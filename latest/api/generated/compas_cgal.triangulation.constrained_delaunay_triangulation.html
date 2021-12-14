@@ -102,10 +102,10 @@
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>boundary</strong> (<a class="reference external" href="https://compas.dev/compas/latest/api/generated/compas.geometry.Polygon.html#compas.geometry.Polygon" title="(in COMPAS v1.7)"><code class="xref py py-class docutils literal notranslate"><span class="pre">compas.geometry.Polygon</span></code></a>) – The boundary of the triangulation.</p></li>
-<li><p><strong>points</strong> (list of <a class="reference external" href="https://compas.dev/compas/latest/api/generated/compas.geometry.Point.html#compas.geometry.Point" title="(in COMPAS v1.7)"><code class="xref py py-class docutils literal notranslate"><span class="pre">compas.geometry.Point</span></code></a>, optional) – Additional internal points.</p></li>
-<li><p><strong>holes</strong> (list of <a class="reference external" href="https://compas.dev/compas/latest/api/generated/compas.geometry.Polygon.html#compas.geometry.Polygon" title="(in COMPAS v1.7)"><code class="xref py py-class docutils literal notranslate"><span class="pre">compas.geometry.Polygon</span></code></a>, optional) – Internal boundary polygons.</p></li>
-<li><p><strong>curves</strong> (list of <a class="reference external" href="https://compas.dev/compas/latest/api/generated/compas.geometry.Polyline.html#compas.geometry.Polyline" title="(in COMPAS v1.7)"><code class="xref py py-class docutils literal notranslate"><span class="pre">compas.geometry.Polyline</span></code></a>, optional) – Internal constraint curves.</p></li>
+<li><p><strong>boundary</strong> (<a class="reference external" href="https://compas.dev/compas/latest/api/generated/compas.geometry.Polygon.html#compas.geometry.Polygon" title="(in COMPAS v1.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">compas.geometry.Polygon</span></code></a>) – The boundary of the triangulation.</p></li>
+<li><p><strong>points</strong> (list of <a class="reference external" href="https://compas.dev/compas/latest/api/generated/compas.geometry.Point.html#compas.geometry.Point" title="(in COMPAS v1.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">compas.geometry.Point</span></code></a>, optional) – Additional internal points.</p></li>
+<li><p><strong>holes</strong> (list of <a class="reference external" href="https://compas.dev/compas/latest/api/generated/compas.geometry.Polygon.html#compas.geometry.Polygon" title="(in COMPAS v1.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">compas.geometry.Polygon</span></code></a>, optional) – Internal boundary polygons.</p></li>
+<li><p><strong>curves</strong> (list of <a class="reference external" href="https://compas.dev/compas/latest/api/generated/compas.geometry.Polyline.html#compas.geometry.Polyline" title="(in COMPAS v1.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">compas.geometry.Polyline</span></code></a>, optional) – Internal constraint curves.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns</dt>
@@ -273,6 +273,8 @@
   if (url) {
     $.get(url, res=>{
       var lines = res.match(/[^\r\n]+/g);
+      lines.sort( (a, b) => a.localeCompare(b, undefined, { numeric:true }) );
+      lines.reverse();
       lines.forEach(version => {
         $("#doc_version_list").append("<a class=\"dropdown-item\" href=\""+ docs_site + version + "\">" + version + "</a>");
       });
