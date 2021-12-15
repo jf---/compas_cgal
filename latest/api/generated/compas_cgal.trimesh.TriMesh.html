@@ -123,6 +123,42 @@ with <cite>f</cite> the number of faces.</p></li>
 </ul>
 </dd>
 </dl>
+<p class="rubric">Attributes</p>
+<table class="longtable docutils align-default">
+<colgroup>
+<col style="width: 10%" />
+<col style="width: 90%" />
+</colgroup>
+<tbody>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">A</span></code></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">C</span></code></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">D</span></code></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">adjacency</span></code></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">average_edge_length</span></code></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">centroid</span></code></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">edges</span></code></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">faces</span></code></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">vertices</span></code></p></td>
+<td><p></p></td>
+</tr>
+</tbody>
+</table>
 <p class="rubric">Methods</p>
 <table class="longtable docutils align-default">
 <colgroup>
@@ -130,34 +166,34 @@ with <cite>f</cite> the number of faces.</p></li>
 <col style="width: 90%" />
 </colgroup>
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="compas_cgal.trimesh.TriMesh.copy.html#compas_cgal.trimesh.TriMesh.copy" title="compas_cgal.trimesh.TriMesh.copy"><code class="xref py py-obj docutils literal notranslate"><span class="pre">copy</span></code></a>()</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="compas_cgal.trimesh.TriMesh.copy.html#compas_cgal.trimesh.TriMesh.copy" title="compas_cgal.trimesh.TriMesh.copy"><code class="xref py py-obj docutils literal notranslate"><span class="pre">copy</span></code></a></p></td>
 <td><p>Create an independent copy of the triangle mesh.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="compas_cgal.trimesh.TriMesh.cull_vertices.html#compas_cgal.trimesh.TriMesh.cull_vertices" title="compas_cgal.trimesh.TriMesh.cull_vertices"><code class="xref py py-obj docutils literal notranslate"><span class="pre">cull_vertices</span></code></a>()</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="compas_cgal.trimesh.TriMesh.cull_vertices.html#compas_cgal.trimesh.TriMesh.cull_vertices" title="compas_cgal.trimesh.TriMesh.cull_vertices"><code class="xref py py-obj docutils literal notranslate"><span class="pre">cull_vertices</span></code></a></p></td>
 <td><p>Remove unused vertices.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="compas_cgal.trimesh.TriMesh.from_mesh.html#compas_cgal.trimesh.TriMesh.from_mesh" title="compas_cgal.trimesh.TriMesh.from_mesh"><code class="xref py py-obj docutils literal notranslate"><span class="pre">from_mesh</span></code></a>(mesh)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="compas_cgal.trimesh.TriMesh.from_mesh.html#compas_cgal.trimesh.TriMesh.from_mesh" title="compas_cgal.trimesh.TriMesh.from_mesh"><code class="xref py py-obj docutils literal notranslate"><span class="pre">from_mesh</span></code></a></p></td>
 <td><p>Construct a triangle mesh from a COMPAS mesh.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="compas_cgal.trimesh.TriMesh.from_off.html#compas_cgal.trimesh.TriMesh.from_off" title="compas_cgal.trimesh.TriMesh.from_off"><code class="xref py py-obj docutils literal notranslate"><span class="pre">from_off</span></code></a>(filepath[, precision])</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="compas_cgal.trimesh.TriMesh.from_off.html#compas_cgal.trimesh.TriMesh.from_off" title="compas_cgal.trimesh.TriMesh.from_off"><code class="xref py py-obj docutils literal notranslate"><span class="pre">from_off</span></code></a></p></td>
 <td><p>Construct a triangle mesh from the data in an OFF file.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="compas_cgal.trimesh.TriMesh.from_ply.html#compas_cgal.trimesh.TriMesh.from_ply" title="compas_cgal.trimesh.TriMesh.from_ply"><code class="xref py py-obj docutils literal notranslate"><span class="pre">from_ply</span></code></a>(filepath[, precision])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="compas_cgal.trimesh.TriMesh.from_ply.html#compas_cgal.trimesh.TriMesh.from_ply" title="compas_cgal.trimesh.TriMesh.from_ply"><code class="xref py py-obj docutils literal notranslate"><span class="pre">from_ply</span></code></a></p></td>
 <td><p>Construct a triangle mesh from the data in a PLY file.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="compas_cgal.trimesh.TriMesh.from_stl.html#compas_cgal.trimesh.TriMesh.from_stl" title="compas_cgal.trimesh.TriMesh.from_stl"><code class="xref py py-obj docutils literal notranslate"><span class="pre">from_stl</span></code></a>(filepath[, precision])</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="compas_cgal.trimesh.TriMesh.from_stl.html#compas_cgal.trimesh.TriMesh.from_stl" title="compas_cgal.trimesh.TriMesh.from_stl"><code class="xref py py-obj docutils literal notranslate"><span class="pre">from_stl</span></code></a></p></td>
 <td><p>Construct a triangle mesh from the data in an STL file.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="compas_cgal.trimesh.TriMesh.remesh.html#compas_cgal.trimesh.TriMesh.remesh" title="compas_cgal.trimesh.TriMesh.remesh"><code class="xref py py-obj docutils literal notranslate"><span class="pre">remesh</span></code></a>(target_length[, iterations])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="compas_cgal.trimesh.TriMesh.remesh.html#compas_cgal.trimesh.TriMesh.remesh" title="compas_cgal.trimesh.TriMesh.remesh"><code class="xref py py-obj docutils literal notranslate"><span class="pre">remesh</span></code></a></p></td>
 <td><p>Remesh the triangle mesh.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="compas_cgal.trimesh.TriMesh.to_mesh.html#compas_cgal.trimesh.TriMesh.to_mesh" title="compas_cgal.trimesh.TriMesh.to_mesh"><code class="xref py py-obj docutils literal notranslate"><span class="pre">to_mesh</span></code></a>()</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="compas_cgal.trimesh.TriMesh.to_mesh.html#compas_cgal.trimesh.TriMesh.to_mesh" title="compas_cgal.trimesh.TriMesh.to_mesh"><code class="xref py py-obj docutils literal notranslate"><span class="pre">to_mesh</span></code></a></p></td>
 <td><p>Convert the triangle mesh to a COMPAS mesh</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="compas_cgal.trimesh.TriMesh.transform.html#compas_cgal.trimesh.TriMesh.transform" title="compas_cgal.trimesh.TriMesh.transform"><code class="xref py py-obj docutils literal notranslate"><span class="pre">transform</span></code></a>(T)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="compas_cgal.trimesh.TriMesh.transform.html#compas_cgal.trimesh.TriMesh.transform" title="compas_cgal.trimesh.TriMesh.transform"><code class="xref py py-obj docutils literal notranslate"><span class="pre">transform</span></code></a></p></td>
 <td><p>Transform the triangle mesh.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="compas_cgal.trimesh.TriMesh.transformed.html#compas_cgal.trimesh.TriMesh.transformed" title="compas_cgal.trimesh.TriMesh.transformed"><code class="xref py py-obj docutils literal notranslate"><span class="pre">transformed</span></code></a>(T)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="compas_cgal.trimesh.TriMesh.transformed.html#compas_cgal.trimesh.TriMesh.transformed" title="compas_cgal.trimesh.TriMesh.transformed"><code class="xref py py-obj docutils literal notranslate"><span class="pre">transformed</span></code></a></p></td>
 <td><p>Create a transformed copy of the triangle mesh.</p></td>
 </tr>
 </tbody>
