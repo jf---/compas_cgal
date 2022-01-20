@@ -123,6 +123,7 @@ padding: 0;
 .compas-sidebar {
   border-bottom: none;
   border-right: 1px solid #ccc;
+  max-width: 320px;
 }
 
 @supports ((position: sticky)
@@ -274,6 +275,25 @@ color: #222;
 font-weight: bold
 }
 
+.compas-navigation .nav-item.has-children .nav-link {
+  padding-right: 41px;
+}
+
+.menu-toggle {
+float: right;
+position: relative;
+top: 0px;
+right: 0px;
+width: 41px;
+height: 41px;
+color: #aaa;
+display: flex;
+align-items: center;
+justify-content: center;
+cursor: pointer;
+}
+
+
 /* TOC */
 
 .compas-toc {
@@ -357,6 +377,10 @@ background-color: #f0f0f0;
 
 .compas-content .anchorjs-link {
 text-decoration: none;
+}
+
+.field-list em {
+  font-style: normal;
 }
 
 /* Footer */
