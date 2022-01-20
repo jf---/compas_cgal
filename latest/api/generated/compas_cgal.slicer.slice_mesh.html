@@ -102,12 +102,12 @@
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>mesh</strong> (tuple[sequence[[float, float, float] | <a class="reference external" href="https://compas.dev/compas/latest/api/generated/compas.geometry.Point.html#compas.geometry.Point" title="(in COMPAS v1.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">compas.geometry.Point</span></code></a>], sequence[[int, int, int]]]) – The mesh to slice.</p></li>
+<li><p><strong>mesh</strong> (tuple[Sequence[[float, float, float] | <a class="reference external" href="https://compas.dev/compas/latest/api/generated/compas.geometry.Point.html#compas.geometry.Point" title="(in COMPAS v1.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">compas.geometry.Point</span></code></a>], Sequence[[int, int, int]]]) – The mesh to slice.</p></li>
 <li><p><strong>planes</strong> (list[[point, normal] | <a class="reference external" href="https://compas.dev/compas/latest/api/generated/compas.geometry.Plane.html#compas.geometry.Plane" title="(in COMPAS v1.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">compas.geometry.Plane</span></code></a>]) – The slicing planes.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns</dt>
-<dd class="field-even"><p><em>list[np.array[np.array[float]]]</em> – A list of slice polylines, with each polyline an array of points.</p>
+<dd class="field-even"><p><em>list[NDArray[(Any, 3), np.float64]]</em> – A list of slice polylines, with each polyline an array of points.</p>
 </dd>
 </dl>
 </dd></dl>

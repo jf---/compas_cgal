@@ -102,15 +102,15 @@
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>A</strong> (tuple[sequence[[float, float, float] | <a class="reference external" href="https://compas.dev/compas/latest/api/generated/compas.geometry.Point.html#compas.geometry.Point" title="(in COMPAS v1.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">compas.geometry.Point</span></code></a>], sequence[[int, int, int]]]) – Mesh A.</p></li>
-<li><p><strong>B</strong> (tuple[sequence[[float, float, float] | <a class="reference external" href="https://compas.dev/compas/latest/api/generated/compas.geometry.Point.html#compas.geometry.Point" title="(in COMPAS v1.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">compas.geometry.Point</span></code></a>], sequence[[int, int, int]]]) – Mesh B.</p></li>
+<li><p><strong>A</strong> (tuple[Sequence[[float, float, float] | <a class="reference external" href="https://compas.dev/compas/latest/api/generated/compas.geometry.Point.html#compas.geometry.Point" title="(in COMPAS v1.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">compas.geometry.Point</span></code></a>], Sequence[[int, int, int]]]) – Mesh A.</p></li>
+<li><p><strong>B</strong> (tuple[Sequence[[float, float, float] | <a class="reference external" href="https://compas.dev/compas/latest/api/generated/compas.geometry.Point.html#compas.geometry.Point" title="(in COMPAS v1.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">compas.geometry.Point</span></code></a>], Sequence[[int, int, int]]]) – Mesh B.</p></li>
 <li><p><strong>operation</strong> (<em>Literal[‘union’, ‘difference’, ‘intersection’]</em>) – The type of boolean operation.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns</dt>
 <dd class="field-even"><p><ul class="simple">
-<li><p><em>(V, 3) np.array[float]</em> – The vertices of the boolean mesh.</p></li>
-<li><p><em>(F, 3) np.array[int]</em> – The faces of the boolean mesh.</p></li>
+<li><p><em>NDArray[(Any, 3) np.float64]</em> – The vertices of the boolean mesh.</p></li>
+<li><p><em>NDArray[(Any, 3) np.int32]</em> – The faces of the boolean mesh.</p></li>
 </ul>
 </p>
 </dd>
