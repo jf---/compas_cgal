@@ -139,13 +139,13 @@ table {
 }
 
 .sig .property {
-	padding-left: 0.5em;
-	padding-right: 0.5em;
-	background-color: #fff;
+	padding-left: 0.25rem;
+	padding-right: 0.25rem;
+	// background-color: #fff;
 }
 
 .sig-prename {
-	font-weight: normal;
+	font-weight: bold;
 	border-radius: 0;
 	padding-right: 0;
 }
@@ -154,10 +154,16 @@ table {
 	font-weight: bold;
 	padding-left: 0;
 	border-radius: 0;
+	color: var(--pink);
 }
 
 .sig-param .n {
-	text-decoration: underline;
+	// text-decoration: underline;
+	padding-left: 0.25rem
+}
+
+.sig-paren {
+	padding-left: 0.25rem
 }
 
 // .compas-content .section {
@@ -165,6 +171,10 @@ table {
 // }
 
 .sig .reference.internal {
+	float: right;
+}
+
+.viewcode-link {
 	float: right;
 }
 
@@ -216,7 +226,7 @@ table {
 .footnote,
 .citation {
 	display: grid;
-	grid-template-columns: auto auto;
+	grid-template-columns: auto minmax(0, 1fr);
 	grid-gap: 1rem;
 	margin: 1rem 0;
 }
@@ -232,11 +242,11 @@ table {
 	padding: 0;
 }
 
-dt .brackets::before {
+a.brackets::before, span.brackets::before {
 	content: '[';
 }
 
-dt .brackets::after {
+a.brackets::after, span.brackets::after {
 	content: ']';
 }
 

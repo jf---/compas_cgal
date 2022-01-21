@@ -93,7 +93,7 @@
 <h1>Installation</h1>
 <section id="stable">
 <h2>Stable</h2>
-<p>Stable releases of <a class="reference internal" href="api/compas_cgal.html#module-compas_cgal" title="compas_cgal"><code class="xref py py-mod docutils literal notranslate"><span class="pre">compas_cgal</span></code></a> can be installed via <cite>conda-forge</cite>.</p>
+<p>Stable releases of <a class="reference internal" href="api/compas_cgal.html#module-compas_cgal" title="compas_cgal"><code class="xref py py-mod docutils literal notranslate"><span class="pre">compas_cgal</span></code></a> can be installed via <code class="docutils literal notranslate"><span class="pre">conda-forge</span></code>.</p>
 <div class="language-bash notranslate"><div class="highlight"><pre><button class="btn copy"><i class="far fa-copy"></i></button><code><span></span>conda create -n cgal -c conda-forge compas compas_cgal --yes
 conda activate cgal
 </code></pre></div>
@@ -113,7 +113,7 @@ To install <code class="xref py py-mod docutils literal notranslate"><span class
 </section>
 <section id="dev-install">
 <h2>Dev Install</h2>
-<p>A local development version can be set up using a combination of <cite>conda</cite> and <cite>pip</cite>.
+<p>A local development version can be set up using a combination of <code class="docutils literal notranslate"><span class="pre">conda</span></code> and <code class="docutils literal notranslate"><span class="pre">pip</span></code>.
 First, clone the <a class="reference internal" href="api/compas_cgal.html#module-compas_cgal" title="compas_cgal"><code class="xref py py-mod docutils literal notranslate"><span class="pre">compas_cgal</span></code></a> repo.</p>
 <div class="language-bash notranslate"><div class="highlight"><pre><button class="btn copy"><i class="far fa-copy"></i></button><code><span></span>git clone https://github.com/compas-dev/compas_cgal
 </code></pre></div>
@@ -148,12 +148,12 @@ First, clone the <a class="reference internal" href="api/compas_cgal.html#module
 <div class="language-bash notranslate"><div class="highlight"><pre><button class="btn copy"><i class="far fa-copy"></i></button><code><span></span><span class="nb">cd</span> compas_cgal
 </code></pre></div>
 </div>
-<p>And compile the code while creating an editable install of the python wrapper using <cite>setuptools</cite>.</p>
+<p>And compile the code while creating an editable install of the python wrapper using <code class="docutils literal notranslate"><span class="pre">setuptools</span></code>.</p>
 <div class="language-bash notranslate"><div class="highlight"><pre><button class="btn copy"><i class="far fa-copy"></i></button><code><span></span>pip install -e .
 </code></pre></div>
 </div>
 <p>To add your c++ module to the wrapper, and potentially exclude some of the existing modules during its development,
-modify the list of extension modules in the <cite>setup.py</cite> file.</p>
+modify the list of extension modules in the <code class="docutils literal notranslate"><span class="pre">setup.py</span></code> file.</p>
 <div class="language-python notranslate"><div class="highlight"><pre><button class="btn copy"><i class="far fa-copy"></i></button><code><span></span><span class="n">ext_modules</span> <span class="o">=</span> <span class="p">[</span>
     <span class="n">Extension</span><span class="p">(</span>
         <span class="s1">&#39;compas_cgal._cgal&#39;</span><span class="p">,</span>
