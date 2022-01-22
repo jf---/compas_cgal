@@ -32,9 +32,9 @@
 /* ----------------------------------------------------------------- */
 
 .admonition {
-	padding: 0 $alert-padding-x;
-	margin-top: 2rem;
-	margin-bottom: 2rem;
+	padding: 0 1rem;
+	margin-top: 1rem;
+	margin-bottom: 1rem;
 	border: $alert-border-width solid transparent;
 	// @include border-radius($alert-border-radius);
 }
@@ -55,6 +55,7 @@
 		theme-color-level(info, -9),
 		theme-color-level(info, 6)
 	);
+	border-color: transparent;
 }
 
 .admonition.important {
@@ -139,7 +140,7 @@ table {
 }
 
 .sig .property {
-	padding-left: 0.25rem;
+	padding-left: 0rem;
 	padding-right: 0.25rem;
 	// background-color: #fff;
 }
@@ -171,11 +172,12 @@ table {
 // }
 
 .sig .reference.internal {
-	float: right;
+	// float: right;
 }
 
 .viewcode-link {
-	float: right;
+	// float: right;
+	margin-left: 1rem;
 }
 
 // ----------------

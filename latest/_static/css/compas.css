@@ -55,8 +55,8 @@ margin-bottom: 3rem;
 code {
 /* color: inherit; */
 color: var(--pink);
-background-color: #f0f0f0;
-padding: 0.2rem 0.4rem;
+/* background-color: #f0f0f0; */
+/* padding: 0.2rem 0.4rem; */
 }
 
 a > code {
@@ -361,11 +361,12 @@ margin-bottom: 1rem;
 }
 
 .hljs {
-padding: 2rem;
+/* padding: 2rem; */
+/* background-color: rgba(0, 146, 210, 0.1); */
 }
 
 .nohighlight pre {
-padding: 2rem;
+padding: 1rem;
 background-color: #f0f0f0;
 }
 
@@ -373,12 +374,13 @@ background-color: #f0f0f0;
   display: block;
   float: right;
   position: relative;
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
   top: 3px;
-  right: 43px;
-  margin-right: -40px;
+  right: 35px;
+  margin-right: -32px;
   color: rgba(0, 0, 0, 0.2);
+  padding: 0;
 }
 .copy:hover {
   color: rgba(0, 0, 0, 0.8);
@@ -394,7 +396,8 @@ text-decoration: none;
 
 .card {
   border-radius: 0;
-  border: 1px solid #eee;
+  border: 1px solid #ccc;
+  margin: 1rem 0;
 }
 .card-header:first-child {
   border: none;
@@ -406,6 +409,7 @@ text-decoration: none;
 }
 .card-body {
   border-top: 1px solid #eee;
+  padding: 1rem;
 }
 .card-header-tabs {
   margin: 0;
