@@ -175,7 +175,7 @@ table {
   color: var(--pink);
 }
 
-.sig-param .n {
+.sig-param {
   padding-left: 0.25rem;
 }
 

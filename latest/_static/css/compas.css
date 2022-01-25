@@ -396,7 +396,7 @@ text-decoration: none;
 
 .card {
   border-radius: 0;
-  border: 1px solid #ccc;
+  border: 4px solid #eee;
   margin: 1rem 0;
 }
 .card-header:first-child {
@@ -428,6 +428,36 @@ text-decoration: none;
 .nav-tabs .nav-link.active {
   /* border-bottom: 4px solid #0092d2; */
   background-color: #f0f0f0;
+}
+
+.compas-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  position: relative;
+  border: 4px solid #eee;
+}
+.compas-tabs > input {
+  position: absolute;
+  opacity: 0;
+}
+.compas-tab-item-label {
+  padding: 0.5rem 1rem;
+  margin: 0;
+  color: #0092d2;
+}
+.compas-tab-item-content {
+  order: 99;
+  width: 100%;
+  padding: 0.5rem 1rem;
+  display: none;
+  border-top: 1px solid #eee;
+}
+.compas-tabs > input:checked + label {
+  background-color: #eee;
+  color: #222;
+}
+.compas-tabs > input:checked + label + div {
+  display: block;
 }
 
 /* Footer */
