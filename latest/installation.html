@@ -118,19 +118,27 @@ First, clone the <a class="reference internal" href="api/compas_cgal.html#module
 <div class="language-bash notranslate"><div class="highlight"><pre><button class="btn copy"><i class="far fa-copy"></i></button><code><span></span>git clone https://github.com/compas-dev/compas_cgal
 </code></pre></div>
 </div>
-<p>Create an environment with all the required dependencies.</p>
+<p>Create a dev environment.</p>
+<div class="language-bash notranslate"><div class="highlight"><pre><button class="btn copy"><i class="far fa-copy"></i></button><code><span></span>conda create -n cgal-dev <span class="nv">python</span><span class="o">=</span><span class="m">3</span>.8 compas compas_view2 --yes
+</code></pre></div>
+</div>
+<p>Install common dev requirements.</p>
+<div class="language-bash notranslate"><div class="highlight"><pre><button class="btn copy"><i class="far fa-copy"></i></button><code><span></span>conda install -n cgal-dev mpfr boost-cpp <span class="nv">eigen</span><span class="o">=</span><span class="m">3</span>.3 cgal-cpp<span class="o">=</span><span class="m">5</span>.2 pybind11 --yes
+</code></pre></div>
+</div>
+<p>Some are OS dependent.</p>
 <div class="compas-tabs docutils">
-<input checked="checked" id="29101a77-0633-4c91-8b93-6fce066fa6ca" name="287b02d5-6318-45a2-9d82-4fbd39d07182" type="radio">
-</input><label class="compas-tab-item-label" for="29101a77-0633-4c91-8b93-6fce066fa6ca">
+<input checked="checked" id="6aaa481b-7df1-4800-8bf1-910cbacceff3" name="e6c406ee-08fb-4f8c-95e0-8f416c3eb9b2" type="radio">
+</input><label class="compas-tab-item-label" for="6aaa481b-7df1-4800-8bf1-910cbacceff3">
 Windows</label><div class="compas-tab-item-content docutils">
-<div class="language-bash notranslate"><div class="highlight"><pre><button class="btn copy"><i class="far fa-copy"></i></button><code><span></span>conda create -n cgal-dev <span class="nv">python</span><span class="o">=</span><span class="m">3</span>.8 mpir mpfr boost-cpp <span class="nv">eigen</span><span class="o">=</span><span class="m">3</span>.3 cgal-cpp<span class="o">=</span><span class="m">5</span>.2 pybind11 compas compas_view2 --yes
+<div class="language-bash notranslate"><div class="highlight"><pre><button class="btn copy"><i class="far fa-copy"></i></button><code><span></span>conda install -n cgal-dev mpir  --yes
 </code></pre></div>
 </div>
 </div>
-<input id="d496422f-e851-4051-ad9d-ed1d8eb4f1de" name="287b02d5-6318-45a2-9d82-4fbd39d07182" type="radio">
-</input><label class="compas-tab-item-label" for="d496422f-e851-4051-ad9d-ed1d8eb4f1de">
+<input id="9d7a56df-597f-4615-ad7c-7a65adf80c22" name="e6c406ee-08fb-4f8c-95e0-8f416c3eb9b2" type="radio">
+</input><label class="compas-tab-item-label" for="9d7a56df-597f-4615-ad7c-7a65adf80c22">
 OSX / Linux</label><div class="compas-tab-item-content docutils">
-<div class="language-bash notranslate"><div class="highlight"><pre><button class="btn copy"><i class="far fa-copy"></i></button><code><span></span>conda create -n cgal-dev <span class="nv">python</span><span class="o">=</span><span class="m">3</span>.8 mpfr gmp boost-cpp <span class="nv">eigen</span><span class="o">=</span><span class="m">3</span>.3 cgal-cpp<span class="o">=</span><span class="m">5</span>.2 pybind11 compas compas_view2 --yes
+<div class="language-bash notranslate"><div class="highlight"><pre><button class="btn copy"><i class="far fa-copy"></i></button><code><span></span>conda install -n cgal-dev gmp --yes
 </code></pre></div>
 </div>
 </div>
