@@ -3,7 +3,7 @@
 
 <head>
   
-  <title>compas_cgal - catmull_clark</title>
+  <title>compas_cgal - split</title>
   
 
   <meta charset="utf-8" />
@@ -20,11 +20,11 @@
   <link rel="stylesheet" type="text/css" href="../../_static/css/compas-reference.css" />
 
   
-  <link rel="next" title="delaunay_triangulation" href="compas_cgal.triangulation.delaunay_triangulation.html" />
+  <link rel="next" title="intersection_mesh_mesh" href="compas_cgal.intersections.intersection_mesh_mesh.html" />
   
 
   
-  <link rel="prev" title="slice_mesh" href="compas_cgal.slicer.slice_mesh.html" />
+  <link rel="prev" title="boolean_intersection" href="compas_cgal.booleans.boolean_intersection.html" />
   
 
   <script type="text/javascript" async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.2/MathJax.js?config=TeX-MML-AM_CHTML"></script>
@@ -86,45 +86,50 @@
             
             <li class="breadcrumb-item"><a href="../compas_cgal.html">compas_cgal</a></li>
             
-            <!-- <li class="breadcrumb-item active" aria-current="page">catmull_clark</li> -->
+            <!-- <li class="breadcrumb-item active" aria-current="page">split</li> -->
           </ol>
         </nav>
         
 
         
         
-        <section class="detail" id="catmull-clark">
-<h1>catmull_clark</h1>
+        <section class="detail" id="split">
+<h1>split</h1>
 <dl class="py function">
-<dt class="sig sig-object py" id="compas_cgal.subdivision.catmull_clark">
-<span class="sig-prename descclassname"><span class="pre">compas_cgal.subdivision.</span></span><span class="sig-name descname"><span class="pre">catmull_clark</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mesh</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">k</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/compas-dev/compas_cgal/blob/master/src/compas_cgal/subdivision.py#L5"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
-<dd><p>Subdivide a mesh withe the Catmull Clark scheme.</p>
+<dt class="sig sig-object py" id="compas_cgal.booleans.split">
+<span class="sig-prename descclassname"><span class="pre">compas_cgal.booleans.</span></span><span class="sig-name descname"><span class="pre">split</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">A</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">B</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/compas-dev/compas_cgal/blob/master/src/compas_cgal/booleans.py#L166"><span class="viewcode-link"><span class="pre">[source]</span></span></a></dt>
+<dd><p>Split one mesh with another.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>mesh</strong> (tuple[Sequence[[float, float, float] | <a class="reference external" href="https://compas.dev/compas/latest/api/generated/compas.geometry.Point.html#compas.geometry.Point" title="(in COMPAS v1.16)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Point</span></code></a>], Sequence[[int, int, int]]]) – The mesh to remesh.</p></li>
-<li><p><strong>k</strong> (<em>int, optional</em>) – The number of subdivision steps.</p></li>
+<li><p><strong>A</strong> (tuple[Sequence[[float, float, float] | <a class="reference external" href="https://compas.dev/compas/latest/api/generated/compas.geometry.Point.html#compas.geometry.Point" title="(in COMPAS v1.16)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Point</span></code></a>], Sequence[[int, int, int]]]) – Mesh A.</p></li>
+<li><p><strong>B</strong> (tuple[Sequence[[float, float, float] | <a class="reference external" href="https://compas.dev/compas/latest/api/generated/compas.geometry.Point.html#compas.geometry.Point" title="(in COMPAS v1.16)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Point</span></code></a>], Sequence[[int, int, int]]]) – Mesh B.</p></li>
+<li><p><strong>operation</strong> (<em>Literal[‘union’, ‘difference’, ‘intersection’]</em>) – The type of boolean operation.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns</dt>
 <dd class="field-even"><p><ul class="simple">
-<li><p><em>NDArray[(Any, 3), np.float64]</em> – The vertices of the subdivided mesh.</p></li>
-<li><p><em>NDArray[(Any, 4), np.int32]</em> – The faces of the subdivided mesh.</p></li>
+<li><p><em>NDArray[(Any, 3), np.float64]</em> – The vertices of the boolean mesh.</p></li>
+<li><p><em>NDArray[(Any, 3), np.int32]</em> – The faces of the boolean mesh.</p></li>
 </ul>
 </p>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="doctest language-python notranslate"><div class="highlight"><pre><button class="btn copy"><i class="far fa-copy"></i></button><code><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">compas.geometry</span> <span class="kn">import</span> <span class="n">Box</span><span class="p">,</span> <span class="n">Polyhedron</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">compas_cgal.subdivision</span> <span class="kn">import</span> <span class="n">catmull_clark</span>
+<div class="doctest language-python notranslate"><div class="highlight"><pre><button class="btn copy"><i class="far fa-copy"></i></button><code><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">compas.geometry</span> <span class="kn">import</span> <span class="n">Box</span><span class="p">,</span> <span class="n">Sphere</span><span class="p">,</span> <span class="n">Polyhedron</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">compas_cgal.booleans</span> <span class="kn">import</span> <span class="n">split</span>
 </code></pre></div>
 </div>
 <div class="doctest language-python notranslate"><div class="highlight"><pre><button class="btn copy"><i class="far fa-copy"></i></button><code><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">box</span> <span class="o">=</span> <span class="n">Box</span><span class="o">.</span><span class="n">from_width_height_depth</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">mesh</span> <span class="o">=</span> <span class="n">box</span><span class="o">.</span><span class="n">to_vertices_and_faces</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">sphere</span> <span class="o">=</span> <span class="n">Sphere</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="mf">0.5</span><span class="p">)</span>
 </code></pre></div>
 </div>
-<div class="doctest language-python notranslate"><div class="highlight"><pre><button class="btn copy"><i class="far fa-copy"></i></button><code><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">result</span> <span class="o">=</span> <span class="n">catmull_clark</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">shape</span> <span class="o">=</span> <span class="n">Polyhedron</span><span class="p">(</span><span class="o">*</span><span class="n">result</span><span class="p">)</span>
+<div class="doctest language-python notranslate"><div class="highlight"><pre><button class="btn copy"><i class="far fa-copy"></i></button><code><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">A</span> <span class="o">=</span> <span class="n">box</span><span class="o">.</span><span class="n">to_vertices_and_faces</span><span class="p">(</span><span class="n">triangulated</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">B</span> <span class="o">=</span> <span class="n">sphere</span><span class="o">.</span><span class="n">to_vertices_and_faces</span><span class="p">(</span><span class="n">u</span><span class="o">=</span><span class="mi">32</span><span class="p">,</span> <span class="n">v</span><span class="o">=</span><span class="mi">32</span><span class="p">,</span> <span class="n">triangulated</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</code></pre></div>
+</div>
+<div class="doctest language-python notranslate"><div class="highlight"><pre><button class="btn copy"><i class="far fa-copy"></i></button><code><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">V</span><span class="p">,</span> <span class="n">F</span> <span class="o">=</span> <span class="n">split</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">B</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">mesh</span> <span class="o">=</span> <span class="n">Mesh</span><span class="o">.</span><span class="n">from_vertices_and_faces</span><span class="p">(</span><span class="n">V</span><span class="p">,</span> <span class="n">F</span><span class="p">)</span>
 </code></pre></div>
 </div>
 </dd></dl>
@@ -167,12 +172,12 @@
 <li class="toctree-l3 nav-item"><a class="nav-link reference internal" href="compas_cgal.booleans.boolean_union.html">boolean_union</a></li>
 <li class="toctree-l3 nav-item"><a class="nav-link reference internal" href="compas_cgal.booleans.boolean_difference.html">boolean_difference</a></li>
 <li class="toctree-l3 nav-item"><a class="nav-link reference internal" href="compas_cgal.booleans.boolean_intersection.html">boolean_intersection</a></li>
-<li class="toctree-l3 nav-item"><a class="nav-link reference internal" href="compas_cgal.booleans.split.html">split</a></li>
+<li class="toctree-l3 nav-item active"><a class="nav-link active reference internal" href="#">split</a></li>
 <li class="toctree-l3 nav-item"><a class="nav-link reference internal" href="compas_cgal.intersections.intersection_mesh_mesh.html">intersection_mesh_mesh</a></li>
 <li class="toctree-l3 nav-item"><a class="nav-link reference internal" href="compas_cgal.measure.volume.html">volume</a></li>
 <li class="toctree-l3 nav-item"><a class="nav-link reference internal" href="compas_cgal.meshing.remesh.html">remesh</a></li>
 <li class="toctree-l3 nav-item"><a class="nav-link reference internal" href="compas_cgal.slicer.slice_mesh.html">slice_mesh</a></li>
-<li class="toctree-l3 nav-item active"><a class="nav-link active reference internal" href="#">catmull_clark</a></li>
+<li class="toctree-l3 nav-item"><a class="nav-link reference internal" href="compas_cgal.subdivision.catmull_clark.html">catmull_clark</a></li>
 <li class="toctree-l3 nav-item"><a class="nav-link reference internal" href="compas_cgal.triangulation.delaunay_triangulation.html">delaunay_triangulation</a></li>
 <li class="toctree-l3 nav-item"><a class="nav-link reference internal" href="compas_cgal.triangulation.constrained_delaunay_triangulation.html">constrained_delaunay_triangulation</a></li>
 <li class="toctree-l3 nav-item"><a class="nav-link reference internal" href="compas_cgal.triangulation.conforming_delaunay_triangulation.html">conforming_delaunay_triangulation</a></li>
@@ -192,7 +197,7 @@
       <div class="d-none d-xl-block col-xl-2 compas-toc" role="toc">
         
         <ul class="nav flex-column" id="compas-toc">
-<li class="nav-item"><a class="nav-link reference internal" href="#">catmull_clark</a></li>
+<li class="nav-item"><a class="nav-link reference internal" href="#">split</a></li>
 </ul>
 
       </div>
@@ -204,20 +209,20 @@
   <footer class="compas-footer">
     <nav class="nav p-2">
       
-      <a href="compas_cgal.slicer.slice_mesh.html" title="slice_mesh" class="nav-link footer-link float-start text-left d-flex w-50" rel="prev">
+      <a href="compas_cgal.booleans.boolean_intersection.html" title="boolean_intersection" class="nav-link footer-link float-start text-left d-flex w-50" rel="prev">
         <div class="nav-button p-2 m-2"><i class="fas fa-arrow-left"></i></div>
         <div class="nav-title flex-grow-1 align-self-center">
           <div class="nav-direction small font-weight-light">Previous</div>
-          slice_mesh
+          boolean_intersection
         </div>
       </a>
       
 
       
-      <a href="compas_cgal.triangulation.delaunay_triangulation.html" title="delaunay_triangulation" class="nav-link footer-link float-end text-right d-flex w-50" rel="next">
+      <a href="compas_cgal.intersections.intersection_mesh_mesh.html" title="intersection_mesh_mesh" class="nav-link footer-link float-end text-right d-flex w-50" rel="next">
         <div class="nav-title footer-link flex-grow-1 align-self-center">
           <div class="nav-direction small font-weight-light">Next</div>
-          delaunay_triangulation
+          intersection_mesh_mesh
         </div>
         <div class="nav-button p-2 m-2"><i class="fas fa-arrow-right"></i></div>
       </a>

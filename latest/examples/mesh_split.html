@@ -3,7 +3,7 @@
 
 <head>
   
-  <title>compas_cgal - Triangulation</title>
+  <title>compas_cgal - Mesh Split</title>
   
 
   <meta charset="utf-8" />
@@ -20,11 +20,11 @@
   <link rel="stylesheet" type="text/css" href="../_static/css/compas-reference.css" />
 
   
-  <link rel="next" title="API Reference" href="../api.html" />
+  <link rel="next" title="Remeshing" href="remeshing.html" />
   
 
   
-  <link rel="prev" title="Subdivision with Catmull Clark" href="subd.html" />
+  <link rel="prev" title="Mesh intersections" href="intersections.html" />
   
 
   <script type="text/javascript" async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.2/MathJax.js?config=TeX-MML-AM_CHTML"></script>
@@ -84,68 +84,68 @@
             
             <li class="breadcrumb-item"><a href="../examples.html">Examples</a></li>
             
-            <!-- <li class="breadcrumb-item active" aria-current="page">Triangulation</li> -->
+            <!-- <li class="breadcrumb-item active" aria-current="page">Mesh Split</li> -->
           </ol>
         </nav>
         
 
         
         
-        <section id="triangulation">
-<h1>Triangulation</h1>
+        <section id="mesh-split">
+<h1>Mesh Split</h1>
 <figure class="figure align-default">
-<img alt="../_images/cgal_triangulation.png" class="figure-img img-fluid" src="../_images/cgal_triangulation.png" />
+<img alt="../_images/cgal_boolean_split.jpg" class="figure-img img-fluid" src="../_images/cgal_boolean_split.jpg" />
 </figure>
-<div class="language-python notranslate"><div class="highlight"><pre><button class="btn copy"><i class="far fa-copy"></i></button><code><span></span><span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
-
-<span class="kn">from</span> <span class="nn">compas_plotters</span> <span class="kn">import</span> <span class="n">Plotter</span>
-<span class="kn">from</span> <span class="nn">compas.geometry</span> <span class="kn">import</span> <span class="n">Point</span><span class="p">,</span> <span class="n">Polygon</span><span class="p">,</span> <span class="n">Translation</span>
+<div class="language-python notranslate"><div class="highlight"><pre><button class="btn copy"><i class="far fa-copy"></i></button><code><span></span><span class="kn">from</span> <span class="nn">compas.geometry</span> <span class="kn">import</span> <span class="n">Point</span>
+<span class="kn">from</span> <span class="nn">compas.geometry</span> <span class="kn">import</span> <span class="n">Box</span>
+<span class="kn">from</span> <span class="nn">compas.geometry</span> <span class="kn">import</span> <span class="n">Sphere</span>
 <span class="kn">from</span> <span class="nn">compas.datastructures</span> <span class="kn">import</span> <span class="n">Mesh</span>
-<span class="kn">from</span> <span class="nn">compas_cgal.triangulation</span> <span class="kn">import</span> <span class="n">conforming_delaunay_triangulation</span> <span class="k">as</span> <span class="n">cdt</span>
-<span class="kn">from</span> <span class="nn">compas_cgal.triangulation</span> <span class="kn">import</span> <span class="n">refined_delaunay_mesh</span> <span class="k">as</span> <span class="n">rdm</span>
+<span class="kn">from</span> <span class="nn">compas.colors</span> <span class="kn">import</span> <span class="n">Color</span>
+<span class="kn">from</span> <span class="nn">random</span> <span class="kn">import</span> <span class="n">random</span>
+
+<span class="kn">from</span> <span class="nn">compas_view2.app</span> <span class="kn">import</span> <span class="n">App</span>
+
+<span class="kn">from</span> <span class="nn">compas_cgal.booleans</span> <span class="kn">import</span> <span class="n">split</span>
+<span class="kn">from</span> <span class="nn">compas.topology</span> <span class="kn">import</span> <span class="n">connected_components</span>
 
 <span class="c1"># ==============================================================================</span>
-<span class="c1"># Constraints</span>
+<span class="c1"># Make a box and a sphere</span>
 <span class="c1"># ==============================================================================</span>
 
-<span class="n">boundary</span> <span class="o">=</span> <span class="n">Polygon</span><span class="o">.</span><span class="n">from_sides_and_radius_xy</span><span class="p">(</span><span class="mi">12</span><span class="p">,</span> <span class="mi">10</span><span class="p">)</span>
-<span class="n">boundary</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">boundary</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+<span class="n">box</span> <span class="o">=</span> <span class="n">Box</span><span class="o">.</span><span class="n">from_width_height_depth</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+<span class="n">box</span> <span class="o">=</span> <span class="n">Mesh</span><span class="o">.</span><span class="n">from_shape</span><span class="p">(</span><span class="n">box</span><span class="p">)</span>
+<span class="n">box</span><span class="o">.</span><span class="n">quads_to_triangles</span><span class="p">()</span>
 
-<span class="n">hole</span> <span class="o">=</span> <span class="n">Polygon</span><span class="o">.</span><span class="n">from_sides_and_radius_xy</span><span class="p">(</span><span class="mi">12</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+<span class="n">A</span> <span class="o">=</span> <span class="n">box</span><span class="o">.</span><span class="n">to_vertices_and_faces</span><span class="p">()</span>
 
-<span class="n">hole1</span> <span class="o">=</span> <span class="n">hole</span><span class="o">.</span><span class="n">transformed</span><span class="p">(</span><span class="n">Translation</span><span class="o">.</span><span class="n">from_vector</span><span class="p">([</span><span class="mi">4</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]))</span>
-<span class="n">hole2</span> <span class="o">=</span> <span class="n">hole</span><span class="o">.</span><span class="n">transformed</span><span class="p">(</span><span class="n">Translation</span><span class="o">.</span><span class="n">from_vector</span><span class="p">([</span><span class="o">-</span><span class="mi">4</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]))</span>
-<span class="n">hole3</span> <span class="o">=</span> <span class="n">hole</span><span class="o">.</span><span class="n">transformed</span><span class="p">(</span><span class="n">Translation</span><span class="o">.</span><span class="n">from_vector</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">0</span><span class="p">]))</span>
-<span class="n">hole4</span> <span class="o">=</span> <span class="n">hole</span><span class="o">.</span><span class="n">transformed</span><span class="p">(</span><span class="n">Translation</span><span class="o">.</span><span class="n">from_vector</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">4</span><span class="p">,</span> <span class="mi">0</span><span class="p">]))</span>
+<span class="n">sphere</span> <span class="o">=</span> <span class="n">Sphere</span><span class="p">(</span><span class="n">Point</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">sphere</span> <span class="o">=</span> <span class="n">Mesh</span><span class="o">.</span><span class="n">from_shape</span><span class="p">(</span><span class="n">sphere</span><span class="p">,</span> <span class="n">u</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span> <span class="n">v</span><span class="o">=</span><span class="mi">20</span><span class="p">)</span>
+<span class="n">sphere</span><span class="o">.</span><span class="n">quads_to_triangles</span><span class="p">()</span>
 
-<span class="n">holes</span> <span class="o">=</span> <span class="p">[</span><span class="n">hole1</span><span class="p">,</span> <span class="n">hole2</span><span class="p">,</span> <span class="n">hole3</span><span class="p">,</span> <span class="n">hole4</span><span class="p">]</span>
-
-<span class="n">points</span> <span class="o">=</span> <span class="p">[</span><span class="n">Point</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> <span class="n">Point</span><span class="p">(</span><span class="o">-</span><span class="mi">4</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> <span class="n">Point</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> <span class="n">Point</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">4</span><span class="p">,</span> <span class="mi">0</span><span class="p">)]</span>
+<span class="n">B</span> <span class="o">=</span> <span class="n">sphere</span><span class="o">.</span><span class="n">to_vertices_and_faces</span><span class="p">()</span>
 
 <span class="c1"># ==============================================================================</span>
-<span class="c1"># Triangulation</span>
+<span class="c1"># Compute the mesh split</span>
 <span class="c1"># ==============================================================================</span>
 
-<span class="n">V</span><span class="p">,</span> <span class="n">F</span> <span class="o">=</span> <span class="n">cdt</span><span class="p">(</span><span class="n">boundary</span><span class="p">,</span> <span class="n">points</span><span class="o">=</span><span class="n">points</span><span class="p">,</span> <span class="n">holes</span><span class="o">=</span><span class="n">holes</span><span class="p">)</span>
+<span class="n">V</span><span class="p">,</span> <span class="n">F</span> <span class="o">=</span> <span class="n">split</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">B</span><span class="p">)</span>
 
-<span class="n">cdt_mesh</span> <span class="o">=</span> <span class="n">Mesh</span><span class="o">.</span><span class="n">from_vertices_and_faces</span><span class="p">(</span><span class="n">V</span><span class="p">,</span> <span class="n">F</span><span class="p">)</span>
-
-<span class="n">V</span><span class="p">,</span> <span class="n">F</span> <span class="o">=</span> <span class="n">rdm</span><span class="p">(</span><span class="n">boundary</span><span class="p">,</span> <span class="n">points</span><span class="o">=</span><span class="n">points</span><span class="p">,</span> <span class="n">holes</span><span class="o">=</span><span class="n">holes</span><span class="p">,</span> <span class="n">maxlength</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">is_optimized</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-
-<span class="n">rdm_mesh</span> <span class="o">=</span> <span class="n">Mesh</span><span class="o">.</span><span class="n">from_vertices_and_faces</span><span class="p">(</span><span class="n">V</span><span class="p">,</span> <span class="n">F</span><span class="p">)</span>
+<span class="n">mesh</span> <span class="o">=</span> <span class="n">Mesh</span><span class="o">.</span><span class="n">from_vertices_and_faces</span><span class="p">(</span><span class="n">V</span><span class="p">,</span> <span class="n">F</span><span class="p">)</span>
 
 <span class="c1"># ==============================================================================</span>
-<span class="c1"># Viz</span>
+<span class="c1"># Seperate disjoint faces and visualize</span>
 <span class="c1"># ==============================================================================</span>
 
-<span class="n">plotter</span> <span class="o">=</span> <span class="n">Plotter</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">16</span><span class="p">,</span> <span class="mi">9</span><span class="p">))</span>
+<span class="n">viewer</span> <span class="o">=</span> <span class="n">App</span><span class="p">()</span>
 
-<span class="n">plotter</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">cdt_mesh</span><span class="p">,</span> <span class="n">sizepolicy</span><span class="o">=</span><span class="s1">&#39;absolute&#39;</span><span class="p">,</span> <span class="n">vertexsize</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
-<span class="n">plotter</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">rdm_mesh</span><span class="o">.</span><span class="n">transformed</span><span class="p">(</span><span class="n">Translation</span><span class="o">.</span><span class="n">from_vector</span><span class="p">([</span><span class="mi">23</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">])),</span> <span class="n">sizepolicy</span><span class="o">=</span><span class="s1">&#39;absolute&#39;</span><span class="p">,</span> <span class="n">vertexsize</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+<span class="n">fa</span> <span class="o">=</span> <span class="n">mesh</span><span class="o">.</span><span class="n">face_adjacency</span><span class="p">()</span>
+<span class="n">parts</span> <span class="o">=</span> <span class="n">connected_components</span><span class="p">(</span><span class="n">fa</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">face_indexes</span> <span class="ow">in</span> <span class="n">connected_components</span><span class="p">(</span><span class="n">fa</span><span class="p">):</span>
+    <span class="n">mesh</span> <span class="o">=</span> <span class="n">Mesh</span><span class="o">.</span><span class="n">from_vertices_and_faces</span><span class="p">(</span><span class="n">V</span><span class="p">,</span> <span class="n">F</span><span class="p">[</span><span class="n">face_indexes</span><span class="p">])</span>
+    <span class="n">mesh</span><span class="o">.</span><span class="n">remove_unused_vertices</span><span class="p">()</span>
+    <span class="n">viewer</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="n">facecolor</span><span class="o">=</span><span class="n">Color</span><span class="o">.</span><span class="n">from_i</span><span class="p">(</span><span class="n">random</span><span class="p">()))</span>
 
-<span class="n">plotter</span><span class="o">.</span><span class="n">zoom_extents</span><span class="p">()</span>
-<span class="c1"># plotter.save(&#39;docs/_images/cgal_triangulation.png&#39;, dpi=150)</span>
-<span class="n">plotter</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+<span class="n">viewer</span><span class="o">.</span><span class="n">run</span><span class="p">()</span>
 </code></pre></div>
 </div>
 </section>
@@ -173,12 +173,12 @@
 <li class="toctree-l2 nav-item"><a class="nav-link reference internal" href="booleans.html">Boolean operations</a></li>
 <li class="toctree-l2 nav-item"><a class="nav-link reference internal" href="booleans_rhino.html">Boolean operations in Rhino</a></li>
 <li class="toctree-l2 nav-item"><a class="nav-link reference internal" href="intersections.html">Mesh intersections</a></li>
-<li class="toctree-l2 nav-item"><a class="nav-link reference internal" href="mesh_split.html">Mesh Split</a></li>
+<li class="toctree-l2 nav-item active"><a class="nav-link active reference internal" href="#">Mesh Split</a></li>
 <li class="toctree-l2 nav-item"><a class="nav-link reference internal" href="remeshing.html">Remeshing</a></li>
 <li class="toctree-l2 nav-item"><a class="nav-link reference internal" href="slicer.html">Mesh slicing</a></li>
 <li class="toctree-l2 nav-item"><a class="nav-link reference internal" href="slicer_rhino.html">Mesh slicing in Rhino</a></li>
 <li class="toctree-l2 nav-item"><a class="nav-link reference internal" href="subd.html">Subdivision with Catmull Clark</a></li>
-<li class="toctree-l2 nav-item active"><a class="nav-link active reference internal" href="#">Triangulation</a></li>
+<li class="toctree-l2 nav-item"><a class="nav-link reference internal" href="triangulation.html">Triangulation</a></li>
 </ul>
 </li>
 <li class="toctree-l1 nav-item"><a class="nav-link reference internal" href="../api.html">API Reference</a><ul class="nav flex-column collapse">
@@ -211,7 +211,7 @@
       <div class="d-none d-xl-block col-xl-2 compas-toc" role="toc">
         
         <ul class="nav flex-column" id="compas-toc">
-<li class="nav-item"><a class="nav-link reference internal" href="#">Triangulation</a></li>
+<li class="nav-item"><a class="nav-link reference internal" href="#">Mesh Split</a></li>
 </ul>
 
       </div>
@@ -223,20 +223,20 @@
   <footer class="compas-footer">
     <nav class="nav p-2">
       
-      <a href="subd.html" title="Subdivision with Catmull Clark" class="nav-link footer-link float-start text-left d-flex w-50" rel="prev">
+      <a href="intersections.html" title="Mesh intersections" class="nav-link footer-link float-start text-left d-flex w-50" rel="prev">
         <div class="nav-button p-2 m-2"><i class="fas fa-arrow-left"></i></div>
         <div class="nav-title flex-grow-1 align-self-center">
           <div class="nav-direction small font-weight-light">Previous</div>
-          Subdivision with Catmull Clark
+          Mesh intersections
         </div>
       </a>
       
 
       
-      <a href="../api.html" title="API Reference" class="nav-link footer-link float-end text-right d-flex w-50" rel="next">
+      <a href="remeshing.html" title="Remeshing" class="nav-link footer-link float-end text-right d-flex w-50" rel="next">
         <div class="nav-title footer-link flex-grow-1 align-self-center">
           <div class="nav-direction small font-weight-light">Next</div>
-          API Reference
+          Remeshing
         </div>
         <div class="nav-button p-2 m-2"><i class="fas fa-arrow-right"></i></div>
       </a>
