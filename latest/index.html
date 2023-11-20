@@ -501,8 +501,9 @@ document.write(`
 <li class="toctree-l2"><a class="reference internal" href="examples/intersections.html">Mesh intersections</a></li>
 <li class="toctree-l2"><a class="reference internal" href="examples/mesh_split.html">Mesh Split</a></li>
 <li class="toctree-l2"><a class="reference internal" href="examples/remeshing.html">Remeshing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples/skeletonization.html">Triangle Mesh Skeletonization</a></li>
 <li class="toctree-l2"><a class="reference internal" href="examples/slicer.html">Mesh slicing</a></li>
-<li class="toctree-l2"><a class="reference internal" href="examples/subd.html">Subdivision with Catmull Clark</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples/subd.html">Mesh Subdivision</a></li>
 <li class="toctree-l2"><a class="reference internal" href="examples/triangulation.html">Triangulation</a></li>
 </ul>
 </li>
@@ -532,20 +533,24 @@ document.write(`
 <li class="toctree-l3"><a class="reference internal" href="api/generated/compas_cgal.slicer.slice_mesh_planes.html">slice_mesh_planes</a></li>
 </ul>
 </li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="api/compas_cgal.subdivision.html">compas_cgal.subdivision</a><input class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-8"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="api/compas_cgal.skeletonization.html">compas_cgal.skeletonization</a><input class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-8"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="api/generated/compas_cgal.skeletonization.mesh_skeleton.html">mesh_skeleton</a></li>
+</ul>
+</li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="api/compas_cgal.subdivision.html">compas_cgal.subdivision</a><input class="toctree-checkbox" id="toctree-checkbox-9" name="toctree-checkbox-9" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-9"><i class="fa-solid fa-chevron-down"></i></label><ul>
 <li class="toctree-l3"><a class="reference internal" href="api/generated/compas_cgal.subdivision.mesh_subdivide_catmull_clark.html">mesh_subdivide_catmull_clark</a></li>
 <li class="toctree-l3"><a class="reference internal" href="api/generated/compas_cgal.subdivision.mesh_subdivide_loop.html">mesh_subdivide_loop</a></li>
 <li class="toctree-l3"><a class="reference internal" href="api/generated/compas_cgal.subdivision.mesh_subdivide_sqrt3.html">mesh_subdivide_sqrt3</a></li>
 </ul>
 </li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="api/compas_cgal.triangulation.html">compas_cgal.triangulation</a><input class="toctree-checkbox" id="toctree-checkbox-9" name="toctree-checkbox-9" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-9"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="api/compas_cgal.triangulation.html">compas_cgal.triangulation</a><input class="toctree-checkbox" id="toctree-checkbox-10" name="toctree-checkbox-10" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-10"><i class="fa-solid fa-chevron-down"></i></label><ul>
 <li class="toctree-l3"><a class="reference internal" href="api/generated/compas_cgal.triangulation.delaunay_triangulation.html">delaunay_triangulation</a></li>
 <li class="toctree-l3"><a class="reference internal" href="api/generated/compas_cgal.triangulation.constrained_delaunay_triangulation.html">constrained_delaunay_triangulation</a></li>
 <li class="toctree-l3"><a class="reference internal" href="api/generated/compas_cgal.triangulation.conforming_delaunay_triangulation.html">conforming_delaunay_triangulation</a></li>
 <li class="toctree-l3"><a class="reference internal" href="api/generated/compas_cgal.triangulation.refined_delaunay_mesh.html">refined_delaunay_mesh</a></li>
 </ul>
 </li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="api/compas_cgal.types.html">compas_cgal.types</a><input class="toctree-checkbox" id="toctree-checkbox-10" name="toctree-checkbox-10" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-10"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="api/compas_cgal.types.html">compas_cgal.types</a><input class="toctree-checkbox" id="toctree-checkbox-11" name="toctree-checkbox-11" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-11"><i class="fa-solid fa-chevron-down"></i></label><ul>
 <li class="toctree-l3"><a class="reference internal" href="api/generated/compas_cgal.types.Vertices.html">Vertices</a></li>
 <li class="toctree-l3"><a class="reference internal" href="api/generated/compas_cgal.types.Faces.html">Faces</a></li>
 <li class="toctree-l3"><a class="reference internal" href="api/generated/compas_cgal.types.VerticesFaces.html">VerticesFaces</a></li>
@@ -611,8 +616,9 @@ of <a class="reference external" href="https://www.cgal.org/">CGAL, The Computat
 <li class="toctree-l2"><a class="reference internal" href="examples/intersections.html">Mesh intersections</a></li>
 <li class="toctree-l2"><a class="reference internal" href="examples/mesh_split.html">Mesh Split</a></li>
 <li class="toctree-l2"><a class="reference internal" href="examples/remeshing.html">Remeshing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples/skeletonization.html">Triangle Mesh Skeletonization</a></li>
 <li class="toctree-l2"><a class="reference internal" href="examples/slicer.html">Mesh slicing</a></li>
-<li class="toctree-l2"><a class="reference internal" href="examples/subd.html">Subdivision with Catmull Clark</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples/subd.html">Mesh Subdivision</a></li>
 <li class="toctree-l2"><a class="reference internal" href="examples/triangulation.html">Triangulation</a></li>
 </ul>
 </li>
@@ -640,6 +646,10 @@ of <a class="reference external" href="https://www.cgal.org/">CGAL, The Computat
 </li>
 <li class="toctree-l2"><a class="reference internal" href="api/compas_cgal.slicer.html">compas_cgal.slicer</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="api/generated/compas_cgal.slicer.slice_mesh_planes.html">slice_mesh_planes</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="api/compas_cgal.skeletonization.html">compas_cgal.skeletonization</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="api/generated/compas_cgal.skeletonization.mesh_skeleton.html">mesh_skeleton</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="api/compas_cgal.subdivision.html">compas_cgal.subdivision</a><ul>
