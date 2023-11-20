@@ -9,7 +9,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
-    <title>PolylinesNumpy &#8212; COMPAS CGAL</title>
+    <title>compas_cgal.reconstruction &#8212; COMPAS CGAL</title>
   
   
   
@@ -19,51 +19,51 @@
   </script>
   
   <!-- Loaded before other Sphinx assets -->
-  <link href="../../_static/styles/theme.css?digest=e353d410970836974a52" rel="stylesheet" />
-<link href="../../_static/styles/bootstrap.css?digest=e353d410970836974a52" rel="stylesheet" />
-<link href="../../_static/styles/pydata-sphinx-theme.css?digest=e353d410970836974a52" rel="stylesheet" />
+  <link href="../_static/styles/theme.css?digest=e353d410970836974a52" rel="stylesheet" />
+<link href="../_static/styles/bootstrap.css?digest=e353d410970836974a52" rel="stylesheet" />
+<link href="../_static/styles/pydata-sphinx-theme.css?digest=e353d410970836974a52" rel="stylesheet" />
 
   
-  <link href="../../_static/vendor/fontawesome/6.1.2/css/all.min.css?digest=e353d410970836974a52" rel="stylesheet" />
-  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../_static/vendor/fontawesome/6.1.2/webfonts/fa-solid-900.woff2" />
-<link rel="preload" as="font" type="font/woff2" crossorigin href="../../_static/vendor/fontawesome/6.1.2/webfonts/fa-brands-400.woff2" />
-<link rel="preload" as="font" type="font/woff2" crossorigin href="../../_static/vendor/fontawesome/6.1.2/webfonts/fa-regular-400.woff2" />
+  <link href="../_static/vendor/fontawesome/6.1.2/css/all.min.css?digest=e353d410970836974a52" rel="stylesheet" />
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../_static/vendor/fontawesome/6.1.2/webfonts/fa-solid-900.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../_static/vendor/fontawesome/6.1.2/webfonts/fa-brands-400.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../_static/vendor/fontawesome/6.1.2/webfonts/fa-regular-400.woff2" />
 
-    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css" />
-    <link rel="stylesheet" type="text/css" href="../../_static/graphviz.css" />
-    <link rel="stylesheet" type="text/css" href="../../_static/tabs.css" />
-    <link rel="stylesheet" type="text/css" href="../../_static/togglebutton.css" />
-    <link rel="stylesheet" type="text/css" href="../../_static/copybutton.css" />
-    <link rel="stylesheet" type="text/css" href="../../_static/design-style.1e8bd061cd6da7fc9cf755528e8ffc24.min.css" />
-    <link rel="stylesheet" type="text/css" href="../../_static/compas.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/tabs.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/togglebutton.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/design-style.1e8bd061cd6da7fc9cf755528e8ffc24.min.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/compas.css" />
   
   <!-- Pre-loaded scripts that we'll load fully later -->
-  <link rel="preload" as="script" href="../../_static/scripts/bootstrap.js?digest=e353d410970836974a52" />
-<link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=e353d410970836974a52" />
+  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=e353d410970836974a52" />
+<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=e353d410970836974a52" />
 
-    <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
-    <script src="../../_static/jquery.js"></script>
-    <script src="../../_static/underscore.js"></script>
-    <script src="../../_static/doctools.js"></script>
-    <script src="../../_static/tabs.js"></script>
-    <script src="../../_static/clipboard.min.js"></script>
-    <script src="../../_static/copybutton.js"></script>
+    <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
+    <script src="../_static/jquery.js"></script>
+    <script src="../_static/underscore.js"></script>
+    <script src="../_static/doctools.js"></script>
+    <script src="../_static/tabs.js"></script>
+    <script src="../_static/clipboard.min.js"></script>
+    <script src="../_static/copybutton.js"></script>
     <script>let toggleHintShow = 'Click to show';</script>
     <script>let toggleHintHide = 'Click to hide';</script>
     <script>let toggleOpenOnPrint = 'true';</script>
-    <script src="../../_static/togglebutton.js"></script>
-    <script src="../../_static/design-tabs.js"></script>
+    <script src="../_static/togglebutton.js"></script>
+    <script src="../_static/design-tabs.js"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
-    <script>DOCUMENTATION_OPTIONS.pagename = 'api/generated/compas_cgal.types.PolylinesNumpy';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'api/compas_cgal.reconstruction';</script>
     <script>
         DOCUMENTATION_OPTIONS.theme_switcher_json_url = 'https://raw.githubusercontent.com/compas-dev/compas_cgal/gh-pages/versions.json';
         DOCUMENTATION_OPTIONS.theme_switcher_version_match = 'latest';
         </script>
-    <link rel="shortcut icon" href="../../_static/compas.ico"/>
-    <link rel="index" title="Index" href="../../genindex.html" />
-    <link rel="search" title="Search" href="../../search.html" />
-    <link rel="next" title="Development Guide" href="../../devguide.html" />
-    <link rel="prev" title="VerticesFacesNumpy" href="compas_cgal.types.VerticesFacesNumpy.html" />
+    <link rel="shortcut icon" href="../_static/compas.ico"/>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="compas_cgal.slicer" href="compas_cgal.slicer.html" />
+    <link rel="prev" title="mesh_remesh" href="generated/compas_cgal.meshing.mesh_remesh.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   </head>
@@ -91,7 +91,7 @@
     <div class="search-button__overlay"></div>
     <div class="search-button__search-container">
 <form class="bd-search d-flex align-items-center"
-      action="../../search.html"
+      action="../search.html"
       method="get">
   <i class="fa-solid fa-magnifying-glass"></i>
   <input type="search"
@@ -119,7 +119,7 @@
       <div class="navbar-item">
   
 
-<a class="navbar-brand logo" href="../../index.html">
+<a class="navbar-brand logo" href="../index.html">
   
   
   
@@ -129,8 +129,8 @@
       
     
     
-    <img src="../../_static/compas_icon.png" class="logo__image only-light" alt="Logo image"/>
-    <script>document.write(`<img src="../../_static/compas_icon_white.png" class="logo__image only-dark" alt="Logo image"/>`);</script>
+    <img src="../_static/compas_icon.png" class="logo__image only-light" alt="Logo image"/>
+    <script>document.write(`<img src="../_static/compas_icon_white.png" class="logo__image only-dark" alt="Logo image"/>`);</script>
   
   
     <p class="title logo__title">COMPAS CGAL</p>
@@ -154,35 +154,35 @@
   <ul class="bd-navbar-elements navbar-nav">
     
                     <li class="nav-item">
-                      <a class="nav-link nav-internal" href="../../index.html">
+                      <a class="nav-link nav-internal" href="../index.html">
                         Introduction
                       </a>
                     </li>
                 
 
                     <li class="nav-item">
-                      <a class="nav-link nav-internal" href="../../installation.html">
+                      <a class="nav-link nav-internal" href="../installation.html">
                         Installation
                       </a>
                     </li>
                 
 
                     <li class="nav-item">
-                      <a class="nav-link nav-internal" href="../../tutorial.html">
+                      <a class="nav-link nav-internal" href="../tutorial.html">
                         Tutorial
                       </a>
                     </li>
                 
 
                     <li class="nav-item">
-                      <a class="nav-link nav-internal" href="../../examples.html">
+                      <a class="nav-link nav-internal" href="../examples.html">
                         Examples
                       </a>
                     </li>
                 
 
                     <li class="nav-item current active">
-                      <a class="nav-link nav-internal" href="../../api.html">
+                      <a class="nav-link nav-internal" href="../api.html">
                         API Reference
                       </a>
                     </li>
@@ -194,21 +194,21 @@
                 <div class="dropdown-menu">
                     
                     <li class="nav-item">
-                      <a class="nav-link nav-internal" href="../../devguide.html">
+                      <a class="nav-link nav-internal" href="../devguide.html">
                         Development Guide
                       </a>
                     </li>
                 
 
                     <li class="nav-item">
-                      <a class="nav-link nav-internal" href="../../license.html">
+                      <a class="nav-link nav-internal" href="../license.html">
                         License
                       </a>
                     </li>
                 
 
                     <li class="nav-item">
-                      <a class="nav-link nav-internal" href="../../acknowledgements.html">
+                      <a class="nav-link nav-internal" href="../acknowledgements.html">
                         Acknowledgements
                       </a>
                     </li>
@@ -345,35 +345,35 @@ document.write(`
   <ul class="bd-navbar-elements navbar-nav">
     
                     <li class="nav-item">
-                      <a class="nav-link nav-internal" href="../../index.html">
+                      <a class="nav-link nav-internal" href="../index.html">
                         Introduction
                       </a>
                     </li>
                 
 
                     <li class="nav-item">
-                      <a class="nav-link nav-internal" href="../../installation.html">
+                      <a class="nav-link nav-internal" href="../installation.html">
                         Installation
                       </a>
                     </li>
                 
 
                     <li class="nav-item">
-                      <a class="nav-link nav-internal" href="../../tutorial.html">
+                      <a class="nav-link nav-internal" href="../tutorial.html">
                         Tutorial
                       </a>
                     </li>
                 
 
                     <li class="nav-item">
-                      <a class="nav-link nav-internal" href="../../examples.html">
+                      <a class="nav-link nav-internal" href="../examples.html">
                         Examples
                       </a>
                     </li>
                 
 
                     <li class="nav-item current active">
-                      <a class="nav-link nav-internal" href="../../api.html">
+                      <a class="nav-link nav-internal" href="../api.html">
                         API Reference
                       </a>
                     </li>
@@ -385,21 +385,21 @@ document.write(`
                 <div class="dropdown-menu">
                     
                     <li class="nav-item">
-                      <a class="nav-link nav-internal" href="../../devguide.html">
+                      <a class="nav-link nav-internal" href="../devguide.html">
                         Development Guide
                       </a>
                     </li>
                 
 
                     <li class="nav-item">
-                      <a class="nav-link nav-internal" href="../../license.html">
+                      <a class="nav-link nav-internal" href="../license.html">
                         License
                       </a>
                     </li>
                 
 
                     <li class="nav-item">
-                      <a class="nav-link nav-internal" href="../../acknowledgements.html">
+                      <a class="nav-link nav-internal" href="../acknowledgements.html">
                         Acknowledgements
                       </a>
                     </li>
@@ -490,81 +490,81 @@ document.write(`
         <div class="sidebar-primary-item"><nav class="bd-links" id="bd-docs-nav" aria-label="Main">
     <div class="bd-toc-item navbar-nav active">
         <ul class="current nav bd-sidenav">
-<li class="toctree-l1"><a class="reference internal" href="../../index.html">Introduction</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../installation.html">Installation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../tutorial.html">Tutorial</a></li>
-<li class="toctree-l1 has-children"><a class="reference internal" href="../../examples.html">Examples</a><input class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-1"><i class="fa-solid fa-chevron-down"></i></label><ul>
-<li class="toctree-l2"><a class="reference internal" href="../../examples/booleans.html">Boolean operations</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../examples/intersections.html">Mesh intersections</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../examples/mesh_split.html">Mesh Split</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../examples/reconstruction.html">Poisson Surface Reconstruction</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../examples/remeshing.html">Remeshing</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../examples/skeletonization.html">Triangle Mesh Skeletonization</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../examples/slicer.html">Mesh slicing</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../examples/subd.html">Mesh Subdivision</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../examples/triangulation.html">Triangulation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../index.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorial.html">Tutorial</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../examples.html">Examples</a><input class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-1"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../examples/booleans.html">Boolean operations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../examples/intersections.html">Mesh intersections</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../examples/mesh_split.html">Mesh Split</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../examples/reconstruction.html">Poisson Surface Reconstruction</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../examples/remeshing.html">Remeshing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../examples/skeletonization.html">Triangle Mesh Skeletonization</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../examples/slicer.html">Mesh slicing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../examples/subd.html">Mesh Subdivision</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../examples/triangulation.html">Triangulation</a></li>
 </ul>
 </li>
-<li class="toctree-l1 current active has-children"><a class="reference internal" href="../../api.html">API Reference</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-2"><i class="fa-solid fa-chevron-down"></i></label><ul class="current">
-<li class="toctree-l2 has-children"><a class="reference internal" href="../compas_cgal.booleans.html">compas_cgal.booleans</a><input class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-3"><i class="fa-solid fa-chevron-down"></i></label><ul>
-<li class="toctree-l3"><a class="reference internal" href="compas_cgal.booleans.boolean_union_mesh_mesh.html">boolean_union_mesh_mesh</a></li>
-<li class="toctree-l3"><a class="reference internal" href="compas_cgal.booleans.boolean_difference_mesh_mesh.html">boolean_difference_mesh_mesh</a></li>
-<li class="toctree-l3"><a class="reference internal" href="compas_cgal.booleans.boolean_intersection_mesh_mesh.html">boolean_intersection_mesh_mesh</a></li>
-<li class="toctree-l3"><a class="reference internal" href="compas_cgal.booleans.split_mesh_mesh.html">split_mesh_mesh</a></li>
+<li class="toctree-l1 current active has-children"><a class="reference internal" href="../api.html">API Reference</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-2"><i class="fa-solid fa-chevron-down"></i></label><ul class="current">
+<li class="toctree-l2 has-children"><a class="reference internal" href="compas_cgal.booleans.html">compas_cgal.booleans</a><input class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-3"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="generated/compas_cgal.booleans.boolean_union_mesh_mesh.html">boolean_union_mesh_mesh</a></li>
+<li class="toctree-l3"><a class="reference internal" href="generated/compas_cgal.booleans.boolean_difference_mesh_mesh.html">boolean_difference_mesh_mesh</a></li>
+<li class="toctree-l3"><a class="reference internal" href="generated/compas_cgal.booleans.boolean_intersection_mesh_mesh.html">boolean_intersection_mesh_mesh</a></li>
+<li class="toctree-l3"><a class="reference internal" href="generated/compas_cgal.booleans.split_mesh_mesh.html">split_mesh_mesh</a></li>
 </ul>
 </li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../compas_cgal.intersections.html">compas_cgal.intersections</a><input class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-4"><i class="fa-solid fa-chevron-down"></i></label><ul>
-<li class="toctree-l3"><a class="reference internal" href="compas_cgal.intersections.intersection_mesh_mesh.html">intersection_mesh_mesh</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="compas_cgal.intersections.html">compas_cgal.intersections</a><input class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-4"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="generated/compas_cgal.intersections.intersection_mesh_mesh.html">intersection_mesh_mesh</a></li>
 </ul>
 </li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../compas_cgal.measure.html">compas_cgal.measure</a><input class="toctree-checkbox" id="toctree-checkbox-5" name="toctree-checkbox-5" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-5"><i class="fa-solid fa-chevron-down"></i></label><ul>
-<li class="toctree-l3"><a class="reference internal" href="compas_cgal.measure.mesh_area.html">mesh_area</a></li>
-<li class="toctree-l3"><a class="reference internal" href="compas_cgal.measure.mesh_volume.html">mesh_volume</a></li>
-<li class="toctree-l3"><a class="reference internal" href="compas_cgal.measure.mesh_centroid.html">mesh_centroid</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="compas_cgal.measure.html">compas_cgal.measure</a><input class="toctree-checkbox" id="toctree-checkbox-5" name="toctree-checkbox-5" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-5"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="generated/compas_cgal.measure.mesh_area.html">mesh_area</a></li>
+<li class="toctree-l3"><a class="reference internal" href="generated/compas_cgal.measure.mesh_volume.html">mesh_volume</a></li>
+<li class="toctree-l3"><a class="reference internal" href="generated/compas_cgal.measure.mesh_centroid.html">mesh_centroid</a></li>
 </ul>
 </li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../compas_cgal.meshing.html">compas_cgal.meshing</a><input class="toctree-checkbox" id="toctree-checkbox-6" name="toctree-checkbox-6" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-6"><i class="fa-solid fa-chevron-down"></i></label><ul>
-<li class="toctree-l3"><a class="reference internal" href="compas_cgal.meshing.mesh_remesh.html">mesh_remesh</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="compas_cgal.meshing.html">compas_cgal.meshing</a><input class="toctree-checkbox" id="toctree-checkbox-6" name="toctree-checkbox-6" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-6"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="generated/compas_cgal.meshing.mesh_remesh.html">mesh_remesh</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="../compas_cgal.reconstruction.html">compas_cgal.reconstruction</a></li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../compas_cgal.slicer.html">compas_cgal.slicer</a><input class="toctree-checkbox" id="toctree-checkbox-7" name="toctree-checkbox-7" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-7"><i class="fa-solid fa-chevron-down"></i></label><ul>
-<li class="toctree-l3"><a class="reference internal" href="compas_cgal.slicer.slice_mesh_planes.html">slice_mesh_planes</a></li>
+<li class="toctree-l2 current active"><a class="current reference internal" href="#">compas_cgal.reconstruction</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="compas_cgal.slicer.html">compas_cgal.slicer</a><input class="toctree-checkbox" id="toctree-checkbox-7" name="toctree-checkbox-7" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-7"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="generated/compas_cgal.slicer.slice_mesh_planes.html">slice_mesh_planes</a></li>
 </ul>
 </li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../compas_cgal.skeletonization.html">compas_cgal.skeletonization</a><input class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-8"><i class="fa-solid fa-chevron-down"></i></label><ul>
-<li class="toctree-l3"><a class="reference internal" href="compas_cgal.skeletonization.mesh_skeleton.html">mesh_skeleton</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="compas_cgal.skeletonization.html">compas_cgal.skeletonization</a><input class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-8"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="generated/compas_cgal.skeletonization.mesh_skeleton.html">mesh_skeleton</a></li>
 </ul>
 </li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../compas_cgal.subdivision.html">compas_cgal.subdivision</a><input class="toctree-checkbox" id="toctree-checkbox-9" name="toctree-checkbox-9" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-9"><i class="fa-solid fa-chevron-down"></i></label><ul>
-<li class="toctree-l3"><a class="reference internal" href="compas_cgal.subdivision.mesh_subdivide_catmull_clark.html">mesh_subdivide_catmull_clark</a></li>
-<li class="toctree-l3"><a class="reference internal" href="compas_cgal.subdivision.mesh_subdivide_loop.html">mesh_subdivide_loop</a></li>
-<li class="toctree-l3"><a class="reference internal" href="compas_cgal.subdivision.mesh_subdivide_sqrt3.html">mesh_subdivide_sqrt3</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="compas_cgal.subdivision.html">compas_cgal.subdivision</a><input class="toctree-checkbox" id="toctree-checkbox-9" name="toctree-checkbox-9" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-9"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="generated/compas_cgal.subdivision.mesh_subdivide_catmull_clark.html">mesh_subdivide_catmull_clark</a></li>
+<li class="toctree-l3"><a class="reference internal" href="generated/compas_cgal.subdivision.mesh_subdivide_loop.html">mesh_subdivide_loop</a></li>
+<li class="toctree-l3"><a class="reference internal" href="generated/compas_cgal.subdivision.mesh_subdivide_sqrt3.html">mesh_subdivide_sqrt3</a></li>
 </ul>
 </li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../compas_cgal.triangulation.html">compas_cgal.triangulation</a><input class="toctree-checkbox" id="toctree-checkbox-10" name="toctree-checkbox-10" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-10"><i class="fa-solid fa-chevron-down"></i></label><ul>
-<li class="toctree-l3"><a class="reference internal" href="compas_cgal.triangulation.delaunay_triangulation.html">delaunay_triangulation</a></li>
-<li class="toctree-l3"><a class="reference internal" href="compas_cgal.triangulation.constrained_delaunay_triangulation.html">constrained_delaunay_triangulation</a></li>
-<li class="toctree-l3"><a class="reference internal" href="compas_cgal.triangulation.conforming_delaunay_triangulation.html">conforming_delaunay_triangulation</a></li>
-<li class="toctree-l3"><a class="reference internal" href="compas_cgal.triangulation.refined_delaunay_mesh.html">refined_delaunay_mesh</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="compas_cgal.triangulation.html">compas_cgal.triangulation</a><input class="toctree-checkbox" id="toctree-checkbox-10" name="toctree-checkbox-10" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-10"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="generated/compas_cgal.triangulation.delaunay_triangulation.html">delaunay_triangulation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="generated/compas_cgal.triangulation.constrained_delaunay_triangulation.html">constrained_delaunay_triangulation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="generated/compas_cgal.triangulation.conforming_delaunay_triangulation.html">conforming_delaunay_triangulation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="generated/compas_cgal.triangulation.refined_delaunay_mesh.html">refined_delaunay_mesh</a></li>
 </ul>
 </li>
-<li class="toctree-l2 current active has-children"><a class="reference internal" href="../compas_cgal.types.html">compas_cgal.types</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-11" name="toctree-checkbox-11" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-11"><i class="fa-solid fa-chevron-down"></i></label><ul class="current">
-<li class="toctree-l3"><a class="reference internal" href="compas_cgal.types.Vertices.html">Vertices</a></li>
-<li class="toctree-l3"><a class="reference internal" href="compas_cgal.types.Faces.html">Faces</a></li>
-<li class="toctree-l3"><a class="reference internal" href="compas_cgal.types.VerticesFaces.html">VerticesFaces</a></li>
-<li class="toctree-l3"><a class="reference internal" href="compas_cgal.types.Planes.html">Planes</a></li>
-<li class="toctree-l3"><a class="reference internal" href="compas_cgal.types.VerticesNumpy.html">VerticesNumpy</a></li>
-<li class="toctree-l3"><a class="reference internal" href="compas_cgal.types.FacesNumpy.html">FacesNumpy</a></li>
-<li class="toctree-l3"><a class="reference internal" href="compas_cgal.types.VerticesFacesNumpy.html">VerticesFacesNumpy</a></li>
-<li class="toctree-l3 current active"><a class="current reference internal" href="#">PolylinesNumpy</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="compas_cgal.types.html">compas_cgal.types</a><input class="toctree-checkbox" id="toctree-checkbox-11" name="toctree-checkbox-11" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-11"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="generated/compas_cgal.types.Vertices.html">Vertices</a></li>
+<li class="toctree-l3"><a class="reference internal" href="generated/compas_cgal.types.Faces.html">Faces</a></li>
+<li class="toctree-l3"><a class="reference internal" href="generated/compas_cgal.types.VerticesFaces.html">VerticesFaces</a></li>
+<li class="toctree-l3"><a class="reference internal" href="generated/compas_cgal.types.Planes.html">Planes</a></li>
+<li class="toctree-l3"><a class="reference internal" href="generated/compas_cgal.types.VerticesNumpy.html">VerticesNumpy</a></li>
+<li class="toctree-l3"><a class="reference internal" href="generated/compas_cgal.types.FacesNumpy.html">FacesNumpy</a></li>
+<li class="toctree-l3"><a class="reference internal" href="generated/compas_cgal.types.VerticesFacesNumpy.html">VerticesFacesNumpy</a></li>
+<li class="toctree-l3"><a class="reference internal" href="generated/compas_cgal.types.PolylinesNumpy.html">PolylinesNumpy</a></li>
 </ul>
 </li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="../../devguide.html">Development Guide</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../license.html">License</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../acknowledgements.html">Acknowledgements</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../devguide.html">Development Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../acknowledgements.html">Acknowledgements</a></li>
 </ul>
 
     </div>
@@ -604,17 +604,14 @@ document.write(`
   <ul class="bd-breadcrumbs" role="navigation" aria-label="Breadcrumb">
     
     <li class="breadcrumb-item breadcrumb-home">
-      <a href="../../index.html" class="nav-link" aria-label="Home">
+      <a href="../index.html" class="nav-link" aria-label="Home">
         <i class="fa-solid fa-home"></i>
       </a>
     </li>
     
-    <li class="breadcrumb-item"><a href="../../api.html" class="nav-link">API Reference</a></li>
+    <li class="breadcrumb-item"><a href="../api.html" class="nav-link">API Reference</a></li>
     
-    
-    <li class="breadcrumb-item"><a href="../compas_cgal.types.html" class="nav-link">compas_cgal.types</a></li>
-    
-    <li class="breadcrumb-item active" aria-current="page">PolylinesNumpy</li>
+    <li class="breadcrumb-item active" aria-current="page">compas_cgal.reconstruction</li>
   </ul>
 </nav>
 </div>
@@ -631,15 +628,16 @@ document.write(`
 <div id="searchbox"></div>
                 <article class="bd-article" role="main">
                   
-  <section class="detail" id="polylinesnumpy">
-<h1>PolylinesNumpy</h1>
-<dl class="py data">
-<dt class="sig sig-object py" id="compas_cgal.types.PolylinesNumpy">
-<span class="sig-prename descclassname"><span class="pre">compas_cgal.types.</span></span><span class="sig-name descname"><span class="pre">PolylinesNumpy</span></span></dt>
-<dd><p>A list of polylines, with each polyline represented as a Nx3 array of spatial coordinates.</p>
-<p>alias of <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.List" title="(in Python v3.12)"><code class="xref py py-class docutils literal notranslate"><span class="pre">List</span></code></a>[<code class="xref py py-class docutils literal notranslate"><span class="pre">NDArray</span></code>]</p>
-</dd></dl>
-
+  <section id="compas-cgal-reconstruction">
+<h1>compas_cgal.reconstruction</h1>
+<table class="autosummary longtable table autosummary">
+<colgroup>
+<col style="width: 10%" />
+<col style="width: 90%" />
+</colgroup>
+<tbody>
+</tbody>
+</table>
 </section>
 
 
@@ -654,20 +652,20 @@ document.write(`
     <div class="footer-article-item"><!-- Previous / next buttons -->
 <div class="prev-next-area">
     <a class="left-prev"
-       href="compas_cgal.types.VerticesFacesNumpy.html"
+       href="generated/compas_cgal.meshing.mesh_remesh.html"
        title="previous page">
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">VerticesFacesNumpy</p>
+        <p class="prev-next-title">mesh_remesh</p>
       </div>
     </a>
     <a class="right-next"
-       href="../../devguide.html"
+       href="compas_cgal.slicer.html"
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">Development Guide</p>
+        <p class="prev-next-title">compas_cgal.slicer</p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>
@@ -692,8 +690,8 @@ document.write(`
   </div>
   
   <!-- Scripts loaded after <body> so the DOM is not blocked -->
-  <script src="../../_static/scripts/bootstrap.js?digest=e353d410970836974a52"></script>
-<script src="../../_static/scripts/pydata-sphinx-theme.js?digest=e353d410970836974a52"></script>
+  <script src="../_static/scripts/bootstrap.js?digest=e353d410970836974a52"></script>
+<script src="../_static/scripts/pydata-sphinx-theme.js?digest=e353d410970836974a52"></script>
 
   <footer class="bd-footer">
 <div class="bd-footer__inner bd-page-width">
