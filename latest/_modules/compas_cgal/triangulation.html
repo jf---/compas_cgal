@@ -8,7 +8,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>compas_cgal.intersections &#8212; COMPAS CGAL</title>
+    <title>compas_cgal.triangulation &#8212; COMPAS CGAL</title>
   
   
   
@@ -53,7 +53,7 @@
     <script src="../../_static/togglebutton.js"></script>
     <script src="../../_static/design-tabs.js"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
-    <script>DOCUMENTATION_OPTIONS.pagename = '_modules/compas_cgal/intersections';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = '_modules/compas_cgal/triangulation';</script>
     <script>
         DOCUMENTATION_OPTIONS.theme_switcher_json_url = 'https://raw.githubusercontent.com/compas-dev/compas_cgal/gh-pages/versions.json';
         DOCUMENTATION_OPTIONS.theme_switcher_version_match = 'latest';
@@ -564,7 +564,7 @@ document.write(`
     
     <li class="breadcrumb-item"><a href="../index.html" class="nav-link">Module code</a></li>
     
-    <li class="breadcrumb-item active" aria-current="page">compas_cgal.intersections</li>
+    <li class="breadcrumb-item active" aria-current="page">compas_cgal.triangulation</li>
   </ul>
 </nav>
 </div>
@@ -581,59 +581,190 @@ document.write(`
 <div id="searchbox"></div>
                 <article class="bd-article" role="main">
                   
-  <h1>Source code for compas_cgal.intersections</h1><div class="highlight"><pre>
+  <h1>Source code for compas_cgal.triangulation</h1><div class="highlight"><pre>
 <span></span><span class="kn">from</span> <span class="nn">__future__</span> <span class="kn">import</span> <span class="n">annotations</span>
-<span class="kn">from</span> <span class="nn">.types</span> <span class="kn">import</span> <span class="n">VerticesFaces</span>
-<span class="kn">from</span> <span class="nn">.types</span> <span class="kn">import</span> <span class="n">PolylinesNumpy</span>
+<span class="kn">from</span> <span class="nn">.types</span> <span class="kn">import</span> <span class="n">FacesNumpy</span>
+<span class="kn">from</span> <span class="nn">.types</span> <span class="kn">import</span> <span class="n">VerticesFacesNumpy</span>
 <span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
-<span class="kn">from</span> <span class="nn">compas_cgal._cgal</span> <span class="kn">import</span> <span class="n">intersections</span>
+<span class="kn">from</span> <span class="nn">compas.geometry</span> <span class="kn">import</span> <span class="n">Point</span>
 <span class="kn">from</span> <span class="nn">compas.plugins</span> <span class="kn">import</span> <span class="n">plugin</span>
+<span class="kn">from</span> <span class="nn">compas_cgal._cgal</span> <span class="kn">import</span> <span class="n">triangulations</span>
 
 
-<div class="viewcode-block" id="intersection_mesh_mesh"><a class="viewcode-back" href="../../api/generated/compas_cgal.intersections.intersection_mesh_mesh.html#compas_cgal.intersections.intersection_mesh_mesh">[docs]</a><span class="nd">@plugin</span><span class="p">(</span><span class="n">category</span><span class="o">=</span><span class="s2">&quot;intersections&quot;</span><span class="p">)</span>
-<span class="k">def</span> <span class="nf">intersection_mesh_mesh</span><span class="p">(</span>
-    <span class="n">A</span><span class="p">:</span> <span class="n">VerticesFaces</span><span class="p">,</span>
-    <span class="n">B</span><span class="p">:</span> <span class="n">VerticesFaces</span><span class="p">,</span>
-<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">PolylinesNumpy</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Compute the intersection of tow meshes.</span>
+<div class="viewcode-block" id="delaunay_triangulation"><a class="viewcode-back" href="../../api/generated/compas_cgal.triangulation.delaunay_triangulation.html#compas_cgal.triangulation.delaunay_triangulation">[docs]</a><span class="nd">@plugin</span><span class="p">(</span><span class="n">category</span><span class="o">=</span><span class="s2">&quot;traingulation&quot;</span><span class="p">,</span> <span class="n">requires</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;compas_cgal&quot;</span><span class="p">])</span>
+<span class="k">def</span> <span class="nf">delaunay_triangulation</span><span class="p">(</span><span class="n">points</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Point</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">FacesNumpy</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Construct a Delaunay triangulation from a set of points.</span>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
-<span class="sd">    A : :attr:`compas_cgal.types.VerticesFaces`</span>
-<span class="sd">        Mesh A.</span>
-<span class="sd">    B : :attr:`compas_cgal.types.VerticesFaces`</span>
-<span class="sd">        Mesh B.</span>
+<span class="sd">    points : list[:class:`compas.geometry.Point`]</span>
+<span class="sd">        Points of the triangulation.</span>
 
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
-<span class="sd">    :attr:`compas_cgal.types.PolylinesNumpy`</span>
-<span class="sd">        A list of intersection polylines, with each polyline an array of points.</span>
+<span class="sd">    :attr:`compas_cgal.types.FacesNumpy`</span>
+<span class="sd">        The faces of the triangulation.</span>
 
 <span class="sd">    Examples</span>
 <span class="sd">    --------</span>
-<span class="sd">    &gt;&gt;&gt; from compas.geometry import Box, Sphere, Polyline</span>
-<span class="sd">    &gt;&gt;&gt; from compas_cgal.intersections import intersection_mesh_mesh</span>
+<span class="sd">    &gt;&gt;&gt; from compas.geometry import Pointcloud</span>
+<span class="sd">    &gt;&gt;&gt; from compas.datastructures import Mesh</span>
+<span class="sd">    &gt;&gt;&gt; from compas_cgal.triangulation import delaunay_triangulation</span>
 
-<span class="sd">    &gt;&gt;&gt; box = Box(1)</span>
-<span class="sd">    &gt;&gt;&gt; sphere = Sphere(0.5, point=[1, 1, 1])</span>
+<span class="sd">    &gt;&gt;&gt; points = Pointcloud.from_bounds(8, 5, 0, 17)</span>
+<span class="sd">    &gt;&gt;&gt; triangles = delaunay_triangulation(points)</span>
 
-<span class="sd">    &gt;&gt;&gt; A = box.to_vertices_and_faces(triangulated=True)</span>
-<span class="sd">    &gt;&gt;&gt; B = sphere.to_vertices_and_faces(u=32, v=32, triangulated=True)</span>
-
-<span class="sd">    &gt;&gt;&gt; result = intersection_mesh_mesh(A, B)</span>
-<span class="sd">    &gt;&gt;&gt; polylines = [Polyline(points) for points in result]</span>
+<span class="sd">    &gt;&gt;&gt; mesh = Mesh.from_vertices_and_faces(points, triangles)</span>
 
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="n">VA</span><span class="p">,</span> <span class="n">FA</span> <span class="o">=</span> <span class="n">A</span>
-    <span class="n">VB</span><span class="p">,</span> <span class="n">FB</span> <span class="o">=</span> <span class="n">B</span>
-    <span class="n">VA</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">VA</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
-    <span class="n">FA</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">FA</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int32</span><span class="p">)</span>
-    <span class="n">VB</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">VB</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
-    <span class="n">FB</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">FB</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int32</span><span class="p">)</span>
+    <span class="n">vertices</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">points</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">triangulations</span><span class="o">.</span><span class="n">delaunay_triangulation</span><span class="p">(</span><span class="n">vertices</span><span class="p">)</span></div>
 
-    <span class="n">pointsets</span> <span class="o">=</span> <span class="n">intersections</span><span class="o">.</span><span class="n">intersection_mesh_mesh</span><span class="p">(</span><span class="n">VA</span><span class="p">,</span> <span class="n">FA</span><span class="p">,</span> <span class="n">VB</span><span class="p">,</span> <span class="n">FB</span><span class="p">)</span>
 
-    <span class="k">return</span> <span class="n">pointsets</span></div>
+<div class="viewcode-block" id="constrained_delaunay_triangulation"><a class="viewcode-back" href="../../api/generated/compas_cgal.triangulation.constrained_delaunay_triangulation.html#compas_cgal.triangulation.constrained_delaunay_triangulation">[docs]</a><span class="nd">@plugin</span><span class="p">(</span><span class="n">category</span><span class="o">=</span><span class="s2">&quot;triangulation&quot;</span><span class="p">,</span> <span class="n">requires</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;compas_cgal&quot;</span><span class="p">])</span>
+<span class="k">def</span> <span class="nf">constrained_delaunay_triangulation</span><span class="p">(</span>
+    <span class="n">boundary</span><span class="p">,</span>
+    <span class="n">points</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">holes</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">curves</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">VerticesFacesNumpy</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Construct a Constrained Delaunay triangulation.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    boundary : :class:`compas.geometry.Polygon`</span>
+<span class="sd">        The boundary of the triangulation.</span>
+<span class="sd">    points : list[:class:`compas.geometry.Point`], optional</span>
+<span class="sd">        Additional internal points.</span>
+<span class="sd">    holes : list[:class:`compas.geometry.Polygon`], optional</span>
+<span class="sd">        Internal boundary polygons.</span>
+<span class="sd">    curves : list[:class:`compas.geometry.Polyline`], optional</span>
+<span class="sd">        Internal constraint curves.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    :attr:`compas_cgal.types.VerticesFacesNumpy`</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">boundary</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">boundary</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+
+    <span class="n">points</span> <span class="o">=</span> <span class="n">points</span> <span class="ow">or</span> <span class="p">[]</span>
+    <span class="n">points</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">points</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">holes</span><span class="p">:</span>
+        <span class="n">holes</span> <span class="o">=</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">hole</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span> <span class="k">for</span> <span class="n">hole</span> <span class="ow">in</span> <span class="n">holes</span><span class="p">]</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">holes</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="k">if</span> <span class="n">curves</span><span class="p">:</span>
+        <span class="n">curves</span> <span class="o">=</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">curve</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span> <span class="k">for</span> <span class="n">curve</span> <span class="ow">in</span> <span class="n">curves</span><span class="p">]</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">curves</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="k">return</span> <span class="n">triangulations</span><span class="o">.</span><span class="n">constrained_delaunay_triangulation</span><span class="p">(</span>
+        <span class="n">boundary</span><span class="p">,</span> <span class="n">points</span><span class="p">,</span> <span class="n">holes</span><span class="p">,</span> <span class="n">curves</span><span class="p">,</span> <span class="n">is_conforming</span><span class="o">=</span><span class="kc">False</span>
+    <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="conforming_delaunay_triangulation"><a class="viewcode-back" href="../../api/generated/compas_cgal.triangulation.conforming_delaunay_triangulation.html#compas_cgal.triangulation.conforming_delaunay_triangulation">[docs]</a><span class="nd">@plugin</span><span class="p">(</span><span class="n">category</span><span class="o">=</span><span class="s2">&quot;triangulation&quot;</span><span class="p">,</span> <span class="n">requires</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;compas_cgal&quot;</span><span class="p">])</span>
+<span class="k">def</span> <span class="nf">conforming_delaunay_triangulation</span><span class="p">(</span>
+    <span class="n">boundary</span><span class="p">,</span>
+    <span class="n">points</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">holes</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">curves</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">VerticesFacesNumpy</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Construct a Conforming Delaunay triangulation.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    boundary : :class:`compas.geometry.Polygon`</span>
+<span class="sd">        The boundary of the triangulation.</span>
+<span class="sd">    points : list[:class:`compas.geometry.Point`], optional</span>
+<span class="sd">        Additional internal points.</span>
+<span class="sd">    holes : list[:class:`compas.geometry.Polygon`], optional</span>
+<span class="sd">        Internal boundary polygons.</span>
+<span class="sd">    curves : list[:class:`compas.geometry.Polyline`], optional</span>
+<span class="sd">        Internal constraint curves.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    :attr:`compas_cgal.types.VerticesFacesNumpy`</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">boundary</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">boundary</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+
+    <span class="n">points</span> <span class="o">=</span> <span class="n">points</span> <span class="ow">or</span> <span class="p">[]</span>
+    <span class="n">points</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">points</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">holes</span><span class="p">:</span>
+        <span class="n">holes</span> <span class="o">=</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">hole</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span> <span class="k">for</span> <span class="n">hole</span> <span class="ow">in</span> <span class="n">holes</span><span class="p">]</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">holes</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="k">if</span> <span class="n">curves</span><span class="p">:</span>
+        <span class="n">curves</span> <span class="o">=</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">curve</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span> <span class="k">for</span> <span class="n">curve</span> <span class="ow">in</span> <span class="n">curves</span><span class="p">]</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">curves</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="k">return</span> <span class="n">triangulations</span><span class="o">.</span><span class="n">constrained_delaunay_triangulation</span><span class="p">(</span>
+        <span class="n">boundary</span><span class="p">,</span> <span class="n">points</span><span class="p">,</span> <span class="n">holes</span><span class="p">,</span> <span class="n">curves</span><span class="p">,</span> <span class="n">is_conforming</span><span class="o">=</span><span class="kc">True</span>
+    <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="refined_delaunay_mesh"><a class="viewcode-back" href="../../api/generated/compas_cgal.triangulation.refined_delaunay_mesh.html#compas_cgal.triangulation.refined_delaunay_mesh">[docs]</a><span class="k">def</span> <span class="nf">refined_delaunay_mesh</span><span class="p">(</span>
+    <span class="n">boundary</span><span class="p">,</span>
+    <span class="n">points</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">holes</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">curves</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">maxlength</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">is_optimized</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">VerticesFacesNumpy</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Construct a refined Delaunay mesh.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    boundary : :class:`compas.geometry.Polygon`</span>
+<span class="sd">        The boundary of the triangulation.</span>
+<span class="sd">    points : list[:class:`compas.geometry.Point`], optional</span>
+<span class="sd">        Additional internal points.</span>
+<span class="sd">    holes : list[:class:`compas.geometry.Polygon`], optional</span>
+<span class="sd">        Internal boundary polygons.</span>
+<span class="sd">    curves : list[:class:`compas.geometry.Polyline`], optional</span>
+<span class="sd">        Internal constraint curves.</span>
+<span class="sd">    maxlength : float, optional</span>
+<span class="sd">        The maximum length of the triangle edges.</span>
+<span class="sd">    is_optimized : bool, optional</span>
+<span class="sd">        Apply LLoyd&#39;s optimisation [1]_.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    :attr:`compas_cgal.types.VerticesFacesNumpy`</span>
+
+<span class="sd">    References</span>
+<span class="sd">    ----------</span>
+<span class="sd">    .. [1] https://doc.cgal.org/latest/Mesh_2/index.html#secMesh_2_meshes</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">boundary</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">boundary</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+
+    <span class="n">points</span> <span class="o">=</span> <span class="n">points</span> <span class="ow">or</span> <span class="p">[]</span>
+    <span class="n">points</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">points</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">holes</span><span class="p">:</span>
+        <span class="n">holes</span> <span class="o">=</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">hole</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span> <span class="k">for</span> <span class="n">hole</span> <span class="ow">in</span> <span class="n">holes</span><span class="p">]</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">holes</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="k">if</span> <span class="n">curves</span><span class="p">:</span>
+        <span class="n">curves</span> <span class="o">=</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">curve</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span> <span class="k">for</span> <span class="n">curve</span> <span class="ow">in</span> <span class="n">curves</span><span class="p">]</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">curves</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="n">maxlength</span> <span class="o">=</span> <span class="n">maxlength</span> <span class="ow">or</span> <span class="mf">0.0</span>
+
+    <span class="k">return</span> <span class="n">triangulations</span><span class="o">.</span><span class="n">refined_delaunay_mesh</span><span class="p">(</span>
+        <span class="n">boundary</span><span class="p">,</span> <span class="n">points</span><span class="p">,</span> <span class="n">holes</span><span class="p">,</span> <span class="n">curves</span><span class="p">,</span> <span class="n">maxlength</span><span class="o">=</span><span class="n">maxlength</span><span class="p">,</span> <span class="n">is_optimized</span><span class="o">=</span><span class="n">is_optimized</span>
+    <span class="p">)</span></div>
 </pre></div>
 
                 </article>
