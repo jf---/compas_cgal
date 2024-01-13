@@ -9,7 +9,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.19: https://docutils.sourceforge.io/" />
     <link rel="icon" href="../_static/compas.ico" type="image/x-icon">
-    <title>Triangle Mesh Skeletonization &#8212; COMPAS CGAL</title>
+    <title>Pointset Normal Estimation &#8212; COMPAS CGAL</title>
   
   
   
@@ -52,15 +52,15 @@
     <script src="../_static/togglebutton.js"></script>
     <script src="../_static/design-tabs.js"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
-    <script>DOCUMENTATION_OPTIONS.pagename = 'examples/skeletonization';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'examples/pointsets_normals';</script>
     <script>
         DOCUMENTATION_OPTIONS.theme_switcher_json_url = 'https://raw.githubusercontent.com/compas-dev/compas_cgal/gh-pages/versions.json';
         DOCUMENTATION_OPTIONS.theme_switcher_version_match = 'latest';
         </script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="Mesh slicing" href="slicer.html" />
-    <link rel="prev" title="Remeshing" href="remeshing.html" />
+    <link rel="next" title="Pointset Smoothing" href="pointsets_smoothing.html" />
+    <link rel="prev" title="Pointset Outlier Removal" href="pointsets.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   </head>
@@ -496,11 +496,11 @@ document.write(`
 <li class="toctree-l2"><a class="reference internal" href="mesh_split.html">Mesh Split</a></li>
 <li class="toctree-l2"><a class="reference internal" href="pointset_reduction.html">Pointset Reduction</a></li>
 <li class="toctree-l2"><a class="reference internal" href="pointsets.html">Pointset Outlier Removal</a></li>
-<li class="toctree-l2"><a class="reference internal" href="pointsets_normals.html">Pointset Normal Estimation</a></li>
+<li class="toctree-l2 current active"><a class="current reference internal" href="#">Pointset Normal Estimation</a></li>
 <li class="toctree-l2"><a class="reference internal" href="pointsets_smoothing.html">Pointset Smoothing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="reconstruction.html">Poisson Surface Reconstruction</a></li>
 <li class="toctree-l2"><a class="reference internal" href="remeshing.html">Remeshing</a></li>
-<li class="toctree-l2 current active"><a class="current reference internal" href="#">Triangle Mesh Skeletonization</a></li>
+<li class="toctree-l2"><a class="reference internal" href="skeletonization.html">Triangle Mesh Skeletonization</a></li>
 <li class="toctree-l2"><a class="reference internal" href="slicer.html">Mesh slicing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="subd.html">Mesh Subdivision</a></li>
 <li class="toctree-l2"><a class="reference internal" href="triangulation.html">Triangulation</a></li>
@@ -568,7 +568,7 @@ document.write(`
     
     <li class="breadcrumb-item"><a href="../examples.html" class="nav-link">Examples</a></li>
     
-    <li class="breadcrumb-item active" aria-current="page">Triangle Mesh Skeletonization</li>
+    <li class="breadcrumb-item active" aria-current="page">Pointset Normal Estimation</li>
   </ul>
 </nav>
 </div>
@@ -585,46 +585,61 @@ document.write(`
 <div id="searchbox"></div>
                 <article class="bd-article" role="main">
                   
-  <section id="triangle-mesh-skeletonization">
-<h1>Triangle Mesh Skeletonization</h1>
+  <section id="pointset-normal-estimation">
+<h1>Pointset Normal Estimation</h1>
 <figure class="figure align-default">
-<img alt="../_images/cgal_skeletonization.png" class="figure-img img-fluid" src="../_images/cgal_skeletonization.png" />
+<img alt="../_images/cgal_pointset_normal_estimation.png" class="figure-img img-fluid" src="../_images/cgal_pointset_normal_estimation.png" />
 </figure>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">math</span>
-<span class="kn">from</span> <span class="nn">pathlib</span> <span class="kn">import</span> <span class="n">Path</span>
-<span class="kn">from</span> <span class="nn">compas.datastructures</span> <span class="kn">import</span> <span class="n">Mesh</span>
-<span class="kn">from</span> <span class="nn">compas.geometry</span> <span class="kn">import</span> <span class="n">Polyline</span>
-<span class="kn">from</span> <span class="nn">compas.geometry</span> <span class="kn">import</span> <span class="n">Rotation</span><span class="p">,</span> <span class="n">Scale</span><span class="p">,</span> <span class="n">Translation</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">pathlib</span> <span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">from</span> <span class="nn">compas.geometry</span> <span class="kn">import</span> <span class="n">Pointcloud</span><span class="p">,</span> <span class="n">Point</span><span class="p">,</span> <span class="n">Line</span>
 <span class="kn">from</span> <span class="nn">compas_view2.app</span> <span class="kn">import</span> <span class="n">App</span>
-<span class="kn">from</span> <span class="nn">compas_view2.objects</span> <span class="kn">import</span> <span class="n">Collection</span>
-<span class="kn">from</span> <span class="nn">compas_cgal.skeletonization</span> <span class="kn">import</span> <span class="n">mesh_skeleton</span>
-<span class="kn">from</span> <span class="nn">compas_cgal.subdivision</span> <span class="kn">import</span> <span class="n">mesh_subdivide_sqrt3</span>
+<span class="kn">from</span> <span class="nn">compas_view2.collections</span> <span class="kn">import</span> <span class="n">Collection</span>
+<span class="kn">from</span> <span class="nn">compas.colors</span> <span class="kn">import</span> <span class="n">Color</span>
+<span class="kn">from</span> <span class="nn">compas_cgal.reconstruction</span> <span class="kn">import</span> <span class="n">pointset_normal_estimation</span>
 
-<span class="n">FILE</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="vm">__file__</span><span class="p">)</span><span class="o">.</span><span class="n">parent</span><span class="o">.</span><span class="n">parent</span><span class="o">.</span><span class="n">parent</span> <span class="o">/</span> <span class="s2">&quot;data&quot;</span> <span class="o">/</span> <span class="s2">&quot;elephant.off&quot;</span>
+<span class="c1"># Define the file path for the point cloud data</span>
+<span class="n">FILE</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="vm">__file__</span><span class="p">)</span><span class="o">.</span><span class="n">parent</span><span class="o">.</span><span class="n">parent</span><span class="o">.</span><span class="n">parent</span> <span class="o">/</span> <span class="s2">&quot;data&quot;</span> <span class="o">/</span> <span class="s2">&quot;forked_branch_1.ply&quot;</span>
 
-<span class="n">Rx</span> <span class="o">=</span> <span class="n">Rotation</span><span class="o">.</span><span class="n">from_axis_and_angle</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">math</span><span class="o">.</span><span class="n">radians</span><span class="p">(</span><span class="mi">60</span><span class="p">))</span>
-<span class="n">Ry</span> <span class="o">=</span> <span class="n">Rotation</span><span class="o">.</span><span class="n">from_axis_and_angle</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">math</span><span class="o">.</span><span class="n">radians</span><span class="p">(</span><span class="mi">5</span><span class="p">))</span>
-<span class="n">R</span> <span class="o">=</span> <span class="n">Ry</span> <span class="o">*</span> <span class="n">Rx</span>
-<span class="n">S</span> <span class="o">=</span> <span class="n">Scale</span><span class="o">.</span><span class="n">from_factors</span><span class="p">([</span><span class="mi">5</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">5</span><span class="p">])</span>
-<span class="n">T</span> <span class="o">=</span> <span class="n">Translation</span><span class="o">.</span><span class="n">from_vector</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">])</span>
-<span class="n">mesh</span> <span class="o">=</span> <span class="n">Mesh</span><span class="o">.</span><span class="n">from_off</span><span class="p">(</span><span class="n">FILE</span><span class="p">)</span><span class="o">.</span><span class="n">transformed</span><span class="p">(</span><span class="n">T</span> <span class="o">*</span> <span class="n">R</span> <span class="o">*</span> <span class="n">S</span><span class="p">)</span>
+<span class="c1"># Load the point cloud data from the PLY file</span>
+<span class="n">cloud</span> <span class="o">=</span> <span class="n">Pointcloud</span><span class="o">.</span><span class="n">from_ply</span><span class="p">(</span><span class="n">FILE</span><span class="p">)</span>
 
-<span class="n">V</span><span class="p">,</span> <span class="n">F</span> <span class="o">=</span> <span class="n">mesh</span><span class="o">.</span><span class="n">to_vertices_and_faces</span><span class="p">()</span>
-<span class="n">V</span><span class="p">,</span> <span class="n">F</span> <span class="o">=</span> <span class="n">mesh_subdivide_sqrt3</span><span class="p">((</span><span class="n">V</span><span class="p">,</span> <span class="n">F</span><span class="p">),</span> <span class="n">k</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+<span class="c1"># Estimate normals for the point cloud</span>
+<span class="n">points</span><span class="p">,</span> <span class="n">vectors</span> <span class="o">=</span> <span class="n">pointset_normal_estimation</span><span class="p">(</span><span class="n">cloud</span><span class="p">,</span> <span class="mi">16</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Original points: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">cloud</span><span class="p">)</span><span class="si">}</span><span class="s2">, Points with normals: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">points</span><span class="p">)</span><span class="si">}</span><span class="s2">, Vectors: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">vectors</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 
-<span class="n">pointsets</span> <span class="o">=</span> <span class="n">mesh_skeleton</span><span class="p">((</span><span class="n">V</span><span class="p">,</span> <span class="n">F</span><span class="p">))</span>
+<span class="c1"># Create lines and properties for visualizing normals</span>
+<span class="n">lines</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="n">line_properties</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="n">line_scale</span> <span class="o">=</span> <span class="mi">25</span>
 
-<span class="n">polylines</span> <span class="o">=</span> <span class="p">[]</span>
-<span class="k">for</span> <span class="n">points</span> <span class="ow">in</span> <span class="n">pointsets</span><span class="p">:</span>
-    <span class="n">polyline</span> <span class="o">=</span> <span class="n">Polyline</span><span class="p">(</span><span class="n">points</span><span class="p">)</span>
-    <span class="n">polylines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">polyline</span><span class="p">)</span>
+<span class="c1"># Iterate over points and vectors to create lines and color properties</span>
+<span class="k">for</span> <span class="n">p</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">points</span><span class="p">,</span> <span class="n">vectors</span><span class="p">):</span>
+    <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Line</span><span class="p">(</span><span class="n">Point</span><span class="p">(</span><span class="n">p</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">p</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">p</span><span class="p">[</span><span class="mi">2</span><span class="p">]),</span> <span class="n">Point</span><span class="p">(</span><span class="n">p</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">v</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">line_scale</span><span class="p">,</span> <span class="n">p</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="n">v</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="n">line_scale</span><span class="p">,</span> <span class="n">p</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">+</span> <span class="n">v</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">*</span> <span class="n">line_scale</span><span class="p">)))</span>
+    
+    <span class="c1"># Normalize vector components to be in the range [0, 1] for color representation</span>
+    <span class="n">r</span> <span class="o">=</span> <span class="p">(</span><span class="n">v</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="mf">0.5</span>
+    <span class="n">g</span> <span class="o">=</span> <span class="p">(</span><span class="n">v</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="mf">0.5</span>
+    <span class="n">b</span> <span class="o">=</span> <span class="p">(</span><span class="n">v</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="mf">0.5</span>
+    
+    <span class="c1"># Store line color properties</span>
+    <span class="n">line_properties</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s1">&#39;linecolor&#39;</span><span class="p">:</span> <span class="n">Color</span><span class="p">(</span><span class="n">r</span><span class="p">,</span> <span class="n">g</span><span class="p">,</span> <span class="n">b</span><span class="p">)})</span>
 
+<span class="c1"># Initialize the COMPAS viewer</span>
 <span class="n">viewer</span> <span class="o">=</span> <span class="n">App</span><span class="p">(</span><span class="n">width</span><span class="o">=</span><span class="mi">1600</span><span class="p">,</span> <span class="n">height</span><span class="o">=</span><span class="mi">900</span><span class="p">)</span>
-<span class="n">viewer</span><span class="o">.</span><span class="n">view</span><span class="o">.</span><span class="n">camera</span><span class="o">.</span><span class="n">position</span> <span class="o">=</span> <span class="p">[</span><span class="o">-</span><span class="mi">5</span><span class="p">,</span> <span class="o">-</span><span class="mi">5</span><span class="p">,</span> <span class="mf">1.5</span><span class="p">]</span>
-<span class="n">viewer</span><span class="o">.</span><span class="n">view</span><span class="o">.</span><span class="n">camera</span><span class="o">.</span><span class="n">look_at</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mf">1.5</span><span class="p">])</span>
 
-<span class="n">viewer</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="n">opacity</span><span class="o">=</span><span class="mf">0.5</span><span class="p">)</span>
-<span class="n">viewer</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">Collection</span><span class="p">(</span><span class="n">polylines</span><span class="p">),</span> <span class="n">linewidth</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+<span class="c1"># Adjust viewer settings</span>
+<span class="n">viewer</span><span class="o">.</span><span class="n">view</span><span class="o">.</span><span class="n">camera</span><span class="o">.</span><span class="n">scale</span> <span class="o">=</span> <span class="mi">1000</span>
+<span class="n">viewer</span><span class="o">.</span><span class="n">view</span><span class="o">.</span><span class="n">grid</span><span class="o">.</span><span class="n">cell_size</span> <span class="o">=</span> <span class="mi">1000</span>
+
+<span class="c1"># Create a line collection and add it to the viewer</span>
+<span class="n">line_collection</span> <span class="o">=</span> <span class="n">Collection</span><span class="p">(</span><span class="n">lines</span><span class="p">,</span> <span class="n">line_properties</span><span class="p">)</span>
+<span class="n">viewer</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">Pointcloud</span><span class="p">(</span><span class="n">points</span><span class="p">))</span>
+<span class="n">viewer</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">line_collection</span><span class="p">)</span>
+
+<span class="c1"># Set the camera to zoom to fit all points and lines</span>
+<span class="n">viewer</span><span class="o">.</span><span class="n">view</span><span class="o">.</span><span class="n">camera</span><span class="o">.</span><span class="n">zoom_extents</span><span class="p">()</span>
+
+<span class="c1"># Run the viewer</span>
 <span class="n">viewer</span><span class="o">.</span><span class="n">run</span><span class="p">()</span>
 </pre></div>
 </div>
