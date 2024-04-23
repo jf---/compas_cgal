@@ -577,9 +577,11 @@ document.write(`
 <img alt="../_images/cgal_pointset_smoothing.png" class="figure-img img-fluid" src="../_images/cgal_pointset_smoothing.png" />
 </figure>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">pathlib</span> <span class="kn">import</span> <span class="n">Path</span>
-<span class="kn">from</span> <span class="nn">compas.geometry</span> <span class="kn">import</span> <span class="n">Pointcloud</span><span class="p">,</span> <span class="n">Translation</span>
-<span class="kn">from</span> <span class="nn">compas_view2.app</span> <span class="kn">import</span> <span class="n">App</span>
+
+<span class="kn">from</span> <span class="nn">compas.geometry</span> <span class="kn">import</span> <span class="n">Pointcloud</span>
+<span class="kn">from</span> <span class="nn">compas.geometry</span> <span class="kn">import</span> <span class="n">Translation</span>
 <span class="kn">from</span> <span class="nn">compas_cgal.reconstruction</span> <span class="kn">import</span> <span class="n">pointset_smoothing</span>
+<span class="kn">from</span> <span class="nn">compas_viewer</span> <span class="kn">import</span> <span class="n">Viewer</span>
 
 <span class="c1"># Define the path to the PLY file</span>
 <span class="n">ply_file_path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="vm">__file__</span><span class="p">)</span><span class="o">.</span><span class="n">parent</span><span class="o">.</span><span class="n">parent</span><span class="o">.</span><span class="n">parent</span> <span class="o">/</span> <span class="s2">&quot;data&quot;</span> <span class="o">/</span> <span class="s2">&quot;box.ply&quot;</span>
@@ -599,20 +601,21 @@ document.write(`
 <span class="n">cloud_original</span> <span class="o">=</span> <span class="n">Pointcloud</span><span class="p">(</span><span class="n">original_points</span><span class="p">)</span>
 <span class="n">cloud_transformed</span> <span class="o">=</span> <span class="n">Pointcloud</span><span class="p">(</span><span class="n">smoothed_points</span><span class="p">)</span>
 
-<span class="c1"># Set up the viewer</span>
-<span class="n">viewer</span> <span class="o">=</span> <span class="n">App</span><span class="p">(</span><span class="n">width</span><span class="o">=</span><span class="mi">1600</span><span class="p">,</span> <span class="n">height</span><span class="o">=</span><span class="mi">900</span><span class="p">)</span>
-<span class="n">viewer</span><span class="o">.</span><span class="n">view</span><span class="o">.</span><span class="n">camera</span><span class="o">.</span><span class="n">scale</span> <span class="o">=</span> <span class="mi">1000</span>
-<span class="n">viewer</span><span class="o">.</span><span class="n">view</span><span class="o">.</span><span class="n">grid</span><span class="o">.</span><span class="n">cell_size</span> <span class="o">=</span> <span class="mi">1000</span>
+<span class="c1"># =============================================================================</span>
+<span class="c1"># Viz</span>
+<span class="c1"># =============================================================================</span>
 
-<span class="c1"># Add the Pointclouds to the viewer</span>
-<span class="n">viewer</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">cloud_original</span><span class="p">)</span>
-<span class="n">viewer</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">cloud_transformed</span><span class="p">)</span>
+<span class="n">viewer</span> <span class="o">=</span> <span class="n">Viewer</span><span class="p">()</span>
 
-<span class="c1"># Adjust the camera and grid settings</span>
-<span class="n">viewer</span><span class="o">.</span><span class="n">view</span><span class="o">.</span><span class="n">camera</span><span class="o">.</span><span class="n">zoom_extents</span><span class="p">()</span>
+<span class="c1"># viewer.view.camera.scale = 1000</span>
+<span class="c1"># viewer.view.grid.cell_size = 1000</span>
 
-<span class="c1"># Run the viewer</span>
-<span class="n">viewer</span><span class="o">.</span><span class="n">run</span><span class="p">()</span>
+<span class="c1"># viewer.scene.add(cloud_original)</span>
+<span class="c1"># viewer.scene.add(cloud_transformed)</span>
+
+<span class="c1"># viewer.view.camera.zoom_extents()</span>
+
+<span class="n">viewer</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 </pre></div>
 </div>
 </section>

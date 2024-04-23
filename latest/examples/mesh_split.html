@@ -576,12 +576,12 @@ document.write(`
 <figure class="figure align-default">
 <img alt="../_images/cgal_boolean_split.png" class="figure-img img-fluid" src="../_images/cgal_boolean_split.png" />
 </figure>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">compas.geometry</span> <span class="kn">import</span> <span class="n">Box</span><span class="p">,</span> <span class="n">Sphere</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">compas.colors</span> <span class="kn">import</span> <span class="n">Color</span>
 <span class="kn">from</span> <span class="nn">compas.datastructures</span> <span class="kn">import</span> <span class="n">Mesh</span>
-<span class="kn">from</span> <span class="nn">compas.colors</span> <span class="kn">import</span> <span class="n">Color</span>
-<span class="kn">from</span> <span class="nn">compas_view2.app</span> <span class="kn">import</span> <span class="n">App</span>
-
+<span class="kn">from</span> <span class="nn">compas.geometry</span> <span class="kn">import</span> <span class="n">Box</span>
+<span class="kn">from</span> <span class="nn">compas.geometry</span> <span class="kn">import</span> <span class="n">Sphere</span>
 <span class="kn">from</span> <span class="nn">compas_cgal.booleans</span> <span class="kn">import</span> <span class="n">split_mesh_mesh</span>
+<span class="kn">from</span> <span class="nn">compas_viewer</span> <span class="kn">import</span> <span class="n">Viewer</span>
 
 <span class="c1"># ==============================================================================</span>
 <span class="c1"># Make a box and a sphere</span>
@@ -605,20 +605,22 @@ document.write(`
 <span class="c1"># Seperate disjoint faces and visualize</span>
 <span class="c1"># ==============================================================================</span>
 
-<span class="n">viewer</span> <span class="o">=</span> <span class="n">App</span><span class="p">(</span><span class="n">width</span><span class="o">=</span><span class="mi">1600</span><span class="p">,</span> <span class="n">height</span><span class="o">=</span><span class="mi">900</span><span class="p">)</span>
-<span class="n">viewer</span><span class="o">.</span><span class="n">view</span><span class="o">.</span><span class="n">camera</span><span class="o">.</span><span class="n">position</span> <span class="o">=</span> <span class="p">[</span><span class="mi">5</span><span class="p">,</span> <span class="o">-</span><span class="mi">4</span><span class="p">,</span> <span class="mi">2</span><span class="p">]</span>
-<span class="n">viewer</span><span class="o">.</span><span class="n">view</span><span class="o">.</span><span class="n">camera</span><span class="o">.</span><span class="n">look_at</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">])</span>
+<span class="n">viewer</span> <span class="o">=</span> <span class="n">Viewer</span><span class="p">()</span>
 
-<span class="k">for</span> <span class="n">color</span><span class="p">,</span> <span class="n">vertices</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">([</span><span class="n">Color</span><span class="o">.</span><span class="n">blue</span><span class="p">(),</span> <span class="n">Color</span><span class="o">.</span><span class="n">pink</span><span class="p">()],</span> <span class="n">mesh</span><span class="o">.</span><span class="n">connected_components</span><span class="p">()):</span>
+<span class="c1"># viewer.ui.window.viewport.view3d.camera.position = [...]</span>
+<span class="c1"># viewer.ui.window.viewport.view3d.camera.target = [...]</span>
+
+<span class="k">for</span> <span class="n">color</span><span class="p">,</span> <span class="n">vertices</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">([</span><span class="n">Color</span><span class="o">.</span><span class="n">blue</span><span class="p">(),</span> <span class="n">Color</span><span class="o">.</span><span class="n">pink</span><span class="p">()],</span> <span class="n">mesh</span><span class="o">.</span><span class="n">connected_vertices</span><span class="p">()):</span>
     <span class="n">faces</span> <span class="o">=</span> <span class="p">[]</span>
     <span class="k">for</span> <span class="n">indices</span> <span class="ow">in</span> <span class="n">F</span><span class="p">:</span>
         <span class="k">if</span> <span class="nb">all</span><span class="p">(</span><span class="n">index</span> <span class="ow">in</span> <span class="n">vertices</span> <span class="k">for</span> <span class="n">index</span> <span class="ow">in</span> <span class="n">indices</span><span class="p">):</span>
             <span class="n">faces</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">indices</span><span class="p">)</span>
     <span class="n">mesh</span> <span class="o">=</span> <span class="n">Mesh</span><span class="o">.</span><span class="n">from_vertices_and_faces</span><span class="p">(</span><span class="n">V</span><span class="p">,</span> <span class="n">faces</span><span class="p">)</span>
     <span class="n">mesh</span><span class="o">.</span><span class="n">remove_unused_vertices</span><span class="p">()</span>
-    <span class="n">viewer</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="n">facecolor</span><span class="o">=</span><span class="n">color</span><span class="p">)</span>
 
-<span class="n">viewer</span><span class="o">.</span><span class="n">run</span><span class="p">()</span>
+    <span class="n">viewer</span><span class="o">.</span><span class="n">scene</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="n">facecolor</span><span class="o">=</span><span class="n">color</span><span class="p">,</span> <span class="n">show_points</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+<span class="n">viewer</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 </pre></div>
 </div>
 </section>
