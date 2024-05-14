@@ -609,6 +609,53 @@ document.write(`
 <span class="n">viewer</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 </pre></div>
 </div>
+<figure class="figure align-default">
+<img alt="../_images/cgal_straight_skeleton_2_holes.png" class="figure-img img-fluid" src="../_images/cgal_straight_skeleton_2_holes.png" />
+</figure>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">compas.datastructures</span> <span class="kn">import</span> <span class="n">Graph</span>
+<span class="kn">from</span> <span class="nn">compas.geometry</span> <span class="kn">import</span> <span class="n">Polygon</span>
+<span class="kn">from</span> <span class="nn">compas_viewer</span> <span class="kn">import</span> <span class="n">Viewer</span>
+
+<span class="kn">from</span> <span class="nn">compas_cgal.straight_skeleton_2</span> <span class="kn">import</span> <span class="n">create_interior_straight_skeleton_with_holes</span>
+
+<span class="n">points</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="p">(</span><span class="o">-</span><span class="mf">1.91</span><span class="p">,</span> <span class="mf">3.59</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">),</span>
+    <span class="p">(</span><span class="o">-</span><span class="mf">5.53</span><span class="p">,</span> <span class="o">-</span><span class="mf">5.22</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">),</span>
+    <span class="p">(</span><span class="o">-</span><span class="mf">0.39</span><span class="p">,</span> <span class="o">-</span><span class="mf">1.98</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">),</span>
+    <span class="p">(</span><span class="mf">2.98</span><span class="p">,</span> <span class="o">-</span><span class="mf">5.51</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">),</span>
+    <span class="p">(</span><span class="mf">4.83</span><span class="p">,</span> <span class="o">-</span><span class="mf">2.02</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">),</span>
+    <span class="p">(</span><span class="mf">9.70</span><span class="p">,</span> <span class="o">-</span><span class="mf">3.63</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">),</span>
+    <span class="p">(</span><span class="mf">12.23</span><span class="p">,</span> <span class="mf">1.25</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">),</span>
+    <span class="p">(</span><span class="mf">3.42</span><span class="p">,</span> <span class="mf">0.66</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">),</span>
+    <span class="p">(</span><span class="mf">2.92</span><span class="p">,</span> <span class="mf">4.03</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">),</span>
+    <span class="p">(</span><span class="o">-</span><span class="mf">1.91</span><span class="p">,</span> <span class="mf">3.59</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">),</span>
+<span class="p">]</span>
+
+<span class="n">holes</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="p">[(</span><span class="mf">0.42</span><span class="p">,</span> <span class="mf">0.88</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">),</span> <span class="p">(</span><span class="mf">1.1</span><span class="p">,</span> <span class="o">-</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">),</span> <span class="p">(</span><span class="o">-</span><span class="mf">1.97</span><span class="p">,</span> <span class="o">-</span><span class="mf">0.93</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">),</span> <span class="p">(</span><span class="o">-</span><span class="mf">1.25</span><span class="p">,</span> <span class="mf">1.82</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">)],</span>
+    <span class="p">[(</span><span class="mf">4.25</span><span class="p">,</span> <span class="o">-</span><span class="mf">0.64</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">),</span> <span class="p">(</span><span class="mf">2.9</span><span class="p">,</span> <span class="o">-</span><span class="mf">3.03</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">),</span> <span class="p">(</span><span class="mf">2.12</span><span class="p">,</span> <span class="o">-</span><span class="mf">2.16</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">),</span> <span class="p">(</span><span class="mf">2.89</span><span class="p">,</span> <span class="o">-</span><span class="mf">0.36</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">)],</span>
+    <span class="p">[(</span><span class="mf">10.6</span><span class="p">,</span> <span class="mf">0.29</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">),</span> <span class="p">(</span><span class="mf">9.48</span><span class="p">,</span> <span class="o">-</span><span class="mf">1.54</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">),</span> <span class="p">(</span><span class="mf">5.48</span><span class="p">,</span> <span class="o">-</span><span class="mf">1.26</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">),</span> <span class="p">(</span><span class="mf">5.98</span><span class="p">,</span> <span class="o">-</span><span class="mf">0.04</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">)],</span>
+<span class="p">]</span>
+
+
+<span class="n">polygon</span> <span class="o">=</span> <span class="n">Polygon</span><span class="p">(</span><span class="n">points</span><span class="p">)</span>
+<span class="n">holes</span> <span class="o">=</span> <span class="p">[</span><span class="n">Polygon</span><span class="p">(</span><span class="n">hole</span><span class="p">)</span> <span class="k">for</span> <span class="n">hole</span> <span class="ow">in</span> <span class="n">holes</span><span class="p">]</span>
+<span class="n">lines</span> <span class="o">=</span> <span class="n">create_interior_straight_skeleton_with_holes</span><span class="p">(</span><span class="n">polygon</span><span class="p">,</span> <span class="n">holes</span><span class="p">)</span>
+<span class="n">graph</span> <span class="o">=</span> <span class="n">Graph</span><span class="o">.</span><span class="n">from_lines</span><span class="p">(</span><span class="n">lines</span><span class="p">)</span>
+
+<span class="c1"># ==============================================================================</span>
+<span class="c1"># Viz</span>
+<span class="c1"># ==============================================================================</span>
+
+<span class="n">viewer</span> <span class="o">=</span> <span class="n">Viewer</span><span class="p">(</span><span class="n">width</span><span class="o">=</span><span class="mi">1600</span><span class="p">,</span> <span class="n">height</span><span class="o">=</span><span class="mi">900</span><span class="p">)</span>
+<span class="n">viewer</span><span class="o">.</span><span class="n">renderer_config</span><span class="o">.</span><span class="n">show_grid</span> <span class="o">=</span> <span class="kc">False</span>
+<span class="n">viewer</span><span class="o">.</span><span class="n">scene</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">graph</span><span class="p">,</span> <span class="n">edgecolor</span><span class="o">=</span><span class="p">(</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">))</span>
+<span class="n">viewer</span><span class="o">.</span><span class="n">scene</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">polygon</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">hole</span> <span class="ow">in</span> <span class="n">holes</span><span class="p">:</span>
+    <span class="n">viewer</span><span class="o">.</span><span class="n">scene</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">hole</span><span class="p">)</span>
+<span class="n">viewer</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</pre></div>
+</div>
 </section>
 
 
