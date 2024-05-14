@@ -618,8 +618,8 @@ document.write(`
 
 <span class="n">viewer</span> <span class="o">=</span> <span class="n">Viewer</span><span class="p">()</span>
 
-<span class="c1"># viewer.ui.window.viewport.view3d.camera.position = [...]</span>
-<span class="c1"># viewer.ui.window.viewport.view3d.camera.target = [...]</span>
+<span class="n">viewer</span><span class="o">.</span><span class="n">renderer</span><span class="o">.</span><span class="n">camera</span><span class="o">.</span><span class="n">target</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span>
+<span class="n">viewer</span><span class="o">.</span><span class="n">renderer</span><span class="o">.</span><span class="n">camera</span><span class="o">.</span><span class="n">position</span> <span class="o">=</span> <span class="p">[</span><span class="mi">4</span><span class="p">,</span> <span class="o">-</span><span class="mi">6</span><span class="p">,</span> <span class="mi">3</span><span class="p">]</span>
 
 <span class="n">viewer</span><span class="o">.</span><span class="n">scene</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">Mesh</span><span class="o">.</span><span class="n">from_vertices_and_faces</span><span class="p">(</span><span class="o">*</span><span class="n">A</span><span class="p">),</span> <span class="n">facecolor</span><span class="o">=</span><span class="p">(</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">),</span> <span class="n">show_points</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
 <span class="n">viewer</span><span class="o">.</span><span class="n">scene</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">Mesh</span><span class="o">.</span><span class="n">from_vertices_and_faces</span><span class="p">(</span><span class="o">*</span><span class="n">B</span><span class="p">),</span> <span class="n">facecolor</span><span class="o">=</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">),</span> <span class="n">show_points</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">opacity</span><span class="o">=</span><span class="mf">0.3</span><span class="p">)</span>
@@ -628,7 +628,7 @@ document.write(`
     <span class="n">viewer</span><span class="o">.</span><span class="n">scene</span><span class="o">.</span><span class="n">add</span><span class="p">(</span>
         <span class="n">polyline</span><span class="p">,</span>
         <span class="n">linecolor</span><span class="o">=</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">),</span>
-        <span class="n">linewidth</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+        <span class="n">lineswidth</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
         <span class="n">pointcolor</span><span class="o">=</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">),</span>
         <span class="n">pointsize</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span>
         <span class="n">show_points</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>

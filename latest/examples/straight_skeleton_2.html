@@ -580,9 +580,8 @@ document.write(`
 </figure>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">compas.datastructures</span> <span class="kn">import</span> <span class="n">Graph</span>
 <span class="kn">from</span> <span class="nn">compas.geometry</span> <span class="kn">import</span> <span class="n">Polygon</span>
-<span class="kn">from</span> <span class="nn">compas_viewer</span> <span class="kn">import</span> <span class="n">Viewer</span>
-
 <span class="kn">from</span> <span class="nn">compas_cgal.straight_skeleton_2</span> <span class="kn">import</span> <span class="n">create_interior_straight_skeleton</span>
+<span class="kn">from</span> <span class="nn">compas_viewer</span> <span class="kn">import</span> <span class="n">Viewer</span>
 
 <span class="n">points</span> <span class="o">=</span> <span class="p">[</span>
     <span class="p">(</span><span class="o">-</span><span class="mf">1.91</span><span class="p">,</span> <span class="mf">3.59</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">),</span>
@@ -605,7 +604,6 @@ document.write(`
 <span class="c1"># ==============================================================================</span>
 
 <span class="n">viewer</span> <span class="o">=</span> <span class="n">Viewer</span><span class="p">(</span><span class="n">width</span><span class="o">=</span><span class="mi">1600</span><span class="p">,</span> <span class="n">height</span><span class="o">=</span><span class="mi">900</span><span class="p">)</span>
-<span class="n">viewer</span><span class="o">.</span><span class="n">renderer_config</span><span class="o">.</span><span class="n">show_grid</span> <span class="o">=</span> <span class="kc">False</span>
 <span class="n">viewer</span><span class="o">.</span><span class="n">scene</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">graph</span><span class="p">,</span> <span class="n">edgecolor</span><span class="o">=</span><span class="p">(</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">))</span>
 <span class="n">viewer</span><span class="o">.</span><span class="n">scene</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">polygon</span><span class="p">)</span>
 <span class="n">viewer</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>

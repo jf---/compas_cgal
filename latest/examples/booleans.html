@@ -593,7 +593,7 @@ document.write(`
 <span class="n">A</span> <span class="o">=</span> <span class="n">box</span><span class="o">.</span><span class="n">to_vertices_and_faces</span><span class="p">(</span><span class="n">triangulated</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 
 <span class="n">sphere</span> <span class="o">=</span> <span class="n">Sphere</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">point</span><span class="o">=</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">])</span>
-<span class="n">B</span> <span class="o">=</span> <span class="n">sphere</span><span class="o">.</span><span class="n">to_vertices_and_faces</span><span class="p">(</span><span class="n">u</span><span class="o">=</span><span class="mi">32</span><span class="p">,</span> <span class="n">v</span><span class="o">=</span><span class="mi">32</span><span class="p">,</span> <span class="n">triangulated</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="n">B</span> <span class="o">=</span> <span class="n">sphere</span><span class="o">.</span><span class="n">to_vertices_and_faces</span><span class="p">(</span><span class="n">u</span><span class="o">=</span><span class="mi">64</span><span class="p">,</span> <span class="n">v</span><span class="o">=</span><span class="mi">64</span><span class="p">,</span> <span class="n">triangulated</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 
 <span class="c1"># ==============================================================================</span>
 <span class="c1"># Remesh the sphere</span>
@@ -617,10 +617,10 @@ document.write(`
 
 <span class="n">viewer</span> <span class="o">=</span> <span class="n">Viewer</span><span class="p">()</span>
 
-<span class="c1"># viewer.ui.window.viewport.view3d.camera.position = [...]</span>
-<span class="c1"># viewer.ui.window.viewport.view3d.camera.target = [...]</span>
+<span class="n">viewer</span><span class="o">.</span><span class="n">renderer</span><span class="o">.</span><span class="n">camera</span><span class="o">.</span><span class="n">target</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span>
+<span class="n">viewer</span><span class="o">.</span><span class="n">renderer</span><span class="o">.</span><span class="n">camera</span><span class="o">.</span><span class="n">position</span> <span class="o">=</span> <span class="p">[</span><span class="mi">4</span><span class="p">,</span> <span class="o">-</span><span class="mi">6</span><span class="p">,</span> <span class="mi">3</span><span class="p">]</span>
 
-<span class="n">viewer</span><span class="o">.</span><span class="n">scene</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="n">linewidth</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">show_points</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<span class="n">viewer</span><span class="o">.</span><span class="n">scene</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="n">lineswidth</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">show_points</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
 <span class="n">viewer</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 </pre></div>
 </div>
