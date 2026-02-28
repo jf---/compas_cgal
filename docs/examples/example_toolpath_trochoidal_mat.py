@@ -197,7 +197,7 @@ unmatched_color = Color.from_rgb255(120, 120, 120)
 for edge in skeleton_bisector_edges(polygon):
     pidx = match_skeleton_edge(edge, groups_centers)
     color = fade_color(MAT_PALETTE[pidx % len(MAT_PALETTE)], 50) if pidx is not None else unmatched_color
-    add_curve(viewer.scene, edge, parent=skeleton_group, linecolor=color, linewidth=1.0)
+    add_curve(viewer.scene, edge, parent=skeleton_group, linecolor=color, linewidth=6.0)
 
 for path_index in sorted(groups):
     ops = groups[path_index]
