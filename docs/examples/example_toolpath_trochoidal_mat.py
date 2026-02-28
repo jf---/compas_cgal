@@ -31,9 +31,9 @@ polygon = Polygon(
 
 operations = trochoidal_mat_toolpath_circular(
     polygon,
-    tool_diameter=1.0,
-    stepover=0.5,
-    pitch=0.75,
+    tool_diameter=.1,
+    stepover=0.01,
+    pitch=0.15,
     mat_scale=1.0,
     lead_in=0.15,
     lead_out=0.15,
