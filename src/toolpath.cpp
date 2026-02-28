@@ -207,7 +207,8 @@ trochoid_chain(
         if (!circles[i].is_degenerate()) {
             const double ri = approx_radius(circles[i]);
 
-            if (has_prev && prev_arrival != tangent.source()) {
+            if (has_prev &&
+                CGAL::compare_squared_distance(prev_arrival, tangent.source(), K::FT(1e-18)) == CGAL::LARGER) {
                 // Varying radius: arrival ≠ departure.  Full circle at nominal
                 // winding for complete material removal, then short repositioning
                 // arc (also nominal winding) to reach the tangent departure point.
