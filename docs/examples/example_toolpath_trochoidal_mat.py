@@ -232,9 +232,9 @@ for path_index in sorted(groups):
                 t = k / TANGENT_SAMPLES
                 pt = g.point_at(t)
                 px, py = float(pt[0]), float(pt[1])
-                # tangent = perpendicular to radius
+                # tangent = perpendicular to radius, respecting winding
                 rx, ry = px - cx, py - cy
-                tx, ty = -ry, rx
+                tx, ty = (ry, -rx) if op.clockwise else (-ry, rx)
                 n = (tx * tx + ty * ty) ** 0.5
                 if n < 1e-12:
                     continue
