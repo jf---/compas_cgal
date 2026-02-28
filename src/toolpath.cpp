@@ -392,6 +392,100 @@ points_to_matrix(const std::vector<Point_2>& points)
     return matrix;
 }
 
+void
+validate_toolpath_params(
+    double tool_diameter, double stepover, double pitch,
+    double min_trochoid_radius, double max_trochoid_radius,
+    int samples_per_cycle, int max_passes)
+{
+    if (tool_diameter <= 0.0) throw std::invalid_argument("tool_diameter should be positive.");
+    if (stepover <= 0.0) throw std::invalid_argument("stepover should be positive.");
+    if (pitch <= 0.0) throw std::invalid_argument("pitch should be positive.");
+    if (min_trochoid_radius < 0.0) throw std::invalid_argument("min_trochoid_radius should be >= 0.");
+    if (max_trochoid_radius < 0.0) throw std::invalid_argument("max_trochoid_radius should be >= 0.");
+    if (samples_per_cycle < 4) throw std::invalid_argument("samples_per_cycle should be at least 4.");
+    if (max_passes <= 0) throw std::invalid_argument("max_passes should be positive.");
+}
+
+// Walk the straight skeleton, clip edges to the valid cutter-center domain,
+// and return trochoid chains for each MAT edge.
+std::vector<std::vector<TrochoidArc>>
+mat_edge_chains(
+    const Polygon_2& boundary,
+    const SsPtr& skeleton,
+    double tool_radius,
+    double radial_clearance,
+    double mat_scale,
+    double min_trochoid_radius,
+    double max_trochoid_radius,
+    double pitch,
+    int max_passes)
+{
+    const double min_centerline_distance = tool_radius + radial_clearance;
+
+    auto compute_radius = [&](double boundary_distance) {
+        const double available = mat_scale * std::max(0.0, boundary_distance - tool_radius - radial_clearance);
+        if (available <= 0.0) return 0.0;
+        double r = std::min(max_trochoid_radius, available);
+        if (min_trochoid_radius > 0.0) {
+            r = std::min(available, std::max(r, min_trochoid_radius));
+        }
+        return r;
+    };
+
+    std::vector<std::vector<TrochoidArc>> chains;
+    chains.reserve(static_cast<std::size_t>(max_passes));
+
+    for (auto edge_iter = skeleton->halfedges_begin();
+         edge_iter != skeleton->halfedges_end(); ++edge_iter) {
+        if (!(edge_iter->is_bisector() || edge_iter->is_inner_bisector())) continue;
+
+        const auto v0 = edge_iter->vertex();
+        const auto v1 = edge_iter->opposite()->vertex();
+        if (&*v0 >= &*v1) continue;
+
+        Point_2 p0(v0->point().x(), v0->point().y());
+        Point_2 p1(v1->point().x(), v1->point().y());
+
+        double d0 = distance_to_boundary_xy(p0, boundary);
+        double d1 = distance_to_boundary_xy(p1, boundary);
+
+        if (d0 < min_centerline_distance && d1 < min_centerline_distance) continue;
+
+        // Clip edge to the valid cutter-center domain.
+        if (d0 < min_centerline_distance || d1 < min_centerline_distance) {
+            const double denom = d1 - d0;
+            if (std::abs(denom) < 1e-12) continue;
+            const double t = std::max(0.0, std::min(1.0, (min_centerline_distance - d0) / denom));
+            const Point_2 cp(p0.x() + t * (p1.x() - p0.x()), p0.y() + t * (p1.y() - p0.y()));
+            if (d0 < min_centerline_distance) { p0 = cp; } else { p1 = cp; }
+        }
+
+        d0 = distance_to_boundary_xy(p0, boundary);
+        d1 = distance_to_boundary_xy(p1, boundary);
+
+        // Canonicalize: narrower end first, tie-break via CGAL exact predicate.
+        if (d0 > d1 + 1e-12 ||
+            (std::abs(d0 - d1) <= 1e-12 && CGAL::compare_xy(p0, p1) == CGAL::LARGER)) {
+            std::swap(p0, p1);
+            std::swap(d0, d1);
+        }
+
+        const Vector_2 edge_dir(p1.x() - p0.x(), p1.y() - p0.y());
+        auto circles = trochoid_circles(p0, p1, compute_radius(d0), compute_radius(d1), pitch);
+        if (circles.size() < 2) continue;
+
+        auto chain = trochoid_chain(circles, edge_dir, true);
+        if (!chain.empty()) {
+            chains.push_back(std::move(chain));
+        }
+
+        if (static_cast<int>(chains.size()) >= max_passes) break;
+    }
+
+    return chains;
+}
+
 } // namespace
 
 std::tuple<compas::RowMatrixXd, compas::RowMatrixXd>
@@ -427,129 +521,28 @@ pmp_trochoidal_mat_toolpath(
     int samples_per_cycle,
     int max_passes)
 {
-    if (tool_diameter <= 0.0) {
-        throw std::invalid_argument("tool_diameter should be positive.");
-    }
-    if (stepover <= 0.0) {
-        throw std::invalid_argument("stepover should be positive.");
-    }
-    if (pitch <= 0.0) {
-        throw std::invalid_argument("pitch should be positive.");
-    }
-    if (min_trochoid_radius < 0.0) {
-        throw std::invalid_argument("min_trochoid_radius should be >= 0.");
-    }
-    if (max_trochoid_radius < 0.0) {
-        throw std::invalid_argument("max_trochoid_radius should be >= 0.");
-    }
-    if (samples_per_cycle < 4) {
-        throw std::invalid_argument("samples_per_cycle should be at least 4.");
-    }
-    if (max_passes <= 0) {
-        throw std::invalid_argument("max_passes should be positive.");
-    }
-
-    (void)stepover; // Reserved for API compatibility.
+    validate_toolpath_params(tool_diameter, stepover, pitch,
+        min_trochoid_radius, max_trochoid_radius, samples_per_cycle, max_passes);
 
     Polygon_2 boundary = data_to_polygon(vertices);
-    SsPtr skeleton = CGAL::create_interior_straight_skeleton_2(boundary.vertices_begin(), boundary.vertices_end());
-    if (!skeleton) {
-        return {};
-    }
+    SsPtr skeleton = CGAL::create_interior_straight_skeleton_2(
+        boundary.vertices_begin(), boundary.vertices_end());
+    if (!skeleton) return {};
 
     const double tool_radius = 0.5 * tool_diameter;
-    const double min_centerline_distance = tool_radius + radial_clearance;
+    auto chains = mat_edge_chains(boundary, skeleton, tool_radius,
+        radial_clearance, mat_scale, min_trochoid_radius, max_trochoid_radius,
+        pitch, max_passes);
 
     std::vector<compas::RowMatrixXd> toolpaths;
-    toolpaths.reserve(static_cast<std::size_t>(max_passes));
-
-    int emitted_paths = 0;
-    for (auto edge_iter = skeleton->halfedges_begin(); edge_iter != skeleton->halfedges_end(); ++edge_iter) {
-        const auto halfedge = edge_iter;
-
-        if (!(halfedge->is_bisector() || halfedge->is_inner_bisector())) {
-            continue;
-        }
-
-        const auto vertex0 = halfedge->vertex();
-        const auto vertex1 = halfedge->opposite()->vertex();
-        if (&*vertex0 >= &*vertex1) {
-            continue;
-        }
-
-        Point_2 p0(vertex0->point().x(), vertex0->point().y());
-        Point_2 p1(vertex1->point().x(), vertex1->point().y());
-
-        double d0 = distance_to_boundary_xy(p0, boundary);
-        double d1 = distance_to_boundary_xy(p1, boundary);
-
-        // Clip edge to the valid cutter-center domain.
-        if (d0 < min_centerline_distance && d1 < min_centerline_distance) {
-            continue;
-        }
-
-        if (d0 < min_centerline_distance || d1 < min_centerline_distance) {
-            const double denom = d1 - d0;
-            if (std::abs(denom) < 1e-12) {
-                continue;
-            }
-            const double t = (min_centerline_distance - d0) / denom;
-            const double clamped_t = std::max(0.0, std::min(1.0, t));
-            const Point_2 clip_point(
-                p0.x() + clamped_t * (p1.x() - p0.x()),
-                p0.y() + clamped_t * (p1.y() - p0.y())
-            );
-
-            if (d0 < min_centerline_distance) {
-                p0 = clip_point;
-            } else {
-                p1 = clip_point;
-            }
-        }
-
-        d0 = distance_to_boundary_xy(p0, boundary);
-        d1 = distance_to_boundary_xy(p1, boundary);
-
-        auto compute_radius = [&](double boundary_distance) {
-            const double available = mat_scale * std::max(0.0, boundary_distance - tool_radius - radial_clearance);
-            if (available <= 0.0) {
-                return 0.0;
-            }
-            double radius = std::min(max_trochoid_radius, available);
-            if (min_trochoid_radius > 0.0) {
-                radius = std::min(available, std::max(radius, min_trochoid_radius));
-            }
-            return radius;
-        };
-
-        const double radius0 = compute_radius(d0);
-        const double radius1 = compute_radius(d1);
-
-        const Vector_2 edge_dir(p1.x() - p0.x(), p1.y() - p0.y());
-        auto circles = trochoid_circles(p0, p1, radius0, radius1, pitch);
-        if (circles.size() < 2) {
-            continue;
-        }
-
-        auto chain = trochoid_chain(circles, edge_dir, true);
-        if (chain.empty()) {
-            continue;
-        }
-
-        auto path_points = tessellate_chain(chain, samples_per_cycle);
-        deduplicate_consecutive_points(path_points, 1e-9);
-        if (path_points.size() < 2) {
-            continue;
-        }
-
-        toolpaths.push_back(points_to_matrix(path_points));
-        emitted_paths++;
-
-        if (emitted_paths >= max_passes) {
-            break;
+    toolpaths.reserve(chains.size());
+    for (auto& chain : chains) {
+        auto pts = tessellate_chain(chain, samples_per_cycle);
+        deduplicate_consecutive_points(pts, 1e-9);
+        if (pts.size() >= 2) {
+            toolpaths.push_back(points_to_matrix(pts));
         }
     }
-
     return toolpaths;
 }
 
@@ -566,135 +559,35 @@ pmp_trochoidal_mat_toolpath_circular_raw(
     int samples_per_cycle,
     int max_passes)
 {
-    if (tool_diameter <= 0.0) {
-        throw std::invalid_argument("tool_diameter should be positive.");
-    }
-    if (stepover <= 0.0) {
-        throw std::invalid_argument("stepover should be positive.");
-    }
-    if (pitch <= 0.0) {
-        throw std::invalid_argument("pitch should be positive.");
-    }
-    if (min_trochoid_radius < 0.0) {
-        throw std::invalid_argument("min_trochoid_radius should be >= 0.");
-    }
-    if (max_trochoid_radius < 0.0) {
-        throw std::invalid_argument("max_trochoid_radius should be >= 0.");
-    }
-    if (samples_per_cycle < 4) {
-        throw std::invalid_argument("samples_per_cycle should be at least 4.");
-    }
-    if (max_passes <= 0) {
-        throw std::invalid_argument("max_passes should be positive.");
-    }
-
-    (void)stepover;
-    (void)samples_per_cycle;
+    validate_toolpath_params(tool_diameter, stepover, pitch,
+        min_trochoid_radius, max_trochoid_radius, samples_per_cycle, max_passes);
 
     Polygon_2 boundary = data_to_polygon(vertices);
-    SsPtr skeleton = CGAL::create_interior_straight_skeleton_2(boundary.vertices_begin(), boundary.vertices_end());
+    SsPtr skeleton = CGAL::create_interior_straight_skeleton_2(
+        boundary.vertices_begin(), boundary.vertices_end());
     if (!skeleton) {
-        return std::make_tuple(compas::RowMatrixXd(0, 3), compas::RowMatrixXd(0, 3), compas::RowMatrixXd(0, 3), compas::RowMatrixXd(0, 3), compas::RowMatrixXd(0, 1));
+        return std::make_tuple(compas::RowMatrixXd(0, 3), compas::RowMatrixXd(0, 3),
+            compas::RowMatrixXd(0, 3), compas::RowMatrixXd(0, 3), compas::RowMatrixXd(0, 1));
     }
 
     const double tool_radius = 0.5 * tool_diameter;
-    const double min_centerline_distance = tool_radius + radial_clearance;
+    auto chains = mat_edge_chains(boundary, skeleton, tool_radius,
+        radial_clearance, mat_scale, min_trochoid_radius, max_trochoid_radius,
+        pitch, max_passes);
 
-    auto compute_radius = [&](double boundary_distance) {
-        const double available = mat_scale * std::max(0.0, boundary_distance - tool_radius - radial_clearance);
-        if (available <= 0.0) {
-            return 0.0;
-        }
-        double radius = std::min(max_trochoid_radius, available);
-        if (min_trochoid_radius > 0.0) {
-            radius = std::min(available, std::max(radius, min_trochoid_radius));
-        }
-        return radius;
-    };
-
+    // Flatten chains into primitives, filter chains without arcs.
     std::vector<TrochoidArc> all_primitives;
     std::vector<int> primitive_path_indices;
-    int emitted_paths = 0;
-
-    for (auto edge_iter = skeleton->halfedges_begin(); edge_iter != skeleton->halfedges_end(); ++edge_iter) {
-        const auto halfedge = edge_iter;
-        if (!(halfedge->is_bisector() || halfedge->is_inner_bisector())) {
-            continue;
-        }
-
-        const auto vertex0 = halfedge->vertex();
-        const auto vertex1 = halfedge->opposite()->vertex();
-        if (&*vertex0 >= &*vertex1) {
-            continue;
-        }
-
-        Point_2 p0(vertex0->point().x(), vertex0->point().y());
-        Point_2 p1(vertex1->point().x(), vertex1->point().y());
-
-        double d0 = distance_to_boundary_xy(p0, boundary);
-        double d1 = distance_to_boundary_xy(p1, boundary);
-
-        if (d0 < min_centerline_distance && d1 < min_centerline_distance) {
-            continue;
-        }
-
-        if (d0 < min_centerline_distance || d1 < min_centerline_distance) {
-            const double denom = d1 - d0;
-            if (std::abs(denom) < 1e-12) {
-                continue;
-            }
-            const double t = std::max(0.0, std::min(1.0, (min_centerline_distance - d0) / denom));
-            const Point_2 clip_point(p0.x() + t * (p1.x() - p0.x()), p0.y() + t * (p1.y() - p0.y()));
-            if (d0 < min_centerline_distance) {
-                p0 = clip_point;
-            } else {
-                p1 = clip_point;
-            }
-        }
-
-        d0 = distance_to_boundary_xy(p0, boundary);
-        d1 = distance_to_boundary_xy(p1, boundary);
-
-        // Canonicalize edge direction: narrower end first, tie-break by x then y.
-        // This ensures deterministic results regardless of which halfedge is selected.
-        if (d0 > d1 + 1e-12 ||
-            (std::abs(d0 - d1) <= 1e-12 && (p0.x() > p1.x() + 1e-12 ||
-             (std::abs(p0.x() - p1.x()) <= 1e-12 && p0.y() > p1.y() + 1e-12)))) {
-            std::swap(p0, p1);
-            std::swap(d0, d1);
-        }
-
-        const double radius0 = compute_radius(d0);
-        const double radius1 = compute_radius(d1);
-
-        const Vector_2 edge_dir(p1.x() - p0.x(), p1.y() - p0.y());
-        auto circles = trochoid_circles(p0, p1, radius0, radius1, pitch);
-        if (circles.size() < 2) {
-            continue;
-        }
-
-        auto chain = trochoid_chain(circles, edge_dir, true);
-
-        // Must have at least one arc (not all lines)
-        bool has_arc = false;
-        for (const auto& arc : chain) {
-            if (!arc.is_line()) {
-                has_arc = true;
-                break;
-            }
-        }
-        if (!has_arc) {
-            continue;
-        }
-
+    int path_idx = 0;
+    for (const auto& chain : chains) {
+        bool has_arc = std::any_of(chain.begin(), chain.end(),
+            [](const TrochoidArc& a) { return !a.is_line(); });
+        if (!has_arc) continue;
         for (const auto& arc : chain) {
             all_primitives.push_back(arc);
-            primitive_path_indices.push_back(emitted_paths);
+            primitive_path_indices.push_back(path_idx);
         }
-        emitted_paths++;
-        if (emitted_paths >= max_passes) {
-            break;
-        }
+        path_idx++;
     }
 
     const int n = static_cast<int>(all_primitives.size());
