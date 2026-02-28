@@ -4,6 +4,7 @@
 #include <array>
 #include <cmath>
 #include <limits>
+#include <numbers>
 #include <stdexcept>
 #include <tuple>
 #include <vector>
@@ -17,12 +18,18 @@ typedef std::shared_ptr<Ss> SsPtr;
 
 namespace
 {
-constexpr double PI = 3.14159265358979323846;
 
 typedef K::Vector_2 Vector_2;
 typedef K::Segment_2 Segment_2;
 typedef K::Circle_2 Circle_2;
 typedef K::Direction_2 Direction_2;
+
+inline double approx_length(const Vector_2& v) {
+    return std::sqrt(std::max(0.0, CGAL::to_double(v.squared_length())));
+}
+inline double approx_distance(const Point_2& a, const Point_2& b) {
+    return std::sqrt(std::max(0.0, CGAL::to_double(CGAL::squared_distance(a, b))));
+}
 
 struct TrochoidArc {
     Circle_2 circle;   // center + squared_radius; zero-radius = line
@@ -32,7 +39,7 @@ struct TrochoidArc {
 
     bool is_line() const
     {
-        return CGAL::to_double(circle.squared_radius()) < 1e-24;
+        return circle.squared_radius() == K::FT(0);
     }
 
     Segment_2 as_segment() const
@@ -68,6 +75,9 @@ struct TrochoidArc {
         if (is_line()) {
             return 0.0;
         }
+        if (start == end) {
+            return 0.0;
+        }
 
         const Point_2& c = circle.center();
         const double ux = CGAL::to_double(start.x() - c.x());
@@ -79,12 +89,9 @@ struct TrochoidArc {
         const double dot_val = ux * vx + uy * vy;
         double ccw = std::atan2(cross, dot_val);
         if (ccw < 0.0) {
-            ccw += 2.0 * PI;
+            ccw += 2.0 * std::numbers::pi;
         }
-        if (ccw <= 1e-12) {
-            return 0.0;
-        }
-        return clockwise ? 2.0 * PI - ccw : ccw;
+        return clockwise ? 2.0 * std::numbers::pi - ccw : ccw;
     }
 
     double radius() const
@@ -115,7 +122,7 @@ struct TrochoidArc {
         if (CGAL::to_double(CGAL::squared_distance(start, next.end)) > tol_sq) {
             return false;
         }
-        return std::abs((sweep() + next.sweep()) - 2.0 * PI) <= 1e-5;
+        return std::abs((sweep() + next.sweep()) - 2.0 * std::numbers::pi) <= tol;
     }
 
     static TrochoidArc make_line(const Point_2& s, const Point_2& e)
@@ -137,7 +144,7 @@ trochoid_circles(
     double r1,
     double pitch)
 {
-    const double length = std::sqrt(std::max(0.0, CGAL::to_double(CGAL::squared_distance(p0, p1))));
+    const double length = approx_distance(p0, p1);
     if (length <= 1e-12) {
         return {};
     }
@@ -148,9 +155,7 @@ trochoid_circles(
     circles.reserve(cycles + 1);
     for (int i = 0; i <= cycles; ++i) {
         const double t = static_cast<double>(i) / static_cast<double>(cycles);
-        const Point_2 center(
-            CGAL::to_double(p0.x()) + t * (CGAL::to_double(p1.x()) - CGAL::to_double(p0.x())),
-            CGAL::to_double(p0.y()) + t * (CGAL::to_double(p1.y()) - CGAL::to_double(p0.y())));
+        const Point_2 center = CGAL::barycenter(p0, 1.0 - t, p1, t);
         const double radius = std::max(0.0, r0 + t * (r1 - r0));
         circles.emplace_back(center, radius * radius);
     }
@@ -165,12 +170,11 @@ external_tangents(
     Segment_2& tangent_b)
 {
     const Vector_2 d = c1.center() - c0.center();
-    const double length_sq = CGAL::to_double(d.squared_length());
-    if (length_sq <= 1e-24) {
+    if (c0.center() == c1.center()) {
         return false;
     }
 
-    const double length = std::sqrt(length_sq);
+    const double length = approx_length(d);
     const double r0 = std::sqrt(std::max(0.0, CGAL::to_double(c0.squared_radius())));
     const double r1 = std::sqrt(std::max(0.0, CGAL::to_double(c1.squared_radius())));
 
@@ -321,7 +325,7 @@ data_to_polygon(Eigen::Ref<const compas::RowMatrixXd> vertices)
 }
 
 double
-distance_to_boundary_xy(const Point_2& point, const Polygon_2& boundary)
+squared_distance_to_boundary_xy(const Point_2& point, const Polygon_2& boundary)
 {
     if (boundary.size() < 2) {
         return 0.0;
@@ -334,8 +338,13 @@ distance_to_boundary_xy(const Point_2& point, const Polygon_2& boundary)
             sq_distance = sq;
         }
     }
+    return sq_distance;
+}
 
-    return std::sqrt(std::max(0.0, sq_distance));
+double
+distance_to_boundary_xy(const Point_2& point, const Polygon_2& boundary)
+{
+    return std::sqrt(std::max(0.0, squared_distance_to_boundary_xy(point, boundary)));
 }
 
 std::tuple<std::vector<Point_2>, std::vector<double>>
@@ -422,6 +431,7 @@ mat_edge_chains(
     int max_passes)
 {
     const double min_centerline_distance = tool_radius + radial_clearance;
+    const double min_cd_sq = min_centerline_distance * min_centerline_distance;
 
     auto compute_radius = [&](double boundary_distance) {
         const double available = mat_scale * std::max(0.0, boundary_distance - tool_radius - radial_clearance);
@@ -447,17 +457,21 @@ mat_edge_chains(
         Point_2 p0(v0->point().x(), v0->point().y());
         Point_2 p1(v1->point().x(), v1->point().y());
 
-        double d0 = distance_to_boundary_xy(p0, boundary);
-        double d1 = distance_to_boundary_xy(p1, boundary);
+        // Squared-distance early rejection (avoids sqrt on discarded edges).
+        double d0_sq = squared_distance_to_boundary_xy(p0, boundary);
+        double d1_sq = squared_distance_to_boundary_xy(p1, boundary);
+        if (d0_sq < min_cd_sq && d1_sq < min_cd_sq) continue;
 
-        if (d0 < min_centerline_distance && d1 < min_centerline_distance) continue;
+        // Edge passes filter — compute actual distances for clipping and radius.
+        double d0 = std::sqrt(std::max(0.0, d0_sq));
+        double d1 = std::sqrt(std::max(0.0, d1_sq));
 
         // Clip edge to the valid cutter-center domain.
         if (d0 < min_centerline_distance || d1 < min_centerline_distance) {
             const double denom = d1 - d0;
             if (std::abs(denom) < 1e-12) continue;
             const double t = std::max(0.0, std::min(1.0, (min_centerline_distance - d0) / denom));
-            const Point_2 cp(p0.x() + t * (p1.x() - p0.x()), p0.y() + t * (p1.y() - p0.y()));
+            const Point_2 cp = CGAL::barycenter(p0, 1.0 - t, p1, t);
             if (d0 < min_centerline_distance) { p0 = cp; } else { p1 = cp; }
         }
 
@@ -471,7 +485,7 @@ mat_edge_chains(
             std::swap(d0, d1);
         }
 
-        const Vector_2 edge_dir(p1.x() - p0.x(), p1.y() - p0.y());
+        const Vector_2 edge_dir = p1 - p0;
         auto circles = trochoid_circles(p0, p1, compute_radius(d0), compute_radius(d1), pitch);
         if (circles.size() < 2) continue;
 
@@ -546,7 +560,7 @@ pmp_trochoidal_mat_toolpath(
     return toolpaths;
 }
 
-std::tuple<compas::RowMatrixXd, compas::RowMatrixXd, compas::RowMatrixXd, compas::RowMatrixXd, compas::RowMatrixXd>
+static std::tuple<compas::RowMatrixXd, compas::RowMatrixXd, compas::RowMatrixXd, compas::RowMatrixXd, compas::RowMatrixXd>
 pmp_trochoidal_mat_toolpath_circular_raw(
     Eigen::Ref<const compas::RowMatrixXd> vertices,
     double tool_diameter,
@@ -639,7 +653,7 @@ path_length(const std::vector<TrochoidArc>& path)
     double length = 0.0;
     for (const auto& a : path) {
         if (a.is_line()) {
-            length += std::sqrt(std::max(0.0, CGAL::to_double(CGAL::squared_distance(a.start, a.end))));
+            length += approx_distance(a.start, a.end);
         } else {
             length += a.radius() * a.sweep();
         }
@@ -699,52 +713,36 @@ pmp_trochoidal_mat_toolpath_circular(
     bool retract_at_end,
     bool merge_circles)
 {
-    // Generate raw circular primitives
-    auto [raw_meta, raw_starts, raw_ends, raw_centers, raw_radii] =
-        pmp_trochoidal_mat_toolpath_circular_raw(
-            vertices, tool_diameter, stepover, pitch,
-            min_trochoid_radius, max_trochoid_radius,
-            mat_scale, radial_clearance, samples_per_cycle, max_passes);
+    // Validate and build skeleton + chains directly (no serialize/deserialize round-trip)
+    validate_toolpath_params(tool_diameter, stepover, pitch,
+        min_trochoid_radius, max_trochoid_radius, samples_per_cycle, max_passes);
 
-    const int raw_n = static_cast<int>(raw_meta.rows());
-    if (raw_n == 0) {
+    Polygon_2 boundary = data_to_polygon(vertices);
+    SsPtr skeleton = CGAL::create_interior_straight_skeleton_2(
+        boundary.vertices_begin(), boundary.vertices_end());
+    if (!skeleton) {
         compas::RowMatrixXd empty_meta(0, 4);
         compas::RowMatrixXd empty3(0, 3);
         compas::RowMatrixXd empty1(0, 1);
         return std::make_tuple(empty_meta, empty3, empty3, empty3, empty1);
     }
 
-    // Parse raw output into per-path lists of TrochoidArc
-    int path_count = 0;
-    for (int i = 0; i < raw_n; ++i) {
-        path_count = std::max(path_count, static_cast<int>(raw_meta(i, 0)) + 1);
-    }
+    const double tool_radius = 0.5 * tool_diameter;
+    auto chains = mat_edge_chains(boundary, skeleton, tool_radius,
+        radial_clearance, mat_scale, min_trochoid_radius, max_trochoid_radius,
+        pitch, max_passes);
 
-    std::vector<std::vector<TrochoidArc>> paths(path_count);
-    for (int i = 0; i < raw_n; ++i) {
-        int pidx = static_cast<int>(raw_meta(i, 0));
-        int ptype = static_cast<int>(raw_meta(i, 1));
-        bool cw = raw_meta(i, 2) > 0.5;
-
-        Point_2 s(raw_starts(i, 0), raw_starts(i, 1));
-        Point_2 e(raw_ends(i, 0), raw_ends(i, 1));
-        Point_2 c(raw_centers(i, 0), raw_centers(i, 1));
-        double r = raw_radii(i, 0);
-
-        if (ptype == 0) {
-            paths[pidx].push_back(TrochoidArc::make_line(s, e));
-        } else {
-            paths[pidx].push_back(TrochoidArc::make_arc(c, r, s, e, cw));
+    // Filter chains without arcs, build paths vector
+    std::vector<std::vector<TrochoidArc>> paths;
+    paths.reserve(chains.size());
+    for (auto& chain : chains) {
+        bool has_arc = std::any_of(chain.begin(), chain.end(),
+            [](const TrochoidArc& a) { return !a.is_line(); });
+        if (has_arc && !chain.empty()) {
+            paths.push_back(std::move(chain));
         }
     }
 
-    // Remove empty paths
-    std::vector<std::vector<TrochoidArc>> nonempty;
-    nonempty.reserve(path_count);
-    for (auto& p : paths) {
-        if (!p.empty()) nonempty.push_back(std::move(p));
-    }
-    paths.swap(nonempty);
     if (paths.empty()) {
         compas::RowMatrixXd empty_meta(0, 4);
         compas::RowMatrixXd empty3(0, 3);
@@ -791,11 +789,13 @@ pmp_trochoidal_mat_toolpath_circular(
     const double safe_z = has_clearance_z ? clearance_z : cut_z;
 
     std::vector<ToolpathPrimitive> operations;
-    operations.reserve(raw_n + paths.size() * 6);
+    std::size_t total_arcs = 0;
+    for (const auto& p : paths) total_arcs += p.size();
+    operations.reserve(total_arcs + paths.size() * 6);
 
-    auto make_tp_line = [](double sx, double sy, double sz, double ex, double ey, double ez, int op, int pidx) {
+    auto make_tp_line = [](const Point_2& s, double sz, const Point_2& e, double ez, int op, int pidx) {
         ToolpathPrimitive tp;
-        tp.arc = TrochoidArc::make_line(Point_2(sx, sy), Point_2(ex, ey));
+        tp.arc = TrochoidArc::make_line(s, e);
         tp.path_index = pidx;
         tp.operation = op;
         tp.z_start = sz;
@@ -803,68 +803,63 @@ pmp_trochoidal_mat_toolpath_circular(
         return tp;
     };
 
-    double cur_x = 0, cur_y = 0, cur_z = 0;
+    Point_2 cur_xy;
+    double cur_z = 0.0;
     bool has_current = false;
 
     for (int pidx = 0; pidx < static_cast<int>(paths.size()); ++pidx) {
         auto& path = paths[pidx];
         if (path.empty()) continue;
 
-        const double path_sx = CGAL::to_double(path.front().start.x());
-        const double path_sy = CGAL::to_double(path.front().start.y());
-        const double path_ex = CGAL::to_double(path.back().end.x());
-        const double path_ey = CGAL::to_double(path.back().end.y());
+        const Point_2& path_start = path.front().start;
+        const Point_2& path_end = path.back().end;
 
         // Compute lead-in start point via start tangent
-        double lead_in_sx = path_sx, lead_in_sy = path_sy;
+        const Vector_2 st = path.front().start_tangent();
+        const double st_len = approx_length(st);
+        Point_2 lead_in_pt = path_start;  // default: no lead-in
         bool has_start_tangent = false;
-        {
-            const Vector_2 st = path.front().start_tangent();
-            const double st_len = std::sqrt(CGAL::to_double(st.squared_length()));
-            if (lead_in > 1e-12 && st_len > 1e-12) {
-                double start_tx = CGAL::to_double(st.x()) / st_len;
-                double start_ty = CGAL::to_double(st.y()) / st_len;
-                lead_in_sx = path_sx - lead_in * start_tx;
-                lead_in_sy = path_sy - lead_in * start_ty;
-                has_start_tangent = true;
-            }
+        if (lead_in > 1e-12 && st_len > 1e-12) {
+            double inv = 1.0 / st_len;
+            lead_in_pt = Point_2(
+                CGAL::to_double(path_start.x()) - lead_in * CGAL::to_double(st.x()) * inv,
+                CGAL::to_double(path_start.y()) - lead_in * CGAL::to_double(st.y()) * inv);
+            has_start_tangent = true;
         }
 
         // Connect to this path
         if (!has_current) {
             if (use_clearance) {
-                operations.push_back(make_tp_line(lead_in_sx, lead_in_sy, safe_z, lead_in_sx, lead_in_sy, cut_z, 5 /*plunge*/, pidx));
+                operations.push_back(make_tp_line(lead_in_pt, safe_z, lead_in_pt, cut_z, 5 /*plunge*/, pidx));
             }
-            cur_x = lead_in_sx; cur_y = lead_in_sy; cur_z = cut_z;
+            cur_xy = lead_in_pt; cur_z = cut_z;
             has_current = true;
         } else if (link_paths) {
             if (use_clearance) {
                 // retract
-                operations.push_back(make_tp_line(cur_x, cur_y, cur_z, cur_x, cur_y, safe_z, 4 /*retract*/, pidx));
+                operations.push_back(make_tp_line(cur_xy, cur_z, cur_xy, safe_z, 4 /*retract*/, pidx));
                 cur_z = safe_z;
                 // link at clearance
-                double ddx = lead_in_sx - cur_x, ddy = lead_in_sy - cur_y;
-                if (std::sqrt(ddx * ddx + ddy * ddy) > 1e-9) {
-                    operations.push_back(make_tp_line(cur_x, cur_y, safe_z, lead_in_sx, lead_in_sy, safe_z, 3 /*link*/, pidx));
+                if (cur_xy != lead_in_pt) {
+                    operations.push_back(make_tp_line(cur_xy, safe_z, lead_in_pt, safe_z, 3 /*link*/, pidx));
                 }
                 // plunge
-                operations.push_back(make_tp_line(lead_in_sx, lead_in_sy, safe_z, lead_in_sx, lead_in_sy, cut_z, 5 /*plunge*/, pidx));
-                cur_x = lead_in_sx; cur_y = lead_in_sy; cur_z = cut_z;
+                operations.push_back(make_tp_line(lead_in_pt, safe_z, lead_in_pt, cut_z, 5 /*plunge*/, pidx));
+                cur_xy = lead_in_pt; cur_z = cut_z;
             } else {
-                double ddx = lead_in_sx - cur_x, ddy = lead_in_sy - cur_y;
-                if (std::sqrt(ddx * ddx + ddy * ddy) > 1e-9) {
-                    operations.push_back(make_tp_line(cur_x, cur_y, cut_z, lead_in_sx, lead_in_sy, cut_z, 3 /*link*/, pidx));
-                    cur_x = lead_in_sx; cur_y = lead_in_sy; cur_z = cut_z;
+                if (cur_xy != lead_in_pt) {
+                    operations.push_back(make_tp_line(cur_xy, cut_z, lead_in_pt, cut_z, 3 /*link*/, pidx));
+                    cur_xy = lead_in_pt; cur_z = cut_z;
                 }
             }
         } else {
-            cur_x = lead_in_sx; cur_y = lead_in_sy; cur_z = cut_z;
+            cur_xy = lead_in_pt; cur_z = cut_z;
         }
 
         // Lead-in
         if (lead_in > 1e-12 && has_start_tangent) {
-            operations.push_back(make_tp_line(lead_in_sx, lead_in_sy, cut_z, path_sx, path_sy, cut_z, 1 /*lead_in*/, pidx));
-            cur_x = path_sx; cur_y = path_sy; cur_z = cut_z;
+            operations.push_back(make_tp_line(lead_in_pt, cut_z, path_start, cut_z, 1 /*lead_in*/, pidx));
+            cur_xy = path_start; cur_z = cut_z;
         }
 
         // Cut primitives
@@ -876,22 +871,21 @@ pmp_trochoidal_mat_toolpath_circular(
             tp.z_start = cut_z;
             tp.z_end = cut_z;
             operations.push_back(tp);
-            cur_x = CGAL::to_double(arc.end.x());
-            cur_y = CGAL::to_double(arc.end.y());
+            cur_xy = arc.end;
             cur_z = cut_z;
         }
 
         // Lead-out via end tangent
         {
             const Vector_2 et = path.back().end_tangent();
-            const double et_len = std::sqrt(CGAL::to_double(et.squared_length()));
+            const double et_len = approx_length(et);
             if (lead_out > 1e-12 && et_len > 1e-12) {
-                double end_tx = CGAL::to_double(et.x()) / et_len;
-                double end_ty = CGAL::to_double(et.y()) / et_len;
-                double lo_ex = path_ex + lead_out * end_tx;
-                double lo_ey = path_ey + lead_out * end_ty;
-                operations.push_back(make_tp_line(path_ex, path_ey, cut_z, lo_ex, lo_ey, cut_z, 2 /*lead_out*/, pidx));
-                cur_x = lo_ex; cur_y = lo_ey; cur_z = cut_z;
+                double inv = 1.0 / et_len;
+                Point_2 lo_end(
+                    CGAL::to_double(path_end.x()) + lead_out * CGAL::to_double(et.x()) * inv,
+                    CGAL::to_double(path_end.y()) + lead_out * CGAL::to_double(et.y()) * inv);
+                operations.push_back(make_tp_line(path_end, cut_z, lo_end, cut_z, 2 /*lead_out*/, pidx));
+                cur_xy = lo_end; cur_z = cut_z;
             }
         }
     }
@@ -899,7 +893,7 @@ pmp_trochoidal_mat_toolpath_circular(
     // Final retract
     if (use_clearance && retract_at_end && has_current) {
         if (std::abs(cur_z - safe_z) > 1e-9) {
-            operations.push_back(make_tp_line(cur_x, cur_y, cur_z, cur_x, cur_y, safe_z, 4 /*retract*/, static_cast<int>(paths.size())));
+            operations.push_back(make_tp_line(cur_xy, cur_z, cur_xy, safe_z, 4 /*retract*/, static_cast<int>(paths.size())));
         }
     }
 
