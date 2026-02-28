@@ -207,15 +207,16 @@ trochoid_chain(
         if (!circles[i].is_degenerate()) {
             const double ri = approx_radius(circles[i]);
 
-            // When radii vary, the tangent arrival point from the previous pair
-            // differs from the departure point for this pair.  Bridge the gap
-            // with a partial arc so the chain stays continuous.
-            if (has_prev && prev_arrival != tangent.source()) {
+            if (has_prev) {
+                // Arc from previous arrival to current departure in winding direction.
+                // When arrival == departure: full 360° circle (sweep() returns 2π).
+                // When they differ: near-360° arc taking the long way around,
+                // avoiding the overlap of a separate bridge arc + full circle.
                 chain.push_back(TrochoidArc::make_arc(ci, ri, prev_arrival, tangent.source(), cw));
+            } else {
+                // First circle: full 360° at the tangent departure point.
+                chain.push_back(TrochoidArc::make_circle(ci, ri, tangent.source(), arc_ori));
             }
-
-            // Full circle at the tangent departure point.
-            chain.push_back(TrochoidArc::make_circle(ci, ri, tangent.source(), arc_ori));
         }
 
         // Tangent line to next circle (skip if zero-length / overlapping).
