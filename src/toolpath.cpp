@@ -645,9 +645,68 @@ path_length(const std::vector<TrochoidArc>& path)
     return length;
 }
 
+compas::RowMatrixXd
+tessellate_operations(const std::vector<ToolpathPrimitive>& ops, double samples_per_radian)
+{
+    if (ops.empty()) return compas::RowMatrixXd(0, 3);
+
+    std::vector<std::array<double, 3>> pts;
+    pts.reserve(ops.size() * 32);
+
+    for (std::size_t oi = 0; oi < ops.size(); ++oi) {
+        const auto& op = ops[oi];
+        const bool first = pts.empty();
+
+        if (op.arc.is_line()) {
+            if (first) {
+                pts.push_back({CGAL::to_double(op.arc.start.x()),
+                               CGAL::to_double(op.arc.start.y()),
+                               op.z_start});
+            }
+            pts.push_back({CGAL::to_double(op.arc.end.x()),
+                           CGAL::to_double(op.arc.end.y()),
+                           op.z_end});
+        } else {
+            const double r = op.arc.radius();
+            const double cx = CGAL::to_double(op.arc.circle.center().x());
+            const double cy = CGAL::to_double(op.arc.circle.center().y());
+            const double sx = CGAL::to_double(op.arc.start.x()) - cx;
+            const double sy = CGAL::to_double(op.arc.start.y()) - cy;
+            const double start_angle = std::atan2(sy, sx);
+
+            const double sw = op.arc.sweep();
+            const double signed_sweep = op.arc.is_clockwise() ? -sw : sw;
+            const int n = std::max(2, static_cast<int>(std::ceil(sw * samples_per_radian)));
+
+            // Skip first sample (junction duplicate) unless first operation
+            const int i0 = first ? 0 : 1;
+            for (int i = i0; i < n - 1; ++i) {
+                const double t = static_cast<double>(i) / static_cast<double>(n - 1);
+                const double theta = start_angle + signed_sweep * t;
+                const double z = op.z_start + t * (op.z_end - op.z_start);
+                pts.push_back({cx + r * std::cos(theta),
+                               cy + r * std::sin(theta), z});
+            }
+            // Exact endpoint — avoids cos/sin drift
+            pts.push_back({CGAL::to_double(op.arc.end.x()),
+                           CGAL::to_double(op.arc.end.y()),
+                           op.z_end});
+        }
+    }
+
+    const int m = static_cast<int>(pts.size());
+    compas::RowMatrixXd result(m, 3);
+    for (int i = 0; i < m; ++i) {
+        result(i, 0) = pts[i][0];
+        result(i, 1) = pts[i][1];
+        result(i, 2) = pts[i][2];
+    }
+    return result;
+}
+
 } // namespace
 
-std::tuple<compas::RowMatrixXd, compas::RowMatrixXd, compas::RowMatrixXd, compas::RowMatrixXd, compas::RowMatrixXd>
+std::tuple<compas::RowMatrixXd, compas::RowMatrixXd, compas::RowMatrixXd, compas::RowMatrixXd, compas::RowMatrixXd, compas::RowMatrixXd>
 pmp_trochoidal_mat_toolpath_circular(
     Eigen::Ref<const compas::RowMatrixXd> vertices,
     double tool_diameter,
@@ -666,7 +725,8 @@ pmp_trochoidal_mat_toolpath_circular(
     double cut_z,
     double clearance_z,
     bool has_clearance_z,
-    bool retract_at_end)
+    bool retract_at_end,
+    double samples_per_radian)
 {
     // Validate and build skeleton + chains directly (no serialize/deserialize round-trip)
     validate_toolpath_params(tool_diameter, stepover, pitch,
@@ -679,7 +739,7 @@ pmp_trochoidal_mat_toolpath_circular(
         compas::RowMatrixXd empty_meta(0, 4);
         compas::RowMatrixXd empty3(0, 3);
         compas::RowMatrixXd empty1(0, 1);
-        return std::make_tuple(empty_meta, empty3, empty3, empty3, empty1);
+        return std::make_tuple(empty_meta, empty3, empty3, empty3, empty1, empty3);
     }
 
     const double tool_radius = 0.5 * tool_diameter;
@@ -702,7 +762,7 @@ pmp_trochoidal_mat_toolpath_circular(
         compas::RowMatrixXd empty_meta(0, 4);
         compas::RowMatrixXd empty3(0, 3);
         compas::RowMatrixXd empty1(0, 1);
-        return std::make_tuple(empty_meta, empty3, empty3, empty3, empty1);
+        return std::make_tuple(empty_meta, empty3, empty3, empty3, empty1, empty3);
     }
 
     // Greedy nearest-neighbor path ordering
@@ -879,7 +939,8 @@ pmp_trochoidal_mat_toolpath_circular(
         radii_out(i, 0) = op.arc.radius();
     }
 
-    return std::make_tuple(meta, starts, ends, centers_out, radii_out);
+    auto polyline = tessellate_operations(operations, samples_per_radian);
+    return std::make_tuple(meta, starts, ends, centers_out, radii_out, polyline);
 }
 
 NB_MODULE(_toolpath, m)
@@ -951,7 +1012,8 @@ NB_MODULE(_toolpath, m)
         "- start points (Nx3 float)\n"
         "- end points (Nx3 float)\n"
         "- centers (Nx3 float)\n"
-        "- radii (Nx1 float)",
+        "- radii (Nx1 float)\n"
+        "- polyline (Mx3 float): tessellated 3D point sequence",
         "vertices"_a,
         "tool_diameter"_a,
         "stepover"_a,
@@ -969,5 +1031,6 @@ NB_MODULE(_toolpath, m)
         "cut_z"_a = 0.0,
         "clearance_z"_a = 0.0,
         "has_clearance_z"_a = false,
-        "retract_at_end"_a = true);
+        "retract_at_end"_a = true,
+        "samples_per_radian"_a = 10.0);
 }

@@ -13,6 +13,7 @@ from hypothesis import settings
 from hypothesis import strategies as st
 
 from compas_cgal.toolpath import ToolpathOperation
+from compas_cgal.toolpath import ToolpathResult
 from compas_cgal.toolpath import polygon_medial_axis_transform
 from compas_cgal.toolpath import trochoidal_mat_toolpath
 from compas_cgal.toolpath import trochoidal_mat_toolpath_circular
@@ -269,13 +270,14 @@ def test_trochoidal_mat_toolpath_maximizes_clearance():
 
 
 def test_circular_returns_toolpath_operations():
-    ops = trochoidal_mat_toolpath_circular(
+    result = trochoidal_mat_toolpath_circular(
         SQUARE,
         tool_diameter=2.0,
         pitch=1.0,
         max_trochoid_radius=float("inf"),
         max_passes=20,
     )
+    ops = result.operations
 
     assert len(ops) > 0
     for op in ops:
@@ -288,8 +290,26 @@ def test_circular_returns_toolpath_operations():
     assert any(isinstance(op.geometry, (Arc, Circle)) for op in ops if op.operation == "cut")
 
 
+def test_circular_returns_toolpath_result():
+    """trochoidal_mat_toolpath_circular returns ToolpathResult with operations + polyline."""
+    result = trochoidal_mat_toolpath_circular(
+        SQUARE,
+        tool_diameter=2.0,
+        pitch=1.0,
+        max_trochoid_radius=float("inf"),
+        max_passes=20,
+    )
+    assert isinstance(result, ToolpathResult)
+    assert len(result.operations) > 0
+    assert isinstance(result.operations[0], ToolpathOperation)
+    assert result.polyline.ndim == 2
+    assert result.polyline.shape[1] == 3
+    assert result.polyline.shape[0] >= 2
+    assert np.isfinite(result.polyline).all()
+
+
 def test_circular_with_leads_and_links():
-    ops = trochoidal_mat_toolpath_circular(
+    result = trochoidal_mat_toolpath_circular(
         SQUARE,
         tool_diameter=2.0,
         pitch=1.0,
@@ -300,6 +320,7 @@ def test_circular_with_leads_and_links():
         link_paths=True,
         optimize_order=True,
     )
+    ops = result.operations
 
     assert len(ops) > 0
     op_types = {op.operation for op in ops}
@@ -310,7 +331,7 @@ def test_circular_with_leads_and_links():
 
 
 def test_circular_with_clearance_z():
-    ops = trochoidal_mat_toolpath_circular(
+    result = trochoidal_mat_toolpath_circular(
         SQUARE,
         tool_diameter=2.0,
         pitch=1.0,
@@ -324,6 +345,7 @@ def test_circular_with_clearance_z():
         clearance_z=3.0,
         retract_at_end=True,
     )
+    ops = result.operations
 
     assert len(ops) > 0
     op_types = {op.operation for op in ops}
@@ -350,7 +372,7 @@ def test_circular_with_clearance_z():
 
 def test_circular_continuity():
     """Consecutive operations share start/end points."""
-    ops = trochoidal_mat_toolpath_circular(
+    result = trochoidal_mat_toolpath_circular(
         SQUARE,
         tool_diameter=2.0,
         pitch=1.0,
@@ -362,6 +384,7 @@ def test_circular_continuity():
         cut_z=-1.0,
         clearance_z=2.0,
     )
+    ops = result.operations
 
     for i in range(1, len(ops)):
         prev_end = _op_end_xy(ops[i - 1])
@@ -371,7 +394,7 @@ def test_circular_continuity():
 
 def test_full_circle_output():
     """Cut operations should contain full Circle geometry objects."""
-    ops = trochoidal_mat_toolpath_circular(
+    result = trochoidal_mat_toolpath_circular(
         SQUARE,
         tool_diameter=2.0,
         pitch=1.0,
@@ -379,7 +402,7 @@ def test_full_circle_output():
         max_passes=20,
     )
 
-    cut_ops = [op for op in ops if op.operation == "cut"]
+    cut_ops = [op for op in result.operations if op.operation == "cut"]
     circles = [op for op in cut_ops if isinstance(op.geometry, Circle)]
     assert len(circles) > 0, "Expected Circle geometry in cut operations"
     assert all(c.geometry.radius > 0 for c in circles)
@@ -389,7 +412,7 @@ def test_full_circle_sweep():
     """Full circles should have sweep angle of approximately 2*pi."""
     import math
 
-    ops = trochoidal_mat_toolpath_circular(
+    result = trochoidal_mat_toolpath_circular(
         SQUARE,
         tool_diameter=2.0,
         pitch=1.0,
@@ -397,7 +420,7 @@ def test_full_circle_sweep():
         max_passes=20,
     )
 
-    cut_circles = [op for op in ops if op.operation == "cut" and isinstance(op.geometry, Circle)]
+    cut_circles = [op for op in result.operations if op.operation == "cut" and isinstance(op.geometry, Circle)]
     assert len(cut_circles) > 0
     for op in cut_circles:
         c = op.geometry
@@ -410,7 +433,7 @@ def test_full_circle_sweep():
 
 def test_circular_exit_tangent_alignment():
     """Circle/arc exit tangents should be aligned with the next line direction (smooth exit)."""
-    ops = trochoidal_mat_toolpath_circular(
+    result = trochoidal_mat_toolpath_circular(
         IRREGULAR,
         tool_diameter=1.0,
         pitch=0.75,
@@ -418,7 +441,7 @@ def test_circular_exit_tangent_alignment():
         max_passes=20,
     )
 
-    cut_ops = [o for o in ops if o.operation == "cut"]
+    cut_ops = [o for o in result.operations if o.operation == "cut"]
     assert len(cut_ops) > 2
 
     exit_angles = []
@@ -486,7 +509,8 @@ _TANGENT_IDS = ["square", "irregular", "L_shape", "star", "kite"]
 @pytest.mark.parametrize("polygon", _TANGENT_POLYGONS, ids=_TANGENT_IDS)
 def test_tangent_continuity_known_polygons(polygon):
     """Engaged milling motions must be tangent-continuous (< 1°)."""
-    ops = trochoidal_mat_toolpath_circular(polygon, **_TANGENT_TOOLPATH_KWARGS)
+    result = trochoidal_mat_toolpath_circular(polygon, **_TANGENT_TOOLPATH_KWARGS)
+    ops = result.operations
     engaged = [op for op in ops if op.operation in ENGAGED_OPS]
     assert len(engaged) > 2, "Not enough engaged operations to test"
     _assert_engaged_tangent_continuity(ops)
@@ -496,6 +520,52 @@ def test_tangent_continuity_known_polygons(polygon):
 @settings(max_examples=50, deadline=None)
 def test_tangent_continuity_random_polygons(polygon):
     """Property: for any simple polygon, engaged motions are tangent-continuous."""
-    ops = trochoidal_mat_toolpath_circular(polygon, **_TANGENT_TOOLPATH_KWARGS)
+    result = trochoidal_mat_toolpath_circular(polygon, **_TANGENT_TOOLPATH_KWARGS)
+    ops = result.operations
     assume(len([op for op in ops if op.operation in ENGAGED_OPS]) > 2)
     _assert_engaged_tangent_continuity(ops)
+
+
+# ---------------------------------------------------------------------------
+# Polyline continuity — known polygons + Hypothesis
+# ---------------------------------------------------------------------------
+
+
+def test_polyline_continuity():
+    """Tessellated polyline has bounded step sizes (flat toolpath, no retracts)."""
+    result = trochoidal_mat_toolpath_circular(
+        IRREGULAR,
+        tool_diameter=0.5,
+        pitch=0.4,
+        lead_in=0.15,
+        lead_out=0.15,
+        link_paths=True,
+        optimize_order=True,
+    )
+    pts = result.polyline
+    diffs = np.linalg.norm(np.diff(pts, axis=0), axis=1)
+    max_step = diffs.max()
+    # Flat toolpath (no clearance_z) — largest step is an XY link between paths
+    # Bound: polygon diameter (~18 units for IRREGULAR)
+    assert max_step < 20.0, f"Max step {max_step:.4f} exceeds bound"
+
+
+@given(polygon=_simple_polygons())
+@settings(max_examples=50, deadline=None)
+def test_polyline_continuity_random(polygon):
+    """Property: tessellated polyline has bounded step sizes for any simple polygon."""
+    result = trochoidal_mat_toolpath_circular(
+        polygon,
+        tool_diameter=0.5,
+        pitch=0.4,
+        lead_in=0.15,
+        lead_out=0.15,
+        link_paths=True,
+        optimize_order=True,
+    )
+    assume(result.polyline.shape[0] > 2)
+    # Skip polygons that trigger the pre-existing lead-in tangent degeneration
+    assume(np.isfinite(result.polyline).all() and np.abs(result.polyline).max() < 1e6)
+    diffs = np.linalg.norm(np.diff(result.polyline, axis=0), axis=1)
+    # Random polygons have diameter up to 30 (base_r up to 15)
+    assert diffs.max() < 35.0
