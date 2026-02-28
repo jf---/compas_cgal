@@ -224,29 +224,35 @@ for path_index in sorted(groups):
 tool_radius = 0.1 / 2
 cone_height = 0.5
 
-# Tessellate all operations into sequential 3D points
+# Tessellate all operations into sequential 3D points.
+# Arc.to_polyline() always goes CCW; for CW arcs the points come out reversed.
+# Fix: check continuity with previous segment and reverse when needed.
+
+
+def _pts(g):
+    """Tessellate a geometry primitive into a list of [x, y, z] coords."""
+    if isinstance(g, Line):
+        return [[float(g.start[i]) for i in range(3)], [float(g.end[i]) for i in range(3)]]
+    n = 64 if isinstance(g, Circle) else 32
+    return [[float(pt[i]) for i in range(3)] for pt in g.to_polyline(n=n).points]
+
+
+def _dist_sq(a, b):
+    return sum((a[i] - b[i]) ** 2 for i in range(3))
+
+
 path_points = []
 for op in operations:
-    g = op.geometry
-    if isinstance(g, Line):
-        path_points.append([float(g.start[0]), float(g.start[1]), float(g.start[2])])
-        path_points.append([float(g.end[0]), float(g.end[1]), float(g.end[2])])
-    elif isinstance(g, Circle):
-        for pt in g.to_polyline(n=64).points:
-            path_points.append([float(pt[0]), float(pt[1]), float(pt[2])])
-    elif isinstance(g, Arc):
-        for pt in g.to_polyline(n=32).points:
-            path_points.append([float(pt[0]), float(pt[1]), float(pt[2])])
-
-# Deduplicate consecutive coincident points
-deduped = [path_points[0]]
-for pt in path_points[1:]:
-    dx = pt[0] - deduped[-1][0]
-    dy = pt[1] - deduped[-1][1]
-    dz = pt[2] - deduped[-1][2]
-    if dx * dx + dy * dy + dz * dz > 1e-18:
-        deduped.append(pt)
-path_points = deduped
+    seg = _pts(op.geometry)
+    if not seg:
+        continue
+    # Reverse segment if its end is closer to the previous point than its start
+    if path_points and len(seg) >= 2:
+        if _dist_sq(path_points[-1], seg[-1]) < _dist_sq(path_points[-1], seg[0]):
+            seg = seg[::-1]
+    # Skip duplicate junction point
+    start = 1 if path_points and _dist_sq(path_points[-1], seg[0]) < 1e-12 else 0
+    path_points.extend(seg[start:])
 
 # Point-down cone: apex at origin, base at z=cone_height
 cone_frame = Frame([0, 0, cone_height], [1, 0, 0], [0, -1, 0])
