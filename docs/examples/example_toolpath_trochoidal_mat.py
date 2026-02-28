@@ -3,14 +3,20 @@ from collections import defaultdict
 from compas.colors import Color
 from compas.geometry import Arc
 from compas.geometry import Circle
+from compas.geometry import Cone
+from compas.geometry import Frame
 from compas.geometry import Line
 from compas.geometry import Polygon
 from compas.geometry import Polyline
+from compas.geometry import Translation
 from compas.scene import get_sceneobject_cls
 from compas.scene import register
 from compas.scene.exceptions import SceneObjectNotRegisteredError
 from compas_viewer import Viewer
+from compas_viewer.components import Slider
 from compas_viewer.scene.geometryobject import GeometryObject
+from PySide6.QtWidgets import QVBoxLayout
+from PySide6.QtWidgets import QWidget
 
 from compas_cgal.straight_skeleton_2 import interior_straight_skeleton
 from compas_cgal.toolpath import trochoidal_mat_toolpath_circular
@@ -31,7 +37,7 @@ polygon = Polygon(
 
 operations = trochoidal_mat_toolpath_circular(
     polygon,
-    tool_diameter=.1,
+    tool_diameter=0.1,
     stepover=0.01,
     pitch=0.15,
     mat_scale=1.0,
@@ -210,5 +216,70 @@ for path_index in sorted(groups):
         lighten = OPERATION_LIGHTEN.get(op.operation, 40)
         color = fade_color(base_color, lighten)
         add_curve(viewer.scene, op.geometry, parent=toolpath_group, linecolor=color, linewidth=width)
+
+# ==============================================================================
+# Tool cone + slider for toolpath exploration
+# ==============================================================================
+
+tool_radius = 0.1 / 2
+cone_height = 0.5
+
+# Tessellate all operations into sequential 3D points
+path_points = []
+for op in operations:
+    g = op.geometry
+    if isinstance(g, Line):
+        path_points.append([float(g.start[0]), float(g.start[1]), float(g.start[2])])
+        path_points.append([float(g.end[0]), float(g.end[1]), float(g.end[2])])
+    elif isinstance(g, Circle):
+        for pt in g.to_polyline(n=64).points:
+            path_points.append([float(pt[0]), float(pt[1]), float(pt[2])])
+    elif isinstance(g, Arc):
+        for pt in g.to_polyline(n=32).points:
+            path_points.append([float(pt[0]), float(pt[1]), float(pt[2])])
+
+# Deduplicate consecutive coincident points
+deduped = [path_points[0]]
+for pt in path_points[1:]:
+    dx = pt[0] - deduped[-1][0]
+    dy = pt[1] - deduped[-1][1]
+    dz = pt[2] - deduped[-1][2]
+    if dx * dx + dy * dy + dz * dz > 1e-18:
+        deduped.append(pt)
+path_points = deduped
+
+# Point-down cone: apex at origin, base at z=cone_height
+cone_frame = Frame([0, 0, cone_height], [1, 0, 0], [0, -1, 0])
+cone = Cone(radius=tool_radius, height=cone_height, frame=cone_frame)
+cone_mesh = cone.to_mesh(u=16)
+cone_obj = viewer.scene.add(cone_mesh, facecolor=Color.from_rgb255(220, 40, 40), opacity=0.8)
+
+
+def update_tool_position(component, value):
+    idx = int(value)
+    pt = path_points[idx]
+    cone_obj.worldtransformation = Translation.from_vector(pt)
+    cone_obj.update(update_transform=True)
+
+
+update_tool_position(None, 0)
+
+slider = Slider(
+    value=0,
+    title="Toolpath",
+    min_val=0,
+    max_val=len(path_points) - 1,
+    step=1,
+    action=update_tool_position,
+)
+
+# Place slider at the bottom of the main viewport (below the GL window)
+container = QWidget()
+layout = QVBoxLayout(container)
+layout.setContentsMargins(0, 0, 0, 0)
+layout.setSpacing(0)
+layout.addWidget(viewer.ui.viewport.widget, 1)
+layout.addWidget(slider.widget, 0)
+viewer.ui.window.widget.setCentralWidget(container)
 
 viewer.show()
