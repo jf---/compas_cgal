@@ -106,10 +106,10 @@ trochoid_circles(
     double r1,
     double pitch)
 {
-    const double length = approx_distance(p0, p1);
-    if (length <= 1e-12) {
+    if (p0 == p1) {
         return {};
     }
+    const double length = approx_distance(p0, p1);
 
     const int cycles = std::max(2, static_cast<int>(std::ceil(length / std::max(pitch, 1e-12))));
 
@@ -296,16 +296,16 @@ data_to_polygon(Eigen::Ref<const compas::RowMatrixXd> vertices)
     return polygon;
 }
 
-double
-squared_distance_to_boundary_xy(const Point_2& point, const Polygon_2& boundary)
+K::FT
+squared_distance_to_boundary(const Point_2& point, const Polygon_2& boundary)
 {
     if (boundary.size() < 2) {
-        return 0.0;
+        return K::FT(0);
     }
 
-    double sq_distance = std::numeric_limits<double>::infinity();
-    for (auto edge_iter = boundary.edges_begin(); edge_iter != boundary.edges_end(); ++edge_iter) {
-        const double sq = CGAL::to_double(CGAL::squared_distance(point, *edge_iter));
+    K::FT sq_distance = CGAL::squared_distance(point, *boundary.edges_begin());
+    for (auto edge_iter = std::next(boundary.edges_begin()); edge_iter != boundary.edges_end(); ++edge_iter) {
+        const K::FT sq = CGAL::squared_distance(point, *edge_iter);
         if (sq < sq_distance) {
             sq_distance = sq;
         }
@@ -314,9 +314,9 @@ squared_distance_to_boundary_xy(const Point_2& point, const Polygon_2& boundary)
 }
 
 double
-distance_to_boundary_xy(const Point_2& point, const Polygon_2& boundary)
+approx_distance_to_boundary(const Point_2& point, const Polygon_2& boundary)
 {
-    return std::sqrt(std::max(0.0, squared_distance_to_boundary_xy(point, boundary)));
+    return std::sqrt(std::max(0.0, CGAL::to_double(squared_distance_to_boundary(point, boundary))));
 }
 
 std::tuple<std::vector<Point_2>, std::vector<double>>
@@ -335,12 +335,12 @@ polygon_medial_axis_transform_internal(const Polygon_2& polygon)
     for (auto vertex_iter = skeleton->vertices_begin(); vertex_iter != skeleton->vertices_end(); ++vertex_iter) {
         const auto& point = vertex_iter->point();
         Point_2 point_xy(point.x(), point.y());
-        const double radius = distance_to_boundary_xy(point_xy, polygon);
+        const K::FT sq_dist = squared_distance_to_boundary(point_xy, polygon);
 
-        // Keep only interior MAT samples.
-        if (radius > 1e-8) {
+        // Keep only interior MAT samples (exact comparison against zero).
+        if (sq_dist > K::FT(0)) {
             points.push_back(point_xy);
-            radii.push_back(radius);
+            radii.push_back(std::sqrt(std::max(0.0, CGAL::to_double(sq_dist))));
         }
     }
 
@@ -353,10 +353,10 @@ deduplicate_consecutive_points(std::vector<Point_2>& points, double tol)
     if (points.size() < 2) {
         return;
     }
-    const double tol_sq = tol * tol;
+    const K::FT tol_sq(tol * tol);
     auto last = std::unique(points.begin(), points.end(),
-        [tol_sq](const Point_2& a, const Point_2& b) {
-            return CGAL::to_double(CGAL::squared_distance(a, b)) <= tol_sq;
+        [&tol_sq](const Point_2& a, const Point_2& b) {
+            return CGAL::compare_squared_distance(a, b, tol_sq) != CGAL::LARGER;
         });
     points.erase(last, points.end());
 }
@@ -429,30 +429,36 @@ mat_edge_chains(
         Point_2 p0(v0->point().x(), v0->point().y());
         Point_2 p1(v1->point().x(), v1->point().y());
 
-        // Squared-distance early rejection (avoids sqrt on discarded edges).
-        double d0_sq = squared_distance_to_boundary_xy(p0, boundary);
-        double d1_sq = squared_distance_to_boundary_xy(p1, boundary);
-        if (d0_sq < min_cd_sq && d1_sq < min_cd_sq) continue;
+        // Exact squared-distance early rejection (avoids sqrt on discarded edges).
+        K::FT sq0 = squared_distance_to_boundary(p0, boundary);
+        K::FT sq1 = squared_distance_to_boundary(p1, boundary);
+        const K::FT min_cd_sq_ft(min_cd_sq);
+        if (sq0 < min_cd_sq_ft && sq1 < min_cd_sq_ft) continue;
 
-        // Edge passes filter — compute actual distances for clipping and radius.
-        double d0 = std::sqrt(std::max(0.0, d0_sq));
-        double d1 = std::sqrt(std::max(0.0, d1_sq));
+        // Edge passes filter — compute distances for clipping and radius.
+        double d0 = std::sqrt(std::max(0.0, CGAL::to_double(sq0)));
+        double d1 = std::sqrt(std::max(0.0, CGAL::to_double(sq1)));
 
         // Clip edge to the valid cutter-center domain.
         if (d0 < min_centerline_distance || d1 < min_centerline_distance) {
             const double denom = d1 - d0;
-            if (std::abs(denom) < 1e-12) continue;
+            if (std::abs(denom) < 1e-12) continue;  // division guard
             const double t = std::max(0.0, std::min(1.0, (min_centerline_distance - d0) / denom));
             const Point_2 cp = CGAL::barycenter(p0, 1.0 - t, p1, t);
-            if (d0 < min_centerline_distance) { p0 = cp; } else { p1 = cp; }
+            // Recompute only the clipped endpoint.
+            if (d0 < min_centerline_distance) {
+                p0 = cp;
+                sq0 = squared_distance_to_boundary(p0, boundary);
+                d0 = std::sqrt(std::max(0.0, CGAL::to_double(sq0)));
+            } else {
+                p1 = cp;
+                sq1 = squared_distance_to_boundary(p1, boundary);
+                d1 = std::sqrt(std::max(0.0, CGAL::to_double(sq1)));
+            }
         }
 
-        d0 = distance_to_boundary_xy(p0, boundary);
-        d1 = distance_to_boundary_xy(p1, boundary);
-
-        // Canonicalize: narrower end first, tie-break via CGAL exact predicate.
-        if (d0 > d1 + 1e-12 ||
-            (std::abs(d0 - d1) <= 1e-12 && CGAL::compare_xy(p0, p1) == CGAL::LARGER)) {
+        // Canonicalize: narrower end first, tie-break via exact predicate.
+        if (sq0 > sq1 || (sq0 == sq1 && CGAL::compare_xy(p0, p1) == CGAL::LARGER)) {
             std::swap(p0, p1);
             std::swap(d0, d1);
         }
@@ -727,7 +733,7 @@ pmp_trochoidal_mat_toolpath_circular(
     }
 
     // Build linked operation stream using ToolpathPrimitive
-    const bool use_clearance = has_clearance_z && (clearance_z > cut_z + 1e-12);
+    const bool use_clearance = has_clearance_z && (clearance_z > cut_z);
     const double safe_z = has_clearance_z ? clearance_z : cut_z;
 
     std::vector<ToolpathPrimitive> operations;
@@ -761,7 +767,7 @@ pmp_trochoidal_mat_toolpath_circular(
         const double st_len = approx_length(st);
         Point_2 lead_in_pt = path_start;  // default: no lead-in
         bool has_start_tangent = false;
-        if (lead_in > 1e-12 && st_len > 1e-12) {
+        if (lead_in > 0.0 && st_len > 1e-12) {  // st_len: division guard
             double inv = 1.0 / st_len;
             lead_in_pt = Point_2(
                 CGAL::to_double(path_start.x()) - lead_in * CGAL::to_double(st.x()) * inv,
@@ -799,7 +805,7 @@ pmp_trochoidal_mat_toolpath_circular(
         }
 
         // Lead-in
-        if (lead_in > 1e-12 && has_start_tangent) {
+        if (lead_in > 0.0 && has_start_tangent) {
             operations.push_back(make_tp_line(lead_in_pt, cut_z, path_start, cut_z, 1 /*lead_in*/, pidx));
             cur_xy = path_start; cur_z = cut_z;
         }
@@ -821,7 +827,7 @@ pmp_trochoidal_mat_toolpath_circular(
         {
             const Vector_2 et = path.back().end_tangent();
             const double et_len = approx_length(et);
-            if (lead_out > 1e-12 && et_len > 1e-12) {
+            if (lead_out > 0.0 && et_len > 1e-12) {  // et_len: division guard
                 double inv = 1.0 / et_len;
                 Point_2 lo_end(
                     CGAL::to_double(path_end.x()) + lead_out * CGAL::to_double(et.x()) * inv,
@@ -834,7 +840,7 @@ pmp_trochoidal_mat_toolpath_circular(
 
     // Final retract
     if (use_clearance && retract_at_end && has_current) {
-        if (std::abs(cur_z - safe_z) > 1e-9) {
+        if (cur_z != safe_z) {
             operations.push_back(make_tp_line(cur_xy, cur_z, cur_xy, safe_z, 4 /*retract*/, static_cast<int>(paths.size())));
         }
     }
