@@ -18,6 +18,7 @@ from compas_cgal.types import PolylinesNumpy
 
 __all__ = [
     "ToolpathOperation",
+    "ToolpathResult",
     "polygon_medial_axis_transform",
     "trochoidal_mat_toolpath",
     "trochoidal_mat_toolpath_circular",
@@ -33,6 +34,14 @@ class ToolpathOperation:
     geometry: Line | Arc | Circle
     operation: str
     path_index: int
+
+
+@dataclass
+class ToolpathResult:
+    """Toolpath output: typed operations for G-code + tessellated polyline for visualization."""
+
+    operations: list[ToolpathOperation]
+    polyline: np.ndarray
 
 
 def _polygon_to_ccw_vertices(polygon: Polygon) -> np.ndarray:
@@ -240,7 +249,8 @@ def trochoidal_mat_toolpath_circular(
     cut_z: float = 0.0,
     clearance_z: float | None = None,
     retract_at_end: bool = True,
-) -> list[ToolpathOperation]:
+    samples_per_radian: float = 10.0,
+) -> ToolpathResult:
     """Generate linked circular arc toolpath operations.
 
     Parameters
@@ -279,11 +289,13 @@ def trochoidal_mat_toolpath_circular(
         Safe Z-height for inter-path travel.
     retract_at_end
         If ``True``, add a final retract after the last path.
+    samples_per_radian
+        Tessellation density for the visualization polyline.
 
     Returns
     -------
-    list[ToolpathOperation]
-        Operation stream with typed compas geometry.
+    ToolpathResult
+        Operations stream with typed compas geometry and tessellated polyline.
     """
     if stepover is None:
         stepover = 0.4 * tool_diameter
@@ -296,7 +308,7 @@ def trochoidal_mat_toolpath_circular(
     effective_clearance_z = float(clearance_z) if clearance_z is not None else 0.0
 
     V = _polygon_to_ccw_vertices(polygon)
-    meta, starts, ends, centers, radii = _toolpath.trochoidal_mat_toolpath_circular(
+    meta, starts, ends, centers, radii, polyline = _toolpath.trochoidal_mat_toolpath_circular(
         V,
         float(tool_diameter),
         float(stepover),
@@ -315,15 +327,20 @@ def trochoidal_mat_toolpath_circular(
         effective_clearance_z,
         has_clearance_z,
         bool(retract_at_end),
+        float(samples_per_radian),
     )
 
     meta = np.asarray(meta, dtype=np.float64)
     if meta.size == 0:
-        return []
+        return ToolpathResult(operations=[], polyline=np.empty((0, 3), dtype=np.float64))
 
     starts = np.asarray(starts, dtype=np.float64, order="C")
     ends = np.asarray(ends, dtype=np.float64, order="C")
     centers = np.asarray(centers, dtype=np.float64, order="C")
     radii = np.asarray(radii, dtype=np.float64, order="C").reshape(-1)
+    polyline = np.asarray(polyline, dtype=np.float64, order="C")
 
-    return _matrices_to_operations(meta, starts, ends, centers, radii)
+    return ToolpathResult(
+        operations=_matrices_to_operations(meta, starts, ends, centers, radii),
+        polyline=polyline,
+    )

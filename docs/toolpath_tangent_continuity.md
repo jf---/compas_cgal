@@ -113,3 +113,19 @@ tangent check.
 | Missing bridge at chain junction | 30°–90° | **fail** |
 | Lead-in misaligned with first cut | > 1° | **fail** |
 | Broken arc encoding | arbitrary | **fail** |
+
+## C++ tessellated polyline
+
+The `trochoidal_mat_toolpath_circular` function now returns a dense 3D polyline
+tessellated directly from the internal `ToolpathPrimitive` vector.  Because this
+tessellation uses the `signed_sweep` from each `TrochoidArc` — not the compas
+geometry representation — it preserves the correct traversal order for both CW
+and CCW arcs.
+
+The polyline bypasses the winding representation gap entirely: no Python-side
+tessellation, no heuristic segment reversal, no `to_polyline()` ambiguity.
+Angular resolution is controlled by `samples_per_radian` (default 10.0, giving
+~63 points per full circle).
+
+Use `result.polyline` for visualization and `result.operations` for G-code
+generation.

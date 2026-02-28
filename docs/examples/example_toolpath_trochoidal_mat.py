@@ -35,7 +35,7 @@ polygon = Polygon(
     ]
 )
 
-operations = trochoidal_mat_toolpath_circular(
+result = trochoidal_mat_toolpath_circular(
     polygon,
     tool_diameter=0.1,
     stepover=0.01,
@@ -48,6 +48,7 @@ operations = trochoidal_mat_toolpath_circular(
     cut_z=-0.2,
     clearance_z=2.0,
 )
+operations = result.operations
 
 
 class ArcObject(GeometryObject):
@@ -224,35 +225,7 @@ for path_index in sorted(groups):
 tool_radius = 0.1 / 2
 cone_height = 0.5
 
-# Tessellate all operations into sequential 3D points.
-# Arc.to_polyline() always goes CCW; for CW arcs the points come out reversed.
-# Fix: check continuity with previous segment and reverse when needed.
-
-
-def _pts(g):
-    """Tessellate a geometry primitive into a list of [x, y, z] coords."""
-    if isinstance(g, Line):
-        return [[float(g.start[i]) for i in range(3)], [float(g.end[i]) for i in range(3)]]
-    n = 64 if isinstance(g, Circle) else 32
-    return [[float(pt[i]) for i in range(3)] for pt in g.to_polyline(n=n).points]
-
-
-def _dist_sq(a, b):
-    return sum((a[i] - b[i]) ** 2 for i in range(3))
-
-
-path_points = []
-for op in operations:
-    seg = _pts(op.geometry)
-    if not seg:
-        continue
-    # Reverse segment if its end is closer to the previous point than its start
-    if path_points and len(seg) >= 2:
-        if _dist_sq(path_points[-1], seg[-1]) < _dist_sq(path_points[-1], seg[0]):
-            seg = seg[::-1]
-    # Skip duplicate junction point
-    start = 1 if path_points and _dist_sq(path_points[-1], seg[0]) < 1e-12 else 0
-    path_points.extend(seg[start:])
+path_points = result.polyline.tolist()
 
 # Point-down cone: apex at origin, base at z=cone_height
 cone_frame = Frame([0, 0, cone_height], [1, 0, 0], [0, -1, 0])

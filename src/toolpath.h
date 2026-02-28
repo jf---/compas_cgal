@@ -55,9 +55,9 @@ pmp_trochoidal_mat_toolpath(
  * Meta matrix columns: [path_index, type(0=line,1=arc,2=circle), clockwise, operation]
  * Operation codes: 0=cut, 1=lead_in, 2=lead_out, 3=link, 4=retract, 5=plunge
  *
- * @return std::tuple of (meta Nx4, starts Nx3, ends Nx3, centers Nx3, radii Nx1)
+ * @return std::tuple of (meta Nx4, starts Nx3, ends Nx3, centers Nx3, radii Nx1, polyline Mx3)
  */
-std::tuple<compas::RowMatrixXd, compas::RowMatrixXd, compas::RowMatrixXd, compas::RowMatrixXd, compas::RowMatrixXd>
+std::tuple<compas::RowMatrixXd, compas::RowMatrixXd, compas::RowMatrixXd, compas::RowMatrixXd, compas::RowMatrixXd, compas::RowMatrixXd>
 pmp_trochoidal_mat_toolpath_circular(
     Eigen::Ref<const compas::RowMatrixXd> vertices,
     double tool_diameter,
@@ -76,5 +76,6 @@ pmp_trochoidal_mat_toolpath_circular(
     double cut_z,
     double clearance_z,
     bool has_clearance_z,
-    bool retract_at_end
+    bool retract_at_end,
+    double samples_per_radian
 );
