@@ -34,6 +34,7 @@ class ToolpathOperation:
     geometry: Line | Arc | Circle
     operation: str
     path_index: int
+    clockwise: bool = False
     start_tangent: np.ndarray | None = None
     end_tangent: np.ndarray | None = None
 
@@ -153,6 +154,7 @@ def _matrices_to_operations(
                     geometry=geom,
                     operation=operation,
                     path_index=path_index,
+                    clockwise=clockwise,
                     start_tangent=st,
                     end_tangent=et,
                 )
