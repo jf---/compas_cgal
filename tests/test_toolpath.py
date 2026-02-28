@@ -575,6 +575,17 @@ def test_tangent_continuity_random_polygons(polygon):
     _assert_engaged_tangent_continuity(ops)
 
 
+@pytest.mark.parametrize("polygon", _TANGENT_POLYGONS, ids=_TANGENT_IDS)
+def test_consistent_winding(polygon):
+    """All cut arcs/circles must have the same winding (climb milling = CW)."""
+    result = trochoidal_mat_toolpath_circular(polygon, **_TANGENT_TOOLPATH_KWARGS)
+    arcs = [op for op in result.operations if op.operation == "cut" and isinstance(op.geometry, (Arc, Circle))]
+    if not arcs:
+        return
+    cw_count = sum(1 for op in arcs if op.clockwise)
+    assert cw_count == len(arcs), f"{len(arcs) - cw_count}/{len(arcs)} arcs have wrong winding"
+
+
 # ---------------------------------------------------------------------------
 # Polyline continuity — known polygons + Hypothesis
 # ---------------------------------------------------------------------------

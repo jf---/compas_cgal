@@ -208,15 +208,11 @@ trochoid_chain(
             const double ri = approx_radius(circles[i]);
 
             if (has_prev && prev_arrival != tangent.source()) {
-                // Varying radius: arrival ≠ departure.  Single arc from arrival
-                // to departure, always taking the long way around (>π).
-                // The gap side depends on radius gradient direction, so we
-                // try the nominal winding first and flip if it takes the short way.
-                auto arc = TrochoidArc::make_arc(ci, ri, prev_arrival, tangent.source(), cw);
-                if (arc.sweep() < std::numbers::pi) {
-                    arc = TrochoidArc::make_arc(ci, ri, prev_arrival, tangent.source(), !cw);
-                }
-                chain.push_back(arc);
+                // Varying radius: arrival ≠ departure.  Full circle at nominal
+                // winding for complete material removal, then short repositioning
+                // arc (also nominal winding) to reach the tangent departure point.
+                chain.push_back(TrochoidArc::make_circle(ci, ri, prev_arrival, arc_ori));
+                chain.push_back(TrochoidArc::make_arc(ci, ri, prev_arrival, tangent.source(), cw));
             } else {
                 // First circle or constant radius: full 360°.
                 const Point_2& cp = has_prev ? prev_arrival : tangent.source();
