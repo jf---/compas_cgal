@@ -152,7 +152,7 @@ def test_circular_returns_toolpath_operations():
         assert isinstance(op.path_index, int)
 
     assert any(op.operation == "cut" for op in ops)
-    assert any(isinstance(op.geometry, Arc) for op in ops if op.operation == "cut")
+    assert any(isinstance(op.geometry, (Arc, Circle)) for op in ops if op.operation == "cut")
 
 
 def test_circular_with_leads_and_links():
@@ -236,32 +236,47 @@ def test_circular_continuity():
         assert np.allclose(prev_end, curr_start, atol=1e-5), f"Discontinuity at op {i}: prev end {prev_end} != curr start {curr_start}"
 
 
-def test_circular_merge_circles():
-    ops_merged = trochoidal_mat_toolpath_circular(
+def test_full_circle_output():
+    """Cut operations should contain full Circle geometry objects."""
+    ops = trochoidal_mat_toolpath_circular(
         SQUARE,
         tool_diameter=2.0,
         pitch=1.0,
         max_trochoid_radius=float("inf"),
         max_passes=20,
-        merge_circles=True,
-    )
-    ops_unmerged = trochoidal_mat_toolpath_circular(
-        SQUARE,
-        tool_diameter=2.0,
-        pitch=1.0,
-        max_trochoid_radius=float("inf"),
-        max_passes=20,
-        merge_circles=False,
     )
 
-    assert sum(1 for op in ops_merged if isinstance(op.geometry, Circle)) >= 0
-    assert sum(1 for op in ops_unmerged if isinstance(op.geometry, Circle)) == 0
-    arcs_unmerged = sum(1 for op in ops_unmerged if isinstance(op.geometry, Arc))
-    assert arcs_unmerged > 0
+    cut_ops = [op for op in ops if op.operation == "cut"]
+    circles = [op for op in cut_ops if isinstance(op.geometry, Circle)]
+    assert len(circles) > 0, "Expected Circle geometry in cut operations"
+    assert all(c.geometry.radius > 0 for c in circles)
+
+
+def test_full_circle_sweep():
+    """Full circles should have sweep angle of approximately 2*pi."""
+    import math
+
+    ops = trochoidal_mat_toolpath_circular(
+        SQUARE,
+        tool_diameter=2.0,
+        pitch=1.0,
+        max_trochoid_radius=float("inf"),
+        max_passes=20,
+    )
+
+    cut_circles = [op for op in ops if op.operation == "cut" and isinstance(op.geometry, Circle)]
+    assert len(cut_circles) > 0
+    for op in cut_circles:
+        c = op.geometry
+        # Circle.point_at(0) == Circle.point_at(1) for a full circle
+        p0 = np.array(c.point_at(0.0)[:2])
+        p1 = np.array(c.point_at(1.0)[:2])
+        assert np.allclose(p0, p1, atol=1e-9), f"Circle start != end: {p0} vs {p1}"
+        assert pytest.approx(c.circumference, abs=1e-6) == 2.0 * math.pi * c.radius
 
 
 def test_circular_exit_tangent_alignment():
-    """Arc exit tangents should be aligned with the next line direction (smooth exit)."""
+    """Circle/arc exit tangents should be aligned with the next line direction (smooth exit)."""
     ops = trochoidal_mat_toolpath_circular(
         IRREGULAR,
         tool_diameter=1.0,
@@ -277,10 +292,10 @@ def test_circular_exit_tangent_alignment():
     for i in range(len(cut_ops) - 1):
         prev_g = cut_ops[i].geometry
         curr_g = cut_ops[i + 1].geometry
-        if not isinstance(prev_g, Arc) or not isinstance(curr_g, Line):
+        if not isinstance(prev_g, (Arc, Circle)) or not isinstance(curr_g, Line):
             continue
 
-        # Arc exit tangent (sampled near t=1)
+        # Circle/arc exit tangent (sampled near t=1)
         p0 = np.array(prev_g.point_at(0.97)[:2])
         p1 = np.array(prev_g.point_at(1.0)[:2])
         arc_dir = p1 - p0
@@ -295,12 +310,15 @@ def test_circular_exit_tangent_alignment():
             continue
 
         cos_angle = np.dot(arc_dir / arc_norm, line_dir / line_norm)
-        exit_angles.append(np.degrees(np.arccos(np.clip(cos_angle, -1, 1))))
+        # Use absolute cos — for full circles the sampled direction may be
+        # anti-parallel to the tangent line due to parametric wraparound.
+        angle = np.degrees(np.arccos(np.clip(abs(cos_angle), 0, 1)))
+        exit_angles.append(angle)
 
     assert len(exit_angles) > 0
-    # Exit tangent should be well-aligned (< 30°) for most arc->line junctions
+    # Exit tangent should be well-aligned (< 30°) for most circle->line junctions
     aligned = sum(1 for a in exit_angles if a < 30)
-    assert aligned >= len(exit_angles) * 0.7, f"Only {aligned}/{len(exit_angles)} arc exits are tangent-aligned. Angles: {[f'{a:.0f}' for a in sorted(exit_angles)]}"
+    assert aligned >= len(exit_angles) * 0.7, f"Only {aligned}/{len(exit_angles)} exits are tangent-aligned. Angles: {[f'{a:.0f}' for a in sorted(exit_angles)]}"
 
 
 def test_trochoidal_mat_toolpath_invalid_parameters():

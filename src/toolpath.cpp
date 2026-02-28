@@ -30,54 +30,41 @@ inline double approx_length(const Vector_2& v) {
 inline double approx_distance(const Point_2& a, const Point_2& b) {
     return std::sqrt(std::max(0.0, CGAL::to_double(CGAL::squared_distance(a, b))));
 }
+inline double approx_radius(const Circle_2& c) {
+    return std::sqrt(std::max(0.0, CGAL::to_double(c.squared_radius())));
+}
 
 struct TrochoidArc {
-    Circle_2 circle;   // center + squared_radius; zero-radius = line
+    Circle_2 circle;   // center + squared_radius + orientation; degenerate = line
     Point_2  start;
     Point_2  end;
-    bool     clockwise;
 
-    bool is_line() const
-    {
-        return circle.squared_radius() == K::FT(0);
-    }
+    bool is_line() const { return circle.is_degenerate(); }
+    bool is_clockwise() const { return circle.orientation() == CGAL::CLOCKWISE; }
 
-    Segment_2 as_segment() const
-    {
-        return Segment_2(start, end);
-    }
+    Segment_2 as_segment() const { return Segment_2(start, end); }
 
     Vector_2 start_tangent() const
     {
-        if (is_line()) {
-            return end - start;
-        }
-        Vector_2 radial = start - circle.center();
-        return radial.perpendicular(clockwise ? CGAL::CLOCKWISE : CGAL::COUNTERCLOCKWISE);
+        if (is_line()) return end - start;
+        return (start - circle.center()).perpendicular(circle.orientation());
     }
 
     Vector_2 end_tangent() const
     {
-        if (is_line()) {
-            return end - start;
-        }
-        Vector_2 radial = end - circle.center();
-        return radial.perpendicular(clockwise ? CGAL::CLOCKWISE : CGAL::COUNTERCLOCKWISE);
+        if (is_line()) return end - start;
+        return (end - circle.center()).perpendicular(circle.orientation());
     }
 
     TrochoidArc reversed() const
     {
-        return TrochoidArc{circle, end, start, is_line() ? clockwise : !clockwise};
+        return TrochoidArc{is_line() ? circle : circle.opposite(), end, start};
     }
 
     double sweep() const
     {
-        if (is_line()) {
-            return 0.0;
-        }
-        if (start == end) {
-            return 0.0;
-        }
+        if (is_line()) return 0.0;
+        if (start == end) return 2.0 * std::numbers::pi;  // full circle
 
         const Point_2& c = circle.center();
         const double ux = CGAL::to_double(start.x() - c.x());
@@ -88,52 +75,27 @@ struct TrochoidArc {
         const double cross = ux * vy - uy * vx;
         const double dot_val = ux * vx + uy * vy;
         double ccw = std::atan2(cross, dot_val);
-        if (ccw < 0.0) {
-            ccw += 2.0 * std::numbers::pi;
-        }
-        return clockwise ? 2.0 * std::numbers::pi - ccw : ccw;
+        if (ccw < 0.0) ccw += 2.0 * std::numbers::pi;
+        return is_clockwise() ? 2.0 * std::numbers::pi - ccw : ccw;
     }
 
-    double radius() const
-    {
-        return std::sqrt(std::max(0.0, CGAL::to_double(circle.squared_radius())));
-    }
-
-    bool completes_circle(const TrochoidArc& next, double tol) const
-    {
-        if (clockwise != next.clockwise) {
-            return false;
-        }
-
-        const double r0 = radius();
-        const double r1 = next.radius();
-        const double scale = std::max(1.0, std::max(r0, r1));
-        const double tol_sq = tol * tol * scale * scale;
-
-        if (CGAL::to_double(CGAL::squared_distance(circle.center(), next.circle.center())) > tol_sq) {
-            return false;
-        }
-        if (std::abs(r0 - r1) > tol * scale) {
-            return false;
-        }
-        if (CGAL::to_double(CGAL::squared_distance(end, next.start)) > tol_sq) {
-            return false;
-        }
-        if (CGAL::to_double(CGAL::squared_distance(start, next.end)) > tol_sq) {
-            return false;
-        }
-        return std::abs((sweep() + next.sweep()) - 2.0 * std::numbers::pi) <= tol;
-    }
+    double radius() const { return approx_radius(circle); }
 
     static TrochoidArc make_line(const Point_2& s, const Point_2& e)
     {
-        return TrochoidArc{Circle_2(s, 0.0), s, e, false};
+        return TrochoidArc{Circle_2(s), s, e};
     }
 
     static TrochoidArc make_arc(const Point_2& center, double r, const Point_2& s, const Point_2& e, bool cw)
     {
-        return TrochoidArc{Circle_2(center, r * r), s, e, cw};
+        return TrochoidArc{Circle_2(center, r * r, cw ? CGAL::CLOCKWISE : CGAL::COUNTERCLOCKWISE), s, e};
     }
+
+    static TrochoidArc make_circle(const Point_2& center, double r, const Point_2& on_circle, CGAL::Orientation ori)
+    {
+        return TrochoidArc{Circle_2(center, r * r, ori), on_circle, on_circle};
+    }
+
 };
 
 std::vector<Circle_2>
@@ -175,8 +137,8 @@ external_tangents(
     }
 
     const double length = approx_length(d);
-    const double r0 = std::sqrt(std::max(0.0, CGAL::to_double(c0.squared_radius())));
-    const double r1 = std::sqrt(std::max(0.0, CGAL::to_double(c1.squared_radius())));
+    const double r0 = approx_radius(c0);
+    const double r1 = approx_radius(c1);
 
     double delta = r1 - r0;
     if (std::abs(delta) >= length) {
@@ -213,16 +175,20 @@ std::vector<TrochoidArc>
 trochoid_chain(
     const std::vector<Circle_2>& circles,
     const Vector_2& edge_direction,
-    bool winding_ccw)
+    bool climb_milling)
 {
     if (circles.size() < 2) {
         return {};
     }
 
-    std::vector<TrochoidArc> chain;
-    chain.reserve(circles.size() * 2);
+    // Climb milling: tool rotation matches feed direction.
+    const CGAL::Orientation arc_ori = climb_milling ? CGAL::CLOCKWISE : CGAL::COUNTERCLOCKWISE;
+    const bool cw = (arc_ori == CGAL::CLOCKWISE);
 
-    Point_2 prev_tangent_end;
+    std::vector<TrochoidArc> chain;
+    chain.reserve(circles.size() * 3);
+
+    Point_2 prev_arrival;
     bool has_prev = false;
 
     for (std::size_t i = 0; i + 1 < circles.size(); ++i) {
@@ -231,34 +197,40 @@ trochoid_chain(
             continue;
         }
 
-        // Alternate tangent side on consecutive iterations.
-        // Even iterations pick one side, odd the other — this places
-        // arrival/departure points on opposite sides of each intermediate
-        // circle, producing the half-circle arcs that form the trochoid.
+        // Always pick the same tangent side (no alternation).
         const Point_2& ci = circles[i].center();
         const auto orient_a = CGAL::orientation(ci, ci + edge_direction, ta.source());
-
-        const bool pick_left = ((i % 2 == 0) == winding_ccw);
-        const Segment_2& tangent = pick_left
+        const Segment_2& tangent = climb_milling
             ? (orient_a == CGAL::LEFT_TURN ? ta : tb)
             : (orient_a == CGAL::RIGHT_TURN ? ta : tb);
 
-        // Arc on intermediate circle: arrival to departure point.
-        // Arc winding matches the departure side: LEFT → CW, RIGHT → CCW.
-        // This ensures the arc exit tangent aligns with the departing line.
-        if (has_prev && prev_tangent_end != tangent.source()) {
-            const double ri = std::sqrt(std::max(0.0, CGAL::to_double(circles[i].squared_radius())));
-            chain.push_back(TrochoidArc::make_arc(
-                ci, ri, prev_tangent_end, tangent.source(), pick_left));
+        if (!circles[i].is_degenerate()) {
+            const double ri = approx_radius(circles[i]);
+
+            // When radii vary, the tangent arrival point from the previous pair
+            // differs from the departure point for this pair.  Bridge the gap
+            // with a partial arc so the chain stays continuous.
+            if (has_prev && prev_arrival != tangent.source()) {
+                chain.push_back(TrochoidArc::make_arc(ci, ri, prev_arrival, tangent.source(), cw));
+            }
+
+            // Full circle at the tangent departure point.
+            chain.push_back(TrochoidArc::make_circle(ci, ri, tangent.source(), arc_ori));
         }
 
-        // Tangent line segment
+        // Tangent line to next circle (skip if zero-length / overlapping).
         if (tangent.source() != tangent.target()) {
             chain.push_back(TrochoidArc::make_line(tangent.source(), tangent.target()));
         }
 
-        prev_tangent_end = tangent.target();
+        prev_arrival = tangent.target();
         has_prev = true;
+    }
+
+    // Full circle on the last circle, at the last tangent arrival point.
+    if (has_prev && !circles.back().is_degenerate()) {
+        const double rlast = approx_radius(circles.back());
+        chain.push_back(TrochoidArc::make_circle(circles.back().center(), rlast, prev_arrival, arc_ori));
     }
 
     return chain;
@@ -284,7 +256,7 @@ tessellate_chain(const std::vector<TrochoidArc>& chain, int samples_per_arc)
             const double start_angle = std::atan2(sy, sx);
 
             const double sw = arc.sweep();
-            const double signed_sweep = arc.clockwise ? -sw : sw;
+            const double signed_sweep = arc.is_clockwise() ? -sw : sw;
 
             const int n = std::max(2, samples_per_arc);
             for (int i = 0; i < n; ++i) {
@@ -489,7 +461,7 @@ mat_edge_chains(
         auto circles = trochoid_circles(p0, p1, compute_radius(d0), compute_radius(d1), pitch);
         if (circles.size() < 2) continue;
 
-        auto chain = trochoid_chain(circles, edge_dir, true);
+        auto chain = trochoid_chain(circles, edge_dir, /*climb_milling=*/true);
         if (!chain.empty()) {
             chains.push_back(std::move(chain));
         }
@@ -615,7 +587,7 @@ pmp_trochoidal_mat_toolpath_circular_raw(
         const auto& arc = all_primitives[i];
         meta(i, 0) = static_cast<double>(primitive_path_indices[i]);
         meta(i, 1) = arc.is_line() ? 0.0 : 1.0;
-        meta(i, 2) = arc.clockwise ? 1.0 : 0.0;
+        meta(i, 2) = arc.is_clockwise() ? 1.0 : 0.0;
 
         starts(i, 0) = CGAL::to_double(arc.start.x());
         starts(i, 1) = CGAL::to_double(arc.start.y());
@@ -661,34 +633,6 @@ path_length(const std::vector<TrochoidArc>& path)
     return length;
 }
 
-void
-merge_circle_pairs(std::vector<ToolpathPrimitive>& ops, double tol = 1e-6)
-{
-    if (ops.size() < 2) {
-        return;
-    }
-    std::vector<ToolpathPrimitive> merged;
-    merged.reserve(ops.size());
-    std::size_t i = 0;
-    while (i < ops.size()) {
-        if (i + 1 < ops.size() &&
-            !ops[i].arc.is_line() && !ops[i + 1].arc.is_line() &&
-            ops[i].operation == ops[i + 1].operation &&
-            ops[i].path_index == ops[i + 1].path_index &&
-            ops[i].arc.completes_circle(ops[i + 1].arc, tol)) {
-
-            ToolpathPrimitive circle = ops[i];
-            circle.arc.end = circle.arc.start;  // circle: start == end
-            merged.push_back(circle);
-            i += 2;
-            continue;
-        }
-        merged.push_back(ops[i]);
-        i += 1;
-    }
-    ops.swap(merged);
-}
-
 } // namespace
 
 std::tuple<compas::RowMatrixXd, compas::RowMatrixXd, compas::RowMatrixXd, compas::RowMatrixXd, compas::RowMatrixXd>
@@ -710,8 +654,7 @@ pmp_trochoidal_mat_toolpath_circular(
     double cut_z,
     double clearance_z,
     bool has_clearance_z,
-    bool retract_at_end,
-    bool merge_circles)
+    bool retract_at_end)
 {
     // Validate and build skeleton + chains directly (no serialize/deserialize round-trip)
     validate_toolpath_params(tool_diameter, stepover, pitch,
@@ -766,15 +709,14 @@ pmp_trochoidal_mat_toolpath_circular(
         used[start_idx] = true;
 
         for (std::size_t step = 1; step < paths.size(); ++step) {
-            const Point_2 cur_end = ordered.back().back().end;
+            const Point_2& cur_end = ordered.back().back().end;
             int best_idx = -1;
-            double best_dist = std::numeric_limits<double>::infinity();
 
             for (int i = 0; i < static_cast<int>(paths.size()); ++i) {
                 if (used[i]) continue;
-                double dist = CGAL::to_double(CGAL::squared_distance(cur_end, paths[i].front().start));
-                if (dist < best_dist) {
-                    best_dist = dist; best_idx = i;
+                if (best_idx < 0 ||
+                    CGAL::has_smaller_distance_to_point(cur_end, paths[i].front().start, paths[best_idx].front().start)) {
+                    best_idx = i;
                 }
             }
 
@@ -897,11 +839,6 @@ pmp_trochoidal_mat_toolpath_circular(
         }
     }
 
-    // Circle merging
-    if (merge_circles) {
-        merge_circle_pairs(operations);
-    }
-
     // Serialize to matrices (meta Nx4)
     const int n = static_cast<int>(operations.size());
     compas::RowMatrixXd meta(n, 4);
@@ -911,12 +848,11 @@ pmp_trochoidal_mat_toolpath_circular(
     compas::RowMatrixXd radii_out(n, 1);
     for (int i = 0; i < n; ++i) {
         const auto& op = operations[i];
-        bool is_circle = merge_circles && !op.arc.is_line() &&
-            op.arc.start == op.arc.end;
+        bool is_circle = !op.arc.is_line() && op.arc.start == op.arc.end;
 
         meta(i, 0) = static_cast<double>(op.path_index);
         meta(i, 1) = op.arc.is_line() ? 0.0 : (is_circle ? 2.0 : 1.0);
-        meta(i, 2) = op.arc.clockwise ? 1.0 : 0.0;
+        meta(i, 2) = op.arc.is_clockwise() ? 1.0 : 0.0;
         meta(i, 3) = static_cast<double>(op.operation);
 
         starts(i, 0) = CGAL::to_double(op.arc.start.x());
@@ -1021,6 +957,5 @@ NB_MODULE(_toolpath, m)
         "cut_z"_a = 0.0,
         "clearance_z"_a = 0.0,
         "has_clearance_z"_a = false,
-        "retract_at_end"_a = true,
-        "merge_circles"_a = true);
+        "retract_at_end"_a = true);
 }

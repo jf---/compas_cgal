@@ -38,7 +38,6 @@ operations = trochoidal_mat_toolpath_circular(
     optimize_order=True,
     cut_z=-0.2,
     clearance_z=2.0,
-    merge_circles=False,
 )
 
 

@@ -76,6 +76,5 @@ pmp_trochoidal_mat_toolpath_circular(
     double cut_z,
     double clearance_z,
     bool has_clearance_z,
-    bool retract_at_end,
-    bool merge_circles
+    bool retract_at_end
 );

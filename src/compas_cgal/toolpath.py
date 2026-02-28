@@ -240,7 +240,6 @@ def trochoidal_mat_toolpath_circular(
     cut_z: float = 0.0,
     clearance_z: float | None = None,
     retract_at_end: bool = True,
-    merge_circles: bool = True,
 ) -> list[ToolpathOperation]:
     """Generate linked circular arc toolpath operations.
 
@@ -280,8 +279,6 @@ def trochoidal_mat_toolpath_circular(
         Safe Z-height for inter-path travel.
     retract_at_end
         If ``True``, add a final retract after the last path.
-    merge_circles
-        If ``True``, merge consecutive arc pairs forming full circles.
 
     Returns
     -------
@@ -318,7 +315,6 @@ def trochoidal_mat_toolpath_circular(
         effective_clearance_z,
         has_clearance_z,
         bool(retract_at_end),
-        bool(merge_circles),
     )
 
     meta = np.asarray(meta, dtype=np.float64)
