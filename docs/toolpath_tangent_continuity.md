@@ -61,6 +61,61 @@ arc with flipped winding.  This trades a small amount of re-cutting
 (over the gap region) for consistent climb/conventional milling
 throughout the toolpath.
 
+### Why this matters
+
+Without consistent winding, the toolpath alternates between climb and
+conventional milling at every varying-radius station.  This causes:
+
+- **Alternating cutting forces** — climb milling pulls the tool into the
+  material, conventional pushes it away.  Rapid alternation induces
+  vibration and chatter.
+- **Degraded surface finish** — each direction change leaves a witness
+  mark.  Consistent climb milling produces a uniform finish.
+- **Reduced tool life** — conventional milling rubs before cutting,
+  generating heat.  Consistent climb avoids this.
+
+The original implementation used a single arc with winding flipped to
+guarantee coverage (>π sweep).  The fix splits this into full circle +
+repositioning arc, both at nominal winding.  Empirically, ~60% of arcs
+were flipped — nearly all were near-full circles (gap < 1°) where the
+flip was caused by construction noise in the tangent departure point.
+
+### Construction noise gate
+
+The decision to emit a repositioning arc uses
+`CGAL::compare_squared_distance` (an exact predicate) with a threshold
+of `1e-18` (i.e. `1e-9²`).  Points closer than this are treated as
+coincident, collapsing to a single full circle.  This avoids mixing
+double-precision proximity checks with exact predicates — the gate stays
+in exact arithmetic throughout.
+
+## ToolpathOperation fields
+
+Each `ToolpathOperation` carries the full C++ metadata:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `geometry` | `Line \| Arc \| Circle` | compas geometry primitive |
+| `operation` | `str` | `"cut"`, `"lead_in"`, `"lead_out"`, `"link"`, `"retract"`, `"plunge"` |
+| `path_index` | `int` | MAT edge group index |
+| `clockwise` | `bool` | winding direction from C++ (ground truth) |
+| `start_tangent` | `ndarray` | unit tangent vector at start (winding-correct, z=0) |
+| `end_tangent` | `ndarray` | unit tangent vector at end (winding-correct, z=0) |
+
+The `start_tangent` and `end_tangent` are computed in C++ via
+`Vector_2::perpendicular(orientation)` — exact CGAL kernel operations —
+then normalized to unit length.  For lines, both equal the unit
+direction vector.  For arcs/circles, they are perpendicular to the
+radius at each endpoint, respecting the winding direction.
+
+To compute a tangent at an arbitrary parameter `t` on an arc/circle in
+Python, use `clockwise` to select the correct perpendicular:
+
+```python
+rx, ry = point.x - center.x, point.y - center.y
+tx, ty = (ry, -rx) if op.clockwise else (-ry, rx)
+```
+
 ## Winding representation gap
 
 The C++ backend emits circles with explicit CW/CCW orientation.
