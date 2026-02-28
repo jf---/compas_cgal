@@ -206,7 +206,8 @@ for edge in skeleton_bisector_edges(polygon):
     color = fade_color(MAT_PALETTE[pidx % len(MAT_PALETTE)], 50) if pidx is not None else unmatched_color
     add_curve(viewer.scene, edge, parent=skeleton_group, linecolor=color, linewidth=6.0)
 
-TANGENT_COLOR = Color.red()
+TANGENT_CW_COLOR = Color.red()
+TANGENT_CCW_COLOR = Color.blue()
 TANGENT_SCALE = 0.5
 TANGENT_SAMPLES = 12
 
@@ -239,10 +240,11 @@ for path_index in sorted(groups):
                 if n < 1e-12:
                     continue
                 tx, ty = tx / n, ty / n
+                tcolor = TANGENT_CW_COLOR if op.clockwise else TANGENT_CCW_COLOR
                 viewer.scene.add(
                     Polyline([[px, py, 0.0], [px + tx * TANGENT_SCALE, py + ty * TANGENT_SCALE, 0.0]]),
                     parent=tangent_group,
-                    linecolor=TANGENT_COLOR,
+                    linecolor=tcolor,
                     linewidth=2.0,
                 )
 

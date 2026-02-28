@@ -50,10 +50,22 @@ is inherent to trochoidal milling geometry — not a defect:
 CNC controllers handle these short direction changes through look-ahead
 deceleration.  The bridge distance is comparable to stepover.
 
+## Consistent winding
+
+All cut arcs and circles use the same winding direction (CW for climb
+milling).  At varying-radius stations — where adjacent trochoid circles
+have different radii — the tangent arrival and departure points on a
+circle do not coincide.  The toolpath emits a full circle followed by a
+short repositioning arc, both at nominal winding, rather than a single
+arc with flipped winding.  This trades a small amount of re-cutting
+(over the gap region) for consistent climb/conventional milling
+throughout the toolpath.
+
 ## Winding representation gap
 
 The C++ backend emits circles with explicit CW/CCW orientation.
-The Python layer maps these to compas geometry types:
+`ToolpathOperation.clockwise` preserves this flag for downstream code.
+The compas geometry types have a partial representation gap:
 
 | C++ type | Python type | Winding preserved? |
 |----------|-------------|--------------------|
@@ -63,9 +75,9 @@ The Python layer maps these to compas geometry types:
 | CCW circle| `Circle`   | yes |
 
 Because compas `Circle` has no winding attribute, CW circles appear as
-CCW in the Python representation.  At Line ↔ Circle boundaries this
-causes the **measured** tangent angle to read 180° (anti-parallel) even
-when the physical tool motion is smooth.
+CCW in the Python representation.  Use `ToolpathOperation.clockwise`
+(from the C++ metadata) for the ground truth.  The pre-computed
+`start_tangent` and `end_tangent` unit vectors are also winding-correct.
 
 ## Testing strategy
 
