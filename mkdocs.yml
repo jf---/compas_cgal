@@ -164,6 +164,7 @@ nav:
       - Triangulation: examples/example_triangulation.md
   - Design Notes:
       - Trochoid Chain Stitching: toolpath_trochoid_chain_design.md
+      - Tangent Continuity: toolpath_tangent_continuity.md
       - CGAL Primitives Critique: critique_toolpath_cgal_primitives.md
   - API Reference:
       - compas_cgal.booleans: api/compas_cgal.booleans.md

@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 import pytest
 from compas.geometry import Arc
@@ -5,6 +7,10 @@ from compas.geometry import Circle
 from compas.geometry import Line
 from compas.geometry import Polygon
 from compas.geometry import is_point_in_polygon_xy
+from hypothesis import assume
+from hypothesis import given
+from hypothesis import settings
+from hypothesis import strategies as st
 
 from compas_cgal.toolpath import ToolpathOperation
 from compas_cgal.toolpath import polygon_medial_axis_transform
@@ -61,6 +67,117 @@ def _op_end_xy(op: ToolpathOperation) -> np.ndarray:
     raise TypeError(type(g))
 
 
+# ---------------------------------------------------------------------------
+# Tangent continuity helpers
+# ---------------------------------------------------------------------------
+
+ENGAGED_OPS = frozenset({"lead_in", "cut", "lead_out"})
+
+
+def _tangent_xy(geom, t):
+    """Exact unit tangent vector in XY at parameter *t*.
+
+    Line: direction vector (exact).
+    Arc / Circle: perpendicular to radius at the point (exact, no discretization).
+    Since the test uses abs(dot) for parallelism, the CW/CCW sign is irrelevant.
+    """
+    if isinstance(geom, Line):
+        d = np.array([float(geom.end[0]) - float(geom.start[0]), float(geom.end[1]) - float(geom.start[1])])
+    else:
+        pt = geom.point_at(t)
+        center = geom.frame.point
+        rx = float(pt[0]) - float(center[0])
+        ry = float(pt[1]) - float(center[1])
+        d = np.array([-ry, rx])
+    n = np.linalg.norm(d)
+    return d / n if n > 1e-14 else None
+
+
+def _is_trochoid_bridge(prev, curr):
+    """True when the transition is a bridge line in a trochoid chain.
+
+    Trochoid chains alternate Arc/Circle ↔ Line within the same path.
+    The bridge line steps along the MAT edge at ~90° to the circle tangent —
+    this is inherent to trochoidal milling geometry, not a defect.
+    """
+    if prev.path_index != curr.path_index:
+        return False
+    if prev.operation != "cut" or curr.operation != "cut":
+        return False
+    prev_is_line = isinstance(prev.geometry, Line)
+    curr_is_line = isinstance(curr.geometry, Line)
+    return prev_is_line != curr_is_line
+
+
+def _assert_engaged_tangent_continuity(ops, tol_deg=1.0):
+    """Assert tangent parallelism at all consecutive engaged-operation transitions.
+
+    Checks that exit tangent of op[i-1] and entry tangent of op[i] are within
+    *tol_deg* of being parallel whenever both operations are material-engaged
+    (lead_in, cut, lead_out).
+
+    Trochoid bridge lines (short linear steps between cutting circles) are
+    excluded — their ~90° angle to the circle tangent is inherent to
+    trochoidal milling geometry.
+
+    Uses *parallelism* (angle to line, not vector) because compas Circle/Arc
+    encoding may reverse the winding direction relative to the C++ trochoid.
+    A winding flip (180°) is safe — it just means G02 vs G03 in G-code.
+    A non-parallel tangent (e.g. 45°, 90°) is a physical jerk that can damage
+    the tool or workpiece.
+    """
+    violations = []
+    for i in range(1, len(ops)):
+        prev, curr = ops[i - 1], ops[i]
+        if prev.operation not in ENGAGED_OPS or curr.operation not in ENGAGED_OPS:
+            continue
+        if _is_trochoid_bridge(prev, curr):
+            continue
+
+        exit_t = _tangent_xy(prev.geometry, 1.0)
+        entry_t = _tangent_xy(curr.geometry, 0.0)
+        if exit_t is None or entry_t is None:
+            continue
+
+        # abs(dot) → measures parallelism, tolerating winding reversal
+        cos_a = np.clip(abs(np.dot(exit_t, entry_t)), 0.0, 1.0)
+        angle_deg = math.degrees(math.acos(cos_a))
+        if angle_deg > tol_deg:
+            violations.append((i, prev.operation, curr.operation, angle_deg))
+
+    assert not violations, f"{len(violations)} tangent discontinuity(ies) (>{tol_deg}°):\n" + "\n".join(
+        f"  op[{idx - 1}] {pop} -> op[{idx}] {cop}: {a:.1f}°" for idx, pop, cop, a in violations[:10]
+    )
+
+
+# ---------------------------------------------------------------------------
+# Hypothesis strategy: random simple polygons
+# ---------------------------------------------------------------------------
+
+
+@st.composite
+def _simple_polygons(draw):
+    """Simple polygon via angular sweep with controlled perturbation.
+
+    Vertices are placed at evenly-spaced angles around the origin with ±25%
+    angular jitter and 0.5–1.0× radial variation.  This guarantees simplicity
+    without a computational geometry check.
+    """
+    n = draw(st.integers(min_value=4, max_value=12))
+    step = 2.0 * math.pi / n
+    base_r = draw(st.floats(min_value=5.0, max_value=15.0))
+    points = []
+    for i in range(n):
+        a = i * step + draw(st.floats(min_value=-0.25 * step, max_value=0.25 * step))
+        r = base_r * draw(st.floats(min_value=0.5, max_value=1.0))
+        points.append((r * math.cos(a), r * math.sin(a), 0.0))
+    return Polygon(points)
+
+
+# ---------------------------------------------------------------------------
+# Test polygons
+# ---------------------------------------------------------------------------
+
 SQUARE = Polygon([[0, 0, 0], [10, 0, 0], [10, 10, 0], [0, 10, 0]])
 IRREGULAR = Polygon(
     [
@@ -75,6 +192,22 @@ IRREGULAR = Polygon(
         (2.92, 4.03, 0.0),
     ]
 )
+L_SHAPE = Polygon([(0, 0, 0), (6, 0, 0), (6, 2, 0), (2, 2, 0), (2, 8, 0), (0, 8, 0)])
+STAR = Polygon(
+    [
+        (5.0, 0.0, 0.0),
+        (1.5, 1.2, 0.0),
+        (1.55, 4.76, 0.0),
+        (-0.57, 1.9, 0.0),
+        (-4.05, 2.94, 0.0),
+        (-1.85, 0.0, 0.0),
+        (-4.05, -2.94, 0.0),
+        (-0.57, -1.9, 0.0),
+        (1.55, -4.76, 0.0),
+        (1.5, -1.2, 0.0),
+    ]
+)
+KITE = Polygon([(5, 0, 0), (0, 5, 0), (-5, 0, 0), (0, -2.5, 0)])
 
 
 def test_polygon_medial_axis_transform_square():
@@ -329,3 +462,40 @@ def test_trochoidal_mat_toolpath_invalid_parameters():
         trochoidal_mat_toolpath(small, tool_diameter=1.0, stepover=0.0)
     with pytest.raises(ValueError):
         trochoidal_mat_toolpath(small, tool_diameter=1.0, samples_per_cycle=3)
+
+
+# ---------------------------------------------------------------------------
+# Tangent continuity — known polygons + Hypothesis
+# ---------------------------------------------------------------------------
+
+_TANGENT_TOOLPATH_KWARGS = dict(
+    tool_diameter=0.5,
+    pitch=0.4,
+    lead_in=0.15,
+    lead_out=0.15,
+    link_paths=True,
+    optimize_order=True,
+    cut_z=-0.2,
+    clearance_z=2.0,
+)
+
+_TANGENT_POLYGONS = [SQUARE, IRREGULAR, L_SHAPE, STAR, KITE]
+_TANGENT_IDS = ["square", "irregular", "L_shape", "star", "kite"]
+
+
+@pytest.mark.parametrize("polygon", _TANGENT_POLYGONS, ids=_TANGENT_IDS)
+def test_tangent_continuity_known_polygons(polygon):
+    """Engaged milling motions must be tangent-continuous (< 1°)."""
+    ops = trochoidal_mat_toolpath_circular(polygon, **_TANGENT_TOOLPATH_KWARGS)
+    engaged = [op for op in ops if op.operation in ENGAGED_OPS]
+    assert len(engaged) > 2, "Not enough engaged operations to test"
+    _assert_engaged_tangent_continuity(ops)
+
+
+@given(polygon=_simple_polygons())
+@settings(max_examples=50, deadline=None)
+def test_tangent_continuity_random_polygons(polygon):
+    """Property: for any simple polygon, engaged motions are tangent-continuous."""
+    ops = trochoidal_mat_toolpath_circular(polygon, **_TANGENT_TOOLPATH_KWARGS)
+    assume(len([op for op in ops if op.operation in ENGAGED_OPS]) > 2)
+    _assert_engaged_tangent_continuity(ops)
