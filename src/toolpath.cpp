@@ -706,7 +706,7 @@ tessellate_operations(const std::vector<ToolpathPrimitive>& ops, double samples_
 
 } // namespace
 
-std::tuple<compas::RowMatrixXd, compas::RowMatrixXd, compas::RowMatrixXd, compas::RowMatrixXd, compas::RowMatrixXd, compas::RowMatrixXd>
+std::tuple<compas::RowMatrixXd, compas::RowMatrixXd, compas::RowMatrixXd, compas::RowMatrixXd, compas::RowMatrixXd, compas::RowMatrixXd, compas::RowMatrixXd, compas::RowMatrixXd>
 pmp_trochoidal_mat_toolpath_circular(
     Eigen::Ref<const compas::RowMatrixXd> vertices,
     double tool_diameter,
@@ -739,7 +739,7 @@ pmp_trochoidal_mat_toolpath_circular(
         compas::RowMatrixXd empty_meta(0, 4);
         compas::RowMatrixXd empty3(0, 3);
         compas::RowMatrixXd empty1(0, 1);
-        return std::make_tuple(empty_meta, empty3, empty3, empty3, empty1, empty3);
+        return std::make_tuple(empty_meta, empty3, empty3, empty3, empty1, empty3, empty3, empty3);
     }
 
     const double tool_radius = 0.5 * tool_diameter;
@@ -762,7 +762,7 @@ pmp_trochoidal_mat_toolpath_circular(
         compas::RowMatrixXd empty_meta(0, 4);
         compas::RowMatrixXd empty3(0, 3);
         compas::RowMatrixXd empty1(0, 1);
-        return std::make_tuple(empty_meta, empty3, empty3, empty3, empty1, empty3);
+        return std::make_tuple(empty_meta, empty3, empty3, empty3, empty1, empty3, empty3, empty3);
     }
 
     // Greedy nearest-neighbor path ordering
@@ -918,6 +918,8 @@ pmp_trochoidal_mat_toolpath_circular(
     compas::RowMatrixXd ends(n, 3);
     compas::RowMatrixXd centers_out(n, 3);
     compas::RowMatrixXd radii_out(n, 1);
+    compas::RowMatrixXd start_tangents(n, 3);
+    compas::RowMatrixXd end_tangents(n, 3);
     for (int i = 0; i < n; ++i) {
         const auto& op = operations[i];
         bool is_circle = !op.arc.is_line() && op.arc.start == op.arc.end;
@@ -937,10 +939,35 @@ pmp_trochoidal_mat_toolpath_circular(
         centers_out(i, 1) = CGAL::to_double(op.arc.circle.center().y());
         centers_out(i, 2) = op.z_start;  // center z matches start z
         radii_out(i, 0) = op.arc.radius();
+
+        // Unit tangent vectors (XY, z=0)
+        const Vector_2 st = op.arc.start_tangent();
+        const double st_len = approx_length(st);
+        if (st_len > 1e-12) {
+            const double inv = 1.0 / st_len;
+            start_tangents(i, 0) = CGAL::to_double(st.x()) * inv;
+            start_tangents(i, 1) = CGAL::to_double(st.y()) * inv;
+        } else {
+            start_tangents(i, 0) = 0.0;
+            start_tangents(i, 1) = 0.0;
+        }
+        start_tangents(i, 2) = 0.0;
+
+        const Vector_2 et = op.arc.end_tangent();
+        const double et_len = approx_length(et);
+        if (et_len > 1e-12) {
+            const double inv = 1.0 / et_len;
+            end_tangents(i, 0) = CGAL::to_double(et.x()) * inv;
+            end_tangents(i, 1) = CGAL::to_double(et.y()) * inv;
+        } else {
+            end_tangents(i, 0) = 0.0;
+            end_tangents(i, 1) = 0.0;
+        }
+        end_tangents(i, 2) = 0.0;
     }
 
     auto polyline = tessellate_operations(operations, samples_per_radian);
-    return std::make_tuple(meta, starts, ends, centers_out, radii_out, polyline);
+    return std::make_tuple(meta, starts, ends, centers_out, radii_out, polyline, start_tangents, end_tangents);
 }
 
 NB_MODULE(_toolpath, m)
@@ -1013,7 +1040,9 @@ NB_MODULE(_toolpath, m)
         "- end points (Nx3 float)\n"
         "- centers (Nx3 float)\n"
         "- radii (Nx1 float)\n"
-        "- polyline (Mx3 float): tessellated 3D point sequence",
+        "- polyline (Mx3 float): tessellated 3D point sequence\n"
+        "- start tangents (Nx3 float): unit tangent at arc/circle start\n"
+        "- end tangents (Nx3 float): unit tangent at arc/circle end",
         "vertices"_a,
         "tool_diameter"_a,
         "stepover"_a,
