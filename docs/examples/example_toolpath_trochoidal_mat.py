@@ -206,6 +206,12 @@ for edge in skeleton_bisector_edges(polygon):
     color = fade_color(MAT_PALETTE[pidx % len(MAT_PALETTE)], 50) if pidx is not None else unmatched_color
     add_curve(viewer.scene, edge, parent=skeleton_group, linecolor=color, linewidth=6.0)
 
+TANGENT_COLOR = Color.red()
+TANGENT_SCALE = 0.5
+TANGENT_SAMPLES = 12
+
+tangent_group = viewer.scene.add_group(name="Tangents")
+
 for path_index in sorted(groups):
     ops = groups[path_index]
     base_color = MAT_PALETTE[path_index % len(MAT_PALETTE)]
@@ -217,6 +223,28 @@ for path_index in sorted(groups):
         lighten = OPERATION_LIGHTEN.get(op.operation, 40)
         color = fade_color(base_color, lighten)
         add_curve(viewer.scene, op.geometry, parent=toolpath_group, linecolor=color, linewidth=width)
+
+        # Sample tangent vectors along arcs/circles
+        if isinstance(op.geometry, (Arc, Circle)) and op.operation == "cut":
+            g = op.geometry
+            cx, cy = float(g.frame.point[0]), float(g.frame.point[1])
+            for k in range(TANGENT_SAMPLES):
+                t = k / TANGENT_SAMPLES
+                pt = g.point_at(t)
+                px, py = float(pt[0]), float(pt[1])
+                # tangent = perpendicular to radius
+                rx, ry = px - cx, py - cy
+                tx, ty = -ry, rx
+                n = (tx * tx + ty * ty) ** 0.5
+                if n < 1e-12:
+                    continue
+                tx, ty = tx / n, ty / n
+                viewer.scene.add(
+                    Polyline([[px, py, 0.0], [px + tx * TANGENT_SCALE, py + ty * TANGENT_SCALE, 0.0]]),
+                    parent=tangent_group,
+                    linecolor=TANGENT_COLOR,
+                    linewidth=2.0,
+                )
 
 # ==============================================================================
 # Tool cone + slider for toolpath exploration

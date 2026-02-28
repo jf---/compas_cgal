@@ -477,6 +477,55 @@ def test_circular_exit_tangent_alignment():
     assert aligned >= len(exit_angles) * 0.7, f"Only {aligned}/{len(exit_angles)} exits are tangent-aligned. Angles: {[f'{a:.0f}' for a in sorted(exit_angles)]}"
 
 
+def test_tangent_vectors_populated():
+    """Every operation has unit-length start/end tangent vectors."""
+    result = trochoidal_mat_toolpath_circular(
+        IRREGULAR,
+        tool_diameter=1.0,
+        pitch=0.75,
+        max_trochoid_radius=float("inf"),
+        max_passes=20,
+    )
+    assert len(result.operations) > 2
+    for op in result.operations:
+        assert op.start_tangent is not None, f"missing start_tangent on {op.operation}"
+        assert op.end_tangent is not None, f"missing end_tangent on {op.operation}"
+        st = op.start_tangent
+        et = op.end_tangent
+        # z component is 0 (2.5D toolpath)
+        assert st[2] == pytest.approx(0.0)
+        assert et[2] == pytest.approx(0.0)
+        # unit length in XY
+        st_len = math.hypot(st[0], st[1])
+        et_len = math.hypot(et[0], et[1])
+        assert st_len == pytest.approx(1.0, abs=1e-10), f"start_tangent not unit: {st_len}"
+        assert et_len == pytest.approx(1.0, abs=1e-10), f"end_tangent not unit: {et_len}"
+
+
+def test_tangent_vectors_match_geometry():
+    """C++ tangent vectors must agree with analytical tangent from geometry."""
+    result = trochoidal_mat_toolpath_circular(
+        IRREGULAR,
+        tool_diameter=1.0,
+        pitch=0.75,
+        max_trochoid_radius=float("inf"),
+        max_passes=20,
+    )
+    for op in result.operations:
+        g = op.geometry
+        # compare start tangent
+        analytical = _tangent_xy(g, 0.0)
+        if analytical is not None:
+            cpp_st = np.array([op.start_tangent[0], op.start_tangent[1]])
+            # parallelism check (abs dot) handles winding sign
+            assert abs(np.dot(cpp_st, analytical)) > 0.99, f"start tangent mismatch: cpp={cpp_st} analytical={analytical}"
+        # compare end tangent
+        analytical = _tangent_xy(g, 1.0)
+        if analytical is not None:
+            cpp_et = np.array([op.end_tangent[0], op.end_tangent[1]])
+            assert abs(np.dot(cpp_et, analytical)) > 0.99, f"end tangent mismatch: cpp={cpp_et} analytical={analytical}"
+
+
 def test_trochoidal_mat_toolpath_invalid_parameters():
     small = Polygon([[0, 0, 0], [2, 0, 0], [2, 2, 0], [0, 2, 0]])
     with pytest.raises(ValueError):

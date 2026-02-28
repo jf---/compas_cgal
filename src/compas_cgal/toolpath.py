@@ -34,6 +34,8 @@ class ToolpathOperation:
     geometry: Line | Arc | Circle
     operation: str
     path_index: int
+    start_tangent: np.ndarray | None = None
+    end_tangent: np.ndarray | None = None
 
 
 @dataclass
@@ -126,6 +128,8 @@ def _matrices_to_operations(
     ends: np.ndarray,
     centers: np.ndarray,
     radii: np.ndarray,
+    start_tangents: np.ndarray | None = None,
+    end_tangents: np.ndarray | None = None,
 ) -> list[ToolpathOperation]:
     ops: list[ToolpathOperation] = []
     for i in range(meta.shape[0]):
@@ -142,7 +146,17 @@ def _matrices_to_operations(
             geom = _row_to_circle(centers[i], starts[i], float(radii[i]))
 
         if geom is not None:
-            ops.append(ToolpathOperation(geometry=geom, operation=operation, path_index=path_index))
+            st = start_tangents[i] if start_tangents is not None else None
+            et = end_tangents[i] if end_tangents is not None else None
+            ops.append(
+                ToolpathOperation(
+                    geometry=geom,
+                    operation=operation,
+                    path_index=path_index,
+                    start_tangent=st,
+                    end_tangent=et,
+                )
+            )
     return ops
 
 
@@ -308,7 +322,7 @@ def trochoidal_mat_toolpath_circular(
     effective_clearance_z = float(clearance_z) if clearance_z is not None else 0.0
 
     V = _polygon_to_ccw_vertices(polygon)
-    meta, starts, ends, centers, radii, polyline = _toolpath.trochoidal_mat_toolpath_circular(
+    meta, starts, ends, centers, radii, polyline, start_tangents, end_tangents = _toolpath.trochoidal_mat_toolpath_circular(
         V,
         float(tool_diameter),
         float(stepover),
@@ -339,8 +353,10 @@ def trochoidal_mat_toolpath_circular(
     centers = np.asarray(centers, dtype=np.float64, order="C")
     radii = np.asarray(radii, dtype=np.float64, order="C").reshape(-1)
     polyline = np.asarray(polyline, dtype=np.float64, order="C")
+    start_tangents = np.asarray(start_tangents, dtype=np.float64, order="C")
+    end_tangents = np.asarray(end_tangents, dtype=np.float64, order="C")
 
     return ToolpathResult(
-        operations=_matrices_to_operations(meta, starts, ends, centers, radii),
+        operations=_matrices_to_operations(meta, starts, ends, centers, radii, start_tangents, end_tangents),
         polyline=polyline,
     )
