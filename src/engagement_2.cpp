@@ -142,6 +142,110 @@ struct Arc {
     double span;
 };
 
+// ----------------------------------------------------------------------------
+// Task 5: exact-station TEA cap certificate along a linear cutter motion.
+// ----------------------------------------------------------------------------
+
+// Conservative bound on how far a run's TEA can grow over a center travel `d`
+// (tool radius r, stock frozen): the factor-1 analytic lemma. Two mechanisms
+// move a run's angular extent between two nearby stations.
+//
+//   (a) ENDPOINT DRIFT. Each end of an existing engaged run sits where the rim
+//       crosses a material boundary. Translating the center by d slides such a
+//       crossing along the rim by at most the arc subtended by a chord of length
+//       d on the radius-r circle, 2*asin(min(1, d/(2r))). A run has two ends, so
+//       its extent can grow by up to 4*asin(min(1, d/(2r))).
+//   (b) NEWBORN CONTACT. A contact absent at a station can appear in between when
+//       a feature first bites the rim. Over travel d the deepest first bite
+//       reaches radial depth d into the disk; the rim chord it cuts spans a full
+//       angle 2*acos(max(-1, 1 - d/r)).
+//
+// GROWTH(d, r) = (a) + (b). Both terms are monotone non-decreasing in d and
+// saturate at d = 2r, so GROWTH is monotone -- required so that growth over the
+// (variable) nearest-station distance is bounded by growth over the half-spacing.
+// Evaluated in doubles: an analytic REFINEMENT bound, never a geometric decision
+// (CLAUDE.md, "Analytic bounds are not precision handling").
+double tea_growth_bound(double d, double r)
+{
+    const double a = 4.0 * std::asin(std::min(1.0, d / (2.0 * r)));
+    const double b = 2.0 * std::acos(std::max(-1.0, 1.0 - d / r));
+    return a + b;
+}
+
+// Explicit integer safety factor applied to GROWTH to form the certificate's
+// guard. The guard need only bound the TRUE growth; multiplying by 2 buries both
+// any looseness in the lemma and the ~1e-15 relative error of asin/acos under
+// proof-level slack (CLAUDE.md analytic-bounds clause). SAFE FAILURE DIRECTION:
+// too LARGE a guard only forces extra refinement or a conservative "uncertified"
+// verdict -- it can NEVER certify a motion that violates the cap. (Too small a
+// guard could hide a violation; the factor exists precisely to forbid that.)
+constexpr int TEA_GUARD_SAFETY_FACTOR = 2;
+
+double tea_guard(double d, double r)
+{
+    return TEA_GUARD_SAFETY_FACTOR * tea_growth_bound(d, r);
+}
+
+// Refinement stops when a segment is shorter than this fraction of the tool
+// radius. At r-scale that leaves a residual guard on the order of 1e-1 rad;
+// below it the newborn-contact term (which falls off like sqrt(d)) shrinks so
+// slowly that halving again barely moves the guard, so recursion cannot close a
+// still-open margin. Reaching the floor with the margin open reports
+// uncertified -- the safe direction.
+constexpr double STATION_FLOOR_FRACTION = 1e-3;
+
+// Belt-and-braces recursion bound, redundant with the spacing floor for any
+// non-degenerate segment but guaranteeing termination regardless of scale.
+constexpr int CERTIFY_MAX_DEPTH = 24;
+
+// Certify TEA <= cap for every center on segment [(x0,y0),(x1,y1)], accumulating
+// into `acc`. INVARIANT: acc.cap_certified stays true until counter-evidence is
+// found, after which callers must stop -- one uncertified sub-span condemns the
+// whole motion. cap_chord_ratio is the precomputed FULL-cap surrogate, reused
+// for max_tea reporting on segments too coarse to guard.
+void certify_recursive(const Stock2& stock, double x0, double y0, double x1,
+                       double y1, double r, double cap, double cap_chord_ratio,
+                       CertifiedTea& acc, int depth)
+{
+    const double seg_len = std::hypot(x1 - x0, y1 - y0);
+    const double cap_guarded = cap - tea_guard(0.5 * seg_len, r);
+    acc.stations += 1;
+
+    if (cap_guarded > 0.0) {
+        // BOUNDARY: the guarded transcendental cap becomes its exact rational
+        // chord surrogate here, computed as a double and injected exactly by
+        // engagement_at. cap_guarded in (0, cap] subset (0, pi] => this ratio is
+        // in (0, 4], the exact predicate's valid range. The station VERDICT
+        // (cap_exceeded) is exact; only the threshold SELECTION is analytic.
+        const double sg = std::sin(0.5 * cap_guarded);
+        const double guarded_ratio = 4.0 * sg * sg;
+        const EngagementSample e0 = engagement_at(stock, x0, y0, r, guarded_ratio);
+        const EngagementSample e1 = engagement_at(stock, x1, y1, r, guarded_ratio);
+        acc.max_tea = std::max({acc.max_tea, e0.max_run_tea, e1.max_run_tea});
+        if (!e0.cap_exceeded && !e1.cap_exceeded)
+            return;   // both stations under the guarded cap => whole span certified
+    } else {
+        // guard >= cap: no positive guarded cap exists at this spacing, so no
+        // certification is possible here. Measure only to report max_tea (a
+        // reported double; cap_exceeded against the full cap is deliberately
+        // ignored -- the verdict comes only from the guarded test), then refine.
+        const EngagementSample e0 = engagement_at(stock, x0, y0, r, cap_chord_ratio);
+        const EngagementSample e1 = engagement_at(stock, x1, y1, r, cap_chord_ratio);
+        acc.max_tea = std::max({acc.max_tea, e0.max_run_tea, e1.max_run_tea});
+    }
+
+    // Not certifiable at this spacing: bisect, unless the floor/depth bound is
+    // hit -- then the margin is unclosable and the motion is uncertified.
+    if (seg_len < STATION_FLOOR_FRACTION * r || depth >= CERTIFY_MAX_DEPTH) {
+        acc.cap_certified = false;
+        return;
+    }
+    const double mx = 0.5 * (x0 + x1), my = 0.5 * (y0 + y1);
+    certify_recursive(stock, x0, y0, mx, my, r, cap, cap_chord_ratio, acc, depth + 1);
+    if (!acc.cap_certified) return;
+    certify_recursive(stock, mx, my, x1, y1, r, cap, cap_chord_ratio, acc, depth + 1);
+}
+
 } // namespace
 
 EngagementSample engagement_at(const Stock2& stock, double cx, double cy,
@@ -259,6 +363,28 @@ EngagementSample engagement_at(const Stock2& stock, double cx, double cy,
     return out;
 }
 
+CertifiedTea certify_segment_tea(const Stock2& stock, double x0, double y0,
+                                 double x1, double y1, double tool_radius,
+                                 double cap_radians)
+{
+    // BOUNDARY (docs/exactness.md, boundary doctrine): validate the ergonomic
+    // angular cap and convert it to its exact chord surrogate here, at the one
+    // declared seam. Contract 0 < cap <= pi: a single engaged run subtends at
+    // most a half turn before the >pi case is an exact orientation verdict, so a
+    // cap above pi is meaningless. The full-cap ratio is carried down for max_tea
+    // reporting; per-level guarded ratios are derived inside the recursion.
+    if (!(cap_radians > 0.0 && cap_radians <= std::numbers::pi))
+        throw std::invalid_argument("cap_radians must be in (0, pi].");
+
+    const double sc = std::sin(0.5 * cap_radians);
+    const double cap_chord_ratio = 4.0 * sc * sc;
+
+    CertifiedTea acc{0.0, true, 0};
+    certify_recursive(stock, x0, y0, x1, y1, tool_radius, cap_radians,
+                      cap_chord_ratio, acc, 0);
+    return acc;
+}
+
 void register_engagement(nanobind::module_& m)
 {
     // Nanobind boundary. cx, cy, tool_radius are measured/computed station data:
@@ -272,6 +398,19 @@ void register_engagement(nanobind::module_& m)
               return std::make_tuple(s.total_tea, s.max_run_tea, s.cap_exceeded);
           },
           "stock"_a, "cx"_a, "cy"_a, "tool_radius"_a, "cap_chord_ratio"_a);
+
+    // Nanobind boundary for the motion certificate: x0..y1, tool_radius and the
+    // angular cap enter exact-land inside certify_segment_tea (validation + exact
+    // chord-surrogate injection). Returns (max_tea, cap_certified, stations),
+    // the CertifiedTea fields, matching the tuple style of engagement_at.
+    m.def("certify_segment_tea",
+          [](const Stock2& stock, double x0, double y0, double x1, double y1,
+             double tool_radius, double cap_radians) {
+              CertifiedTea c = certify_segment_tea(stock, x0, y0, x1, y1,
+                                                   tool_radius, cap_radians);
+              return std::make_tuple(c.max_tea, c.cap_certified, c.stations);
+          },
+          "stock"_a, "x0"_a, "y0"_a, "x1"_a, "y1"_a, "tool_radius"_a, "cap_radians"_a);
 
     // Test-only: exact sign of A + B*sqrt(alpha) + C*sqrt(beta) + D*sqrt(alpha*beta)
     // (returns -1/0/+1) so the cap predicate's core primitive is unit-tested

@@ -332,3 +332,50 @@ def test_sign_mixed_radical_dyadic():
         got = _stock_2._sign_mixed_radical(a, b, c, d, alpha, beta)
         exact = _ref_sign_mixed(*(Fraction(v) for v in (a, b, c, d, alpha, beta)))
         assert got == exact, (a, b, c, d, alpha, beta, got, exact)
+
+
+# --------------------------------------------------------------------------- #
+# certify_segment_tea: exact-station TEA cap certificate along a linear motion #
+# --------------------------------------------------------------------------- #
+
+
+def test_certify_segment_in_open_field():
+    """Rim never touches material along the motion -> TEA == 0, cap certified."""
+    stock = _stock_2.Stock2(SQUARE, [])
+    stock.subtract_capsule(1.0, 5.0, 9.0, 5.0, 1.5)  # wide cleared corridor
+    max_tea, ok, n = _stock_2.certify_segment_tea(stock, 2.0, 5.0, 8.0, 5.0, 0.5, math.radians(120))
+    assert ok
+    assert max_tea == pytest.approx(0.0, abs=1e-9)
+
+
+def test_certify_segment_flags_slotting():
+    """Virgin slotting move: TEA ~ a full turn >> 120 deg cap -> not certified."""
+    stock = _stock_2.Stock2(SQUARE, [])
+    max_tea, ok, n = _stock_2.certify_segment_tea(stock, 2.0, 5.0, 8.0, 5.0, 0.5, math.radians(120))
+    assert not ok
+    assert max_tea > math.radians(170)
+
+
+def test_certify_stations_refine_near_feature():
+    """Motion leaving a cleared pocket into material forces refinement + fails."""
+    stock = _stock_2.Stock2(SQUARE, [])
+    stock.subtract_disk(5.0, 5.0, 2.0)  # cleared pocket in the middle
+    max_tea, ok, n = _stock_2.certify_segment_tea(stock, 5.0, 5.0, 9.0, 5.0, 0.5, math.radians(120))
+    assert not ok  # exits the cleared disk into full slotting
+    assert n > 2  # refinement actually happened
+
+
+def test_certify_flags_unclosable_guard_margin():
+    """Cap set barely above a near-uniform corridor's station TEA: no station
+    exceeds the cap, yet the analytic guard margin (>= ~0.13 rad down at the
+    spacing floor) can never be closed, so the certificate conservatively reports
+    False -- the guarded-threshold discipline refusing a false pass."""
+    stock = _stock_2.Stock2(SQUARE, [])
+    stock.subtract_capsule(0.0, 6.7, 10.0, 6.7, 2.0)  # clears band y in [4.7, 8.7]
+    r, y = 0.5, 5.0
+    # self-calibrate: the largest station TEA the motion's dyadic stations hit
+    tau = max(_stock_2.engagement_at(stock, x, y, r, cap_ratio(math.pi))[1] for x in (3.0, 4.0, 5.0, 6.0, 7.0))
+    cap = tau + 0.02  # barely above every station's TEA
+    assert cap <= math.pi
+    _, ok, _ = _stock_2.certify_segment_tea(stock, 3.0, y, 7.0, y, r, cap)
+    assert not ok
