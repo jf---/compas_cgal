@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 
 ### Added
+- `toolpath`: certified gouge-free trochoid generation — every station radius derives from an exact clearance query at its own center (fixes reflex-vertex gouging from linear radius interpolation, up to 89% of tool radius on pinched pockets); bridge tangents, leads, and flat links are certified against the boundary at tool radius with midpoint-refinement and run-splitting.
+- `toolpath`: `stepover` now bounds radial engagement per trochoid cycle (station advance + radius growth); previously accepted but unused.
+- `toolpath`: `holes` parameter — pocket islands with certified clearance on all boundaries (straight skeleton via `Polygon_with_holes_2`).
+- `toolpath`: `climb` parameter — climb (CW) vs conventional (CCW) milling.
+- `toolpath`: `OperationType` str-enum, `InvalidPolygonError` / `DegeneratePrimitiveError` named exceptions.
+- `toolpath`: `max_passes` truncation now warns with the count of unmachined skeleton edges (was silent).
+
 * Added  `compas_cgal.skeletonization.mesh_skeleton_with_mapping`
 - `HeatGeodesicSolver` class with precomputation for repeated queries
 - `heat_geodesic_distances` function for single-shot usage
@@ -19,6 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ### Changed
+- `toolpath`: `polygon_medial_axis_transform` renamed to `polygon_skeleton_clearance` — samples are straight-skeleton loci (identical to the medial axis only for convex polygons) with exact clearance radii.
+- `toolpath`: `radial_clearance` default is now scale-free (`1e-3 * tool_diameter`) instead of the absolute `1e-4`.
+- `toolpath`: flat links (no `clearance_z`) that would gouge the boundary raise instead of being emitted; leads shrink or drop to stay gouge-free; degenerate primitives raise instead of being silently dropped.
+- `toolpath`: skeleton halfedge canonicalization uses vertex ids (reproducible) instead of allocation addresses; all tolerances are named constants with derivations.
 * Added optional surface meshing parameters (`sm_angle`, `sm_radius`, `sm_distance`) to `compas_cgal.reconstruction.poisson_surface_reconstruction` for controlling mesh quality and density.
 
   - `subdivision`: pass-by-value → Eigen::Ref<const> (3 functions)
@@ -27,6 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `meshing`: removed extra & and added const (7 functions)
 
 ### Removed
+- `toolpath`: dead `pmp_trochoidal_mat_toolpath_circular_raw` serializer.
 
 
 ## [0.9.1] 2025-06-26

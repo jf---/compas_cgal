@@ -12,6 +12,7 @@
 typedef CGAL::Exact_predicates_inexact_constructions_kernel K;
 typedef K::Point_2 Point_2;
 typedef CGAL::Polygon_2<K> Polygon_2;
+typedef CGAL::Polygon_with_holes_2<K> Polygon_with_holes;
 typedef CGAL::Straight_skeleton_2<K> Ss;
 
 typedef std::shared_ptr<Ss> SsPtr;
@@ -23,6 +24,40 @@ typedef K::Vector_2 Vector_2;
 typedef K::Segment_2 Segment_2;
 typedef K::Circle_2 Circle_2;
 typedef K::Direction_2 Direction_2;
+
+// ---------------------------------------------------------------------------
+// Named numerical floors and tolerances.
+//
+// Geometric *decisions* use exact CGAL predicates.  The constants below guard
+// inherently inexact double *constructions* (normalization, tessellation) or
+// define output granularity; each states its unit and derivation.
+// ---------------------------------------------------------------------------
+
+// Fraction of the tool radius below which two trochoid stations are merged.
+// Below this spacing a separate circle removes no measurable material and the
+// external-tangent unit normal (denominator = spacing) loses precision.
+constexpr double STATION_MERGE_FRACTION = 1e-6;
+
+// Floor for 1/length normalizations of tangent/direction vectors (absolute,
+// model units).  Pure division guard, not a geometric tolerance.
+constexpr double DIRECTION_NORM_FLOOR = 1e-12;
+
+// Consecutive tessellated output points closer than this merge (absolute,
+// model units).  Output granularity only; never used in decisions upstream.
+constexpr double OUTPUT_DEDUP_TOL = 1e-9;
+
+// Arrival/departure points on a circle closer than this squared distance skip
+// the repositioning arc (= OUTPUT_DEDUP_TOL^2; same granularity rationale).
+constexpr double REPOSITION_GATE_SQ = OUTPUT_DEDUP_TOL * OUTPUT_DEDUP_TOL;
+
+// Bridge/lead certification refinement: rounds of midpoint insertion before a
+// run is split at the offending gap.  Spacing halves per round, so 8 rounds
+// resolve clearance dips down to spacing/256.
+constexpr int MAX_BRIDGE_REFINE_ROUNDS = 8;
+
+// Lead lines that gouge are halved at most this many times before being
+// dropped (lead length resolution = requested/16).
+constexpr int MAX_LEAD_HALVINGS = 4;
 
 inline double approx_length(const Vector_2& v) {
     return std::sqrt(std::max(0.0, CGAL::to_double(v.squared_length())));
@@ -98,51 +133,202 @@ struct TrochoidArc {
 
 };
 
-std::vector<Circle_2>
-trochoid_circles(
-    const Point_2& p0,
-    const Point_2& p1,
-    double r0,
-    double r1,
-    double pitch)
+// ---------------------------------------------------------------------------
+// Boundary: outer polygon plus optional holes, flattened to edge segments for
+// exact clearance queries.
+// ---------------------------------------------------------------------------
+
+struct Boundary {
+    std::vector<Segment_2> edges;
+
+    void add_polygon(const Polygon_2& polygon)
+    {
+        for (auto edge_iter = polygon.edges_begin(); edge_iter != polygon.edges_end(); ++edge_iter) {
+            edges.push_back(*edge_iter);
+        }
+    }
+
+    K::FT squared_distance_to(const Point_2& point) const
+    {
+        K::FT best = CGAL::squared_distance(point, edges.front());
+        for (std::size_t i = 1; i < edges.size(); ++i) {
+            const K::FT sq = CGAL::squared_distance(point, edges[i]);
+            if (sq < best) best = sq;
+        }
+        return best;
+    }
+
+    K::FT squared_distance_to(const Segment_2& segment) const
+    {
+        K::FT best = CGAL::squared_distance(segment, edges.front());
+        for (std::size_t i = 1; i < edges.size(); ++i) {
+            const K::FT sq = CGAL::squared_distance(segment, edges[i]);
+            if (sq < best) best = sq;
+        }
+        return best;
+    }
+
+    double distance_to(const Point_2& point) const
+    {
+        return std::sqrt(std::max(0.0, CGAL::to_double(squared_distance_to(point))));
+    }
+
+    // Certified gouge-free test: every point of *segment* keeps at least
+    // *clearance* to the boundary.
+    bool segment_clear(const Segment_2& segment, double clearance) const
+    {
+        return !(squared_distance_to(segment) < K::FT(clearance) * K::FT(clearance));
+    }
+};
+
+// ---------------------------------------------------------------------------
+// Stations: cutter-center samples along a skeleton edge, each carrying its
+// EXACT boundary clearance.  No interpolation of clearance anywhere — this is
+// the structural fix for the reflex-vertex gouge.
+// ---------------------------------------------------------------------------
+
+struct Station {
+    Point_2 center;
+    double clearance;  // exact distance to boundary at *center*
+    double radius;     // trochoid radius derived from *clearance*
+};
+
+struct RadiusModel {
+    double tool_radius;
+    double radial_clearance;
+    double mat_scale;
+    double min_trochoid_radius;
+    double max_trochoid_radius;
+
+    double min_centerline() const { return tool_radius + radial_clearance; }
+
+    double radius_from_clearance(double clearance) const
+    {
+        const double available = mat_scale * std::max(0.0, clearance - tool_radius - radial_clearance);
+        if (available <= 0.0) return 0.0;
+        double r = std::min(max_trochoid_radius, available);
+        if (min_trochoid_radius > 0.0) {
+            r = std::min(available, std::max(r, min_trochoid_radius));
+        }
+        return r;
+    }
+};
+
+Station make_station(const Point_2& center, const Boundary& boundary, const RadiusModel& model)
 {
-    if (p0 == p1) {
-        return {};
-    }
-    const double length = approx_distance(p0, p1);
-
-    const int cycles = std::max(2, static_cast<int>(std::ceil(length / std::max(pitch, 1e-12))));
-
-    std::vector<Circle_2> circles;
-    circles.reserve(cycles + 1);
-    for (int i = 0; i <= cycles; ++i) {
-        const double t = static_cast<double>(i) / static_cast<double>(cycles);
-        const Point_2 center = CGAL::barycenter(p0, 1.0 - t, p1, t);
-        const double radius = std::max(0.0, r0 + t * (r1 - r0));
-        circles.emplace_back(center, radius * radius);
-    }
-    return circles;
+    const double clearance = boundary.distance_to(center);
+    return Station{center, clearance, model.radius_from_clearance(clearance)};
 }
 
-bool
-external_tangents(
-    const Circle_2& c0,
-    const Circle_2& c1,
-    Segment_2& tangent_a,
-    Segment_2& tangent_b)
+// Split edge samples into maximal runs of stations where the cutter fits.
+std::vector<std::vector<Station>>
+valid_runs(const std::vector<Station>& stations, const RadiusModel& model)
 {
-    const Vector_2 d = c1.center() - c0.center();
-    if (c0.center() == c1.center()) {
-        return false;
+    std::vector<std::vector<Station>> runs;
+    std::vector<Station> current;
+    for (const auto& s : stations) {
+        if (s.clearance >= model.min_centerline()) {
+            current.push_back(s);
+        } else if (!current.empty()) {
+            runs.push_back(std::move(current));
+            current.clear();
+        }
     }
+    if (!current.empty()) runs.push_back(std::move(current));
+    return runs;
+}
 
+// Enforce the engagement bound: per cycle, center advance plus radius growth
+// must not exceed *stepover* (the crescent of new material cut by the next
+// circle has radial width <= spacing + max(0, r_next - r_prev)).  Clearance is
+// 1-Lipschitz so refinement by midpoint insertion converges geometrically.
+void refine_engagement(std::vector<Station>& run, const Boundary& boundary,
+                       const RadiusModel& model, double stepover)
+{
+    for (int round = 0; round < MAX_BRIDGE_REFINE_ROUNDS; ++round) {
+        bool inserted = false;
+        std::vector<Station> refined;
+        refined.reserve(run.size() * 2);
+        for (std::size_t i = 0; i < run.size(); ++i) {
+            refined.push_back(run[i]);
+            if (i + 1 >= run.size()) continue;
+            const double spacing = approx_distance(run[i].center, run[i + 1].center);
+            const double growth = std::max(0.0, run[i + 1].radius - run[i].radius);
+            const double merge_floor = STATION_MERGE_FRACTION * model.tool_radius;
+            if (spacing + growth > stepover && spacing > 2.0 * merge_floor) {
+                const Point_2 mid = CGAL::barycenter(run[i].center, 0.5, run[i + 1].center, 0.5);
+                Station s = make_station(mid, boundary, model);
+                if (s.clearance >= model.min_centerline()) {
+                    refined.push_back(s);
+                    inserted = true;
+                }
+            }
+        }
+        run.swap(refined);
+        if (!inserted) return;
+    }
+}
+
+// Drop stations that add nothing: near-coincident neighbours (keep the larger
+// radius) and disks fully contained in a neighbour's disk.  Guarantees the
+// external-tangent precondition |r1 - r0| < distance for consecutive stations,
+// which removes the former clamp-induced coordinate blow-up structurally.
+void dedup_stations(std::vector<Station>& run, const RadiusModel& model)
+{
+    const double merge_floor = STATION_MERGE_FRACTION * model.tool_radius;
+    const K::FT merge_floor_sq(merge_floor * merge_floor);
+
+    bool changed = true;
+    while (changed && run.size() > 1) {
+        changed = false;
+        std::vector<Station> kept;
+        kept.reserve(run.size());
+        kept.push_back(run.front());
+        for (std::size_t i = 1; i < run.size(); ++i) {
+            Station& prev = kept.back();
+            const Station& cur = run[i];
+            // Near-coincident: keep the larger disk.
+            if (CGAL::compare_squared_distance(prev.center, cur.center, merge_floor_sq) != CGAL::LARGER) {
+                if (cur.radius > prev.radius) prev = cur;
+                changed = true;
+                continue;
+            }
+            // Containment with a conditioning margin: require
+            // distance > |dr| + merge_floor so the external-tangent normal
+            // (denominator = distance - |dr|) stays well conditioned in double
+            // arithmetic downstream.
+            const double dr_margin = std::abs(cur.radius - prev.radius) + merge_floor;
+            const K::FT dr_margin_sq(dr_margin * dr_margin);
+            if (CGAL::compare_squared_distance(prev.center, cur.center, dr_margin_sq) != CGAL::LARGER) {
+                // One disk (nearly) contains the other: keep the larger.
+                if (cur.radius > prev.radius) prev = cur;
+                changed = true;
+                continue;
+            }
+            kept.push_back(cur);
+        }
+        run.swap(kept);
+    }
+}
+
+// Choose the tangent side once per chain, from the run direction and milling
+// convention.  Single source of truth shared by chain assembly and bridge
+// certification.
+bool
+external_tangent(const Circle_2& c0, const Circle_2& c1, const Vector_2& edge_direction,
+                 bool climb_milling, Segment_2& tangent)
+{
+    if (c0.center() == c1.center()) return false;
+
+    const Vector_2 d = c1.center() - c0.center();
     const double length = approx_length(d);
     const double r0 = approx_radius(c0);
     const double r1 = approx_radius(c1);
-
-    double delta = r1 - r0;
-    if (std::abs(delta) >= length) {
-        delta = (delta >= 0.0 ? 1.0 : -1.0) * (length - 1e-9);
+    const double delta = r1 - r0;
+    if (!(std::abs(delta) < length)) {
+        // Structurally unreachable after dedup_stations(); fail loud, never
+        // fabricate geometry (the old clamp here caused 6e6-unit excursions).
+        throw std::logic_error("external_tangent: contained circles reached tangent construction");
     }
 
     const double ux = CGAL::to_double(d.x()) / length;
@@ -162,62 +348,57 @@ external_tangents(
     const double c1x = CGAL::to_double(c1.center().x());
     const double c1y = CGAL::to_double(c1.center().y());
 
-    tangent_a = Segment_2(
-        Point_2(c0x + r0 * n1x, c0y + r0 * n1y),
-        Point_2(c1x + r1 * n1x, c1y + r1 * n1y));
-    tangent_b = Segment_2(
-        Point_2(c0x + r0 * n2x, c0y + r0 * n2y),
-        Point_2(c1x + r1 * n2x, c1y + r1 * n2y));
+    const Segment_2 ta(Point_2(c0x + r0 * n1x, c0y + r0 * n1y), Point_2(c1x + r1 * n1x, c1y + r1 * n1y));
+    const Segment_2 tb(Point_2(c0x + r0 * n2x, c0y + r0 * n2y), Point_2(c1x + r1 * n2x, c1y + r1 * n2y));
+
+    const Point_2& ci = c0.center();
+    const auto orient_a = CGAL::orientation(ci, ci + edge_direction, ta.source());
+    tangent = climb_milling
+        ? (orient_a == CGAL::LEFT_TURN ? ta : tb)
+        : (orient_a == CGAL::RIGHT_TURN ? ta : tb);
     return true;
 }
 
 std::vector<TrochoidArc>
-trochoid_chain(
-    const std::vector<Circle_2>& circles,
+trochoid_chain_from_stations(
+    const std::vector<Station>& run,
     const Vector_2& edge_direction,
     bool climb_milling)
 {
-    if (circles.size() < 2) {
-        return {};
-    }
+    if (run.size() < 2) return {};
 
     // Climb milling: tool rotation matches feed direction.
     const CGAL::Orientation arc_ori = climb_milling ? CGAL::CLOCKWISE : CGAL::COUNTERCLOCKWISE;
     const bool cw = (arc_ori == CGAL::CLOCKWISE);
 
     std::vector<TrochoidArc> chain;
-    chain.reserve(circles.size() * 3);
+    chain.reserve(run.size() * 3);
 
     Point_2 prev_arrival;
     bool has_prev = false;
 
-    for (std::size_t i = 0; i + 1 < circles.size(); ++i) {
-        Segment_2 ta, tb;
-        if (!external_tangents(circles[i], circles[i + 1], ta, tb)) {
+    for (std::size_t i = 0; i + 1 < run.size(); ++i) {
+        const Circle_2 ci(run[i].center, run[i].radius * run[i].radius);
+        const Circle_2 cj(run[i + 1].center, run[i + 1].radius * run[i + 1].radius);
+
+        Segment_2 tangent;
+        if (!external_tangent(ci, cj, edge_direction, climb_milling, tangent)) {
             continue;
         }
 
-        // Always pick the same tangent side (no alternation).
-        const Point_2& ci = circles[i].center();
-        const auto orient_a = CGAL::orientation(ci, ci + edge_direction, ta.source());
-        const Segment_2& tangent = climb_milling
-            ? (orient_a == CGAL::LEFT_TURN ? ta : tb)
-            : (orient_a == CGAL::RIGHT_TURN ? ta : tb);
-
-        if (!circles[i].is_degenerate()) {
-            const double ri = approx_radius(circles[i]);
-
+        if (!ci.is_degenerate()) {
+            const double ri = run[i].radius;
             if (has_prev &&
-                CGAL::compare_squared_distance(prev_arrival, tangent.source(), K::FT(1e-18)) == CGAL::LARGER) {
-                // Varying radius: arrival ≠ departure.  Full circle at nominal
+                CGAL::compare_squared_distance(prev_arrival, tangent.source(), K::FT(REPOSITION_GATE_SQ)) == CGAL::LARGER) {
+                // Varying radius: arrival != departure.  Full circle at nominal
                 // winding for complete material removal, then short repositioning
                 // arc (also nominal winding) to reach the tangent departure point.
-                chain.push_back(TrochoidArc::make_circle(ci, ri, prev_arrival, arc_ori));
-                chain.push_back(TrochoidArc::make_arc(ci, ri, prev_arrival, tangent.source(), cw));
+                chain.push_back(TrochoidArc::make_circle(run[i].center, ri, prev_arrival, arc_ori));
+                chain.push_back(TrochoidArc::make_arc(run[i].center, ri, prev_arrival, tangent.source(), cw));
             } else {
-                // First circle or constant radius: full 360°.
+                // First circle or constant radius: full 360 degrees.
                 const Point_2& cp = has_prev ? prev_arrival : tangent.source();
-                chain.push_back(TrochoidArc::make_circle(ci, ri, cp, arc_ori));
+                chain.push_back(TrochoidArc::make_circle(run[i].center, ri, cp, arc_ori));
             }
         }
 
@@ -231,12 +412,72 @@ trochoid_chain(
     }
 
     // Full circle on the last circle, at the last tangent arrival point.
-    if (has_prev && !circles.back().is_degenerate()) {
-        const double rlast = approx_radius(circles.back());
-        chain.push_back(TrochoidArc::make_circle(circles.back().center(), rlast, prev_arrival, arc_ori));
+    const Station& last = run.back();
+    if (has_prev && last.radius > 0.0) {
+        chain.push_back(TrochoidArc::make_circle(last.center, last.radius, prev_arrival, arc_ori));
     }
 
     return chain;
+}
+
+// Certify every bridge (line primitive) of a station run against the boundary
+// at tool-radius clearance.  Gouging bridges trigger midpoint-station
+// insertion; a persistent violation splits the run at that gap (the corridor
+// between the stations is genuinely unreachable).
+std::vector<std::vector<Station>>
+certify_bridges(std::vector<Station> run, const Boundary& boundary,
+                const RadiusModel& model, const Vector_2& edge_direction,
+                bool climb_milling)
+{
+    const double merge_floor = STATION_MERGE_FRACTION * model.tool_radius;
+
+    for (int round = 0; round < MAX_BRIDGE_REFINE_ROUNDS; ++round) {
+        dedup_stations(run, model);
+        if (run.size() < 2) return {std::move(run)};
+
+        bool inserted = false;
+        std::vector<Station> refined;
+        refined.reserve(run.size() * 2);
+
+        for (std::size_t i = 0; i + 1 < run.size(); ++i) {
+            refined.push_back(run[i]);
+            const Circle_2 ci(run[i].center, run[i].radius * run[i].radius);
+            const Circle_2 cj(run[i + 1].center, run[i + 1].radius * run[i + 1].radius);
+            Segment_2 tangent;
+            if (!external_tangent(ci, cj, edge_direction, climb_milling, tangent)) continue;
+            if (boundary.segment_clear(tangent, model.tool_radius)) continue;
+
+            const double spacing = approx_distance(run[i].center, run[i + 1].center);
+            if (spacing > 2.0 * merge_floor) {
+                const Point_2 mid = CGAL::barycenter(run[i].center, 0.5, run[i + 1].center, 0.5);
+                Station s = make_station(mid, boundary, model);
+                if (s.clearance >= model.min_centerline()) {
+                    refined.push_back(s);
+                    inserted = true;
+                    continue;
+                }
+            }
+            // Unreachable corridor between stations: split the run here.
+            refined.push_back(Station{run[i].center, -1.0, -1.0});  // split marker
+        }
+        refined.push_back(run.back());
+        run.swap(refined);
+        if (!inserted) break;
+    }
+
+    // Partition at split markers (clearance < 0).
+    std::vector<std::vector<Station>> parts;
+    std::vector<Station> current;
+    for (const auto& s : run) {
+        if (s.clearance < 0.0) {
+            if (current.size() >= 2) parts.push_back(std::move(current));
+            current.clear();
+        } else {
+            current.push_back(s);
+        }
+    }
+    if (current.size() >= 2) parts.push_back(std::move(current));
+    return parts;
 }
 
 std::vector<Point_2>
@@ -292,6 +533,11 @@ data_to_polygon(Eigen::Ref<const compas::RowMatrixXd> vertices)
         polygon.push_back(Point_2(vertices(i, 0), vertices(i, 1)));
     }
 
+    if (!polygon.is_simple()) {
+        throw std::invalid_argument(
+            "Polygon boundary must be simple (no self-intersections, no repeated vertices).");
+    }
+
     if (polygon.is_clockwise_oriented()) {
         polygon.reverse_orientation();
     }
@@ -299,55 +545,149 @@ data_to_polygon(Eigen::Ref<const compas::RowMatrixXd> vertices)
     return polygon;
 }
 
-K::FT
-squared_distance_to_boundary(const Point_2& point, const Polygon_2& boundary)
+// Assemble outer boundary + holes: validates simplicity, hole containment and
+// pairwise hole disjointness (CGAL straight-skeleton preconditions), and
+// returns both the CGAL input and the flattened clearance boundary.
+std::tuple<Polygon_with_holes, Boundary>
+assemble_domain(
+    Eigen::Ref<const compas::RowMatrixXd> vertices,
+    const std::vector<compas::RowMatrixXd>& holes)
 {
-    if (boundary.size() < 2) {
-        return K::FT(0);
-    }
+    Polygon_2 outer = data_to_polygon(vertices);
 
-    K::FT sq_distance = CGAL::squared_distance(point, *boundary.edges_begin());
-    for (auto edge_iter = std::next(boundary.edges_begin()); edge_iter != boundary.edges_end(); ++edge_iter) {
-        const K::FT sq = CGAL::squared_distance(point, *edge_iter);
-        if (sq < sq_distance) {
-            sq_distance = sq;
+    Boundary boundary;
+    boundary.add_polygon(outer);
+
+    Polygon_with_holes domain(outer);
+    std::vector<Polygon_2> hole_polygons;
+    hole_polygons.reserve(holes.size());
+
+    for (const auto& hole_data : holes) {
+        Polygon_2 hole = data_to_polygon(hole_data);  // validates simplicity, makes CCW
+        for (auto vertex_iter = hole.vertices_begin(); vertex_iter != hole.vertices_end(); ++vertex_iter) {
+            if (outer.bounded_side(*vertex_iter) != CGAL::ON_BOUNDED_SIDE) {
+                throw std::invalid_argument("Hole polygon must lie strictly inside the outer boundary.");
+            }
         }
+        for (const auto& other : hole_polygons) {
+            for (auto ea = hole.edges_begin(); ea != hole.edges_end(); ++ea) {
+                for (auto eb = other.edges_begin(); eb != other.edges_end(); ++eb) {
+                    if (CGAL::do_intersect(*ea, *eb)) {
+                        throw std::invalid_argument("Hole polygons must be pairwise disjoint.");
+                    }
+                }
+            }
+        }
+        boundary.add_polygon(hole);
+        hole_polygons.push_back(hole);
+        hole.reverse_orientation();  // CGAL interior skeleton expects CW holes
+        domain.add_hole(hole);
     }
-    return sq_distance;
+
+    return std::make_tuple(domain, boundary);
 }
 
-double
-approx_distance_to_boundary(const Point_2& point, const Polygon_2& boundary)
+SsPtr
+build_skeleton(const Polygon_with_holes& domain)
 {
-    return std::sqrt(std::max(0.0, CGAL::to_double(squared_distance_to_boundary(point, boundary))));
-}
-
-std::tuple<std::vector<Point_2>, std::vector<double>>
-polygon_medial_axis_transform_internal(const Polygon_2& polygon)
-{
-    SsPtr skeleton = CGAL::create_interior_straight_skeleton_2(polygon.vertices_begin(), polygon.vertices_end());
+    SsPtr skeleton = CGAL::create_interior_straight_skeleton_2(domain);
     if (!skeleton) {
-        return std::make_tuple(std::vector<Point_2>{}, std::vector<double>{});
+        throw std::invalid_argument(
+            "Straight skeleton construction failed: polygon is degenerate or violates preconditions.");
     }
+    return skeleton;
+}
 
-    std::vector<Point_2> points;
-    std::vector<double> radii;
-    points.reserve(skeleton->size_of_vertices());
-    radii.reserve(skeleton->size_of_vertices());
+void
+validate_toolpath_params(
+    double tool_diameter, double stepover, double pitch,
+    double min_trochoid_radius, double max_trochoid_radius,
+    int samples_per_cycle, int max_passes)
+{
+    if (tool_diameter <= 0.0) throw std::invalid_argument("tool_diameter should be positive.");
+    if (stepover <= 0.0) throw std::invalid_argument("stepover should be positive.");
+    if (pitch <= 0.0) throw std::invalid_argument("pitch should be positive.");
+    if (min_trochoid_radius < 0.0) throw std::invalid_argument("min_trochoid_radius should be >= 0.");
+    if (max_trochoid_radius < 0.0) throw std::invalid_argument("max_trochoid_radius should be >= 0.");
+    if (samples_per_cycle < 4) throw std::invalid_argument("samples_per_cycle should be at least 4.");
+    if (max_passes <= 0) throw std::invalid_argument("max_passes should be positive.");
+}
 
-    for (auto vertex_iter = skeleton->vertices_begin(); vertex_iter != skeleton->vertices_end(); ++vertex_iter) {
-        const auto& point = vertex_iter->point();
-        Point_2 point_xy(point.x(), point.y());
-        const K::FT sq_dist = squared_distance_to_boundary(point_xy, polygon);
+// Walk the straight skeleton and return certified trochoid chains per edge,
+// plus the number of qualifying edges skipped once max_passes was reached.
+std::tuple<std::vector<std::vector<TrochoidArc>>, int>
+skeleton_edge_chains(
+    const Boundary& boundary,
+    const SsPtr& skeleton,
+    const RadiusModel& model,
+    double pitch,
+    double stepover,
+    bool climb_milling,
+    int max_passes)
+{
+    const double station_spacing = std::min(pitch, stepover);
 
-        // Keep only interior MAT samples (exact comparison against zero).
-        if (sq_dist > K::FT(0)) {
-            points.push_back(point_xy);
-            radii.push_back(std::sqrt(std::max(0.0, CGAL::to_double(sq_dist))));
+    std::vector<std::vector<TrochoidArc>> chains;
+    chains.reserve(static_cast<std::size_t>(max_passes));
+    int skipped_edges = 0;
+
+    for (auto edge_iter = skeleton->halfedges_begin();
+         edge_iter != skeleton->halfedges_end(); ++edge_iter) {
+        if (!(edge_iter->is_bisector() || edge_iter->is_inner_bisector())) continue;
+
+        const auto v0 = edge_iter->vertex();
+        const auto v1 = edge_iter->opposite()->vertex();
+        // Deterministic halfedge-pair canonicalization by vertex id (allocation
+        // addresses are not reproducible across runs/platforms).
+        if (v0->id() >= v1->id()) continue;
+
+        Point_2 p0(v0->point().x(), v0->point().y());
+        Point_2 p1(v1->point().x(), v1->point().y());
+        if (p0 == p1) continue;
+
+        // Exact early rejection: both endpoints too close to the boundary.
+        const double min_cd = model.min_centerline();
+        const K::FT min_cd_sq(min_cd * min_cd);
+        if (boundary.squared_distance_to(p0) < min_cd_sq &&
+            boundary.squared_distance_to(p1) < min_cd_sq) {
+            continue;
+        }
+
+        // Canonical direction: narrower end first (exact compare, id tiebreak
+        // handled above by the halfedge selection).
+        if (boundary.squared_distance_to(p0) > boundary.squared_distance_to(p1)) {
+            std::swap(p0, p1);
+        }
+        const Vector_2 edge_dir = p1 - p0;
+
+        // Sample stations at engagement-bounded spacing with EXACT clearance.
+        const double length = approx_distance(p0, p1);
+        const int n_spans = std::max(1, static_cast<int>(std::ceil(length / station_spacing)));
+        std::vector<Station> stations;
+        stations.reserve(n_spans + 1);
+        for (int i = 0; i <= n_spans; ++i) {
+            const double t = static_cast<double>(i) / static_cast<double>(n_spans);
+            stations.push_back(make_station(CGAL::barycenter(p0, 1.0 - t, p1, t), boundary, model));
+        }
+
+        for (auto& run : valid_runs(stations, model)) {
+            if (run.size() < 2) continue;
+            refine_engagement(run, boundary, model, stepover);
+            for (auto& part : certify_bridges(std::move(run), boundary, model, edge_dir, climb_milling)) {
+                dedup_stations(part, model);
+                if (part.size() < 2) continue;
+                auto chain = trochoid_chain_from_stations(part, edge_dir, climb_milling);
+                if (chain.empty()) continue;
+                if (static_cast<int>(chains.size()) >= max_passes) {
+                    skipped_edges += 1;
+                } else {
+                    chains.push_back(std::move(chain));
+                }
+            }
         }
     }
 
-    return std::make_tuple(points, radii);
+    return std::make_tuple(std::move(chains), skipped_edges);
 }
 
 void
@@ -376,136 +716,48 @@ points_to_matrix(const std::vector<Point_2>& points)
     return matrix;
 }
 
-void
-validate_toolpath_params(
-    double tool_diameter, double stepover, double pitch,
-    double min_trochoid_radius, double max_trochoid_radius,
-    int samples_per_cycle, int max_passes)
-{
-    if (tool_diameter <= 0.0) throw std::invalid_argument("tool_diameter should be positive.");
-    if (stepover <= 0.0) throw std::invalid_argument("stepover should be positive.");
-    if (pitch <= 0.0) throw std::invalid_argument("pitch should be positive.");
-    if (min_trochoid_radius < 0.0) throw std::invalid_argument("min_trochoid_radius should be >= 0.");
-    if (max_trochoid_radius < 0.0) throw std::invalid_argument("max_trochoid_radius should be >= 0.");
-    if (samples_per_cycle < 4) throw std::invalid_argument("samples_per_cycle should be at least 4.");
-    if (max_passes <= 0) throw std::invalid_argument("max_passes should be positive.");
-}
-
-// Walk the straight skeleton, clip edges to the valid cutter-center domain,
-// and return trochoid chains for each MAT edge.
-std::vector<std::vector<TrochoidArc>>
-mat_edge_chains(
-    const Polygon_2& boundary,
-    const SsPtr& skeleton,
-    double tool_radius,
-    double radial_clearance,
-    double mat_scale,
-    double min_trochoid_radius,
-    double max_trochoid_radius,
-    double pitch,
-    int max_passes)
-{
-    const double min_centerline_distance = tool_radius + radial_clearance;
-    const double min_cd_sq = min_centerline_distance * min_centerline_distance;
-
-    auto compute_radius = [&](double boundary_distance) {
-        const double available = mat_scale * std::max(0.0, boundary_distance - tool_radius - radial_clearance);
-        if (available <= 0.0) return 0.0;
-        double r = std::min(max_trochoid_radius, available);
-        if (min_trochoid_radius > 0.0) {
-            r = std::min(available, std::max(r, min_trochoid_radius));
-        }
-        return r;
-    };
-
-    std::vector<std::vector<TrochoidArc>> chains;
-    chains.reserve(static_cast<std::size_t>(max_passes));
-
-    for (auto edge_iter = skeleton->halfedges_begin();
-         edge_iter != skeleton->halfedges_end(); ++edge_iter) {
-        if (!(edge_iter->is_bisector() || edge_iter->is_inner_bisector())) continue;
-
-        const auto v0 = edge_iter->vertex();
-        const auto v1 = edge_iter->opposite()->vertex();
-        if (&*v0 >= &*v1) continue;
-
-        Point_2 p0(v0->point().x(), v0->point().y());
-        Point_2 p1(v1->point().x(), v1->point().y());
-
-        // Exact squared-distance early rejection (avoids sqrt on discarded edges).
-        K::FT sq0 = squared_distance_to_boundary(p0, boundary);
-        K::FT sq1 = squared_distance_to_boundary(p1, boundary);
-        const K::FT min_cd_sq_ft(min_cd_sq);
-        if (sq0 < min_cd_sq_ft && sq1 < min_cd_sq_ft) continue;
-
-        // Edge passes filter — compute distances for clipping and radius.
-        double d0 = std::sqrt(std::max(0.0, CGAL::to_double(sq0)));
-        double d1 = std::sqrt(std::max(0.0, CGAL::to_double(sq1)));
-
-        // Clip edge to the valid cutter-center domain.
-        if (d0 < min_centerline_distance || d1 < min_centerline_distance) {
-            const double denom = d1 - d0;
-            if (std::abs(denom) < 1e-12) continue;  // division guard
-            const double t = std::max(0.0, std::min(1.0, (min_centerline_distance - d0) / denom));
-            const Point_2 cp = CGAL::barycenter(p0, 1.0 - t, p1, t);
-            // Recompute only the clipped endpoint.
-            if (d0 < min_centerline_distance) {
-                p0 = cp;
-                sq0 = squared_distance_to_boundary(p0, boundary);
-                d0 = std::sqrt(std::max(0.0, CGAL::to_double(sq0)));
-            } else {
-                p1 = cp;
-                sq1 = squared_distance_to_boundary(p1, boundary);
-                d1 = std::sqrt(std::max(0.0, CGAL::to_double(sq1)));
-            }
-        }
-
-        // Canonicalize: narrower end first, tie-break via exact predicate.
-        if (sq0 > sq1 || (sq0 == sq1 && CGAL::compare_xy(p0, p1) == CGAL::LARGER)) {
-            std::swap(p0, p1);
-            std::swap(d0, d1);
-        }
-
-        const Vector_2 edge_dir = p1 - p0;
-        auto circles = trochoid_circles(p0, p1, compute_radius(d0), compute_radius(d1), pitch);
-        if (circles.size() < 2) continue;
-
-        auto chain = trochoid_chain(circles, edge_dir, /*climb_milling=*/true);
-        if (!chain.empty()) {
-            chains.push_back(std::move(chain));
-        }
-
-        if (static_cast<int>(chains.size()) >= max_passes) break;
-    }
-
-    return chains;
-}
-
 } // namespace
 
 std::tuple<compas::RowMatrixXd, compas::RowMatrixXd>
-pmp_polygon_medial_axis_transform(
-    Eigen::Ref<const compas::RowMatrixXd> vertices)
+pmp_polygon_skeleton_clearance(
+    Eigen::Ref<const compas::RowMatrixXd> vertices,
+    const std::vector<compas::RowMatrixXd>& holes)
 {
-    Polygon_2 polygon = data_to_polygon(vertices);
-    auto [mat_points, mat_radii] = polygon_medial_axis_transform_internal(polygon);
+    auto [domain, boundary] = assemble_domain(vertices, holes);
+    SsPtr skeleton = build_skeleton(domain);
 
-    compas::RowMatrixXd points_matrix(mat_points.size(), 3);
-    compas::RowMatrixXd radii_matrix(mat_radii.size(), 1);
+    std::vector<Point_2> points;
+    std::vector<double> radii;
+    points.reserve(skeleton->size_of_vertices());
+    radii.reserve(skeleton->size_of_vertices());
 
-    for (std::size_t i = 0; i < mat_points.size(); ++i) {
-        points_matrix(i, 0) = mat_points[i].x();
-        points_matrix(i, 1) = mat_points[i].y();
-        points_matrix(i, 2) = 0.0;
-        radii_matrix(i, 0) = mat_radii[i];
+    for (auto vertex_iter = skeleton->vertices_begin(); vertex_iter != skeleton->vertices_end(); ++vertex_iter) {
+        const auto& point = vertex_iter->point();
+        Point_2 point_xy(point.x(), point.y());
+        const K::FT sq_dist = boundary.squared_distance_to(point_xy);
+
+        // Keep only interior skeleton samples (exact comparison against zero).
+        if (sq_dist > K::FT(0)) {
+            points.push_back(point_xy);
+            radii.push_back(std::sqrt(std::max(0.0, CGAL::to_double(sq_dist))));
+        }
     }
 
+    compas::RowMatrixXd points_matrix(points.size(), 3);
+    compas::RowMatrixXd radii_matrix(radii.size(), 1);
+    for (std::size_t i = 0; i < points.size(); ++i) {
+        points_matrix(i, 0) = points[i].x();
+        points_matrix(i, 1) = points[i].y();
+        points_matrix(i, 2) = 0.0;
+        radii_matrix(i, 0) = radii[i];
+    }
     return std::make_tuple(points_matrix, radii_matrix);
 }
 
-std::vector<compas::RowMatrixXd>
+std::tuple<std::vector<compas::RowMatrixXd>, int>
 pmp_trochoidal_mat_toolpath(
     Eigen::Ref<const compas::RowMatrixXd> vertices,
+    const std::vector<compas::RowMatrixXd>& holes,
     double tool_diameter,
     double stepover,
     double pitch,
@@ -514,103 +766,30 @@ pmp_trochoidal_mat_toolpath(
     double mat_scale,
     double radial_clearance,
     int samples_per_cycle,
-    int max_passes)
+    int max_passes,
+    bool climb)
 {
     validate_toolpath_params(tool_diameter, stepover, pitch,
         min_trochoid_radius, max_trochoid_radius, samples_per_cycle, max_passes);
 
-    Polygon_2 boundary = data_to_polygon(vertices);
-    SsPtr skeleton = CGAL::create_interior_straight_skeleton_2(
-        boundary.vertices_begin(), boundary.vertices_end());
-    if (!skeleton) return {};
+    auto [domain, boundary] = assemble_domain(vertices, holes);
+    SsPtr skeleton = build_skeleton(domain);
 
-    const double tool_radius = 0.5 * tool_diameter;
-    auto chains = mat_edge_chains(boundary, skeleton, tool_radius,
-        radial_clearance, mat_scale, min_trochoid_radius, max_trochoid_radius,
-        pitch, max_passes);
+    const RadiusModel model{0.5 * tool_diameter, radial_clearance, mat_scale,
+                            min_trochoid_radius, max_trochoid_radius};
+    auto [chains, skipped] = skeleton_edge_chains(boundary, skeleton, model,
+                                                  pitch, stepover, climb, max_passes);
 
     std::vector<compas::RowMatrixXd> toolpaths;
     toolpaths.reserve(chains.size());
     for (auto& chain : chains) {
         auto pts = tessellate_chain(chain, samples_per_cycle);
-        deduplicate_consecutive_points(pts, 1e-9);
+        deduplicate_consecutive_points(pts, OUTPUT_DEDUP_TOL);
         if (pts.size() >= 2) {
             toolpaths.push_back(points_to_matrix(pts));
         }
     }
-    return toolpaths;
-}
-
-static std::tuple<compas::RowMatrixXd, compas::RowMatrixXd, compas::RowMatrixXd, compas::RowMatrixXd, compas::RowMatrixXd>
-pmp_trochoidal_mat_toolpath_circular_raw(
-    Eigen::Ref<const compas::RowMatrixXd> vertices,
-    double tool_diameter,
-    double stepover,
-    double pitch,
-    double min_trochoid_radius,
-    double max_trochoid_radius,
-    double mat_scale,
-    double radial_clearance,
-    int samples_per_cycle,
-    int max_passes)
-{
-    validate_toolpath_params(tool_diameter, stepover, pitch,
-        min_trochoid_radius, max_trochoid_radius, samples_per_cycle, max_passes);
-
-    Polygon_2 boundary = data_to_polygon(vertices);
-    SsPtr skeleton = CGAL::create_interior_straight_skeleton_2(
-        boundary.vertices_begin(), boundary.vertices_end());
-    if (!skeleton) {
-        return std::make_tuple(compas::RowMatrixXd(0, 3), compas::RowMatrixXd(0, 3),
-            compas::RowMatrixXd(0, 3), compas::RowMatrixXd(0, 3), compas::RowMatrixXd(0, 1));
-    }
-
-    const double tool_radius = 0.5 * tool_diameter;
-    auto chains = mat_edge_chains(boundary, skeleton, tool_radius,
-        radial_clearance, mat_scale, min_trochoid_radius, max_trochoid_radius,
-        pitch, max_passes);
-
-    // Flatten chains into primitives, filter chains without arcs.
-    std::vector<TrochoidArc> all_primitives;
-    std::vector<int> primitive_path_indices;
-    int path_idx = 0;
-    for (const auto& chain : chains) {
-        bool has_arc = std::any_of(chain.begin(), chain.end(),
-            [](const TrochoidArc& a) { return !a.is_line(); });
-        if (!has_arc) continue;
-        for (const auto& arc : chain) {
-            all_primitives.push_back(arc);
-            primitive_path_indices.push_back(path_idx);
-        }
-        path_idx++;
-    }
-
-    const int n = static_cast<int>(all_primitives.size());
-    compas::RowMatrixXd meta(n, 3);
-    compas::RowMatrixXd starts(n, 3);
-    compas::RowMatrixXd ends(n, 3);
-    compas::RowMatrixXd centers(n, 3);
-    compas::RowMatrixXd radii(n, 1);
-
-    for (int i = 0; i < n; ++i) {
-        const auto& arc = all_primitives[i];
-        meta(i, 0) = static_cast<double>(primitive_path_indices[i]);
-        meta(i, 1) = arc.is_line() ? 0.0 : 1.0;
-        meta(i, 2) = arc.is_clockwise() ? 1.0 : 0.0;
-
-        starts(i, 0) = CGAL::to_double(arc.start.x());
-        starts(i, 1) = CGAL::to_double(arc.start.y());
-        starts(i, 2) = 0.0;
-        ends(i, 0) = CGAL::to_double(arc.end.x());
-        ends(i, 1) = CGAL::to_double(arc.end.y());
-        ends(i, 2) = 0.0;
-        centers(i, 0) = CGAL::to_double(arc.circle.center().x());
-        centers(i, 1) = CGAL::to_double(arc.circle.center().y());
-        centers(i, 2) = 0.0;
-        radii(i, 0) = arc.radius();
-    }
-
-    return std::make_tuple(meta, starts, ends, centers, radii);
+    return std::make_tuple(std::move(toolpaths), skipped);
 }
 
 // ============================================================================
@@ -701,11 +880,34 @@ tessellate_operations(const std::vector<ToolpathPrimitive>& ops, double samples_
     return result;
 }
 
+// Shrink an engaged lead segment until it is certified gouge-free; empty
+// optional means the lead cannot fit and is dropped.
+bool
+certified_lead(const Point_2& anchor, const Vector_2& direction_unit, double length,
+               const Boundary& boundary, double tool_radius, bool outward,
+               Point_2& lead_point)
+{
+    double len = length;
+    for (int i = 0; i <= MAX_LEAD_HALVINGS; ++i) {
+        const double sign = outward ? 1.0 : -1.0;
+        const Point_2 candidate(
+            CGAL::to_double(anchor.x()) + sign * len * CGAL::to_double(direction_unit.x()),
+            CGAL::to_double(anchor.y()) + sign * len * CGAL::to_double(direction_unit.y()));
+        if (boundary.segment_clear(Segment_2(anchor, candidate), tool_radius)) {
+            lead_point = candidate;
+            return true;
+        }
+        len *= 0.5;
+    }
+    return false;
+}
+
 } // namespace
 
-std::tuple<compas::RowMatrixXd, compas::RowMatrixXd, compas::RowMatrixXd, compas::RowMatrixXd, compas::RowMatrixXd, compas::RowMatrixXd, compas::RowMatrixXd, compas::RowMatrixXd>
+std::tuple<compas::RowMatrixXd, compas::RowMatrixXd, compas::RowMatrixXd, compas::RowMatrixXd, compas::RowMatrixXd, compas::RowMatrixXd, compas::RowMatrixXd, compas::RowMatrixXd, int>
 pmp_trochoidal_mat_toolpath_circular(
     Eigen::Ref<const compas::RowMatrixXd> vertices,
+    const std::vector<compas::RowMatrixXd>& holes,
     double tool_diameter,
     double stepover,
     double pitch,
@@ -715,6 +917,7 @@ pmp_trochoidal_mat_toolpath_circular(
     double radial_clearance,
     int samples_per_cycle,
     int max_passes,
+    bool climb,
     double lead_in,
     double lead_out,
     bool link_paths,
@@ -725,24 +928,17 @@ pmp_trochoidal_mat_toolpath_circular(
     bool retract_at_end,
     double samples_per_radian)
 {
-    // Validate and build skeleton + chains directly (no serialize/deserialize round-trip)
     validate_toolpath_params(tool_diameter, stepover, pitch,
         min_trochoid_radius, max_trochoid_radius, samples_per_cycle, max_passes);
 
-    Polygon_2 boundary = data_to_polygon(vertices);
-    SsPtr skeleton = CGAL::create_interior_straight_skeleton_2(
-        boundary.vertices_begin(), boundary.vertices_end());
-    if (!skeleton) {
-        compas::RowMatrixXd empty_meta(0, 4);
-        compas::RowMatrixXd empty3(0, 3);
-        compas::RowMatrixXd empty1(0, 1);
-        return std::make_tuple(empty_meta, empty3, empty3, empty3, empty1, empty3, empty3, empty3);
-    }
+    auto [domain, boundary] = assemble_domain(vertices, holes);
+    SsPtr skeleton = build_skeleton(domain);
 
     const double tool_radius = 0.5 * tool_diameter;
-    auto chains = mat_edge_chains(boundary, skeleton, tool_radius,
-        radial_clearance, mat_scale, min_trochoid_radius, max_trochoid_radius,
-        pitch, max_passes);
+    const RadiusModel model{tool_radius, radial_clearance, mat_scale,
+                            min_trochoid_radius, max_trochoid_radius};
+    auto [chains, skipped] = skeleton_edge_chains(boundary, skeleton, model,
+                                                  pitch, stepover, climb, max_passes);
 
     // Filter chains without arcs, build paths vector
     std::vector<std::vector<TrochoidArc>> paths;
@@ -759,10 +955,11 @@ pmp_trochoidal_mat_toolpath_circular(
         compas::RowMatrixXd empty_meta(0, 4);
         compas::RowMatrixXd empty3(0, 3);
         compas::RowMatrixXd empty1(0, 1);
-        return std::make_tuple(empty_meta, empty3, empty3, empty3, empty1, empty3, empty3, empty3);
+        return std::make_tuple(empty_meta, empty3, empty3, empty3, empty1, empty3, empty3, empty3, skipped);
     }
 
-    // Greedy nearest-neighbor path ordering
+    // Greedy nearest-neighbor path ordering (documented heuristic; optimal
+    // ordering is a TSP and out of scope).
     if (optimize_order && paths.size() > 1) {
         double max_len = -1.0;
         int start_idx = 0;
@@ -825,17 +1022,18 @@ pmp_trochoidal_mat_toolpath_circular(
         const Point_2& path_start = path.front().start;
         const Point_2& path_end = path.back().end;
 
-        // Compute lead-in start point via start tangent
+        // Certified lead-in start point via start tangent (shrinks to fit,
+        // dropped when no gouge-free length exists).
         const Vector_2 st = path.front().start_tangent();
         const double st_len = approx_length(st);
         Point_2 lead_in_pt = path_start;  // default: no lead-in
-        bool has_start_tangent = false;
-        if (lead_in > 0.0 && st_len > 1e-12) {  // st_len: division guard
-            double inv = 1.0 / st_len;
-            lead_in_pt = Point_2(
-                CGAL::to_double(path_start.x()) - lead_in * CGAL::to_double(st.x()) * inv,
-                CGAL::to_double(path_start.y()) - lead_in * CGAL::to_double(st.y()) * inv);
-            has_start_tangent = true;
+        bool has_lead_in = false;
+        if (lead_in > 0.0 && st_len > DIRECTION_NORM_FLOOR) {
+            const double inv = 1.0 / st_len;
+            const Vector_2 st_unit(CGAL::to_double(st.x()) * inv, CGAL::to_double(st.y()) * inv);
+            has_lead_in = certified_lead(path_start, st_unit, lead_in, boundary,
+                                         tool_radius, /*outward=*/false, lead_in_pt);
+            if (!has_lead_in) lead_in_pt = path_start;
         }
 
         // Connect to this path
@@ -859,6 +1057,14 @@ pmp_trochoidal_mat_toolpath_circular(
                 cur_xy = lead_in_pt; cur_z = cut_z;
             } else {
                 if (cur_xy != lead_in_pt) {
+                    // A flat link is an engaged move: it must be certified
+                    // against the walls.  Without a clearance plane there is no
+                    // safe fallback — fail loud.
+                    if (!boundary.segment_clear(Segment_2(cur_xy, lead_in_pt), tool_radius)) {
+                        throw std::invalid_argument(
+                            "Flat link between paths would gouge the boundary; "
+                            "provide clearance_z for safe Z-linking.");
+                    }
                     operations.push_back(make_tp_line(cur_xy, cut_z, lead_in_pt, cut_z, 3 /*link*/, pidx));
                     cur_xy = lead_in_pt; cur_z = cut_z;
                 }
@@ -868,7 +1074,7 @@ pmp_trochoidal_mat_toolpath_circular(
         }
 
         // Lead-in
-        if (lead_in > 0.0 && has_start_tangent) {
+        if (has_lead_in && lead_in_pt != path_start) {
             operations.push_back(make_tp_line(lead_in_pt, cut_z, path_start, cut_z, 1 /*lead_in*/, pidx));
             cur_xy = path_start; cur_z = cut_z;
         }
@@ -886,17 +1092,20 @@ pmp_trochoidal_mat_toolpath_circular(
             cur_z = cut_z;
         }
 
-        // Lead-out via end tangent
+        // Certified lead-out via end tangent
         {
             const Vector_2 et = path.back().end_tangent();
             const double et_len = approx_length(et);
-            if (lead_out > 0.0 && et_len > 1e-12) {  // et_len: division guard
-                double inv = 1.0 / et_len;
-                Point_2 lo_end(
-                    CGAL::to_double(path_end.x()) + lead_out * CGAL::to_double(et.x()) * inv,
-                    CGAL::to_double(path_end.y()) + lead_out * CGAL::to_double(et.y()) * inv);
-                operations.push_back(make_tp_line(path_end, cut_z, lo_end, cut_z, 2 /*lead_out*/, pidx));
-                cur_xy = lo_end; cur_z = cut_z;
+            if (lead_out > 0.0 && et_len > DIRECTION_NORM_FLOOR) {
+                const double inv = 1.0 / et_len;
+                const Vector_2 et_unit(CGAL::to_double(et.x()) * inv, CGAL::to_double(et.y()) * inv);
+                Point_2 lo_end = path_end;
+                if (certified_lead(path_end, et_unit, lead_out, boundary,
+                                   tool_radius, /*outward=*/true, lo_end) &&
+                    lo_end != path_end) {
+                    operations.push_back(make_tp_line(path_end, cut_z, lo_end, cut_z, 2 /*lead_out*/, pidx));
+                    cur_xy = lo_end; cur_z = cut_z;
+                }
             }
         }
     }
@@ -940,7 +1149,7 @@ pmp_trochoidal_mat_toolpath_circular(
         // Unit tangent vectors (XY, z=0)
         const Vector_2 st = op.arc.start_tangent();
         const double st_len = approx_length(st);
-        if (st_len > 1e-12) {
+        if (st_len > DIRECTION_NORM_FLOOR) {
             const double inv = 1.0 / st_len;
             start_tangents(i, 0) = CGAL::to_double(st.x()) * inv;
             start_tangents(i, 1) = CGAL::to_double(st.y()) * inv;
@@ -952,7 +1161,7 @@ pmp_trochoidal_mat_toolpath_circular(
 
         const Vector_2 et = op.arc.end_tangent();
         const double et_len = approx_length(et);
-        if (et_len > 1e-12) {
+        if (et_len > DIRECTION_NORM_FLOOR) {
             const double inv = 1.0 / et_len;
             end_tangents(i, 0) = CGAL::to_double(et.x()) * inv;
             end_tangents(i, 1) = CGAL::to_double(et.y()) * inv;
@@ -964,59 +1173,41 @@ pmp_trochoidal_mat_toolpath_circular(
     }
 
     auto polyline = tessellate_operations(operations, samples_per_radian);
-    return std::make_tuple(meta, starts, ends, centers_out, radii_out, polyline, start_tangents, end_tangents);
+    return std::make_tuple(meta, starts, ends, centers_out, radii_out, polyline, start_tangents, end_tangents, skipped);
 }
 
 NB_MODULE(_toolpath, m)
 {
     m.def(
-        "polygon_medial_axis_transform",
-        &pmp_polygon_medial_axis_transform,
-        "Compute MAT samples from polygon interior straight skeleton.\n\n"
+        "polygon_skeleton_clearance",
+        &pmp_polygon_skeleton_clearance,
+        "Interior straight-skeleton vertices with exact boundary clearance.\n\n"
+        "The straight skeleton coincides with the medial axis for convex\n"
+        "polygons only; radii are exact clearances at the returned loci.\n\n"
         "Parameters\n"
         "----------\n"
         "vertices : array-like\n"
-        "    Matrix of polygon vertices (Nx3, float64)\n"
+        "    Matrix of outer boundary vertices (Nx3, float64)\n"
+        "holes : list of array-like\n"
+        "    Optional hole polygons (each Mx3, float64)\n"
         "\n"
         "Returns\n"
         "-------\n"
         "tuple\n"
-        "    - MAT points (Mx3, float64)\n"
-        "    - MAT radii (Mx1, float64)",
-        "vertices"_a);
+        "    - skeleton points (Mx3, float64)\n"
+        "    - exact clearance radii (Mx1, float64)",
+        "vertices"_a,
+        "holes"_a);
 
     m.def(
         "trochoidal_mat_toolpath",
         &pmp_trochoidal_mat_toolpath,
-        "Create MAT-constrained trochoidal toolpaths for a polygon pocket.\n\n"
-        "Parameters\n"
-        "----------\n"
-        "vertices : array-like\n"
-        "    Matrix of polygon vertices (Nx3, float64)\n"
-        "tool_diameter : float\n"
-        "    Cutter diameter\n"
-        "stepover : float\n"
-        "    Reserved for API compatibility (currently unused)\n"
-        "pitch : float\n"
-        "    Trochoid pitch\n"
-        "min_trochoid_radius : float\n"
-        "    Minimum trochoid radius\n"
-        "max_trochoid_radius : float\n"
-        "    Maximum trochoid radius\n"
-        "mat_scale : float\n"
-        "    MAT availability scale factor\n"
-        "radial_clearance : float\n"
-        "    Clearance from available radius\n"
-        "samples_per_cycle : int\n"
-        "    Samples per trochoid cycle\n"
-        "max_passes : int\n"
-        "    Maximum number of emitted MAT-edge toolpaths\n"
-        "\n"
-        "Returns\n"
-        "-------\n"
-        "list\n"
-        "    List of toolpath polylines (each Kx3, float64)",
+        "Certified gouge-free trochoidal pocket toolpaths along the straight\n"
+        "skeleton, with exact per-station clearance radii.\n\n"
+        "Returns (list of Kx3 polylines, number of skeleton edges skipped by\n"
+        "max_passes).",
         "vertices"_a,
+        "holes"_a,
         "tool_diameter"_a,
         "stepover"_a,
         "pitch"_a,
@@ -1025,7 +1216,8 @@ NB_MODULE(_toolpath, m)
         "mat_scale"_a,
         "radial_clearance"_a,
         "samples_per_cycle"_a,
-        "max_passes"_a);
+        "max_passes"_a,
+        "climb"_a = true);
 
     m.def(
         "trochoidal_mat_toolpath_circular",
@@ -1039,8 +1231,10 @@ NB_MODULE(_toolpath, m)
         "- radii (Nx1 float)\n"
         "- polyline (Mx3 float): tessellated 3D point sequence\n"
         "- start tangents (Nx3 float): unit tangent at arc/circle start\n"
-        "- end tangents (Nx3 float): unit tangent at arc/circle end",
+        "- end tangents (Nx3 float): unit tangent at arc/circle end\n"
+        "- skipped (int): skeleton edges dropped once max_passes was reached",
         "vertices"_a,
+        "holes"_a,
         "tool_diameter"_a,
         "stepover"_a,
         "pitch"_a,
@@ -1050,6 +1244,7 @@ NB_MODULE(_toolpath, m)
         "radial_clearance"_a,
         "samples_per_cycle"_a,
         "max_passes"_a,
+        "climb"_a = true,
         "lead_in"_a = 0.0,
         "lead_out"_a = 0.0,
         "link_paths"_a = true,

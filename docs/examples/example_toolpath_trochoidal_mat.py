@@ -38,7 +38,7 @@ polygon = Polygon(
 result = trochoidal_mat_toolpath_circular(
     polygon,
     tool_diameter=0.1,
-    stepover=0.01,
+    stepover=0.04,  # max radial engagement per cycle (0.4 x tool diameter)
     pitch=0.15,
     mat_scale=1.0,
     lead_in=0.15,

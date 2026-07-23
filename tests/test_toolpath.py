@@ -12,9 +12,12 @@ from hypothesis import given
 from hypothesis import settings
 from hypothesis import strategies as st
 
+from compas_cgal.toolpath import DegeneratePrimitiveError
+from compas_cgal.toolpath import OperationType
 from compas_cgal.toolpath import ToolpathOperation
 from compas_cgal.toolpath import ToolpathResult
-from compas_cgal.toolpath import polygon_medial_axis_transform
+from compas_cgal.toolpath import _matrices_to_operations
+from compas_cgal.toolpath import polygon_skeleton_clearance
 from compas_cgal.toolpath import trochoidal_mat_toolpath
 from compas_cgal.toolpath import trochoidal_mat_toolpath_circular
 
@@ -211,11 +214,17 @@ STAR = Polygon(
 KITE = Polygon([(5, 0, 0), (0, 5, 0), (-5, 0, 0), (0, -2.5, 0)])
 
 
-def test_polygon_medial_axis_transform_square():
-    mat_points, mat_radii = polygon_medial_axis_transform(SQUARE)
+def test_polygon_skeleton_clearance_square():
+    mat_points, mat_radii = polygon_skeleton_clearance(SQUARE)
     assert mat_points.shape == (1, 3)
     assert mat_radii.shape == (1,)
     assert pytest.approx(mat_radii[0]) == 5.0
+
+
+def test_medial_axis_transform_name_removed():
+    """The old name claimed MAT; samples are straight-skeleton loci. Renamed for honesty."""
+    with pytest.raises(ImportError):
+        from compas_cgal.toolpath import polygon_medial_axis_transform  # noqa: F401
 
 
 def test_trochoidal_mat_toolpath_inside_polygon():
@@ -439,6 +448,7 @@ def test_circular_exit_tangent_alignment():
         pitch=0.75,
         max_trochoid_radius=float("inf"),
         max_passes=20,
+        clearance_z=2.0,
     )
 
     cut_ops = [o for o in result.operations if o.operation == "cut"]
@@ -485,11 +495,14 @@ def test_tangent_vectors_populated():
         pitch=0.75,
         max_trochoid_radius=float("inf"),
         max_passes=20,
+        clearance_z=2.0,
     )
     assert len(result.operations) > 2
     for op in result.operations:
         assert op.start_tangent is not None, f"missing start_tangent on {op.operation}"
         assert op.end_tangent is not None, f"missing end_tangent on {op.operation}"
+        if op.operation in ("retract", "plunge"):
+            continue  # vertical moves have no XY tangent by construction
         st = op.start_tangent
         et = op.end_tangent
         # z component is 0 (2.5D toolpath)
@@ -510,6 +523,7 @@ def test_tangent_vectors_match_geometry():
         pitch=0.75,
         max_trochoid_radius=float("inf"),
         max_passes=20,
+        clearance_z=2.0,
     )
     for op in result.operations:
         g = op.geometry
@@ -592,7 +606,10 @@ def test_consistent_winding(polygon):
 
 
 def test_polyline_continuity():
-    """Tessellated polyline has bounded step sizes (flat toolpath, no retracts)."""
+    """Tessellated polyline has bounded step sizes.
+
+    Links ride the clearance plane: flat links on a non-convex pocket would
+    gouge and now raise instead (certified-link contract)."""
     result = trochoidal_mat_toolpath_circular(
         IRREGULAR,
         tool_diameter=0.5,
@@ -601,13 +618,241 @@ def test_polyline_continuity():
         lead_out=0.15,
         link_paths=True,
         optimize_order=True,
+        clearance_z=2.0,
     )
     pts = result.polyline
     diffs = np.linalg.norm(np.diff(pts, axis=0), axis=1)
     max_step = diffs.max()
-    # Flat toolpath (no clearance_z) — largest step is an XY link between paths
+    # Largest step is an XY link between paths at clearance height
     # Bound: polygon diameter (~18 units for IRREGULAR)
     assert max_step < 20.0, f"Max step {max_step:.4f} exceeds bound"
+
+
+# ---------------------------------------------------------------------------
+# Review remediation (2026-07-22): gouge-free certification, input validation,
+# engagement control, fail-loud contracts, holes, climb, naming.
+# ---------------------------------------------------------------------------
+
+
+def _dumbbell(pinch: float) -> Polygon:
+    """20x10 pocket pinched to *pinch* at x=10 by two facing reflex notches."""
+    h = pinch / 2.0
+    return Polygon(
+        [
+            (0.0, 0.0, 0.0),
+            (9.0, 0.0, 0.0),
+            (10.0, 5.0 - h, 0.0),
+            (11.0, 0.0, 0.0),
+            (20.0, 0.0, 0.0),
+            (20.0, 10.0, 0.0),
+            (11.0, 10.0, 0.0),
+            (10.0, 5.0 + h, 0.0),
+            (9.0, 10.0, 0.0),
+            (0.0, 10.0, 0.0),
+        ]
+    )
+
+
+GOUGE_TOL = 1e-6  # certification slack: exact clearance may equal R at the optimum
+
+
+@pytest.mark.parametrize("pinch", [2.4, 1.8, 1.2], ids=["wide", "medium", "tight"])
+def test_no_gouge_dumbbell_dense(pinch):
+    """Every tessellated tool-center point keeps exact wall clearance >= tool radius.
+
+    Regression for the reflex-vertex gouge: linear radius interpolation along
+    straight-skeleton edges overestimated clearance near notch tips by up to
+    89% of the tool radius.
+    """
+    tool_diameter = 1.0
+    tool_radius = 0.5 * tool_diameter
+    polygon = _dumbbell(pinch)
+    poly_xy = [list(pt[:2]) for pt in polygon.points]
+    paths = trochoidal_mat_toolpath(polygon, tool_diameter=tool_diameter, pitch=0.75, samples_per_cycle=64)
+    assert len(paths) > 0
+    worst = 0.0
+    for path in paths:
+        for pt in path:
+            d = _distance_to_polygon_boundary_xy(pt[:2].tolist(), poly_xy)
+            worst = max(worst, tool_radius - d)
+    assert worst <= GOUGE_TOL, f"tool center {worst:.4f} too close to wall (R={tool_radius})"
+
+
+def test_no_gouge_circular_primitives_dumbbell():
+    """Each cut circle/arc satisfies clearance(center) >= trochoid radius + tool radius."""
+    tool_diameter = 1.0
+    tool_radius = 0.5 * tool_diameter
+    polygon = _dumbbell(2.4)
+    poly_xy = [list(pt[:2]) for pt in polygon.points]
+    result = trochoidal_mat_toolpath_circular(polygon, tool_diameter=tool_diameter, pitch=0.75, clearance_z=3.0)
+    cut_arcs = [op for op in result.operations if op.operation == "cut" and isinstance(op.geometry, (Arc, Circle))]
+    assert len(cut_arcs) > 0
+    for op in cut_arcs:
+        c = op.geometry.frame.point
+        clearance = _distance_to_polygon_boundary_xy([float(c[0]), float(c[1])], poly_xy)
+        assert clearance + GOUGE_TOL >= op.geometry.radius + tool_radius, f"cut primitive gouges: clearance={clearance:.4f} < r={op.geometry.radius:.4f} + R={tool_radius}"
+
+
+def test_non_simple_polygon_raises_local_crossing():
+    """A locally self-intersecting boundary must fail loudly, not return 0 paths."""
+    poly = Polygon([(0, 0, 0), (10, 0, 0), (10, 10, 0), (4, 10, 0), (5, 11, 0), (6, 9.5, 0), (3, 9.7, 0), (0, 10, 0)])
+    with pytest.raises(ValueError, match="simple"):
+        trochoidal_mat_toolpath(poly, tool_diameter=0.5)
+
+
+def test_non_simple_polygon_raises_bowtie():
+    """A bowtie must be diagnosed as self-intersecting, not as 'not in XY plane'."""
+    bowtie = Polygon([(0, 0, 0), (6, 0, 0), (0, 4, 0), (6, 4, 0)])
+    with pytest.raises(ValueError, match="simple|self.intersect|degenerate"):
+        trochoidal_mat_toolpath(bowtie, tool_diameter=0.5)
+
+
+def test_stepover_changes_output():
+    """stepover must not be a dead parameter."""
+    p_fine = trochoidal_mat_toolpath(SQUARE, tool_diameter=1.0, stepover=0.2, pitch=0.75, samples_per_cycle=16)
+    p_coarse = trochoidal_mat_toolpath(SQUARE, tool_diameter=1.0, stepover=2.0, pitch=0.75, samples_per_cycle=16)
+    identical = len(p_fine) == len(p_coarse) and all(np.array_equal(a, b) for a, b in zip(p_fine, p_coarse))
+    assert not identical, "stepover has no effect on the toolpath"
+
+
+def test_stepover_bounds_engagement():
+    """Per cycle: station advance plus radius growth stays within stepover.
+
+    The crescent of new material cut by circle i+1 has radial width bounded by
+    center spacing + max(0, r_{i+1} - r_i).
+    """
+    stepover = 0.6
+    result = trochoidal_mat_toolpath_circular(IRREGULAR, tool_diameter=1.0, stepover=stepover, pitch=2.0, max_trochoid_radius=float("inf"))
+    by_path = {}
+    for op in result.operations:
+        if op.operation == "cut" and isinstance(op.geometry, Circle):
+            by_path.setdefault(op.path_index, []).append(op.geometry)
+    checked = 0
+    for circles in by_path.values():
+        for a, b in zip(circles, circles[1:]):
+            ca, cb = np.array(a.frame.point[:2]), np.array(b.frame.point[:2])
+            spacing = float(np.linalg.norm(cb - ca))
+            growth = max(0.0, b.radius - a.radius)
+            assert spacing + growth <= stepover + 1e-6, f"engagement {spacing + growth:.4f} exceeds stepover {stepover}"
+            checked += 1
+    assert checked > 0
+
+
+def test_max_passes_truncation_warns():
+    """Hitting max_passes must warn about unmachined skeleton edges, never truncate silently."""
+    with pytest.warns(UserWarning, match="max_passes"):
+        trochoidal_mat_toolpath(STAR, tool_diameter=0.5, pitch=0.4, max_passes=2)
+
+
+def test_scale_invariance_of_defaults():
+    """Default parameters must be scale-free: a 1000x pocket with a 1000x tool
+    yields the same toolpath scaled by 1000 (measured by count and length)."""
+    scale = 1000.0
+    base = trochoidal_mat_toolpath(SQUARE, tool_diameter=1.0, pitch=0.75, samples_per_cycle=32)
+    big_polygon = Polygon([[scale * c for c in pt] for pt in SQUARE.points])
+    big = trochoidal_mat_toolpath(big_polygon, tool_diameter=scale * 1.0, pitch=scale * 0.75, samples_per_cycle=32)
+    assert len(base) == len(big)
+
+    def total_length(paths):
+        return sum(float(np.linalg.norm(np.diff(p, axis=0), axis=1).sum()) for p in paths)
+
+    lb, lg = total_length(base), total_length(big)
+    assert lg == pytest.approx(scale * lb, rel=1e-6), f"scaled length {lg:.6f} != {scale} * {lb:.6f}"
+
+
+def test_degenerate_primitive_raises():
+    """A degenerate arc row from the backend must raise, not be silently dropped."""
+    meta = np.array([[0.0, 1.0, 1.0, 0.0]])  # arc, cw, cut
+    starts = np.array([[1.0, 1.0, 0.0]])
+    ends = np.array([[2.0, 1.0, 0.0]])
+    centers = np.array([[1.0, 1.0, 0.0]])  # center == start -> degenerate
+    radii = np.array([0.5])
+    with pytest.raises(DegeneratePrimitiveError):
+        _matrices_to_operations(meta, starts, ends, centers, radii)
+
+
+def test_operation_type_enum():
+    """Operations carry a typed OperationType that remains str-comparable."""
+    result = trochoidal_mat_toolpath_circular(SQUARE, tool_diameter=2.0, pitch=1.0, max_passes=20)
+    assert len(result.operations) > 0
+    for op in result.operations:
+        assert isinstance(op.operation, OperationType)
+    assert any(op.operation == OperationType.CUT for op in result.operations)
+    assert any(op.operation == "cut" for op in result.operations)  # str compatibility
+
+
+def test_climb_parameter_controls_winding():
+    """climb=True -> CW cut arcs; climb=False (conventional) -> CCW cut arcs."""
+    for climb, expect_cw in ((True, True), (False, False)):
+        result = trochoidal_mat_toolpath_circular(SQUARE, tool_diameter=2.0, pitch=1.0, climb=climb)
+        arcs = [op for op in result.operations if op.operation == "cut" and isinstance(op.geometry, (Arc, Circle))]
+        assert len(arcs) > 0
+        assert all(op.clockwise == expect_cw for op in arcs), f"climb={climb} produced wrong winding"
+
+
+def test_holes_island_respected():
+    """A pocket with an island machines around it: clearance to island >= tool radius."""
+    tool_diameter = 0.8
+    tool_radius = 0.5 * tool_diameter
+    outer = Polygon([(0, 0, 0), (14, 0, 0), (14, 10, 0), (0, 10, 0)])
+    island = Polygon([(5.5, 3.5, 0), (8.5, 3.5, 0), (8.5, 6.5, 0), (5.5, 6.5, 0)])
+    paths = trochoidal_mat_toolpath(outer, tool_diameter=tool_diameter, pitch=0.6, samples_per_cycle=48, holes=[island])
+    assert len(paths) > 0
+    outer_xy = [list(pt[:2]) for pt in outer.points]
+    island_xy = [list(pt[:2]) for pt in island.points]
+    for path in paths:
+        for pt in path:
+            p = pt[:2].tolist()
+            assert _distance_to_polygon_boundary_xy(p, outer_xy) >= tool_radius - GOUGE_TOL
+            assert _distance_to_polygon_boundary_xy(p, island_xy) >= tool_radius - GOUGE_TOL
+            assert is_point_in_polygon_xy(p, outer_xy)
+            assert not is_point_in_polygon_xy(p, island_xy)
+
+
+def test_lead_in_certified_against_walls():
+    """Lead-in/out lines are engaged motions: they must stay gouge-free even when
+    the requested lead length does not fit; the implementation must shrink or drop it."""
+    polygon = KITE
+    tool_radius = 0.25
+    poly_xy = [list(pt[:2]) for pt in polygon.points]
+    result = trochoidal_mat_toolpath_circular(polygon, tool_diameter=0.5, pitch=0.4, lead_in=5.0, lead_out=5.0, clearance_z=2.0)
+    leads = [op for op in result.operations if op.operation in ("lead_in", "lead_out")]
+    for op in leads:
+        for t in np.linspace(0.0, 1.0, 9):
+            pt = op.geometry.point_at(t) if hasattr(op.geometry, "point_at") else None
+            if pt is None:
+                start, end = np.array(op.geometry.start[:2]), np.array(op.geometry.end[:2])
+                pt2 = (1 - t) * start + t * end
+            else:
+                pt2 = np.array([float(pt[0]), float(pt[1])])
+            d = _distance_to_polygon_boundary_xy(pt2.tolist(), poly_xy)
+            inside = is_point_in_polygon_xy(pt2.tolist(), poly_xy)
+            assert inside and d >= tool_radius - 1e-3, f"{op.operation} point {pt2} gouges (inside={inside}, clearance={d:.4f})"
+
+
+def test_min_trochoid_radius_bounded_output():
+    """Radius floors create non-Lipschitz radius jumps between stations; output
+    coordinates must stay finite and bounded by the polygon scale regardless."""
+    paths = trochoidal_mat_toolpath(L_SHAPE, tool_diameter=0.5, pitch=0.4, min_trochoid_radius=0.4, samples_per_cycle=16)
+    for path in paths:
+        assert np.isfinite(path).all()
+        assert np.abs(path).max() < 20.0
+
+
+@given(polygon=_simple_polygons())
+@settings(max_examples=50, deadline=None)
+def test_no_gouge_random_polygons(polygon):
+    """Property: for any simple polygon, every tool-center sample keeps exact
+    clearance >= tool radius (disk-based, dense — not point containment)."""
+    tool_diameter = 0.5
+    tool_radius = 0.25
+    paths = trochoidal_mat_toolpath(polygon, tool_diameter=tool_diameter, pitch=0.4, samples_per_cycle=32)
+    assume(len(paths) > 0)
+    poly_xy = [list(pt[:2]) for pt in polygon.points]
+    for path in paths:
+        for pt in path[:: max(1, len(path) // 64)]:
+            d = _distance_to_polygon_boundary_xy(pt[:2].tolist(), poly_xy)
+            assert d >= tool_radius - 1e-4, f"gouge: clearance {d:.4f} < R={tool_radius}"
 
 
 @given(polygon=_simple_polygons())
@@ -622,10 +867,13 @@ def test_polyline_continuity_random(polygon):
         lead_out=0.15,
         link_paths=True,
         optimize_order=True,
+        clearance_z=2.0,
     )
     assume(result.polyline.shape[0] > 2)
-    # Skip polygons that trigger the pre-existing lead-in tangent degeneration
-    assume(np.isfinite(result.polyline).all() and np.abs(result.polyline).max() < 1e6)
+    # Hard invariants: coordinates are finite and bounded by the polygon scale.
+    # (Previously masked with assume() — a known lead-in tangent degeneration.)
+    assert np.isfinite(result.polyline).all(), "non-finite toolpath coordinates"
+    assert np.abs(result.polyline).max() < 100.0, f"coordinate blow-up: {np.abs(result.polyline).max():.3e}"
     diffs = np.linalg.norm(np.diff(result.polyline, axis=0), axis=1)
     # Random polygons have diameter up to 30 (base_r up to 15)
     assert diffs.max() < 35.0
