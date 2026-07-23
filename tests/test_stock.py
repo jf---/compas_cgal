@@ -256,8 +256,9 @@ CURATED = [
     (5, 1, 1, 1, 2, 3, 1),
     (3, -1, 0, 0, 9, 0, 0),  # 3 - sqrt(9) = 0
     (0, 1, -1, 0, 2, 2, 0),  # sqrt(2) - sqrt(2) = 0
-    (2, 0, 0, -1, 1, 4, 0),  # 2 - sqrt(4) = 0
-    (-2, 0, 0, 1, 4, 1, 0),  # -2 + sqrt(4) = 0
+    (2, 0, 0, -1, 1, 4, 0),  # 2 - sqrt(4) = 0            (general branch, compare EQUAL)
+    (-2, 0, 0, 1, 4, 1, 0),  # -2 + sqrt(4) = 0           (general branch, compare EQUAL)
+    (0, 1, -0.5, 0, 2, 8, 0),  # sqrt(2) - 0.5*sqrt(8) = 0 (u extended, opposite-sign EQUAL)
 ]
 
 
