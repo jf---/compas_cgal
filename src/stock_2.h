@@ -40,6 +40,14 @@ public:
     bool contains(double x, double y) const;
     bool is_empty() const;
 
+    // Remove the exact disk of the given radius centred at (cx, cy).
+    void subtract_disk(double cx, double cy, double radius);
+
+    // Remove the tool sweep along segment (x0,y0)->(x1,y1) as a certified
+    // under-covering disk chain (the exact oriented capsule has irrational
+    // side lines, so it is not representable in the circle-segment traits).
+    void subtract_capsule(double x0, double y0, double x1, double y1, double radius);
+
     const Gps& set() const { return set_; }          // engagement kernel reads this
     Gps& set() { return set_; }
 
