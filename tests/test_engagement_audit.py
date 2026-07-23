@@ -122,26 +122,31 @@ def _bottom_anchored_arc(center_y: float, radius: float, sweep_deg: float = 36.0
 
 
 def test_arc_certifier_refuses_circular_merge_over_cap():
-    """RED before the fix: a circular cut motion whose stations each split into two
-    sub-cap engaged runs across a thin CLOSING void must NOT certify.
+    """The arc certifier's gap-closure wiring: a circular cut whose stations each split
+    into two sub-cap runs across a thin void must be REFUSED (RED before the fix).
 
     The tool-centre arc is anchored at its lowest point exactly on the material
-    boundary at ``(5, 5)`` (``params[0]``) and rises 36 deg to one side, so every
-    sampled station sits in the two-run regime of the slotted lower half-plane.
-    At the fixed station density the guard is ``gamma_guard ~44 deg`` (>> the
-    ~11.5 deg gap) and the guarded cap is ``pi - gamma_guard ~136 deg``, which
-    lies strictly between the single-run span (~84 deg) and the merged span
-    (~180 deg).
+    boundary at ``(5, 5)`` (``params[0]``, unconditionally sampled regardless of the
+    fixed-density ``ceil``) and rises 36 deg to one side, so every sampled station
+    sits in the two-run regime of the slotted lower half-plane (two ~84 deg runs
+    across a ~11.5 deg gap). At the fixed density the guard is ``gamma_guard ~44 deg``
+    and the guarded cap ``pi - gamma_guard ~136 deg`` lies strictly between the
+    single-run span (~84 deg) and the merged span (~180 deg).
 
-    Pre-fix the arc certifier passes NO ``gap_close_ratio`` (defaults 0): each
-    station sees only its larger ~84 deg run, nothing exceeds ~136 deg, and the
-    motion FALSE-PASSES as ``cap_certified=True`` -- the O(1) run-merge slipping
-    between stations. Post-fix the certifier threads ``gamma_guard`` so the thin
-    gap is pre-absorbed, the ~180 deg merged pessimistic run exceeds ~136 deg, and
-    the motion is correctly refused. The reported ``max_tea`` stays the TRUE
-    (unmerged) sub-cap measure throughout -- the deciding/reporting split: the peak
-    reported run is well under a half-turn, yet the motion is refused because the
-    DECISION accounts for the merge the reported peak cannot show.
+    Pre-fix the certifier passes NO ``gap_close_ratio`` (defaults 0): each station
+    sees only its larger ~84 deg run, nothing exceeds ~136 deg, and the motion
+    certifies ``True``. Post-fix the certifier threads ``gamma_guard`` so the thin
+    gap is pre-absorbed and the ~180 deg pessimistic merged run exceeds ~136 deg ->
+    the motion is refused.
+
+    HONEST SCOPE (verified by a dense exact scan): on THIS motion the two runs never
+    actually fuse -- the true peak run is ~86 deg and the centre never submerges -- so
+    ``False`` is the accepted OVER-CONSERVATIVE gap-closure refusal, NOT a demonstrated
+    genuine merge hole (a robust certifier-level RED for a real hole needs a brittle
+    sub-floor construction). Its value is as a WIRING-DISCRIMINATION GUARD: it fails
+    iff the certifier stops threading ``gap_close_ratio``. It also exercises the
+    deciding/reporting split -- reported ``max_tea`` stays the TRUE sub-cap measure
+    while the DECISION refuses.
     """
     stock = _slotted_lower_half_stock()
     arc = _bottom_anchored_arc(center_y=5.0 + 0.05, radius=0.05)
