@@ -182,6 +182,44 @@ def test_engagement_seam_crossing_run():
     assert exceeded  # ~pi + slack > pi cap, orientation branch
 
 
+def test_engagement_exact_pi_run():
+    """Exact-pi run -> the sign primitive's ZERO branch (collinear center/start/end).
+
+    Stock is the lower half-plane y <= 5, its top edge passing exactly through the
+    cutter centre, so the engaged run is an exact semicircle with antipodal
+    endpoints and orientation(center, p, q) == COLLINEAR. At cap == pi (ratio == 4)
+    run == cap and it does NOT exceed; any tighter cap does. Exact equality, no
+    tolerance.
+    """
+    lower_half = np.array([[0, 0, 0], [10, 0, 0], [10, 5, 0], [0, 5, 0]], dtype=np.float64)
+    stock = _stock_2.Stock2(lower_half, [])
+    total, max_run, exceeded = _stock_2.engagement_at(stock, 5.0, 5.0, 0.5, cap_ratio(math.pi))
+    assert total == pytest.approx(math.pi, abs=1e-9)
+    assert max_run == pytest.approx(math.pi, abs=1e-9)
+    assert not exceeded  # run == pi == cap: ZERO branch, cap_chord_ratio < 4 is False
+    _, _, exceeded_tight = _stock_2.engagement_at(stock, 5.0, 5.0, 0.5, cap_ratio(math.radians(179.0)))
+    assert exceeded_tight  # run pi > 179 deg cap
+
+
+def test_engagement_tangent_touch():
+    """Tangent contact is a zero-measure event and must not alter the 2*pi run.
+
+    A cleared disk internally tangent to the cutter rim at a single point removes
+    only that measure-zero point; an externally tangent one removes nothing. Both
+    leave the rim fully engaged.
+    """
+    stock = _stock_2.Stock2(SQUARE, [])
+    stock.subtract_disk(5.0, 5.25, 0.25)  # inside cutter, tangent to rim at (5, 5.5)
+    total, _, exceeded = _stock_2.engagement_at(stock, 5.0, 5.0, 0.5, cap_ratio(math.pi))
+    assert total == pytest.approx(2.0 * math.pi, abs=1e-9)
+    assert exceeded
+
+    stock2 = _stock_2.Stock2(SQUARE, [])
+    stock2.subtract_disk(6.0, 5.0, 0.5)  # externally tangent to rim at (5.5, 5)
+    total2, _, _ = _stock_2.engagement_at(stock2, 5.0, 5.0, 0.5, cap_ratio(math.pi))
+    assert total2 == pytest.approx(2.0 * math.pi, abs=1e-9)
+
+
 def test_engagement_rejects_bad_cap_ratio():
     stock = _stock_2.Stock2(SQUARE, [])
     with pytest.raises(ValueError):
