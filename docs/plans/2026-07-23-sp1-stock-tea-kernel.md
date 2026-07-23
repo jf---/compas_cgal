@@ -1036,6 +1036,24 @@ git commit -m "feat(engagement): station certificate with conservative growth bo
 
 ### Task 6: Python API — `stock.py`, `engagement.py`, audit replay
 
+> **AMENDMENT (2026-07-23):** split into 6a and 6b for pipeline parallelism,
+> and align with the Task 4/5 exactness amendments:
+>
+> - **6a (dispatchable before Tasks 4/5 land):** `src/compas_cgal/stock.py`
+>   (the `Stock` wrapper — uses only the Task 1–3 bindings) plus
+>   `tests/test_engagement_audit.py` containing ONLY
+>   `test_stock_wrapper_roundtrip`. Commit message:
+>   `feat(stock): typed Stock wrapper (Task 6a)`.
+> - **6b (after Tasks 4/5):** `src/compas_cgal/engagement.py` + the remaining
+>   audit tests appended to `tests/test_engagement_audit.py`. Commit message
+>   as originally specified.
+> - Signature alignment: `_stock_2.engagement_at` takes `cap_chord_ratio`
+>   (= `4·sin²(cap/2)`); `engagement.py` accepts ergonomic `tea_cap` radians,
+>   validates `0 < tea_cap ≤ π`, and converts ONCE
+>   (`ratio = 4.0 * math.sin(tea_cap / 2.0) ** 2`) with the boundary-doctrine
+>   comment. `certify_segment_tea` keeps radians (binding-level conversion per
+>   Task 5 amendment). Where the text below conflicts, this governs.
+
 **Files:**
 - Create: `src/compas_cgal/stock.py`
 - Create: `src/compas_cgal/engagement.py`
@@ -1206,6 +1224,14 @@ git commit -m "feat(engagement): typed Stock wrapper + toolpath engagement audit
 ---
 
 ### Task 7: Monte-Carlo differential oracle
+
+> **AMENDMENT (2026-07-23):** every `_stock_2.engagement_at(...)` call below
+> passes `4.0 * math.sin(cap / 2.0) ** 2` as the final argument (chord-ratio
+> API per the Task 4 amendment); the raster oracle itself is unchanged. In
+> `test_growth_bound_sound`, compare against the Task 5 amendment's guard
+> formula at safety factor 1 (the raw lemma bound
+> `4·asin(min(1, d/2r)) + 2·acos(max(−1, 1−d/r))`) — the test validates the
+> lemma, the factor-2 margin stays in the certifier.
 
 **Files:**
 - Test: `tests/test_engagement_oracle.py`
