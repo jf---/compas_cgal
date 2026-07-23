@@ -24,8 +24,8 @@ using CoordNT = GpsPoint::CoordNT;   // Sqrt_extension<FT, FT>: a0 + a1*sqrt(roo
 // cutter-circle points p, q whose coordinates live in Q(sqrt alpha) and
 // Q(sqrt beta) respectively expand to exactly this shape.
 //
-// Idiom (CLAUDE.md "Numeric comparison is the exact-kernel idiom"): compare at
-// the NUMBER-TYPE level. Sqrt_extension is RealEmbeddable, so CGAL::sign and
+// Idiom (docs/exactness.md "Numeric comparison is the exact-kernel idiom"):
+// compare at the NUMBER-TYPE level. Sqrt_extension is RealEmbeddable, so CGAL::sign and
 // same-root CGAL::compare (and same-root +/-/*) are exact -- we build the
 // derived quantities INSIDE one extension Q(sqrt alpha) and let CGAL decide,
 // rather than hand-rolling a bignum squaring routine. Cross-root Sqrt_extension
@@ -179,6 +179,13 @@ EngagementSample engagement_at(const Stock2& stock, double cx, double cy,
             // about the centre. CLOCKWISE means the CCW sweep runs target->source.
             GpsPoint s = xc.source();
             GpsPoint t = xc.target();
+
+            // Tangent-touch degeneracy (docs/exactness.md "Degeneracy is an
+            // ordinary input case"): a zero-measure contact. CGAL never emits a
+            // degenerate (source == target) x-monotone arc, but guard exactly so
+            // one could never be mistaken for a full 2*pi run by span wrap-around.
+            if (s == t) continue;
+
             if (xc.orientation() == CGAL::CLOCKWISE) std::swap(s, t);
 
             const double sx = CGAL::to_double(s.x()), sy = CGAL::to_double(s.y());
@@ -254,6 +261,11 @@ EngagementSample engagement_at(const Stock2& stock, double cx, double cy,
 
 void register_engagement(nanobind::module_& m)
 {
+    // Nanobind boundary. cx, cy, tool_radius are measured/computed station data:
+    // each double IS a rational and enters exact-land by exact injection
+    // (Epeck::FT) -- no snapping, no tolerance at the seam. cap_chord_ratio is
+    // the caller's exact rational surrogate 4*sin^2(cap/2) for the transcendental
+    // cap (docs/exactness.md "Input semantics" and "boundary doctrine").
     m.def("engagement_at",
           [](const Stock2& stock, double cx, double cy, double tool_radius, double cap_chord_ratio) {
               EngagementSample s = engagement_at(stock, cx, cy, tool_radius, cap_chord_ratio);
