@@ -31,6 +31,13 @@ typedef Epeck::Point_2 EPoint;
 typedef Epeck::Circle_2 ECircle;
 typedef Epeck::Segment_2 ESegment;
 
+// Full disk of the given radius centred at `center`, as a two-arc CCW general
+// polygon (split at its x-extreme vertical-tangency points). Shared by the
+// stock-subtraction paths and the engagement query (which intersects the stock
+// with this exact cutter disk), so it carries external linkage here rather than
+// hiding in stock_2.cpp's anonymous namespace.
+GpsPolygon disk_polygon(const EPoint& center, const Epeck::FT& radius);
+
 // Exact 2D stock model: the remaining material as a general polygon set of
 // linear (this task) and circular (later tasks) boundary arcs. Later tasks
 // subtract tool sweeps and query engagement; this task owns init + point-in.

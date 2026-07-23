@@ -41,11 +41,15 @@ GpsPolygon data_to_gps_polygon(Eigen::Ref<const compas::RowMatrixXd> vertices)
     return polygon;
 }
 
+} // namespace
+
 // Full disk as a two-arc general polygon (counterclockwise). Split at the two
 // x-extreme (vertical-tangency) points; radius comes from a double so it is an
 // exact rational, hence center.x() +/- radius are plain rationals that GpsPoint
 // accepts directly (Task 1 pattern). This mirrors CGAL's own full-circle
 // subdivision in Arr_circle_segment_traits_2::Make_x_monotone_2.
+// Declared in stock_2.h with external linkage so engagement_2.cpp can build the
+// same exact cutter disk it intersects the stock against.
 GpsPolygon disk_polygon(const EPoint& center, const Epeck::FT& radius)
 {
     const Epeck::FT r_sq = radius * radius;
@@ -59,8 +63,6 @@ GpsPolygon disk_polygon(const EPoint& center, const Epeck::FT& radius)
     polygon.push_back(GpsXCurve(circle, p_max, p_min, CGAL::COUNTERCLOCKWISE));  // upper half
     return polygon;
 }
-
-} // namespace
 
 Stock2::Stock2(Eigen::Ref<const compas::RowMatrixXd> boundary,
                const std::vector<compas::RowMatrixXd>& holes)
