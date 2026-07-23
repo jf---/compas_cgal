@@ -191,3 +191,49 @@ def test_arc_certifier_certifies_non_engaged_arc():
 
     assert cap_certified is True
     assert max_tea == pytest.approx(0.0, abs=1e-9)
+
+
+# --------------------------------------------------------------------------- #
+# Baseline audit script (Task 8) -- SP2 reference generator                    #
+# --------------------------------------------------------------------------- #
+
+
+def test_baseline_script_generates_report(tmp_path):
+    """`scripts/engagement_baseline.py` runs end-to-end and emits a BLUF-first report + JSON.
+
+    The full 7-pocket baseline is O(n^2) exact stock depletion (~1 hour) and its generation is
+    DEFERRED to SP2 (docs/superpowers/state/sp1-gate-c-analysis.md) -- the committed artifact is
+    the harness, not baseline data. This test drives the SAME generate -> audit -> report code
+    path over a tiny synthetic smoke pocket via ``--quick`` (~8 s). It guards the report
+    CONTRACT -- BLUF heading, the "worst TEA" phrasing, the SP2-reference sentence, and a JSON
+    sidecar whose per-op numbers round-trip through ``json.loads``.
+    """
+    import json
+    import os
+    import pathlib
+    import subprocess
+    import sys
+
+    repo_root = pathlib.Path(__file__).resolve().parent.parent
+    env = dict(os.environ, PYTHONPATH="src")
+    out = subprocess.run(
+        [sys.executable, "scripts/engagement_baseline.py", "--out", str(tmp_path), "--quick"],
+        capture_output=True,
+        text=True,
+        env=env,
+        cwd=repo_root,
+        timeout=120,
+    )
+    assert out.returncode == 0, out.stderr
+
+    md = (tmp_path / "engagement_baseline.md").read_text()
+    assert md.splitlines()[0].startswith("# Engagement baseline")
+    assert "worst TEA" in md
+    assert "This baseline is the reference SP2 must beat." in md
+
+    data = json.loads((tmp_path / "engagement_baseline.json").read_text())
+    assert data["pockets"], "expected at least one audited pocket"
+    first = data["pockets"][0]
+    for key in ("name", "tool_diameter", "max_tea_deg", "cap_violations", "stations", "wall_clock_s"):
+        assert key in first, f"missing per-op field {key!r}"
+    assert "total_wall_clock_s" in data
