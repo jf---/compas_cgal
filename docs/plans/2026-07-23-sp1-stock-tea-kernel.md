@@ -596,6 +596,59 @@ git commit -m "feat(stock): certified under-covering arc sweep chains"
 
 ### Task 4: TEA at a station — exact engagement query
 
+> **AMENDMENT (2026-07-23, supersedes the decision-core details below):** the
+> original text below contains two exact-kernel violations — a
+> `CAP_BOUND_DEFLATION` deflated-double cap comparison and a `1e-12`
+> double-angle merge gap. Both are FORBIDDEN by the repo CLAUDE.md
+> "Exact-Kernel Discipline" section. The binding design is:
+>
+> 1. **API contract:** the C++ signature is
+>    `engagement_at(stock, cx, cy, tool_radius, cap_chord_ratio)` where
+>    `cap_chord_ratio = 4·sin²(cap/2)`, dimensionless, in `(0, 4]`, computed
+>    by the CALLER (tests: `4.0 * math.sin(cap/2.0)**2`) and injected exactly
+>    (`Epeck::FT(double)`). Caps are contractually `0 < cap ≤ π`. The
+>    certificate is an exact statement about the exact rational threshold
+>    `T = FT(cap_chord_ratio) · FT(r)²`; the sub-ulp gap to the transcendental
+>    angle is documented API semantics at the parameter, not a correction
+>    constant. NO deflation factor exists anywhere.
+> 2. **Run merging is exact:** abutting sub-arcs share their endpoint one-root
+>    point exactly (same arrangement vertex); merge maximal runs by exact
+>    CoordNT point equality (`GpsPoint operator==`), including the
+>    wrap-around pair. Delete `MERGE_GAP`/1e-12 entirely. Angular sorting for
+>    run assembly uses exact point comparisons (half-plane wrt the rational
+>    horizontal line through the center via `CGAL::compare(y, c_y)`, then
+>    `compare_x` within each half) — `atan2` doubles are used ONLY for the
+>    reported angles, never for adjacency or ordering decisions.
+> 3. **Cap decision is an exact predicate.** For a maximal run with endpoints
+>    p, q (one-root, possibly different roots α, β) on the cutter circle:
+>    - angle(run) > π ⟺ exact orientation test of (center, start, end)
+>      honoring the run's winding; any >π run violates (cap ≤ π). Equality
+>      (collinear/antipodal) means angle = π exactly: violation iff
+>      `cap_chord_ratio < 4` exactly.
+>    - angle ≤ π: violation ⟺ squared chord |pq|² > T, decided exactly.
+>    Both reduce to the sign of `A + B√α + C√β + D√(αβ)` with RATIONAL
+>    A,B,C,D extracted via `Sqrt_extension::a0()/a1()/root()` from the point
+>    coordinates. Implement one exact primitive
+>    `CGAL::Sign sign_mixed_radical(A, B, C, D, alpha, beta)` by repeated
+>    squaring over FT only (group `u = A + B√α`, `w = C + D√α`; the sign of
+>    `u + √β·w` follows from sign(u), sign(w), and the one-root comparison
+>    `u²  vs  β·w²`, which is again a 2-term `A' + B'√α` sign — bottoming out
+>    in rational signs). Cross-root Sqrt_extension ARITHMETIC is never
+>    performed (documented UB); only rational coefficient arithmetic.
+>    Unit-test the primitive directly against high-precision references
+>    (`Fraction`-based cases in Python through a test-only binding
+>    `_sign_mixed_radical(a, b, c, d, alpha, beta)` exposed on the module).
+> 4. **Reporting stays double** (`atan2` for total/max angles) and never
+>    feeds decisions.
+> 5. **Test changes vs the text below:** every `engagement_at(...)` call
+>    passes `4.0 * math.sin(cap / 2.0) ** 2` instead of `cap`; the
+>    `math.radians(181)` case is replaced by `cap = math.pi` (caps are ≤ π;
+>    a ≈π engaged run under chain under-coverage measures strictly below π,
+>    so `not exceeded` holds); add one test asserting `engagement_at` raises
+>    `ValueError` for `cap_chord_ratio <= 0` or `> 4`.
+>
+> Where the text below conflicts with this amendment, the amendment governs.
+
 **Files:**
 - Modify: `src/engagement_2.h`, `src/engagement_2.cpp`
 - Test: `tests/test_stock.py`
@@ -825,6 +878,41 @@ git commit -m "feat(engagement): exact station TEA via GPS intersection rim harv
 ---
 
 ### Task 5: TEA certificate along a motion
+
+> **AMENDMENT (2026-07-23, supersedes conflicting details below):** the
+> certificate must respect the Exact-Kernel Discipline. Redesign:
+>
+> - **Stations decide exactly.** Every station measurement is the Task 4
+>   (amended) exact cap predicate — but evaluated against a GUARDED
+>   threshold: at refinement level with half-spacing `d`, the station test
+>   uses `cap_guarded = cap − guard(d, r)` converted to its chord ratio by
+>   the caller-side rule (C++ receives the guarded ratio per level from its
+>   own conversion — see below).
+> - **The guard is an analytic lemma bound with proof-level slack** (per the
+>   CLAUDE.md analytic-bounds clause):
+>   `guard(d, r) = 2·(4·asin(min(1, d/(2r))) + 2·acos(max(−1, 1 − d/r)))` —
+>   the Task-5 endpoint-drift + newborn-contact bound at an explicit integer
+>   safety factor 2, stated in the derivation comment with the safe failure
+>   direction (a too-large guard causes more refinement or a false violation,
+>   never a false certificate). Double evaluation of the guard is sanctioned
+>   by the slack factor; the STATION test itself remains the exact predicate.
+> - `certify_segment_tea(stock, x0, y0, x1, y1, tool_radius, cap_radians)`
+>   keeps the ergonomic radians signature at the BINDING layer only: the
+>   lambda validates `0 < cap ≤ π`, and per recursion level computes
+>   `guarded_ratio = 4·sin²((cap − guard)/2)` as a double, injected exactly —
+>   this is threshold SELECTION at the declared boundary (documented at the
+>   parameter), after which all station decisions are exact. `guard ≥ cap`
+>   forces refinement (station test unsatisfiable at that spacing) until the
+>   spacing floor, then reports uncertified.
+> - Recursion floor and depth cap stay as below (`STATION_FLOOR_FRACTION`,
+>   depth 24); `max_tea` in the result stays a reported double.
+> - Tests: same three scenarios as below, with `cap` passed in radians to
+>   `certify_segment_tea` (unchanged), and expectations unchanged — plus one
+>   new test: a corridor whose width puts stations exactly at the guarded
+>   boundary must return `cap_certified` False rather than a false pass
+>   (construct by using a cap barely above the corridor's station TEA).
+>
+> Where the text below conflicts, this amendment governs.
 
 **Files:**
 - Modify: `src/engagement_2.h`, `src/engagement_2.cpp`

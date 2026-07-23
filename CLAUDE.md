@@ -34,6 +34,65 @@ This project uses `Exact_predicates_inexact_constructions_kernel` (Epick). All C
 - Storing geometry as `(sx, sy, ex, ey, cx, cy, radius)` raw doubles — use kernel types
 - `std::sqrt(CGAL::to_double(CGAL::squared_distance(a, b)))` — use `approx_distance`
 
+## Exact-Kernel Discipline (Epeck / circle-segment traits) — MANDATORY
+
+The stock/engagement modules run on `Exact_predicates_exact_constructions_kernel`
+with `Gps_circle_segment_traits_2` (one-root point coordinates,
+`CGAL::Sqrt_extension`). CGAL's own doctrine (Developer Manual, Robustness):
+"imprecise calculations can cause wrong or, much worse, mutually contradictory
+decisions." In an exact-constructions kernel there is NO legitimate epsilon,
+deflation factor, ulp-nudge, or `nextafter` in any decision path. C-style
+floating-point precision handling is a defect, always.
+
+### The deciding / reporting split
+- A comparison that changes control flow, output topology, or a certificate is
+  a DECISION: it must be an exact predicate on exact quantities.
+- A number produced for humans (angles, lengths, areas in reports and
+  statistics) is REPORTING: `to_double` is fine there, and reported values
+  must never feed back into decisions.
+
+### Boundary doctrine for doubles
+- Doubles enter exact-land ONCE, at declared API boundaries, by exact
+  injection — every `double` IS a rational; there is no snapping and no
+  tolerance at the seam.
+- Transcendental user intent (an angle cap, a feed angle) is NOT enforced
+  transcendentally. The API contract is an exact rational surrogate (e.g. a
+  squared-chord threshold `4·sin²(cap/2)` computed by the caller as a double
+  and injected exactly). Certificates are exact statements about the exact
+  surrogate; the sub-ulp gap between the surrogate and the transcendental
+  intent is an API semantic, documented at the parameter — never an in-core
+  correction constant.
+
+### One-root numbers (`Sqrt_extension` / CoordNT)
+- Arithmetic (`+ − × /`) requires operands in the SAME extension — the
+  documented precondition is `a.root()==0 or b.root()==0 or a.root()==b.root()`;
+  cross-root arithmetic is undefined behavior. Never write it.
+- Cross-root COMPARISON of arrangement/traits points is exact and supported —
+  use `==`, `compare_x`, `compare_xy` on points instead of double-gap checks.
+- Abutting sub-curves share endpoints EXACTLY (same arrangement vertex).
+  Reconstructing adjacency with double-angle tolerances is a design error:
+  merge by exact endpoint equality.
+- When a needed exact comparison is not a stock predicate (e.g. sign of
+  `A + B√α + C√β + D√(αβ)` with rational A,B,C,D — squared distances and
+  orientations of points from different circles reduce to this), implement it
+  exactly over the rational coefficients (`a0()/a1()/root()` + repeated
+  squaring). Do not fall back to `to_double`.
+
+### Analytic bounds are not precision handling
+- A mathematical lemma bound (Lipschitz/growth bounds over transcendental
+  functions) may be evaluated in doubles ONLY to drive refinement, and only
+  when the lemma's constants carry proof-level slack (integer-factor margins
+  stated in the derivation comment) that dwarfs floating-point evaluation by
+  orders of magnitude. The safe failure direction (more refinement / flag as
+  violation) must be stated. This clause never applies to geometric truth —
+  point membership, adjacency, thresholds — which is predicate territory.
+
+### Kernel primitives first
+- Per the Developer Manual: "use kernel primitives whenever possible."
+  Reach for `CGAL::orientation`, `compare_squared_distance`,
+  `has_smaller_distance_to_point`, traits functors — before writing any
+  coordinate arithmetic of your own.
+
 ## Build & Test
 
 ```bash
