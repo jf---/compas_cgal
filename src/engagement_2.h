@@ -32,6 +32,43 @@ struct EngagementSample {
 EngagementSample engagement_at(const Stock2& stock, double cx, double cy,
                                double tool_radius, double cap_chord_ratio);
 
+// Result of certifying the engagement cap along one linear cutter motion.
+// max_tea is the largest run TEA seen at any station visited -- a REPORTING
+// double, best-effort over the sampled stations, never a decision input.
+// cap_certified is the DECISION: true iff no cutter center on the motion can
+// exceed the cap, established purely from EXACT station verdicts plus the
+// analytic guard (see certify_segment_tea); false means a station violated the
+// guarded cap and the margin could not be closed by refinement. stations counts
+// the sub-intervals examined.
+struct CertifiedTea {
+    double max_tea;
+    bool cap_certified;
+    int stations;
+};
+
+// Certify TEA(P) <= cap_radians for EVERY cutter center P on the segment
+// (x0,y0)->(x1,y1) with tool radius tool_radius, against the frozen stock.
+//
+// Method -- adaptive station sampling with a guarded exact test. Each station is
+// measured by the EXACT engagement_at cap predicate, but against a GUARDED cap:
+// at half-station-spacing d the station threshold is cap - guard(d), where guard
+// is a conservative analytic TEA-growth bound carrying an explicit integer
+// safety factor (derivation in engagement_2.cpp). Every center lies within its
+// half-spacing of the nearer measured station, so two stations both under the
+// guarded cap certify the whole span at TEA <= cap. If the guarded cap is
+// exceeded -- or is non-positive, the spacing being too coarse to admit any
+// guard -- the span is bisected; on reaching the spacing floor with the margin
+// still open the motion is reported uncertified. The verdict is thus EXACT
+// station predicates + the analytic guard ONLY; max_tea is reporting.
+//
+// BOUNDARY (docs/exactness.md, boundary doctrine): cap_radians is validated to
+// (0, pi] and converted to exact chord surrogates here, at the one declared
+// seam; every value crossing into the exact station test is injected exactly.
+// Raises std::invalid_argument if cap_radians lies outside (0, pi].
+CertifiedTea certify_segment_tea(const Stock2& stock, double x0, double y0,
+                                 double x1, double y1, double tool_radius,
+                                 double cap_radians);
+
 // Engagement queries share the _stock_2 nanobind module (NB_STATIC forbids
 // cross-module type sharing), so registration is a hook the module macro in
 // stock_2.cpp calls. It also exposes a test-only `_sign_mixed_radical` binding
