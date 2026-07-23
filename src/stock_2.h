@@ -8,6 +8,8 @@
 // caster in its own (NB_STATIC) translation unit.
 #include <nanobind/stl/vector.h>
 
+#include <utility>
+
 #include <CGAL/Exact_predicates_exact_constructions_kernel.h>
 #include <CGAL/Boolean_set_operations_2.h>
 #include <CGAL/General_polygon_set_2.h>
@@ -48,9 +50,20 @@ public:
     // side lines, so it is not representable in the circle-segment traits).
     void subtract_capsule(double x0, double y0, double x1, double y1, double radius);
 
+    // Remove the tool sweep along the circular guide arc from (sx,sy) to
+    // (ex,ey) about (cx,cy) — cw selects the sweep direction, start == end
+    // means the full circle — as a certified under-covering disk chain.
+    void subtract_arc_sweep(double cx, double cy, double sx, double sy,
+                            double ex, double ey, bool cw, double tool_radius);
+
     const Gps& set() const { return set_; }          // engagement kernel reads this
     Gps& set() { return set_; }
 
 private:
+    // Subtract the union of exact tool disks of the given radius centred at the
+    // listed points — the one chain implementation shared by capsule and arc.
+    void subtract_point_chain(const std::vector<std::pair<double, double>>& centers,
+                              double radius);
+
     Gps set_;
 };
