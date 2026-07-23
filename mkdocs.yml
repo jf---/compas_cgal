@@ -163,6 +163,7 @@ nav:
       - Toolpath Trochoidal MAT: examples/example_toolpath_trochoidal_mat.md
       - Triangulation: examples/example_triangulation.md
   - Design Notes:
+      - Exact-Kernel Discipline: exactness.md
       - Trochoid Chain Stitching: toolpath_trochoid_chain_design.md
       - Tangent Continuity: toolpath_tangent_continuity.md
       - CGAL Primitives Critique: critique_toolpath_cgal_primitives.md

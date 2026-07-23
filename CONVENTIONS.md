@@ -36,6 +36,10 @@ This project uses `Exact_predicates_inexact_constructions_kernel` (Epick). All C
 
 ## Exact-Kernel Discipline (Epeck / circle-segment traits) — MANDATORY
 
+Full doctrine: `docs/exactness.md` (site page, repo-anchored, 12-question
+review checklist) and `docs/dev/exact-cgal-idioms.md` (verbatim reference).
+The rules below are the enforced distillation.
+
 The stock/engagement modules run on `Exact_predicates_exact_constructions_kernel`
 with `Gps_circle_segment_traits_2` (one-root point coordinates,
 `CGAL::Sqrt_extension`). CGAL's own doctrine (Developer Manual, Robustness):
