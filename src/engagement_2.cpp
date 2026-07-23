@@ -6,6 +6,7 @@
 #include <numbers>
 #include <stdexcept>
 #include <tuple>
+#include <utility>
 #include <vector>
 
 #include <CGAL/enum.h>
@@ -142,13 +143,89 @@ struct Arc {
     double span;
 };
 
+// Gap-closure pessimism: absorb every VOID gap between consecutive engaged runs
+// whose angular span does NOT exceed the gap-closure angle gamma (surrogate
+// gap_close_ratio, exact threshold T_gamma = gap_close_ratio * r^2), returning
+// the resulting PESSIMISTIC runs as (ccw_start, ccw_end) endpoint pairs for the
+// cap DECISION. `runs` are the maximal true runs, CCW-sorted, none sharing an
+// endpoint (abutting runs were already merged), so between run[i] and
+// run[(i+1)%n] lies exactly one void gap -- the CCW arc from run[i].ccw_end to
+// run[(i+1)%n].ccw_start (for n == 1 the single gap is the run's complement).
+//
+// EXACTNESS. A gap is itself an arc with exact one-root endpoints; it is absorbed
+// iff its span does not exceed gamma, decided by run_exceeds_cap VERBATIM (the
+// identical exact orientation + squared-chord machinery the run cap uses) -- no
+// angle is ever summed. Absorbing gap[i] merges run[i] and run[(i+1)%n]; a chain
+// of runs joined by absorbed gaps is a SINGLE CCW arc from the chain's first
+// ccw_start to its last ccw_end (this is what keeps the whole construction exact:
+// the pessimistic run is one arc, so the same endpoint predicates apply directly
+// with no per-gap accumulation). Closures chain transitively -- A-gap-B-gap-C with
+// both gaps absorbed becomes one run A.start..C.end -- and because each gap's span
+// is fixed (its endpoints are frozen run endpoints, unmoved by a neighbour's
+// closure) deciding every gap once and then merging connected runs is exactly the
+// iterate-to-fixpoint the brief describes, with no iteration needed.
+//
+// gamma <= pi by contract, so a gap wider than pi (orientation NEGATIVE in
+// run_exceeds_cap) never closes. When EVERY gap is absorbed the rim is
+// pessimistically full: a degenerate start == end pair is returned, the
+// closed-loop case run_exceeds_cap reports as exceeding any cap <= pi.
+std::vector<std::pair<GpsPoint, GpsPoint>>
+pessimistic_runs(const std::vector<Arc>& runs, const FT& cx, const FT& cy,
+                 const FT& gap_close_ratio, const FT& T_gamma)
+{
+    const std::size_t n = runs.size();
+    // A lone run already closing the loop (2*pi, ccw_start == ccw_end) has no gap.
+    if (n == 1 && runs[0].ccw_start == runs[0].ccw_end)
+        return {{runs[0].ccw_start, runs[0].ccw_end}};
+
+    // Decide every gap once. gap_closed[i] absorbs the void from run[i].ccw_end to
+    // run[(i+1)%n].ccw_start. Post-merge these endpoints are distinct, so the gap
+    // never degenerates to run_exceeds_cap's p == q full-loop branch.
+    std::vector<bool> gap_closed(n);
+    std::size_t open_count = 0;
+    for (std::size_t i = 0; i < n; ++i) {
+        const GpsPoint& g_start = runs[i].ccw_end;
+        const GpsPoint& g_end = runs[(i + 1) % n].ccw_start;
+        gap_closed[i] = !run_exceeds_cap(g_start, g_end, cx, cy, gap_close_ratio, T_gamma);
+        if (!gap_closed[i]) ++open_count;
+    }
+
+    // Every gap absorbed => the whole rim is one pessimistic full-circle run.
+    if (open_count == 0)
+        return {{runs[0].ccw_start, runs[0].ccw_start}};
+
+    // At least one open gap breaks the circle. Start a fresh pessimistic run at the
+    // run whose PRECEDING gap is open, then walk all n runs once: an absorbed
+    // preceding gap extends the current chain's end, an open one closes the chain
+    // and starts the next. The open gap preceding the start run is never rejoined,
+    // so no chain spuriously wraps the seam.
+    std::size_t s = 0;
+    while (gap_closed[(s + n - 1) % n]) ++s;   // guaranteed to halt: open_count > 0
+
+    std::vector<std::pair<GpsPoint, GpsPoint>> pess;
+    GpsPoint cur_start = runs[s].ccw_start;
+    GpsPoint cur_end = runs[s].ccw_end;
+    for (std::size_t step = 1; step < n; ++step) {
+        const std::size_t i = (s + step) % n;
+        if (gap_closed[(i + n - 1) % n]) {
+            cur_end = runs[i].ccw_end;               // absorbed gap: extend the chain
+        } else {
+            pess.emplace_back(cur_start, cur_end);   // open gap: close off, restart
+            cur_start = runs[i].ccw_start;
+            cur_end = runs[i].ccw_end;
+        }
+    }
+    pess.emplace_back(cur_start, cur_end);
+    return pess;
+}
+
 // ----------------------------------------------------------------------------
 // Task 5: exact-station TEA cap certificate along a linear cutter motion.
 // ----------------------------------------------------------------------------
 
-// Conservative bound on how far a run's TEA can grow over a center travel `d`
-// (tool radius r, stock frozen): the factor-1 analytic lemma. Two mechanisms
-// move a run's angular extent between two nearby stations.
+// Conservative bound on how far a single run's TEA can grow over a center travel
+// `d` (tool radius r, stock frozen): the factor-1 analytic lemma. Two mechanisms
+// move an existing run's angular extent between two nearby stations.
 //
 //   (a) ENDPOINT DRIFT. Each end of an existing engaged run sits where the rim
 //       crosses a material boundary. Translating the center by d slides such a
@@ -164,7 +241,43 @@ struct Arc {
 // saturate at d = 2r, so GROWTH is monotone -- required so that growth over the
 // (variable) nearest-station distance is bounded by growth over the half-spacing.
 // Evaluated in doubles: an analytic REFINEMENT bound, never a geometric decision
-// (CLAUDE.md, "Analytic bounds are not precision handling").
+// (docs/exactness.md, "Analytic bounds are not precision handling").
+//
+//   (c) RUN MERGE -- and why (a)+(b) suffice with NO merge term. A third event
+//       changes the LARGEST run: two runs separated by a thin void gap on the rim
+//       fuse into one when that gap closes as the cutter advances. This is an O(1)
+//       jump in max_run (by min(|A|, |B|) of the two fused runs) reachable within
+//       an arbitrarily small step -- unbounded by GROWTH, which is O(sqrt d). A
+//       merge term is therefore impossible; the certificate instead removes the
+//       event at the source with GAP-CLOSURE PESSIMISM (see pessimistic_runs):
+//       each station is measured with every void gap of span <= gamma_guard
+//       pre-absorbed, gamma_guard = 2*GROWTH(hs) at half-spacing hs.
+//
+//       CLAIM: with that pre-closure at both stations, no merge completing within
+//       the step is invisible, so max_run at any interior center P is bounded by
+//       the PESSIMISTIC max-run at the nearer station S plus the ordinary (a)+(b)
+//       growth -- the same shape the single-run lemma already certifies.
+//       ARGUMENT (contradiction): suppose the true run through P is the fusion of
+//       runs that were SEPARATE at S, across a gap G still open at S. |P - S| <= hs,
+//       so G closes from its span sigma(S) > 0 to 0 over travel <= hs. G's two ends
+//       are run endpoints; each drifts along the rim by <= 2*asin(min(1, hs/(2r)))
+//       (mechanism a, per end) and a newborn bridging G spans <= 2*acos(max(-1,
+//       1 - hs/r)) (mechanism b), so the most G can shrink over hs is
+//       4*asin(min(1, hs/(2r))) + 2*acos(max(-1, 1 - hs/r)) = GROWTH(hs). Hence
+//       sigma(S) <= GROWTH(hs) <= 2*GROWTH(hs) = gamma_guard -- but a gap of span
+//       <= gamma_guard is ABSORBED in S's pessimistic measurement, i.e. those runs
+//       were ALREADY counted as one at S. That contradicts "separate at S". So the
+//       pessimistic run at S already spans the fused arc, and P differs from it by
+//       (a)+(b) only. The guarded cap subtracts 2*GROWTH(hs) while this accounting
+//       needs only GROWTH(hs): span(run at P) <= pess_max_run(S) + GROWTH(hs) <=
+//       (cap - 2*GROWTH(hs)) + GROWTH(hs) = cap - GROWTH(hs) <= cap. QED.
+//
+//       SAFE FAILURE DIRECTION. gamma_guard = 2*GROWTH(hs) over-closes (only
+//       GROWTH(hs) is strictly required), and closing MORE gaps only enlarges the
+//       pessimistic runs, making the exact station test STRICTER -- forcing extra
+//       refinement or a conservative "uncertified" verdict, never a false pass.
+//       Reported total_tea/max_run_tea stay the TRUE (unclosed) measures, so the
+//       pessimism inflates only the decision, never the numbers shown to humans.
 double tea_growth_bound(double d, double r)
 {
     const double a = 4.0 * std::asin(std::min(1.0, d / (2.0 * r)));
@@ -208,7 +321,9 @@ void certify_recursive(const Stock2& stock, double x0, double y0, double x1,
                        CertifiedTea& acc, int depth)
 {
     const double seg_len = std::hypot(x1 - x0, y1 - y0);
-    const double cap_guarded = cap - tea_guard(0.5 * seg_len, r);
+    const double half_spacing = 0.5 * seg_len;
+    const double guard = tea_guard(half_spacing, r);
+    const double cap_guarded = cap - guard;
     acc.stations += 1;
 
     if (cap_guarded > 0.0) {
@@ -219,8 +334,20 @@ void certify_recursive(const Stock2& stock, double x0, double y0, double x1,
         // (cap_exceeded) is exact; only the threshold SELECTION is analytic.
         const double sg = std::sin(0.5 * cap_guarded);
         const double guarded_ratio = 4.0 * sg * sg;
-        const EngagementSample e0 = engagement_at(stock, x0, y0, r, guarded_ratio);
-        const EngagementSample e1 = engagement_at(stock, x1, y1, r, guarded_ratio);
+        // GAP-CLOSURE GUARD (merge repair). gamma_guard = 2*GROWTH(half_spacing)
+        // == guard (the existing factor-2 tea_guard, reused). Any void gap that
+        // could close within one half-spacing of travel has span <= GROWTH(hs) <=
+        // gamma_guard (endpoints of the gap are run endpoints moving under the same
+        // drift/newborn moduli the growth lemma bounds), so pre-closing every gap
+        // <= gamma_guard makes each station's PESSIMISTIC max-run already account
+        // for any merge completing before the next station -- the growth lemma then
+        // bridges stations with NO merge term (derivation at tea_growth_bound). The
+        // cap min(gamma_guard, pi) keeps the surrogate in [0, 4]; gamma_guard >= pi
+        // closes all sub-pi gaps (maximally pessimistic, the safe direction).
+        const double gg = std::sin(0.5 * std::min(guard, std::numbers::pi));
+        const double gap_close_ratio = 4.0 * gg * gg;
+        const EngagementSample e0 = engagement_at(stock, x0, y0, r, guarded_ratio, gap_close_ratio);
+        const EngagementSample e1 = engagement_at(stock, x1, y1, r, guarded_ratio, gap_close_ratio);
         acc.max_tea = std::max({acc.max_tea, e0.max_run_tea, e1.max_run_tea});
         if (!e0.cap_exceeded && !e1.cap_exceeded)
             return;   // both stations under the guarded cap => whole span certified
@@ -249,12 +376,17 @@ void certify_recursive(const Stock2& stock, double x0, double y0, double x1,
 } // namespace
 
 EngagementSample engagement_at(const Stock2& stock, double cx, double cy,
-                               double tool_radius, double cap_chord_ratio)
+                               double tool_radius, double cap_chord_ratio,
+                               double gap_close_ratio)
 {
     // API-boundary contract: cap_chord_ratio = 4*sin^2(cap/2) with 0 < cap <= pi
     // lies in (0, 4]. Validate the raw double before exact injection (NaN fails).
     if (!(cap_chord_ratio > 0.0 && cap_chord_ratio <= 4.0))
         throw std::invalid_argument("cap_chord_ratio must be in (0, 4] (= 4*sin^2(cap/2), 0 < cap <= pi).");
+    // gap_close_ratio = 4*sin^2(gamma/2) with 0 <= gamma <= pi lies in [0, 4];
+    // 0 (no gap closed) is the default and the pre-pessimism semantics.
+    if (!(gap_close_ratio >= 0.0 && gap_close_ratio <= 4.0))
+        throw std::invalid_argument("gap_close_ratio must be in [0, 4] (= 4*sin^2(gamma/2), 0 <= gamma <= pi).");
 
     EngagementSample out{0.0, 0.0, false};
 
@@ -351,14 +483,32 @@ EngagementSample engagement_at(const Stock2& stock, double cx, double cy,
         runs.pop_back();
     }
 
-    // 4. Report totals (doubles) and certify the cap (exact) per run.
-    const FT ratio_ft(cap_chord_ratio);
-    const FT T = ratio_ft * r_sq;
+    // 4a. REPORTING (doubles) over the TRUE runs -- never gap-closed. total_tea and
+    //     max_run_tea describe the material actually engaged at this station.
     for (const Arc& run : runs) {
         out.total_tea += run.span;
         out.max_run_tea = std::max(out.max_run_tea, run.span);
-        if (run_exceeds_cap(run.ccw_start, run.ccw_end, FT(cx), FT(cy), ratio_ft, T))
+    }
+
+    // 4b. DECISION (exact) over the PESSIMISTIC runs. Void gaps <= gamma are
+    //     absorbed (default gamma == 0 closes none => pessimistic == true runs, so
+    //     the verdict is bit-for-bit the pre-pessimism result). The cap predicate
+    //     runs against the ACTUAL cap threshold T; the gap-closure predicate uses
+    //     the separate gamma threshold T_gamma. A pessimistic run contains its true
+    //     runs, and run_exceeds_cap is monotone in the arc, so testing the
+    //     pessimistic runs alone is conservative -- any true run over the cap forces
+    //     its pessimistic superset over it too.
+    const FT ratio_ft(cap_chord_ratio);
+    const FT T = ratio_ft * r_sq;
+    const FT gap_ratio_ft(gap_close_ratio);
+    const FT T_gamma = gap_ratio_ft * r_sq;
+    const FT cxf(cx), cyf(cy);
+    for (const auto& [start, end] :
+         pessimistic_runs(runs, cxf, cyf, gap_ratio_ft, T_gamma)) {
+        if (run_exceeds_cap(start, end, cxf, cyf, ratio_ft, T)) {
             out.cap_exceeded = true;
+            break;
+        }
     }
     return out;
 }
@@ -393,11 +543,14 @@ void register_engagement(nanobind::module_& m)
     // the caller's exact rational surrogate 4*sin^2(cap/2) for the transcendental
     // cap (docs/exactness.md "Input semantics" and "boundary doctrine").
     m.def("engagement_at",
-          [](const Stock2& stock, double cx, double cy, double tool_radius, double cap_chord_ratio) {
-              EngagementSample s = engagement_at(stock, cx, cy, tool_radius, cap_chord_ratio);
+          [](const Stock2& stock, double cx, double cy, double tool_radius,
+             double cap_chord_ratio, double gap_close_ratio) {
+              EngagementSample s = engagement_at(stock, cx, cy, tool_radius,
+                                                 cap_chord_ratio, gap_close_ratio);
               return std::make_tuple(s.total_tea, s.max_run_tea, s.cap_exceeded);
           },
-          "stock"_a, "cx"_a, "cy"_a, "tool_radius"_a, "cap_chord_ratio"_a);
+          "stock"_a, "cx"_a, "cy"_a, "tool_radius"_a, "cap_chord_ratio"_a,
+          "gap_close_ratio"_a = 0.0);
 
     // Nanobind boundary for the motion certificate: x0..y1, tool_radius and the
     // angular cap enter exact-land inside certify_segment_tea (validation + exact
