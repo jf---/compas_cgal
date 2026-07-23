@@ -238,6 +238,20 @@ def _certify_arc_engagement(stock: Stock, geometry: Arc | Circle, tool_radius: f
     bounds that Euclidean distance, so the uniform guard is conservative. Unlike
     the C++ certifier the station density is FIXED, not adaptively refined.
 
+    MERGE-CLOSURE WIRING (mirror of ``certify_segment_tea``). The station cap
+    decision is measured with ``gap_close_ratio = 4*sin^2(min(gamma_guard, pi)/2)``,
+    where ``gamma_guard == _tea_guard(half spacing) == 2*GROWTH(hs)`` -- the SAME
+    angle subtracted from the cap. This pre-absorbs every void gap that could close
+    within one station step, so a run-merge (two engaged runs fusing across a thin
+    closing rim void -- an O(1) jump in max-run the O(sqrt d) growth lemma cannot
+    bridge) is seen at the station instead of slipping between stations and
+    false-passing. SAFE FAILURE DIRECTION: only ``GROWTH(hs)`` is strictly required
+    to bound the closable span; ``gamma_guard`` uses the factor-2 ``_tea_guard`` and
+    thus OVER-closes, which only enlarges the pessimistic runs -> a stricter test ->
+    at most an extra (conservative) refusal, never a false certificate. The reported
+    ``max_tea`` is the TRUE (unmerged) engaged-run measure regardless of the closure
+    (the deciding/reporting split lives inside ``engagement_at``).
+
     Args:
         stock: The current (frozen for this measurement) stock.
         geometry: The ``Arc`` or ``Circle`` traced by the tool center.
@@ -268,22 +282,35 @@ def _certify_arc_engagement(stock: Stock, geometry: Arc | Circle, tool_radius: f
     n_stations = len(params)
 
     # Uniform spacing -> a single guard for every interior center on the motion.
-    cap_guarded = tea_cap - _tea_guard(0.5 * spacing, tool_radius)
+    # gamma_guard == 2*GROWTH(hs): TEA_GUARD_SAFETY_FACTOR == 2, so _tea_guard already
+    # IS 2*GROWTH -- the merge-closure angle is the SAME quantity subtracted from the cap.
+    gamma_guard = _tea_guard(0.5 * spacing, tool_radius)
+    cap_guarded = tea_cap - gamma_guard
     if cap_guarded > 0.0:
         ratio = _cap_chord_ratio(cap_guarded)
+        # Pre-absorb every void gap of span <= gamma_guard so a run-merge completing
+        # within a station step is never invisible to the cap decision. gamma_guard
+        # bounds a gap's closable span (its endpoints are run endpoints drifting under
+        # the same growth moduli), so each station's PESSIMISTIC max-run already
+        # accounts for any merge before the next station -- the growth lemma then
+        # bridges stations with no merge term. Mirrors certify_segment_tea's
+        # gap_close_ratio = 4*sin^2(min(gamma_guard, pi)/2) (src/engagement_2.cpp).
+        gap_close_ratio = _cap_chord_ratio(min(gamma_guard, math.pi))
         cap_certified = True
     else:
         # No positive guarded cap exists at this spacing: unclosable at the fixed
         # density -> uncertified. Measure with the full-cap ratio only to report
-        # max_tea; its per-station exceeded flag is intentionally not consulted.
+        # max_tea; its per-station exceeded flag is intentionally not consulted. No
+        # pessimism (mirrors the C++ guard>=cap branch passing gap_close_ratio 0.0).
         ratio = _cap_chord_ratio(tea_cap)
+        gap_close_ratio = 0.0
         cap_certified = False
 
     raw = stock.raw
     max_tea = 0.0
     for t in params:
         p = geometry.point_at(t)
-        _total_tea, max_run_tea, exceeded = _stock_2.engagement_at(raw, float(p[0]), float(p[1]), tool_radius, ratio)
+        _total_tea, max_run_tea, exceeded = _stock_2.engagement_at(raw, float(p[0]), float(p[1]), tool_radius, ratio, gap_close_ratio)
         if max_run_tea > max_tea:
             max_tea = max_run_tea
         if cap_certified and exceeded:
