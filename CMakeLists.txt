@@ -238,6 +238,7 @@ add_nanobind_module(_triangulation src/triangulation.cpp)
 add_nanobind_module(_subdivision src/subdivision.cpp)
 add_nanobind_module(_polylines src/polylines.cpp)
 add_nanobind_module(_toolpath src/toolpath.cpp)
+add_nanobind_module(_stock_2 "src/stock_2.cpp;src/engagement_2.cpp")
 
 add_nanobind_module(_geodesics src/geodesics.cpp)
 add_nanobind_module(_isolines src/isolines.cpp)
