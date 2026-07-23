@@ -19,46 +19,49 @@ using CoordNT = GpsPoint::CoordNT;   // Sqrt_extension<FT, FT>: a0 + a1*sqrt(roo
 // ----------------------------------------------------------------------------
 // Exact sign of a mixed two-radical form   A + B*sqrt(alpha) + C*sqrt(beta)
 //                                            + D*sqrt(alpha*beta)
-// with RATIONAL A, B, C, D and RATIONAL alpha, beta >= 0. Every arithmetic
-// operation is on FT (rationals) only: we never form cross-root Sqrt_extension
-// products (documented UB — the extension arithmetic precondition is a shared
-// root). The exact cap predicate reduces to this: orientation and squared-chord
-// tests of two cutter-circle points p, q whose coordinates live in Q(sqrt alpha)
-// and Q(sqrt beta) respectively expand to exactly this shape.
+// with RATIONAL A, B, C, D and RATIONAL alpha, beta >= 0. The exact cap
+// predicate reduces to this: orientation and squared-chord tests of two
+// cutter-circle points p, q whose coordinates live in Q(sqrt alpha) and
+// Q(sqrt beta) respectively expand to exactly this shape.
 //
-// sign(A + B*sqrt(alpha)), the single-radical bottom of the recursion.
-CGAL::Sign sign_two_term(const FT& A, const FT& B, const FT& alpha)
-{
-    const CGAL::Sign sA = CGAL::sign(A);
-    const CGAL::Sign sB = CGAL::sign(B);
-    if (sB == CGAL::ZERO) return sA;            // A
-    if (CGAL::is_zero(alpha)) return sA;        // B*sqrt(0) = 0  ->  A
-    if (sA == CGAL::ZERO) return sB;            // B*sqrt(alpha), alpha > 0
-    if (sA == sB) return sA;                    // like signs add
-    // Opposite signs: sign(A + B*sqrt(alpha)) = sign(A) * sign(A^2 - B^2*alpha).
-    const CGAL::Sign s = CGAL::sign(A * A - B * B * alpha);
-    return (sA == CGAL::POSITIVE) ? s : CGAL::opposite(s);
-}
-
+// Idiom (CLAUDE.md "Numeric comparison is the exact-kernel idiom"): compare at
+// the NUMBER-TYPE level. Sqrt_extension is RealEmbeddable, so CGAL::sign and
+// same-root CGAL::compare (and same-root +/-/*) are exact -- we build the
+// derived quantities INSIDE one extension Q(sqrt alpha) and let CGAL decide,
+// rather than hand-rolling a bignum squaring routine. Cross-root Sqrt_extension
+// arithmetic (documented UB) is never formed: sqrt(beta) only ever appears as a
+// squared factor `beta` (a rational), and the degenerate roots are folded away
+// with exact FT compares before any extension is built.
 CGAL::Sign sign_mixed_radical(const FT& A, const FT& B, const FT& C, const FT& D,
                               const FT& alpha, const FT& beta)
 {
-    if (CGAL::is_zero(beta))                    // sqrt(beta) = sqrt(alpha*beta) = 0
-        return sign_two_term(A, B, alpha);
+    const bool alpha_ext = !CGAL::is_zero(alpha);
+    const bool beta_ext = !CGAL::is_zero(beta);
 
-    // Group over the shared root alpha:  u = A + B*sqrt(alpha),
-    // w = C + D*sqrt(alpha), so the form is u + sqrt(beta)*w.
-    const CGAL::Sign su = sign_two_term(A, B, alpha);
-    const CGAL::Sign sw = sign_two_term(C, D, alpha);
-    if (su == sw) return su;                    // both zero -> 0; like signs add
-    if (su == CGAL::ZERO) return sw;            // sqrt(beta)*w, beta > 0
-    if (sw == CGAL::ZERO) return su;            // u
-    // Opposite non-zero signs: sign(u + sqrt(beta)*w) = sign(u)*sign(u^2 - beta*w^2).
-    // u^2 - beta*w^2 is itself a single-radical form A' + B'*sqrt(alpha).
-    const FT Ap = A * A + B * B * alpha - beta * (C * C + D * D * alpha);
-    const FT Bp = 2 * A * B - 2 * beta * C * D;
-    const CGAL::Sign s = sign_two_term(Ap, Bp, alpha);
-    return (su == CGAL::POSITIVE) ? s : CGAL::opposite(s);
+    // Root degeneracies fold to a single same-root value -> one CGAL::sign.
+    if (!alpha_ext && !beta_ext) return CGAL::sign(A);              // fully rational
+    if (!beta_ext) return CGAL::sign(CoordNT(A, B, alpha));         // A + B*sqrt(alpha)
+    if (!alpha_ext) return CGAL::sign(CoordNT(A, C, beta));         // A + C*sqrt(beta)
+    if (alpha == beta)                                             // sqrt(alpha*beta) = alpha
+        return CGAL::sign(CoordNT(A + D * alpha, B + C, alpha));    // (A+D*alpha) + (B+C)*sqrt(alpha)
+
+    // General case: group over the shared root alpha into u, w in Q(sqrt alpha),
+    // so the form is u + sqrt(beta)*w. Its sign follows from sign(u), sign(w),
+    // and -- for opposite non-zero signs -- which magnitude dominates, decided
+    // exactly by compare(u^2, beta*w^2) (all same-root, so beta enters as the
+    // rational CoordNT(beta), never as sqrt(beta)).
+    const CoordNT u(A, B, alpha);
+    const CoordNT w(C, D, alpha);
+    const CGAL::Sign su = CGAL::sign(u);
+    const CGAL::Sign sw = CGAL::sign(w);
+    if (sw == CGAL::ZERO) return su;                 // sqrt(beta)*w = 0 -> u
+    if (su == CGAL::ZERO) return sw;                 // u = 0 -> sqrt(beta)*w, beta > 0
+    if (su == sw) return su;                         // like signs add
+    switch (CGAL::compare(u * u, w * w * CoordNT(beta))) {
+        case CGAL::LARGER:  return su;               // |u| dominates
+        case CGAL::SMALLER: return sw;               // sqrt(beta)*|w| dominates
+        default:            return CGAL::ZERO;        // equal magnitude, opposite sign
+    }
 }
 
 // A cutter-circle point in rational coordinates over its single root:
