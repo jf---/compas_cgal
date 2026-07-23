@@ -641,11 +641,15 @@ git commit -m "feat(stock): certified under-covering arc sweep chains"
 > 4. **Reporting stays double** (`atan2` for total/max angles) and never
 >    feeds decisions.
 > 5. **Test changes vs the text below:** every `engagement_at(...)` call
->    passes `4.0 * math.sin(cap / 2.0) ** 2` instead of `cap`; the
->    `math.radians(181)` case is replaced by `cap = math.pi` (caps are ≤ π;
->    a ≈π engaged run under chain under-coverage measures strictly below π,
->    so `not exceeded` holds); add one test asserting `engagement_at` raises
->    `ValueError` for `cap_chord_ratio <= 0` or `> 4`.
+>    passes `4.0 * math.sin(cap / 2.0) ** 2` instead of `cap`; add one test
+>    asserting `engagement_at` raises `ValueError` for
+>    `cap_chord_ratio <= 0` or `> 4`.
+>    *(Corrected during implementation: the original premise here — that
+>    the half-plane run measures below π under chain under-coverage — was
+>    geometrically inverted; under-coverage leaves EXTRA material, so that
+>    run measures π+slack and exceeds every cap ≤ π. The landed tests use
+>    the half-plane case for the >π orientation branch and a partial band
+>    (~106° run) to exercise the chord predicate in both directions.)*
 >
 > Where the text below conflicts with this amendment, the amendment governs.
 
