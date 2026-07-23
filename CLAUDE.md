@@ -87,6 +87,18 @@ floating-point precision handling is a defect, always.
   violation) must be stated. This clause never applies to geometric truth —
   point membership, adjacency, thresholds — which is predicate territory.
 
+### Numeric comparison is the exact-kernel idiom
+- Comparisons are made at the NUMBER-TYPE level with CGAL's comparison
+  machinery: `CGAL::sign`, `CGAL::compare`, `Comparison_result`
+  (SMALLER/EQUAL/LARGER) — never `operator<` on `to_double` values, never
+  re-deriving what `Real_embeddable_traits` already provides.
+- `Sqrt_extension` is RealEmbeddable: `CGAL::sign` and same-root
+  `CGAL::compare` (plus same-root `+ − ×`) are exact and supported — build
+  derived quantities INSIDE one extension and compare there. A mixed-radical
+  sign (`u + √β·w` with u, w ∈ ℚ(√α)) decomposes into `sign(u)`, `sign(w)`,
+  and `compare(u², β·w²)` — three supported exact calls, not a hand-rolled
+  bignum routine.
+
 ### Kernel primitives first
 - Per the Developer Manual: "use kernel primitives whenever possible."
   Reach for `CGAL::orientation`, `compare_squared_distance`,
