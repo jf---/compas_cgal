@@ -10,6 +10,12 @@ class Stock2;
 // the largest maximal contiguous engaged run. cap_exceeded is the only DECISION
 // carried out here and it is decided EXACTLY on the exact arrangement, never
 // from these reported doubles (see engagement_2.cpp).
+//
+// DECIDING / REPORTING SPLIT under gap-closure pessimism (see engagement_at):
+// total_tea and max_run_tea always describe the TRUE runs (no gap closed);
+// cap_exceeded is decided on the PESSIMISTIC runs (void gaps <= gap_close_ratio
+// pre-absorbed). With the default gap_close_ratio == 0 the two coincide and
+// every field is bit-for-bit the pre-pessimism result.
 struct EngagementSample {
     double total_tea;
     double max_run_tea;
@@ -29,8 +35,23 @@ struct EngagementSample {
 // exact rational threshold T = FT(cap_chord_ratio) * FT(tool_radius)^2; the
 // sub-ulp gap between this rational surrogate and the transcendental angle cap
 // is API semantics documented here, NOT an in-core correction constant.
+//
+// gap_close_ratio is the analogous squared-chord surrogate 4*sin^2(gamma/2) for
+// a gap-closure angle gamma in [0, pi] (so gap_close_ratio lies in [0, 4]; out
+// of range raises std::invalid_argument). GAP-CLOSURE PESSIMISM: before deciding
+// the cap, every VOID gap between consecutive engaged runs whose angular span is
+// <= gamma is absorbed, merging its two bounding runs (chained to a fixpoint) so
+// the cap DECISION sees the PESSIMISTIC runs. This closes the certificate's merge
+// hole: two runs a hair of void apart at a station are treated as already merged,
+// so a merge that completes within a certifier step cannot slip past unseen. The
+// closure test is the SAME exact orientation+chord predicate used for runs (a
+// gap absorbed iff its span does not exceed gamma), applied to the gap's exact
+// one-root endpoints -- no angle sums. The default 0.0 (gamma = 0) closes no gap:
+// pessimistic runs == true runs, and every result is the pre-pessimism value
+// bit-for-bit. Reported total_tea/max_run_tea always describe the TRUE runs.
 EngagementSample engagement_at(const Stock2& stock, double cx, double cy,
-                               double tool_radius, double cap_chord_ratio);
+                               double tool_radius, double cap_chord_ratio,
+                               double gap_close_ratio = 0.0);
 
 // Result of certifying the engagement cap along one linear cutter motion.
 // max_tea is the largest run TEA seen at any station visited -- a REPORTING

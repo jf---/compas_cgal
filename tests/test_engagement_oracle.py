@@ -65,6 +65,12 @@ CAP_CHORD_RATIO = 4.0 * math.sin(CAP / 2.0) ** 2
 # engaged arcs are active beyond the single-run 4*H/r term.
 CHAIN_SLACK_TEA = 0.01
 
+# Fraction of `tol` the worst observed exact-vs-oracle gap is pinned under, so an
+# erosion of the agreement headroom (observed ~0.80) surfaces as a failure rather
+# than silently consuming the raw tolerance. Not a geometric tolerance -- a
+# regression sentinel on the margin between observation and the derived bound.
+TEA_AGREEMENT_HEADROOM = 0.90
+
 # Pure numerical floors (NOT geometric tolerances): guard a degenerate
 # zero-length segment against divide-by-zero, and give the abs() float
 # comparison of the growth bound a few ulp of slack.
@@ -129,12 +135,19 @@ def test_tea_agrees_with_raster_oracle(seed: int) -> None:
     * Rim quantisation ``2*pi/N_ANGLE``: the oracle samples the rim at that
       spacing (~4.4 mrad at N_ANGLE=1440), so its estimate is granular to one
       step regardless of geometry.
-    * Boundary-cell ambiguity ``4*H/r``: at each end of an engaged arc, whether a
-      rim sample reads material is decided by an ``H``-sized cell. Both the
-      sample's cell-centre position and the rasterised subtraction boundary
-      quantise by up to ``H``, leaving the true arc endpoint uncertain by up to
-      ``2*H/r`` rad (a conservative bound). An engaged arc has two endpoints, so
-      up to ``4*H/r`` rad (0.16 rad at H=0.02, r=0.5) -- the dominant term.
+    * Boundary-cell ambiguity ``4*H/r`` (a TRANSVERSAL / generic-position budget):
+      at each end of an engaged arc that crosses a rasterised material boundary at
+      a nonzero angle, whether a rim sample reads material is decided by an
+      ``H``-sized cell. Both the sample's cell-centre position and the rasterised
+      subtraction boundary quantise by up to ``H``, leaving the true arc endpoint
+      uncertain by up to ``2*H/r`` rad; an engaged arc has two endpoints, so up to
+      ``4*H/r`` rad (0.16 rad at H=0.02, r=0.5) -- the dominant term. This is a
+      transversal-crossing bound. GRAZING INCIDENCE -- a material boundary running
+      nearly tangent to the rim -- is the KNOWN gap it does not cover: there a
+      whole ``O(sqrt(H/r))`` run of rim samples flips together, an error that can
+      exceed ``4*H/r``. This suite samples random probe centres, so grazing
+      alignments are measure-zero and do not arise; ``CHAIN_SLACK_TEA`` below
+      carries what residual multi-run quantisation the random draws do produce.
     * Chain under-coverage + multi-run residual ``CHAIN_SLACK_TEA``: the exact
       kernel's subtraction chains under-cover the ideal sweep by
       <= CHAIN_SLACK_FRACTION * r = 1e-4 * r (leaving slightly more material, so
@@ -142,6 +155,13 @@ def test_tea_agrees_with_raster_oracle(seed: int) -> None:
       the single-run boundary budget; ``CHAIN_SLACK_TEA = 0.01`` rad absorbs both.
 
     => ``tol = 2*pi/N_ANGLE + 4*H/r + CHAIN_SLACK_TEA``.
+
+    HEADROOM PIN. The largest exact-vs-oracle disagreement observed over this
+    suite is ``~0.80 * tol`` (measured 2026-07-23 on the post-merge-repair build,
+    all 8 seeds). ``TEA_AGREEMENT_HEADROOM`` asserts every probe stays under
+    ``0.90 * tol`` so a regression that erodes the ~20% headroom -- e.g. a grazing
+    alignment creeping in, or the transversal budget being consumed -- surfaces
+    here instead of silently riding the raw ``tol`` bound.
     """
     rng = np.random.default_rng(seed)
     exact = Stock(SQUARE)
@@ -153,10 +173,14 @@ def test_tea_agrees_with_raster_oracle(seed: int) -> None:
         raster.subtract_capsule(x0, y0, x1, y1, r)
     r_tool = 0.5
     tol = 2 * math.pi / N_ANGLE + 4 * H / r_tool + CHAIN_SLACK_TEA
+    max_gap = 0.0
     for _ in range(40):
         cx, cy = rng.uniform(1.0, 9.0, 2)
         total, _, _ = _stock_2.engagement_at(exact.raw, cx, cy, r_tool, CAP_CHORD_RATIO)
-        assert total == pytest.approx(raster.tea_at(cx, cy, r_tool), abs=tol)
+        oracle = raster.tea_at(cx, cy, r_tool)
+        assert total == pytest.approx(oracle, abs=tol)
+        max_gap = max(max_gap, abs(total - oracle))
+    assert max_gap <= TEA_AGREEMENT_HEADROOM * tol  # ~20% headroom pinned (observed ~0.80)
 
 
 def test_growth_bound_sound() -> None:
@@ -185,3 +209,116 @@ def test_growth_bound_sound() -> None:
         t1, _, _ = _stock_2.engagement_at(exact.raw, cx + d * math.cos(theta), cy + d * math.sin(theta), r, CAP_CHORD_RATIO)
         bound = 4 * math.asin(min(1.0, d / (2 * r))) + 2 * math.acos(max(-1.0, 1.0 - d / r))
         assert abs(t1 - t0) <= bound + _FLOAT_SLACK
+
+
+# --------------------------------------------------------------------------- #
+# Run-merge discontinuity and its gap-closure repair (Task-5 certificate hole) #
+# --------------------------------------------------------------------------- #
+
+# Merge witness stock: lower half-plane (y <= 5) with a thin central void slot
+# biting the rim bottom. A radius-0.5 cutter at cy = 5 engages the lower
+# semicircle; the slot splits it into two runs, which MERGE into one ~pi run as
+# the centre slides in x and the slot leaves the rim near cx ~ 4.71. There the
+# growth lemma (bounded above by test_growth_bound_sound for a SINGLE run) is
+# violated by an O(1) jump in max_run -- the hole the certificate had to close.
+_MERGE_LOWER_HALF = np.array([[0, 0, 0], [10, 0, 0], [10, 5, 0], [0, 5, 0]], dtype=np.float64)
+_MERGE_LOCUS_X = 4.7125  # cx where the two runs fuse (max_run jumps ~pi/2 -> pi)
+_MERGE_R = 0.5
+
+
+def _merge_stock():
+    stock = _stock_2.Stock2(_MERGE_LOWER_HALF, [])
+    stock.subtract_capsule(5.0, 4.30, 5.0, 4.53, 0.05)
+    return stock
+
+
+def _cap_ratio(cap: float) -> float:
+    """Caller-side exact squared-chord surrogate 4*sin^2(cap/2) for an angular cap/gamma."""
+    return 4.0 * math.sin(cap / 2.0) ** 2
+
+
+def _growth_bound(d: float, r: float) -> float:
+    """Raw factor-1 TEA-growth lemma (mirrors tea_growth_bound in engagement_2.cpp)."""
+    return 4.0 * math.asin(min(1.0, d / (2.0 * r))) + 2.0 * math.acos(max(-1.0, 1.0 - d / r))
+
+
+def _pess_max_run(stock, cx: float, r: float, gamma_ratio: float, iters: int = 34) -> float:
+    """Largest PESSIMISTIC run angle at a station (void gaps <= gamma absorbed).
+
+    The reported ``max_run`` stays the TRUE (unclosed) measure by design, so the
+    pessimistic span is recovered through the exact DECISION: bisect the cap for the
+    ``cap_exceeded`` flip at ``gap_close_ratio = gamma_ratio``. Saturates at ``pi`` --
+    a run ``>= pi`` exceeds every cap ``<= pi`` (the exact orientation branch), so a
+    merged (``~pi``) pessimistic run reads as ``pi`` here.
+    """
+    if _stock_2.engagement_at(stock, cx, 5.0, r, _cap_ratio(math.pi), gamma_ratio)[2]:
+        return math.pi
+    lo, hi = 1e-4, math.pi
+    for _ in range(iters):
+        mid = 0.5 * (lo + hi)
+        if _stock_2.engagement_at(stock, cx, 5.0, r, _cap_ratio(mid), gamma_ratio)[2]:
+            lo = mid  # exceeded -> pessimistic max_run > mid
+        else:
+            hi = mid
+    return 0.5 * (lo + hi)
+
+
+def test_merge_jump_exceeds_growth_lemma() -> None:
+    """The run-merge discontinuity is real: raw max_run jumps by more than the growth
+    lemma allows.
+
+    An INVERTED assertion -- it documents the HOLE, not the fix. Sweeping the cutter
+    centre across the merge locus with raw engagement (``gap_close_ratio = 0``), the
+    largest step-to-step change in ``max_run`` is an O(1) jump (~pi/2 rad: two ~pi/2
+    runs fusing into one ~pi run) even though the step ``d`` is tiny. The raw lemma
+    bound ``4*asin(min(1,d/2r)) + 2*acos(max(-1,1-d/r))`` is O(sqrt d) and cannot cover
+    it, so a certificate bridging stations by that lemma alone (the pre-repair Task-5
+    design) is unsound across merges. The repair removes the event at the station
+    (test_pessimistic_max_run_growth_is_sound;
+    tests/test_stock.py::test_certificate_refuses_merge_over_cap).
+
+    The geometry is fixed, not tuned to the outcome: if this jump ever fell within the
+    bound the merge hole would be illusory and the whole repair suspect -- a BLOCKED
+    signal, not something to soften.
+    """
+    stock = _merge_stock()
+    r = _MERGE_R
+    step = 0.005
+    xs = [4.700 + i * step for i in range(6)]  # 4.700 .. 4.725, straddling the merge ~4.7125
+    runs = [_stock_2.engagement_at(stock, cx, 5.0, r, CAP_CHORD_RATIO)[1] for cx in xs]
+    max_jump = max(abs(runs[i + 1] - runs[i]) for i in range(len(runs) - 1))
+    bound = _growth_bound(step, r)
+    assert max_jump > bound  # ~1.04 rad jump dwarfs the ~0.30 rad O(sqrt d) lemma bound
+    assert max_jump > math.radians(45.0)  # a genuine O(1) merge, not boundary quantisation
+
+
+def test_pessimistic_max_run_growth_is_sound() -> None:
+    """The quantity the repaired certificate NOW relies on -- the PESSIMISTIC max_run
+    at a station -- grows within the raw lemma across the merge, where the true max_run
+    does not.
+
+    For probe pairs straddling the merge locus at spacing ``d``, the certifier measures
+    each station with void gaps ``<= gamma = 2*GROWTH(d/2)`` pre-absorbed. Both probes
+    then see the closing gap as already shut, report the merged ~pi run, and the
+    pessimistic max_run changes by ~0 across the pair -- inside the raw lemma bound. The
+    TRUE max_run over the same pair jumps by ~pi/2 (the discontinuity of
+    test_merge_jump_exceeds_growth_lemma), so the lemma bounds this quantity only AFTER
+    the pessimism is applied. Sound at safety factor 1 (raw lemma, no guard margin),
+    mirroring test_growth_bound_sound. If the pessimistic delta ever exceeded the bound,
+    the certificate's new load-bearing quantity would itself be unbounded -- report
+    BLOCKED, do not widen the bound.
+    """
+    stock = _merge_stock()
+    r, m = _MERGE_R, _MERGE_LOCUS_X
+    for d in (0.01, 0.02, 0.04):
+        gamma = min(2.0 * _growth_bound(0.5 * d, r), math.pi)  # certifier's guard for hs = d/2
+        gr = _cap_ratio(gamma)
+        a, b = m - 0.5 * d, m + 0.5 * d
+        pa = _pess_max_run(stock, a, r, gr)
+        pb = _pess_max_run(stock, b, r, gr)
+        bound = _growth_bound(d, r)
+        assert abs(pa - pb) <= bound + _FLOAT_SLACK  # pessimism keeps the growth lemma-bounded
+        # nonvacuous: the TRUE max_run across the SAME pair exceeds the lemma (the jump absorbed)
+        ta = _stock_2.engagement_at(stock, a, 5.0, r, CAP_CHORD_RATIO)[1]
+        tb = _stock_2.engagement_at(stock, b, 5.0, r, CAP_CHORD_RATIO)[1]
+        assert abs(ta - tb) > bound

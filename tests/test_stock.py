@@ -379,3 +379,107 @@ def test_certify_flags_unclosable_guard_margin():
     assert cap <= math.pi
     _, ok, _ = _stock_2.certify_segment_tea(stock, 3.0, y, 7.0, y, r, cap)
     assert not ok
+
+
+# --------------------------------------------------------------------------- #
+# gap-closure pessimism: the certificate's run-merge repair                    #
+# --------------------------------------------------------------------------- #
+
+# Stock = lower half-plane (y <= 5) with a thin vertical void slot at x = 5 that
+# bites the cutter rim's bottom. A cutter of radius 0.5 centred at cy = 5 engages
+# the lower semicircle; the slot splits that engaged region into two maximal runs
+# separated by a thin void gap. Sliding the centre in x slides the slot off the
+# rim -- the two runs MERGE into one ~pi run when it no longer bites -- so max_run
+# jumps discontinuously by O(1) within an arbitrarily small step. That jump is the
+# configuration the O(sqrt d) growth lemma cannot bridge (demonstrated in
+# tests/test_engagement_oracle.py::test_merge_jump_exceeds_growth_lemma) and that
+# gap-closure pessimism repairs.
+LOWER_HALF = np.array([[0, 0, 0], [10, 0, 0], [10, 5, 0], [0, 5, 0]], dtype=np.float64)
+
+
+def _slotted_lower_half():
+    """Lower half-plane with a thin central void slot reaching the rim bottom."""
+    stock = _stock_2.Stock2(LOWER_HALF, [])
+    stock.subtract_capsule(5.0, 4.30, 5.0, 4.53, 0.05)
+    return stock
+
+
+def test_gap_closure_flips_cap_decision():
+    """Pessimism unit test: absorbing a thin void gap between two engaged runs flips
+    the exact cap decision.
+
+    At cx = 5 the central slot splits the lower semicircle into two symmetric ~84
+    deg runs separated by a ~11 deg void gap. With gap_close_ratio = 0 the cap
+    decision sees only the larger single run (~84 deg); closing the gap (gamma = 30
+    deg, comfortably above the ~11 deg gap) absorbs it into one ~180 deg pessimistic
+    run. For a cap BETWEEN the single-run and merged spans the verdict flips
+    False -> True -- the exact mechanism that lets a station account for a merge that
+    could complete before the next station. Reported max_run stays the TRUE (unclosed)
+    measure regardless of gamma (the deciding/reporting split).
+    """
+    stock = _slotted_lower_half()
+    r, cx, cy = 0.5, 5.0, 5.0
+    total, max_run, _ = _stock_2.engagement_at(stock, cx, cy, r, cap_ratio(math.pi))
+    assert total == pytest.approx(2.0 * max_run, rel=0.05)  # two symmetric runs
+    assert max_run < math.radians(90.0)
+
+    cap = math.radians(135.0)  # between the single run (~84) and the merged span (~180)
+    assert max_run < cap
+    _, max_open, exceeded_open = _stock_2.engagement_at(stock, cx, cy, r, cap_ratio(cap), 0.0)
+    assert not exceeded_open  # gap open: largest run ~84 deg < 135 deg cap
+
+    gamma = cap_ratio(math.radians(30.0))  # 30 deg > the ~11 deg gap -> absorbed
+    _, max_closed, exceeded_closed = _stock_2.engagement_at(stock, cx, cy, r, cap_ratio(cap), gamma)
+    assert exceeded_closed  # gap closed: merged ~180 deg pessimistic run > 135 deg cap
+    # deciding/reporting split: gamma changes only the DECISION, never reported max_run
+    assert max_closed == pytest.approx(max_open, abs=1e-9)
+
+
+def test_certificate_refuses_merge_over_cap():
+    """Load-bearing soundness: a linear motion crossing the run-merge locus with a cap
+    below the merged span is NOT certified.
+
+    The cutter centre sweeps in x across the slot's disengagement (cx ~ 4.71), where
+    the two engaged runs fuse into one ~180 deg (== pi) run. A station in the merged
+    stretch genuinely exceeds a 150 deg cap while a split station further along is
+    under it, so the guarded stations straddle the O(1) merge jump. Gap-closure
+    pessimism pre-absorbs the closing gap at the stations, so the merge is seen and
+    certify_segment_tea reports the motion uncertified -- the certificate the pre-repair
+    growth lemma could unsoundly pass (see the jump vs bound in
+    test_engagement_oracle.py::test_merge_jump_exceeds_growth_lemma).
+    """
+    stock = _slotted_lower_half()
+    r, cap = 0.5, math.radians(150.0)
+    # the merged stretch (cx <= ~4.71) holds a full pi run -- a genuine > 150 deg violation
+    _, merged_run, _ = _stock_2.engagement_at(stock, 4.68, 5.0, r, cap_ratio(math.pi))
+    assert merged_run > cap
+    # a split station further along is under the cap (two runs, largest < 150 deg)
+    _, split_run, _ = _stock_2.engagement_at(stock, 4.85, 5.0, r, cap_ratio(math.pi))
+    assert split_run < cap
+
+    _, certified, stations = _stock_2.certify_segment_tea(stock, 4.65, 5.0, 4.85, 5.0, r, cap)
+    assert not certified
+    assert stations > 2  # refinement engaged, not a single-shot verdict
+
+
+def test_gap_close_ratio_zero_preserves_true_verdict():
+    """gap_close_ratio = 0 (the default) closes no gap: the cap decision is the true
+    per-run verdict, bit-for-bit the pre-pessimism result. Explicit 0.0 and the default
+    must agree, and both must see only the true ~84 deg runs (not exceeded at 135 deg)."""
+    stock = _slotted_lower_half()
+    r, cap = 0.5, cap_ratio(math.radians(135.0))
+    default = _stock_2.engagement_at(stock, 5.0, 5.0, r, cap)
+    explicit_zero = _stock_2.engagement_at(stock, 5.0, 5.0, r, cap, 0.0)
+    assert default == explicit_zero
+    assert not default[2]  # true largest run ~84 deg < 135 deg cap
+
+
+def test_gap_close_ratio_rejects_out_of_range():
+    """gap_close_ratio is the chord surrogate 4*sin^2(gamma/2) for 0 <= gamma <= pi, so
+    it must lie in [0, 4]; values outside raise (validated before exact injection)."""
+    stock = _slotted_lower_half()
+    r, cap = 0.5, cap_ratio(math.pi)
+    with pytest.raises(ValueError):
+        _stock_2.engagement_at(stock, 5.0, 5.0, r, cap, -1e-9)
+    with pytest.raises(ValueError):
+        _stock_2.engagement_at(stock, 5.0, 5.0, r, cap, 4.0 + 1e-9)
