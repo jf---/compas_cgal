@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 import pytest
 
@@ -60,3 +62,37 @@ def test_subtract_degenerate_capsule_is_disk():
     stock.subtract_capsule(5.0, 5.0, 5.0, 5.0, 1.0)
     assert not stock.contains(5.5, 5.0)
     assert stock.contains(6.5, 5.0)
+
+
+def test_subtract_arc_sweep_full_circle():
+    stock = _stock_2.Stock2(SQUARE, [])
+    # tool r=0.4 swept around full circle of radius 2 centered at (5,5)
+    stock.subtract_arc_sweep(5.0, 5.0, 7.0, 5.0, 7.0, 5.0, True, 0.4)
+    assert not stock.contains(7.0, 5.0)        # on guide circle
+    assert not stock.contains(5.0, 7.0)        # opposite side of circle
+    assert not stock.contains(7.3, 5.0)        # within tool band (outer)
+    assert not stock.contains(6.7, 5.0)        # within tool band (inner)
+    assert stock.contains(5.0, 5.0)            # annulus center survives
+    assert stock.contains(7.6, 5.0)            # outside band + slack
+
+
+def test_subtract_arc_sweep_quarter_arc():
+    stock = _stock_2.Stock2(SQUARE, [])
+    # CCW quarter arc from (7,5) to (5,7) about (5,5), tool r=0.4
+    stock.subtract_arc_sweep(5.0, 5.0, 7.0, 5.0, 5.0, 7.0, False, 0.4)
+    mid = (5.0 + 2.0 * math.cos(math.pi / 4), 5.0 + 2.0 * math.sin(math.pi / 4))
+    assert not stock.contains(*mid)
+    assert stock.contains(5.0, 3.0)            # untouched opposite quadrant
+    assert stock.contains(3.0, 5.0)
+
+
+def test_arc_sweep_under_covers_never_over():
+    """Conservatism: nothing farther than tool_radius from the guide arc is removed."""
+    stock = _stock_2.Stock2(SQUARE, [])
+    stock.subtract_arc_sweep(5.0, 5.0, 7.0, 5.0, 7.0, 5.0, True, 0.4)
+    rng = np.random.default_rng(3)
+    for _ in range(400):
+        x, y = rng.uniform(0.2, 9.8, 2)
+        d_guide = abs(math.hypot(x - 5.0, y - 5.0) - 2.0)
+        if d_guide > 0.4:               # strictly outside the true sweep
+            assert stock.contains(x, y), (x, y, d_guide)

@@ -3,7 +3,10 @@
 
 #include <algorithm>
 #include <cmath>
+#include <numbers>
 #include <stdexcept>
+#include <utility>
+#include <vector>
 
 namespace {
 
@@ -92,6 +95,22 @@ void Stock2::subtract_disk(double cx, double cy, double radius)
     set_.difference(region);
 }
 
+// Subtract the union of exact tool disks centered at the given points. One
+// chain implementation shared by the capsule (Task 2) and arc (Task 3) paths:
+// callers only choose where the centers sit; exact predicates still decide
+// point-in on the constructed disks, so the union under-covers the true sweep.
+void Stock2::subtract_point_chain(const std::vector<std::pair<double, double>>& centers,
+                                  double radius)
+{
+    Gps region;
+    for (const auto& [x, y] : centers) {
+        Gps disk_set;
+        disk_set.insert(disk_polygon(EPoint(x, y), Epeck::FT(radius)));
+        region.join(disk_set);
+    }
+    set_.difference(region);
+}
+
 void Stock2::subtract_capsule(double x0, double y0, double x1, double y1, double radius)
 {
     if (radius <= 0.0) throw std::invalid_argument("radius should be positive.");
@@ -104,20 +123,51 @@ void Stock2::subtract_capsule(double x0, double y0, double x1, double y1, double
     }
     // Disk chain spacing s with per-disk radius r: the chain covers the true
     // capsule shrunk by delta = r - sqrt(r^2 - (s/2)^2) <= s^2/(4r). Choose s
-    // so delta <= CHAIN_SLACK_FRACTION * r  =>  s = 2r*sqrt(fraction). Exact
-    // predicates still decide point-in on the constructed disks; s only sets
-    // the (certified, under-covering) construction density.
+    // so delta <= CHAIN_SLACK_FRACTION * r  =>  s = 2r*sqrt(fraction). s only
+    // sets the (certified, under-covering) construction density.
     const double len = std::sqrt(len_sq);
     const double spacing = 2.0 * radius * std::sqrt(CHAIN_SLACK_FRACTION);
     const int n = std::max(1, static_cast<int>(std::ceil(len / spacing)));
-    Gps region;
+    std::vector<std::pair<double, double>> centers;
+    centers.reserve(n + 1);
     for (int i = 0; i <= n; ++i) {
         const double t = static_cast<double>(i) / static_cast<double>(n);
-        Gps disk_set;
-        disk_set.insert(disk_polygon(EPoint(x0 + t * dx, y0 + t * dy), Epeck::FT(radius)));
-        region.join(disk_set);
+        centers.emplace_back(x0 + t * dx, y0 + t * dy);
     }
-    set_.difference(region);
+    subtract_point_chain(centers, radius);
+}
+
+void Stock2::subtract_arc_sweep(double cx, double cy, double sx, double sy,
+                                double ex, double ey, bool cw, double tool_radius)
+{
+    if (tool_radius <= 0.0) throw std::invalid_argument("tool_radius should be positive.");
+    const double rx = sx - cx, ry = sy - cy;
+    const double guide_r = std::hypot(rx, ry);
+    if (guide_r == 0.0) { subtract_disk(cx, cy, tool_radius); return; }
+
+    double a0 = std::atan2(ry, rx);
+    double a1 = std::atan2(ey - cy, ex - cx);
+    double sweep = cw ? a0 - a1 : a1 - a0;
+    if (sweep <= 0.0) sweep += 2.0 * std::numbers::pi;
+    const bool full = (sx == ex && sy == ey);
+    if (full) sweep = 2.0 * std::numbers::pi;
+
+    // Chain spacing along the guide: disks of tool_radius at arc-length step s
+    // under-cover the true sweep by delta <= s^2/(4*tool_radius) (chord
+    // sagitta bound; the straight-chord bound is conservative for the arc chain
+    // because consecutive centers are closer along the chord than the arc).
+    const double spacing = 2.0 * tool_radius * std::sqrt(CHAIN_SLACK_FRACTION);
+    const double arc_len = guide_r * sweep;
+    const int n = std::max(4, static_cast<int>(std::ceil(arc_len / spacing)));
+
+    std::vector<std::pair<double, double>> centers;
+    centers.reserve(n + 1);
+    for (int i = 0; i <= n; ++i) {
+        const double t = static_cast<double>(i) / static_cast<double>(n);
+        const double a = cw ? a0 - sweep * t : a0 + sweep * t;
+        centers.emplace_back(cx + guide_r * std::cos(a), cy + guide_r * std::sin(a));
+    }
+    subtract_point_chain(centers, tool_radius);
 }
 
 NB_MODULE(_stock_2, m)
@@ -130,6 +180,8 @@ NB_MODULE(_stock_2, m)
         .def("is_empty", &Stock2::is_empty)
         .def("subtract_capsule", &Stock2::subtract_capsule,
              "x0"_a, "y0"_a, "x1"_a, "y1"_a, "radius"_a)
+        .def("subtract_arc_sweep", &Stock2::subtract_arc_sweep,
+             "cx"_a, "cy"_a, "sx"_a, "sy"_a, "ex"_a, "ey"_a, "cw"_a, "tool_radius"_a)
         .def("subtract_disk", &Stock2::subtract_disk, "cx"_a, "cy"_a, "radius"_a);
 
     register_engagement(m);
