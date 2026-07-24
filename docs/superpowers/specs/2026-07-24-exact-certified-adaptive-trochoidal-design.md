@@ -431,7 +431,7 @@ corpus. They are never the sole Phase-1 acceptance authority.
 - exact verdict;
 - canonical event-trace digest binding chart/root identity, exact isolating
   interval, event kind, trimmed feature and branch IDs, effective-cap bytes,
-  verdict, and strategy version;
+  verdict, strategy version, and verified `EventPartitionCertificate` digest;
 - event-cell count;
 - unresolved count, necessarily zero for returned paths;
 - stock-state digest before the motion.
@@ -612,6 +612,15 @@ Apollonius Graph parabola component. A release may not silently add a
 GPL/commercial package to an LGPL distribution without a compatible project
 license decision or commercial CGAL entitlement. A failed license gate blocks
 every task using that package, including the continuous event oracle.
+
+### G0A — canonical identity foundation
+
+Before a depletion trace, motion witness, reachable-domain certificate, or MAT
+artifact is created, establish the one versioned canonical encoder plus
+`InputIdentity` and `ComponentIdentity` primitives. Later components consume
+those primitives; they do not invent local byte encodings. Final
+`BuildProvenance` and `ArtifactIdentity` assembly occurs only after their
+consumer streams exist.
 
 ### G1 — exact depletion
 
