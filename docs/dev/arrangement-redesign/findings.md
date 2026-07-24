@@ -5,8 +5,11 @@
 behavior-preserving fixes already landed (aggregated disk-chain union → **7×** end-to-end;
 per-query stock-copy elimination → **11%**). The residual cost is the
 `General_polygon_set_2::intersection` **full-overlay-per-query** pattern; the principled fix is a
-**persistent `Arrangement_2` with `zone`-based local queries**. This exploration compiled and
-measured the right primitives and **validated that redesign as feasible** — it is not yet built.
+**`zone`-based local query of the cutter in the Gps's OWN arrangement** (no persistent rewrite, no
+observer — `General_polygon_set_2::arrangement()` already carries `contained()` = material). This
+exploration compiled and measured the right primitives, and the fix has since **LANDED in the
+certified `engagement_at`** (2026-07-24): certificate reproduced exactly (0/7200), ~4–5× faster
+queries, 165 tests green. See the LANDED note below.
 
 Prototypes referenced below live beside this file (`min.cpp`, `pl_bench.cpp`, `stock_arr.cpp`);
 `compile.sh` has the exact build line.
@@ -102,11 +105,23 @@ cutter sub-arcs. Then reuse the **existing exact run-assembly + cap decision** v
     spans to the EXACT engagement — full immersion → 2π, edge-straddle → π, in-cleared → 0.** The
     query redesign is technically solved; every piece is proven with running code.
 
-!!! warning "UNDER BUILD (mechanical integration only)"
-    What remains is the port into the certified module: in `engagement_2.cpp`, replace the
-    `region.intersection(stock.set())` overlay + harvest (lines ~393–441) with the `harvest.cpp`
-    zone-visitor harvest that fills the SAME `arcs` vector, then feed it to the EXISTING exact
-    run-assembly + cap decision (unchanged — the certificate logic is untouched). Resolve the
-    `const` (justified `const_cast`, zone is non-mutating). **Add alongside, TDD it reproduces the
-    165 tests' TEA/verdicts EXACTLY, measure the query speedup, swap with permission.** Until then
-    the certified path uses the (7× faster) `General_polygon_set_2` code.
+!!! success "LANDED (2026-07-24) — the certified `engagement_at` now uses the local zone query"
+    Ported into `engagement_2.cpp` add-alongside → TDD-gated → swapped: `engaged_arcs_zone`
+    (`Arrangement_zone_2` + `found_subcurve` visitor over `const_cast<Gps&>(stock.set()).arrangement()`,
+    non-mutating) fills the SAME `Arc` vector, fed to the VERBATIM shared tail `finish_engagement`
+    (run-assembly + pessimistic cap decision, unchanged). The overlay harvest is removed.
+
+    **Certificate reproduced EXACTLY** — 0 `cap_exceeded` mismatches over 7200 comparisons (5 witness
+    stocks × 4 radii × caps 90°/120°/180° × γ). The two harvests were proven to find the *identical*
+    crossing geometry (0 unmatched non-x-extreme endpoints / 4462; every crossing exactly `==`). The
+    ONLY residual is a ≤ 1e-15 rad reporting-double artifact: the overlay (Gps boolean) and the zone
+    (arrangement sweep) spell the same one-root crossing with different `Sqrt_extension` triples, and
+    `to_double` is representation-sensitive — never the decision. Bit-exact reporting across two exact
+    algorithms is unachievable and not required (deciding/reporting split). Full analysis:
+    `docs/superpowers/state/engagement-zone-divergence.md`.
+
+    **Speedup measured** — ~3.8–5.1× per query on 10/25/50-cut pockets (overlay 2.5–6.8 → zone
+    0.65–1.5 ms/q); the full test suite dropped 8.5 s → 4.8 s (engagement-heavy audits). A lower
+    bound: real audit pockets have much larger arrangements mid-depletion, where the removed
+    O(stock) overlay cost dominated (~137 s of the square's 183 s). Full suite 165 green post-swap;
+    the certificate is bit-for-bit unchanged.

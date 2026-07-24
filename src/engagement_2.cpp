@@ -11,6 +11,10 @@
 
 #include <CGAL/enum.h>
 #include <CGAL/number_utils.h>
+#include <CGAL/Arr_walk_along_line_point_location.h>
+#include <CGAL/Arrangement_zone_2.h>
+
+#include <boost/variant.hpp>
 
 namespace {
 
@@ -219,6 +223,183 @@ pessimistic_runs(const std::vector<Arc>& runs, const FT& cx, const FT& cy,
     return pess;
 }
 
+// Shared engagement tail: given the rim arcs supported by the cutter circle
+// (from EITHER harvest -- the overlay boundary or the local zone query), assemble
+// the maximal engaged runs by EXACT endpoint equality, report the true TEA
+// (doubles), and decide the cap EXACTLY over the pessimistic runs. The
+// certificate logic is identical regardless of how `arcs` was produced -- the
+// harvest only changes HOW rim arcs are found, never the decision. `arcs` is
+// consumed (sorted in place). `r_sq` is FT(tool_radius)^2, the exact cutter
+// squared radius already computed by the caller.
+EngagementSample finish_engagement(std::vector<Arc>& arcs, double cx, double cy,
+                                   const FT& r_sq, double cap_chord_ratio,
+                                   double gap_close_ratio)
+{
+    EngagementSample out{0.0, 0.0, false};
+    if (arcs.empty()) return out;   // rim nowhere in material
+
+    // 3. Assemble maximal engaged runs. Abutting rim arcs share their split
+    //    vertex EXACTLY (same arrangement point), so adjacency is exact point
+    //    equality -- no angular gap tolerance. Sort CCW by start using exact
+    //    point comparisons only (half-plane about the rational horizontal line
+    //    through the centre, then x within each half), so atan2 stays confined
+    //    to reporting.
+    const CoordNT cx_c{FT(cx)};
+    const CoordNT cy_c{FT(cy)};
+    auto upper = [&](const GpsPoint& pt) -> bool {
+        // Angle in [0, pi): y > cy, or (y == cy and x > cx) (the +x seam point).
+        const CGAL::Comparison_result cyc = CGAL::compare(pt.y(), cy_c);
+        if (cyc == CGAL::LARGER) return true;
+        if (cyc == CGAL::SMALLER) return false;
+        return CGAL::compare(pt.x(), cx_c) == CGAL::LARGER;
+    };
+    auto ccw_less = [&](const Arc& u, const Arc& v) -> bool {
+        const bool uu = upper(u.ccw_start);
+        const bool uv = upper(v.ccw_start);
+        if (uu != uv) return uu;   // upper half [0, pi) precedes lower half [pi, 2pi)
+        const CGAL::Comparison_result cx_cmp =
+            CGAL::compare(u.ccw_start.x(), v.ccw_start.x());
+        // Upper half: angle grows as x decreases; lower half: as x increases.
+        return uu ? (cx_cmp == CGAL::LARGER) : (cx_cmp == CGAL::SMALLER);
+    };
+    std::sort(arcs.begin(), arcs.end(), ccw_less);
+
+    std::vector<Arc> runs;
+    for (const Arc& a : arcs) {
+        if (!runs.empty() && runs.back().ccw_end == a.ccw_start) {
+            runs.back().ccw_end = a.ccw_end;
+            runs.back().span += a.span;
+        } else {
+            runs.push_back(a);
+        }
+    }
+    // Wrap-around: at most one run crosses the +x seam, joining the last run's
+    // end to the first run's start (again exact point equality).
+    if (runs.size() > 1 && runs.back().ccw_end == runs.front().ccw_start) {
+        runs.front().ccw_start = runs.back().ccw_start;
+        runs.front().span += runs.back().span;
+        runs.pop_back();
+    }
+
+    // 4a. REPORTING (doubles) over the TRUE runs -- never gap-closed. total_tea and
+    //     max_run_tea describe the material actually engaged at this station.
+    for (const Arc& run : runs) {
+        out.total_tea += run.span;
+        out.max_run_tea = std::max(out.max_run_tea, run.span);
+    }
+
+    // 4b. DECISION (exact) over the PESSIMISTIC runs. Void gaps <= gamma are
+    //     absorbed (default gamma == 0 closes none => pessimistic == true runs, so
+    //     the verdict is bit-for-bit the pre-pessimism result). The cap predicate
+    //     runs against the ACTUAL cap threshold T; the gap-closure predicate uses
+    //     the separate gamma threshold T_gamma. A pessimistic run contains its true
+    //     runs, and run_exceeds_cap is monotone in the arc, so testing the
+    //     pessimistic runs alone is conservative -- any true run over the cap forces
+    //     its pessimistic superset over it too.
+    const FT ratio_ft(cap_chord_ratio);
+    const FT T = ratio_ft * r_sq;
+    const FT gap_ratio_ft(gap_close_ratio);
+    const FT T_gamma = gap_ratio_ft * r_sq;
+    const FT cxf(cx), cyf(cy);
+    for (const auto& [start, end] :
+         pessimistic_runs(runs, cxf, cyf, gap_ratio_ft, T_gamma)) {
+        if (run_exceeds_cap(start, end, cxf, cyf, ratio_ft, T)) {
+            out.cap_exceeded = true;
+            break;
+        }
+    }
+    return out;
+}
+
+// ----------------------------------------------------------------------------
+// Local zone-query harvest: read the engaged rim arcs LOCALLY off the Gps's own
+// arrangement (faces carry contained() = material), instead of overlaying the
+// whole stock with the cutter disk. Validated end to end by the compiled
+// prototypes in docs/dev/arrangement-redesign/ (see findings.md).
+// ----------------------------------------------------------------------------
+
+using Arr = Gps::Arrangement_2;
+using PL = CGAL::Arr_walk_along_line_point_location<Arr>;
+
+// Arrangement_zone_2 visitor (models CGAL/Arrangement_2/Arr_compute_zone_visitor.h,
+// verified against the vendored CGAL 6.0.1 header): collect every cutter-circle
+// sub-arc whose containing face is contained() -- those are exactly the rim
+// pieces in material. Non-inserting (returns an invalid halfedge + "continue"),
+// so the zone never mutates the arrangement.
+struct EngagementVisitor {
+    using X_monotone_curve_2 = Arr::X_monotone_curve_2;
+    using Vertex_handle = Arr::Vertex_handle;
+    using Halfedge_handle = Arr::Halfedge_handle;
+    using Face_handle = Arr::Face_handle;
+    using Result = std::pair<Halfedge_handle, bool>;
+
+    std::vector<X_monotone_curve_2> engaged;
+
+    void init(Arr*) {}
+    Result found_subcurve(const X_monotone_curve_2& cv, Face_handle face,
+                          Vertex_handle, Halfedge_handle, Vertex_handle, Halfedge_handle) {
+        if (face->contained()) engaged.push_back(cv);   // cutter rim in material
+        return Result(Halfedge_handle(), false);
+    }
+    Result found_overlap(const X_monotone_curve_2&, Halfedge_handle, Vertex_handle, Vertex_handle) {
+        return Result(Halfedge_handle(), false);         // grazing boundary: measure-zero
+    }
+};
+
+// Harvest the rim arcs of the cutter of radius `tool_radius` centred at (cx, cy)
+// by zoning the cutter circle in the stock's own arrangement. Fills the SAME
+// Arc{ccw_start, ccw_end, span} vector the overlay harvest produces, with the
+// IDENTICAL per-arc normalization, so finish_engagement yields the identical
+// result (the split points coincide: disk_polygon and make_x_monotone_2 both
+// split at the x-extreme rational points (cx +/- r, cy), the remaining splits
+// are the same exact cutter/stock crossings).
+//
+// const_cast: engagement_at holds a const Stock2&, but Arrangement_zone_2 and
+// the point-location structure want a non-const Arrangement_2 handle. The zone
+// here is strictly READ-ONLY -- a non-inserting visitor, no arrangement mutation
+// -- and the kernel is single-threaded, so treating the logically-const stock as
+// non-const for this local read is justified and encapsulated here.
+void engaged_arcs_zone(const Stock2& stock, double cx, double cy,
+                       double tool_radius, std::vector<Arc>& arcs)
+{
+    Arr& arr = const_cast<Gps&>(stock.set()).arrangement();
+    PL pl(arr);
+
+    const EPoint center(cx, cy);
+    const FT r_sq = FT(tool_radius) * FT(tool_radius);
+    GpsTraits traits;
+    // Same exact cutter circle disk_polygon builds: ECircle(center, FT(r)^2).
+    const GpsTraits::Curve_2 cutter(ECircle(center, r_sq));
+
+    std::vector<boost::variant<GpsPoint, GpsXCurve>> xmono;
+    traits.make_x_monotone_2_object()(cutter, std::back_inserter(xmono));
+
+    EngagementVisitor vis;
+    for (const auto& piece : xmono) {
+        if (const GpsXCurve* xc = boost::get<GpsXCurve>(&piece)) {
+            CGAL::Arrangement_zone_2<Arr, EngagementVisitor> zone(arr, &vis);
+            zone.init(*xc, pl);
+            zone.compute_zone();
+        }
+    }
+
+    // Extract Arc{ccw_start, ccw_end, span} from each engaged rim sub-arc, with
+    // the SAME normalization as the overlay harvest (docs: engagement_at):
+    // CCW-normalize by orientation, drop tangent-touch degeneracies, report the
+    // span as a REPORTING double (atan2) that never feeds a decision.
+    for (const GpsXCurve& xc : vis.engaged) {
+        GpsPoint s = xc.source();
+        GpsPoint t = xc.target();
+        if (s == t) continue;   // tangent-touch degeneracy: zero-measure contact
+        if (xc.orientation() == CGAL::CLOCKWISE) std::swap(s, t);
+        const double sx = CGAL::to_double(s.x()), sy = CGAL::to_double(s.y());
+        const double tx = CGAL::to_double(t.x()), ty = CGAL::to_double(t.y());
+        double span = std::atan2(ty - cy, tx - cx) - std::atan2(sy - cy, sx - cx);
+        if (span <= 0.0) span += 2.0 * std::numbers::pi;
+        arcs.push_back({s, t, span});
+    }
+}
+
 // ----------------------------------------------------------------------------
 // Task 5: exact-station TEA cap certificate along a linear cutter motion.
 // ----------------------------------------------------------------------------
@@ -388,132 +569,21 @@ EngagementSample engagement_at(const Stock2& stock, double cx, double cy,
     if (!(gap_close_ratio >= 0.0 && gap_close_ratio <= 4.0))
         throw std::invalid_argument("gap_close_ratio must be in [0, 4] (= 4*sin^2(gamma/2), 0 <= gamma <= pi).");
 
-    EngagementSample out{0.0, 0.0, false};
-
-    // 1. region = tool disk intersect stock (regularized, exact). Intersect the SMALL
-    //    disk against the stock passed BY CONST REF; never `Gps region = stock.set()`,
-    //    which deep-copies the entire (growing) stock arrangement on EVERY query
-    //    (20 stations/circle x hundreds of circles). intersection() is commutative, so
-    //    disk-in-place gives the identical result with no whole-stock copy.
-    Gps region;
-    region.insert(disk_polygon(EPoint(cx, cy), FT(tool_radius)));
-    region.intersection(stock.set());
-    if (region.is_empty()) return out;
-
-    // 2. Harvest boundary arcs supported by the cutter circle (rim-in-material).
-    //    The cutter disk's circle data is rational and GPS boolean ops preserve
-    //    an arc's supporting circle verbatim, so this identity test is exact.
-    const EPoint center(cx, cy);
+    // Harvest the engaged rim arcs LOCALLY off the stock's OWN arrangement (its Gps
+    // faces carry contained() = material): zone the cutter circle there and collect
+    // the rim sub-arcs in material, then run the exact run-assembly + cap decision.
+    // This replaces the earlier whole-stock overlay (region =
+    // disk.intersection(stock.set())): the SAME exact certificate, read in
+    // O(cutter-crossings) instead of O(stock) -- measured ~4-5x/query, more on a
+    // heavily depleted pocket. The overlay was validated to reproduce this exactly:
+    // 0 certificate mismatches over 7200 comparisons; the only residual was a
+    // <= 1e-15 rad reporting-double representation artifact (algebraically-equal
+    // one-root crossings whose representation-sensitive to_double rounds by ulps),
+    // never the decision (docs/superpowers/state/engagement-zone-divergence.md).
     const FT r_sq = FT(tool_radius) * FT(tool_radius);
-
     std::vector<Arc> arcs;
-    auto harvest = [&](const GpsPolygon& poly) {
-        for (auto cit = poly.curves_begin(); cit != poly.curves_end(); ++cit) {
-            const GpsXCurve& xc = *cit;
-            if (!xc.is_circular()) continue;
-            if (xc.supporting_circle().center() != center) continue;
-            if (xc.supporting_circle().squared_radius() != r_sq) continue;
-
-            // CCW-normalize: orientation() is the exact winding of source->target
-            // about the centre. CLOCKWISE means the CCW sweep runs target->source.
-            GpsPoint s = xc.source();
-            GpsPoint t = xc.target();
-
-            // Tangent-touch degeneracy (docs/exactness.md "Degeneracy is an
-            // ordinary input case"): a zero-measure contact. CGAL never emits a
-            // degenerate (source == target) x-monotone arc, but guard exactly so
-            // one could never be mistaken for a full 2*pi run by span wrap-around.
-            if (s == t) continue;
-
-            if (xc.orientation() == CGAL::CLOCKWISE) std::swap(s, t);
-
-            const double sx = CGAL::to_double(s.x()), sy = CGAL::to_double(s.y());
-            const double tx = CGAL::to_double(t.x()), ty = CGAL::to_double(t.y());
-            double span = std::atan2(ty - cy, tx - cx) - std::atan2(sy - cy, sx - cx);
-            if (span <= 0.0) span += 2.0 * std::numbers::pi;
-            arcs.push_back({s, t, span});
-        }
-    };
-
-    std::vector<GpsPolygonWithHoles> pwhs;
-    region.polygons_with_holes(std::back_inserter(pwhs));
-    for (const auto& pwh : pwhs) {
-        harvest(pwh.outer_boundary());
-        for (auto hit = pwh.holes_begin(); hit != pwh.holes_end(); ++hit) harvest(*hit);
-    }
-    if (arcs.empty()) return out;   // region present but rim nowhere in material
-
-    // 3. Assemble maximal engaged runs. Abutting rim arcs share their split
-    //    vertex EXACTLY (same arrangement point), so adjacency is exact point
-    //    equality -- no angular gap tolerance. Sort CCW by start using exact
-    //    point comparisons only (half-plane about the rational horizontal line
-    //    through the centre, then x within each half), so atan2 stays confined
-    //    to reporting.
-    const CoordNT cx_c{FT(cx)};
-    const CoordNT cy_c{FT(cy)};
-    auto upper = [&](const GpsPoint& pt) -> bool {
-        // Angle in [0, pi): y > cy, or (y == cy and x > cx) (the +x seam point).
-        const CGAL::Comparison_result cyc = CGAL::compare(pt.y(), cy_c);
-        if (cyc == CGAL::LARGER) return true;
-        if (cyc == CGAL::SMALLER) return false;
-        return CGAL::compare(pt.x(), cx_c) == CGAL::LARGER;
-    };
-    auto ccw_less = [&](const Arc& u, const Arc& v) -> bool {
-        const bool uu = upper(u.ccw_start);
-        const bool uv = upper(v.ccw_start);
-        if (uu != uv) return uu;   // upper half [0, pi) precedes lower half [pi, 2pi)
-        const CGAL::Comparison_result cx_cmp =
-            CGAL::compare(u.ccw_start.x(), v.ccw_start.x());
-        // Upper half: angle grows as x decreases; lower half: as x increases.
-        return uu ? (cx_cmp == CGAL::LARGER) : (cx_cmp == CGAL::SMALLER);
-    };
-    std::sort(arcs.begin(), arcs.end(), ccw_less);
-
-    std::vector<Arc> runs;
-    for (const Arc& a : arcs) {
-        if (!runs.empty() && runs.back().ccw_end == a.ccw_start) {
-            runs.back().ccw_end = a.ccw_end;
-            runs.back().span += a.span;
-        } else {
-            runs.push_back(a);
-        }
-    }
-    // Wrap-around: at most one run crosses the +x seam, joining the last run's
-    // end to the first run's start (again exact point equality).
-    if (runs.size() > 1 && runs.back().ccw_end == runs.front().ccw_start) {
-        runs.front().ccw_start = runs.back().ccw_start;
-        runs.front().span += runs.back().span;
-        runs.pop_back();
-    }
-
-    // 4a. REPORTING (doubles) over the TRUE runs -- never gap-closed. total_tea and
-    //     max_run_tea describe the material actually engaged at this station.
-    for (const Arc& run : runs) {
-        out.total_tea += run.span;
-        out.max_run_tea = std::max(out.max_run_tea, run.span);
-    }
-
-    // 4b. DECISION (exact) over the PESSIMISTIC runs. Void gaps <= gamma are
-    //     absorbed (default gamma == 0 closes none => pessimistic == true runs, so
-    //     the verdict is bit-for-bit the pre-pessimism result). The cap predicate
-    //     runs against the ACTUAL cap threshold T; the gap-closure predicate uses
-    //     the separate gamma threshold T_gamma. A pessimistic run contains its true
-    //     runs, and run_exceeds_cap is monotone in the arc, so testing the
-    //     pessimistic runs alone is conservative -- any true run over the cap forces
-    //     its pessimistic superset over it too.
-    const FT ratio_ft(cap_chord_ratio);
-    const FT T = ratio_ft * r_sq;
-    const FT gap_ratio_ft(gap_close_ratio);
-    const FT T_gamma = gap_ratio_ft * r_sq;
-    const FT cxf(cx), cyf(cy);
-    for (const auto& [start, end] :
-         pessimistic_runs(runs, cxf, cyf, gap_ratio_ft, T_gamma)) {
-        if (run_exceeds_cap(start, end, cxf, cyf, ratio_ft, T)) {
-            out.cap_exceeded = true;
-            break;
-        }
-    }
-    return out;
+    engaged_arcs_zone(stock, cx, cy, tool_radius, arcs);
+    return finish_engagement(arcs, cx, cy, r_sq, cap_chord_ratio, gap_close_ratio);
 }
 
 CertifiedTea certify_segment_tea(const Stock2& stock, double x0, double y0,
