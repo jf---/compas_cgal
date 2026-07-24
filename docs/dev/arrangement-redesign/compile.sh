@@ -5,7 +5,7 @@
 set -euo pipefail
 CGAL_ENV="${CGAL_ENV:-/Users/jelle/mambaforge/envs/cgal-dev}"
 cd "$(dirname "$0")"
-for src in min pl_bench stock_arr; do
+for src in min pl_bench stock_arr gps_zone; do
     echo "=== $src ==="
     c++ -std=c++20 -O2 -I"$CGAL_ENV/include" "$src.cpp" -o "$src" \
         -L"$CGAL_ENV/lib" -lgmp -lmpfr
