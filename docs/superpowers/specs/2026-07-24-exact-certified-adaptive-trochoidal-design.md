@@ -633,7 +633,6 @@ Replay recomputes every digest and rejects one-bit changes.
 - `DegenerateCircleMotionError`
 - `InvalidPreclearedEntryError`
 - `NativeDependencyIntegrityError`
-- `CgalLicenseGateError`
 - `PocketNotMachinableError`
 - `ReachableDomainConstructionError`
 - `DegenerateMedialAxisError`
@@ -670,15 +669,6 @@ Every CMake-downloaded native archive has a verified `URL_HASH`; an existing
 locked manifest. `BuildProvenance` binds archive hashes and actual native
 source-tree digests, so `pixi.lock` is not misrepresented as locking CMake
 dependencies.
-
-Before any dependent implementation, record the repository's GPL/commercial
-CGAL position for every newly instantiated package, including 2D Arrangements,
-2D Boolean Set Operations, 2D Minkowski Sums or the selected morphology
-alternative, Segment Delaunay Graphs, 2D Voronoi Diagram Adaptor, and the
-Apollonius Graph parabola component. A release may not silently add a
-GPL/commercial package to an LGPL distribution without a compatible project
-license decision or commercial CGAL entitlement. A failed license gate blocks
-every task using that package, including the continuous event oracle.
 
 ### G0A — canonical identity foundation
 

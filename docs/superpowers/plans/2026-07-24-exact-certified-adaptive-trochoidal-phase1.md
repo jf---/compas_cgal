@@ -39,26 +39,26 @@ at exactly `6334e8d6446086e3dfbe688c4a3656dd6845c3b1`.
 - Add new paths alongside working paths. Do not redirect or remove legacy
   behavior in this phase.
 - No reported angle, tolerance, or sampled maximum may decide a certificate.
-- A native algebraic or licensing gate that fails stops the dependent tasks.
-  It does not authorize a fallback.
+- A native algebraic gate that fails stops the dependent tasks. It does not
+  authorize a fallback.
 - Commit only the task’s files. Author and committer are
   `Jelle Feringa <jelleferinga@gmail.com>`.
 
 ## Proof and implementation dependency graph
 
 ```text
-T0 Pixi + native-source + package-license lock
+T0 Pixi + native-source lock
  └─ T1 typed motion/policy/cap boundary
      └─ T1A canonical identity foundation
          ├─ T2 exact conservative depletion
          ├─ T3 exact reachable domain + full-sweep coverage
-         └─ package gate ─ T4 event corpus + boundary extraction
-                           └─ T5 algebraic event substrate
-                               ├─ T6 exact segment oracle
-                               └─ T7 exact full-circle oracle
-                                   └─ T8 typed motion certifier
-T0 package gate + T3 + T5 ─ T9 exactly clipped true MAT
-                            └─ T10 typed MAT + neck/candidate lattice
+         └─ T4 event corpus + boundary extraction
+             └─ T5 algebraic event substrate
+                 ├─ T6 exact segment oracle
+                 └─ T7 exact full-circle oracle
+                     └─ T8 typed motion certifier
+T0 + T3 + T5 ─ T9 exactly clipped true MAT
+                └─ T10 typed MAT + neck/candidate lattice
 T2 + T3 + T8 + T10 ─ T11 entry + containment + InputIdentity
                      ├─ T11A fresh independent replay
                      └─ T12 transactional candidate evaluator
@@ -184,7 +184,7 @@ file acquires a second responsibility.
 
 ---
 
-## Task 0 — Lock Pixi, native sources, and CGAL package licenses
+## Task 0 — Lock Pixi and native sources
 
 **Files**
 
@@ -195,7 +195,6 @@ file acquires a second responsibility.
 - Create: `cmake/NativeDependencies.cmake`
 - Create: `cmake/VerifyNativeSource.cmake`
 - Create: `docs/build/native-dependency-lock.json`
-- Create: `docs/licenses/cgal-adaptive-package-audit.md`
 
 ### Step 1: add the Pixi workspace
 
@@ -267,8 +266,8 @@ verified SHA-256 archive hashes into `NativeDependencies.cmake`. Every
 
 `VerifyNativeSource.cmake` computes a canonical content digest over sorted
 relative paths plus file bytes for each extracted source tree. The committed
-JSON lock records package name, version, URL, archive SHA-256, expected
-source-tree digest, and license identifier. Configure fails if:
+JSON lock records package name, version, URL, archive SHA-256, and expected
+source-tree digest. Configure fails if:
 
 - a downloaded archive misses its `URL_HASH`;
 - an existing `external/<package>` tree differs from the committed digest;
@@ -299,39 +298,7 @@ pixi run affected
 If editable native rebuild does not trigger after a touched C++ source, correct
 the scikit-build configuration and repeat. Do not introduce pip/conda commands.
 
-### Step 4: record package licensing
-
-The audit records:
-
-- repository license;
-- each CGAL package newly used;
-- CGAL’s declared package license;
-- whether the project has a compatible GPL distribution decision or commercial
-  CGAL entitlement.
-
-The matrix covers every newly instantiated package and names the dependent
-task:
-
-- 2D Arrangements (`Arr_algebraic_segment_traits_2` and circle arrangements):
-  Tasks 3–8;
-- Algebraic Kernel (`Algebraic_kernel_d_1`/`d_2` with CORE): Tasks 5–10;
-- 2D Boolean Set Operations: Task 3 and containment/coverage consumers;
-- 2D Minkowski Sums, or the explicitly selected morphology alternative:
-  Task 3;
-- Segment Delaunay Graphs: Tasks 9–10;
-- 2D Voronoi Diagram Adaptor: Tasks 9–10;
-- Apollonius Graph parabola component supplying `Parabola_segment_2`:
-  Tasks 9–10.
-
-For each package record the exact CGAL documentation URL, declared
-GPL/commercial status, files/headers instantiated, and project distribution
-decision or commercial entitlement. A missing compatible decision records the
-stable `CGAL_LICENSE_GATE_ERROR` code and blocks the listed task and every
-downstream consumer; Task 1 exposes the corresponding
-`CgalLicenseGateError`. It never permits a sampled or different-kernel
-substitute.
-
-### Step 5: verify and commit
+### Step 4: verify and commit
 
 ```bash
 pixi run lint
@@ -520,12 +487,17 @@ Commit: `feat(identity): add canonical primitives`
 - Create: `src/exact_motion_2.h`
 - Create: `src/exact_depletion_2.h`
 - Create: `src/exact_depletion_2.cpp`
+- Modify: `CMakeLists.txt`
 - Modify: `src/stock_2.h`
 - Modify: `src/stock_2.cpp`
 - Modify: `src/compas_cgal/stock.py`
+- Modify: `src/compas_cgal/_stock_2.pyi`
+- Modify: `src/compas_cgal/adaptive/canonical.py`
+- Modify: `src/compas_cgal/adaptive/errors.py`
 - Create: `src/compas_cgal/adaptive/stock_area.py`
 - Test: `tests/adaptive/test_exact_depletion.py`
 - Test: `tests/adaptive/test_stock_monotonicity.py`
+- Modify: `tests/adaptive/typecheck/consumer_contract.py`
 
 ### Step 1: write RED exact-invariant tests
 
@@ -542,7 +514,11 @@ coordinates. Require:
 - a rounded-interpolation/rotation test strategy fails its exact incidence
   predicate;
 - `Stock2.clone()` is independent;
-- rejected trial depletion leaves authoritative stock unchanged.
+- rejected trial depletion leaves authoritative stock exactly equal to its
+  snapshot;
+- the center-count limit fails before allocation or mutation;
+- the stock-inclusion/cap monotonicity fixture is non-vacuous: the larger stock
+  exceeds the cap while the smaller stock does not.
 
 Use representable fixtures to assert `U \ W` is exactly empty for Pythagorean
 segments and circles. Add the exact-predicate metamorphic implication
@@ -562,24 +538,34 @@ Add alongside legacy methods:
 ```cpp
 DepletionTrace subtract_exact_segment(
     const ExactSegmentMotion2&, const Epeck::FT& tool_radius,
-    const Epeck::FT& max_chord);
+    const Epeck::FT& max_chord, std::size_t center_count_limit);
 
 DepletionTrace subtract_exact_full_circle(
     const ExactCircleMotion2&, const Epeck::FT& tool_radius,
-    const Epeck::FT& max_chord);
+    const Epeck::FT& max_chord, std::size_t center_count_limit);
 ```
 
 Segment centers use exact `Epeck::FT` barycentric parameters.
 Circle centers use four exact Pythagorean quarter charts. Refine until exact
-consecutive squared-chord comparisons pass. No trig or double interpolation is
-permitted.
+consecutive squared-chord comparisons, including the cyclic seam, pass.
+Refinement is by powers of two and checks the complete center count with
+overflow-safe arithmetic before allocation. No trig, normalization,
+`to_double`, or double interpolation is permitted.
 
-`DepletionTrace` contains deterministic parameter indices, count, exact
-max-chord input, motion identity, and strategy version. Its digest is computed
-from canonical motion/policy bytes, not from `to_double` coordinates.
+`DepletionTrace` contains deterministic structural parameter indices, count,
+exact max-chord input, removal radius, and strategy version. Native code does
+not reproduce or echo Task 1A's CCAN identity grammar. Python computes the
+`DepletionWitness` from canonical motion, full depletion policy, tool radius,
+ordered structural center parameters, native strategy version, and parent
+lineage.
 
-`Stock2::clone()` copies the exact `Gps` value. Bind new methods under distinct
-names and leave `subtract_capsule`/`subtract_arc_sweep` unchanged.
+`Stock2` owns the authoritative `Gps` behind `std::unique_ptr<Gps>`.
+`Stock2::clone()` uses the exact deep-copy constructor. Exact depletion builds
+and subtracts on a completed clone, validates the structural trace, then
+commits with a no-throw pointer swap; `Gps::operator=` is not an atomic commit.
+Expose native exact subset/equality diagnostics through copied differences,
+not sampled `contains()` calls. Bind new methods under distinct names and leave
+`subtract_capsule`/`subtract_arc_sweep` unchanged.
 
 ### Step 3: implement the typed owner
 
@@ -587,7 +573,9 @@ names and leave `subtract_capsule`/`subtract_arc_sweep` unchanged.
 has explicit `@overload` signatures for `ExactSegmentMotion` and
 `ExactCircleMotion`, returning a `DepletionWitness`; the single implementation
 dispatches without a second public calling convention. It does not certify
-motion. Task 11 adds the validated-entry overload.
+motion. It depletes a raw clone, validates and canonicalizes the native trace,
+constructs the immutable witness, then replaces `_raw` and appends lineage only
+after every preceding step succeeds. Task 11 adds the validated-entry overload.
 
 ### Step 4: GREEN and regression
 
@@ -606,10 +594,6 @@ Commit: `feat(stock): add exact-on-guide depletion`
 ---
 
 ## Task 3 — Build the exact reachable domain and full-sweep coverage ledger
-
-**Hard precondition:** Task 0 records compatible distribution or commercial
-entitlement for every CGAL package selected for arrangements, morphology, and
-Boolean set operations. Otherwise stop this task and its downstream consumers.
 
 **Files**
 
@@ -713,10 +697,6 @@ Commit: `feat(coverage): add exact reachable ledger`
 ---
 
 ## Task 4 — Commit the event corpus and exact stock-boundary extraction
-
-**Hard precondition:** Task 0 records compatible distribution or commercial
-entitlement for the CGAL arrangement packages used by Tasks 4–8. Otherwise
-stop before adding their headers or binaries.
 
 **Files**
 
@@ -1197,11 +1177,6 @@ Commit: `feat(adaptive): add event-exact certifier`
 
 ## Task 9 — Add the true segment-site Voronoi medial axis
 
-**Hard precondition:** Task 0 records compatible distribution or commercial
-CGAL entitlement for every Segment Delaunay, Voronoi adaptor, parabola,
-arrangement, and reachable-domain package used here. Without it, stop and
-report the exact licensing blocker.
-
 **Implementation dependencies:** Task 3's verified `C_r`/digest and Task 5's
 `exact_algebraic_1` root encoding/backend.
 
@@ -1236,6 +1211,11 @@ Require:
 - tangential clips, hole clips, and multiple-crossing clips retain exact
   endpoint/boundary provenance;
 - exact node collapse and adjacency use stable IDs, never addresses/doubles;
+- incident point/open-segment feature-transition duals are rejected exactly
+  when the point generator is that segment's source or target, while
+  nonincident point/segment parabolas remain;
+- degeneracy-normalized nodes collect the union of generator-site provenance
+  from every incident halfedge, not one underlying face triple;
 - every neck record is an exact local site-distance minimum, binds both sites
   and the separating graph cut, and changes only when exact squared-width
   thresholds are crossed;
@@ -1291,7 +1271,26 @@ ring segments with stable feature IDs. Use
 `Segment_Delaunay_graph_storage_traits_with_info_2` with explicit
 conversion/merge functors, or an exact post-map proved bijective by native
 tests; default storage does not preserve caller IDs. Provenance distinguishes
-vertex point-sites from open-segment sites.
+vertex point-sites from open-segment sites. The adaptor provides generator and
+limiter handles through `up()`, `down()`, `left()`, and `right()` plus the
+underlying SDG edge through `dual()`; recover stable caller data only through
+`storage_site().info()`. Handles, addresses, and iterator order never enter
+identity.
+
+The Voronoi adaptor removes zero-length edges and zero-area faces, but not all
+point-versus-incident-segment feature-transition bisectors. Before clipping,
+discard exactly a point/open-segment dual whose point vertex ID equals that
+segment's source or target vertex ID, and independently assert exact point
+equality with the endpoint. Retain every nonincident point/segment parabola,
+point/point dual, and segment/segment dual. At a degeneracy-normalized node,
+construct node-site CSR from the union over all incident halfedges because one
+`Vertex::site(i)` face triple may omit additional incident generators.
+
+`SDG::primal()` supplies exact `Line_2`, `Ray_2`, `Segment_2`, or
+`Parabola_segment_2` geometry. `Parabola_2::side_of_parabola`,
+`Parabola_segment_2::compute_k`, `generate_points`, and streamed parabola
+output are visualization APIs with `to_double` paths and are forbidden from
+topology, clipping, identity, and certificate decisions.
 
 Split each dual at exact `D`-boundary roots and exact clearance roots. Classify
 every open parameter cell by point-in-`D` and clearance sign, then emit every
@@ -2020,7 +2019,6 @@ Review the complete branch against the governing spec:
 - file responsibilities and size;
 - named errors/no fallback;
 - legacy isolation;
-- license record;
 - archive hashes and actual native source-tree digests;
 - exact clipping of every MAT dual primitive and neck-state transitions;
 - identity/replay independence;
@@ -2039,7 +2037,7 @@ the exact final SHA and clean/dirty status.
 
 Phase 1 is complete only when:
 
-- the licensing and algebraic-traits gates are satisfied;
+- the algebraic-traits gates are satisfied;
 - exact segment/full-circle event oracles resolve the committed reachable
   corpus;
 - the tractable path is non-vacuous, gouge-free, cap-certified, and exactly
