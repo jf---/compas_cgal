@@ -22,10 +22,13 @@ struct EngagementSample {
     bool cap_exceeded;
 };
 
-// Exact TEA query. Intersect the stock with the cutter disk of radius
-// tool_radius at (cx, cy), harvest the boundary arcs supported by the cutter
-// circle (the rim-in-material pieces), assemble maximal engaged runs by EXACT
-// endpoint equality, and certify each run against the engagement cap.
+// Exact TEA query, read LOCALLY. Zone the cutter circle of radius tool_radius at
+// (cx, cy) in the stock's OWN Gps arrangement (faces carry contained() =
+// material) and harvest the engaged rim sub-arcs (the rim-in-material pieces),
+// assemble maximal engaged runs by EXACT endpoint equality, and certify each run
+// against the engagement cap. The query is O(cutter-crossings), not O(stock) --
+// no whole-stock overlay (see engagement_2.cpp; the earlier overlay was validated
+// to reproduce this exactly before it was removed).
 //
 // cap_chord_ratio is the dimensionless squared-chord surrogate for the angular
 // cap: cap_chord_ratio = 4*sin^2(cap/2), which the CALLER computes as a double
