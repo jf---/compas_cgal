@@ -32,3 +32,11 @@ class InvalidTraversalPolicyError(ValueError):
 
 class InvalidCutDirectionPolicyError(ValueError):
     """A cut-direction intent or material-side decision is invalid."""
+
+
+class CanonicalEncodingError(ValueError):
+    """A value cannot be represented by the frozen canonical byte grammar."""
+
+
+class ArtifactIdentityError(ValueError):
+    """An identity input or decision record violates its structural contract."""
