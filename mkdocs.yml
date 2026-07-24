@@ -74,7 +74,11 @@ markdown_extensions:
   - pymdownx.inlinehilite
   - pymdownx.snippets:
       check_paths: true
-  - pymdownx.superfences
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
   - toc:
       permalink: "¤"
 
@@ -164,6 +168,7 @@ nav:
       - Triangulation: examples/example_triangulation.md
   - Design Notes:
       - Exact-Kernel Discipline: exactness.md
+      - Engagement Zone Query: engagement_zone_query.md
       - Trochoid Chain Stitching: toolpath_trochoid_chain_design.md
       - Tangent Continuity: toolpath_tangent_continuity.md
       - CGAL Primitives Critique: critique_toolpath_cgal_primitives.md

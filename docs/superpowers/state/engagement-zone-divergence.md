@@ -1,6 +1,6 @@
 # Engagement zone-query divergence: reporting-only, ≤48 ulps, certificate perfect
 
-**BLUF.** `engagement_at_zone` reproduces `engagement_at`'s **exact certificate**
+`engagement_at_zone` reproduces `engagement_at`'s **exact certificate**
 (`cap_exceeded`) **bit-for-bit in 100% of cases** (0 mismatches / 7200 comparisons
 across caps 90°/120°/180° and gap-closure γ=30°). The ONLY divergence is in the
 two **reporting doubles** (`total_tea`, `max_run_tea`): ≤ **48 ulps** (~1.3e-15 rad)

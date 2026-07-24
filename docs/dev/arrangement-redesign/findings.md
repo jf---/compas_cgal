@@ -1,6 +1,6 @@
 # Engagement/stock performance: the O(n²) was API misuse, and the fix is a persistent arrangement
 
-**BLUF.** The SP1 stock/engagement kernel's "prohibitively O(n²)" audit cost is dominated by
+The SP1 stock/engagement kernel's "prohibitively O(n²)" audit cost is dominated by
 **CGAL API misuse, not the geometry, the exact kernel, or an inherent limit.** Two
 behavior-preserving fixes already landed (aggregated disk-chain union → **7×** end-to-end;
 per-query stock-copy elimination → **11%**). The residual cost is the
@@ -120,8 +120,10 @@ cutter sub-arcs. Then reuse the **existing exact run-assembly + cap decision** v
     algorithms is unachievable and not required (deciding/reporting split). Full analysis:
     `docs/superpowers/state/engagement-zone-divergence.md`.
 
-    **Speedup measured** — ~3.8–5.1× per query on 10/25/50-cut pockets (overlay 2.5–6.8 → zone
-    0.65–1.5 ms/q); the full test suite dropped 8.5 s → 4.8 s (engagement-heavy audits). A lower
-    bound: real audit pockets have much larger arrangements mid-depletion, where the removed
-    O(stock) overlay cost dominated (~137 s of the square's 183 s). Full suite 165 green post-swap;
-    the certificate is bit-for-bit unchanged.
+    **Speedup measured (real pocket A/B)** — full audit of a 10×10 square (tool ⌀2, 119 ops),
+    overlay source vs zone, both rebuilt and driven through the identical `audit_toolpath_engagement`
+    replay: **92.2 s → 19.1 s end-to-end (4.8×)**; `engagement_at` **18.5 ms → 1.5 ms/call (12.4×)**
+    on the fully-depleted stock; worst-TEA/violations identical (360°/64) both builds. The former
+    overlay was **90 %** of the audit; with it gone, exact depletion (`subtract_*`) is now the 50 %
+    residual (the SP2 disk-chain lever). Full write-up (A/B table + mermaid):
+    `docs/engagement_zone_query.md`. Full suite 165 green post-swap; certificate bit-for-bit unchanged.
