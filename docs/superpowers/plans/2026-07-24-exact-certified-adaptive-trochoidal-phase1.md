@@ -435,10 +435,10 @@ Tests require:
   ordinal and trim-incidence orientation; no raw `Sqrt_extension`
   representation is hashed;
 - a closed `CanonicalOperation` tagged union for approach, plunge, exact
-  segment, and exact full-circle operations; approach/plunge bind
-  clearance/cut Z, while each lateral operation binds geometry, semantic kind,
-  cut Z, stable neck owner/orientation, `EffectiveCapDecision`, and
-  `TraversalDecision`;
+  segment, and exact full-circle operations; approach binds target XY plus
+  clearance Z, plunge binds the same XY plus clearance and cut Z, while each
+  lateral operation binds geometry, semantic kind, cut Z, stable neck
+  owner/orientation, `EffectiveCapDecision`, and `TraversalDecision`;
 - a closed `EffectiveCapDecision` union: full-cap decisions bind equal
   user/effective bytes, while neck-cap decisions bind neck-evidence digest,
   exact width-class ID, passage before/after state, and user/effective bytes;
