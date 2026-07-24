@@ -185,7 +185,7 @@ baseline = { cmd = '''editable_build_dir="$(python -c 'import sys; print(next(f.
 affected = { cmd = '''editable_build_dir="$(python -c 'import sys; print(next(f.path for f in sys.meta_path if hasattr(f, "known_wheel_files") and "compas_cgal._stock_2" in f.known_wheel_files))')" && SKBUILD_EDITABLE_SKIP="$editable_build_dir" pytest tests -n auto --testmon -q''', depends-on = ["_editable-rebuild"] }
 lint = "ruff check src/compas_cgal tests"
 format-adaptive = "ruff format src/compas_cgal/adaptive tests/adaptive"
-types-adaptive = "mypy --strict src/compas_cgal/adaptive"
+types-adaptive = "mypy --strict --warn-unused-ignores src/compas_cgal/adaptive tests/adaptive/typecheck/consumer_contract.py"
 schema = { cmd = '''editable_build_dir="$(python -c 'import sys; print(next(f.path for f in sys.meta_path if hasattr(f, "known_wheel_files") and "compas_cgal._stock_2" in f.known_wheel_files))')" && SKBUILD_EDITABLE_SKIP="$editable_build_dir" pytest tests/adaptive/test_schema.py -n auto -q''', depends-on = ["_editable-rebuild"] }
 mutations-adaptive = "python scripts/run-adaptive-mutations.py"
 wheel = "python -m build --wheel --no-isolation"

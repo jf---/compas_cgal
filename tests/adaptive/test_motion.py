@@ -95,6 +95,11 @@ def test_engagement_cap_rejects_angles_outside_native_domain(theta: float) -> No
         EngagementCap.build(theta)
 
 
+def test_engagement_cap_translates_huge_integer_overflow() -> None:
+    with pytest.raises(InvalidEngagementCapError):
+        EngagementCap.build(10**10000)  # type: ignore[arg-type]
+
+
 def test_engagement_cap_owns_native_surrogate_bytes() -> None:
     theta = math.radians(87.0)
 

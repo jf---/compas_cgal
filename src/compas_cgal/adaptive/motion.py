@@ -70,7 +70,10 @@ class EngagementCap:
     def __post_init__(self) -> None:
         if isinstance(self.theta, bool) or not isinstance(self.theta, (int, float)):
             raise InvalidEngagementCapError("engagement cap must be a real angle.")
-        theta = float(self.theta)
+        try:
+            theta = float(self.theta)
+        except OverflowError:
+            raise InvalidEngagementCapError("engagement cap exceeds the binary64 range.") from None
         try:
             native_ratio = _stock_2.cap_chord_ratio(theta)
         except ValueError as error:
