@@ -44,17 +44,19 @@ transitions also differ from the paper’s offset-contour transition elements.
 
 - a world-XY polygonal design pocket `D`: one outer ring and zero or more
   island rings;
+- a typed cut-plane Z coordinate and strictly higher clearance Z coordinate;
 - a positive tool radius `r`;
 - a maximum lateral tool-engagement angle `theta_max` in `(0, pi]`;
 - a `PreclearedEntry` disk contained in `D`, representing a predrill or a
   separately qualified entry cycle;
-- a finite `CandidatePolicy`, `NeckPolicy`, `DepletionPolicy`, and traversal
-  policy.
+- a finite `CandidatePolicy`, `NeckPolicy`, `DepletionPolicy`, traversal
+  policy, and explicit climb/conventional `CutDirectionPolicy`.
 
-The precleared entry is a physical precondition, not an invisible stock edit. Its
-center, radius, process provenance, and exact input bytes belong to
-`InputIdentity`. The returned approach/plunge travels through that cleared disk
-and is not counted as a lateral cut. Phase 1 does not pretend that one
+The precleared entry is a physical precondition, not an invisible stock edit.
+Its center, radius, qualified bore Z interval, process provenance, and exact
+input bytes belong to `InputIdentity`. The returned approach at clearance Z and
+vertical plunge to cut Z travel through that cleared bore and are not counted
+as lateral cuts. Phase 1 does not pretend that one
 tool-radius plunge can launch a capped lateral move: against frozen stock, every
 nonzero displacement from that seed engages more than `pi`.
 
@@ -165,6 +167,8 @@ The strict Python subpackage uses Python 3.12 and `mypy --strict`.
 - `ToolRadius`, `EntryRadius`, `Clearance`, `GuideRadius`, `Spacing`, and
   `ChordBound` are frozen value types. Their `build(...)` factories validate
   finiteness, sign, and cross-field invariants and raise named exceptions.
+- `CutZ`, `ClearanceZ`, and `CutPlane` carry the axial frame/unit contract;
+  `CutPlane.build(...)` requires `clearance_z > cut_z`.
 - `Point2[FrameT]` and `Vector2[FrameT]` carry frame identity; Phase 1 uses
   `WorldXY`.
 - vector factories provide both scalar-positional and array-input overloads.
@@ -179,6 +183,8 @@ The strict Python subpackage uses Python 3.12 and `mypy --strict`.
 - `CandidatePolicy` owns spatial resolution, radius resolution, finite forward
   window, minimum progress, exact depletion chord bound, branch ordering, and
   tie-break order.
+- `CutDirectionPolicy` explicitly maps climb/conventional intent and material
+  side to circle orientation; no hidden CW/CCW default exists.
 
 Factories own invariant validation. Raw dataclass construction is kept minimal
 and is not the public boundary. No type is introduced merely to wrap ordinary
@@ -198,15 +204,18 @@ Phase 1 adds a focused `_medial_axis_2` native unit based on
 1. insert every design-pocket boundary segment as a site with stable ring/edge
    IDs;
 2. obtain the Euclidean segment Voronoi dual;
-3. intersect every line, ray, segment, and parabolic dual with the exact design
-   pocket and emit every connected interior component, including bounded
-   pieces clipped from an unbounded dual;
-4. remove triangulation-only duals and normalize degenerate faces independent
+3. clip every line, ray, segment, and parabolic dual against `D`, then
+   substitute its exact parameterization into
+   `distance_to_defining_site^2 - r^2`; isolating every degree-at-most-four
+   clearance root yields exactly the intersection with `C_r`;
+4. emit every connected admissible-center component, including bounded pieces
+   clipped from an unbounded dual;
+5. remove triangulation-only duals and normalize degenerate faces independent
    of insertion order;
-5. retain the two defining boundary features and exact clipped-endpoint
+6. retain the two defining boundary features and exact clipped-endpoint
    provenance for every MAT edge;
-6. sample line and parabolic bisectors at the declared proposal resolution;
-7. return CSR chains plus stable node IDs, edge IDs, conic kind, and incident
+7. sample line and parabolic bisectors at the declared proposal resolution;
+8. return CSR chains plus stable node IDs, edge IDs, conic kind, and incident
    feature IDs.
 
 CGAL predicates decide diagram topology and feature incidence. Sampled
@@ -255,6 +264,11 @@ constructs `C_r`; exact regularized circular-arc set operations construct
 offset sampling. The construction certificate binds every arrangement curve,
 selected cell, connected component, and residual digest. An unsupported
 degeneracy raises `ReachableDomainConstructionError`.
+
+Phase 1 accepts exactly one qualified entry, so `C_r` must be connected and
+contain that entry center. A disconnected admissible-center domain raises
+`PocketNotMachinableError`; multiple qualified entry cycles are a later input
+extension.
 
 `Stock2Area` begins with `D`. It conservatively retains the unreachable
 residual throughout machining; this cannot change a certified cutter's
@@ -390,29 +404,39 @@ The deciding implementation uses CGAL algebraic arrangements and exact
 real-root isolation. Reporting maxima and isolating intervals may be emitted
 for diagnostics, but only exact signs and topology determine the verdict.
 
-The coefficient field is the compiled exact rational type. Each projective
-chart yields primitive square-free polynomials over that field. Segment motion
+Exact rational equations are denominator-cleared to primitive integer
+polynomials. The concrete no-GMP root backend is
+`CGAL::Algebraic_kernel_d_1<CORE::BigInt>` under the locked CORE/Boost
+configuration. Each projective chart yields primitive square-free polynomials.
+Segment motion
 has bidegree bounds `(1,2)` for line supports and `(2,4)` for circle supports;
 full-circle motion has bounds `(2,2)` and `(4,4)` respectively. Generated
 degrees above those bounds are a construction error.
+
+`AlgebraicRootIdV1` is the normalized primitive square-free
+positive-leading-coefficient polynomial plus the root's ordinal among all
+ordered real roots. Native verification reruns exact isolation/comparison.
+`CORE::Expr` text and floating approximations never enter identity.
 
 The completeness table is part of the native contract:
 
 | Event | Projection certificate | Degeneracy disposition |
 |---|---|---|
 | tangency | resultant of `F` and `partial_u F` | repeated factor isolated once |
-| trimmed vertex | exact univariate vertex-on-rim equation | trim endpoint retained |
-| overlap/coincidence | all primitive coefficients zero | explicit overlap interval |
+| trimmed vertex | rational elimination of rim plus incident supports | conjugates filtered by endpoint ID and trim truth |
+| overlap/coincidence | common-zero projection of all rim coefficients in the motion parameter | isolated overlap fibre versus motion interval |
 | endpoint order/merge | resultant of two active branch equations | original equations and trims rechecked |
-| cap crossing | two branch equations plus exact squared-chord relation | extraneous roots filtered; identical interval explicit |
+| orientation boundary | branch equations plus exact CCW determinant zero | zero versus `pi` separated by exact dot sign |
+| cap crossing | two branch equations plus squared-chord relation and CCW branch | complement roots filtered; identical interval has orientation disposition |
 | chart seam | exact finite/infinite chart boundary evaluation | one canonical seam owner |
 
 Every native `EventPartitionCertificate` records normalized polynomial bytes,
-degree bounds, square-free factors, all isolated real roots and intervals,
+degree bounds, square-free factors, all isolated real-root IDs,
 chart/seam coverage, sign-invariant open cells, zero-dimensional fibres,
 trim/feature/branch identities, and each degeneracy disposition. Reconstructing
 that certificate and verifying every factor/root/cell is the completeness
-check; a cell count alone has no evidentiary role.
+check; a cell count alone has no evidentiary role. Isolating intervals are
+regenerated diagnostics and are excluded from canonical proof identity.
 
 The existing guarded segment/circular certifiers remain compatibility and
 performance experiments. They may become a fast prefilter only after the
@@ -429,8 +453,8 @@ corpus. They are never the sole Phase-1 acceptance authority.
   `effective <= user`;
 - `event-exact` strategy/source/native component identity;
 - exact verdict;
-- canonical event-trace digest binding chart/root identity, exact isolating
-  interval, event kind, trimmed feature and branch IDs, effective-cap bytes,
+- canonical event-trace digest binding chart/root identity, event kind,
+  trimmed feature and branch IDs, effective-cap bytes,
   verdict, strategy version, and verified `EventPartitionCertificate` digest;
 - event-cell count;
 - unresolved count, necessarily zero for returned paths;
@@ -444,13 +468,14 @@ infeasibility.
 
 Engagement safety and containment are independent gates.
 
-- A full circle is gouge-free only when the exact outer disk centered at `c`
-  with squared radius corresponding to `|v| + r` is contained in the original
-  machinable pocket. The implementation uses exact regularized Boolean
-  containment, not reported clearance.
-- A segment transition is gouge-free only when exact segment-to-every-boundary
-  squared-distance predicates establish clearance `>= r`, including endpoint
-  containment and island boundaries.
+- A full circle is gouge-free only when its exact annular sweep—or disk when
+  `|v| <= r`—is contained in `D`. This is equivalent to exact guide-circle
+  containment in `C_r`. An outer disk of radius `|v| + r` is merely a
+  conservative fast rejection and cannot decide containment around islands.
+- A segment transition is gouge-free only when its exact capsule is contained
+  in `D`, equivalently when the center segment is contained in `C_r`. Exact
+  segment-to-boundary squared-distance predicates may implement that decision,
+  including endpoint containment and island boundaries.
 - Equality is allowed by the regular-closed contact contract.
 
 An otherwise engagement-safe candidate that fails containment is rejected
@@ -458,9 +483,10 @@ without stock mutation.
 
 ## Entry model
 
-`PreclearedEntry.build(...)` proves that its exact disk is contained in the
-pocket and large enough for the first declared phase point and tool disk. It is
-applied to both generator and fresh-audit initial stock.
+`PreclearedEntry.build(...)` proves that its exact disk and qualified bore
+through the declared clearance-to-cut Z interval are contained in the pocket
+contract and large enough for the first declared phase point and tool disk. It
+is applied to both generator and fresh-audit initial stock.
 
 The returned path includes a clearance approach and vertical plunge through the
 precleared bore. Neither removes new material. The first lateral circle must
@@ -510,6 +536,14 @@ comparison of reported clearance. A neck candidate is an exact local minimum
 of the site-distance function on a clipped MAT component. Its two site IDs,
 critical algebraic parameter, exact squared-width comparison, and separating
 graph cut form `NeckEvidence`.
+
+`NeckEvidence` is a closed exact union covering a strict relative-interior
+minimum, one-sided `C_r` endpoint minimum, shared-vertex minimum, or maximal
+connected constant-clearance plateau. Equal incident minima merge under one
+canonical owner. Evidence survives only when removing its point, vertex, or
+contracted plateau separates two nonempty traversal sides. Exact parameter and
+width values use `AlgebraicRootIdV1`; endpoint features and cuts use CSR so
+degenerate multi-feature incidence is not truncated.
 
 `NeckPolicy.build(...)` owns rationalized squared-width class boundaries and a
 finite mapping from `(neck_class, passage_state)` to a native-produced
@@ -566,12 +600,23 @@ Replay recomputes every digest and rejects one-bit changes.
 ## Error model
 
 - `InvalidAdaptiveInputError`
+- `InvalidUnitValueError`
 - `InvalidEngagementCapError`
 - `InvalidCandidatePolicyError`
+- `InvalidCutDirectionPolicyError`
+- `InvalidNeckPolicyError`
+- `InvalidDepletionPolicyError`
+- `InvalidTraversalPolicyError`
+- `DegenerateSegmentMotionError`
+- `DegenerateCircleMotionError`
 - `InvalidPreclearedEntryError`
+- `NativeDependencyIntegrityError`
+- `CgalLicenseGateError`
 - `PocketNotMachinableError`
 - `ReachableDomainConstructionError`
 - `DegenerateMedialAxisError`
+- `ConicSamplingLimitError`
+- `AlgebraicEventConstructionError`
 - `ExactDepletionConstructionError`
 - `GougeContainmentError`
 - `EngagementCapExceededError`
@@ -617,9 +662,10 @@ every task using that package, including the continuous event oracle.
 
 Before a depletion trace, motion witness, reachable-domain certificate, or MAT
 artifact is created, establish the one versioned canonical encoder plus
-`InputIdentity` and `ComponentIdentity` primitives. Later components consume
-those primitives; they do not invent local byte encodings. Final
-`BuildProvenance` and `ArtifactIdentity` assembly occurs only after their
+`ComponentIdentity`. Later components consume those primitives; they do not
+invent local byte encodings. Construct `InputIdentity` only after the
+`PreclearedEntry` and all policies validate, and before generation or replay.
+Final `BuildProvenance` and `ArtifactIdentity` assembly occurs only after their
 consumer streams exist.
 
 ### G1 — exact depletion
