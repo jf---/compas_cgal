@@ -82,3 +82,31 @@ any run past ~5 min, so NO full benchmark pocket completes in this session regar
   the O(n²) growth; real investigation; fights the session limit.
 - **[C′] Defer generation to a post-limit session.** Accept the ~1 hr full-exact baseline, run
   it once in a fresh session after 18:00 when the limit resets. Complete + exact, just slow.
+
+## UPDATE 2 (2026-07-24) — the "inherent O(n²)" premise was WRONG: it was API misuse
+
+Everything above is superseded. The cost was **not** an inherent property of exact-boolean
+depletion — it was a classic Boolean-set-operations anti-pattern in
+`Stock2::subtract_point_chain`: each swept region was built by **incremental**
+`General_polygon_set_2::join(disk)` per disk, so every join re-swept the growing union
+(O(N²) in the ~hundreds of chain disks). Fix: the **aggregated** `join(first, last)`
+(one arrangement sweep) — commit `030322f`.
+
+Measured, and **behavior-preserving** (union is associative → identical stock → 165 tests
+unchanged):
+- per-circle `subtract_arc_sweep`: **3612 ms → 168 ms** (~21×)
+- full kite audit: **>600 s → 87 s** (~7× end-to-end)
+- full suite: **~34 s → 9.5 s**
+
+⇒ The baseline is tractable; **Task 8/9 are UN-DEFERRED** (baseline generated, gate re-attempted
+honestly). The earlier decomposition (coarser grids = 0 speedup) was correct but its conclusion
+("boolean-bound, fundamental") was wrong — the boolean was bound by *how it was called*.
+
+**Second lever (`CHAIN_SLACK_FRACTION`) REJECTED.** Loosening 1e-4 → 1e-3 gave another ~3×
+(kite 87 s → 27 s) but broke two *calibrated* edge tests (`test_engagement_cap_exceeded_over_half`,
+`test_engagement_seam_crossing_run`): the under-cover sliver they exercise (the exact `>pi`
+orientation branch; the seam-merge run structure) is a real accuracy parameter, not over-fit.
+A 10× coarser under-cover degrades the very number the baseline reports; kept at 1e-4. The
+residual per-pocket cost (kite 87 s > the 10 s/pocket gate) is scallop-accumulation from the
+disk-chain approximation; its principled fix is a lower-arc-count exact swept-region
+representation (SP2), never a coarser certificate.
