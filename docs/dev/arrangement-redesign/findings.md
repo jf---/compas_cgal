@@ -68,12 +68,39 @@ using PL     = CGAL::Arr_walk_along_line_point_location<Arr>;        // measured
    TEA/verdicts exactly (it is exact, not approximate).
 5. **Review** in the certified path before it lands.
 
-!!! success "CONFIRMED (measured this session)"
-    Aggregated-union fix (7×) and copy-elimination (11%) are committed and behavior-preserving.
-    Point-location = `walk_along_line`. Persistent-arrangement substrate + `zone` query are
-    validated by compiled prototypes.
+## The clean fix (validated on the real depletion path) — no rewrite, no observer
 
-!!! warning "UNDER BUILD (not yet done)"
-    Exact zone→TEA span computation, observer-based marking, `engagement_at` integration, TDD
-    against current results, and review. Until these land, the certified path still uses the
-    (now 7× faster) `General_polygon_set_2` code.
+The persistent-arrangement rewrite above turns out to be **unnecessary**.
+`General_polygon_set_2::arrangement()` is public (const + non-const), and its `Gps_default_dcel`
+faces already carry **`contained()`** (= material). So the *fast* Gps depletion (aggregated join)
+already maintains a correctly-marked arrangement — the only defect is the QUERY overlaying it.
+
+**The fix:** reach into `stock.set().arrangement()` and **zone the cutter there**, reading
+`contained()`. Validated on the real path (`gps_zone.cpp`): `square.difference(disk)`, cutter
+straddling the disk → **4 face cells (3 material), 2 edge crossings**, local, no overlay.
+
+**Harvest (interface confirmed):** `Arrangement_zone_2<Arr, Visitor>` with a
+`found_subcurve(cv, face, …)` visitor — collect `cv` when `face->contained()`; those ARE the engaged
+cutter sub-arcs. Then reuse the **existing exact run-assembly + cap decision** verbatim (same
+`Arc{source, target, span}` shape as `engagement_2.cpp`'s current `harvest`).
+
+### Revised buildout (much smaller than the observer design)
+1. Harvest visitor + `Arrangement_zone_2` driver → engaged sub-arcs from `stock.arrangement()`.
+2. `const` handling: `engagement_at` holds `const Stock2&`; `zone` wants a non-const `arr`. Either a
+   justified `const_cast` (zone is non-mutating) encapsulated in a `Stock2` const helper, or a
+   verified const path — **verify, do not assume**.
+3. Reuse the existing exact run-assembly for the TEA + cap verdict (no new decision logic).
+4. **Add alongside** the current `engagement_at` (repo rule: add + validate, then swap); TDD it
+   reproduces the current 165 tests' TEA/verdicts EXACTLY; measure the query speedup; swap only with
+   permission.
+
+!!! success "CONFIRMED (compiled + measured this session)"
+    Aggregated-union fix (7×) and copy-elimination (11%) committed, behavior-preserving.
+    Point-location = `walk_along_line`. **The clean query fix — zone the Gps's own arrangement and
+    read `contained()` — is validated on the real depletion path** (`gps_zone.cpp`); the harvest
+    visitor interface (`found_subcurve`) is confirmed.
+
+!!! warning "UNDER BUILD (not yet coded)"
+    The harvest visitor + `const` handling + `engagement_at` integration + TDD-against-current +
+    measured swap. Until these land, the certified path uses the (now 7× faster)
+    `General_polygon_set_2` code — correct, just not yet locally queried.
