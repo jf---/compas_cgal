@@ -1,13 +1,16 @@
 import hashlib
+from dataclasses import dataclass
 from dataclasses import fields
 from fractions import Fraction
 
 import pytest
 
+from compas_cgal.adaptive.canonical import CanonicalRingV1
 from compas_cgal.adaptive.canonical import ExactRationalV1
 from compas_cgal.adaptive.canonical import encode_bytes
 from compas_cgal.adaptive.canonical import encode_tagged_union
-from compas_cgal.adaptive.errors import ArtifactIdentityError
+from compas_cgal.adaptive.errors import InvalidBoundaryVertexIdentityError
+from compas_cgal.adaptive.errors import InvalidComponentIdentityError
 from compas_cgal.adaptive.identity import BOUNDARY_VERTEX_ID_VERSION
 from compas_cgal.adaptive.identity import COMPONENT_IDENTITY_VERSION
 from compas_cgal.adaptive.identity import INPUT_SCHEMA_VERSION
@@ -24,6 +27,34 @@ from compas_cgal.adaptive.identity import SourceRevision
 from compas_cgal.adaptive.identity import StrategyVersion
 from compas_cgal.adaptive.identity import SupportKind
 from compas_cgal.adaptive.identity import TrimIncidenceOrientation
+from compas_cgal.adaptive.units import Point2
+from compas_cgal.adaptive.units import WorldXY
+
+
+@dataclass(frozen=True)
+class SemanticComponentIdentity(ComponentIdentity):
+    provenance_bit: bool
+
+
+@dataclass(frozen=True)
+class SemanticIncidentSupport(IncidentSupport):
+    provenance_bit: bool
+
+
+@dataclass(frozen=True)
+class SemanticInputRingVertex(InputRingVertexIdV1):
+    provenance_bit: bool
+
+
+def _outer_ring() -> CanonicalRingV1:
+    return CanonicalRingV1.build_outer(
+        (
+            Point2[WorldXY].build(0.0, 0.0),
+            Point2[WorldXY].build(4.0, 0.0),
+            Point2[WorldXY].build(4.0, 4.0),
+            Point2[WorldXY].build(0.0, 4.0),
+        )
+    )
 
 
 def _component_identity(
@@ -89,7 +120,7 @@ def test_component_identity_hashes_only_its_canonical_inputs() -> None:
 
 
 def test_component_identity_rejects_untyped_or_malformed_inputs() -> None:
-    with pytest.raises(ArtifactIdentityError, match="strategy version"):
+    with pytest.raises(InvalidComponentIdentityError, match="strategy version"):
         ComponentIdentity.build(
             strategy_version=StrategyVersion(b""),
             component_domain=ComponentDomainTag(b"motion-certifier"),
@@ -97,13 +128,13 @@ def test_component_identity_rejects_untyped_or_malformed_inputs() -> None:
             native_source_tree_digest=NativeSourceTreeDigest(b"\x00" * 32),
             canonical_parameter_bytes=b"parameters",
         )
-    with pytest.raises(ArtifactIdentityError, match="32-byte"):
+    with pytest.raises(InvalidComponentIdentityError, match="32-byte"):
         _component_identity(native_digest=b"short")
-    with pytest.raises(ArtifactIdentityError, match="versioned"):
+    with pytest.raises(InvalidComponentIdentityError, match="versioned"):
         _component_identity(parameters=b"parameters")
-    with pytest.raises(ArtifactIdentityError, match="tagged"):
+    with pytest.raises(InvalidComponentIdentityError, match="tagged"):
         _component_identity(parameters=encode_bytes(b"parameters"))
-    with pytest.raises(ArtifactIdentityError, match="one complete"):
+    with pytest.raises(InvalidComponentIdentityError, match="one complete"):
         _component_identity(parameters=encode_tagged_union(b"motion-parameters-v1", b"parameters") + b"trailing")
 
 
@@ -123,25 +154,25 @@ def test_incident_support_identity_normalizes_rational_scale_and_sign() -> None:
 
 
 def test_input_ring_boundary_vertex_binds_ring_and_exact_ordinal() -> None:
-    ring_bytes = encode_tagged_union(b"input-ring-v1", b"outer-ring")
-    vertex = InputRingVertexIdV1.build(canonical_ring_bytes=ring_bytes, vertex_ordinal=3)
-    changed = InputRingVertexIdV1.build(canonical_ring_bytes=ring_bytes, vertex_ordinal=4)
+    ring = _outer_ring()
+    vertex = InputRingVertexIdV1.build(canonical_ring=ring, vertex_ordinal=2)
+    changed = InputRingVertexIdV1.build(canonical_ring=ring, vertex_ordinal=3)
 
     boundary_vertex: BoundaryVertexIdV1 = vertex
 
     assert boundary_vertex.canonical_bytes != changed.canonical_bytes
 
 
-def test_input_ring_boundary_vertex_rejects_incomplete_canonical_record() -> None:
-    incomplete = encode_tagged_union(b"input-ring-v1", b"outer-ring")[:-1]
+def test_input_ring_boundary_vertex_requires_typed_ring_and_bounded_ordinal() -> None:
+    ring = _outer_ring()
 
-    with pytest.raises(ArtifactIdentityError, match="one complete"):
-        InputRingVertexIdV1.build(canonical_ring_bytes=incomplete, vertex_ordinal=0)
-    with pytest.raises(ArtifactIdentityError, match="tagged"):
+    with pytest.raises(InvalidBoundaryVertexIdentityError, match="CanonicalRingV1"):
         InputRingVertexIdV1.build(
-            canonical_ring_bytes=encode_bytes(b"outer-ring"),
+            canonical_ring=encode_tagged_union(b"not-a-ring-v1", b"payload"),  # type: ignore[arg-type]
             vertex_ordinal=0,
         )
+    with pytest.raises(InvalidBoundaryVertexIdentityError, match="vertex count"):
+        InputRingVertexIdV1.build(canonical_ring=ring, vertex_ordinal=ring.vertex_count)
 
 
 def test_intersection_boundary_vertex_sorts_incident_support_ids() -> None:
@@ -210,7 +241,7 @@ def test_intersection_boundary_vertex_rejects_duplicate_supports() -> None:
         trim_incidence_orientation=TrimIncidenceOrientation.ENTERING,
     )
 
-    with pytest.raises(ArtifactIdentityError, match="distinct"):
+    with pytest.raises(InvalidBoundaryVertexIdentityError, match="distinct"):
         IntersectionBoundaryVertexIdV1.build(
             incident_supports=(incidence, incidence),
             intersection_ordinal=0,
@@ -218,7 +249,7 @@ def test_intersection_boundary_vertex_rejects_duplicate_supports() -> None:
 
 
 def test_intersection_boundary_vertex_rejects_malformed_support_before_sorting() -> None:
-    with pytest.raises(ArtifactIdentityError, match="typed"):
+    with pytest.raises(InvalidBoundaryVertexIdentityError, match="exact"):
         IntersectionBoundaryVertexIdV1.build(
             incident_supports=(object(), object()),  # type: ignore[arg-type]
             intersection_ordinal=0,
@@ -228,13 +259,65 @@ def test_intersection_boundary_vertex_rejects_malformed_support_before_sorting()
 def test_incident_support_rejects_degenerate_exact_coefficients() -> None:
     zero = ExactRationalV1.build(0, 1)
 
-    with pytest.raises(ArtifactIdentityError, match="nonzero"):
+    with pytest.raises(InvalidBoundaryVertexIdentityError, match="nonzero"):
         IncidentSupportIdV1.build(
             support_kind=SupportKind.LINE,
             normalized_coefficients=(zero, zero, zero),
         )
-    with pytest.raises(ArtifactIdentityError, match="four"):
+    with pytest.raises(InvalidBoundaryVertexIdentityError, match="four"):
         IncidentSupportIdV1.build(
             support_kind=SupportKind.CIRCLE,
             normalized_coefficients=(ExactRationalV1.build(Fraction(1, 2).numerator, 2), zero),
         )
+
+
+def test_component_identity_subclass_cannot_drop_added_semantics() -> None:
+    baseline = _component_identity()
+    variants = (
+        SemanticComponentIdentity(
+            baseline.component_domain,
+            baseline.strategy_version,
+            baseline.source_revision,
+            baseline.native_source_tree_digest,
+            baseline.canonical_parameter_bytes,
+            False,
+        ),
+        SemanticComponentIdentity(
+            baseline.component_domain,
+            baseline.strategy_version,
+            baseline.source_revision,
+            baseline.native_source_tree_digest,
+            baseline.canonical_parameter_bytes,
+            True,
+        ),
+    )
+
+    assert variants[0] != variants[1]
+    for variant in variants:
+        with pytest.raises(InvalidComponentIdentityError, match="exact ComponentIdentity"):
+            _ = variant.canonical_bytes
+
+
+def test_boundary_identity_subclasses_fail_before_canonical_bytes() -> None:
+    support = _line_support(1, 0, -1)
+    semantic_incident = SemanticIncidentSupport(
+        support,
+        TrimIncidenceOrientation.ENTERING,
+        True,
+    )
+    ring = _outer_ring()
+    semantic_vertex = SemanticInputRingVertex(ring, 0, True)
+
+    with pytest.raises(InvalidBoundaryVertexIdentityError, match="exact IncidentSupport"):
+        IntersectionBoundaryVertexIdV1.build(
+            incident_supports=(
+                semantic_incident,
+                IncidentSupport.build(
+                    support_id=_line_support(0, 1, -1),
+                    trim_incidence_orientation=TrimIncidenceOrientation.LEAVING,
+                ),
+            ),
+            intersection_ordinal=0,
+        )
+    with pytest.raises(InvalidBoundaryVertexIdentityError, match="exact InputRingVertexIdV1"):
+        _ = semantic_vertex.canonical_bytes

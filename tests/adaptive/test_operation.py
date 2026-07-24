@@ -1,10 +1,13 @@
 import math
 import struct
+from dataclasses import dataclass
 from dataclasses import fields
 
 import pytest
 
-from compas_cgal.adaptive.errors import ArtifactIdentityError
+from compas_cgal.adaptive.errors import InvalidEffectiveCapDecisionError
+from compas_cgal.adaptive.errors import InvalidOperationIdentityError
+from compas_cgal.adaptive.errors import InvalidTraversalDecisionError
 from compas_cgal.adaptive.identity import IdentityDigest
 from compas_cgal.adaptive.motion import EngagementCap
 from compas_cgal.adaptive.motion import ExactCircleMotion
@@ -30,15 +33,50 @@ from compas_cgal.adaptive.policy import BranchId
 from compas_cgal.adaptive.policy import ComponentId
 from compas_cgal.adaptive.policy import PassageState
 from compas_cgal.adaptive.units import ClearanceZ
-from compas_cgal.adaptive.units import CutPlane
 from compas_cgal.adaptive.units import CutZ
 from compas_cgal.adaptive.units import Point2
 from compas_cgal.adaptive.units import Vector2
 from compas_cgal.adaptive.units import WorldXY
 
 
-def _plane() -> CutPlane:
-    return CutPlane.build(CutZ.build(-2.0), ClearanceZ.build(5.0))
+@dataclass(frozen=True)
+class SemanticApproach(ApproachOperation):
+    provenance_bit: bool
+
+
+@dataclass(frozen=True)
+class SemanticPlunge(PlungeOperation):
+    provenance_bit: bool
+
+
+@dataclass(frozen=True)
+class SemanticLink(LinkSegmentOperation):
+    provenance_bit: bool
+
+
+@dataclass(frozen=True)
+class SemanticCircle(CutFullCircleOperation):
+    provenance_bit: bool
+
+
+@dataclass(frozen=True)
+class SemanticPoint(Point2[WorldXY]):
+    provenance_bit: bool
+
+
+@dataclass(frozen=True)
+class SemanticVector(Vector2[WorldXY]):
+    provenance_bit: bool
+
+
+@dataclass(frozen=True)
+class SemanticFullCap(FullCapDecision):
+    provenance_bit: bool
+
+
+@dataclass(frozen=True)
+class SemanticHold(HoldTraversalDecision):
+    provenance_bit: bool
 
 
 def _advance(*, terminal: bool = False) -> AdvanceTraversalDecision:
@@ -80,7 +118,7 @@ def _neck_cap() -> NeckCapDecision:
 def test_full_cap_requires_equal_user_and_effective_surrogate_bytes() -> None:
     user_cap = EngagementCap.build(math.pi / 2.0)
 
-    with pytest.raises(ArtifactIdentityError, match="equal"):
+    with pytest.raises(InvalidEffectiveCapDecisionError, match="equal"):
         FullCapDecision.build(
             user_cap=user_cap,
             effective_cap=EngagementCap.build(math.pi / 3.0),
@@ -105,7 +143,7 @@ def test_neck_cap_binds_evidence_class_passage_and_both_caps() -> None:
 
 
 def test_neck_cap_rejects_nonadvancing_passage_or_excessive_effective_cap() -> None:
-    with pytest.raises(ArtifactIdentityError, match="advance"):
+    with pytest.raises(InvalidEffectiveCapDecisionError, match="advance"):
         NeckCapDecision.build(
             neck_evidence_digest=IdentityDigest(b"\x22" * 32),
             width_class_id=WidthClassId.build(0),
@@ -114,7 +152,7 @@ def test_neck_cap_rejects_nonadvancing_passage_or_excessive_effective_cap() -> N
             user_cap=EngagementCap.build(math.pi / 2.0),
             effective_cap=EngagementCap.build(math.pi / 3.0),
         )
-    with pytest.raises(ArtifactIdentityError, match="exceeds"):
+    with pytest.raises(InvalidEffectiveCapDecisionError, match="exceeds"):
         NeckCapDecision.build(
             neck_evidence_digest=IdentityDigest(b"\x22" * 32),
             width_class_id=WidthClassId.build(0),
@@ -128,7 +166,7 @@ def test_neck_cap_rejects_nonadvancing_passage_or_excessive_effective_cap() -> N
 def test_neck_cap_raw_constructor_rejects_untyped_passage_state() -> None:
     cap = EngagementCap.build(math.pi / 2.0).chord_ratio_bytes
 
-    with pytest.raises(ArtifactIdentityError, match="typed passage"):
+    with pytest.raises(InvalidEffectiveCapDecisionError, match="typed passage"):
         NeckCapDecision(
             IdentityDigest(b"\x22" * 32),
             WidthClassId.build(0),
@@ -155,7 +193,7 @@ def test_advance_traversal_binds_all_ids_cursor_transition_and_terminal_bit() ->
 
 
 def test_advance_traversal_requires_real_progress_and_typed_terminal_state() -> None:
-    with pytest.raises(ArtifactIdentityError, match="advance"):
+    with pytest.raises(InvalidTraversalDecisionError, match="advance"):
         AdvanceTraversalDecision.build(
             component_id=ComponentId(b"component-a"),
             edge_id=EdgeId(b"edge-a"),
@@ -164,7 +202,7 @@ def test_advance_traversal_requires_real_progress_and_typed_terminal_state() -> 
             cursor_after=CursorIdentity(b"cursor"),
             makes_cursor_terminal=False,
         )
-    with pytest.raises(ArtifactIdentityError, match="terminal"):
+    with pytest.raises(InvalidTraversalDecisionError, match="terminal"):
         AdvanceTraversalDecision.build(
             component_id=ComponentId(b"component-a"),
             edge_id=EdgeId(b"edge-a"),
@@ -184,20 +222,60 @@ def test_hold_traversal_binds_equal_cursor_identities_and_cannot_be_terminal() -
     assert hold.canonical_bytes != _advance().canonical_bytes
 
 
-def test_approach_and_plunge_bind_the_same_xy_and_complete_cut_plane() -> None:
+def test_approach_binds_only_target_xy_and_clearance_z() -> None:
     point = Point2[WorldXY].build(1.0, 2.0)
-    approach = ApproachOperation.build(position=point, cut_plane=_plane())
-    plunge = PlungeOperation.build(position=point, cut_plane=_plane())
-    changed_plane = ApproachOperation.build(
+    approach = ApproachOperation.build(position=point, clearance_z=ClearanceZ.build(5.0))
+    changed_clearance = ApproachOperation.build(
         position=point,
-        cut_plane=CutPlane.build(CutZ.build(-3.0), ClearanceZ.build(5.0)),
+        clearance_z=ClearanceZ.build(6.0),
     )
+    unrelated_cut_z_a = CutZ.build(-2.0)
+    unrelated_cut_z_b = CutZ.build(-3.0)
 
+    assert unrelated_cut_z_a != unrelated_cut_z_b
+    assert {field.name for field in fields(ApproachOperation)} == {"position", "clearance_z"}
+    assert approach.canonical_bytes != changed_clearance.canonical_bytes
+
+
+def test_plunge_binds_same_xy_clearance_z_and_cut_z() -> None:
+    point = Point2[WorldXY].build(1.0, 2.0)
+    approach = ApproachOperation.build(position=point, clearance_z=ClearanceZ.build(5.0))
+    plunge = PlungeOperation.build(
+        position=point,
+        clearance_z=ClearanceZ.build(5.0),
+        cut_z=CutZ.build(-2.0),
+    )
+    changed_cut = PlungeOperation.build(
+        position=point,
+        clearance_z=plunge.clearance_z,
+        cut_z=CutZ.build(-3.0),
+    )
     operations: tuple[CanonicalOperation, ...] = (approach, plunge)
 
+    assert approach.position == plunge.position
+    assert approach.clearance_z == plunge.clearance_z
+    assert plunge.canonical_bytes != changed_cut.canonical_bytes
     assert approach.canonical_bytes != plunge.canonical_bytes
-    assert approach.canonical_bytes != changed_plane.canonical_bytes
     assert len(operations) == 2
+
+
+@pytest.mark.parametrize(
+    ("clearance_z", "cut_z"),
+    (
+        (ClearanceZ.build(-2.0), CutZ.build(-2.0)),
+        (ClearanceZ.build(-3.0), CutZ.build(-2.0)),
+    ),
+)
+def test_plunge_requires_clearance_strictly_above_cut(
+    clearance_z: ClearanceZ,
+    cut_z: CutZ,
+) -> None:
+    with pytest.raises(InvalidOperationIdentityError, match="strictly above"):
+        PlungeOperation.build(
+            position=Point2[WorldXY].build(1.0, 2.0),
+            clearance_z=clearance_z,
+            cut_z=cut_z,
+        )
 
 
 def test_link_segment_binds_motion_neck_scope_cap_and_hold() -> None:
@@ -255,7 +333,7 @@ def test_lateral_operation_scope_and_cap_decision_must_agree() -> None:
         Point2[WorldXY].build(1.0, 0.0),
     )
 
-    with pytest.raises(ArtifactIdentityError, match="neck scope"):
+    with pytest.raises(InvalidOperationIdentityError, match="neck scope"):
         LinkSegmentOperation.build(
             motion=motion,
             cut_z=CutZ.build(-2.0),
@@ -276,7 +354,7 @@ def test_link_and_circle_cannot_duplicate_or_exchange_the_cursor_advance() -> No
         False,
     )
 
-    with pytest.raises(ArtifactIdentityError, match="hold traversal"):
+    with pytest.raises(InvalidOperationIdentityError, match="hold traversal"):
         LinkSegmentOperation(  # type: ignore[arg-type]
             segment,
             CutZ.build(-2.0),
@@ -284,7 +362,7 @@ def test_link_and_circle_cannot_duplicate_or_exchange_the_cursor_advance() -> No
             _full_cap(),
             _advance(),
         )
-    with pytest.raises(ArtifactIdentityError, match="own the one accepted"):
+    with pytest.raises(InvalidOperationIdentityError, match="own the one accepted"):
         CutFullCircleOperation(  # type: ignore[arg-type]
             circle,
             CutZ.build(-2.0),
@@ -292,6 +370,425 @@ def test_link_and_circle_cannot_duplicate_or_exchange_the_cursor_advance() -> No
             _full_cap(),
             _hold(),
         )
+
+
+def test_operation_and_nested_decision_subclasses_cannot_drop_semantics() -> None:
+    point = Point2[WorldXY].build(1.0, 2.0)
+    approaches = (
+        SemanticApproach(point, ClearanceZ.build(5.0), False),
+        SemanticApproach(point, ClearanceZ.build(5.0), True),
+    )
+    plunge = SemanticPlunge(point, ClearanceZ.build(5.0), CutZ.build(-2.0), True)
+    cap = _full_cap()
+    semantic_cap = SemanticFullCap(cap.user_cap_bytes, cap.effective_cap_bytes, True)
+    hold = _hold()
+    semantic_hold = SemanticHold(
+        hold.component_id,
+        hold.edge_id,
+        hold.branch_id,
+        hold.cursor_before,
+        hold.cursor_after,
+        hold.makes_cursor_terminal,
+        True,
+    )
+    link_motion = ExactSegmentMotion.build(
+        Point2[WorldXY].build(0.0, 0.0),
+        Point2[WorldXY].build(1.0, 0.0),
+    )
+    link = SemanticLink(
+        link_motion,
+        CutZ.build(-2.0),
+        NoNeckScope.build(),
+        cap,
+        hold,
+        True,
+    )
+    circle = SemanticCircle(
+        ExactCircleMotion.build(
+            Point2[WorldXY].build(1.0, 0.0),
+            Vector2[WorldXY].build(1.0, 0.0),
+            False,
+        ),
+        CutZ.build(-2.0),
+        NoNeckScope.build(),
+        cap,
+        _advance(),
+        True,
+    )
+
+    assert approaches[0] != approaches[1]
+    for approach in approaches:
+        with pytest.raises(InvalidOperationIdentityError, match="exact ApproachOperation"):
+            _ = approach.canonical_bytes
+    with pytest.raises(InvalidOperationIdentityError, match="exact PlungeOperation"):
+        _ = plunge.canonical_bytes
+    with pytest.raises(InvalidOperationIdentityError, match="exact LinkSegmentOperation"):
+        _ = link.canonical_bytes
+    with pytest.raises(InvalidOperationIdentityError, match="exact CutFullCircleOperation"):
+        _ = circle.canonical_bytes
+    with pytest.raises(InvalidEffectiveCapDecisionError, match="exact FullCapDecision"):
+        _ = semantic_cap.canonical_bytes
+    with pytest.raises(InvalidTraversalDecisionError, match="exact HoldTraversalDecision"):
+        _ = semantic_hold.canonical_bytes
+
+
+def test_lateral_operation_rejects_subclassed_nested_decisions() -> None:
+    cap = _full_cap()
+    semantic_cap = SemanticFullCap(cap.user_cap_bytes, cap.effective_cap_bytes, True)
+    hold = _hold()
+    semantic_hold = SemanticHold(
+        hold.component_id,
+        hold.edge_id,
+        hold.branch_id,
+        hold.cursor_before,
+        hold.cursor_after,
+        hold.makes_cursor_terminal,
+        True,
+    )
+    motion = ExactSegmentMotion.build(
+        Point2[WorldXY].build(0.0, 0.0),
+        Point2[WorldXY].build(1.0, 0.0),
+    )
+
+    with pytest.raises(InvalidOperationIdentityError, match="exact effective-cap"):
+        LinkSegmentOperation.build(
+            motion=motion,
+            cut_z=CutZ.build(-2.0),
+            neck_scope=NoNeckScope.build(),
+            effective_cap_decision=semantic_cap,
+            traversal_decision=hold,
+        )
+    with pytest.raises(InvalidOperationIdentityError, match="exact HoldTraversalDecision"):
+        LinkSegmentOperation.build(
+            motion=motion,
+            cut_z=CutZ.build(-2.0),
+            neck_scope=NoNeckScope.build(),
+            effective_cap_decision=cap,
+            traversal_decision=semantic_hold,
+        )
+
+
+def test_lateral_raw_constructor_rejects_motion_with_subclassed_geometry() -> None:
+    semantic_point = SemanticPoint(0.0, 0.0, True)
+    segment = ExactSegmentMotion.build(
+        semantic_point,
+        Point2[WorldXY].build(1.0, 0.0),
+    )
+    semantic_vector = SemanticVector(1.0, 0.0, True)
+    circle = ExactCircleMotion.build(
+        Point2[WorldXY].build(1.0, 0.0),
+        semantic_vector,
+        False,
+    )
+
+    with pytest.raises(InvalidOperationIdentityError, match="exact Point2"):
+        LinkSegmentOperation.build(
+            motion=segment,
+            cut_z=CutZ.build(-2.0),
+            neck_scope=NoNeckScope.build(),
+            effective_cap_decision=_full_cap(),
+            traversal_decision=_hold(),
+        )
+    with pytest.raises(InvalidOperationIdentityError, match="exact Vector2"):
+        CutFullCircleOperation.build(
+            motion=circle,
+            cut_z=CutZ.build(-2.0),
+            neck_scope=NoNeckScope.build(),
+            effective_cap_decision=_full_cap(),
+            traversal_decision=_advance(),
+        )
+
+
+def test_cap_decision_mutation_matrix_binds_every_field() -> None:
+    full_cap = _full_cap()
+    changed_full_cap_value = EngagementCap.build(math.pi / 3.0)
+    full_variants = (
+        full_cap,
+        FullCapDecision.build(
+            user_cap=changed_full_cap_value,
+            effective_cap=changed_full_cap_value,
+        ),
+    )
+    neck_variants = (
+        _neck_cap(),
+        NeckCapDecision.build(
+            neck_evidence_digest=IdentityDigest(b"\x23" * 32),
+            width_class_id=WidthClassId.build(0),
+            passage_before=PassageState.UNVISITED,
+            passage_after=PassageState.FIRST_PASS_COMPLETE,
+            user_cap=EngagementCap.build(math.pi / 2.0),
+            effective_cap=EngagementCap.build(math.pi / 3.0),
+        ),
+        NeckCapDecision.build(
+            neck_evidence_digest=IdentityDigest(b"\x22" * 32),
+            width_class_id=WidthClassId.build(1),
+            passage_before=PassageState.UNVISITED,
+            passage_after=PassageState.FIRST_PASS_COMPLETE,
+            user_cap=EngagementCap.build(math.pi / 2.0),
+            effective_cap=EngagementCap.build(math.pi / 3.0),
+        ),
+        NeckCapDecision.build(
+            neck_evidence_digest=IdentityDigest(b"\x22" * 32),
+            width_class_id=WidthClassId.build(0),
+            passage_before=PassageState.FIRST_PASS_COMPLETE,
+            passage_after=PassageState.SECOND_PASS_COMPLETE,
+            user_cap=EngagementCap.build(math.pi / 2.0),
+            effective_cap=EngagementCap.build(math.pi / 3.0),
+        ),
+        NeckCapDecision.build(
+            neck_evidence_digest=IdentityDigest(b"\x22" * 32),
+            width_class_id=WidthClassId.build(0),
+            passage_before=PassageState.UNVISITED,
+            passage_after=PassageState.FIRST_PASS_COMPLETE,
+            user_cap=EngagementCap.build(3.0 * math.pi / 4.0),
+            effective_cap=EngagementCap.build(math.pi / 3.0),
+        ),
+        NeckCapDecision.build(
+            neck_evidence_digest=IdentityDigest(b"\x22" * 32),
+            width_class_id=WidthClassId.build(0),
+            passage_before=PassageState.UNVISITED,
+            passage_after=PassageState.FIRST_PASS_COMPLETE,
+            user_cap=EngagementCap.build(math.pi / 2.0),
+            effective_cap=EngagementCap.build(math.pi / 4.0),
+        ),
+    )
+
+    assert len({decision.canonical_bytes for decision in full_variants}) == len(full_variants)
+    assert len({decision.canonical_bytes for decision in neck_variants}) == len(neck_variants)
+
+
+def test_traversal_decision_mutation_matrix_binds_every_field() -> None:
+    hold = _hold()
+    hold_variants = (
+        hold,
+        HoldTraversalDecision.build(
+            component_id=ComponentId(b"component-b"),
+            edge_id=hold.edge_id,
+            branch_id=hold.branch_id,
+            cursor=hold.cursor_before,
+        ),
+        HoldTraversalDecision.build(
+            component_id=hold.component_id,
+            edge_id=EdgeId(b"edge-b"),
+            branch_id=hold.branch_id,
+            cursor=hold.cursor_before,
+        ),
+        HoldTraversalDecision.build(
+            component_id=hold.component_id,
+            edge_id=hold.edge_id,
+            branch_id=BranchId(b"branch-b"),
+            cursor=hold.cursor_before,
+        ),
+        HoldTraversalDecision.build(
+            component_id=hold.component_id,
+            edge_id=hold.edge_id,
+            branch_id=hold.branch_id,
+            cursor=CursorIdentity(b"cursor-other"),
+        ),
+    )
+    advance = _advance()
+    advance_variants = (
+        advance,
+        AdvanceTraversalDecision.build(
+            component_id=ComponentId(b"component-b"),
+            edge_id=advance.edge_id,
+            branch_id=advance.branch_id,
+            cursor_before=advance.cursor_before,
+            cursor_after=advance.cursor_after,
+            makes_cursor_terminal=advance.makes_cursor_terminal,
+        ),
+        AdvanceTraversalDecision.build(
+            component_id=advance.component_id,
+            edge_id=EdgeId(b"edge-b"),
+            branch_id=advance.branch_id,
+            cursor_before=advance.cursor_before,
+            cursor_after=advance.cursor_after,
+            makes_cursor_terminal=advance.makes_cursor_terminal,
+        ),
+        AdvanceTraversalDecision.build(
+            component_id=advance.component_id,
+            edge_id=advance.edge_id,
+            branch_id=BranchId(b"branch-b"),
+            cursor_before=advance.cursor_before,
+            cursor_after=advance.cursor_after,
+            makes_cursor_terminal=advance.makes_cursor_terminal,
+        ),
+        AdvanceTraversalDecision.build(
+            component_id=advance.component_id,
+            edge_id=advance.edge_id,
+            branch_id=advance.branch_id,
+            cursor_before=CursorIdentity(b"cursor-before-other"),
+            cursor_after=advance.cursor_after,
+            makes_cursor_terminal=advance.makes_cursor_terminal,
+        ),
+        AdvanceTraversalDecision.build(
+            component_id=advance.component_id,
+            edge_id=advance.edge_id,
+            branch_id=advance.branch_id,
+            cursor_before=advance.cursor_before,
+            cursor_after=CursorIdentity(b"cursor-after-other"),
+            makes_cursor_terminal=advance.makes_cursor_terminal,
+        ),
+        _advance(terminal=True),
+    )
+
+    assert len({decision.canonical_bytes for decision in hold_variants}) == len(hold_variants)
+    assert len({decision.canonical_bytes for decision in advance_variants}) == len(advance_variants)
+
+
+def test_operation_mutation_matrix_binds_every_field() -> None:
+    point = Point2[WorldXY].build(1.0, 2.0)
+    approach = ApproachOperation.build(position=point, clearance_z=ClearanceZ.build(5.0))
+    approach_variants = (
+        approach,
+        ApproachOperation.build(position=Point2[WorldXY].build(2.0, 2.0), clearance_z=approach.clearance_z),
+        ApproachOperation.build(position=point, clearance_z=ClearanceZ.build(6.0)),
+    )
+    plunge = PlungeOperation.build(
+        position=point,
+        clearance_z=ClearanceZ.build(5.0),
+        cut_z=CutZ.build(-2.0),
+    )
+    plunge_variants = (
+        plunge,
+        PlungeOperation.build(
+            position=Point2[WorldXY].build(2.0, 2.0),
+            clearance_z=plunge.clearance_z,
+            cut_z=plunge.cut_z,
+        ),
+        PlungeOperation.build(position=point, clearance_z=ClearanceZ.build(6.0), cut_z=plunge.cut_z),
+        PlungeOperation.build(position=point, clearance_z=plunge.clearance_z, cut_z=CutZ.build(-3.0)),
+    )
+    link_motion = ExactSegmentMotion.build(
+        Point2[WorldXY].build(0.0, 0.0),
+        Point2[WorldXY].build(1.0, 0.0),
+    )
+    link = LinkSegmentOperation.build(
+        motion=link_motion,
+        cut_z=CutZ.build(-2.0),
+        neck_scope=OrientedNeckScope.build(
+            neck_owner_id=NeckOwnerId(b"neck-a"),
+            orientation=NeckTraversalOrientation.FORWARD,
+        ),
+        effective_cap_decision=_neck_cap(),
+        traversal_decision=_hold(),
+    )
+    link_variants = (
+        link,
+        LinkSegmentOperation.build(
+            motion=ExactSegmentMotion.build(
+                Point2[WorldXY].build(0.0, 0.0),
+                Point2[WorldXY].build(2.0, 0.0),
+            ),
+            cut_z=link.cut_z,
+            neck_scope=link.neck_scope,
+            effective_cap_decision=link.effective_cap_decision,
+            traversal_decision=link.traversal_decision,
+        ),
+        LinkSegmentOperation.build(
+            motion=link.motion,
+            cut_z=CutZ.build(-3.0),
+            neck_scope=link.neck_scope,
+            effective_cap_decision=link.effective_cap_decision,
+            traversal_decision=link.traversal_decision,
+        ),
+        LinkSegmentOperation.build(
+            motion=link.motion,
+            cut_z=link.cut_z,
+            neck_scope=OrientedNeckScope.build(
+                neck_owner_id=NeckOwnerId(b"neck-b"),
+                orientation=NeckTraversalOrientation.FORWARD,
+            ),
+            effective_cap_decision=link.effective_cap_decision,
+            traversal_decision=link.traversal_decision,
+        ),
+        LinkSegmentOperation.build(
+            motion=link.motion,
+            cut_z=link.cut_z,
+            neck_scope=link.neck_scope,
+            effective_cap_decision=NeckCapDecision.build(
+                neck_evidence_digest=IdentityDigest(b"\x23" * 32),
+                width_class_id=WidthClassId.build(0),
+                passage_before=PassageState.UNVISITED,
+                passage_after=PassageState.FIRST_PASS_COMPLETE,
+                user_cap=EngagementCap.build(math.pi / 2.0),
+                effective_cap=EngagementCap.build(math.pi / 3.0),
+            ),
+            traversal_decision=link.traversal_decision,
+        ),
+        LinkSegmentOperation.build(
+            motion=link.motion,
+            cut_z=link.cut_z,
+            neck_scope=link.neck_scope,
+            effective_cap_decision=link.effective_cap_decision,
+            traversal_decision=HoldTraversalDecision.build(
+                component_id=link.traversal_decision.component_id,
+                edge_id=link.traversal_decision.edge_id,
+                branch_id=link.traversal_decision.branch_id,
+                cursor=CursorIdentity(b"cursor-other"),
+            ),
+        ),
+    )
+    circle_motion = ExactCircleMotion.build(
+        Point2[WorldXY].build(1.0, 0.0),
+        Vector2[WorldXY].build(1.0, 0.0),
+        False,
+    )
+    circle = CutFullCircleOperation.build(
+        motion=circle_motion,
+        cut_z=CutZ.build(-2.0),
+        neck_scope=NoNeckScope.build(),
+        effective_cap_decision=_full_cap(),
+        traversal_decision=_advance(),
+    )
+    changed_cap_value = EngagementCap.build(math.pi / 3.0)
+    circle_variants = (
+        circle,
+        CutFullCircleOperation.build(
+            motion=ExactCircleMotion.build(circle.motion.center, circle.motion.phase_vector, True),
+            cut_z=circle.cut_z,
+            neck_scope=circle.neck_scope,
+            effective_cap_decision=circle.effective_cap_decision,
+            traversal_decision=circle.traversal_decision,
+        ),
+        CutFullCircleOperation.build(
+            motion=circle.motion,
+            cut_z=CutZ.build(-3.0),
+            neck_scope=circle.neck_scope,
+            effective_cap_decision=circle.effective_cap_decision,
+            traversal_decision=circle.traversal_decision,
+        ),
+        CutFullCircleOperation.build(
+            motion=circle.motion,
+            cut_z=circle.cut_z,
+            neck_scope=OrientedNeckScope.build(
+                neck_owner_id=NeckOwnerId(b"neck-a"),
+                orientation=NeckTraversalOrientation.FORWARD,
+            ),
+            effective_cap_decision=_neck_cap(),
+            traversal_decision=circle.traversal_decision,
+        ),
+        CutFullCircleOperation.build(
+            motion=circle.motion,
+            cut_z=circle.cut_z,
+            neck_scope=circle.neck_scope,
+            effective_cap_decision=FullCapDecision.build(
+                user_cap=changed_cap_value,
+                effective_cap=changed_cap_value,
+            ),
+            traversal_decision=circle.traversal_decision,
+        ),
+        CutFullCircleOperation.build(
+            motion=circle.motion,
+            cut_z=circle.cut_z,
+            neck_scope=circle.neck_scope,
+            effective_cap_decision=circle.effective_cap_decision,
+            traversal_decision=_advance(terminal=True),
+        ),
+    )
+
+    for variants in (approach_variants, plunge_variants, link_variants, circle_variants):
+        assert len({operation.canonical_bytes for operation in variants}) == len(variants)
 
 
 def test_canonical_operations_do_not_embed_or_trust_witnesses() -> None:
