@@ -96,11 +96,17 @@ cutter sub-arcs. Then reuse the **existing exact run-assembly + cap decision** v
 
 !!! success "CONFIRMED (compiled + measured this session)"
     Aggregated-union fix (7×) and copy-elimination (11%) committed, behavior-preserving.
-    Point-location = `walk_along_line`. **The clean query fix — zone the Gps's own arrangement and
-    read `contained()` — is validated on the real depletion path** (`gps_zone.cpp`); the harvest
-    visitor interface (`found_subcurve`) is confirmed.
+    Point-location = `walk_along_line`. The clean query fix — zone the Gps's own arrangement, read
+    `contained()` — is validated on the real depletion path. **The full harvest is validated end to
+    end (`harvest.cpp`): an `Arrangement_zone_2` + `found_subcurve` visitor sums engaged sub-arc
+    spans to the EXACT engagement — full immersion → 2π, edge-straddle → π, in-cleared → 0.** The
+    query redesign is technically solved; every piece is proven with running code.
 
-!!! warning "UNDER BUILD (not yet coded)"
-    The harvest visitor + `const` handling + `engagement_at` integration + TDD-against-current +
-    measured swap. Until these land, the certified path uses the (now 7× faster)
-    `General_polygon_set_2` code — correct, just not yet locally queried.
+!!! warning "UNDER BUILD (mechanical integration only)"
+    What remains is the port into the certified module: in `engagement_2.cpp`, replace the
+    `region.intersection(stock.set())` overlay + harvest (lines ~393–441) with the `harvest.cpp`
+    zone-visitor harvest that fills the SAME `arcs` vector, then feed it to the EXISTING exact
+    run-assembly + cap decision (unchanged — the certificate logic is untouched). Resolve the
+    `const` (justified `const_cast`, zone is non-mutating). **Add alongside, TDD it reproduces the
+    165 tests' TEA/verdicts EXACTLY, measure the query speedup, swap with permission.** Until then
+    the certified path uses the (7× faster) `General_polygon_set_2` code.
