@@ -171,6 +171,16 @@ def test_binary64_normalizes_signed_zero_and_rejects_nonfinite_values() -> None:
             encode_binary64(nonfinite)
 
 
+def test_binary64_rejects_integers_before_float_precision_can_collapse() -> None:
+    distinct_integers = (2**53, 2**53 + 1)
+
+    assert len(set(distinct_integers)) == 2
+    assert len({float(value) for value in distinct_integers}) == 1
+    for value in distinct_integers:
+        with pytest.raises(CanonicalEncodingError, match="exact float"):
+            encode_binary64(value)  # type: ignore[arg-type]
+
+
 def test_exact_rational_normalizes_sign_and_common_factors() -> None:
     reduced = ExactRationalV1.build(1, 2)
 

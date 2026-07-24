@@ -88,17 +88,13 @@ def encode_integer(value: int) -> bytes:
 
 
 def encode_binary64(value: float) -> bytes:
-    if type(value) not in (int, float):
-        raise CanonicalEncodingError("canonical binary64 value must be a finite real number.")
-    try:
-        numeric = float(value)
-    except OverflowError:
-        raise CanonicalEncodingError("canonical binary64 value must be finite.") from None
-    if not math.isfinite(numeric):
+    if type(value) is not float:
+        raise CanonicalEncodingError("canonical binary64 value must be an exact float.")
+    if not math.isfinite(value):
         raise CanonicalEncodingError("canonical binary64 value must be finite.")
-    if numeric == 0.0:
-        numeric = 0.0
-    return _node(b"D", _BINARY64.pack(numeric))
+    if value == 0.0:
+        value = 0.0
+    return _node(b"D", _BINARY64.pack(value))
 
 
 def encode_boolean(value: bool) -> bytes:
