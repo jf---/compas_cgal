@@ -104,12 +104,19 @@ void Stock2::subtract_disk(double cx, double cy, double radius)
 void Stock2::subtract_point_chain(const std::vector<std::pair<double, double>>& centers,
                                   double radius)
 {
-    Gps region;
+    // AGGREGATED union: build every disk, union them in ONE sweep-based pass, then a
+    // single difference. The prior per-disk `region.join(disk_set)` was the O(N^2)
+    // Boolean_set_operations anti-pattern -- each incremental join re-swept the whole
+    // growing union. General_polygon_set_2::join(first, last) unions the range in one
+    // arrangement. The result is identical (union is associative/commutative) -- this
+    // is purely a cost fix, not a semantic change.
+    std::vector<GpsPolygon> disks;
+    disks.reserve(centers.size());
     for (const auto& [x, y] : centers) {
-        Gps disk_set;
-        disk_set.insert(disk_polygon(EPoint(x, y), Epeck::FT(radius)));
-        region.join(disk_set);
+        disks.push_back(disk_polygon(EPoint(x, y), Epeck::FT(radius)));
     }
+    Gps region;
+    region.join(disks.begin(), disks.end());
     set_.difference(region);
 }
 
