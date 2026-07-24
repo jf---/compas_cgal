@@ -137,7 +137,7 @@ Unsupported geometry raises a named exception.
 
 ```mermaid
 flowchart TD
-  I["D, r, cap, precleared entry, policies"] --> RD["C_r + M_r"]
+  I["D, cut plane, r, cap, entry, policies"] --> RD["C_r + M_r"]
   RD --> ID["InputIdentity"]
   I --> MAT["MatGraph: CGAL segment Voronoi / medial axis"]
   MAT --> CP["Middle-curve candidate lattice"]
@@ -228,6 +228,16 @@ Stable feature provenance uses
 conversion/merge semantics, or a native-tested exact bijective post-map.
 Default SDG storage is insufficient because it does not retain caller IDs.
 Point-sites and open-segment sites have distinct canonical IDs.
+
+Clearance clipping handles constant polynomials before normalization: positive
+retains, negative discards, and identically zero retains the whole dual cell as
+a closed `C_r`-boundary plateau. A quartic clip root is represented as
+`AlgebraicCurvePointV1`—original dual identity plus
+`AlgebraicRootIdV1`—rather than coerced into a square-root-kernel point.
+Same-curve order uses the root kernel; cross-curve equality uses original-node
+identity or the bivariate algebraic kernel. Endpoint provenance is an
+independent event bitset plus feature CSR, so coincident original/clip events
+and multi-feature vertices are preserved.
 
 For a sampled MAT point `m` with incident boundary footpoint `p` and reporting
 clearance `d`, the one-sided MATHSM proposal is:
@@ -397,6 +407,10 @@ For a frozen `Stock2` contour and an exact segment or full-circle center path,
    zero-dimensional event fibre;
 7. returns `CERTIFIED`, `CAP_EXCEEDED`, or `UNRESOLVED_DEGENERACY`.
 
+`BoundaryVertexIdV1` is structural: a canonical input-ring vertex ID, or sorted
+normalized incident-support IDs plus exact lexicographic intersection ordinal
+and trim-incidence orientation. Raw one-root representations are not identity.
+
 `UNRESOLVED_DEGENERACY` is a hard failure. Positive-length overlap is handled
 explicitly or remains unresolved; it is never silently treated as empty.
 
@@ -407,9 +421,10 @@ for diagnostics, but only exact signs and topology determine the verdict.
 Exact rational equations are denominator-cleared to primitive integer
 polynomials. The concrete no-GMP root backend is
 `CGAL::Algebraic_kernel_d_1<CORE::BigInt>` under the locked CORE/Boost
-configuration. Each projective chart yields primitive square-free polynomials.
-Segment motion
-has bidegree bounds `(1,2)` for line supports and `(2,4)` for circle supports;
+configuration; bivariate arrangement/elimination uses
+`CGAL::Algebraic_kernel_d_2<CORE::BigInt>`. Each projective chart yields
+primitive square-free polynomials. Segment motion has bidegree bounds `(1,2)`
+for line supports and `(2,4)` for circle supports;
 full-circle motion has bounds `(2,2)` and `(4,4)` respectively. Generated
 degrees above those bounds are a construction error.
 
@@ -551,6 +566,9 @@ effective cap no larger than the user cap. `DepletionPolicy.build(...)` owns
 the exact rational chord bound and exact center-count limit.
 `TraversalPolicy.build(...)` owns component/branch order and the finite forward
 window. All factories validate canonical ordering and hash their exact bytes.
+Width boundaries use the canonical exact-rational encoding; for increasing
+boundaries `b_i`, classes are `[0,b_0]`, `(b_0,b_1]`, ..., with equality owned
+by the narrower, more restrictive class.
 
 Each oriented neck edge carries one of `UNVISITED`, `FIRST_PASS_COMPLETE`,
 `SECOND_PASS_COMPLETE`, or `TERMINAL`. The accepted operation records the
@@ -573,16 +591,20 @@ Before return:
 - fresh exact full-sweep replay proves `M_r \ union_i W_i` empty.
 
 `CoverageCertificate` binds the fresh initial-state digest, ordered exact-sweep
-witnesses, terminal traversal digest, and exact residual-empty verdict.
-Generation raises `IncompletePocketCoverageError` for any residual component;
-it never claims that dense sampling “looks covered.”
+witnesses, canonical ordered-operation digest/index chain, recomputed effective
+cap decisions, terminal traversal/stock/coverage digests, unreachable-residual
+digest, and exact residual-empty verdict. Replay validates legal
+approach-plunge-lateral grammar and exact phase/Z continuity. Generation raises
+`IncompletePocketCoverageError` for any residual component; it never claims
+that dense sampling “looks covered.”
 
 ## Artifact identity
 
 Identity is a directed acyclic structure, not one ambiguous hash.
 
-1. `InputIdentity`: canonical ring bytes and order, frame, tool and entry
-   geometry, native cap bytes, all policies, and schema versions.
+1. `InputIdentity`: canonical ring bytes and order, frame, cut plane, tool and
+   entry geometry/bore interval, native cap bytes, all policies, and schema
+   versions.
 2. `BuildProvenance`: source revision plus dirty-tree digest, native extension
    binary digest, `pixi.lock` digest, compiler/standard-library identity, CGAL
    version, and component source digests.
@@ -714,7 +736,7 @@ straight-skeleton output must remain unchanged.
 
 Implement precleared entry, finite joint candidate enumeration, containment,
 event-exact link/circle certification, exact depletion, branch traversal, and
-the exact empty-stock terminal gate.
+the exact empty-`M_r` residual terminal gate.
 
 ### G5 — artifact and independent acceptance
 
@@ -722,10 +744,12 @@ Fresh replay rebuilds stock from canonical input and consumes the canonical
 operation stream. It creates pristine stock and coverage ledgers, applies the
 declared `PreclearedEntry`, then derives each effective cap from the canonical
 policy record, certifies against frozen pre-depletion stock, and only then
-depletes both ledgers. It never trusts generator verdicts or stock snapshots.
-It shares the exact kernel and event oracle intentionally; independence is in
-state lineage and orchestration. Kernel/oracle defects are covered by their
-exact reference and mutation suites.
+depletes both ledgers. It recomputes operation grammar, exact phase continuity,
+neck/pass state, traversal terminality, and empty `M_r` coverage. It never
+trusts generator verdicts or stock snapshots. It shares the exact kernel and
+event oracle intentionally; independence is in state lineage and
+orchestration. Kernel/oracle defects are covered by their exact reference and
+mutation suites.
 
 ## Acceptance matrix
 
