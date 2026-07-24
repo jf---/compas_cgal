@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "source_tree_digest": "native-source-tree-v1",
+  "packages": [
+    {
+      "name": "cgal",
+      "version": "6.0.1",
+      "url": "https://github.com/CGAL/cgal/releases/download/v6.0.1/CGAL-6.0.1.zip",
+      "archive_sha256": "884da87edd0701932302aa36d24f330e62cab27e595567507cfd2df0cf82fdd2",
+      "source_tree_sha256": "37353282eb92a62dd412cfdc144f9ab8706607d278ef0e3e0aff5a351043f421",
+      "license_identifier": "LicenseRef-CGAL-Package-Dependent"
+    },
+    {
+      "name": "boost",
+      "version": "1.82.0",
+      "url": "https://archives.boost.io/release/1.82.0/source/boost_1_82_0.tar.gz",
+      "archive_sha256": "66a469b6e608a51f8347236f4912e27dc5c60c60d7d53ae9bfe4683316c6f04c",
+      "source_tree_sha256": "75a4827f862f947bedf60daa19385c43289cd8666525f37cbedc79ec32a945fe",
+      "license_identifier": "BSL-1.0"
+    },
+    {
+      "name": "eigen",
+      "version": "3.4.0",
+      "url": "https://gitlab.com/libeigen/eigen/-/archive/3.4.0/eigen-3.4.0.tar.gz",
+      "archive_sha256": "8586084f71f9bde545ee7fa6d00288b264a2b7ac3607b974e54d13e7162c1c72",
+      "source_tree_sha256": "f8737c321ce0287bfcb8ff8beea83486cb6e1cd32d83631cd24768b5692c42f0",
+      "license_identifier": "MPL-2.0"
+    }
+  ]
+}

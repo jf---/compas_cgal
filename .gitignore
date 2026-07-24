@@ -9,6 +9,10 @@ __pycache__/
 build/
 _build/
 **/build/
+!docs/build/
+!docs/build/native-dependency-lock.json
+!tests/build/
+!tests/build/test_native_source_integrity.py
 develop-eggs/
 dist/
 downloads/
@@ -87,6 +91,8 @@ coverage.xml
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
+.pixi/
+.testmondata*
 
 # ==============================================================================
 # COMPAS

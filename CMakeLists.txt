@@ -40,6 +40,7 @@ endif()
 # Dependencies
 # =====================================================================
 include(ExternalProject)
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/NativeDependencies.cmake")
 
 # Define source directories for external dependencies
 set(EXTERNAL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/external")
@@ -50,62 +51,34 @@ set(EIGEN_SOURCE_DIR "${EXTERNAL_DIR}/eigen")
 # Create a custom target for all external dependencies
 add_custom_target(external_downloads ALL)
 
-# ========================================================================
-# CGAL
-# ========================================================================
-if(NOT EXISTS "${CGAL_SOURCE_DIR}")
-    message(STATUS "Downloading CGAL...")
-    ExternalProject_Add(
-        cgal_download
-        URL https://github.com/CGAL/cgal/releases/download/v6.0.1/CGAL-6.0.1.zip
-        SOURCE_DIR "${CGAL_SOURCE_DIR}"
-        CONFIGURE_COMMAND ""
-        BUILD_COMMAND ""
-        INSTALL_COMMAND ""
-        LOG_DOWNLOAD ON
-        UPDATE_COMMAND ""
-        PATCH_COMMAND ""
-        TLS_VERIFY ON
-    )
-    add_dependencies(external_downloads cgal_download)
-endif()
+native_dependencies_validate_lock(
+    "${CMAKE_CURRENT_SOURCE_DIR}/docs/build/native-dependency-lock.json"
+)
 
-# ========================================================================
-# BOOST
-# ========================================================================
-if(NOT EXISTS "${BOOST_SOURCE_DIR}")
-    message(STATUS "Configuring Boost...")
-    ExternalProject_Add(boost_download
-        URL https://archives.boost.io/release/1.82.0/source/boost_1_82_0.tar.gz
-        SOURCE_DIR "${BOOST_SOURCE_DIR}"
-        CONFIGURE_COMMAND ""
-        BUILD_COMMAND ""
-        INSTALL_COMMAND ${CMAKE_COMMAND} -E copy_directory <SOURCE_DIR>/boost ${BOOST_SOURCE_DIR}/boost
-        LOG_DOWNLOAD
-        ON
-    )
-
-    add_dependencies(external_downloads boost_download)
-endif()
-
-# ========================================================================
-# EIGEN
-# ========================================================================
-if(NOT EXISTS "${EIGEN_SOURCE_DIR}")
-    message(STATUS "Downloading Eigen...")
-    ExternalProject_Add(
-        eigen_download
-        URL https://gitlab.com/libeigen/eigen/-/archive/3.4.0/eigen-3.4.0.tar.gz
-        SOURCE_DIR "${EIGEN_SOURCE_DIR}"
-        CONFIGURE_COMMAND ""
-        BUILD_COMMAND ""
-        INSTALL_COMMAND ""
-        LOG_DOWNLOAD ON
-        UPDATE_COMMAND ""
-        PATCH_COMMAND ""
-    )
-    add_dependencies(external_downloads eigen_download)
-endif()
+native_add_locked_dependency(
+    NAME cgal
+    SOURCE_DIR "${CGAL_SOURCE_DIR}"
+    VERSION "${CGAL_VERSION}"
+    URL "${CGAL_URL}"
+    ARCHIVE_SHA256 "${CGAL_ARCHIVE_SHA256}"
+    SOURCE_TREE_SHA256 "${CGAL_SOURCE_TREE_SHA256}"
+)
+native_add_locked_dependency(
+    NAME boost
+    SOURCE_DIR "${BOOST_SOURCE_DIR}"
+    VERSION "${BOOST_VERSION}"
+    URL "${BOOST_URL}"
+    ARCHIVE_SHA256 "${BOOST_ARCHIVE_SHA256}"
+    SOURCE_TREE_SHA256 "${BOOST_SOURCE_TREE_SHA256}"
+)
+native_add_locked_dependency(
+    NAME eigen
+    SOURCE_DIR "${EIGEN_SOURCE_DIR}"
+    VERSION "${EIGEN_VERSION}"
+    URL "${EIGEN_URL}"
+    ARCHIVE_SHA256 "${EIGEN_ARCHIVE_SHA256}"
+    SOURCE_TREE_SHA256 "${EIGEN_SOURCE_TREE_SHA256}"
+)
 
 # Add include directories
 set(CGAL_INCLUDE_DIR "${CGAL_SOURCE_DIR}/include")
