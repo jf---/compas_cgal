@@ -390,11 +390,14 @@ EngagementSample engagement_at(const Stock2& stock, double cx, double cy,
 
     EngagementSample out{0.0, 0.0, false};
 
-    // 1. region = stock intersect tool disk (regularized, exact).
-    Gps disk_set;
-    disk_set.insert(disk_polygon(EPoint(cx, cy), FT(tool_radius)));
-    Gps region = stock.set();
-    region.intersection(disk_set);
+    // 1. region = tool disk intersect stock (regularized, exact). Intersect the SMALL
+    //    disk against the stock passed BY CONST REF; never `Gps region = stock.set()`,
+    //    which deep-copies the entire (growing) stock arrangement on EVERY query
+    //    (20 stations/circle x hundreds of circles). intersection() is commutative, so
+    //    disk-in-place gives the identical result with no whole-stock copy.
+    Gps region;
+    region.insert(disk_polygon(EPoint(cx, cy), FT(tool_radius)));
+    region.intersection(stock.set());
     if (region.is_empty()) return out;
 
     // 2. Harvest boundary arcs supported by the cutter circle (rim-in-material).
