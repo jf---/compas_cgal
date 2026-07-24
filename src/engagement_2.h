@@ -4,6 +4,16 @@
 
 class Stock2;
 
+// Convert the ergonomic angle cap exactly once at the native boundary. The
+// returned binary64 value is subsequently injected into Epeck as a rational.
+// Both the angle and the computed surrogate are validated; a positive angle
+// whose squared sine underflows to zero is outside the representable contract.
+double cap_chord_ratio(double cap_radians);
+
+// Compare two valid binary64 cap surrogates after exact Epeck injection.
+// Invalid values outside (0, 4] raise std::invalid_argument.
+bool cap_chord_ratio_le(double lhs, double rhs);
+
 // Tool-engagement-angle sample at one cutter station. Angles in radians and are
 // REPORTING quantities (doubles produced for humans/statistics): total_tea sums
 // the angular extent of every rim arc in contact with material, max_run_tea is

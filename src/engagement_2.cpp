@@ -495,10 +495,10 @@ constexpr int CERTIFY_MAX_DEPTH = 24;
 // Certify TEA <= cap for every center on segment [(x0,y0),(x1,y1)], accumulating
 // into `acc`. INVARIANT: acc.cap_certified stays true until counter-evidence is
 // found, after which callers must stop -- one uncertified sub-span condemns the
-// whole motion. cap_chord_ratio is the precomputed FULL-cap surrogate, reused
-// for max_tea reporting on segments too coarse to guard.
+// whole motion. full_cap_chord_ratio is the precomputed FULL-cap surrogate,
+// reused for max_tea reporting on segments too coarse to guard.
 void certify_recursive(const Stock2& stock, double x0, double y0, double x1,
-                       double y1, double r, double cap, double cap_chord_ratio,
+                       double y1, double r, double cap, double full_cap_chord_ratio,
                        CertifiedTea& acc, int depth)
 {
     const double seg_len = std::hypot(x1 - x0, y1 - y0);
@@ -513,8 +513,7 @@ void certify_recursive(const Stock2& stock, double x0, double y0, double x1,
         // engagement_at. cap_guarded in (0, cap] subset (0, pi] => this ratio is
         // in (0, 4], the exact predicate's valid range. The station VERDICT
         // (cap_exceeded) is exact; only the threshold SELECTION is analytic.
-        const double sg = std::sin(0.5 * cap_guarded);
-        const double guarded_ratio = 4.0 * sg * sg;
+        const double guarded_ratio = cap_chord_ratio(cap_guarded);
         // GAP-CLOSURE GUARD (merge repair). gamma_guard = 2*GROWTH(half_spacing)
         // == guard (the existing factor-2 tea_guard, reused). Any void gap that
         // could close within one half-spacing of travel has span <= GROWTH(hs) <=
@@ -525,8 +524,9 @@ void certify_recursive(const Stock2& stock, double x0, double y0, double x1,
         // bridges stations with NO merge term (derivation at tea_growth_bound). The
         // cap min(gamma_guard, pi) keeps the surrogate in [0, 4]; gamma_guard >= pi
         // closes all sub-pi gaps (maximally pessimistic, the safe direction).
-        const double gg = std::sin(0.5 * std::min(guard, std::numbers::pi));
-        const double gap_close_ratio = 4.0 * gg * gg;
+        const double closed_gap_cap = std::min(guard, std::numbers::pi);
+        const double gap_close_ratio =
+            closed_gap_cap == 0.0 ? 0.0 : cap_chord_ratio(closed_gap_cap);
         const EngagementSample e0 = engagement_at(stock, x0, y0, r, guarded_ratio, gap_close_ratio);
         const EngagementSample e1 = engagement_at(stock, x1, y1, r, guarded_ratio, gap_close_ratio);
         acc.max_tea = std::max({acc.max_tea, e0.max_run_tea, e1.max_run_tea});
@@ -537,8 +537,8 @@ void certify_recursive(const Stock2& stock, double x0, double y0, double x1,
         // certification is possible here. Measure only to report max_tea (a
         // reported double; cap_exceeded against the full cap is deliberately
         // ignored -- the verdict comes only from the guarded test), then refine.
-        const EngagementSample e0 = engagement_at(stock, x0, y0, r, cap_chord_ratio);
-        const EngagementSample e1 = engagement_at(stock, x1, y1, r, cap_chord_ratio);
+        const EngagementSample e0 = engagement_at(stock, x0, y0, r, full_cap_chord_ratio);
+        const EngagementSample e1 = engagement_at(stock, x1, y1, r, full_cap_chord_ratio);
         acc.max_tea = std::max({acc.max_tea, e0.max_run_tea, e1.max_run_tea});
     }
 
@@ -549,12 +549,34 @@ void certify_recursive(const Stock2& stock, double x0, double y0, double x1,
         return;
     }
     const double mx = 0.5 * (x0 + x1), my = 0.5 * (y0 + y1);
-    certify_recursive(stock, x0, y0, mx, my, r, cap, cap_chord_ratio, acc, depth + 1);
+    certify_recursive(stock, x0, y0, mx, my, r, cap, full_cap_chord_ratio, acc, depth + 1);
     if (!acc.cap_certified) return;
-    certify_recursive(stock, mx, my, x1, y1, r, cap, cap_chord_ratio, acc, depth + 1);
+    certify_recursive(stock, mx, my, x1, y1, r, cap, full_cap_chord_ratio, acc, depth + 1);
 }
 
 } // namespace
+
+double cap_chord_ratio(double cap_radians)
+{
+    if (!(cap_radians > 0.0 && cap_radians <= std::numbers::pi))
+        throw std::invalid_argument("cap_radians must be in (0, pi].");
+
+    const double half_cap_sine = std::sin(0.5 * cap_radians);
+    const double ratio = 4.0 * half_cap_sine * half_cap_sine;
+    if (!(ratio > 0.0 && ratio <= 4.0))
+        throw std::invalid_argument("cap_radians has no representable chord ratio in (0, 4].");
+    return ratio;
+}
+
+bool cap_chord_ratio_le(double lhs, double rhs)
+{
+    if (!(lhs > 0.0 && lhs <= 4.0))
+        throw std::invalid_argument("lhs cap_chord_ratio must be in (0, 4].");
+    if (!(rhs > 0.0 && rhs <= 4.0))
+        throw std::invalid_argument("rhs cap_chord_ratio must be in (0, 4].");
+
+    return CGAL::compare(FT(lhs), FT(rhs)) != CGAL::LARGER;
+}
 
 EngagementSample engagement_at(const Stock2& stock, double cx, double cy,
                                double tool_radius, double cap_chord_ratio,
@@ -596,20 +618,19 @@ CertifiedTea certify_segment_tea(const Stock2& stock, double x0, double y0,
     // most a half turn before the >pi case is an exact orientation verdict, so a
     // cap above pi is meaningless. The full-cap ratio is carried down for max_tea
     // reporting; per-level guarded ratios are derived inside the recursion.
-    if (!(cap_radians > 0.0 && cap_radians <= std::numbers::pi))
-        throw std::invalid_argument("cap_radians must be in (0, pi].");
-
-    const double sc = std::sin(0.5 * cap_radians);
-    const double cap_chord_ratio = 4.0 * sc * sc;
+    const double full_cap_chord_ratio = cap_chord_ratio(cap_radians);
 
     CertifiedTea acc{0.0, true, 0};
     certify_recursive(stock, x0, y0, x1, y1, tool_radius, cap_radians,
-                      cap_chord_ratio, acc, 0);
+                      full_cap_chord_ratio, acc, 0);
     return acc;
 }
 
 void register_engagement(nanobind::module_& m)
 {
+    m.def("cap_chord_ratio", &cap_chord_ratio, "cap_radians"_a);
+    m.def("cap_chord_ratio_le", &cap_chord_ratio_le, "lhs"_a, "rhs"_a);
+
     // Nanobind boundary. cx, cy, tool_radius are measured/computed station data:
     // each double IS a rational and enters exact-land by exact injection
     // (Epeck::FT) -- no snapping, no tolerance at the seam. cap_chord_ratio is
