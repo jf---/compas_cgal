@@ -217,7 +217,7 @@ scipy = "*"
 [tool.pixi.pypi-dependencies]
 compas-cgal = { path = ".", editable = true }
 nanobind = ">=1.3.2"
-scikit-build-core = { version = ">=0.10", extras = ["pyproject"] }
+scikit-build-core = ">=0.10"
 build = "*"
 pytest = ">=7"
 pytest-xdist = "*"
@@ -227,21 +227,31 @@ ruff = "*"
 mypy = "*"
 jsonschema = "*"
 
+[tool.pixi.pypi-options]
+no-build-isolation = ["compas-cgal"]
+
 [tool.pixi.tasks]
-baseline = "pytest tests -n auto -q"
-affected = "pytest tests -n auto --testmon -q"
+_editable-rebuild = '''python -c "from compas_cgal import _stock_2, _toolpath"'''
+pytest = { cmd = '''editable_build_dir="$(python -c 'import sys; print(next(f.path for f in sys.meta_path if hasattr(f, "known_wheel_files") and "compas_cgal._stock_2" in f.known_wheel_files))')" && SKBUILD_EDITABLE_SKIP="$editable_build_dir" pytest''', depends-on = ["_editable-rebuild"] }
+baseline = { cmd = '''editable_build_dir="$(python -c 'import sys; print(next(f.path for f in sys.meta_path if hasattr(f, "known_wheel_files") and "compas_cgal._stock_2" in f.known_wheel_files))')" && SKBUILD_EDITABLE_SKIP="$editable_build_dir" pytest tests -n auto -q''', depends-on = ["_editable-rebuild"] }
+affected = { cmd = '''editable_build_dir="$(python -c 'import sys; print(next(f.path for f in sys.meta_path if hasattr(f, "known_wheel_files") and "compas_cgal._stock_2" in f.known_wheel_files))')" && SKBUILD_EDITABLE_SKIP="$editable_build_dir" pytest tests -n auto --testmon -q''', depends-on = ["_editable-rebuild"] }
 lint = "ruff check src/compas_cgal tests"
 format-adaptive = "ruff format src/compas_cgal/adaptive tests/adaptive"
 types-adaptive = "mypy --strict src/compas_cgal/adaptive"
-schema = "pytest tests/adaptive/test_schema.py -n auto -q"
+schema = { cmd = '''editable_build_dir="$(python -c 'import sys; print(next(f.path for f in sys.meta_path if hasattr(f, "known_wheel_files") and "compas_cgal._stock_2" in f.known_wheel_files))')" && SKBUILD_EDITABLE_SKIP="$editable_build_dir" pytest tests/adaptive/test_schema.py -n auto -q''', depends-on = ["_editable-rebuild"] }
 mutations-adaptive = "python scripts/run-adaptive-mutations.py"
 wheel = "python -m build --wheel --no-isolation"
-native-lock-check = "cmake -S . -B build/native-lock-check -G Ninja"
+_native-lock-configure = "cmake -S . -B build/native-lock-check -G Ninja"
+_native-lock-build = "cmake --build build/native-lock-check --target external_downloads"
+native-lock-check = { depends-on = ["_native-lock-configure", "_native-lock-build"] }
 ```
 
 Set `editable.rebuild = true` in the existing `[tool.scikit-build]` table; its
-persistent `build-dir` already satisfies the rebuild contract. Do not add a pip
-wrapper task. Add `.pixi/`, `.testmondata`, and `.mypy_cache/` to `.gitignore`.
+persistent `build-dir` already satisfies the rebuild contract. The coordinator
+rebuilds before xdist, then workers receive that exact build directory through
+`SKBUILD_EDITABLE_SKIP`; all plan-level `pixi run pytest ...` calls use the
+public task. Do not add a pip wrapper task. Add `.pixi/`, `.testmondata*`, and
+`.mypy_cache/` to `.gitignore`.
 Keep `.env` and `.DS_Store` ignored.
 
 Add `compas`, `numpy`, and `scipy` as hard project runtime dependencies.
@@ -278,10 +288,12 @@ Run:
 
 ```bash
 pixi lock
-pixi install
+pixi install --locked
+pixi lock --check
 pixi run native-lock-check
 pixi run python -c "from compas_cgal import _stock_2, _toolpath"
 pixi run baseline
+pixi run affected
 ```
 
 If editable native rebuild does not trigger after a touched C++ source, correct
@@ -323,7 +335,9 @@ substitute.
 
 ```bash
 pixi run lint
+pixi lock --check
 pixi run native-lock-check
+pixi run affected
 git diff --check
 ```
 
