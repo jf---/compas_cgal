@@ -1,447 +1,2039 @@
-# Exact-certified adaptive trochoidal-MAT — Phase 1 Implementation Plan
+# Exact-certified adaptive trochoidal-MAT — Phase 1 implementation plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> Execute with `superpowers:executing-plans` and
+> `superpowers:subagent-driven-development`. Run one task at a time through
+> implementer review, specification review, and code-quality review. Do not
+> dispatch two agents to files that share native state.
 
-**Goal:** A generator where the user sets a maximum tool-engagement angle θ_max and gets back a trochoidal-MAT toolpath whose exact engagement angle is provably ≤ θ_max on every cutting motion.
+**Goal:** Return a non-vacuous polygonal-pocket toolpath whose lateral
+engagement, gouge freedom, exact tool-reachable-material coverage, and artifact
+lineage are machine-checkable.
 
-**Architecture:** A Python subpackage `compas_cgal.adaptive` orchestrating the existing exact CGAL kernel: the C++ straight-skeleton medial axis (newly exposed as a station walk) feeds an adaptive spacer that, per candidate machining circle, asks the exact engagement kernel (`_stock_2.engagement_at`, contour-aware against a depleting `Stock2`) whether θ ≤ θ_max, packing to the tightest spacing that passes. The generated path is re-audited by the *independent* `audit_toolpath_engagement` to certify the claim.
+**Architecture:** A typed Python orchestrator proposes one-sided MATHSM circles
+from a true CGAL segment-site Voronoi medial axis. Exact native components own
+the proof boundaries: Epeck stock/station predicates, exact-on-guide
+conservative depletion, exact construction of `C_r = D ⊖ B_r` and
+`M_r = C_r ⊕ B_r`, an exact-with-sqrt full-sweep coverage ledger, and an
+event-exact continuous engagement oracle. Candidate evaluation is
+transactional. Existing straight-skeleton generators, rounded depletion APIs,
+and audit compatibility paths remain unchanged.
 
-**Tech Stack:** Python 3.12; compas; the built `compas_cgal._stock_2` (Epeck one-root kernel) and `compas_cgal._toolpath` extensions; nanobind/CGAL 6.0.1 for the C++ station exposure; pytest + pytest-xdist.
+**Governing spec:**
+`docs/superpowers/specs/2026-07-24-exact-certified-adaptive-trochoidal-design.md`
+at exactly `6334e8d6446086e3dfbe688c4a3656dd6845c3b1`.
 
-## Global Constraints
+**Start point:** branch `codex/exact-certified-adaptive-phase1`, based on
+`1860167929e50f38fdae8d67ef77e9c967364f1c`.
 
-- Python target **3.12 / 3.9** (compas dependency); no `__all__` in any `__init__.py`; keep `__init__.py` minimal.
-- **`mypy --strict`** must pass for the whole `compas_cgal.adaptive` subpackage — the unit-typing is aspirational without it.
-- **Exact-Kernel Discipline** (`CLAUDE.md`, `docs/exactness.md`): no epsilon / deflation / ulp-nudge in any decision path; every spacing acceptance is an exact predicate via the kernel; `to_double` is reporting-only and never feeds a decision.
-- One responsibility per file; factory functions (`.build(...)`) own invariants; raw dataclass constructors stay minimal. One **named exception per failure mode** — never bare `raise ValueError`.
-- Build the C++ extension (no pip): `cmake --build build/cp312-abi3-macosx_15_0_arm64 --target _stock_2 _toolpath -j 8`. Run tests: `PYTHONPATH=src /Users/jelle/mambaforge/envs/cgal-dev/bin/python -m pytest tests/adaptive -n auto -q`.
-- Commits: author AND committer `Jelle Feringa <jelleferinga@gmail.com>`; concise conventional messages; NO attribution lines. Ruff before each Python commit. Never touch `docs/examples/example_isolines.py`.
+## Non-negotiable execution rules
 
----
+- Work only in the isolated task worktree.
+- Use Pixi for every build, package, test, lint, type, schema, and mutation
+  command.
+- Every pytest invocation includes `-n auto`.
+- After code changes, the targeted GREEN command includes `--testmon`.
+- Write the failing test before implementation. Do not skip, `skipif`, or
+  xfail it.
+- Run Ruff before every Python commit and `mypy --strict` for the adaptive
+  package.
+- Add new paths alongside working paths. Do not redirect or remove legacy
+  behavior in this phase.
+- No reported angle, tolerance, or sampled maximum may decide a certificate.
+- A native algebraic or licensing gate that fails stops the dependent tasks.
+  It does not authorize a fallback.
+- Commit only the task’s files. Author and committer are
+  `Jelle Feringa <jelleferinga@gmail.com>`.
 
-## File Structure
+## Proof and implementation dependency graph
 
+```text
+T0 Pixi + native-source + package-license lock
+ └─ T1 typed motion/policy/cap boundary
+     └─ T1A canonical identity foundation
+         ├─ T2 exact conservative depletion
+         ├─ T3 exact reachable domain + full-sweep coverage
+         └─ package gate ─ T4 event corpus + boundary extraction
+                           └─ T5 algebraic event substrate
+                               ├─ T6 exact segment oracle
+                               └─ T7 exact full-circle oracle
+                                   └─ T8 typed motion certifier
+T0 package gate + T3 + T5 ─ T9 exactly clipped true MAT
+                            └─ T10 typed MAT + neck/candidate lattice
+T2 + T3 + T8 + T10 ─ T11 entry + containment + InputIdentity
+                     ├─ T11A fresh independent replay
+                     └─ T12 transactional candidate evaluator
+T11A + T12 ─ T13 traversal + generator + coverage
+                             └─ T14 artifact assembly + schema
+                                 └─ T15 acceptance + mutation campaign
+                                     └─ T16 full verification/review
 ```
+
+## File morphology
+
+```text
+src/
+  exact_motion_2.h
+  exact_algebraic_1.h
+  exact_algebraic_1.cpp
+  reachable_domain_2.h
+  reachable_domain_2.cpp
+  exact_depletion_2.h
+  exact_depletion_2.cpp
+  coverage_2.h
+  coverage_2.cpp
+  continuous_tea_2/
+    result.h
+    boundary_events.h
+    boundary_events.cpp
+    parameter_charts.h
+    parameter_charts.cpp
+    event_partition.h
+    event_partition.cpp
+    segment_oracle.cpp
+    circle_oracle.cpp
+  continuous_tea_2.cpp              # nanobind adapter only
+  segment_site_mat.h
+  segment_site_mat.cpp
+  segment_site_mat_sampling.h
+  segment_site_mat_sampling.cpp
+  medial_axis_2.cpp                 # nanobind adapter only
+  containment_2.h
+  containment_2.cpp
+  containment_2_bindings.cpp
+
 src/compas_cgal/adaptive/
-  __init__.py            # minimal
-  units.py               # Task 1  — typed vocabulary (Radian, Millimetre, ToolRadius, Clearance, TrochoidRadius, Spacing)
-  errors.py              # Task 2  — named exceptions
-  engagement_cap.py      # Task 3  — EngagementCap (angle -> exact chord surrogate)
-  medial_axis.py         # Task 5  — MedialAxisWalk (wraps the new C++ station binding)
-  machined_area.py       # Task 6  — MachinedArea protocol + Stock2Area implementation
-  engagement_probe.py    # Task 7  — EngagementProbe (exact theta<=theta_max verdict)
-  spacer.py              # Task 8+9 — AdaptiveSpacer (+ neck-aware cap)
-  transitions.py         # Task 10 — TransitionBuilder (non-slotting links)
-  certificate.py         # Task 11 — BuildIdentity + EngagementCertificate
-  generator.py           # Task 12 — adaptive_trochoidal_toolpath entry point
-src/toolpath.cpp         # Task 4  — expose medial_axis_stations(...) binding (MODIFY)
-src/toolpath.h           # Task 4  — declare it (MODIFY)
+  __init__.py                       # minimal; no __all__
+  errors.py
+  units.py
+  motion.py
+  policy.py
+  canonical.py
+  identity.py
+  operation.py
+  stock_area.py
+  reachable_domain.py
+  coverage.py
+  motion_certificate.py
+  replay.py
+  medial_axis.py
+  neck.py
+  entry.py
+  containment.py
+  candidates.py
+  transaction.py
+  traversal.py
+  certificate.py
+  schema.py
+  generator.py
+
+src/compas_cgal/
+  _stock_2.pyi
+  _coverage_2.pyi
+  _continuous_tea_2.pyi
+  _medial_axis_2.pyi
+  _containment_2.pyi
+
 tests/adaptive/
-  test_units.py test_errors.py test_engagement_cap.py test_medial_axis.py
-  test_machined_area.py test_engagement_probe.py test_spacer.py test_transitions.py
-  test_certificate.py test_generator.py
-  test_acceptance.py     # Task 13 — differential certificate oracle + ablation
+  conftest.py
+  test_units.py
+  test_motion.py
+  test_policy.py
+  test_canonical.py
+  test_identity.py
+  test_operation.py
+  test_exact_depletion.py
+  test_reachable_domain.py
+  test_coverage.py
+  test_motion_counterexamples.py
+  test_event_substrate.py
+  test_segment_oracle.py
+  test_circle_oracle.py
+  test_motion_certificate.py
+  test_replay.py
+  test_medial_axis.py
+  test_neck.py
+  test_entry.py
+  test_containment.py
+  test_candidates.py
+  test_transaction.py
+  test_traversal.py
+  test_certificate.py
+  test_schema.py
+  test_acceptance.py
+  fixtures/
+    held_fig5.json
+    tractable_pocket.json
+    event_corpus.json
+
+schemas/
+  certified_toolpath-v1.schema.json
+
+cmake/
+  NativeDependencies.cmake
+  VerifyNativeSource.cmake
+
+docs/build/
+  native-dependency-lock.json
+
+scripts/
+  run-adaptive-mutations.py
 ```
 
-Files that change together live together; each module has one responsibility. The C++ change (Task 4) is the only non-Python unit.
+No native implementation file may grow past 1,000 lines. Split earlier when a
+file acquires a second responsibility.
 
 ---
 
-### Task 1: Typed unit vocabulary
+## Task 0 — Lock Pixi, native sources, and CGAL package licenses
 
-**Files:**
+**Files**
+
+- Modify: `pyproject.toml`
+- Modify: `.gitignore`
+- Modify: `CMakeLists.txt`
+- Create: `pixi.lock`
+- Create: `cmake/NativeDependencies.cmake`
+- Create: `cmake/VerifyNativeSource.cmake`
+- Create: `docs/build/native-dependency-lock.json`
+- Create: `docs/licenses/cgal-adaptive-package-audit.md`
+
+### Step 1: add the Pixi workspace
+
+Use Python 3.12 and conda-forge:
+
+```toml
+[tool.pixi.workspace]
+channels = ["conda-forge"]
+platforms = ["osx-arm64", "linux-64"]
+
+[tool.pixi.dependencies]
+python = "3.12.*"
+cmake = ">=3.15"
+ninja = "*"
+compas = "*"
+numpy = "*"
+scipy = "*"
+
+[tool.pixi.pypi-dependencies]
+compas-cgal = { path = ".", editable = true }
+nanobind = ">=1.3.2"
+scikit-build-core = { version = ">=0.10", extras = ["pyproject"] }
+build = "*"
+pytest = ">=7"
+pytest-xdist = "*"
+pytest-testmon = "*"
+hypothesis = "*"
+ruff = "*"
+mypy = "*"
+jsonschema = "*"
+
+[tool.pixi.tasks]
+baseline = "pytest tests -n auto -q"
+affected = "pytest tests -n auto --testmon -q"
+lint = "ruff check src/compas_cgal tests"
+format-adaptive = "ruff format src/compas_cgal/adaptive tests/adaptive"
+types-adaptive = "mypy --strict src/compas_cgal/adaptive"
+schema = "pytest tests/adaptive/test_schema.py -n auto -q"
+mutations-adaptive = "python scripts/run-adaptive-mutations.py"
+wheel = "python -m build --wheel --no-isolation"
+native-lock-check = "cmake -S . -B build/native-lock-check -G Ninja"
+```
+
+Set `editable.rebuild = true` in the existing `[tool.scikit-build]` table; its
+persistent `build-dir` already satisfies the rebuild contract. Do not add a pip
+wrapper task. Add `.pixi/`, `.testmondata`, and `.mypy_cache/` to `.gitignore`.
+Keep `.env` and `.DS_Store` ignored.
+
+Add `compas`, `numpy`, and `scipy` as hard project runtime dependencies.
+`scipy` is mandatory because the existing nanobind surface includes
+`nanobind/eigen/sparse.h`; no conditional import or optional-dependency path is
+allowed.
+
+### Step 2: lock every native source
+
+Move the CGAL 6.0.1, Boost 1.82.0, and Eigen 3.4.0 URLs plus independently
+verified SHA-256 archive hashes into `NativeDependencies.cmake`. Every
+`ExternalProject_Add` uses `URL_HASH SHA256=...`.
+
+`VerifyNativeSource.cmake` computes a canonical content digest over sorted
+relative paths plus file bytes for each extracted source tree. The committed
+JSON lock records package name, version, URL, archive SHA-256, expected
+source-tree digest, and license identifier. Configure fails if:
+
+- a downloaded archive misses its `URL_HASH`;
+- an existing `external/<package>` tree differs from the committed digest;
+- a package/version/URL differs from the JSON lock.
+
+Each configure-time integrity failure emits the stable
+`NATIVE_DEPENDENCY_INTEGRITY_ERROR` code with exact package and
+expected/observed digest. Task 1 maps runtime exposure to
+`NativeDependencyIntegrityError`.
+
+`BuildProvenance` later consumes these actual source-tree digests. It must not
+claim that `pixi.lock` covers CMake downloads.
+
+### Step 3: generate and validate both locks
+
+Run:
+
+```bash
+pixi lock
+pixi install
+pixi run native-lock-check
+pixi run python -c "from compas_cgal import _stock_2, _toolpath"
+pixi run baseline
+```
+
+If editable native rebuild does not trigger after a touched C++ source, correct
+the scikit-build configuration and repeat. Do not introduce pip/conda commands.
+
+### Step 4: record package licensing
+
+The audit records:
+
+- repository license;
+- each CGAL package newly used;
+- CGAL’s declared package license;
+- whether the project has a compatible GPL distribution decision or commercial
+  CGAL entitlement.
+
+The matrix covers every newly instantiated package and names the dependent
+task:
+
+- 2D Arrangements (`Arr_algebraic_segment_traits_2` and circle arrangements):
+  Tasks 3–8;
+- Algebraic Kernel (`Algebraic_kernel_d_1`/`d_2` with CORE): Tasks 5–10;
+- 2D Boolean Set Operations: Task 3 and containment/coverage consumers;
+- 2D Minkowski Sums, or the explicitly selected morphology alternative:
+  Task 3;
+- Segment Delaunay Graphs: Tasks 9–10;
+- 2D Voronoi Diagram Adaptor: Tasks 9–10;
+- Apollonius Graph parabola component supplying `Parabola_segment_2`:
+  Tasks 9–10.
+
+For each package record the exact CGAL documentation URL, declared
+GPL/commercial status, files/headers instantiated, and project distribution
+decision or commercial entitlement. A missing compatible decision records the
+stable `CGAL_LICENSE_GATE_ERROR` code and blocks the listed task and every
+downstream consumer; Task 1 exposes the corresponding
+`CgalLicenseGateError`. It never permits a sampled or different-kernel
+substitute.
+
+### Step 5: verify and commit
+
+```bash
+pixi run lint
+pixi run native-lock-check
+git diff --check
+```
+
+Commit: `build: add locked pixi workflow`
+
+---
+
+## Task 1 — Establish typed units, policies, exact motions, and cap ownership
+
+**Files**
+
+- Create: `src/compas_cgal/adaptive/errors.py`
 - Create: `src/compas_cgal/adaptive/units.py`
-- Create: `src/compas_cgal/adaptive/__init__.py` (empty)
+- Create: `src/compas_cgal/adaptive/motion.py`
+- Create: `src/compas_cgal/adaptive/policy.py`
+- Create: `src/compas_cgal/adaptive/__init__.py`
+- Create: `src/compas_cgal/_stock_2.pyi`
+- Modify: `src/engagement_2.h`
+- Modify: `src/engagement_2.cpp`
 - Test: `tests/adaptive/test_units.py`
+- Test: `tests/adaptive/test_motion.py`
+- Test: `tests/adaptive/test_policy.py`
 
-**Interfaces:**
-- Produces: `Radian = NewType("Radian", float)`, `Millimetre = NewType("Millimetre", float)`; frozen dataclasses `ToolRadius`, `Clearance`, `TrochoidRadius`, `Spacing`, each with a `.value: Millimetre` field and a classmethod `build(mm: float) -> Self` that rejects NaN/≤0 (raises `NonPositiveLengthError`, Task 2).
+### Step 1: write RED contracts
 
-- [ ] **Step 1: Write the failing test**
-```python
-# tests/adaptive/test_units.py
-import math
-import pytest
-from compas_cgal.adaptive.units import ToolRadius, Spacing
-from compas_cgal.adaptive.errors import NonPositiveLengthError
+Tests require:
 
-def test_tool_radius_build_accepts_positive():
-    assert ToolRadius.build(1.5).value == 1.5
+- `Point2[WorldXY]` and `Vector2[WorldXY]`;
+- scalar and sequence overloads for both vector factories;
+- `ToolRadius`, `EntryRadius`, `Spacing`, `ChordBound`, `CutZ`, and
+  `ClearanceZ` reject non-finite or invalid values through
+  `InvalidUnitValueError`; `CutPlane.build(cut_z, clearance_z)` requires
+  `clearance_z > cut_z`;
+- `ExactSegmentMotion.build(a,b)` rejects zero progress through
+  `DegenerateSegmentMotionError`;
+- `ExactCircleMotion.build(center, phase_vector, clockwise)` derives squared
+  radius and rejects a zero phase through `DegenerateCircleMotionError`;
+- `EngagementCap.build(theta)` calls the native cap conversion and retains the
+  exact returned big-endian bytes;
+- `CandidatePolicy.build(...)` defines every finite bound and canonical
+  tie-break;
+- `NeckPolicy.build(...)` canonicalizes exact squared-width class boundaries
+  and finite `(neck_class, passage_state) -> effective cap` mappings;
+- `DepletionPolicy.build(...)` owns exact chord-bound bytes and a positive
+  center-count limit;
+- `TraversalPolicy.build(...)` owns deterministic component/branch order and a
+  finite forward window;
+- `CutDirectionPolicy.build(...)` requires explicit climb or conventional
+  intent and maps material side to circle orientation with no default;
+- the four policy factories raise `InvalidCandidatePolicyError`,
+  `InvalidNeckPolicyError`, `InvalidDepletionPolicyError`, and
+  `InvalidTraversalPolicyError`; cut direction raises
+  `InvalidCutDirectionPolicyError`;
+- every effective cap is produced by the native cap boundary and proven no
+  larger than the user cap;
+- no reporting clearance, magic tolerance, or raw string decides a policy
+  branch.
 
-def test_tool_radius_rejects_nonpositive():
-    with pytest.raises(NonPositiveLengthError):
-        ToolRadius.build(0.0)
+Run RED:
 
-def test_spacing_rejects_nan():
-    with pytest.raises(NonPositiveLengthError):
-        Spacing.build(math.nan)
+```bash
+pixi run pytest tests/adaptive/test_units.py tests/adaptive/test_motion.py \
+  tests/adaptive/test_policy.py -n auto -q
 ```
-- [ ] **Step 2: Run to verify it fails** — `pytest tests/adaptive/test_units.py -v` → FAIL (module missing).
-- [ ] **Step 3: Implement** `units.py` — the `NewType`s and one shared frozen dataclass base with a `build` classmethod doing `if not (mm > 0.0): raise NonPositiveLengthError(mm)`; derive `ToolRadius`, `Clearance`, `TrochoidRadius`, `Spacing` from it. Minimal `__init__.py`.
-- [ ] **Step 4: Run to verify pass** — same command → PASS.
-- [ ] **Step 5: Commit** — `git add src/compas_cgal/adaptive/units.py src/compas_cgal/adaptive/__init__.py tests/adaptive/test_units.py && git commit -m "feat(adaptive): typed length vocabulary"`
+
+### Step 2: implement the native cap seam
+
+Add:
+
+```cpp
+double cap_chord_ratio(double cap_radians);
+bool cap_chord_ratio_le(double lhs, double rhs);
+```
+
+`certify_segment_tea` and the binding call this one implementation. Bind both
+functions on `_stock_2`; `cap_chord_ratio_le` injects both binary64 values into
+Epeck before comparison. Reject angles outside `(0, pi]` before `sin`.
+
+### Step 3: implement the Python domain
+
+Use frozen dataclasses only where frame/unit or cross-field invariants are real.
+Factories raise the named errors in the governing spec. Keep
+`adaptive/__init__.py` minimal and do not add `__all__`.
+
+The `.pyi` file covers every `_stock_2` symbol used by the strict package; no
+blanket `Any` or ignore is accepted.
+
+### Step 4: GREEN gates
+
+```bash
+pixi run format-adaptive
+pixi run lint
+pixi run types-adaptive
+pixi run pytest tests/adaptive/test_units.py tests/adaptive/test_motion.py \
+  tests/adaptive/test_policy.py -n auto --testmon -q
+pixi run pytest tests/test_stock.py tests/test_engagement_oracle.py -n auto -q
+```
+
+Commit: `feat(adaptive): add exact motion types`
 
 ---
 
-### Task 2: Named error model
+## Task 1A — Establish canonical encoding and identity primitives
 
-**Files:** Create `src/compas_cgal/adaptive/errors.py`; Test `tests/adaptive/test_errors.py`.
+**Files**
 
-**Interfaces:**
-- Produces exceptions (all subclass a package base `AdaptiveError(Exception)`): `NonPositiveLengthError`, `EngagementOutOfRangeError`, `PocketNotMachinableError`, `EngagementCapInfeasibleError`, `NeckTooTightError(width: float, cap_deg: float)`, `TransitionGougeError`, `DegenerateMedialAxisError`.
+- Create: `src/compas_cgal/adaptive/canonical.py`
+- Create: `src/compas_cgal/adaptive/identity.py`
+- Create: `src/compas_cgal/adaptive/operation.py`
+- Test: `tests/adaptive/test_canonical.py`
+- Test: `tests/adaptive/test_identity.py`
+- Test: `tests/adaptive/test_operation.py`
 
-- [ ] **Step 1: Failing test**
-```python
-# tests/adaptive/test_errors.py
-from compas_cgal.adaptive.errors import AdaptiveError, NeckTooTightError
+### Step 1: write RED identity contracts
 
-def test_neck_error_carries_context():
-    e = NeckTooTightError(width=0.4, cap_deg=80.0)
-    assert isinstance(e, AdaptiveError)
-    assert "0.4" in str(e) and "80" in str(e)
+Tests require:
+
+- versioned big-endian encoders for integers, binary64 values,
+  `ExactRationalV1` normalized numerator/positive-denominator bytes, sequences,
+  tagged unions, and component maps;
+- signed-zero normalization and loud rejection of NaN/infinity;
+- canonical outer-ring start/orientation and hole ordering;
+- canonical bytes for every Task 1 cut plane, motion, cap, and policy;
+- frozen `INPUT_SCHEMA_VERSION`, `OPERATION_SCHEMA_VERSION`, and component
+  version tags available before any witness is emitted;
+- `BoundaryVertexIdV1` as either a canonical input-ring vertex ID or sorted
+  normalized incident-support IDs plus the exact lexicographic intersection
+  ordinal and trim-incidence orientation; no raw `Sqrt_extension`
+  representation is hashed;
+- a closed `CanonicalOperation` tagged union for approach, plunge, exact
+  segment, and exact full-circle operations; approach/plunge bind
+  clearance/cut Z, while each lateral operation binds geometry, semantic kind,
+  cut Z, stable neck owner/orientation, `EffectiveCapDecision`, and
+  `TraversalDecision`;
+- a closed `EffectiveCapDecision` union: full-cap decisions bind equal
+  user/effective bytes, while neck-cap decisions bind neck-evidence digest,
+  exact width-class ID, passage before/after state, and user/effective bytes;
+- `TraversalDecision` binds component/edge/branch IDs, exact cursor
+  before/after identities, and whether that transition makes the cursor
+  terminal;
+- motion and depletion witnesses remain separate keyed streams; they are never
+  embedded in or trusted as part of `CanonicalOperation`;
+- `ComponentIdentity.build(...)` binds strategy version, source revision,
+  native source-tree digest, and canonical parameter bytes;
+- one-bit changes and reordered-but-equivalent polygon encodings have named
+  expected identity behavior;
+- no identity includes its own digest.
+
+Run RED:
+
+```bash
+pixi run pytest tests/adaptive/test_canonical.py \
+  tests/adaptive/test_identity.py tests/adaptive/test_operation.py -n auto -q
 ```
-- [ ] **Step 2: Verify fail.** **Step 3:** implement each exception; the parameterised ones format a fix-oriented message in `__init__`. **Step 4: verify pass.** **Step 5: commit** `feat(adaptive): named error model`.
+
+### Step 2: implement and GREEN
+
+All later traces and witnesses import these encoders; no task invents a local
+serialization. Validated `InputIdentity` is added with `PreclearedEntry` in
+Task 11. `BuildProvenance` and final `ArtifactIdentity` remain incomplete until
+Task 14.
+
+```bash
+pixi run format-adaptive
+pixi run lint
+pixi run types-adaptive
+pixi run pytest tests/adaptive/test_canonical.py \
+  tests/adaptive/test_identity.py tests/adaptive/test_operation.py \
+  -n auto --testmon -q
+```
+
+Commit: `feat(identity): add canonical primitives`
 
 ---
 
-### Task 3: EngagementCap (the API boundary)
+## Task 2 — Add exact-on-guide conservative depletion
 
-**Files:** Create `src/compas_cgal/adaptive/engagement_cap.py`; Test `tests/adaptive/test_engagement_cap.py`.
+**Files**
 
-**Interfaces:**
-- Consumes: `Radian` (Task 1), `EngagementOutOfRangeError` (Task 2).
-- Produces: frozen `EngagementCap` with fields `theta: Radian`, `chord_ratio: float`; `EngagementCap.from_degrees(deg: float) -> EngagementCap` and `from_radians(rad: float) -> EngagementCap`, validating `θ ∈ (0, π]` and computing `chord_ratio = 4*sin(θ/2)**2` (the exact rational surrogate the kernel consumes). Method `reduced(factor: float) -> EngagementCap` for neck handling (factor ∈ (0,1], re-derives the surrogate).
+- Create: `src/exact_motion_2.h`
+- Create: `src/exact_depletion_2.h`
+- Create: `src/exact_depletion_2.cpp`
+- Modify: `src/stock_2.h`
+- Modify: `src/stock_2.cpp`
+- Modify: `src/compas_cgal/stock.py`
+- Create: `src/compas_cgal/adaptive/stock_area.py`
+- Test: `tests/adaptive/test_exact_depletion.py`
+- Test: `tests/adaptive/test_stock_monotonicity.py`
 
-- [ ] **Step 1: Failing test**
-```python
-# tests/adaptive/test_engagement_cap.py
-import math, pytest
-from compas_cgal.adaptive.engagement_cap import EngagementCap
-from compas_cgal.adaptive.errors import EngagementOutOfRangeError
+### Step 1: write RED exact-invariant tests
 
-def test_full_cap_surrogate_is_four():
-    assert EngagementCap.from_radians(math.pi).chord_ratio == pytest.approx(4.0)
+Expose test diagnostics from the new binding, not NumPy-round-tripped
+coordinates. Require:
 
-def test_ninety_deg_surrogate():
-    assert EngagementCap.from_degrees(90).chord_ratio == pytest.approx(4*math.sin(math.radians(45))**2)
+- every segment center is exactly collinear and ordered between endpoints;
+- both endpoints occur;
+- every circle center has exact squared distance `v dot v` from `c`;
+- phase, quarter points, antipode, and seam interval occur;
+- every removal radius is positive and `<= tool_radius`;
+- exact consecutive chord bounds include the circle seam;
+- CW and CCW share a removal set but have different ordered witnesses;
+- a rounded-interpolation/rotation test strategy fails its exact incidence
+  predicate;
+- `Stock2.clone()` is independent;
+- rejected trial depletion leaves authoritative stock unchanged.
 
-@pytest.mark.parametrize("bad", [0.0, -1.0, math.pi + 1e-6])
-def test_rejects_out_of_range(bad):
-    with pytest.raises(EngagementOutOfRangeError):
-        EngagementCap.from_radians(bad)
+Use representable fixtures to assert `U \ W` is exactly empty for Pythagorean
+segments and circles. Add the exact-predicate metamorphic implication
+`cap_exceeded(S) => cap_exceeded(S_hat)` for `S subseteq S_hat`.
 
-def test_reduced_shrinks_surrogate():
-    assert EngagementCap.from_degrees(120).reduced(0.5).theta < EngagementCap.from_degrees(120).theta
+Run RED:
+
+```bash
+pixi run pytest tests/adaptive/test_exact_depletion.py \
+  tests/adaptive/test_stock_monotonicity.py -n auto -q
 ```
-- [ ] **Step 2–4:** verify fail → implement (surrogate + validation mirror `_stock_2.engagement_at`'s contract) → verify pass. **Step 5: commit** `feat(adaptive): EngagementCap angle->exact chord surrogate`.
+
+### Step 2: implement exact native construction
+
+Add alongside legacy methods:
+
+```cpp
+DepletionTrace subtract_exact_segment(
+    const ExactSegmentMotion2&, const Epeck::FT& tool_radius,
+    const Epeck::FT& max_chord);
+
+DepletionTrace subtract_exact_full_circle(
+    const ExactCircleMotion2&, const Epeck::FT& tool_radius,
+    const Epeck::FT& max_chord);
+```
+
+Segment centers use exact `Epeck::FT` barycentric parameters.
+Circle centers use four exact Pythagorean quarter charts. Refine until exact
+consecutive squared-chord comparisons pass. No trig or double interpolation is
+permitted.
+
+`DepletionTrace` contains deterministic parameter indices, count, exact
+max-chord input, motion identity, and strategy version. Its digest is computed
+from canonical motion/policy bytes, not from `to_double` coordinates.
+
+`Stock2::clone()` copies the exact `Gps` value. Bind new methods under distinct
+names and leave `subtract_capsule`/`subtract_arc_sweep` unchanged.
+
+### Step 3: implement the typed owner
+
+`Stock2Area.build(...)` owns stock lifetime. `fork()` clones. `deplete(...)`
+has explicit `@overload` signatures for `ExactSegmentMotion` and
+`ExactCircleMotion`, returning a `DepletionWitness`; the single implementation
+dispatches without a second public calling convention. It does not certify
+motion. Task 11 adds the validated-entry overload.
+
+### Step 4: GREEN and regression
+
+```bash
+pixi run format-adaptive
+pixi run lint
+pixi run types-adaptive
+pixi run pytest tests/adaptive/test_exact_depletion.py \
+  tests/adaptive/test_stock_monotonicity.py -n auto --testmon -q
+pixi run pytest tests/test_stock.py tests/test_engagement_oracle.py \
+  tests/test_engagement_audit.py -n auto -q
+```
+
+Commit: `feat(stock): add exact-on-guide depletion`
 
 ---
 
-### Task 4: Expose the medial-axis station walk (C++)
+## Task 3 — Build the exact reachable domain and full-sweep coverage ledger
 
-**Files:** Modify `src/toolpath.cpp`, `src/toolpath.h`; Test `tests/adaptive/test_medial_axis.py`.
+**Hard precondition:** Task 0 records compatible distribution or commercial
+entitlement for every CGAL package selected for arrangements, morphology, and
+Boolean set operations. Otherwise stop this task and its downstream consumers.
 
-**Interfaces:**
-- Produces a nanobind binding `_toolpath.medial_axis_stations(boundary: RowMatrixXd, holes: list[RowMatrixXd], tool_radius: float, radial_clearance: float) -> tuple[np.ndarray, np.ndarray, np.ndarray]` returning, in medial-axis-walk order, `centers (N×2)`, `clearance (N,)` (exact boundary distance at each center, as double), `trochoid_radius (N,)`.
+**Files**
 
-- [ ] **Step 1: Failing test**
-```python
-# tests/adaptive/test_medial_axis.py
-import numpy as np
-from compas.geometry import Polygon
-from compas_cgal import _toolpath
-from compas_cgal.stock import _polygon_to_ccw_vertices  # reuse existing CCW helper
+- Create: `src/reachable_domain_2.h`
+- Create: `src/reachable_domain_2.cpp`
+- Create: `src/coverage_2.h`
+- Create: `src/coverage_2.cpp`
+- Modify: `CMakeLists.txt`
+- Create: `src/compas_cgal/_coverage_2.pyi`
+- Create: `src/compas_cgal/adaptive/reachable_domain.py`
+- Create: `src/compas_cgal/adaptive/coverage.py`
+- Test: `tests/adaptive/test_reachable_domain.py`
+- Test: `tests/adaptive/test_coverage.py`
 
-def test_square_stations_lie_inside_and_clearances_positive():
-    sq = _polygon_to_ccw_vertices(Polygon([[0,0,0],[10,0,0],[10,10,0],[0,10,0]]))
-    c, clr, rad = _toolpath.medial_axis_stations(sq, [], 1.0, 0.0)
-    assert len(c) > 3 and clr.min() > 0
-    # every station center is >= tool_radius from the boundary (machinable)
-    assert clr.min() >= 1.0 - 1e-6
-    # medial axis of a square peaks at clearance ~5 (center)
-    assert clr.max() == np.testing.assert_allclose or clr.max() > 4.0
+### Step 1: compile gate
+
+Before public code, compile a minimal target using
+`Exact_predicates_exact_constructions_kernel_with_sqrt` and
+`Gps_circle_segment_traits_2` that constructs:
+
+- `C_r = D ⊖ B_r` from the arrangement of exact edge-offset lines and
+  vertex-radius circles, with cells selected by exact disk containment;
+- `M_r = C_r ⊕ B_r` and `D \ M_r`;
+- a capsule for a non-axis-aligned rational segment;
+- an annulus whose guide radius is `sqrt(v dot v)`;
+- exact union and difference against a polygon.
+
+Run it through a Pixi task. If the selected traits cannot represent or compare
+these curves exactly under the locked build, stop Task 3 and all coverage-
+dependent tasks. Do not substitute disk chains or sampled residual area.
+
+### Step 2: write RED coverage contracts
+
+Tests require:
+
+- rectangle, acute convex corner, reflex corner, narrow neck, island, and
+  disconnected-`C_r` fixtures; the disconnected case raises
+  `PocketNotMachinableError` because Phase 1 has one qualified entry;
+- exact `C_r` disk-containment at every selected cell and rejection immediately
+  across every boundary;
+- exact `M_r subseteq D`, exact `D \ M_r`, and a nonempty convex-corner
+  residual for positive tool radius;
+- exact reachable-domain construction is insertion-order invariant and its
+  certificate binds every source curve, selected cell, component, and digest;
+- exact capsule and annulus membership at endpoints, sides, inner/outer radii,
+  and seams;
+- `guide_radius <`, `==`, and `>` tool radius;
+- exact residual non-empty before complete sweeps and empty after a committed
+  complete fixture;
+- operation order and duplicate sweeps do not alter set semantics but do alter
+  lineage only where the canonical stream differs;
+- under-cover engagement stock remains non-empty in a wall-tangent fixture
+  while the exact full-sweep ledger proves coverage;
+- removing the final sweep leaves a named residual component;
+- a rounded sweep construction fails an exact boundary fixture.
+
+Run RED:
+
+```bash
+pixi run pytest tests/adaptive/test_reachable_domain.py \
+  tests/adaptive/test_coverage.py -n auto -q
 ```
-(Fix the final assert to `assert clr.max() > 4.0` when writing.)
-- [ ] **Step 2: verify fail** — `medial_axis_stations` not bound.
-- [ ] **Step 3: Implement.** In `toolpath.cpp`, factor the existing straight-skeleton walk + `Station{center, clearance, radius}` computation (currently internal to `trochoidal_mat_toolpath_circular`, ~lines 185–260) into a reusable function that returns the ordered `std::vector<Station>`; bind a thin wrapper converting to three arrays. Do NOT change the existing generator's behaviour — extract-and-reuse, add-alongside. Rebuild: `cmake --build build/cp312-abi3-macosx_15_0_arm64 --target _toolpath -j 8`.
-- [ ] **Step 4: verify pass.** **Step 5: commit** `feat(toolpath): expose medial-axis station walk with exact clearance`.
+
+### Step 3: implement
+
+Bind:
+
+```python
+ReachableDomain2(design_boundary, holes, tool_radius)
+ReachableDomain2.center_domain()
+ReachableDomain2.reachable_material()
+ReachableDomain2.unreachable_residual()
+ReachableDomain2.certificate()
+Coverage2(reachable_material, precleared_center, precleared_radius)
+Coverage2.clone()
+Coverage2.add_segment_sweep(...)
+Coverage2.add_full_circle_sweep(...)
+Coverage2.residual_is_empty()
+Coverage2.residual_component_count()
+```
+
+The native owner accumulates exact mathematical sweeps against `M_r`, not
+under-cover chains and not the sharp-corner design pocket `D`.
+`ReachableDomain.build(...)` validates the native certificate and owns
+`C_r`, `M_r`, and `D \ M_r`. `CoverageLedger` binds ordered sweep witnesses to
+the same canonical motions used by depletion and binds the unreachable-residual
+digest separately.
+
+### Step 4: GREEN
+
+```bash
+pixi run format-adaptive
+pixi run lint
+pixi run types-adaptive
+pixi run pytest tests/adaptive/test_reachable_domain.py \
+  tests/adaptive/test_coverage.py -n auto --testmon -q
+```
+
+Commit: `feat(coverage): add exact reachable ledger`
 
 ---
 
-### Task 5: MedialAxisWalk wrapper
+## Task 4 — Commit the event corpus and exact stock-boundary extraction
 
-**Files:** Create `src/compas_cgal/adaptive/medial_axis.py`; Test extends `tests/adaptive/test_medial_axis.py`.
+**Hard precondition:** Task 0 records compatible distribution or commercial
+entitlement for the CGAL arrangement packages used by Tasks 4–8. Otherwise
+stop before adding their headers or binaries.
 
-**Interfaces:**
-- Consumes: `_toolpath.medial_axis_stations` (Task 4), `Clearance`/`TrochoidRadius` (Task 1), `DegenerateMedialAxisError` (Task 2).
-- Produces: frozen `Station(center: tuple[float,float], clearance: Clearance, trochoid_radius: TrochoidRadius)`; `MedialAxisWalk.build(polygon, holes, tool_radius: ToolRadius) -> MedialAxisWalk`; iterable of `Station` in walk order; raises `DegenerateMedialAxisError` on empty/degenerate output.
+**Files**
 
-- [ ] **Step 1: Failing test**
-```python
-def test_walk_yields_typed_stations():
-    from compas.geometry import Polygon
-    from compas_cgal.adaptive.medial_axis import MedialAxisWalk
-    from compas_cgal.adaptive.units import ToolRadius
-    walk = MedialAxisWalk.build(Polygon([[0,0,0],[10,0,0],[10,10,0],[0,10,0]]), [], ToolRadius.build(1.0))
-    stations = list(walk)
-    assert stations and stations[0].clearance.value > 0
+- Create: `src/continuous_tea_2/result.h`
+- Create: `src/continuous_tea_2/boundary_events.h`
+- Create: `src/continuous_tea_2/boundary_events.cpp`
+- Create: `src/continuous_tea_2.cpp`
+- Modify: `CMakeLists.txt`
+- Create: `src/compas_cgal/_continuous_tea_2.pyi`
+- Create: `tests/adaptive/fixtures/event_corpus.json`
+- Create: `tests/adaptive/test_motion_counterexamples.py`
+- Create: `tests/adaptive/test_event_substrate.py`
+
+### Step 1: encode the RED corpus
+
+The fixtures cover:
+
+1. a subtracted tool disk coincident with the cutter rim;
+2. dyadic one-sided offsets proving engagement `> pi`;
+3. near-coincident equal circles with fixed endpoint rotation and vanishing
+   center travel;
+4. external/internal tangencies;
+5. line/circle and circle/circle regularization vertices;
+6. positive-length supporting-curve overlap;
+7. two-disk run merge/split;
+8. the existing slotted gap-merge witness;
+9. three simultaneous intersections;
+10. segment and full-circle parameter seams;
+11. a quadratic circle-circle endpoint whose `BoundaryVertexIdV1` is stable
+    across operand and iterator order.
+
+One test explicitly asserts that the current center-distance growth expression
+is not a valid universal endpoint bound. This is a regression fact, not an
+xfail.
+
+Run RED:
+
+```bash
+pixi run pytest tests/adaptive/test_motion_counterexamples.py \
+  tests/adaptive/test_event_substrate.py -n auto -q
 ```
-- [ ] **Step 2–4:** verify fail → implement (call the binding, wrap rows into typed `Station`s, raise on empty) → verify pass. **Step 5: commit** `feat(adaptive): typed medial-axis walk`.
+
+### Step 2: expose exact boundary records
+
+Extract each trimmed `Stock2` halfedge with:
+
+- supporting line/circle coefficients;
+- exact endpoints;
+- material side;
+- exact feature ID and trimmed-domain predicate;
+- exact overlap and vertex incidence.
+
+The regularized polygon-set boundary does not retain removal-source identity.
+Depletion lineage records that identity separately when the removal is applied;
+boundary extraction never attempts to reconstruct it. Event construction
+intersects the supporting curve **and** its trimmed-domain predicate so an
+intersection on the infinite support but outside the halfedge cannot create a
+spurious event.
+
+Feature IDs come from the Task 1A canonical encoding of material side,
+normalized support coefficients, oriented `BoundaryVertexIdV1` trim endpoints,
+and overlap multiplicity, then are sorted by canonical bytes. Task 4 constructs
+each intersection ordinal using exact CircularKernel lexicographic comparison.
+They never depend on a raw one-root representation, CGAL iterator order, or
+object addresses.
+
+Do not flatten positive-length overlaps into tangent events. The low-level
+binding exposes test diagnostics plus:
+
+```python
+BoundaryEventKind = Literal[
+    "transverse", "tangent", "vertex", "overlap", "seam"
+]
+```
+
+The result contract is:
+
+```cpp
+enum class ContinuousTeaVerdict {
+    CERTIFIED,
+    CAP_EXCEEDED,
+    UNRESOLVED_DEGENERACY,
+};
+```
+
+No bool compatibility mapping is used in the new module.
+
+### Step 3: GREEN
+
+```bash
+pixi run format-adaptive
+pixi run lint
+pixi run pytest tests/adaptive/test_motion_counterexamples.py \
+  tests/adaptive/test_event_substrate.py -n auto --testmon -q
+pixi run pytest tests/test_stock.py tests/test_engagement_oracle.py -n auto -q
+```
+
+Commit: `feat(tea): expose continuous events`
 
 ---
 
-### Task 6: MachinedArea (contour-aware, Stock2-backed)
+## Task 5 — Compile and validate the algebraic event substrate
 
-**Files:** Create `src/compas_cgal/adaptive/machined_area.py`; Test `tests/adaptive/test_machined_area.py`.
+**Files**
 
-**Interfaces:**
-- Consumes: `compas_cgal.stock.Stock`, `_stock_2` (existing).
-- Produces: a `MachinedArea` typing.Protocol with `raw` (the `_stock_2.Stock2` handle for engagement queries) and `deplete_circle(cx: float, cy: float, radius: float) -> None`; and `Stock2Area.build(polygon, holes, tool_radius) -> Stock2Area` implementing it via `Stock` + `subtract_disk`/`subtract_arc_sweep`. Depletion models the cleared region; the engagement kernel reads `.raw` contour-aware.
+- Create: `src/continuous_tea_2/parameter_charts.h`
+- Create: `src/continuous_tea_2/parameter_charts.cpp`
+- Create: `src/exact_algebraic_1.h`
+- Create: `src/exact_algebraic_1.cpp`
+- Create: `src/continuous_tea_2/event_partition.h`
+- Create: `src/continuous_tea_2/event_partition.cpp`
+- Create: `src/continuous_tea_2/partition_certificate.h`
+- Modify: `CMakeLists.txt`
+- Test: `tests/adaptive/test_event_substrate.py`
 
-- [ ] **Step 1: Failing test**
-```python
-# tests/adaptive/test_machined_area.py
-import math
-from compas.geometry import Polygon
-from compas_cgal import _stock_2
-from compas_cgal.adaptive.machined_area import Stock2Area
-from compas_cgal.adaptive.units import ToolRadius
+### Step 1: compile gate
 
-def test_depletion_lowers_subsequent_engagement():
-    P = Polygon([[0,0,0],[10,0,0],[10,10,0],[0,10,0]])
-    area = Stock2Area.build(P, [], ToolRadius.build(0.5))
-    cap = 4.0  # full cap
-    before = _stock_2.engagement_at(area.raw, 5.0, 5.0, 0.5, cap)[0]
-    area.deplete_circle(5.0, 5.0, 0.5)            # clear where the cutter is
-    after = _stock_2.engagement_at(area.raw, 5.0, 5.0, 0.5, cap)[0]
-    assert before > 0.0 and after == 0.0          # contour-aware: now cleared
+Under the actual locked CGAL 6.0.1 build, compile:
+
+- `Arr_algebraic_segment_traits_2`;
+- `CGAL::Algebraic_kernel_d_1<CORE::BigInt>` after clearing exact rational
+  polynomial denominators to primitive integer coefficients;
+- `CGAL::Algebraic_kernel_d_2<CORE::BigInt>` for bivariate arrangement and
+  elimination operations;
+- exact real-root isolation, comparison, and sign-at-root through that kernel;
+- sign-at-root;
+- rational projective half-angle charts;
+- primitive/square-free normalization over the compiled exact rational
+  coefficient type;
+- the required CORE/Boost backend without re-enabling an undeclared GMP path.
+
+Record the exact traits and compile definitions in the code and
+`BuildProvenance`. If this gate fails, stop Tasks 5–16 and report the unsupported
+number-field operation. No sampled fallback is permitted.
+
+`exact_algebraic_1` defines the only algebraic witness encoding:
+
+```text
+AlgebraicRootIdV1 =
+  version tag
+  + primitive square-free integer coefficients normalized to gcd 1
+    and positive leading coefficient
+  + ordinal among all ordered real roots
 ```
-- [ ] **Step 2–4:** verify fail → implement (`Stock` wrapper + subtract; `raw` returns `stock.raw`) → verify pass. **Step 5: commit** `feat(adaptive): contour-aware machined-area (Stock2)`.
+
+The native verifier reruns `Solve_1`, checks the ordinal, and obtains/refines a
+rational isolating interval. Native comparisons use `Compare_1`/`Sign_at_1`;
+identity never uses `CORE::Expr` streaming or a decimal approximation.
+
+### Step 2: RED chart and root contracts
+
+Tests require:
+
+- line motion `c(t) = a + t(b-a)`, `t in [0,1]`;
+- four charts for a full circular center motion;
+- two rim half-angle charts plus explicit seams;
+- exact pullback polynomials for line and circular stock supports;
+- enforced bidegree bounds: segment/line `(1,2)`, segment/circle `(2,4)`,
+  full-circle/line `(2,2)`, and full-circle/circle `(4,4)`;
+- exact trimmed-halfedge domain predicates on every pullback branch;
+- exact isolation/order of repeated and simultaneous event roots;
+- an identically zero polynomial classifies as overlap;
+- every positive-width open parameter cell has a rational witness;
+- every zero-dimensional event fibre retains its exact algebraic root and
+  isolating interval;
+- two-branch cap crossings are isolated from `F_i(t,u) = 0`,
+  `F_j(t,v) = 0`, and the exact squared-chord cap relation;
+- the exact oriented-CCW run branch used by `run_exceeds_cap` separates
+  `theta` from its `2*pi - theta` complement and partitions determinant-zero
+  orientation boundaries;
+- isolated equal-support fibres arise from common zeros of every rim-polynomial
+  coefficient in `t`, not only from a globally zero pullback;
+- circle-circle regularization vertices are projected by rational elimination
+  through both incident supports and conjugate-filtered by exact trim/vertex
+  identity;
+- resultant roots are filtered against all original equations and trim
+  predicates, while an identically-equal cap interval is represented
+  explicitly;
+- deleting a seam or coalescing two exact roots fails a named fixture.
+
+Run RED:
+
+```bash
+pixi run pytest tests/adaptive/test_event_substrate.py -n auto -q
+```
+
+### Step 3: implement event partition primitives
+
+Keep algebraic curve construction, root isolation, cap-crossing elimination,
+extraneous-root filtering, and cell ordering separate. No material/run logic
+enters these files. The substrate gate is not complete until the minimal
+two-moving-branch resultant fixture passes without station sampling.
+
+Implement and test this derivation table:
+
+| Event class | Exact projection | Completeness/degeneracy record |
+|---|---|---|
+| tangency | `resultant_u(F, partial_u F)` | square-free factors; repeated root once |
+| trimmed vertex | rational elimination of rim plus incident supports | conjugates filtered by endpoint ID and trim truth |
+| support overlap | common-zero projection of all rim coefficients in `t` | isolated overlap fibre versus motion interval |
+| endpoint order/merge | resultant of two active endpoint branches | both original equations and trims rechecked |
+| orientation boundary | eliminate branches with exact CCW determinant zero | zero versus `pi` separated by exact dot sign |
+| cap crossing | eliminate `u,v` from `F_i`, `F_j`, squared-chord relation plus CCW branch | complement roots filtered; identical interval has orientation disposition |
+| chart seam | exact finite/infinite boundary evaluation | exactly one canonical owner |
+
+`EventPartitionCertificate` records:
+
+- chart IDs and exact chart-domain coverage;
+- normalized coefficient bytes, actual bidegree, square-free factors, and a
+  reference to the applicable degree bound;
+- every isolated real root with exact isolating interval and multiplicity;
+- every positive-width sign-invariant cell and its rational witness;
+- every zero-dimensional fibre and algebraic-root identity;
+- event kind, trim/feature/branch IDs, exact disposition, and seam owner.
+
+The native verifier reconstructs every projected factor, reruns complete
+real-root isolation, checks union of chart domains including seams, and checks
+that ordered roots induce exactly the recorded cells/fibres. Any mismatch is
+`UNRESOLVED_DEGENERACY`; `event_cell_count` is never accepted as completeness
+evidence.
+
+Canonical certificate bytes bind `AlgebraicRootIdV1`, not solver-selected
+isolating intervals. Intervals are regenerated exact diagnostics and excluded
+from proof identity, preserving fresh-process determinism.
+
+The compile/RED gate includes an isolated equal-circle coincidence, a
+positive-width motion overlap, and a circle-circle regularization vertex with
+quadratic coordinates. These prevent the rational coefficient contract from
+being bypassed through algebraic-coordinate substitution.
+
+### Step 4: GREEN
+
+```bash
+pixi run format-adaptive
+pixi run lint
+pixi run pytest tests/adaptive/test_event_substrate.py -n auto --testmon -q
+```
+
+Commit: `feat(tea): add exact event partition`
 
 ---
 
-### Task 7: EngagementProbe (the exact decision)
+## Task 6 — Implement the event-exact segment oracle
 
-**Files:** Create `src/compas_cgal/adaptive/engagement_probe.py`; Test `tests/adaptive/test_engagement_probe.py`.
+**Files**
 
-**Interfaces:**
-- Consumes: `MachinedArea` (Task 6), `EngagementCap` (Task 3), `_stock_2.engagement_at`, `MachiningCircle` (defined here: frozen `MachiningCircle(cx: float, cy: float, tool_radius: float, trochoid_radius: float)`).
-- Produces: `EngagementProbe(area: MachinedArea, tool_radius: float)`; method `within_cap(circle: MachiningCircle, cap: EngagementCap) -> bool` — the EXACT verdict "does the tool's max engagement as it sweeps this machining circle stay ≤ θ_max, contour-aware?" Implemented by sampling stations along the machining circle and calling `engagement_at(area.raw, x, y, tool_radius, cap.chord_ratio)`; returns True iff no sampled station reports `cap_exceeded`. Station count derived from the arc length so a full circle is covered at ≤ tool_radius spacing (same density basis as `certify_segment_tea`).
+- Create: `src/continuous_tea_2/segment_oracle.cpp`
+- Modify: `src/continuous_tea_2.cpp`
+- Modify: `src/compas_cgal/_continuous_tea_2.pyi`
+- Test: `tests/adaptive/test_segment_oracle.py`
 
-- [ ] **Step 1: Failing test**
-```python
-# tests/adaptive/test_engagement_probe.py
-import math
-from compas.geometry import Polygon
-from compas_cgal.adaptive.machined_area import Stock2Area
-from compas_cgal.adaptive.engagement_probe import EngagementProbe, MachiningCircle
-from compas_cgal.adaptive.engagement_cap import EngagementCap
-from compas_cgal.adaptive.units import ToolRadius
+### Step 1: write RED decision tests
 
-def test_small_immersion_passes_large_cap_fails_tiny_cap():
-    P = Polygon([[0,0,0],[10,0,0],[10,10,0],[0,10,0]])
-    probe = EngagementProbe(Stock2Area.build(P, [], ToolRadius.build(0.5)), tool_radius=0.5)
-    # a machining circle deep inside virgin stock: full immersion on part of the sweep
-    circle = MachiningCircle(cx=5.0, cy=5.0, tool_radius=0.5, trochoid_radius=1.5)
-    assert probe.within_cap(circle, EngagementCap.from_degrees(180)) is True
-    assert probe.within_cap(circle, EngagementCap.from_degrees(20)) is False
+Required cases:
+
+- line half-plane: exact `pi` equality certifies, tighter cap exceeds;
+- fully clear and fully material rim;
+- line/circle and circle/circle tangency during segment motion;
+- cutter-rim passage through a stock vertex;
+- run birth/death and merge/split;
+- coincident tool-disk boundary returns resolved conservative engagement or
+  `UNRESOLVED_DEGENERACY`, never empty by omission;
+- cap equality at an algebraic event root;
+- zero-length motion rejected by the typed factory before native dispatch;
+- omitting tangency, overlap, vertex, merge, or cap roots kills one named test.
+
+Run RED:
+
+```bash
+pixi run pytest tests/adaptive/test_segment_oracle.py -n auto -q
 ```
-- [ ] **Step 2: verify fail.** **Step 3: implement** — sample the machining-circle tool-center positions, query `engagement_at`, return the AND of `not exceeded`. The decision is exact (kernel `cap_exceeded`); `to_double` is never compared. **Step 4: verify pass.** **Step 5: commit** `feat(adaptive): exact engagement probe (contour-aware verdict)`.
+
+### Step 2: implement
+
+Bind:
+
+```python
+audit_segment_tea_event_exact(
+    stock,
+    x0,
+    y0,
+    x1,
+    y1,
+    tool_radius,
+    cap_chord_ratio,
+) -> tuple[Literal["certified", "cap_exceeded", "unresolved"], EventTrace]
+```
+
+For every open parameter cell and event fibre:
+
+1. assemble exact engaged rim intervals from material-side records;
+2. merge exact cyclic runs;
+3. isolate every run/cap equality through the Task 5 two-branch elimination;
+4. decide one exact sign per sign-invariant cell;
+5. retain the first canonical violation or unresolved event.
+
+Reporting intervals never decide the verdict.
+
+`EventTrace` has a canonical order independent of insertion order. Its digest
+binds the motion chart and `AlgebraicRootIdV1`, event kind, trimmed feature IDs,
+active branch IDs, canonical effective-cap bytes, exact verdict, oracle
+strategy version, and verified
+`EventPartitionCertificate` digest. `event_cell_count` is reporting metadata,
+never proof identity.
+
+### Step 3: differential falsifier
+
+For every certified result, probe the committed dyadic corpus with the full
+exact `engagement_at` cap and zero gap closure. A station violation is a
+definitive oracle bug. A clean scan is only a falsifier, not proof.
+
+### Step 4: GREEN
+
+```bash
+pixi run format-adaptive
+pixi run lint
+pixi run pytest tests/adaptive/test_segment_oracle.py \
+  tests/adaptive/test_motion_counterexamples.py -n auto --testmon -q
+```
+
+Commit: `feat(tea): certify segment events exactly`
 
 ---
 
-### Task 8: AdaptiveSpacer — tightest certified spacing
+## Task 7 — Implement the event-exact full-circle oracle
 
-**Files:** Create `src/compas_cgal/adaptive/spacer.py`; Test `tests/adaptive/test_spacer.py`.
+**Files**
 
-**Interfaces:**
-- Consumes: `MedialAxisWalk` (Task 5), `EngagementProbe` (Task 7), `MachiningCircle`, `EngagementCap`, `MachinedArea`, `EngagementCapInfeasibleError` (Task 2).
-- Produces: `AdaptiveSpacer(walk, probe, area, cap)`; `next_circle(prev: MachiningCircle) -> MachiningCircle` — bisect the along-walk spacing to the LARGEST value whose `MachiningCircle` passes `probe.within_cap(..., cap)`, deplete the accepted circle into `area`, return it. `spacing_search_floor` and `resolution` are named module constants (with unit/derivation comments), not literals. Raises `EngagementCapInfeasibleError` if even the floor spacing exceeds the cap. `circles() -> Iterator[MachiningCircle]` walks the whole path.
+- Create: `src/continuous_tea_2/circle_oracle.cpp`
+- Modify: `src/continuous_tea_2.cpp`
+- Modify: `src/compas_cgal/_continuous_tea_2.pyi`
+- Test: `tests/adaptive/test_circle_oracle.py`
 
-- [ ] **Step 1: Failing test** — the load-bearing behavioural contract:
-```python
-# tests/adaptive/test_spacer.py
-import math
-from compas.geometry import Polygon
-from compas_cgal.adaptive.spacer import AdaptiveSpacer
-from compas_cgal.adaptive.engagement_cap import EngagementCap
-# (build walk/probe/area via their factories; helper in the test)
+### Step 1: write RED circle contracts
 
-def test_every_accepted_circle_is_within_cap():
-    cap = EngagementCap.from_degrees(80)
-    spacer = _build_spacer(Polygon([[0,0,0],[20,0,0],[20,20,0],[0,20,0]]), tool_radius=0.8, cap=cap)
-    circles = list(spacer.circles())
-    assert circles
-    # re-probe each accepted circle against the area state it was accepted in:
-    for c in circles:
-        assert spacer.last_verdict(c) is True     # spacer records the exact verdict per circle
+Require:
 
-def test_tighter_cap_packs_more_circles():
-    P = Polygon([[0,0,0],[20,0,0],[20,20,0],[0,20,0]])
-    n80 = len(list(_build_spacer(P, 0.8, EngagementCap.from_degrees(80)).circles()))
-    n40 = len(list(_build_spacer(P, 0.8, EngagementCap.from_degrees(40)).circles()))
-    assert n40 > n80                              # smaller cap -> more circles (Held Fig-6 monotonicity)
+- full four-chart coverage and exact seam identity;
+- CW/CCW same maximum verdict, distinct ordered trace;
+- coincident and near-coincident prior tool disks;
+- external/internal tangency;
+- two-disk merge/split and existing slotted circular witness;
+- contour vertex and simultaneous-event fibres;
+- exact cap equality;
+- mutation removal of any chart, seam, coincidence, merge, or cap root fails;
+- certified event result has no violating dyadic probe through the declared
+  falsifier depth.
+
+Run RED:
+
+```bash
+pixi run pytest tests/adaptive/test_circle_oracle.py -n auto -q
 ```
-- [ ] **Step 2: verify fail.** **Step 3: implement** the bisection over spacing on the exact `within_cap` boolean (monotone: larger spacing → higher θ). Record `last_verdict` per accepted circle. **Step 4: verify pass.** **Step 5: commit** `feat(adaptive): certified adaptive spacer`.
+
+### Step 2: implement
+
+Bind:
+
+```python
+audit_full_circle_tea_event_exact(
+    stock,
+    center_x,
+    center_y,
+    phase_dx,
+    phase_dy,
+    clockwise,
+    tool_radius,
+    cap_chord_ratio,
+) -> tuple[Literal["certified", "cap_exceeded", "unresolved"], EventTrace]
+```
+
+The nonzero phase vector, not a rounded radius, defines the guide circle. A
+zero vector raises `DegenerateCircleMotionError` before native dispatch.
+Chart/root identity defines seam ownership; equivalent seam events are
+deduplicated by exact identity, and the trace is sorted by oriented motion
+order followed by canonical event identity. CW/CCW order therefore cannot
+depend on chart insertion order.
+
+### Step 3: GREEN and exact-kernel regression
+
+```bash
+pixi run format-adaptive
+pixi run lint
+pixi run pytest tests/adaptive/test_circle_oracle.py \
+  tests/adaptive/test_segment_oracle.py -n auto --testmon -q
+pixi run pytest tests/test_stock.py tests/test_engagement_oracle.py \
+  tests/test_engagement_audit.py -n auto -q
+```
+
+Commit: `feat(tea): certify circle events exactly`
 
 ---
 
-### Task 9: Neck-aware cap reduction
+## Task 8 — Add the typed motion certifier
 
-**Files:** Modify `src/compas_cgal/adaptive/spacer.py`; Test extends `tests/adaptive/test_spacer.py`.
+**Files**
 
-**Interfaces:**
-- Consumes: `Clearance` from the walk, `EngagementCap.reduced` (Task 3), `NeckTooTightError` (Task 2).
-- Produces: within `next_circle`, when the station clearance marks a bottleneck (clearance below a named `NECK_CLEARANCE_FACTOR * tool_radius`), use `cap.reduced(width_fraction)` for that circle; raise `NeckTooTightError` if the reduced cap is infeasible at the floor spacing.
+- Create: `src/compas_cgal/adaptive/motion_certificate.py`
+- Test: `tests/adaptive/test_motion_certificate.py`
 
-- [ ] **Step 1: Failing test** — the slotted lower-half witness (from `test_engagement_audit.py`): a thin neck forces a reduced cap, and the path through it stays certified at the reduced angle.
+### Step 1: write RED public contracts
+
 ```python
-def test_neck_uses_reduced_cap_and_stays_certified():
-    # slotted lower-half pocket; the neck circles must certify against a reduced cap, not the nominal
-    spacer = _build_spacer(_slotted_lower_half(), tool_radius=0.5, cap=EngagementCap.from_degrees(120))
-    circles = list(spacer.circles())
-    assert all(spacer.last_verdict(c) for c in circles)   # no circle exceeds its (possibly reduced) cap
+@dataclass(frozen=True)
+class MotionWitness:
+    operation_index: int
+    operation_kind: OperationType
+    motion: ExactSegmentMotion | ExactCircleMotion
+    user_cap_bytes: bytes
+    effective_cap_bytes: bytes
+    strategy_identity: bytes
+    stock_lineage_digest: bytes
+    event_trace_digest: bytes
+    verdict: Literal["certified"]
+    event_cell_count: int
+    unresolved_count: int
+
+
+@dataclass(frozen=True)
+class MotionCertifier:
+    ...
+
+    def certify(
+        self,
+        *,
+        operation_index: int,
+        operation_kind: OperationType,
+        motion: ExactSegmentMotion | ExactCircleMotion,
+        user_cap: EngagementCap,
+        effective_cap: EngagementCap,
+    ) -> MotionWitness: ...
 ```
-- [ ] **Step 2–4:** verify fail → implement neck detection off `Clearance` + reduced cap → verify pass. **Step 5: commit** `feat(adaptive): neck-aware cap reduction`.
+
+`certify` proves `effective_cap <= user_cap` with the exact cap surrogate before
+native dispatch. The canonical effective cap, not a generator-provided witness,
+is the cap passed to the native oracle.
+
+Tests require:
+
+- certified -> immutable witness;
+- proved cap exceedance -> `EngagementCapExceededError`, which only the
+  candidate evaluator converts to ordinary rejection;
+- unresolved -> `UnresolvedMotionEventError`;
+- the certifier exposes a const stock API and leaves lineage digest, canonical
+  boundary digest, and exact stock queries unchanged;
+- negative index, non-lateral kind, kind/motion incompatibility, and
+  `effective_cap > user_cap` are rejected locally;
+- the returned witness binds the supplied ordinal, semantic kind, exact motion,
+  caps, and observed pre-state digest;
+- pre-deplete virgin slotting fails;
+- no plunge/approach witness exists.
+
+Run RED:
+
+```bash
+pixi run pytest tests/adaptive/test_motion_certificate.py -n auto -q
+```
+
+### Step 2: implement and GREEN
+
+The certifier is read-only and dispatches only exact segment/full-circle
+motions. It never calls the legacy guarded certifiers. Fresh orchestration is
+deferred until Task 11A, after validated entry and exact neck state exist.
+Cross-record ordinal/motion/cap/state mismatch belongs to replay and artifact
+assembly, where an expected canonical operation and keyed witness stream exist.
+
+```bash
+pixi run format-adaptive
+pixi run lint
+pixi run types-adaptive
+pixi run pytest tests/adaptive/test_motion_certificate.py \
+  -n auto --testmon -q
+```
+
+Commit: `feat(adaptive): add event-exact certifier`
 
 ---
 
-### Task 10: TransitionBuilder (non-slotting links)
+## Task 9 — Add the true segment-site Voronoi medial axis
 
-**Files:** Create `src/compas_cgal/adaptive/transitions.py`; Test `tests/adaptive/test_transitions.py`.
+**Hard precondition:** Task 0 records compatible distribution or commercial
+CGAL entitlement for every Segment Delaunay, Voronoi adaptor, parabola,
+arrangement, and reachable-domain package used here. Without it, stop and
+report the exact licensing blocker.
 
-**Interfaces:**
-- Consumes: `MachiningCircle`, `MachinedArea` (for the cleared region), `TransitionGougeError` (Task 2).
-- Produces: `TransitionBuilder(area)`; `link(a: MachiningCircle, b: MachiningCircle) -> list[tuple[float,float]]` — a polyline connecting consecutive machining circles that stays within the already-cleared area (so it does not slot fresh stock). Verified by probing the link's midpoints: engagement against the depleted area must be 0. Raises `TransitionGougeError` if no cleared route exists.
+**Implementation dependencies:** Task 3's verified `C_r`/digest and Task 5's
+`exact_algebraic_1` root encoding/backend.
 
-- [ ] **Step 1: Failing test**
-```python
-# tests/adaptive/test_transitions.py
-def test_link_between_adjacent_circles_does_not_engage_material():
-    # two overlapping cleared circles; the link between their centers is in cleared area
-    builder, a, b, area = _two_cleared_circles()
-    pts = builder.link(a, b)
-    for x, y in pts:
-        assert _stock_2.engagement_at(area.raw, x, y, a.tool_radius, 4.0)[0] == 0.0
+**Files**
+
+- Create: `src/segment_site_mat.h`
+- Create: `src/segment_site_mat.cpp`
+- Create: `src/segment_site_mat_sampling.h`
+- Create: `src/segment_site_mat_sampling.cpp`
+- Create: `src/segment_site_neck.h`
+- Create: `src/segment_site_neck.cpp`
+- Create: `src/medial_axis_2.cpp`
+- Modify: `CMakeLists.txt`
+- Create: `src/compas_cgal/_medial_axis_2.pyi`
+- Test: `tests/adaptive/test_medial_axis.py`
+
+### Step 1: write RED topology/provenance tests
+
+Require:
+
+- the committed analytically verified point/segment-bisector fixture produces a
+  retained `PARABOLA` edge, proving no straight-skeleton downgrade;
+- native exact verdict fields prove every sample equidistant to its recorded
+  generator sites and no site closer; returned doubles are never rechecked as
+  exact evidence;
+- exact polygon clipping against `D` plus exact clearance clipping
+  `distance_to_defining_site^2 >= r^2` removes exterior, hole-interior, and
+  tool-center-inadmissible portions; the result equals intersection with `C_r`;
+- lines, rays, segments, and parabolas that cross the domain multiple times
+  emit every connected interior component;
+- an unbounded dual with bounded interior pieces retains those pieces;
+- tangential clips, hole clips, and multiple-crossing clips retain exact
+  endpoint/boundary provenance;
+- exact node collapse and adjacency use stable IDs, never addresses/doubles;
+- every neck record is an exact local site-distance minimum, binds both sites
+  and the separating graph cut, and changes only when exact squared-width
+  thresholds are crossed;
+- strict interior minima, maximal constant-clearance plateaus, one-sided
+  `C_r` endpoint minima, and shared-vertex minima have one deterministic owner;
+- a clearance polynomial that is identically zero retains the complete dual
+  cell as a closed `C_r`-boundary plateau; constant positive retains and
+  constant negative rejects;
+- equal minima meeting at a vertex merge once, while a non-separating minimum
+  is not a neck;
+- graph cycle rank equals the exact first Betti number of `C_r`; narrow
+  corridors may disconnect components or remove a design-pocket hole cycle;
+- sampling refinement changes samples but not analytic topology/provenance;
+- insufficient conic refinement raises `ConicSamplingLimitError`;
+- repeated calls are bitwise deterministic;
+- existing `tests/test_toolpath.py` output remains unchanged.
+
+Run RED:
+
+```bash
+pixi run pytest tests/adaptive/test_medial_axis.py -n auto -q
 ```
-- [ ] **Step 2–4:** verify fail → implement (route through overlap of cleared circles; probe midpoints) → verify pass. **Step 5: commit** `feat(adaptive): non-slotting transitions`.
+
+### Step 2: implement the exact graph
+
+First compile a native spike that parameterizes every Voronoi primitive
+(`Line_2`, `Ray_2`, `Segment_2`, and `Parabola_segment_2`), substitutes it into
+the defining-site squared-clearance equation, clears denominators to a
+primitive integer polynomial of degree at most four, and isolates/orders every
+`clearance^2 = r^2` root with Task 5's
+`CGAL::Algebraic_kernel_d_1<CORE::BigInt>`. Exact line-boundary intersections
+clip against `D`; the clearance polynomial clips to `C_r`. This deliberately
+does not assume a `Parabola_segment_2`/circle intersection overload. If any
+primitive cannot produce and order those roots exactly, stop Tasks 9–16. Do not
+sample the clip.
+
+Constant clearance is handled before square-free normalization: exact positive
+retains the whole primitive domain, exact negative discards it, and exact zero
+retains it as a boundary plateau with no fabricated roots.
+
+Use:
+
+```cpp
+using MatKernel =
+    CGAL::Exact_predicates_exact_constructions_kernel_with_sqrt;
+using MatTraits =
+    CGAL::Segment_Delaunay_graph_traits_without_intersections_2<
+        MatKernel, CGAL::Field_with_sqrt_tag>;
+```
+
+Use the segment-Delaunay degeneracy-removal Voronoi adaptor. Insert normalized
+ring segments with stable feature IDs. Use
+`Segment_Delaunay_graph_storage_traits_with_info_2` with explicit
+conversion/merge functors, or an exact post-map proved bijective by native
+tests; default storage does not preserve caller IDs. Provenance distinguishes
+vertex point-sites from open-segment sites.
+
+Split each dual at exact `D`-boundary roots and exact clearance roots. Classify
+every open parameter cell by point-in-`D` and clearance sign, then emit every
+maximal admissible-center component. On a valid Voronoi dual the defining-site
+distance is the nearest-site distance, so this clearance predicate is exactly
+membership in `C_r`. Never discard a dual merely because its unclipped
+primitive is unbounded. Each emitted edge binds original dual identity,
+component index, both generator sites, and complete endpoint provenance.
+Independently reconstruct `C_r` through the shared `reachable_domain_2`
+component and require its digest to equal Task 3's digest for the same input.
+
+A quartic root is not coerced into `MatKernel::Point_2`.
+`AlgebraicCurvePointV1` stores original dual identity plus
+`AlgebraicRootIdV1`. Same-curve ordering uses the root kernel; equality at a
+shared original Voronoi vertex uses its node identity; any remaining
+cross-curve equality uses Task 5's bivariate exact kernel. Coordinates are
+approximated only for reporting samples. The compile spike must exercise exact
+curve evaluation/sign, same-curve order, shared-vertex equality, and
+cross-curve equality without a `CORE::Expr` stream conversion.
+
+Canonicalize exact nodes lexicographically. Edge records contain source/target
+node, `LINE|PARABOLA`, ordered generator-site IDs, original-dual identity, and
+clip provenance.
+
+Set target-local compile definitions:
+
+```cmake
+CGAL_USE_CORE=1
+CGAL_CORE_USE_BOOST_BACKEND=1
+```
+
+Keep the repository's existing Boost multiprecision and GMP-disabled flags.
+
+### Step 3: implement exact neck evidence and classification
+
+`NeckEvidenceV1` is a versioned tagged union:
+
+- `STRICT_EDGE`: relative-interior `AlgebraicRootIdV1` with derivative sign
+  changing negative-to-positive;
+- `CLEARANCE_ENDPOINT`: one-sided minimum at a `C_r` clip with full endpoint
+  feature CSR;
+- `SHARED_VERTEX`: one exact node plus all incident minimizing halfedges;
+- `PLATEAU`: one maximal connected constant-clearance interval/subgraph with
+  exact endpoint IDs.
+
+Every variant binds its exact squared width as `AlgebraicRootIdV1`, defining
+site IDs, owner ID, and canonical separating-cut partition. Ownership rules are:
+
+1. relative-interior strict minima exclude endpoints;
+2. all equal-width incident endpoint minima merge into the shared vertex;
+3. constant-clearance cells merge to one maximal plateau owned by the
+   lexicographically first edge/node identity;
+4. a remaining `C_r` endpoint is a one-sided minimum only when exact signs are
+   nondecreasing into the edge;
+5. evidence is retained only when removing its point, vertex, or contracted
+   plateau separates at least two nonempty traversal sides.
+
+Bind:
+
+```python
+_medial_axis_2.validate_and_classify_necks(
+    mat_certificate: bytes,
+    neck_evidence: tuple[bytes, ...],
+    squared_width_boundaries: tuple[bytes, ...],
+) -> tuple[NDArray[int64], tuple[bytes, ...]]
+```
+
+The function revalidates every algebraic root/cut, compares exact algebraic
+widths to rational policy boundaries natively, and returns class IDs plus
+comparison-certificate bytes. Each boundary byte string is Task 1A's
+`ExactRationalV1` numerator/denominator encoding. Boundaries are strictly
+increasing and width classes are `[0,b0]`, `(b0,b1]`, ..., `(bn,+infinity)`, so
+exact equality belongs to the narrower, more restrictive class. `CORE::Expr`
+text and doubles are forbidden.
+
+### Step 4: implement proposal sampling
+
+Lines use exact barycentric samples. Parabolas use exact parameter bisection;
+reported chord/sagitta select refinement. At the depth cap, fail loud.
+
+Bind:
+
+```python
+_medial_axis_2.segment_site_medial_axis(
+    vertices,
+    holes,
+    tool_radius,
+    station_spacing,
+    max_sagitta,
+    max_refinement_depth,
+)
+```
+
+`tool_radius` is the sole admissible-center radius and is exactly the `r` bound
+into Task 3's `C_r` digest. No unused or second radial-clearance parameter
+exists.
+
+Return this fixed tuple:
+
+1. `nodes: float64[V,3]`;
+2. `edges: int64[E,8]` as source, target, curve kind, site A, site B,
+   original-dual kind, original-dual ID, clip-component index;
+3. `node_site_offsets: int64[V+1]`;
+4. `node_site_ids: int64[K]`;
+5. `site_provenance: int64[S,3]` as kind, ring, feature;
+6. `edge_endpoint_provenance_flags: int64[E,2]` as an independent bitset of
+   original Voronoi vertex, `D` clip, and clearance/`C_r` root, allowing
+   coincident events at one endpoint;
+7. `endpoint_feature_offsets: int64[2*E+1]`;
+8. `endpoint_features: int64[J,5]` as domain kind, component, curve kind,
+   source-site/ring, and derived-feature index; CSR retains every incident
+   feature at tangencies and degenerate vertices;
+9. `edge_exact_flags: int64[E,3]` as admissible-center component,
+   source-provenance verified, and target-provenance verified;
+10. `sample_centers: float64[N,3]`;
+11. `sample_clearance: float64[N]`;
+12. `sample_guide_radius: float64[N]`;
+13. `sample_flags: int64[N,2]` as exact-equidistant and no-site-closer;
+14. `edge_sample_offsets: int64[E+1]`;
+15. `sample_parameter: float64[N]`;
+16. `neck_evidence: tuple[bytes, ...]`;
+17. `neck_cut_offsets: int64[Q+1]`;
+18. `neck_cut_edge_ids: int64[L]`;
+19. `center_domain_digest: bytes`;
+20. `mat_certificate: bytes`.
+
+All exact flag columns are native contract verdicts and must be one for every
+returned edge/sample; tool fit is structural because edges are exactly clipped
+to `C_r`. All floating fields remain proposal-only.
+
+### Step 5: GREEN
+
+```bash
+pixi run format-adaptive
+pixi run lint
+pixi run pytest tests/adaptive/test_medial_axis.py -n auto --testmon -q
+pixi run pytest tests/test_toolpath.py -n auto -q
+```
+
+Commit: `feat(mat): add exact segment Voronoi graph`
 
 ---
 
-### Task 11: BuildIdentity + EngagementCertificate
+## Task 10 — Wrap MAT topology, neck state, and the finite candidate lattice
 
-**Files:** Create `src/compas_cgal/adaptive/certificate.py`; Test `tests/adaptive/test_certificate.py`.
+**Files**
 
-**Interfaces:**
-- Consumes: `MachiningCircle`, `EngagementCap`.
-- Produces: frozen `BuildIdentity(sha: str)` via `BuildIdentity.of(polygon, holes, tool_radius, cap, version: str)` — SHA-256 over canonicalised inputs; frozen `EngagementCertificate(identity: BuildIdentity, cap: EngagementCap, per_circle_within_cap: tuple[bool, ...])` with property `holds: bool = all(per_circle_within_cap)`.
+- Create: `src/compas_cgal/adaptive/medial_axis.py`
+- Create: `src/compas_cgal/adaptive/neck.py`
+- Create: `src/compas_cgal/adaptive/candidates.py`
+- Test: `tests/adaptive/test_medial_axis.py`
+- Test: `tests/adaptive/test_neck.py`
+- Test: `tests/adaptive/test_candidates.py`
 
-- [ ] **Step 1: Failing test**
-```python
-# tests/adaptive/test_certificate.py
-from compas_cgal.adaptive.certificate import BuildIdentity, EngagementCertificate
-from compas_cgal.adaptive.engagement_cap import EngagementCap
+### Step 1: write RED typed contracts
 
-def test_identity_is_deterministic_and_input_sensitive():
-    from compas.geometry import Polygon
-    P = Polygon([[0,0,0],[10,0,0],[10,10,0],[0,10,0]])
-    cap = EngagementCap.from_degrees(80)
-    a = BuildIdentity.of(P, [], 1.0, cap, "phase1")
-    b = BuildIdentity.of(P, [], 1.0, cap, "phase1")
-    c = BuildIdentity.of(P, [], 1.5, cap, "phase1")
-    assert a == b and a != c
+Tests require:
 
-def test_certificate_holds_iff_all_within_cap():
-    cap = EngagementCap.from_degrees(80)
-    ok = EngagementCertificate(BuildIdentity("x"), cap, (True, True))
-    bad = EngagementCertificate(BuildIdentity("x"), cap, (True, False))
-    assert ok.holds and not bad.holds
+- CSR ranks/dtypes and stable topology validation;
+- exact feature/node IDs survive without coordinate matching;
+- maximal tool-fit runs retain parent edge identity and clipped endpoint state;
+- native `NeckEvidence` bytes validate exact local-minimum, squared-width
+  class, site-pair, and separating-cut identity;
+- each oriented neck uses the literal passage states `unvisited`,
+  `first_pass_complete`, `second_pass_complete`, and `terminal`;
+- `NeckPolicy` maps `(exact width class, passage state)` to a native-produced
+  effective cap, proves it no larger than the user cap, and never reads
+  `sample_clearance`;
+- `_medial_axis_2.validate_and_classify_necks` recomputes every class and
+  comparison certificate from the MAT certificate and policy's exact squared
+  boundaries;
+- `EffectiveCapDecision.build(...)` binds the verified neck-evidence digest,
+  class, before/after state, and selected cap; full-cap decisions prove equal
+  cap bytes, while neck decisions use `_stock_2.cap_chord_ratio_le`;
+- accepted neck operations record one legal before/after state transition;
+- each candidate carries one deterministic proposed `TraversalDecision` from
+  its current exact cursor to its candidate endpoint;
+- one-sided MATHSM proposal from `(m,p,r)` yields `q`, midpoint `c`, and phase
+  `q-c`;
+- the complete lattice contains all declared spatial/radius/phase refinement
+  levels;
+- exhaustive small-lattice oracle equals production enumeration;
+- repeated enumeration order is identical;
+- tie-break is furthest progress, largest radius, then canonical identity;
+- no bisection or monotonic-feasibility assumption occurs.
+
+Run RED:
+
+```bash
+pixi run pytest tests/adaptive/test_medial_axis.py \
+  tests/adaptive/test_neck.py tests/adaptive/test_candidates.py -n auto -q
 ```
-- [ ] **Step 2–4:** verify fail → implement (canonical JSON of rounded verts + params → sha256) → verify pass. **Step 5: commit** `feat(adaptive): content-addressed engagement certificate`.
+
+### Step 2: implement and GREEN
+
+Keep topology ownership in `medial_axis.py`, exact neck evidence/passage state
+in `neck.py`, and pure finite enumeration in `candidates.py`. The candidate
+identity binds exact neck evidence, before/after passage state, and effective
+cap bytes plus the proposed traversal transition. This task semantically
+validates the Task 1A operation decision records; it does not change the frozen
+operation encoding.
+
+```bash
+pixi run format-adaptive
+pixi run lint
+pixi run types-adaptive
+pixi run pytest tests/adaptive/test_medial_axis.py \
+  tests/adaptive/test_neck.py tests/adaptive/test_candidates.py \
+  -n auto --testmon -q
+```
+
+Commit: `feat(adaptive): add finite MAT candidates`
 
 ---
 
-### Task 12: Generator entry point
+## Task 11 — Add precleared entry and exact gouge containment
 
-**Files:** Create `src/compas_cgal/adaptive/generator.py`; Test `tests/adaptive/test_generator.py`.
+**Files**
 
-**Interfaces:**
-- Consumes: all prior units.
-- Produces: `adaptive_trochoidal_toolpath(polygon, tool_diameter: float, max_engagement_deg: float, holes=None, radial_clearance: float = 0.0) -> CertifiedToolpath`, where frozen `CertifiedToolpath(circles: tuple[MachiningCircle, ...], links: tuple[tuple[tuple[float,float],...], ...], certificate: EngagementCertificate)`. Assembles: `EngagementCap.from_degrees` → `MedialAxisWalk.build` → `Stock2Area.build` → `EngagementProbe` → `AdaptiveSpacer` → `TransitionBuilder` → `EngagementCertificate`.
+- Create: `src/containment_2.h`
+- Create: `src/containment_2.cpp`
+- Create: `src/containment_2_bindings.cpp`
+- Modify: `CMakeLists.txt`
+- Create: `src/compas_cgal/_containment_2.pyi`
+- Create: `src/compas_cgal/adaptive/entry.py`
+- Create: `src/compas_cgal/adaptive/containment.py`
+- Modify: `src/compas_cgal/adaptive/stock_area.py`
+- Modify: `src/compas_cgal/adaptive/identity.py`
+- Test: `tests/adaptive/test_entry.py`
+- Test: `tests/adaptive/test_containment.py`
+- Modify: `tests/adaptive/test_identity.py`
 
-- [ ] **Step 1: Failing test**
-```python
-# tests/adaptive/test_generator.py
-from compas.geometry import Polygon
-from compas_cgal.adaptive.generator import adaptive_trochoidal_toolpath
+### Step 1: write RED entry tests
 
-def test_generator_returns_holding_certificate_for_square():
-    P = Polygon([[0,0,0],[20,0,0],[20,20,0],[0,20,0]])
-    out = adaptive_trochoidal_toolpath(P, tool_diameter=1.6, max_engagement_deg=80.0)
-    assert out.circles and out.certificate.holds
-    assert out.certificate.cap.theta > 0
+Require:
+
+- precleared disk exact containment in pocket and exclusion from islands;
+- entry center belongs to `C_r`; a larger entry radius is separately proved
+  contained in `D`;
+- process evidence qualifies the bore across the complete
+  `CutPlane.clearance_z -> CutPlane.cut_z` interval;
+- process provenance and radius bind to input identity;
+- `Stock2Area.deplete(PreclearedEntry)` is an explicit overload, subtracts the
+  exact entry disk once, and returns the required keyed `DepletionWitness`;
+- canonical approach at clearance Z and vertical plunge to cut Z travel through
+  the declared void and remove no material;
+- first full circle fits inside the entry disk and certifies against post-entry
+  stock;
+- one-tool-radius seed on a large square is rejected as unable to launch any
+  capped non-degenerate lateral motion;
+- arbitrary lateral motion cannot be relabelled as entry;
+- `InputIdentity.build(...)` accepts only the validated entry and binds
+  canonical `D`, frame, cut plane, tool, reachable-domain digest, user cap,
+  cut direction, all candidate/neck/depletion/traversal policies,
+  `INPUT_SCHEMA_VERSION`, `OPERATION_SCHEMA_VERSION`, and every current
+  component version.
+
+### Step 2: write RED containment tests
+
+For circles, decide exact containment of the mathematical annular sweep—or disk
+when `|v| <= r`—in `D`, equivalently exact guide-circle containment in `C_r`.
+Do not require the filled outer disk: that conservative test wrongly rejects
+valid annuli surrounding islands. For segments, decide exact capsule
+containment in `D`, equivalently center-segment containment in `C_r`.
+
+The sweep and center-domain formulations are contract-tested as equivalent.
+The outer-disk predicate may be a rejection-only optimization but never the
+acceptance authority.
+
+Test equality, reflex vertices, island boundaries, and a one-rational-quantum
+gouge mutation.
+
+Run RED:
+
+```bash
+pixi run pytest tests/adaptive/test_entry.py \
+  tests/adaptive/test_containment.py tests/adaptive/test_identity.py \
+  -n auto -q
 ```
-- [ ] **Step 2–4:** verify fail → implement the assembly → verify pass. **Step 5: commit** `feat(adaptive): adaptive_trochoidal_toolpath generator`.
+
+### Step 3: implement and GREEN
+
+```bash
+pixi run format-adaptive
+pixi run lint
+pixi run types-adaptive
+pixi run pytest tests/adaptive/test_entry.py \
+  tests/adaptive/test_containment.py tests/adaptive/test_identity.py \
+  -n auto --testmon -q
+```
+
+Commit: `feat(adaptive): certify entry and input`
 
 ---
 
-### Task 13: Acceptance — differential oracle + ablation
+## Task 11A — Add independent fresh-state replay
 
-**Files:** Test `tests/adaptive/test_acceptance.py`.
+**Dependencies:** Tasks 3, 8, 10, and 11.
 
-**Interfaces:** Consumes `adaptive_trochoidal_toolpath` (Task 12), the *independent* `compas_cgal.engagement.audit_toolpath_engagement`, `_stock_2.engagement_at`.
+**Files**
 
-- [ ] **Step 1: Write the acceptance tests** (no new production code — these certify the whole):
+- Create: `src/compas_cgal/adaptive/replay.py`
+- Test: `tests/adaptive/test_replay.py`
+
+### Step 1: write RED replay contracts
+
+Expose:
+
 ```python
-# tests/adaptive/test_acceptance.py
-import math
-import numpy as np
-from compas.geometry import Polygon
-from compas_cgal import _stock_2
-from compas_cgal.adaptive.generator import adaptive_trochoidal_toolpath
-from compas_cgal.adaptive.machined_area import Stock2Area
-from compas_cgal.adaptive.units import ToolRadius
-
-SQUARE = Polygon([[0,0,0],[20,0,0],[20,20,0],[0,20,0]])
-
-def _independent_max_engagement(out, tool_radius, cap_ratio):
-    """Replay the certified circles through a FRESH depleting stock and re-measure
-    the max engagement per circle -- a second, independent path through the kernel."""
-    area = Stock2Area.build(SQUARE, [], ToolRadius.build(tool_radius))
-    worst = 0.0
-    for c in out.circles:
-        # sample the machining circle, measure engagement contour-aware, then deplete
-        for a in np.linspace(0, 2*math.pi, 24, endpoint=False):
-            x, y = c.cx + c.trochoid_radius*math.cos(a), c.cy + c.trochoid_radius*math.sin(a)
-            total, mx, exceeded = _stock_2.engagement_at(area.raw, x, y, tool_radius, cap_ratio)
-            worst = max(worst, mx)
-        area.deplete_circle(c.cx, c.cy, tool_radius)
-    return worst
-
-def test_differential_certificate_no_cutting_arc_exceeds_cap():
-    deg = 80.0
-    out = adaptive_trochoidal_toolpath(SQUARE, tool_diameter=1.6, max_engagement_deg=deg)
-    assert out.certificate.holds                       # the generator's claim
-    worst = _independent_max_engagement(out, 0.8, out.certificate.cap.chord_ratio)
-    assert worst <= math.radians(deg) + 1e-6           # the independent confirmation
-
-def test_ablation_fixed_stepover_produces_a_tail_adaptive_does_not():
-    # adaptive at 120 deg: 0% of circles exceed 120
-    out = adaptive_trochoidal_toolpath(SQUARE, tool_diameter=1.6, max_engagement_deg=120.0)
-    assert all(out.certificate.per_circle_within_cap)
-    # (the fixed-stepover comparison uses trochoidal_mat_toolpath_circular audited at 120 deg,
-    #  reproducing the measured ~15% tail -- see docs spec acceptance section)
+def replay_certificate(
+    *,
+    input_identity: InputIdentity,
+    pocket: Polygon,
+    holes: Sequence[Polygon],
+    cut_plane: CutPlane,
+    tool_radius: ToolRadius,
+    user_cap: EngagementCap,
+    entry: PreclearedEntry,
+    operations: tuple[CanonicalOperation, ...],
+    candidate_policy: CandidatePolicy,
+    neck_policy: NeckPolicy,
+    depletion_policy: DepletionPolicy,
+    traversal_policy: TraversalPolicy,
+    cut_direction_policy: CutDirectionPolicy,
+) -> ReplayCertificate: ...
 ```
-- [ ] **Step 2: Run** — `PYTHONPATH=src ... pytest tests/adaptive/test_acceptance.py -v`. Expected: the differential oracle passes (generator claim == independent measurement, θ ≤ θ_max); if it fails, the spacer over-packed — STOP and tighten, do not loosen the tolerance.
-- [ ] **Step 3: Full suite green** — `pytest tests/ -n auto -q`, the pre-existing suite unchanged.
-- [ ] **Step 4: Commit** — `test(adaptive): differential certificate oracle + ablation`.
+
+Tests require:
+
+- replay recomputes and matches `InputIdentity`, `C_r`/`M_r`, MAT certificate,
+  exact neck evidence/classes, and cut-direction orientation from canonical
+  inputs;
+- pristine stock and coverage are constructed, then `PreclearedEntry` is
+  applied before the first lateral operation;
+- approach/plunge exactly match clearance/cut Z and the qualified bore, and
+  never mutate 2D stock;
+- operation grammar is exactly approach, plunge, then one or more lateral
+  operations; every segment/circle phase endpoint is exactly continuous with
+  its predecessor and every lateral Z equals `CutPlane.cut_z`;
+- replay computes a canonical ordered-operation digest and index chain;
+- for each lateral operation, replay reconstructs `EffectiveCapDecision` from
+  exact neck evidence, current passage state, and `NeckPolicy`; it rejects a
+  recorded class, evidence digest, state transition, or cap that differs;
+- motion is event-exact certified against frozen pre-depletion stock before
+  exact depletion and coverage mutation;
+- operation orientation agrees with `CutDirectionPolicy`;
+- every `TraversalDecision` is recomputed against the fresh MAT graph, advances
+  the named cursor legally, and leaves every required cursor terminal;
+- fresh coverage proves exact `M_r` residual emptiness and separately binds
+  the unchanged `D \ M_r` digest;
+- generator witness verdicts, stock snapshots, and coverage snapshots are not
+  accepted as inputs;
+- a state-dependent reorder, stale input identity, non-fresh state, omitted
+  entry, broken phase continuity, illegal grammar, nonterminal traversal,
+  nonempty residual, and certify-after-deplete mutations fail named tests.
+
+`ReplayCertificate` binds input identity, canonical ordered-operation
+digest/index chain, recomputed effective-cap decisions, fresh initial
+stock/coverage digests, ordered fresh motion/depletion/sweep traces, terminal
+traversal/stock/coverage digests, unreachable-residual digest, and the exact
+empty-`M_r` verdict. A commuting reorder that remains physically valid changes
+this digest and is detected when Task 14 validates `ArtifactIdentity`; replay
+does not invent an expected output order from input identity.
+
+Run RED:
+
+```bash
+pixi run pytest tests/adaptive/test_replay.py -n auto -q
+```
+
+### Step 2: implement and GREEN
+
+Separate immutable `ReplayCertificate`, policy/effective-cap recomputation, and
+the short-lived replay state. Do not mix replay into `stock_area.py`.
+
+```bash
+pixi run format-adaptive
+pixi run lint
+pixi run types-adaptive
+pixi run pytest tests/adaptive/test_replay.py -n auto --testmon -q
+```
+
+Commit: `feat(cert): add independent replay`
 
 ---
 
-## Self-Review
+## Task 12 — Implement joint transactional candidate evaluation
 
-**Spec coverage:** EngagementCap (T3←spec §Contract/boundary), MedialAxisWalk (T4-5←§Components.2), MachinedArea Stock2 (T6←§Components.3 Phase-1), EngagementProbe exact decision (T7←§Components.4 + deciding/reporting), AdaptiveSpacer (T8←§Components.5), neck reduction (T9←§Components.5 §3.2), transitions (T10←§Components.6), certificate+BuildIdentity (T11←§Components.7), generator (T12), differential oracle + ablation (T13←§Acceptance). Types (T1←§Units), errors (T2←§Error model). **Deferred by spec:** Phase-1.5 exact sorted-arc contour (not in this plan — a follow-up plan swaps the `MachinedArea` implementation behind its Protocol); Phase-2 elliptic returns. Held-scale full-pocket run is a Phase-1.5 exit, not a Phase-1 task — Task 13 uses a tractable 20×20 square, matching the spec.
+**Files**
 
-**Placeholder scan:** the `clr.max()` assert in Task 4 Step 1 has an inline correction note — the implementer writes `assert clr.max() > 4.0`. No TODO/TBD elsewhere; each task carries its test code.
+- Create: `src/compas_cgal/adaptive/transaction.py`
+- Test: `tests/adaptive/test_transaction.py`
 
-**Type consistency:** `MachiningCircle(cx, cy, tool_radius, trochoid_radius)` defined in Task 7 and used identically in Tasks 8/10/12/13; `EngagementCap.chord_ratio` (T3) consumed by T7/T13; `MachinedArea.raw`/`deplete_circle` (T6) consumed by T7/T10/T13; `.circles()`/`last_verdict` (T8) consumed by T9/T13.
+### Step 1: write RED transaction tests
+
+Each candidate evaluation must:
+
+1. fork authoritative engagement stock and coverage ledger;
+2. construct the direct phase-to-phase segment;
+3. containment-check, event-certify, and exact-deplete the segment;
+4. containment-check, event-certify, and exact-deplete the circle;
+5. append both exact sweeps to forked coverage;
+6. validate and record the candidate's exact neck-state and
+   `TraversalDecision` transitions;
+7. return an immutable accepted transaction or a proved rejection;
+8. leave authoritative state unchanged until explicit commit.
+
+Tests cover link pass/circle fail, link fail, unresolved event, gouge failure,
+successful atomic commit, stale-parent digest, and deterministic winner choice.
+A mutation that depletes before certify or advances neck state before commit
+must fail.
+
+Run RED:
+
+```bash
+pixi run pytest tests/adaptive/test_transaction.py -n auto -q
+```
+
+### Step 2: implement
+
+Do not create a stateful god object. Separate:
+
+- immutable `CandidateTransaction`;
+- short-lived `CandidateEvaluator`;
+- long-lived `GenerationState`;
+- pure winner selection.
+
+### Step 3: GREEN
+
+```bash
+pixi run format-adaptive
+pixi run lint
+pixi run types-adaptive
+pixi run pytest tests/adaptive/test_transaction.py -n auto --testmon -q
+```
+
+Commit: `feat(adaptive): add atomic candidate commit`
+
+---
+
+## Task 13 — Traverse all MAT components and generate a covered path
+
+**Files**
+
+- Create: `src/compas_cgal/adaptive/traversal.py`
+- Create: `src/compas_cgal/adaptive/generator.py`
+- Test: `tests/adaptive/test_traversal.py`
+- Test: `tests/adaptive/test_acceptance.py`
+- Create: `tests/adaptive/fixtures/tractable_pocket.json`
+
+### Step 1: write RED traversal contracts
+
+Require:
+
+- one well-founded cursor per MAT edge/component;
+- every accepted candidate advances exactly one cursor;
+- shared node IDs determine branch transitions;
+- holes preserve graph cycles and explicit visited-side state;
+- every accepted neck crossing follows the exact first/second-passage state
+  machine and records the selected effective cap;
+- no `max_passes`, silent branch drop, or coordinate-based adjacency;
+- exhaustion with exact residual raises `IncompletePocketCoverageError`;
+- no feasible exact candidate raises the appropriate named cap/neck/transition
+  error;
+- empty, entry-only, first-circle-only, and dropped-final-branch mutations fail.
+
+### Step 2: write RED end-to-end small fixture
+
+The committed tractable fixture must return:
+
+- precleared approach/plunge;
+- at least one certified segment and two certified full circles;
+- operation/witness order with no holes;
+- terminal traversal state;
+- exact `M_r` full-sweep residual empty with `D \ M_r` separately bound;
+- fresh event-exact replay with zero cap violations, every cursor terminal, and
+  exact empty `M_r` residual.
+
+Run RED:
+
+```bash
+pixi run pytest tests/adaptive/test_traversal.py \
+  tests/adaptive/test_acceptance.py -n auto -q
+```
+
+### Step 3: implement generator
+
+Internal orchestration boundary:
+
+```python
+def generate_exact_adaptive(
+    pocket: Polygon,
+    *,
+    holes: Sequence[Polygon],
+    cut_plane: CutPlane,
+    tool_radius: ToolRadius,
+    engagement_cap: EngagementCap,
+    entry: PreclearedEntry,
+    candidate_policy: CandidatePolicy,
+    neck_policy: NeckPolicy,
+    depletion_policy: DepletionPolicy,
+    traversal_policy: TraversalPolicy,
+    cut_direction_policy: CutDirectionPolicy,
+) -> GenerationResult:
+    ...
+```
+
+No default hides a manufacturing or resolution decision. The function returns
+only after traversal, coverage, and replay gates pass. Task 14 assembles the
+public `CertifiedToolpath` after final provenance and schema binding; Task 13
+does not reference a type defined by a later task.
+
+### Step 4: GREEN
+
+```bash
+pixi run format-adaptive
+pixi run lint
+pixi run types-adaptive
+pixi run pytest tests/adaptive/test_traversal.py \
+  tests/adaptive/test_acceptance.py -n auto --testmon -q
+```
+
+Commit: `feat(adaptive): generate certified covered path`
+
+---
+
+## Task 14 — Assemble the artifact, provenance, schema, and public factory
+
+**Files**
+
+- Create: `src/compas_cgal/adaptive/certificate.py`
+- Modify: `src/compas_cgal/adaptive/identity.py`
+- Create: `src/compas_cgal/adaptive/schema.py`
+- Create: `schemas/certified_toolpath-v1.schema.json`
+- Create: `tests/adaptive/test_certificate.py`
+- Modify: `tests/adaptive/test_identity.py`
+- Create: `tests/adaptive/test_schema.py`
+
+### Step 1: write RED artifact/provenance contracts
+
+Require:
+
+- `InputIdentity`, `BuildProvenance`, and `ArtifactIdentity` DAG;
+- source revision plus dirty digest, native binary, `pixi.lock`, compiler,
+  CGAL, kernel, verified archive hashes, actual native source-tree digests, and
+  component source identities;
+- exact operation, event witness, depletion witness, traversal, and coverage
+  streams;
+- same-process and fresh-process stability;
+- one-bit mutation of every field changes or invalidates identity;
+- any operation reorder changes `ArtifactIdentity`, including commuting
+  operations whose fresh physical replay would still succeed;
+- operation/witness bijection and state-lineage order;
+- artifact never hashes its own digest.
+
+The public factory accepts every Task 13 policy explicitly, calls
+`generate_exact_adaptive`, constructs `BuildProvenance`, assembles
+`CertifiedToolpath`, performs fresh replay, and returns only the bound artifact:
+
+```python
+def exact_certified_adaptive_trochoidal_toolpath(
+    pocket: Polygon,
+    *,
+    holes: Sequence[Polygon],
+    cut_plane: CutPlane,
+    tool_radius: ToolRadius,
+    engagement_cap: EngagementCap,
+    entry: PreclearedEntry,
+    candidate_policy: CandidatePolicy,
+    neck_policy: NeckPolicy,
+    depletion_policy: DepletionPolicy,
+    traversal_policy: TraversalPolicy,
+    cut_direction_policy: CutDirectionPolicy,
+) -> CertifiedToolpath: ...
+```
+
+### Step 2: write RED consumer contract
+
+Serialize, call `json.loads`, validate with `jsonschema`, deserialize, recompute
+identity, derive the legacy `ToolpathResult`, and replay it. Reject unknown
+schema versions and any canonical-motion/COMPAS-view mismatch.
+
+Run RED:
+
+```bash
+pixi run pytest tests/adaptive/test_certificate.py \
+  tests/adaptive/test_identity.py tests/adaptive/test_schema.py -n auto -q
+```
+
+### Step 3: implement and GREEN
+
+```bash
+pixi run format-adaptive
+pixi run lint
+pixi run types-adaptive
+pixi run pytest tests/adaptive/test_certificate.py \
+  tests/adaptive/test_identity.py tests/adaptive/test_schema.py \
+  -n auto --testmon -q
+pixi run schema
+```
+
+Commit: `feat(cert): bind exact toolpath artifact`
+
+---
+
+## Task 15 — Execute ablation, mutation, and Held provenance gates
+
+**Files**
+
+- Create: `scripts/run-adaptive-mutations.py`
+- Modify: `tests/adaptive/test_acceptance.py`
+- Create: `tests/adaptive/fixtures/held_fig5.json`
+- Create: `docs/benchmarks/exact-certified-adaptive-phase1.md`
+
+### Step 1: fixed-policy primitive-grammar ablation
+
+On the same tractable pocket, execute a committed fixed-policy comparator that
+uses the same Phase-1 exact-segment/full-circle operation grammar and replay
+every lateral operation through the event-exact oracle. Do not feed the legacy
+generator's unsupported partial repositioning/lead arcs to this oracle or label
+the comparator as a replay of that generator.
+Require:
+
+- fixed comparator has a nonzero proved cap-violation tail;
+- adaptive path has zero violations;
+- both use the same pocket/tool/cap and declared entry state;
+- both use the same reachable-domain construction and primitive grammar;
+- reported max angles are diagnostics only.
+
+### Step 2: native/Python mutation campaign
+
+The Pixi mutation task creates isolated temporary source copies and compiled
+variants; it never edits the working tree. Each mutation runs its named kill
+test and must fail:
+
+1. double segment interpolation;
+2. double circle rotation;
+3. off-guide exact center;
+4. inflated removal disk;
+5. omitted circle seam;
+6. rounded full-sweep coverage;
+7. omitted tangency event;
+8. omitted overlap event;
+9. omitted run merge;
+10. omitted contour vertex;
+11. omitted cap root;
+12. certify after deplete;
+13. non-fresh replay;
+14. stale witness;
+15. empty/seed-only/dropped-branch path;
+16. relabelled lateral cut;
+17. broken exact phase/Z continuity;
+18. stale neck class/effective-cap decision;
+19. nonterminal traversal decision;
+20. omitted constant-clearance plateau;
+21. mutated `BoundaryVertexIdV1` intersection ordinal.
+
+The script uses `pathlib`, `tempfile`, and subprocesses invoked through the
+current Pixi environment. No `os.path`, force flag, or worktree mutation.
+
+### Step 3: Held fixture provenance
+
+Commit the vectorized Fig-5 input with extraction/source notes and all
+parameters. Run it only if Phase-1 resource bounds allow exact completion.
+Otherwise the benchmark report records the measured blocker and leaves the
+Held parity label unset. It may not substitute a hand-drawn lookalike.
+
+### Step 4: GREEN
+
+```bash
+pixi run ruff format scripts/run-adaptive-mutations.py \
+  tests/adaptive/test_acceptance.py
+pixi run lint
+pixi run pytest tests/adaptive/test_acceptance.py -n auto --testmon -q
+pixi run mutations-adaptive
+```
+
+Commit: `test(adaptive): prove certificate mechanism`
+
+---
+
+## Task 16 — Full verification and whole-branch review
+
+### Step 1: formatting, lint, typing, schema
+
+```bash
+pixi run format-adaptive
+pixi run lint
+pixi run types-adaptive
+pixi run schema
+git diff --check
+```
+
+### Step 2: affected and full suites
+
+```bash
+pixi run affected
+pixi run baseline
+```
+
+Do not claim success from `--testmon` alone. Record full-suite test count,
+duration, and exit status.
+
+### Step 3: build/package contract
+
+```bash
+pixi run wheel
+```
+
+Install/test the built wheel in a fresh Pixi environment defined in the
+workspace, then validate native imports, JSON round trip, fresh replay, and the
+tractable acceptance fixture.
+
+### Step 4: adversarial review
+
+Review the complete branch against the governing spec:
+
+- exact/proposal/reporting boundaries;
+- exact `D`, `C_r`, `M_r`, and unreachable-residual boundaries;
+- all continuum event classes;
+- event-partition root/cell completeness certificates;
+- under-cover and full-sweep set proofs;
+- certify-before-deplete ordering;
+- non-vacuity and coverage;
+- frame/unit typing and native stub closure;
+- file responsibilities and size;
+- named errors/no fallback;
+- legacy isolation;
+- license record;
+- archive hashes and actual native source-tree digests;
+- exact clipping of every MAT dual primitive and neck-state transitions;
+- identity/replay independence;
+- every mutation kill.
+
+Any finding reopens its owning task and reruns that task’s RED/GREEN and full
+gates.
+
+### Step 5: final commit
+
+If review requires no correction, no empty “verification” commit is created.
+Otherwise commit each correction by responsibility, rerun Steps 1–4, and report
+the exact final SHA and clean/dirty status.
+
+## Completion definition
+
+Phase 1 is complete only when:
+
+- the licensing and algebraic-traits gates are satisfied;
+- exact segment/full-circle event oracles resolve the committed reachable
+  corpus;
+- the tractable path is non-vacuous, gouge-free, cap-certified, and exactly
+  coverage-certified over `M_r`, with `D \ M_r` explicitly bound;
+- fresh replay agrees without trusting generator witnesses;
+- fixed-policy primitive-grammar ablation and all named mutations demonstrate
+  mechanism;
+- strict typing, Ruff, schema, full pytest, and wheel consumer gates pass;
+- existing generators and compatibility APIs remain green and unchanged in
+  behavior;
+- the worktree contains no unexplained changes.
