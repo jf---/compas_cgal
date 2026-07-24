@@ -59,6 +59,15 @@ def test_unit_factories_reject_invalid_values(factory: Callable[[float], object]
         factory(value)
 
 
+def test_unit_factories_translate_huge_integer_overflow() -> None:
+    huge = 10**10000
+
+    with pytest.raises(InvalidUnitValueError):
+        ToolRadius.build(huge)  # type: ignore[arg-type]
+    with pytest.raises(InvalidUnitValueError):
+        Point2[WorldXY].build(huge, 0.0)  # type: ignore[arg-type]
+
+
 def test_cut_plane_requires_clearance_above_cut() -> None:
     cut_z = CutZ.build(-3.0)
 

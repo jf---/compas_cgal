@@ -4,7 +4,10 @@ from dataclasses import dataclass
 from enum import Enum
 from enum import auto
 from fractions import Fraction
+from typing import Callable
+from typing import NewType
 from typing import Self
+from typing import TypeVar
 
 from compas_cgal import _stock_2
 from compas_cgal.adaptive.errors import InvalidCandidatePolicyError
@@ -14,9 +17,14 @@ from compas_cgal.adaptive.errors import InvalidNeckPolicyError
 from compas_cgal.adaptive.errors import InvalidTraversalPolicyError
 from compas_cgal.adaptive.motion import EngagementCap
 from compas_cgal.adaptive.units import ChordBound
+from compas_cgal.adaptive.units import ExactMillimetre
 from compas_cgal.adaptive.units import GuideRadius
 from compas_cgal.adaptive.units import Spacing
 from compas_cgal.adaptive.units import SquaredMillimetre
+
+ComponentId = NewType("ComponentId", bytes)
+BranchId = NewType("BranchId", bytes)
+CandidateT = TypeVar("CandidateT")
 
 
 class PassageState(Enum):
@@ -70,6 +78,31 @@ def _positive_int(value: object, name: str, error_type: type[ValueError]) -> int
 
 
 @dataclass(frozen=True)
+class CandidateOrderKey:
+    progress: ExactMillimetre
+    squared_radius: SquaredMillimetre
+    canonical_identity: bytes
+
+    def __post_init__(self) -> None:
+        if type(self.progress) is not Fraction or self.progress < 0:
+            raise InvalidCandidatePolicyError("candidate progress must be an exact non-negative length.")
+        if type(self.squared_radius) is not Fraction or self.squared_radius <= 0:
+            raise InvalidCandidatePolicyError("candidate squared radius must be exact and positive.")
+        if type(self.canonical_identity) is not bytes or not self.canonical_identity:
+            raise InvalidCandidatePolicyError("candidate canonical identity must be nonempty bytes.")
+
+    @classmethod
+    def build(
+        cls,
+        *,
+        progress: ExactMillimetre,
+        squared_radius: SquaredMillimetre,
+        canonical_identity: bytes,
+    ) -> Self:
+        return cls(progress, squared_radius, canonical_identity)
+
+
+@dataclass(frozen=True)
 class CandidatePolicy:
     """Finite candidate lattice bounds.
 
@@ -120,6 +153,31 @@ class CandidatePolicy:
             minimum_progress,
         )
 
+    def order_candidates(
+        self,
+        candidates: Sequence[CandidateT],
+        *,
+        key: Callable[[CandidateT], CandidateOrderKey],
+    ) -> tuple[CandidateT, ...]:
+        decorated: list[tuple[CandidateOrderKey, CandidateT]] = []
+        for candidate in candidates:
+            order_key = key(candidate)
+            if not isinstance(order_key, CandidateOrderKey):
+                raise InvalidCandidatePolicyError("candidate key function must return CandidateOrderKey.")
+            decorated.append((order_key, candidate))
+
+        identities = [order_key.canonical_identity for order_key, _ in decorated]
+        if len(identities) != len(set(identities)):
+            raise InvalidCandidatePolicyError("candidate canonical identities must be unique.")
+        decorated.sort(
+            key=lambda item: (
+                -item[0].progress,
+                -item[0].squared_radius,
+                item[0].canonical_identity,
+            )
+        )
+        return tuple(candidate for _, candidate in decorated)
+
 
 @dataclass(frozen=True)
 class NeckEffectiveCap:
@@ -143,6 +201,14 @@ class NeckPolicy:
     effective_caps: tuple[NeckEffectiveCap, ...]
 
     def __post_init__(self) -> None:
+        try:
+            boundaries = tuple(self.squared_width_boundaries)
+            effective_caps = tuple(self.effective_caps)
+        except TypeError:
+            raise InvalidNeckPolicyError("neck boundaries and effective caps must be finite sequences.") from None
+        object.__setattr__(self, "squared_width_boundaries", boundaries)
+        object.__setattr__(self, "effective_caps", effective_caps)
+
         if not isinstance(self.user_cap, EngagementCap):
             raise InvalidNeckPolicyError("neck policy requires a native-produced user cap.")
         if any(type(boundary) is not Fraction or boundary < 0 for boundary in self.squared_width_boundaries):
@@ -233,13 +299,19 @@ class TraversalPolicy:
     def build(cls, *, forward_window: int) -> Self:
         return cls(forward_window)
 
+    def order_components(self, component_ids: Sequence[ComponentId]) -> tuple[ComponentId, ...]:
+        if any(type(component_id) is not bytes or not component_id for component_id in component_ids):
+            raise InvalidTraversalPolicyError("component IDs must be nonempty bytes.")
+        if len(component_ids) != len(set(component_ids)):
+            raise InvalidTraversalPolicyError("component IDs must be unique.")
+        return tuple(sorted(component_ids))
 
-_CIRCLE_ORIENTATION = {
-    (CutIntent.CLIMB, MaterialSide.INSIDE): CircleOrientation.CLOCKWISE,
-    (CutIntent.CLIMB, MaterialSide.OUTSIDE): CircleOrientation.COUNTERCLOCKWISE,
-    (CutIntent.CONVENTIONAL, MaterialSide.INSIDE): CircleOrientation.COUNTERCLOCKWISE,
-    (CutIntent.CONVENTIONAL, MaterialSide.OUTSIDE): CircleOrientation.CLOCKWISE,
-}
+    def order_branches(self, branch_ids: Sequence[BranchId]) -> tuple[BranchId, ...]:
+        if any(type(branch_id) is not bytes or not branch_id for branch_id in branch_ids):
+            raise InvalidTraversalPolicyError("branch IDs must be nonempty bytes.")
+        if len(branch_ids) != len(set(branch_ids)):
+            raise InvalidTraversalPolicyError("branch IDs must be unique.")
+        return tuple(sorted(branch_ids))
 
 
 @dataclass(frozen=True)
@@ -257,4 +329,12 @@ class CutDirectionPolicy:
     def circle_orientation(self, material_side: MaterialSide) -> CircleOrientation:
         if not isinstance(material_side, MaterialSide):
             raise InvalidCutDirectionPolicyError("material side must be explicit and typed.")
-        return _CIRCLE_ORIENTATION[(self.intent, material_side)]
+        if self.intent is CutIntent.CLIMB:
+            if material_side is MaterialSide.INSIDE:
+                return CircleOrientation.CLOCKWISE
+            return CircleOrientation.COUNTERCLOCKWISE
+        if self.intent is CutIntent.CONVENTIONAL:
+            if material_side is MaterialSide.INSIDE:
+                return CircleOrientation.COUNTERCLOCKWISE
+            return CircleOrientation.CLOCKWISE
+        raise InvalidCutDirectionPolicyError("cut intent and material side do not define an orientation.")

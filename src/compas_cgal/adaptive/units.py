@@ -12,6 +12,7 @@ from typing import overload
 from compas_cgal.adaptive.errors import InvalidUnitValueError
 
 Millimetre = NewType("Millimetre", float)
+ExactMillimetre = NewType("ExactMillimetre", Fraction)
 SquaredMillimetre = NewType("SquaredMillimetre", Fraction)
 Radian = NewType("Radian", float)
 
@@ -26,7 +27,10 @@ FrameT = TypeVar("FrameT")
 def _finite(value: object, name: str) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise InvalidUnitValueError(f"{name} must be a finite real number.")
-    numeric = float(value)
+    try:
+        numeric = float(value)
+    except OverflowError:
+        raise InvalidUnitValueError(f"{name} exceeds the binary64 range.") from None
     if not math.isfinite(numeric):
         raise InvalidUnitValueError(f"{name} must be finite.")
     return numeric
