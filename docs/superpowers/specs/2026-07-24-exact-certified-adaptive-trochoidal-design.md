@@ -26,10 +26,12 @@ The Python layer owns typed policy, deterministic proposal search, transactions,
 artifact identity, and replay. It never replaces a CGAL decision with an epsilon
 or a reported angle.
 
-Phase 1 supports polygonal pocket boundaries, including declared island loops.
-The guide is a true Euclidean segment-site Voronoi medial axis, not the existing
-straight skeleton. Circular-arc pocket boundaries require an arc-site Voronoi
-backend and are a named Phase-1.5 extension.
+Phase 1 accepts a polygonal design pocket, including declared island loops.
+Its tool-reachable material boundary contains exact circular arcs even though
+the proposal guide is the true Euclidean segment-site Voronoi medial axis of
+the polygon, not the existing straight skeleton. Arc-site Voronoi proposals
+for an independently supplied circular-arc design boundary remain a named
+Phase-1.5 extension.
 
 This work is inspired by and re-derives the circle-placement logic of Held and
 Pfeiffer. It does not claim paper parity until the committed Fig-5 reproduction,
@@ -40,10 +42,11 @@ transitions also differ from the paper’s offset-contour transition elements.
 
 ### Input
 
-- a world-XY polygonal pocket `P`: one outer ring and zero or more island rings;
+- a world-XY polygonal design pocket `D`: one outer ring and zero or more
+  island rings;
 - a positive tool radius `r`;
 - a maximum lateral tool-engagement angle `theta_max` in `(0, pi]`;
-- a `PreclearedEntry` disk contained in `P`, representing a predrill or a
+- a `PreclearedEntry` disk contained in `D`, representing a predrill or a
   separately qualified entry cycle;
 - a finite `CandidatePolicy`, `NeckPolicy`, `DepletionPolicy`, and traversal
   policy.
@@ -72,11 +75,13 @@ For the exact rationalized motion artifact and regularized set semantics:
 
 1. **Engagement:** every lateral cutting motion has maximum connected
    contour-aware engagement `<= theta_max`, or its lower neck cap.
-2. **Gouge freedom:** every emitted cutter sweep is contained in the pocket’s
-   machinable region.
+2. **Gouge freedom:** every emitted cutter sweep is contained in `D`.
 3. **Coverage:** an exact-with-sqrt full-sweep ledger proves
-   `P \ union_i W_i` empty. Conservative engagement stock is deliberately not
-   reused as a coverage oracle.
+   `M_r \ union_i W_i` empty for exact tool-reachable material
+   `M_r = (D ⊖ B_r) ⊕ B_r`. The necessarily unreachable corner residual
+   `D \ M_r` is reported separately and is not called a coverage failure.
+   Conservative engagement stock is deliberately not reused as a coverage
+   oracle.
 4. **Lineage:** canonical input, policies, exact motion stream, witnesses,
    source/native/toolchain provenance, and component versions are
    content-addressed.
@@ -130,7 +135,8 @@ Unsupported geometry raises a named exception.
 
 ```mermaid
 flowchart TD
-  I["P, r, cap, precleared entry, policies"] --> ID["InputIdentity"]
+  I["D, r, cap, precleared entry, policies"] --> RD["C_r + M_r"]
+  RD --> ID["InputIdentity"]
   I --> MAT["MatGraph: CGAL segment Voronoi / medial axis"]
   MAT --> CP["Middle-curve candidate lattice"]
   CP --> TX["Transactional candidate evaluator"]
@@ -163,6 +169,9 @@ The strict Python subpackage uses Python 3.12 and `mypy --strict`.
   `WorldXY`.
 - vector factories provide both scalar-positional and array-input overloads.
 - `EngagementCap` owns the native-produced full-cap surrogate bytes.
+- `ReachableDomain` owns exact `D`, admissible-center domain
+  `C_r = D ⊖ B_r`, reachable material `M_r = C_r ⊕ B_r`, and unreachable
+  residual `D \ M_r`.
 - `ExactSegmentMotion` and `ExactCircleMotion` carry the exact input semantics
   above.
 - `MatNode`, `MatEdge`, and `BoundaryFeatureRef` carry graph and feature
@@ -186,12 +195,16 @@ Phase 1 adds a focused `_medial_axis_2` native unit based on
 `Exact_predicates_exact_constructions_kernel_with_sqrt`,
 `Field_with_sqrt_tag`, and the degeneracy-removal Voronoi adaptor:
 
-1. insert every polygon boundary segment as a site with stable ring/edge IDs;
+1. insert every design-pocket boundary segment as a site with stable ring/edge
+   IDs;
 2. obtain the Euclidean segment Voronoi dual;
-3. retain the finite dual portions inside the pocket material;
+3. intersect every line, ray, segment, and parabolic dual with the exact design
+   pocket and emit every connected interior component, including bounded
+   pieces clipped from an unbounded dual;
 4. remove triangulation-only duals and normalize degenerate faces independent
    of insertion order;
-5. retain the two defining boundary features for every MAT edge;
+5. retain the two defining boundary features and exact clipped-endpoint
+   provenance for every MAT edge;
 6. sample line and parabolic bisectors at the declared proposal resolution;
 7. return CSR chains plus stable node IDs, edge IDs, conic kind, and incident
    feature IDs.
@@ -200,6 +213,12 @@ CGAL predicates decide diagram topology and feature incidence. Sampled
 coordinates, clearances, and conic parameters are proposal/reporting doubles.
 They may decide which candidate is tried; they never certify engagement,
 containment, or coverage.
+
+Stable feature provenance uses
+`Segment_Delaunay_graph_storage_traits_with_info_2` with explicit
+conversion/merge semantics, or a native-tested exact bijective post-map.
+Default SDG storage is insufficient because it does not retain caller IDs.
+Point-sites and open-segment sites have distinct canonical IDs.
 
 For a sampled MAT point `m` with incident boundary footpoint `p` and reporting
 clearance `d`, the one-sided MATHSM proposal is:
@@ -214,10 +233,36 @@ This yields the paper’s middle-curve circle proposal. The accepted rationalize
 engagement, so proposal rounding cannot manufacture a certificate.
 
 Holes are handled as additional boundary sites and explicit MAT graph cycles.
-Traversal must cover every graph component reachable in the machinable region;
+Traversal must cover every graph component intersecting `C_r`;
 there is no implicit bridge inference from approximate endpoint equality.
 
 ## Exact conservative stock
+
+### Exact reachable domain
+
+A positive-radius disk cannot cover a polygon's convex corner while remaining
+inside that polygon. Phase 1 therefore distinguishes:
+
+- `D`, the exact polygonal design pocket;
+- `C_r = D ⊖ B_r`, the exact admissible-center domain;
+- `M_r = C_r ⊕ B_r`, the exact tool-reachable material;
+- `D \ M_r`, the exact unreachable residual.
+
+Here minus/plus denote exact morphological erosion/dilation by the closed tool
+disk. A native arrangement of edge-offset lines and vertex-radius circles
+constructs `C_r`; exact regularized circular-arc set operations construct
+`M_r`. Cell membership is decided by exact disk-containment predicates, not
+offset sampling. The construction certificate binds every arrangement curve,
+selected cell, connected component, and residual digest. An unsupported
+degeneracy raises `ReachableDomainConstructionError`.
+
+`Stock2Area` begins with `D`. It conservatively retains the unreachable
+residual throughout machining; this cannot change a certified cutter's
+positive-length rim engagement because every contained cutter sweep is a
+subset of `M_r` and therefore disjoint from the interior of `D \ M_r`. Keeping
+event-oracle stock in the rational Epeck representation also avoids injecting
+square-root reporting coordinates into its coefficient field. The separate
+exact-with-sqrt coverage ledger owns `M_r`.
 
 `Stock2Area` owns one mutable `Stock2`, supports an exact clone/fork, and exposes
 only:
@@ -281,9 +326,9 @@ the coverage claim is implemented. If the traits contract cannot represent a
 required sweep, coverage is blocked; it is not approximated.
 
 `CoverageCertificate` proves the regularized difference
-`P \ union_i W_i` is empty. Sweep identity and ordering are shared with the
-canonical operation stream, but the coverage ledger never supplies engagement
-state.
+`M_r \ union_i W_i` is empty and separately binds the exact digest of
+`D \ M_r`. Sweep identity and ordering are shared with the canonical operation
+stream, but the coverage ledger never supplies engagement state.
 
 ### Conservative-stock induction
 
@@ -321,7 +366,8 @@ For a frozen `Stock2` contour and an exact segment or full-circle center path,
 `EventExactMotionCertifier`:
 
 1. extracts the trimmed material boundary halfedges with their supporting
-   line/circle identity and material side;
+   line/circle identity, exact trim-domain predicate, stable feature identity,
+   and material side;
 2. rationally parameterizes the center motion and cutter rim with projective
    half-angle charts;
 3. pulls every intersection condition back to algebraic curves in
@@ -329,8 +375,13 @@ For a frozen `Stock2` contour and an exact segment or full-circle center path,
 4. partitions motion parameter space at every tangency, contour vertex,
    supporting-curve coincidence, cyclic-order change, run merge/split, chart
    seam, and cap-equality root;
-5. exactly labels every open cell and supported event fibre;
-6. returns `CERTIFIED`, `CAP_EXCEEDED`, or `UNRESOLVED_DEGENERACY`.
+5. isolates cap crossings between moving endpoint branches by eliminating the
+   two branch equations with the exact squared-chord cap relation, filters
+   extraneous roots against the original equations and trim predicates, and
+   explicitly represents identically-equal intervals;
+6. exactly labels every positive-width open cell and supported
+   zero-dimensional event fibre;
+7. returns `CERTIFIED`, `CAP_EXCEEDED`, or `UNRESOLVED_DEGENERACY`.
 
 `UNRESOLVED_DEGENERACY` is a hard failure. Positive-length overlap is handled
 explicitly or remains unresolved; it is never silently treated as empty.
@@ -338,6 +389,30 @@ explicitly or remains unresolved; it is never silently treated as empty.
 The deciding implementation uses CGAL algebraic arrangements and exact
 real-root isolation. Reporting maxima and isolating intervals may be emitted
 for diagnostics, but only exact signs and topology determine the verdict.
+
+The coefficient field is the compiled exact rational type. Each projective
+chart yields primitive square-free polynomials over that field. Segment motion
+has bidegree bounds `(1,2)` for line supports and `(2,4)` for circle supports;
+full-circle motion has bounds `(2,2)` and `(4,4)` respectively. Generated
+degrees above those bounds are a construction error.
+
+The completeness table is part of the native contract:
+
+| Event | Projection certificate | Degeneracy disposition |
+|---|---|---|
+| tangency | resultant of `F` and `partial_u F` | repeated factor isolated once |
+| trimmed vertex | exact univariate vertex-on-rim equation | trim endpoint retained |
+| overlap/coincidence | all primitive coefficients zero | explicit overlap interval |
+| endpoint order/merge | resultant of two active branch equations | original equations and trims rechecked |
+| cap crossing | two branch equations plus exact squared-chord relation | extraneous roots filtered; identical interval explicit |
+| chart seam | exact finite/infinite chart boundary evaluation | one canonical seam owner |
+
+Every native `EventPartitionCertificate` records normalized polynomial bytes,
+degree bounds, square-free factors, all isolated real roots and intervals,
+chart/seam coverage, sign-invariant open cells, zero-dimensional fibres,
+trim/feature/branch identities, and each degeneracy disposition. Reconstructing
+that certificate and verifying every factor/root/cell is the completeness
+check; a cell count alone has no evidentiary role.
 
 The existing guarded segment/circular certifiers remain compatibility and
 performance experiments. They may become a fast prefilter only after the
@@ -350,9 +425,13 @@ corpus. They are never the sole Phase-1 acceptance authority.
 
 - canonical operation index and exact motion kind;
 - semantic operation kind;
-- full and effective cap surrogate bytes;
+- user and effective cap surrogate bytes, with exact proof that
+  `effective <= user`;
 - `event-exact` strategy/source/native component identity;
 - exact verdict;
+- canonical event-trace digest binding chart/root identity, exact isolating
+  interval, event kind, trimmed feature and branch IDs, effective-cap bytes,
+  verdict, and strategy version;
 - event-cell count;
 - unresolved count, necessarily zero for returned paths;
 - stock-state digest before the motion.
@@ -427,14 +506,22 @@ an unsupported event required for progress, fail with
 ## Neck policy
 
 Neck classification is an exact discrete MAT/boundary predicate, not a
-comparison of reported clearance. `NeckPolicy` maps the classified bottleneck
-width to an effective cap no larger than the user cap. The native cap boundary
-produces the effective surrogate. Policy parameters and every effective cap are
-hashed.
+comparison of reported clearance. A neck candidate is an exact local minimum
+of the site-distance function on a clipped MAT component. Its two site IDs,
+critical algebraic parameter, exact squared-width comparison, and separating
+graph cut form `NeckEvidence`.
 
-The first/second passage distinction from Held and Pfeiffer is explicit graph
-state. No “already machined other side” decision is inferred from a sampled
-angle.
+`NeckPolicy.build(...)` owns rationalized squared-width class boundaries and a
+finite mapping from `(neck_class, passage_state)` to a native-produced
+effective cap no larger than the user cap. `DepletionPolicy.build(...)` owns
+the exact rational chord bound and exact center-count limit.
+`TraversalPolicy.build(...)` owns component/branch order and the finite forward
+window. All factories validate canonical ordering and hash their exact bytes.
+
+Each oriented neck edge carries one of `UNVISITED`, `FIRST_PASS_COMPLETE`,
+`SECOND_PASS_COMPLETE`, or `TERMINAL`. The accepted operation records the
+before/after state and effective-cap identity. No “already machined other side”
+decision is inferred from a sampled angle.
 
 ## Traversal and coverage
 
@@ -449,7 +536,7 @@ Before return:
 - operation grammar and phase continuity validate;
 - every lateral cut has exactly one matching motion witness;
 - every stock mutation has exactly one matching depletion witness;
-- fresh exact full-sweep replay proves `P \ union_i W_i` empty.
+- fresh exact full-sweep replay proves `M_r \ union_i W_i` empty.
 
 `CoverageCertificate` binds the fresh initial-state digest, ordered exact-sweep
 witnesses, terminal traversal digest, and exact residual-empty verdict.
@@ -483,9 +570,11 @@ Replay recomputes every digest and rejects one-bit changes.
 - `InvalidCandidatePolicyError`
 - `InvalidPreclearedEntryError`
 - `PocketNotMachinableError`
+- `ReachableDomainConstructionError`
 - `DegenerateMedialAxisError`
 - `ExactDepletionConstructionError`
 - `GougeContainmentError`
+- `EngagementCapExceededError`
 - `EngagementCapInfeasibleError`
 - `NeckTooTightError`
 - `TransitionEngagementError`
@@ -509,10 +598,20 @@ Add a Python-3.12 Pixi workspace and lock with native build, Ruff,
 adapters receive narrow `.pyi` contracts so strict typing does not terminate in
 `Any`.
 
-Before adding the segment-Delaunay module, record the repository's
-GPL/commercial CGAL position. CGAL labels that package GNU GPL. A release may
-not silently add it to an LGPL distribution without a compatible project
-license decision or commercial CGAL entitlement.
+Every CMake-downloaded native archive has a verified `URL_HASH`; an existing
+`external/` source tree is accepted only after its content digest matches the
+locked manifest. `BuildProvenance` binds archive hashes and actual native
+source-tree digests, so `pixi.lock` is not misrepresented as locking CMake
+dependencies.
+
+Before any dependent implementation, record the repository's GPL/commercial
+CGAL position for every newly instantiated package, including 2D Arrangements,
+2D Boolean Set Operations, 2D Minkowski Sums or the selected morphology
+alternative, Segment Delaunay Graphs, 2D Voronoi Diagram Adaptor, and the
+Apollonius Graph parabola component. A release may not silently add a
+GPL/commercial package to an LGPL distribution without a compatible project
+license decision or commercial CGAL entitlement. A failed license gate blocks
+every task using that package, including the continuous event oracle.
 
 ### G1 — exact depletion
 
@@ -525,6 +624,7 @@ traits. Required evidence:
 - exact representable-set tests of `U \ W == empty`;
 - exact capsule/annulus construction and residual-set tests for the coverage
   ledger;
+- exact `D`, `C_r`, `M_r`, and `D \ M_r` construction and containment tests;
 - stock-inclusion induction fixtures;
 - exact cap-verdict monotonicity under stock inclusion;
 - mutations for rounded interpolation/rotation, off-guide centers, inflated
@@ -549,10 +649,11 @@ authorize sampling, cap inflation, or silent exclusion.
 
 ### G3 — true MAT and proposal contracts
 
-Validate segment-site Voronoi topology, interior restriction, conic sampling,
-incident feature provenance, branch IDs, holes, deterministic normalization,
-and MATHSM middle-curve proposal formulas. Existing straight-skeleton output
-must remain unchanged.
+Validate segment-site Voronoi topology, exact clipping of all dual primitive
+kinds into every connected interior component, clipped-endpoint provenance,
+conic sampling, incident feature provenance, branch IDs, holes, deterministic
+normalization, and MATHSM middle-curve proposal formulas. Existing
+straight-skeleton output must remain unchanged.
 
 ### G4 — transactional generator and coverage
 
@@ -563,8 +664,11 @@ the exact empty-stock terminal gate.
 ### G5 — artifact and independent acceptance
 
 Fresh replay rebuilds stock from canonical input and consumes the canonical
-operation stream. It never trusts generator verdicts or stock snapshots. It
-shares the exact kernel and event oracle intentionally; independence is in
+operation stream. It creates pristine stock and coverage ledgers, applies the
+declared `PreclearedEntry`, then derives each effective cap from the canonical
+policy record, certifies against frozen pre-depletion stock, and only then
+depletes both ledgers. It never trusts generator verdicts or stock snapshots.
+It shares the exact kernel and event oracle intentionally; independence is in
 state lineage and orchestration. Kernel/oracle defects are covered by their
 exact reference and mutation suites.
 
@@ -578,9 +682,11 @@ exact reference and mutation suites.
   and all traversal cursors are terminal.
 - **Binding:** exact operation-to-motion-witness and mutation-to-depletion-
   witness bijections.
-- **Ablation:** execute the existing fixed-stepover generator on the same
-  committed fixture and require a nonzero certified-violation tail; the
-  adaptive result has zero violations.
+- **Ablation:** execute a fixed-policy comparator that emits the same Phase-1
+  segment/full-circle primitive grammar on the same committed fixture and
+  require a nonzero certified-violation tail; the adaptive result has zero
+  violations. This is not presented as replay of the legacy generator's
+  unsupported partial arcs.
 - **Mutation kills:** empty path, seed-only path, dropped final branch,
   relabelled cut, stale witness, certify-after-deplete, rounded depletion,
   omitted sweep seam, non-fresh replay, and each event class all fail named
@@ -593,7 +699,8 @@ exact reference and mutation suites.
 
 ## Phasing
 
-- **Phase 1:** polygonal true-MAT proposal, precleared-entry condition,
+- **Phase 1:** polygonal true-MAT proposal, exact reachable-material domain,
+  precleared-entry condition,
   event-exact segment/full-circle certificates, conservative exact-on-guide
   stock, complete small-pocket path, coverage, identity, fresh replay, and
   ablation.
