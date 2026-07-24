@@ -1,6 +1,8 @@
 #pragma once
 
 #include "compas.h"
+#include "exact_depletion_2.h"
+#include "exact_motion_2.h"
 
 // compas.h supplies nanobind/stl/bind_vector.h (opaque nb::bind_vector) but NOT
 // the automatic std::vector<T> <-> Python-list type caster. The Stock2
@@ -8,9 +10,9 @@
 // caster in its own (NB_STATIC) translation unit.
 #include <nanobind/stl/vector.h>
 
+#include <memory>
 #include <utility>
 
-#include <CGAL/Exact_predicates_exact_constructions_kernel.h>
 #include <CGAL/Boolean_set_operations_2.h>
 #include <CGAL/General_polygon_set_2.h>
 #include <CGAL/Gps_circle_segment_traits_2.h>
@@ -20,16 +22,12 @@
 // build new geometry (sweep boundaries, intersection vertices) whose exact
 // coordinates must be representable, so Epeck (not the repo-default Epick) is
 // mandatory here. See CLAUDE.md: exact predicates, no epsilon decisions.
-typedef CGAL::Exact_predicates_exact_constructions_kernel Epeck;
 typedef CGAL::Gps_circle_segment_traits_2<Epeck> GpsTraits;
 typedef CGAL::General_polygon_set_2<GpsTraits> Gps;
 typedef GpsTraits::Polygon_2 GpsPolygon;             // circle-segment general polygon
 typedef GpsTraits::Polygon_with_holes_2 GpsPolygonWithHoles;
 typedef GpsTraits::Point_2 GpsPoint;                 // one-root coordinates
 typedef GpsTraits::X_monotone_curve_2 GpsXCurve;
-typedef Epeck::Point_2 EPoint;
-typedef Epeck::Circle_2 ECircle;
-typedef Epeck::Segment_2 ESegment;
 
 // Full disk of the given radius centred at `center`, as a two-arc CCW general
 // polygon (split at its x-extreme vertical-tangency points). Shared by the
@@ -45,9 +43,16 @@ class Stock2 {
 public:
     Stock2(Eigen::Ref<const compas::RowMatrixXd> boundary,
            const std::vector<compas::RowMatrixXd>& holes);
+    Stock2(Stock2&&) noexcept = default;
+    Stock2& operator=(Stock2&&) noexcept = default;
+    Stock2(const Stock2&) = delete;
+    Stock2& operator=(const Stock2&) = delete;
 
     bool contains(double x, double y) const;
     bool is_empty() const;
+    Stock2 clone() const;
+    bool is_subset_of(const Stock2& other) const;
+    bool exactly_equals(const Stock2& other) const;
 
     // Remove the exact disk of the given radius centred at (cx, cy).
     void subtract_disk(double cx, double cy, double radius);
@@ -63,14 +68,28 @@ public:
     void subtract_arc_sweep(double cx, double cy, double sx, double sy,
                             double ex, double ey, bool cw, double tool_radius);
 
-    const Gps& set() const { return set_; }          // engagement kernel reads this
-    Gps& set() { return set_; }
+    DepletionTrace subtract_exact_segment(
+        const ExactSegmentMotion2& motion,
+        const Epeck::FT& tool_radius,
+        const Epeck::FT& max_chord,
+        std::size_t center_count_limit);
+
+    DepletionTrace subtract_exact_full_circle(
+        const ExactCircleMotion2& motion,
+        const Epeck::FT& tool_radius,
+        const Epeck::FT& max_chord,
+        std::size_t center_count_limit);
+
+    const Gps& set() const { return *set_; }          // engagement kernel reads this
+    Gps& set() { return *set_; }
 
 private:
+    explicit Stock2(std::unique_ptr<Gps> set) noexcept;
+
     // Subtract the union of exact tool disks of the given radius centred at the
     // listed points — the one chain implementation shared by capsule and arc.
     void subtract_point_chain(const std::vector<std::pair<double, double>>& centers,
                               double radius);
 
-    Gps set_;
+    std::unique_ptr<Gps> set_;
 };

@@ -1,3 +1,9 @@
+from compas_cgal import _stock_2
+
+ExactDepletionConstructionError = _stock_2.ExactDepletionConstructionError
+ExactDepletionCenterLimitError = _stock_2.ExactDepletionCenterLimitError
+
+
 class InvalidUnitValueError(ValueError):
     """A typed unit or framed coordinate violates its numeric invariant."""
 
@@ -24,6 +30,18 @@ class InvalidNeckPolicyError(ValueError):
 
 class InvalidDepletionPolicyError(ValueError):
     """A depletion construction has an invalid bound."""
+
+
+class InvalidDepletionTraceError(ValueError):
+    """A native exact-depletion trace violates its structural contract."""
+
+
+class InvalidDepletionWitnessError(ValueError):
+    """A depletion witness omits or corrupts an immutable identity input."""
+
+
+class InvalidStockAreaError(ValueError):
+    """A stock-area owner received an aliased or invalid stock lifetime."""
 
 
 class InvalidTraversalPolicyError(ValueError):

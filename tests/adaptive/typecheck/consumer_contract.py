@@ -11,11 +11,19 @@ from compas_cgal.adaptive.operation import LinkSegmentOperation
 from compas_cgal.adaptive.operation import NeckCapDecision
 from compas_cgal.adaptive.operation import PlungeOperation
 from compas_cgal.adaptive.operation import TraversalDecision
+from compas_cgal.adaptive.motion import ExactCircleMotion
+from compas_cgal.adaptive.motion import ExactSegmentMotion
+from compas_cgal.adaptive.policy import DepletionPolicy
+from compas_cgal.adaptive.stock_area import DepletionWitness
+from compas_cgal.adaptive.stock_area import Stock2Area
+from compas_cgal.adaptive.units import ChordBound
 from compas_cgal.adaptive.units import Point2
 from compas_cgal.adaptive.units import ClearanceZ
 from compas_cgal.adaptive.units import CutZ
+from compas_cgal.adaptive.units import ToolRadius
 from compas_cgal.adaptive.units import Vector2
 from compas_cgal.adaptive.units import WorldXY
+from compas_cgal.stock import Stock
 
 
 class MachineXY:
@@ -43,6 +51,25 @@ plunge_operation = PlungeOperation.build(
 )
 assert_type(approach_operation, ApproachOperation)
 assert_type(plunge_operation, PlungeOperation)
+
+stock_area = Stock2Area.build(Stock.__new__(Stock))
+depletion_policy = DepletionPolicy.build(
+    chord_bound=ChordBound.build(0.25),
+    center_count_limit=256,
+)
+segment_motion = ExactSegmentMotion.build(
+    Point2[WorldXY].build(0.0, 0.0),
+    Point2[WorldXY].build(1.0, 0.0),
+)
+circle_motion = ExactCircleMotion.build(
+    Point2[WorldXY].build(0.0, 0.0),
+    Vector2[WorldXY].build(1.0, 0.0),
+    False,
+)
+segment_witness = stock_area.deplete(segment_motion, ToolRadius.build(0.5), depletion_policy)
+circle_witness = stock_area.deplete(circle_motion, ToolRadius.build(0.5), depletion_policy)
+assert_type(segment_witness, DepletionWitness)
+assert_type(circle_witness, DepletionWitness)
 
 
 def accepts_world_point(point: Point2[WorldXY]) -> None:
