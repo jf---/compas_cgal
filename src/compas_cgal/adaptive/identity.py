@@ -279,7 +279,7 @@ class IntersectionBoundaryVertexIdV1:
             raise InvalidBoundaryVertexIdentityError("intersection boundary vertex requires at least two incident supports.")
         if any(type(incident) is not IncidentSupport for incident in self.incident_supports):
             raise InvalidBoundaryVertexIdentityError("intersection incident supports must be exact IncidentSupport.")
-        canonical = tuple(sorted(self.incident_supports, key=lambda incident: incident.canonical_bytes))
+        canonical = tuple(sorted(self.incident_supports, key=lambda incident: incident.support_id.canonical_bytes))
         if canonical != self.incident_supports:
             raise InvalidBoundaryVertexIdentityError("intersection incident supports must use canonical pair order.")
         support_bytes = tuple(incident.support_id.canonical_bytes for incident in self.incident_supports)
@@ -301,7 +301,7 @@ class IntersectionBoundaryVertexIdV1:
             raise InvalidBoundaryVertexIdentityError("intersection incident supports must be finite.") from None
         if any(type(incident) is not IncidentSupport for incident in supports):
             raise InvalidBoundaryVertexIdentityError("intersection incident supports must be exact IncidentSupport.")
-        supports = tuple(sorted(supports, key=lambda incident: incident.canonical_bytes))
+        supports = tuple(sorted(supports, key=lambda incident: incident.support_id.canonical_bytes))
         return cls(supports, intersection_ordinal)
 
     @property

@@ -175,28 +175,50 @@ def test_input_ring_boundary_vertex_requires_typed_ring_and_bounded_ordinal() ->
         InputRingVertexIdV1.build(canonical_ring=ring, vertex_ordinal=ring.vertex_count)
 
 
-def test_intersection_boundary_vertex_sorts_incident_support_ids() -> None:
-    first = _line_support(1, 0, -1)
-    second = _line_support(0, 1, -2)
-    first_incidence = IncidentSupport.build(
-        support_id=first,
+def _oppositely_ordered_incident_supports() -> tuple[IncidentSupport, IncidentSupport]:
+    support_low, support_high = sorted(
+        (_line_support(1, 0, -1), _line_support(0, 1, -2)),
+        key=lambda support: support.canonical_bytes,
+    )
+    incidence_low = IncidentSupport.build(
+        support_id=support_low,
         trim_incidence_orientation=TrimIncidenceOrientation.ENTERING,
     )
-    second_incidence = IncidentSupport.build(
-        support_id=second,
+    incidence_high = IncidentSupport.build(
+        support_id=support_high,
         trim_incidence_orientation=TrimIncidenceOrientation.LEAVING,
     )
+
+    assert incidence_high.canonical_bytes < incidence_low.canonical_bytes
+    return incidence_low, incidence_high
+
+
+def test_intersection_boundary_vertex_build_sorts_only_by_support_id() -> None:
+    incidence_low, incidence_high = _oppositely_ordered_incident_supports()
+    canonical_order = (incidence_low, incidence_high)
     forward = IntersectionBoundaryVertexIdV1.build(
-        incident_supports=(first_incidence, second_incidence),
+        incident_supports=canonical_order,
         intersection_ordinal=0,
     )
     reversed_supports = IntersectionBoundaryVertexIdV1.build(
-        incident_supports=(second_incidence, first_incidence),
+        incident_supports=tuple(reversed(canonical_order)),
         intersection_ordinal=0,
     )
 
+    assert forward.incident_supports == canonical_order
     assert forward == reversed_supports
     assert forward.canonical_bytes == reversed_supports.canonical_bytes
+
+
+def test_intersection_boundary_vertex_raw_order_is_by_support_id() -> None:
+    incidence_low, incidence_high = _oppositely_ordered_incident_supports()
+    canonical_order = (incidence_low, incidence_high)
+
+    raw = IntersectionBoundaryVertexIdV1(canonical_order, 0)
+
+    assert raw.incident_supports == canonical_order
+    with pytest.raises(InvalidBoundaryVertexIdentityError, match="canonical pair order"):
+        IntersectionBoundaryVertexIdV1(tuple(reversed(canonical_order)), 0)
 
 
 def test_intersection_boundary_vertex_binds_ordinal_and_trim_orientation() -> None:
