@@ -8,6 +8,7 @@ from typing import NewType
 from typing import Self
 from typing import TypeAlias
 
+from compas_cgal.adaptive.canonical import CanonicalRingV1
 from compas_cgal.adaptive.canonical import ExactRationalV1
 from compas_cgal.adaptive.canonical import canonical_record_kind
 from compas_cgal.adaptive.canonical import encode_component_map
@@ -15,8 +16,9 @@ from compas_cgal.adaptive.canonical import encode_integer
 from compas_cgal.adaptive.canonical import encode_sequence
 from compas_cgal.adaptive.canonical import encode_tagged_union
 from compas_cgal.adaptive.canonical import require_canonical_record
-from compas_cgal.adaptive.errors import ArtifactIdentityError
 from compas_cgal.adaptive.errors import CanonicalEncodingError
+from compas_cgal.adaptive.errors import InvalidBoundaryVertexIdentityError
+from compas_cgal.adaptive.errors import InvalidComponentIdentityError
 
 INPUT_SCHEMA_VERSION: Final[bytes] = b"adaptive-input-schema-v1"
 OPERATION_SCHEMA_VERSION: Final[bytes] = b"adaptive-operation-schema-v1"
@@ -32,7 +34,7 @@ NativeSourceTreeDigest = NewType("NativeSourceTreeDigest", bytes)
 
 def _nonempty_bytes(value: object, name: str) -> bytes:
     if type(value) is not bytes or not value:
-        raise ArtifactIdentityError(f"{name} must be nonempty bytes.")
+        raise InvalidComponentIdentityError(f"{name} must be nonempty bytes.")
     return value
 
 
@@ -49,13 +51,13 @@ class ComponentIdentity:
         _nonempty_bytes(self.strategy_version, "strategy version")
         _nonempty_bytes(self.source_revision, "source revision")
         if type(self.native_source_tree_digest) is not bytes or len(self.native_source_tree_digest) != hashlib.sha256().digest_size:
-            raise ArtifactIdentityError("native source-tree digest must be exactly one 32-byte SHA-256 digest.")
+            raise InvalidComponentIdentityError("native source-tree digest must be exactly one 32-byte SHA-256 digest.")
         try:
             require_canonical_record(self.canonical_parameter_bytes)
         except CanonicalEncodingError:
-            raise ArtifactIdentityError("canonical parameter bytes must contain one complete versioned CCAN record.") from None
+            raise InvalidComponentIdentityError("canonical parameter bytes must contain one complete versioned CCAN record.") from None
         if canonical_record_kind(self.canonical_parameter_bytes) != b"T":
-            raise ArtifactIdentityError("canonical parameter bytes must be a tagged domain record.")
+            raise InvalidComponentIdentityError("canonical parameter bytes must be a tagged domain record.")
 
     @classmethod
     def build(
@@ -77,6 +79,8 @@ class ComponentIdentity:
 
     @property
     def canonical_bytes(self) -> bytes:
+        if type(self) is not ComponentIdentity:
+            raise InvalidComponentIdentityError("component identity must be exact ComponentIdentity, not a subclass.")
         return encode_tagged_union(
             COMPONENT_IDENTITY_VERSION,
             encode_component_map(
@@ -118,7 +122,7 @@ def _primitive_coefficients(coefficients: tuple[ExactRationalV1, ...]) -> tuple[
     for integer_coefficient in integers:
         common_factor = gcd(common_factor, abs(integer_coefficient))
     if common_factor == 0:
-        raise ArtifactIdentityError("incident support coefficients must include a nonzero exact value.")
+        raise InvalidBoundaryVertexIdentityError("incident support coefficients must include a nonzero exact value.")
     primitive = tuple(coefficient // common_factor for coefficient in integers)
     first_nonzero = next(coefficient for coefficient in primitive if coefficient != 0)
     if first_nonzero < 0:
@@ -132,21 +136,21 @@ class IncidentSupportIdV1:
     primitive_coefficients: tuple[int, ...]
 
     def __post_init__(self) -> None:
-        if not isinstance(self.support_kind, SupportKind):
-            raise ArtifactIdentityError("incident support kind must be line or circle.")
-        if not isinstance(self.primitive_coefficients, tuple) or any(type(value) is not int for value in self.primitive_coefficients):
-            raise ArtifactIdentityError("incident support coefficients must be exact primitive integers.")
+        if type(self.support_kind) is not SupportKind:
+            raise InvalidBoundaryVertexIdentityError("incident support kind must be exact SupportKind.")
+        if type(self.primitive_coefficients) is not tuple or any(type(value) is not int for value in self.primitive_coefficients):
+            raise InvalidBoundaryVertexIdentityError("incident support coefficients must be exact primitive integers.")
         expected_count = 3 if self.support_kind is SupportKind.LINE else 4
         if len(self.primitive_coefficients) != expected_count:
             expected_name = "three" if expected_count == 3 else "four"
-            raise ArtifactIdentityError(f"{self.support_kind.name.lower()} support requires exactly {expected_name} coefficients.")
+            raise InvalidBoundaryVertexIdentityError(f"{self.support_kind.name.lower()} support requires exactly {expected_name} coefficients.")
         normalized = _primitive_coefficients(tuple(ExactRationalV1(value, 1) for value in self.primitive_coefficients))
         if normalized != self.primitive_coefficients:
-            raise ArtifactIdentityError("incident support coefficients must already be primitive with positive leading sign.")
+            raise InvalidBoundaryVertexIdentityError("incident support coefficients must already be primitive with positive leading sign.")
         if self.support_kind is SupportKind.LINE and self.primitive_coefficients[:2] == (0, 0):
-            raise ArtifactIdentityError("line support requires a nonzero normal.")
+            raise InvalidBoundaryVertexIdentityError("line support requires a nonzero normal.")
         if self.support_kind is SupportKind.CIRCLE and self.primitive_coefficients[0] == 0:
-            raise ArtifactIdentityError("circle support requires a nonzero quadratic coefficient.")
+            raise InvalidBoundaryVertexIdentityError("circle support requires a nonzero quadratic coefficient.")
 
     @classmethod
     def build(
@@ -158,17 +162,21 @@ class IncidentSupportIdV1:
         try:
             coefficients = tuple(normalized_coefficients)
         except TypeError:
-            raise ArtifactIdentityError("incident support coefficients must be finite.") from None
-        if any(not isinstance(coefficient, ExactRationalV1) for coefficient in coefficients):
-            raise ArtifactIdentityError("incident support coefficients must be exact rationals.")
+            raise InvalidBoundaryVertexIdentityError("incident support coefficients must be finite.") from None
+        if type(support_kind) is not SupportKind:
+            raise InvalidBoundaryVertexIdentityError("incident support kind must be exact SupportKind.")
+        if any(type(coefficient) is not ExactRationalV1 for coefficient in coefficients):
+            raise InvalidBoundaryVertexIdentityError("incident support coefficients must be exact ExactRationalV1 values.")
         expected_count = 3 if support_kind is SupportKind.LINE else 4 if support_kind is SupportKind.CIRCLE else 0
         if len(coefficients) != expected_count:
             expected_name = "three" if expected_count == 3 else "four"
-            raise ArtifactIdentityError(f"incident support requires exactly {expected_name} exact coefficients.")
+            raise InvalidBoundaryVertexIdentityError(f"incident support requires exactly {expected_name} exact coefficients.")
         return cls(support_kind, _primitive_coefficients(coefficients))
 
     @property
     def canonical_bytes(self) -> bytes:
+        if type(self) is not IncidentSupportIdV1:
+            raise InvalidBoundaryVertexIdentityError("incident support identity must be exact IncidentSupportIdV1, not a subclass.")
         return encode_tagged_union(
             b"incident-support-id-v1",
             encode_component_map(
@@ -190,10 +198,10 @@ class IncidentSupport:
     trim_incidence_orientation: TrimIncidenceOrientation
 
     def __post_init__(self) -> None:
-        if not isinstance(self.support_id, IncidentSupportIdV1):
-            raise ArtifactIdentityError("incident support requires a normalized support identity.")
-        if not isinstance(self.trim_incidence_orientation, TrimIncidenceOrientation):
-            raise ArtifactIdentityError("incident support requires an explicit trim-incidence orientation.")
+        if type(self.support_id) is not IncidentSupportIdV1:
+            raise InvalidBoundaryVertexIdentityError("incident support requires exact IncidentSupportIdV1.")
+        if type(self.trim_incidence_orientation) is not TrimIncidenceOrientation:
+            raise InvalidBoundaryVertexIdentityError("incident support requires exact TrimIncidenceOrientation.")
 
     @classmethod
     def build(
@@ -206,6 +214,8 @@ class IncidentSupport:
 
     @property
     def canonical_bytes(self) -> bytes:
+        if type(self) is not IncidentSupport:
+            raise InvalidBoundaryVertexIdentityError("incident support must be exact IncidentSupport, not a subclass.")
         return encode_tagged_union(
             b"incident-support-v1",
             encode_component_map(
@@ -222,32 +232,32 @@ class IncidentSupport:
 
 @dataclass(frozen=True)
 class InputRingVertexIdV1:
-    canonical_ring_bytes: bytes
+    canonical_ring: CanonicalRingV1
     vertex_ordinal: int
 
     def __post_init__(self) -> None:
-        try:
-            require_canonical_record(self.canonical_ring_bytes)
-        except CanonicalEncodingError:
-            raise ArtifactIdentityError("input-ring vertex requires one complete versioned canonical ring record.") from None
-        if canonical_record_kind(self.canonical_ring_bytes) != b"T":
-            raise ArtifactIdentityError("input-ring vertex requires a tagged canonical ring record.")
+        if type(self.canonical_ring) is not CanonicalRingV1:
+            raise InvalidBoundaryVertexIdentityError("input-ring vertex requires exact CanonicalRingV1.")
         if type(self.vertex_ordinal) is not int or self.vertex_ordinal < 0:
-            raise ArtifactIdentityError("input-ring vertex ordinal must be an exact nonnegative integer.")
+            raise InvalidBoundaryVertexIdentityError("input-ring vertex ordinal must be an exact nonnegative integer.")
+        if self.vertex_ordinal >= self.canonical_ring.vertex_count:
+            raise InvalidBoundaryVertexIdentityError("input-ring vertex ordinal must be below the ring vertex count.")
 
     @classmethod
-    def build(cls, *, canonical_ring_bytes: bytes, vertex_ordinal: int) -> Self:
-        return cls(canonical_ring_bytes, vertex_ordinal)
+    def build(cls, *, canonical_ring: CanonicalRingV1, vertex_ordinal: int) -> Self:
+        return cls(canonical_ring, vertex_ordinal)
 
     @property
     def canonical_bytes(self) -> bytes:
+        if type(self) is not InputRingVertexIdV1:
+            raise InvalidBoundaryVertexIdentityError("input-ring vertex identity must be exact InputRingVertexIdV1, not a subclass.")
         return encode_tagged_union(
             BOUNDARY_VERTEX_ID_VERSION,
             encode_tagged_union(
                 b"input-ring-vertex-v1",
                 encode_component_map(
                     {
-                        b"ring": self.canonical_ring_bytes,
+                        b"ring": self.canonical_ring.canonical_bytes,
                         b"vertex-ordinal": encode_integer(self.vertex_ordinal),
                     }
                 ),
@@ -265,18 +275,18 @@ class IntersectionBoundaryVertexIdV1:
     intersection_ordinal: int
 
     def __post_init__(self) -> None:
-        if not isinstance(self.incident_supports, tuple) or len(self.incident_supports) < 2:
-            raise ArtifactIdentityError("intersection boundary vertex requires at least two incident supports.")
-        if any(not isinstance(incident, IncidentSupport) for incident in self.incident_supports):
-            raise ArtifactIdentityError("intersection incident supports must be typed.")
+        if type(self.incident_supports) is not tuple or len(self.incident_supports) < 2:
+            raise InvalidBoundaryVertexIdentityError("intersection boundary vertex requires at least two incident supports.")
+        if any(type(incident) is not IncidentSupport for incident in self.incident_supports):
+            raise InvalidBoundaryVertexIdentityError("intersection incident supports must be exact IncidentSupport.")
         canonical = tuple(sorted(self.incident_supports, key=lambda incident: incident.canonical_bytes))
         if canonical != self.incident_supports:
-            raise ArtifactIdentityError("intersection incident supports must use canonical pair order.")
+            raise InvalidBoundaryVertexIdentityError("intersection incident supports must use canonical pair order.")
         support_bytes = tuple(incident.support_id.canonical_bytes for incident in self.incident_supports)
         if len(support_bytes) != len(set(support_bytes)):
-            raise ArtifactIdentityError("intersection incident support identities must be distinct.")
+            raise InvalidBoundaryVertexIdentityError("intersection incident support identities must be distinct.")
         if type(self.intersection_ordinal) is not int or self.intersection_ordinal < 0:
-            raise ArtifactIdentityError("intersection ordinal must be an exact nonnegative integer.")
+            raise InvalidBoundaryVertexIdentityError("intersection ordinal must be an exact nonnegative integer.")
 
     @classmethod
     def build(
@@ -288,14 +298,16 @@ class IntersectionBoundaryVertexIdV1:
         try:
             supports = tuple(incident_supports)
         except TypeError:
-            raise ArtifactIdentityError("intersection incident supports must be finite.") from None
-        if any(not isinstance(incident, IncidentSupport) for incident in supports):
-            raise ArtifactIdentityError("intersection incident supports must be typed.")
+            raise InvalidBoundaryVertexIdentityError("intersection incident supports must be finite.") from None
+        if any(type(incident) is not IncidentSupport for incident in supports):
+            raise InvalidBoundaryVertexIdentityError("intersection incident supports must be exact IncidentSupport.")
         supports = tuple(sorted(supports, key=lambda incident: incident.canonical_bytes))
         return cls(supports, intersection_ordinal)
 
     @property
     def canonical_bytes(self) -> bytes:
+        if type(self) is not IntersectionBoundaryVertexIdV1:
+            raise InvalidBoundaryVertexIdentityError("intersection identity must be exact IntersectionBoundaryVertexIdV1, not a subclass.")
         return encode_tagged_union(
             BOUNDARY_VERTEX_ID_VERSION,
             encode_tagged_union(

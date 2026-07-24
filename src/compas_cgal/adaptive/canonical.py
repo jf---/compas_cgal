@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from fractions import Fraction
 from typing import Final
 from typing import Self
+from typing import TypeVar
 
 from compas_cgal.adaptive.errors import CanonicalEncodingError
 from compas_cgal.adaptive.motion import EngagementCap
@@ -17,18 +18,24 @@ from compas_cgal.adaptive.policy import CutDirectionPolicy
 from compas_cgal.adaptive.policy import CutIntent
 from compas_cgal.adaptive.policy import DepletionPolicy
 from compas_cgal.adaptive.policy import MaterialSide
+from compas_cgal.adaptive.policy import NeckEffectiveCap
 from compas_cgal.adaptive.policy import NeckPolicy
 from compas_cgal.adaptive.policy import PassageState
 from compas_cgal.adaptive.policy import TraversalPolicy
+from compas_cgal.adaptive.units import ChordBound
+from compas_cgal.adaptive.units import ClearanceZ
 from compas_cgal.adaptive.units import CutPlane
 from compas_cgal.adaptive.units import CutZ
+from compas_cgal.adaptive.units import GuideRadius
 from compas_cgal.adaptive.units import Point2
+from compas_cgal.adaptive.units import Spacing
 from compas_cgal.adaptive.units import Vector2
 from compas_cgal.adaptive.units import WorldXY
 
 CANONICAL_ENCODING_VERSION: Final[bytes] = b"CCAN\x00\x01"
 _U64: Final[struct.Struct] = struct.Struct(">Q")
 _BINARY64: Final[struct.Struct] = struct.Struct(">d")
+ExactT = TypeVar("ExactT")
 
 _PASSAGE_TAGS: Final[dict[PassageState, bytes]] = {
     PassageState.UNVISITED: b"passage-unvisited-v1",
@@ -48,6 +55,12 @@ _CIRCLE_ORIENTATION_TAGS: Final[dict[CircleOrientation, bytes]] = {
     CircleOrientation.CLOCKWISE: b"circle-clockwise-v1",
     CircleOrientation.COUNTERCLOCKWISE: b"circle-counterclockwise-v1",
 }
+
+
+def _require_exact(value: object, expected_type: type[ExactT], name: str) -> ExactT:
+    if type(value) is not expected_type:
+        raise CanonicalEncodingError(f"{name} must be exact {expected_type.__name__}, not a subclass or alternate type.")
+    return value
 
 
 def _node(kind: bytes, payload: bytes) -> bytes:
@@ -75,7 +88,7 @@ def encode_integer(value: int) -> bytes:
 
 
 def encode_binary64(value: float) -> bytes:
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
+    if type(value) not in (int, float):
         raise CanonicalEncodingError("canonical binary64 value must be a finite real number.")
     try:
         numeric = float(value)
@@ -269,6 +282,7 @@ class ExactRationalV1:
 
     @property
     def canonical_bytes(self) -> bytes:
+        _require_exact(self, ExactRationalV1, "canonical rational")
         return _node(
             b"R",
             encode_integer(self.numerator) + encode_integer(self.denominator),
@@ -276,6 +290,7 @@ class ExactRationalV1:
 
 
 def encode_passage_state(state: PassageState) -> bytes:
+    _require_exact(state, PassageState, "passage state")
     try:
         tag = _PASSAGE_TAGS[state]
     except (KeyError, TypeError):
@@ -284,6 +299,7 @@ def encode_passage_state(state: PassageState) -> bytes:
 
 
 def encode_cut_intent(intent: CutIntent) -> bytes:
+    _require_exact(intent, CutIntent, "cut intent")
     try:
         tag = _CUT_INTENT_TAGS[intent]
     except (KeyError, TypeError):
@@ -292,6 +308,7 @@ def encode_cut_intent(intent: CutIntent) -> bytes:
 
 
 def encode_material_side(side: MaterialSide) -> bytes:
+    _require_exact(side, MaterialSide, "material side")
     try:
         tag = _MATERIAL_SIDE_TAGS[side]
     except (KeyError, TypeError):
@@ -300,6 +317,7 @@ def encode_material_side(side: MaterialSide) -> bytes:
 
 
 def encode_circle_orientation(orientation: CircleOrientation) -> bytes:
+    _require_exact(orientation, CircleOrientation, "circle orientation")
     try:
         tag = _CIRCLE_ORIENTATION_TAGS[orientation]
     except (KeyError, TypeError):
@@ -308,8 +326,7 @@ def encode_circle_orientation(orientation: CircleOrientation) -> bytes:
 
 
 def canonical_point2_bytes(point: Point2[WorldXY]) -> bytes:
-    if not isinstance(point, Point2):
-        raise CanonicalEncodingError("canonical point must be a typed world-XY point.")
+    _require_exact(point, Point2, "canonical point")
     return encode_tagged_union(
         b"point2-world-xy-v1",
         encode_sequence((encode_binary64(point.x), encode_binary64(point.y))),
@@ -317,8 +334,7 @@ def canonical_point2_bytes(point: Point2[WorldXY]) -> bytes:
 
 
 def canonical_vector2_bytes(vector: Vector2[WorldXY]) -> bytes:
-    if not isinstance(vector, Vector2):
-        raise CanonicalEncodingError("canonical vector must be a typed world-XY vector.")
+    _require_exact(vector, Vector2, "canonical vector")
     return encode_tagged_union(
         b"vector2-world-xy-v1",
         encode_sequence((encode_binary64(vector.x), encode_binary64(vector.y))),
@@ -330,17 +346,24 @@ def _scalar_bytes(tag: bytes, value: float) -> bytes:
 
 
 def canonical_cut_z_bytes(cut_z: CutZ) -> bytes:
-    if not isinstance(cut_z, CutZ):
-        raise CanonicalEncodingError("canonical cut Z must be typed.")
+    _require_exact(cut_z, CutZ, "canonical cut Z")
     return _scalar_bytes(b"cut-z-mm-v1", cut_z.value)
 
 
+def canonical_clearance_z_bytes(clearance_z: ClearanceZ) -> bytes:
+    _require_exact(clearance_z, ClearanceZ, "canonical clearance Z")
+    return _scalar_bytes(b"clearance-z-mm-v1", clearance_z.value)
+
+
 def _cut_plane_bytes(cut_plane: CutPlane) -> bytes:
+    _require_exact(cut_plane, CutPlane, "cut plane")
+    _require_exact(cut_plane.cut_z, CutZ, "cut-plane cut Z")
+    _require_exact(cut_plane.clearance_z, ClearanceZ, "cut-plane clearance Z")
     return encode_tagged_union(
         b"cut-plane-v1",
         encode_component_map(
             {
-                b"clearance-z": _scalar_bytes(b"clearance-z-mm-v1", cut_plane.clearance_z.value),
+                b"clearance-z": canonical_clearance_z_bytes(cut_plane.clearance_z),
                 b"cut-z": canonical_cut_z_bytes(cut_plane.cut_z),
             }
         ),
@@ -348,6 +371,9 @@ def _cut_plane_bytes(cut_plane: CutPlane) -> bytes:
 
 
 def _segment_motion_bytes(motion: ExactSegmentMotion) -> bytes:
+    _require_exact(motion, ExactSegmentMotion, "segment motion")
+    _require_exact(motion.start, Point2, "segment start")
+    _require_exact(motion.end, Point2, "segment end")
     return encode_tagged_union(
         b"exact-segment-motion-v1",
         encode_component_map(
@@ -360,6 +386,11 @@ def _segment_motion_bytes(motion: ExactSegmentMotion) -> bytes:
 
 
 def _circle_motion_bytes(motion: ExactCircleMotion) -> bytes:
+    _require_exact(motion, ExactCircleMotion, "circle motion")
+    _require_exact(motion.center, Point2, "circle center")
+    _require_exact(motion.phase_vector, Vector2, "circle phase vector")
+    if type(motion.clockwise) is not bool:
+        raise CanonicalEncodingError("circle orientation must be exact bool.")
     orientation_tag = b"clockwise-v1" if motion.clockwise else b"counterclockwise-v1"
     return encode_tagged_union(
         b"exact-full-circle-motion-v1",
@@ -374,12 +405,25 @@ def _circle_motion_bytes(motion: ExactCircleMotion) -> bytes:
 
 
 def _engagement_cap_bytes(cap: EngagementCap) -> bytes:
+    _require_exact(cap, EngagementCap, "engagement cap")
     if type(cap.chord_ratio_bytes) is not bytes or len(cap.chord_ratio_bytes) != _BINARY64.size:
         raise CanonicalEncodingError("engagement cap must retain one native binary64 surrogate.")
     return encode_tagged_union(b"engagement-cap-v1", encode_bytes(cap.chord_ratio_bytes))
 
 
 def _candidate_policy_bytes(policy: CandidatePolicy) -> bytes:
+    _require_exact(policy, CandidatePolicy, "candidate policy")
+    _require_exact(policy.spatial_resolution, Spacing, "candidate spatial resolution")
+    _require_exact(policy.radius_resolution, Spacing, "candidate radius resolution")
+    _require_exact(policy.minimum_guide_radius, GuideRadius, "candidate minimum guide radius")
+    _require_exact(policy.minimum_progress, Spacing, "candidate minimum progress")
+    for integer_value in (
+        policy.spatial_refinement_levels,
+        policy.radius_refinement_levels,
+        policy.phase_count,
+    ):
+        if type(integer_value) is not int:
+            raise CanonicalEncodingError("candidate policy integer bounds must be exact int.")
     return encode_tagged_union(
         b"candidate-policy-v1",
         encode_component_map(
@@ -400,6 +444,18 @@ def _candidate_policy_bytes(policy: CandidatePolicy) -> bytes:
 
 
 def _neck_policy_bytes(policy: NeckPolicy) -> bytes:
+    _require_exact(policy, NeckPolicy, "neck policy")
+    _require_exact(policy.user_cap, EngagementCap, "neck user cap")
+    if type(policy.squared_width_boundaries) is not tuple or any(type(boundary) is not Fraction for boundary in policy.squared_width_boundaries):
+        raise CanonicalEncodingError("neck squared-width boundaries must be an exact Fraction tuple.")
+    if type(policy.effective_caps) is not tuple:
+        raise CanonicalEncodingError("neck effective caps must be an exact tuple.")
+    for entry in policy.effective_caps:
+        _require_exact(entry, NeckEffectiveCap, "neck effective-cap entry")
+        if type(entry.neck_class) is not int:
+            raise CanonicalEncodingError("neck class must be exact int.")
+        _require_exact(entry.passage_state, PassageState, "neck passage state")
+        _require_exact(entry.cap, EngagementCap, "neck effective cap")
     boundaries = encode_sequence(tuple(ExactRationalV1.from_fraction(boundary).canonical_bytes for boundary in policy.squared_width_boundaries))
     entries = encode_sequence(
         tuple(
@@ -429,21 +485,24 @@ def _neck_policy_bytes(policy: NeckPolicy) -> bytes:
 
 
 def canonical_task1_bytes(value: object) -> bytes:
-    if isinstance(value, CutPlane):
+    if type(value) is CutPlane:
         return _cut_plane_bytes(value)
-    if isinstance(value, CutZ):
+    if type(value) is CutZ:
         return canonical_cut_z_bytes(value)
-    if isinstance(value, ExactSegmentMotion):
+    if type(value) is ExactSegmentMotion:
         return _segment_motion_bytes(value)
-    if isinstance(value, ExactCircleMotion):
+    if type(value) is ExactCircleMotion:
         return _circle_motion_bytes(value)
-    if isinstance(value, EngagementCap):
+    if type(value) is EngagementCap:
         return _engagement_cap_bytes(value)
-    if isinstance(value, CandidatePolicy):
+    if type(value) is CandidatePolicy:
         return _candidate_policy_bytes(value)
-    if isinstance(value, NeckPolicy):
+    if type(value) is NeckPolicy:
         return _neck_policy_bytes(value)
-    if isinstance(value, DepletionPolicy):
+    if type(value) is DepletionPolicy:
+        _require_exact(value.chord_bound, ChordBound, "depletion chord bound")
+        if type(value.center_count_limit) is not int or type(value.chord_bound_bytes) is not bytes:
+            raise CanonicalEncodingError("depletion policy fields must use exact owned types.")
         return encode_tagged_union(
             b"depletion-policy-v1",
             encode_component_map(
@@ -453,12 +512,15 @@ def canonical_task1_bytes(value: object) -> bytes:
                 }
             ),
         )
-    if isinstance(value, TraversalPolicy):
+    if type(value) is TraversalPolicy:
+        if type(value.forward_window) is not int:
+            raise CanonicalEncodingError("traversal forward window must be exact int.")
         return encode_tagged_union(
             b"traversal-policy-v1",
             encode_component_map({b"forward-window": encode_integer(value.forward_window)}),
         )
-    if isinstance(value, CutDirectionPolicy):
+    if type(value) is CutDirectionPolicy:
+        _require_exact(value.intent, CutIntent, "cut-direction intent")
         return encode_tagged_union(
             b"cut-direction-policy-v1",
             encode_component_map({b"intent": encode_cut_intent(value.intent)}),
@@ -474,38 +536,103 @@ def _exact_ring_area(points: tuple[Point2[WorldXY], ...]) -> Fraction:
     return area_twice
 
 
-def _canonical_ring(points: Sequence[Point2[WorldXY]], *, counterclockwise: bool) -> bytes:
+def _normalized_ring_vertices(
+    points: Sequence[Point2[WorldXY]],
+    *,
+    is_outer: bool,
+) -> tuple[Point2[WorldXY], ...]:
     try:
         ring = tuple(points)
     except TypeError:
         raise CanonicalEncodingError("polygon ring must be a finite point sequence.") from None
+    if any(type(point) is not Point2 for point in ring):
+        raise CanonicalEncodingError("polygon ring requires exact Point2 vertices.")
     if ring and ring[0] == ring[-1]:
         ring = ring[:-1]
-    if len(ring) < 3 or any(not isinstance(point, Point2) for point in ring):
-        raise CanonicalEncodingError("polygon ring requires at least three typed world-XY points.")
+    if len(ring) < 3:
+        raise CanonicalEncodingError("polygon ring requires at least three exact world-XY points.")
+    ring = tuple(
+        Point2[WorldXY].build(
+            0.0 if point.x == 0.0 else point.x,
+            0.0 if point.y == 0.0 else point.y,
+        )
+        for point in ring
+    )
     area_twice = _exact_ring_area(ring)
     if area_twice == 0:
         raise CanonicalEncodingError("polygon ring requires nonzero exact area.")
-    if (area_twice > 0) is not counterclockwise:
+    if (area_twice > 0) is not is_outer:
         ring = tuple(reversed(ring))
     point_bytes = tuple(canonical_point2_bytes(point) for point in ring)
     if len(point_bytes) != len(set(point_bytes)):
         raise CanonicalEncodingError("polygon ring must not contain repeated canonical vertices.")
     rotations = tuple(point_bytes[index:] + point_bytes[:index] for index in range(len(point_bytes)))
     canonical_rotation = min(rotations)
-    ring_tag = b"outer-ring-ccw-v1" if counterclockwise else b"hole-ring-cw-v1"
-    return encode_tagged_union(ring_tag, encode_sequence(canonical_rotation))
+    start_index = rotations.index(canonical_rotation)
+    return ring[start_index:] + ring[:start_index]
+
+
+@dataclass(frozen=True)
+class CanonicalRingV1:
+    vertices: tuple[Point2[WorldXY], ...]
+    is_outer: bool
+
+    def __post_init__(self) -> None:
+        _require_exact(self, CanonicalRingV1, "canonical ring")
+        if type(self.vertices) is not tuple or any(type(point) is not Point2 for point in self.vertices):
+            raise CanonicalEncodingError("canonical ring vertices must be an exact Point2 tuple.")
+        if type(self.is_outer) is not bool:
+            raise CanonicalEncodingError("canonical ring role must be exact bool.")
+        if len(self.vertices) < 3:
+            raise CanonicalEncodingError("canonical ring requires at least three vertices.")
+        for point in self.vertices:
+            if (point.x == 0.0 and math.copysign(1.0, point.x) < 0.0) or (point.y == 0.0 and math.copysign(1.0, point.y) < 0.0):
+                raise CanonicalEncodingError("canonical ring vertices must normalize signed zero.")
+        point_bytes = tuple(canonical_point2_bytes(point) for point in self.vertices)
+        if len(point_bytes) != len(set(point_bytes)):
+            raise CanonicalEncodingError("canonical ring must not contain repeated vertices.")
+        area_twice = _exact_ring_area(self.vertices)
+        if area_twice == 0:
+            raise CanonicalEncodingError("canonical ring requires nonzero exact area.")
+        if (area_twice > 0) is not self.is_outer:
+            raise CanonicalEncodingError("canonical ring winding does not match its exact role.")
+        rotations = tuple(point_bytes[index:] + point_bytes[:index] for index in range(len(point_bytes)))
+        if point_bytes != min(rotations):
+            raise CanonicalEncodingError("canonical ring vertices must use canonical rotation.")
+
+    @classmethod
+    def build_outer(cls, points: Sequence[Point2[WorldXY]]) -> Self:
+        return cls(_normalized_ring_vertices(points, is_outer=True), True)
+
+    @classmethod
+    def build_hole(cls, points: Sequence[Point2[WorldXY]]) -> Self:
+        return cls(_normalized_ring_vertices(points, is_outer=False), False)
+
+    @property
+    def vertex_count(self) -> int:
+        _require_exact(self, CanonicalRingV1, "canonical ring")
+        return len(self.vertices)
+
+    @property
+    def canonical_bytes(self) -> bytes:
+        _require_exact(self, CanonicalRingV1, "canonical ring")
+        ring_tag = b"outer-ring-ccw-v1" if self.is_outer else b"hole-ring-cw-v1"
+        return encode_tagged_union(
+            ring_tag,
+            encode_sequence(tuple(canonical_point2_bytes(point) for point in self.vertices)),
+        )
 
 
 def canonical_polygon_bytes(
     outer_ring: Sequence[Point2[WorldXY]],
     holes: Sequence[Sequence[Point2[WorldXY]]],
 ) -> bytes:
-    outer_bytes = _canonical_ring(outer_ring, counterclockwise=True)
+    outer = CanonicalRingV1.build_outer(outer_ring)
     try:
-        hole_bytes = tuple(sorted(_canonical_ring(hole, counterclockwise=False) for hole in holes))
+        canonical_holes = tuple(CanonicalRingV1.build_hole(hole) for hole in holes)
     except TypeError:
         raise CanonicalEncodingError("polygon holes must be a finite ring sequence.") from None
+    hole_bytes = tuple(sorted(hole.canonical_bytes for hole in canonical_holes))
     if len(hole_bytes) != len(set(hole_bytes)):
         raise CanonicalEncodingError("polygon holes must not contain canonical duplicates.")
     return encode_tagged_union(
@@ -513,7 +640,7 @@ def canonical_polygon_bytes(
         encode_component_map(
             {
                 b"holes": encode_sequence(hole_bytes),
-                b"outer-ring": outer_bytes,
+                b"outer-ring": outer.canonical_bytes,
             }
         ),
     )

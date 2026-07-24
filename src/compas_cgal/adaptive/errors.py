@@ -40,3 +40,23 @@ class CanonicalEncodingError(ValueError):
 
 class ArtifactIdentityError(ValueError):
     """An identity input or decision record violates its structural contract."""
+
+
+class InvalidComponentIdentityError(ArtifactIdentityError):
+    """A component identity omits or corrupts a required build input."""
+
+
+class InvalidBoundaryVertexIdentityError(ArtifactIdentityError):
+    """A structural boundary-vertex identity is invalid or ambiguous."""
+
+
+class InvalidEffectiveCapDecisionError(ArtifactIdentityError):
+    """An effective-cap decision is not a closed, exact policy result."""
+
+
+class InvalidTraversalDecisionError(ArtifactIdentityError):
+    """A traversal decision does not encode one legal cursor transition."""
+
+
+class InvalidOperationIdentityError(ArtifactIdentityError):
+    """A canonical operation omits or contradicts an owned decision."""
