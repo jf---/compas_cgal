@@ -97,6 +97,24 @@ class Stock:
         """The underlying exact-kernel `_stock_2.Stock2` backend instance."""
         return self._raw
 
+    @classmethod
+    def _from_raw(cls, raw: "_stock_2.Stock2") -> "Stock":
+        stock = cls.__new__(cls)
+        stock._raw = raw
+        return stock
+
+    def clone(self) -> "Stock":
+        """Return an exact deep copy with independent native ownership."""
+        return self._from_raw(self._raw.clone())
+
+    def is_subset_of(self, other: "Stock") -> bool:
+        """Return exact regularized-set inclusion in *other*."""
+        return self._raw.is_subset_of(other._raw)
+
+    def exactly_equals(self, other: "Stock") -> bool:
+        """Return exact regularized-set equality with *other*."""
+        return self._raw.exactly_equals(other._raw)
+
     def contains(self, x: float, y: float) -> bool:
         """Return whether the point ``(x, y)`` is still material (inside the stock).
 

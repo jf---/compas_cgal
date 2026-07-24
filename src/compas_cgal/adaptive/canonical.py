@@ -29,6 +29,7 @@ from compas_cgal.adaptive.units import CutZ
 from compas_cgal.adaptive.units import GuideRadius
 from compas_cgal.adaptive.units import Point2
 from compas_cgal.adaptive.units import Spacing
+from compas_cgal.adaptive.units import ToolRadius
 from compas_cgal.adaptive.units import Vector2
 from compas_cgal.adaptive.units import WorldXY
 
@@ -285,6 +286,43 @@ class ExactRationalV1:
         )
 
 
+@dataclass(frozen=True)
+class ExactCenterParameterV1:
+    chart: int
+    numerator: int
+    denominator: int
+
+    def __post_init__(self) -> None:
+        if type(self.chart) is not int or self.chart < -1 or self.chart > 3:
+            raise CanonicalEncodingError("exact center chart must be one integer in [-1, 3].")
+        if type(self.numerator) is not int or type(self.denominator) is not int:
+            raise CanonicalEncodingError("exact center parameter numerator and denominator must be integers.")
+        if self.denominator <= 0 or self.numerator < 0 or self.numerator > self.denominator:
+            raise CanonicalEncodingError("exact center parameter must lie in the closed unit interval.")
+
+    @classmethod
+    def build(cls, *, chart: int, numerator: int, denominator: int) -> Self:
+        return cls(chart, numerator, denominator)
+
+    @property
+    def fraction(self) -> Fraction:
+        return Fraction(self.numerator, self.denominator)
+
+    @property
+    def canonical_bytes(self) -> bytes:
+        _require_exact(self, ExactCenterParameterV1, "exact center parameter")
+        return encode_tagged_union(
+            b"exact-center-parameter-v1",
+            encode_component_map(
+                {
+                    b"chart": encode_integer(self.chart),
+                    b"denominator": encode_integer(self.denominator),
+                    b"numerator": encode_integer(self.numerator),
+                }
+            ),
+        )
+
+
 def encode_passage_state(state: PassageState) -> bytes:
     _require_exact(state, PassageState, "passage state")
     try:
@@ -522,6 +560,42 @@ def canonical_task1_bytes(value: object) -> bytes:
             encode_component_map({b"intent": encode_cut_intent(value.intent)}),
         )
     raise CanonicalEncodingError("value is not a supported Task 1 canonical type.")
+
+
+def canonical_depletion_witness_bytes(
+    *,
+    motion: ExactSegmentMotion | ExactCircleMotion,
+    policy: DepletionPolicy,
+    tool_radius: ToolRadius,
+    center_parameters: tuple[ExactCenterParameterV1, ...],
+    native_strategy_version: bytes,
+    parent_lineage: tuple[bytes, ...],
+) -> bytes:
+    if type(motion) not in (ExactSegmentMotion, ExactCircleMotion):
+        raise CanonicalEncodingError("depletion witness motion must be one exact motion type.")
+    _require_exact(policy, DepletionPolicy, "depletion witness policy")
+    _require_exact(tool_radius, ToolRadius, "depletion witness tool radius")
+    if type(center_parameters) is not tuple or not center_parameters:
+        raise CanonicalEncodingError("depletion witness center parameters must be one nonempty exact tuple.")
+    if any(type(parameter) is not ExactCenterParameterV1 for parameter in center_parameters):
+        raise CanonicalEncodingError("depletion witness center parameters must use exact closed values.")
+    if type(native_strategy_version) is not bytes or not native_strategy_version:
+        raise CanonicalEncodingError("depletion witness native strategy version must be nonempty bytes.")
+    if type(parent_lineage) is not tuple or any(type(digest) is not bytes or len(digest) != 32 for digest in parent_lineage):
+        raise CanonicalEncodingError("depletion witness parent lineage must contain exact SHA-256 digests.")
+    return encode_tagged_union(
+        b"depletion-witness-v1",
+        encode_component_map(
+            {
+                b"center-parameters": encode_sequence(tuple(parameter.canonical_bytes for parameter in center_parameters)),
+                b"motion": canonical_task1_bytes(motion),
+                b"native-strategy-version": encode_bytes(native_strategy_version),
+                b"parent-lineage": encode_sequence(tuple(encode_bytes(digest) for digest in parent_lineage)),
+                b"policy": canonical_task1_bytes(policy),
+                b"tool-radius": _scalar_bytes(b"tool-radius-mm-v1", tool_radius.value),
+            }
+        ),
+    )
 
 
 def _exact_ring_area(points: tuple[Point2[WorldXY], ...]) -> Fraction:
