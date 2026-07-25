@@ -288,7 +288,9 @@ void incomplete_catalog_gate()
         "certificate accepted a recipe-incomplete source catalog");
 }
 
-void require_vertex_record(const std::string& record)
+void require_vertex_record(
+    const std::string& record,
+    bool require_source_incidence)
 {
     const std::vector<std::string> fields =
         record_fields(record, "arrangement-vertex-v1");
@@ -300,12 +302,47 @@ void require_vertex_record(const std::string& record)
             fields[0],
             "arrangement-incidence-multiset-v1");
     require(
-        !incidences.empty(),
+        !require_source_incidence
+            || !incidences.empty(),
         "selected vertex lost source incidence");
+    for (const std::string& incidence : incidences) {
+        const std::vector<std::string> source_piece =
+            record_fields(
+                incidence,
+                "source-piece-v1");
+        require(
+            source_piece.size() == 2,
+            "vertex source piece lost identity or ordinal");
+        static_cast<void>(
+            decode_u64_field(
+                source_piece[1],
+                "source-piece ordinal is not u64"));
+    }
     static_cast<void>(
         decode_u64_field(
             fields[1],
             "vertex ordinal is not u64"));
+}
+
+void require_arrangement_vertex_records(
+    const ReachableDomainCertificate2& certificate,
+    const ReachableArrangement2& reachable)
+{
+    require(
+        certificate.arrangement_vertex_records.size()
+                == reachable.arrangement.number_of_vertices()
+            && std::is_sorted(
+                certificate.arrangement_vertex_records.begin(),
+                certificate.arrangement_vertex_records.end())
+            && std::adjacent_find(
+                   certificate.arrangement_vertex_records.begin(),
+                   certificate.arrangement_vertex_records.end())
+                == certificate.arrangement_vertex_records.end(),
+        "certificate vertex records are missing, repeated, or noncanonical");
+    for (const std::string& record :
+         certificate.arrangement_vertex_records) {
+        require_vertex_record(record, false);
+    }
 }
 
 void require_cycle_record(
@@ -346,8 +383,8 @@ void require_cycle_record(
                 && target_endpoint.size() == 1
                 && source_endpoint[0] != target_endpoint[0],
             "cycle element has invalid endpoint roles");
-        require_vertex_record(source_endpoint[0]);
-        require_vertex_record(target_endpoint[0]);
+        require_vertex_record(source_endpoint[0], true);
+        require_vertex_record(target_endpoint[0], true);
         require(
             !record_fields(
                  element_fields[2],
@@ -568,9 +605,17 @@ void insertion_order_gate()
         build_reachable_certificate(forward, true);
     const ReachableDomainCertificate2 reverse_certificate =
         build_reachable_certificate(reverse, true);
+    require_arrangement_vertex_records(
+        forward_certificate,
+        forward);
+    require_arrangement_vertex_records(
+        reverse_certificate,
+        reverse);
     require(
         forward_certificate.source_curve_records
                 == reverse_certificate.source_curve_records
+            && forward_certificate.arrangement_vertex_records
+                == reverse_certificate.arrangement_vertex_records
             && forward_certificate.selected_cell_records
                 == reverse_certificate.selected_cell_records
             && forward_certificate.component_records
@@ -586,6 +631,7 @@ void source_and_input_gate()
         build_reachable_arrangement(rectangle_input());
     const ReachableDomainCertificate2 certificate =
         build_reachable_certificate(rectangle, true);
+    require_arrangement_vertex_records(certificate, rectangle);
     require(
         certificate.strategy_version
                 == "exact-reachable-arrangement-v2"
@@ -670,6 +716,10 @@ void source_and_input_gate()
                 == rotated_certificate.source_curve_records
             && certificate.source_curve_records
                 == reversed_certificate.source_curve_records
+            && certificate.arrangement_vertex_records
+                == rotated_certificate.arrangement_vertex_records
+            && certificate.arrangement_vertex_records
+                == reversed_certificate.arrangement_vertex_records
             && certificate.selected_cell_records
                 == rotated_certificate.selected_cell_records
             && certificate.selected_cell_records

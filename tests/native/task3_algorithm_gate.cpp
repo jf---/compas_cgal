@@ -1,6 +1,7 @@
 #include "exact_region_2.h"
 #include "exact_sweep_2.h"
 #include "reachable_arrangement_2.h"
+#include "reachable_domain_2.h"
 #include "reachable_errors_2.h"
 #include "task3_certificate_gate.h"
 
@@ -356,6 +357,50 @@ void rectangle_reachable_gate()
         "rectangle center domain retained a forbidden corner");
 }
 
+void reachable_domain_owner_gate()
+{
+    const ReachableDomain2 domain(rectangle_matrix(), {}, 1.0);
+    const ReachableDomainBuildAudit2& audit =
+        domain.build_audit_for_native_gate();
+    require(audit.geometry_passes == 1, "geometry replayed");
+    require(
+        audit.provenance_arrangements == 1,
+        "arrangement replayed");
+    require(
+        audit.center_extractions == 1,
+        "C_r enumerated repeatedly");
+    require(
+        audit.material_batch_unions == 1,
+        "M_r was not one batch union");
+    require(
+        audit.subset_decisions == 1,
+        "unexpected subset decisions");
+    require(
+        audit.residual_differences == 1,
+        "residual reconstructed");
+    require(
+        audit.source_geometric_rematches == 0,
+        "sources rematched");
+
+    const ExactRegion2 first = domain.reachable_material();
+    const ExactRegion2 second = domain.reachable_material();
+    require(
+        first.shares_storage_with_for_audit(second),
+        "reachable region accessor deep-copied exact storage");
+
+    const ReachableDomainCertificate2 certificate =
+        domain.certificate();
+    require(
+        certificate.exact_cell_selection,
+        "public owner lost exact cell selection");
+    require(
+        certificate.complete_source_provenance,
+        "public owner lost complete source provenance");
+    require(
+        certificate.reachable_subset_of_design,
+        "public owner lost exact material containment");
+}
+
 void canonical_input_invariance_gate()
 {
     compas::RowMatrixXd rotated(4, 3);
@@ -641,6 +686,7 @@ int main()
     arc_sweep_orientation_and_radius_gate();
     full_circle_radius_gate();
     rectangle_reachable_gate();
+    reachable_domain_owner_gate();
     canonical_input_invariance_gate();
     acute_corner_gate();
     island_gate();

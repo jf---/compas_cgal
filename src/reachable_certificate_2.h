@@ -8,6 +8,7 @@
 struct ReachableDomainCertificate2 {
     std::string strategy_version;
     std::vector<std::string> source_curve_records;
+    std::vector<std::string> arrangement_vertex_records;
     std::vector<std::string> selected_cell_records;
     std::vector<std::string> component_records;
     bool exact_cell_selection = false;
