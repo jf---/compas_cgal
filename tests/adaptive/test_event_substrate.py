@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 import json
 from collections import Counter
+from fractions import Fraction
 from pathlib import Path
 
 import numpy as np
@@ -7,6 +10,10 @@ import pytest
 
 from compas_cgal import _continuous_tea_2
 from compas_cgal import _stock_2
+from compas_cgal.adaptive.canonical import encode_component_map
+from compas_cgal.adaptive.canonical import encode_integer
+from compas_cgal.adaptive.canonical import encode_sequence
+from compas_cgal.adaptive.canonical import encode_tagged_union
 from compas_cgal.adaptive.canonical import require_canonical_record
 from compas_cgal.adaptive.identity import IncidentSupport
 from compas_cgal.adaptive.identity import IncidentSupportIdV1
@@ -328,3 +335,128 @@ def test_quadratic_circle_vertex_identity_is_operand_order_invariant() -> None:
     forward_vertex_ids = sorted(event.vertex_id for event in _continuous_tea_2.extract_boundary_events(stock) if event.kind == "vertex")
     reversed_vertex_ids = sorted(event.vertex_id for event in _continuous_tea_2.extract_boundary_events(reversed_stock) if event.kind == "vertex")
     assert forward_vertex_ids == reversed_vertex_ids
+
+
+def _root_id(coefficients: tuple[int, ...], ordinal: int) -> bytes:
+    return encode_tagged_union(
+        b"algebraic-root-id-v1",
+        encode_component_map(
+            {
+                b"coefficients": encode_sequence(tuple(encode_integer(value) for value in coefficients)),
+                b"root-ordinal": encode_integer(ordinal),
+            }
+        ),
+    )
+
+
+def _event(
+    suffix: bytes,
+    *,
+    kind: str = "tangency",
+    disposition: str = "accepted",
+) -> _continuous_tea_2.PartitionEvent2:
+    return _continuous_tea_2.PartitionEvent2(
+        kind,
+        b"feature-" + suffix,
+        b"support-" + suffix,
+        b"trim-" + suffix,
+        b"vertex-" + suffix,
+        b"branch-" + suffix,
+        disposition,
+    )
+
+
+def _projection_input(
+    identifier: str,
+    coefficients: tuple[str, ...],
+    events: tuple[_continuous_tea_2.PartitionEvent2, ...],
+) -> _continuous_tea_2.ProjectionInput2:
+    return _continuous_tea_2.ProjectionInput2(
+        identifier,
+        coefficients,
+        events,
+    )
+
+
+def _cell_witnesses(
+    certificate: _continuous_tea_2.EventPartitionCertificate2,
+) -> tuple[Fraction, ...]:
+    return tuple(
+        Fraction(
+            int(cell.witness_numerator),
+            int(cell.witness_denominator),
+        )
+        for cell in certificate.cells
+    )
+
+
+def test_locked_algebraic_backend_evidence_is_immutable_and_exact() -> None:
+    evidence = _continuous_tea_2.exact_algebraic_backend_evidence()
+
+    assert evidence.cgal_version == "6.0.1"
+    assert evidence.integer_backend == "CORE::BigInt(boost::multiprecision::cpp_int)"
+    assert evidence.algebraic_kernel_1 == "CGAL::Algebraic_kernel_d_1<CORE::BigInt>"
+    assert evidence.algebraic_kernel_2 == "CGAL::Algebraic_kernel_d_2<CORE::BigInt>"
+    assert evidence.arrangement_traits == "CGAL::Arr_algebraic_segment_traits_2<CORE::BigInt>"
+    assert evidence.compile_definitions == (
+        "CGAL_DISABLE_GMP=1",
+        "CGAL_USE_BOOST_MP=1",
+        "CGAL_USE_CORE=1",
+        "CGAL_CORE_USE_BOOST_BACKEND=1",
+    )
+    with pytest.raises(AttributeError):
+        evidence.cgal_version = "changed"
+
+
+def test_frozen_center_and_rim_charts_cover_each_seam_once() -> None:
+    charts = _continuous_tea_2.parameter_charts()
+
+    assert [chart.chart_id for chart in charts] == [
+        "center-quarter-0-v1",
+        "center-quarter-1-v1",
+        "center-quarter-2-v1",
+        "center-quarter-3-v1",
+        "rim-half-0-v1",
+        "rim-half-1-v1",
+    ]
+    assert [(chart.domain_low, chart.domain_high, chart.orientation) for chart in charts] == [
+        ("0", "1", "ccw"),
+        ("0", "1", "ccw"),
+        ("0", "1", "ccw"),
+        ("0", "1", "ccw"),
+        ("-1", "1", "ccw"),
+        ("-1", "1", "ccw"),
+    ]
+    seam_owners: Counter[bytes] = Counter()
+    for chart in charts:
+        assert chart.owns_start_seam
+        assert not chart.owns_end_seam
+        seam_owners[chart.start_seam_id] += 1
+        assert chart.end_seam_id in {candidate.start_seam_id for candidate in charts}
+    assert sorted(seam_owners.values()) == [1, 1, 1, 1, 1, 1]
+
+    verified = _continuous_tea_2.verify_chart_coverage(charts)
+    assert verified.verdict.name == "CERTIFIED"
+    assert len(verified.partition.seams) == 6
+
+
+def test_repeated_tangency_root_is_one_fibre_with_multiplicity_two() -> None:
+    certificate = _continuous_tea_2.partition_projections(
+        (
+            _projection_input(
+                "repeated",
+                ("1", "-4", "4"),
+                (_event(b"repeated"),),
+            ),
+        )
+    )
+
+    assert len(certificate.roots) == 1
+    root = certificate.roots[0]
+    assert root.root_id == _root_id((-1, 2), 0)
+    assert root.factor_coefficients == ("-1", "2")
+    assert root.multiplicity == 2
+    assert Fraction(root.interval_low) < Fraction(1, 2) < Fraction(root.interval_high)
+    assert _cell_witnesses(certificate) == (Fraction(1, 4), Fraction(3, 4))
+    assert len(certificate.fibres) == 1
+    assert len(certificate.fibres[0].events) == 1
