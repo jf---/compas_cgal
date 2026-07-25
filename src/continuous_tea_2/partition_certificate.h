@@ -161,6 +161,11 @@ public:
     using EventSubstrateError::EventSubstrateError;
 };
 
+class UnsupportedAlgebraicDegreeError : public EventSubstrateError {
+public:
+    using EventSubstrateError::EventSubstrateError;
+};
+
 class AlgebraicRootIsolationError : public EventSubstrateError {
 public:
     using EventSubstrateError::EventSubstrateError;

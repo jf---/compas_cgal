@@ -103,6 +103,10 @@ NB_MODULE(_continuous_tea_2, m)
         m,
         "InvalidAlgebraicPolynomialError",
         substrate_error.ptr());
+    nb::exception<UnsupportedAlgebraicDegreeError>(
+        m,
+        "UnsupportedAlgebraicDegreeError",
+        substrate_error.ptr());
     nb::exception<AlgebraicRootIsolationError>(
         m,
         "AlgebraicRootIsolationError",
