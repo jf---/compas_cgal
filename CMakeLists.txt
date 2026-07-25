@@ -216,6 +216,7 @@ target_include_directories(coverage_exact_core
 
 add_executable(task3_algorithm_gate EXCLUDE_FROM_ALL
     tests/native/task3_algorithm_gate.cpp
+    tests/native/task3_certificate_gate.cpp
 )
 target_link_libraries(task3_algorithm_gate PRIVATE coverage_exact_core)
 target_compile_definitions(task3_algorithm_gate PRIVATE CGAL_USE_CORE=1)

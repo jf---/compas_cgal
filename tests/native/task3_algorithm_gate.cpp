@@ -1,14 +1,11 @@
 #include "exact_region_2.h"
 #include "exact_sweep_2.h"
 #include "reachable_arrangement_2.h"
-#include "reachable_certificate_2.h"
 #include "reachable_errors_2.h"
+#include "task3_certificate_gate.h"
 
 #include <algorithm>
-#include <cstdint>
-#include <iostream>
 #include <iterator>
-#include <limits>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -27,62 +24,6 @@ void require(bool condition, const char* message)
     }
 }
 
-std::size_t decode_u64(
-    const std::string& record,
-    std::size_t& offset,
-    const char* message)
-{
-    constexpr std::size_t U64_BYTES = 8;
-    if (offset > record.size()
-        || record.size() - offset < U64_BYTES) {
-        throw std::runtime_error(message);
-    }
-    std::uint64_t value = 0;
-    for (std::size_t index = 0; index < U64_BYTES; ++index) {
-        value = (value << 8)
-            | static_cast<unsigned char>(record[offset + index]);
-    }
-    offset += U64_BYTES;
-    if (value > std::numeric_limits<std::size_t>::max()) {
-        throw std::runtime_error(message);
-    }
-    return static_cast<std::size_t>(value);
-}
-
-std::vector<std::string> record_fields(
-    const std::string& record,
-    const std::string& tag)
-{
-    const std::string prefix = tag + '\0';
-    if (!record.starts_with(prefix)) {
-        throw std::runtime_error("structural record has the wrong tag");
-    }
-    std::size_t offset = prefix.size();
-    const std::size_t count = decode_u64(
-        record,
-        offset,
-        "structural record has no field count");
-    std::vector<std::string> fields;
-    fields.reserve(count);
-    for (std::size_t index = 0; index < count; ++index) {
-        const std::size_t size = decode_u64(
-            record,
-            offset,
-            "structural record has no field length");
-        if (offset > record.size()
-            || size > record.size() - offset) {
-            throw std::runtime_error(
-                "structural record field exceeds its bytes");
-        }
-        fields.push_back(record.substr(offset, size));
-        offset += size;
-    }
-    if (offset != record.size()) {
-        throw std::runtime_error(
-            "structural record has trailing bytes");
-    }
-    return fields;
-}
 void exact_region_storage_gate()
 {
     ReachSet disk;
@@ -436,17 +377,9 @@ void acute_corner_gate()
 {
     compas::RowMatrixXd boundary(3, 3);
     boundary << 0, 0, 0, 12, 0, 0, 1, 7, 0;
-    ReachableArrangement2 acute = build_reachable_arrangement(
+    const ReachableArrangement2 acute = build_reachable_arrangement(
         canonical_reach_input(boundary, {}, 0.5));
     require_reachable_audit(acute, 9);
-    const ReachableDomainCertificate2 certificate =
-        build_reachable_certificate(acute, true);
-    require(
-        certificate.source_curve_records.size() == 9
-            && certificate.selected_cell_records.size()
-                == acute.audit.selected_face_count
-            && certificate.component_records.size() == 1,
-        "acute certificate lost structural coverage");
 }
 
 void island_gate()
@@ -455,7 +388,7 @@ void island_gate()
     boundary << 0, 0, 0, 20, 0, 0, 20, 20, 0, 0, 20, 0;
     compas::RowMatrixXd island(4, 3);
     island << 8, 8, 0, 8, 12, 0, 12, 12, 0, 12, 8, 0;
-    ReachableArrangement2 reachable = build_reachable_arrangement(
+    const ReachableArrangement2 reachable = build_reachable_arrangement(
         canonical_reach_input(boundary, {island}, 1.0));
     require_reachable_audit(reachable, 24);
     require(
@@ -464,23 +397,6 @@ void island_gate()
             reachable.center_polygon.holes_end()))
             == 1,
         "island reachable domain lost its exact hole");
-    const ReachableDomainCertificate2 certificate =
-        build_reachable_certificate(reachable, true);
-    const std::vector<std::string> component =
-        record_fields(
-            certificate.component_records.front(),
-            "selected-component-v1");
-    const std::vector<std::string> boundary_cycles =
-        record_fields(
-            component[2],
-            "selected-component-boundary-cycles-v1");
-    require(
-        certificate.source_curve_records.size() == 24
-            && certificate.selected_cell_records.size()
-                == reachable.audit.selected_face_count
-            && certificate.component_records.size() == 1
-            && boundary_cycles.size() == 2,
-        "island certificate lost cells, sources, or boundary cycles");
 }
 
 void overlap_label_gate()
@@ -536,8 +452,7 @@ void overlap_label_gate()
 
 void append_labelled_rectangle(
     std::vector<ReachDataTraits2::X_monotone_curve_2>& curves,
-    const std::vector<std::string>& primitive_ids,
-    const std::vector<std::string>& source_piece_ids = {})
+    const std::vector<std::string>& primitive_ids)
 {
     const std::vector<ReachKernelPoint> points{
         {0, 0},
@@ -551,10 +466,7 @@ void append_labelled_rectangle(
                 ReachXCurve(
                     points[index],
                     points[(index + 1) % points.size()]),
-                ReachCurveLabels2{
-                    source_piece_ids,
-                    primitive_ids,
-                },
+                ReachCurveLabels2{{}, primitive_ids},
             });
     }
 }
@@ -720,264 +632,6 @@ void canonical_input_bypass_gate()
         "reachable build accepted valid geometry detached from identity");
 }
 
-void selected_adjacency_certificate_gate()
-{
-    const ReachableArrangement2 source_owner =
-        build_reachable_arrangement(rectangle_input());
-    const std::string source = source_owner.source_records.front();
-    const std::string piece = reach_tagged_record(
-        "source-piece-v1", {source, reach_u64_record(0)});
-    ReachableArrangement2 adjacent{
-        ReachArrangement2{},
-        rectangle_input(),
-        {source},
-        ReachPolygonWithHoles{}, ReachPolygonWithHoles{}, {},
-    };
-    std::vector<ReachDataTraits2::X_monotone_curve_2> curves;
-    append_labelled_rectangle(curves, {"synthetic-outer"}, {piece});
-    curves.push_back({
-        ReachXCurve(ReachKernelPoint(2, 0), ReachKernelPoint(2, 3)),
-        ReachCurveLabels2{{piece}, {}},
-    });
-    CGAL::insert(adjacent.arrangement, curves.begin(), curves.end());
-    classify_faces_by_primitive_parity(
-        adjacent.arrangement,
-        {{"synthetic-outer", ReachPrimitiveKind2::Outer}});
-    for (auto face = adjacent.arrangement.faces_begin();
-         face != adjacent.arrangement.faces_end();
-         ++face) {
-        adjacent.audit.selected_face_count +=
-            face->data().selected ? 1 : 0;
-    }
-    for (auto edge = adjacent.arrangement.edges_begin();
-         edge != adjacent.arrangement.edges_end();
-         ++edge) {
-        adjacent.audit.selected_adjacency_count +=
-            edge->face()->data().selected
-                && edge->twin()->face()->data().selected
-            ? 1
-            : 0;
-    }
-    const ReachableDomainCertificate2 certificate =
-        build_reachable_certificate(adjacent, true);
-    const std::vector<std::string> component = record_fields(
-        certificate.component_records.front(), "selected-component-v1");
-    const std::vector<std::string> adjacencies = record_fields(
-        component[1], "selected-component-adjacencies-v1");
-    require(
-        certificate.selected_cell_records.size() == 2
-            && adjacent.audit.selected_adjacency_count == 1
-            && adjacencies.size() == 1,
-        "certificate did not bind one exact selected-cell adjacency");
-}
-
-void certificate_gate()
-{
-    constexpr std::size_t RECTANGLE_SOURCE_COUNT = 12;
-    constexpr std::size_t MAX_DIRECT_SOURCE_RECORD_BYTES = 128;
-    ReachableArrangement2 rectangle =
-        build_reachable_arrangement(rectangle_input());
-    const ReachableDomainCertificate2 certificate =
-        build_reachable_certificate(rectangle, true);
-
-    require(
-        certificate.strategy_version
-            == "exact-reachable-arrangement-v2",
-        "certificate strategy version is not structural v2");
-    require(
-        certificate.source_curve_records.size()
-            == RECTANGLE_SOURCE_COUNT,
-        "certificate omitted rectangle source curves");
-    require(
-        certificate.selected_cell_records.size()
-            == rectangle.audit.selected_face_count,
-        "certificate omitted selected arrangement cells");
-    require(
-        certificate.component_records.size() == 1,
-        "certificate did not bind the selected component");
-    require(
-        certificate.exact_cell_selection,
-        "certificate lost exact face selection");
-    require(
-        certificate.complete_source_provenance,
-        "certificate lost propagated source provenance");
-    require(
-        certificate.reachable_subset_of_design,
-        "certificate lost its supplied exact subset decision");
-    require(
-        certificate.input_recipe_record
-            == rectangle.input.recipe_record,
-        "certificate lost canonical input identity");
-    require(
-        std::is_sorted(
-            certificate.source_curve_records.begin(),
-            certificate.source_curve_records.end())
-            && std::is_sorted(
-                certificate.selected_cell_records.begin(),
-                certificate.selected_cell_records.end())
-            && std::is_sorted(
-                certificate.component_records.begin(),
-                certificate.component_records.end()),
-        "certificate record collections are not canonical");
-
-    std::size_t max_source_record_bytes = 0;
-    for (const std::string& source :
-         certificate.source_curve_records) {
-        const std::vector<std::string> fields =
-            record_fields(source, "source-curve-v2");
-        require(
-            fields.size() == 5,
-            "source record does not use the direct v2 schema");
-        require(
-            fields[0] == "outer"
-                && fields[1] == reach_u64_record(0),
-            "rectangle source record lost canonical ring identity");
-        require(
-            fields[3] == "offset-minus"
-                || fields[3] == "offset-plus"
-                || fields[3] == "vertex-circle",
-            "source record has an unknown construction role");
-        require(
-            source.size() <= MAX_DIRECT_SOURCE_RECORD_BYTES,
-            "source record embeds nonlocal ring data");
-        max_source_record_bytes =
-            std::max(max_source_record_bytes, source.size());
-    }
-
-    const std::vector<std::string> component_fields =
-        record_fields(
-            certificate.component_records.front(),
-            "selected-component-v1");
-    require(
-        component_fields.size() == 3,
-        "component record lost cells, adjacency, or boundary cycles");
-    const std::vector<std::string> cells =
-        record_fields(
-            component_fields[0],
-            "selected-component-cells-v1");
-    const std::vector<std::string> adjacencies =
-        record_fields(
-            component_fields[1],
-            "selected-component-adjacencies-v1");
-    const std::vector<std::string> boundary_cycles =
-        record_fields(
-            component_fields[2],
-            "selected-component-boundary-cycles-v1");
-    require(
-        cells.size() == certificate.selected_cell_records.size(),
-        "component does not bind every selected cell exactly once");
-    for (std::size_t ordinal = 0;
-         ordinal < cells.size();
-         ++ordinal) {
-        const std::vector<std::string> id_fields =
-            record_fields(cells[ordinal], "selected-cell-id-v1");
-        require(
-            id_fields.size() == 1
-                && id_fields[0] == reach_u64_record(ordinal),
-            "component cell identity is not canonical");
-    }
-    require(
-        adjacencies.size()
-            == rectangle.audit.selected_adjacency_count,
-        "component omitted selected-cell adjacency");
-    require(
-        std::is_sorted(adjacencies.begin(), adjacencies.end())
-            && std::adjacent_find(
-                adjacencies.begin(),
-                adjacencies.end())
-                == adjacencies.end(),
-        "component adjacency is repeated or noncanonical");
-    require(
-        boundary_cycles.size() == 1,
-        "rectangle component lost its regularized boundary");
-    require(
-        rectangle.audit.cycle_rotation_comparisons
-            <= 3 * rectangle.audit.cycle_element_count,
-        "cycle canonicalization exceeded linear comparison bound");
-
-    compas::RowMatrixXd changed_boundary = rectangle_matrix();
-    changed_boundary(1, 0) = 11.0;
-    require(
-        certificate.matches_exact_inputs(
-            rectangle_matrix(),
-            {},
-            1.0),
-        "certificate rejected its exact inputs");
-    require(
-        !certificate.matches_exact_inputs(
-            changed_boundary,
-            {},
-            1.0),
-        "certificate accepted changed exact geometry");
-    require(
-        !certificate.matches_exact_inputs(
-            rectangle_matrix(),
-            {},
-            1.5),
-        "certificate accepted a changed exact radius");
-
-    compas::RowMatrixXd rotated(4, 3);
-    rotated << 10, 8, 0, 0, 8, 0, 0, 0, 0, 10, 0, 0;
-    compas::RowMatrixXd reversed(4, 3);
-    reversed << 0, 0, 0, 0, 8, 0, 10, 8, 0, 10, 0, 0;
-    require(
-        certificate.matches_exact_inputs(rotated, {}, 1.0)
-            && certificate.matches_exact_inputs(
-                reversed,
-                {},
-                1.0),
-        "certificate exact-input match is not canonical");
-    ReachableArrangement2 rotated_reachable =
-        build_reachable_arrangement(
-            canonical_reach_input(rotated, {}, 1.0));
-    ReachableArrangement2 reversed_reachable =
-        build_reachable_arrangement(
-            canonical_reach_input(reversed, {}, 1.0));
-    const ReachableDomainCertificate2 rotated_certificate =
-        build_reachable_certificate(rotated_reachable, true);
-    const ReachableDomainCertificate2 reversed_certificate =
-        build_reachable_certificate(reversed_reachable, true);
-    require(
-        certificate.source_curve_records
-                == rotated_certificate.source_curve_records
-            && certificate.source_curve_records
-                == reversed_certificate.source_curve_records
-            && certificate.selected_cell_records
-                == rotated_certificate.selected_cell_records
-            && certificate.selected_cell_records
-                == reversed_certificate.selected_cell_records
-            && certificate.component_records
-                == rotated_certificate.component_records
-            && certificate.component_records
-                == reversed_certificate.component_records,
-        "canonical ring variants changed structural certificate");
-
-    ReachableArrangement2 missing_source =
-        build_reachable_arrangement(rectangle_input());
-    missing_source.source_records.pop_back();
-    try {
-        static_cast<void>(
-            build_reachable_certificate(missing_source, true));
-        throw std::runtime_error(
-            "certificate accepted an unbound source piece");
-    }
-    catch (const ReachableArrangementTopologyError&) {
-    }
-
-    std::cout
-        << "task3-certificate"
-        << " sources=" << certificate.source_curve_records.size()
-        << " vertices=" << rectangle.arrangement.number_of_vertices()
-        << " cells=" << certificate.selected_cell_records.size()
-        << " adjacencies=" << adjacencies.size()
-        << " components=" << certificate.component_records.size()
-        << " boundary-cycles=" << boundary_cycles.size()
-        << " cycle-elements=" << rectangle.audit.cycle_element_count
-        << " cycle-comparisons="
-        << rectangle.audit.cycle_rotation_comparisons
-        << " max-source-bytes=" << max_source_record_bytes
-        << '\n';
-}
 } // namespace
 
 int main()
@@ -994,6 +648,5 @@ int main()
     identical_boundary_parity_gate();
     disconnected_domain_gate();
     canonical_input_bypass_gate();
-    selected_adjacency_certificate_gate();
-    certificate_gate();
+    task3_certificate_gate();
 }
