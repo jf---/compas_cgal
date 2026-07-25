@@ -22,6 +22,7 @@ from compas_cgal.adaptive.identity import IncidentSupport
 from compas_cgal.adaptive.identity import IncidentSupportIdV1
 from compas_cgal.adaptive.identity import InputRingVertexIdV1
 from compas_cgal.adaptive.identity import IntersectionBoundaryVertexIdV1
+from compas_cgal.adaptive.identity import MultiIncidenceIntersectionBoundaryVertexIdV1
 from compas_cgal.adaptive.identity import NativeSourceTreeDigest
 from compas_cgal.adaptive.identity import ParameterSeamBoundaryVertexIdV1
 from compas_cgal.adaptive.identity import SourceRevision
@@ -323,6 +324,58 @@ def test_parameter_seam_vertex_rejects_non_seam_incidences() -> None:
         ParameterSeamBoundaryVertexIdV1.build(
             incident_supports=(first, same_orientation),
             seam_ordinal=0,
+        )
+
+
+def test_multi_incidence_intersection_preserves_every_orientation() -> None:
+    first_support = _line_support(0, 1, 0)
+    second_support = _line_support(1, 0, 0)
+    incidents = tuple(
+        IncidentSupport.build(
+            support_id=support,
+            trim_incidence_orientation=orientation,
+        )
+        for support in (first_support, second_support)
+        for orientation in (
+            TrimIncidenceOrientation.ENTERING,
+            TrimIncidenceOrientation.LEAVING,
+        )
+    )
+
+    forward = MultiIncidenceIntersectionBoundaryVertexIdV1.build(
+        incident_supports=incidents,
+        intersection_ordinal=0,
+    )
+    reverse = MultiIncidenceIntersectionBoundaryVertexIdV1.build(
+        incident_supports=reversed(incidents),
+        intersection_ordinal=0,
+    )
+    boundary_vertex: BoundaryVertexIdV1 = forward
+
+    assert forward == reverse
+    assert len(boundary_vertex.incident_supports) == 4
+
+
+def test_multi_incidence_intersection_requires_repeated_support() -> None:
+    incidents = (
+        IncidentSupport.build(
+            support_id=_line_support(0, 1, 0),
+            trim_incidence_orientation=TrimIncidenceOrientation.ENTERING,
+        ),
+        IncidentSupport.build(
+            support_id=_line_support(1, 0, 0),
+            trim_incidence_orientation=TrimIncidenceOrientation.LEAVING,
+        ),
+        IncidentSupport.build(
+            support_id=_line_support(1, 1, 0),
+            trim_incidence_orientation=TrimIncidenceOrientation.ENTERING,
+        ),
+    )
+
+    with pytest.raises(InvalidBoundaryVertexIdentityError, match="repeated support"):
+        MultiIncidenceIntersectionBoundaryVertexIdV1.build(
+            incident_supports=incidents,
+            intersection_ordinal=0,
         )
 
 

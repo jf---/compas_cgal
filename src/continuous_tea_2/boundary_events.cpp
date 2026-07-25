@@ -433,16 +433,23 @@ std::vector<VertexState> build_vertices(
             }
         }
         if (support_ids_at_vertex.size() >= 2) {
+            const bool has_repeated_support =
+                all_incident_records.size()
+                != support_ids_at_vertex.size();
             vertices[index].vertex_id = ccan_tagged(
                 "boundary-vertex-id-v1",
                 ccan_tagged(
-                    "support-intersection-v1",
+                    has_repeated_support
+                        ? "multi-incidence-intersection-v1"
+                        : "support-intersection-v1",
                     ccan_map(
                         {
                             {
                                 "incident-supports",
                                 ccan_sequence(
-                                    incident_records),
+                                    has_repeated_support
+                                        ? all_incident_records
+                                        : incident_records),
                             },
                             {
                                 "intersection-ordinal",
