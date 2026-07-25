@@ -212,6 +212,29 @@ def _validate_arrangement_vertex_records(
     return set(records)
 
 
+def _minimal_rotation_index(values: tuple[bytes, ...]) -> int:
+    size = len(values)
+    left = 0
+    right = 1
+    offset = 0
+    while left < size and right < size and offset < size:
+        left_value = values[(left + offset) % size]
+        right_value = values[(right + offset) % size]
+        if left_value == right_value:
+            offset += 1
+            continue
+        if left_value > right_value:
+            left += offset + 1
+            if left == right:
+                left += 1
+        else:
+            right += offset + 1
+            if left == right:
+                right += 1
+        offset = 0
+    return min(left, right)
+
+
 def _validate_boundary_cycle(
     record: bytes,
     *,
@@ -228,8 +251,7 @@ def _validate_boundary_cycle(
     elements = _record_fields(fields[1], b"cycle-elements-v1", f"{name} elements")
     if not elements:
         raise InvalidReachableDomainCertificateError(f"{name} must contain exact cycle elements.")
-    rotations = tuple(elements[index:] + elements[:index] for index in range(len(elements)))
-    if elements != min(rotations):
+    if _minimal_rotation_index(elements) != 0:
         raise InvalidReachableDomainCertificateError(f"{name} does not use canonical rotation.")
 
     endpoints: list[tuple[bytes, bytes]] = []
