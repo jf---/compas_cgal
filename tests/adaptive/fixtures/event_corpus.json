@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {"id": "coincident-tool-rim", "kind": "overlap"},
+    {"id": "dyadic-one-sided-offset", "kind": "counterexample"},
+    {"id": "near-coincident-equal-circles", "kind": "counterexample"},
+    {"id": "external-internal-tangencies", "kind": "tangent"},
+    {"id": "line-circle-regularization-vertex", "kind": "vertex"},
+    {"id": "circle-circle-regularization-vertex", "kind": "vertex"},
+    {"id": "positive-length-support-overlap", "kind": "overlap"},
+    {"id": "two-disk-run-merge-split", "kind": "vertex"},
+    {"id": "slotted-gap-merge", "kind": "vertex"},
+    {"id": "three-simultaneous-intersections", "kind": "vertex"},
+    {"id": "segment-full-circle-parameter-seams", "kind": "seam"},
+    {"id": "quadratic-circle-circle-stable-vertex", "kind": "vertex"}
+  ]
+}

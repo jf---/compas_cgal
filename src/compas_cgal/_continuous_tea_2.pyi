@@ -1,0 +1,64 @@
+from collections.abc import Sequence
+from typing import Literal
+from typing import TypeAlias
+
+from compas_cgal._stock_2 import Stock2
+
+BoundaryEventKind: TypeAlias = Literal[
+    "transverse",
+    "tangent",
+    "vertex",
+    "overlap",
+    "seam",
+]
+
+BOUNDARY_EVENT_KINDS: tuple[BoundaryEventKind, ...]
+
+
+class ContinuousTeaVerdict:
+    CERTIFIED: ContinuousTeaVerdict
+    CAP_EXCEEDED: ContinuousTeaVerdict
+    UNRESOLVED_DEGENERACY: ContinuousTeaVerdict
+    @property
+    def name(self) -> str: ...
+
+
+class BoundaryFeatureRecord2:
+    @property
+    def support_kind(self) -> Literal["line", "circle"]: ...
+    @property
+    def support_coefficients(self) -> Sequence[bytes]: ...
+    @property
+    def source_exact(self) -> bytes: ...
+    @property
+    def target_exact(self) -> bytes: ...
+    @property
+    def source_vertex_id(self) -> bytes: ...
+    @property
+    def target_vertex_id(self) -> bytes: ...
+    @property
+    def material_side(self) -> Literal["left"]: ...
+    @property
+    def trim_predicate(self) -> bytes: ...
+    @property
+    def feature_id(self) -> bytes: ...
+
+
+class BoundaryEvent2:
+    kind: BoundaryEventKind
+    @property
+    def first_feature_id(self) -> bytes: ...
+    @property
+    def second_feature_id(self) -> bytes: ...
+    @property
+    def vertex_id(self) -> bytes: ...
+    multiplicity: int
+
+
+def extract_boundary_records(stock: Stock2) -> Sequence[BoundaryFeatureRecord2]: ...
+def classify_boundary_pair(
+    stock: Stock2,
+    first_index: int,
+    second_index: int,
+) -> Sequence[BoundaryEvent2]: ...
+def extract_boundary_events(stock: Stock2) -> Sequence[BoundaryEvent2]: ...
