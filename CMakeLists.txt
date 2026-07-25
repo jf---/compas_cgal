@@ -203,6 +203,8 @@ add_library(coverage_exact_core STATIC
     src/reachable_input_2.cpp
     src/reachable_arrangement_2.cpp
     src/reachable_certificate_2.cpp
+    src/reachable_domain_2.cpp
+    src/coverage_2.cpp
 )
 set_target_properties(coverage_exact_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_compile_definitions(coverage_exact_core PRIVATE CGAL_USE_CORE=1)
@@ -236,6 +238,9 @@ add_nanobind_module(_subdivision src/subdivision.cpp)
 add_nanobind_module(_polylines src/polylines.cpp)
 add_nanobind_module(_toolpath src/toolpath.cpp)
 add_nanobind_module(_stock_2 "src/stock_2.cpp;src/exact_depletion_2.cpp;src/engagement_2.cpp")
+add_nanobind_module(_coverage_2 src/coverage_bindings_2.cpp)
+target_link_libraries(_coverage_2 PRIVATE coverage_exact_core)
+target_compile_definitions(_coverage_2 PRIVATE CGAL_USE_CORE=1)
 
 add_nanobind_module(_geodesics src/geodesics.cpp)
 add_nanobind_module(_isolines src/isolines.cpp)

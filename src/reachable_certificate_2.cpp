@@ -793,6 +793,24 @@ ReachableDomainCertificate2 build_reachable_certificate(
             source_contracts);
     const ReachVertexRecordMap2 vertex_records =
         build_vertex_records(reachable.arrangement);
+    std::vector<std::string> arrangement_vertex_records;
+    arrangement_vertex_records.reserve(vertex_records.size());
+    for (const auto& [point, record] : vertex_records) {
+        static_cast<void>(point);
+        arrangement_vertex_records.push_back(record);
+    }
+    std::sort(
+        arrangement_vertex_records.begin(),
+        arrangement_vertex_records.end());
+    if (arrangement_vertex_records.size()
+            != reachable.arrangement.number_of_vertices()
+        || std::adjacent_find(
+               arrangement_vertex_records.begin(),
+               arrangement_vertex_records.end())
+            != arrangement_vertex_records.end()) {
+        throw ReachableArrangementTopologyError(
+            "certificate vertex records are incomplete or nonunique");
+    }
 
     std::vector<std::string> selected_cell_records;
     selected_cell_records.reserve(
@@ -896,6 +914,7 @@ ReachableDomainCertificate2 build_reachable_certificate(
     return {
         std::string(REACHABLE_STRATEGY_VERSION),
         reachable.source_records,
+        std::move(arrangement_vertex_records),
         std::move(selected_cell_records),
         std::move(component_records),
         exact_cell_selection(reachable),
