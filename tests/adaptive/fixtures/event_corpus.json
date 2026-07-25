@@ -1,17 +1,75 @@
 {
   "schema_version": 1,
   "cases": [
-    {"id": "coincident-tool-rim", "kind": "overlap"},
-    {"id": "dyadic-one-sided-offset", "kind": "counterexample"},
-    {"id": "near-coincident-equal-circles", "kind": "counterexample"},
-    {"id": "external-internal-tangencies", "kind": "tangent"},
-    {"id": "line-circle-regularization-vertex", "kind": "vertex"},
-    {"id": "circle-circle-regularization-vertex", "kind": "vertex"},
-    {"id": "positive-length-support-overlap", "kind": "overlap"},
-    {"id": "two-disk-run-merge-split", "kind": "vertex"},
-    {"id": "slotted-gap-merge", "kind": "vertex"},
-    {"id": "three-simultaneous-intersections", "kind": "vertex"},
-    {"id": "segment-full-circle-parameter-seams", "kind": "seam"},
-    {"id": "quadratic-circle-circle-stable-vertex", "kind": "vertex"}
+    {
+      "id": "coincident-tool-rim",
+      "kind": "overlap",
+      "geometry": {"stock": [0, 0, 10, 10], "disk": [5, 5, 1], "probe": [5, 5, 1]}
+    },
+    {
+      "id": "dyadic-one-sided-offset",
+      "kind": "counterexample",
+      "geometry": {"stock": [0, 0, 10, 10], "disk": [5, 5, 1], "offset_exponents": [8, 12, 16, 20]}
+    },
+    {
+      "id": "near-coincident-equal-circles",
+      "kind": "counterexample",
+      "geometry": {"radius": 1, "center_separation": 9.5367431640625e-7, "endpoint_rotation": 1.5707963267948966}
+    },
+    {
+      "id": "external-internal-tangencies",
+      "kind": "tangent",
+      "geometry": {
+        "stock": [0, 0, 10, 10],
+        "external_disks": [[4, 5, 1], [6, 5, 1]],
+        "internal_disk": [5, 1, 1]
+      }
+    },
+    {
+      "id": "line-circle-regularization-vertex",
+      "kind": "vertex",
+      "geometry": {"stock": [0, 0, 10, 10], "disk": [5, 0, 1]}
+    },
+    {
+      "id": "circle-circle-regularization-vertex",
+      "kind": "vertex",
+      "geometry": {"stock": [0, 0, 10, 10], "disks": [[4.5, 5, 1], [5.5, 5, 1]]}
+    },
+    {
+      "id": "positive-length-support-overlap",
+      "kind": "overlap",
+      "geometry": {"stock": [0, 0, 10, 10], "disk": [5, 5, 1], "pair": "same-feature"}
+    },
+    {
+      "id": "two-disk-run-merge-split",
+      "kind": "vertex",
+      "geometry": {"stock": [0, 0, 10, 10], "disks": [[4.5, 5, 1], [5.5, 5, 1]]}
+    },
+    {
+      "id": "slotted-gap-merge",
+      "kind": "counterexample",
+      "geometry": {
+        "stock": [0, 0, 10, 5],
+        "capsule": [5, 4.3, 5, 4.53, 0.05],
+        "probe_y": 5,
+        "probe_radius": 0.5,
+        "probe_x": [4.7, 4.705, 4.71, 4.715, 4.72, 4.725]
+      }
+    },
+    {
+      "id": "three-simultaneous-intersections",
+      "kind": "vertex",
+      "geometry": {"stock": [0, 0, 10, 10], "tangent_disks": [[4, 5, 1], [6, 5, 1]], "minimum_pair_events": 3}
+    },
+    {
+      "id": "segment-full-circle-parameter-seams",
+      "kind": "seam",
+      "geometry": {"stock": [0, 0, 10, 10], "disk": [5, 5, 1]}
+    },
+    {
+      "id": "quadratic-circle-circle-stable-vertex",
+      "kind": "vertex",
+      "geometry": {"stock": [0, 0, 10, 10], "disks": [[4.5, 5, 1], [5.5, 5, 1]]}
+    }
   ]
 }

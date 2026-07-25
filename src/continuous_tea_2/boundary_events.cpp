@@ -1,4 +1,5 @@
 #include "boundary_events.h"
+#include "result.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -10,17 +11,19 @@
 #include <utility>
 #include <variant>
 
+#include <boost/multiprecision/cpp_int.hpp>
 #include <CGAL/number_utils.h>
 
 namespace {
 
 using IntersectionPoint = std::pair<GpsPoint, unsigned int>;
 using IntersectionResult = std::variant<IntersectionPoint, GpsXCurve>;
+using BigInt = boost::multiprecision::cpp_int;
 
 struct VertexState {
     GpsPoint point;
     std::string exact_record;
-    std::vector<std::string> incidents;
+    std::vector<std::pair<std::string, std::string>> incidents;
     std::string vertex_id;
 };
 
@@ -48,6 +51,102 @@ std::string tagged_record(
         result += field;
     }
     return result;
+}
+
+std::string ccan_node(char kind, const std::string& payload)
+{
+    std::string result("CCAN\0\1", 6);
+    result.push_back(kind);
+    result += u64_record(payload.size());
+    result += payload;
+    return result;
+}
+
+std::string ccan_bytes(const std::string& value)
+{
+    return ccan_node('B', value);
+}
+
+std::string ccan_integer(const BigInt& value)
+{
+    BigInt magnitude = value < 0 ? -value : value;
+    std::vector<unsigned char> bytes;
+    if (magnitude != 0) {
+        export_bits(
+            magnitude,
+            std::back_inserter(bytes),
+            8,
+            true);
+    }
+    std::string payload(
+        1,
+        value < 0
+            ? static_cast<char>(1)
+            : static_cast<char>(0));
+    payload.append(
+        reinterpret_cast<const char*>(bytes.data()),
+        bytes.size());
+    return ccan_node('I', payload);
+}
+
+std::string ccan_sequence(
+    const std::vector<std::string>& values)
+{
+    std::string payload = u64_record(values.size());
+    for (const std::string& value : values) {
+        payload += ccan_bytes(value);
+    }
+    return ccan_node('S', payload);
+}
+
+std::string ccan_tagged(
+    const std::string& tag,
+    const std::string& payload)
+{
+    return ccan_node(
+        'T',
+        ccan_bytes(tag) + ccan_bytes(payload));
+}
+
+std::string ccan_map(
+    std::vector<std::pair<std::string, std::string>> fields)
+{
+    std::vector<std::pair<std::string, std::string>> encoded;
+    encoded.reserve(fields.size());
+    for (const auto& [key, value] : fields) {
+        encoded.emplace_back(
+            ccan_bytes(key),
+            ccan_bytes(value));
+    }
+    std::sort(encoded.begin(), encoded.end());
+    std::string payload = u64_record(encoded.size());
+    for (const auto& [key, value] : encoded) {
+        payload += key;
+        payload += value;
+    }
+    return ccan_node('M', payload);
+}
+
+BigInt greatest_common_divisor(BigInt left, BigInt right)
+{
+    left = left < 0 ? -left : left;
+    right = right < 0 ? -right : right;
+    while (right != 0) {
+        const BigInt remainder = left % right;
+        left = right;
+        right = remainder;
+    }
+    return left;
+}
+
+std::pair<BigInt, BigInt> exact_fraction(
+    const Epeck::FT& value)
+{
+    const auto& exact = CGAL::exact(value);
+    return {
+        boost::multiprecision::numerator(exact),
+        boost::multiprecision::denominator(exact),
+    };
 }
 
 std::string exact_rational_record(const Epeck::FT& value)
@@ -85,27 +184,21 @@ bool point_equal(const GpsPoint& left, const GpsPoint& right)
         == CGAL::EQUAL;
 }
 
-std::vector<std::string> normalized_support_coefficients(
-    const GpsXCurve& curve)
+struct SupportState {
+    std::string kind;
+    std::vector<std::string> exact_coefficients;
+    std::vector<std::string> primitive_coefficients;
+    std::string support_id;
+};
+
+SupportState support_state(const GpsXCurve& curve)
 {
     std::vector<Epeck::FT> coefficients;
+    const std::string kind =
+        curve.is_linear() ? "line" : "circle";
     if (curve.is_linear()) {
         const Epeck::Line_2 line = curve.supporting_line();
         coefficients = {line.a(), line.b(), line.c()};
-        const auto pivot = std::find_if(
-            coefficients.begin(),
-            coefficients.end(),
-            [](const Epeck::FT& value) {
-                return CGAL::sign(value) != CGAL::ZERO;
-            });
-        if (pivot == coefficients.end()) {
-            throw std::runtime_error(
-                "boundary line support has zero coefficients");
-        }
-        const Epeck::FT scale = *pivot;
-        for (Epeck::FT& coefficient : coefficients) {
-            coefficient /= scale;
-        }
     } else {
         const Epeck::Circle_2 circle = curve.supporting_circle();
         coefficients = {
@@ -117,24 +210,84 @@ std::vector<std::string> normalized_support_coefficients(
                 - circle.squared_radius(),
         };
     }
-    std::vector<std::string> records;
-    records.reserve(coefficients.size());
+    std::vector<std::string> exact_records;
+    exact_records.reserve(coefficients.size());
+    std::vector<std::pair<BigInt, BigInt>> fractions;
+    fractions.reserve(coefficients.size());
+    BigInt denominator_lcm = 1;
     for (const Epeck::FT& coefficient : coefficients) {
-        records.push_back(exact_rational_record(coefficient));
+        exact_records.push_back(
+            exact_rational_record(coefficient));
+        const auto fraction = exact_fraction(coefficient);
+        fractions.push_back(fraction);
+        denominator_lcm =
+            denominator_lcm
+            / greatest_common_divisor(
+                denominator_lcm,
+                fraction.second)
+            * fraction.second;
     }
-    return records;
-}
-
-std::string support_record(
-    const std::string& kind,
-    const std::vector<std::string>& coefficients)
-{
-    std::vector<std::string> fields{kind};
-    fields.insert(
-        fields.end(),
-        coefficients.begin(),
-        coefficients.end());
-    return tagged_record("incident-support-id-v1", fields);
+    std::vector<BigInt> primitive;
+    primitive.reserve(fractions.size());
+    BigInt common_factor = 0;
+    for (const auto& [numerator, denominator] : fractions) {
+        primitive.push_back(
+            numerator * (denominator_lcm / denominator));
+        common_factor = greatest_common_divisor(
+            common_factor,
+            primitive.back());
+    }
+    if (common_factor == 0) {
+        throw BoundaryExtractionError(
+            "boundary support has zero coefficients");
+    }
+    for (BigInt& coefficient : primitive) {
+        coefficient /= common_factor;
+    }
+    const auto first_nonzero = std::find_if(
+        primitive.begin(),
+        primitive.end(),
+        [](const BigInt& value) {
+            return value != 0;
+        });
+    if (*first_nonzero < 0) {
+        for (BigInt& coefficient : primitive) {
+            coefficient = -coefficient;
+        }
+    }
+    std::vector<std::string> primitive_text;
+    std::vector<std::string> encoded_integers;
+    primitive_text.reserve(primitive.size());
+    encoded_integers.reserve(primitive.size());
+    for (const BigInt& coefficient : primitive) {
+        primitive_text.push_back(
+            coefficient.convert_to<std::string>());
+        encoded_integers.push_back(
+            ccan_integer(coefficient));
+    }
+    const std::string support_id = ccan_tagged(
+        "incident-support-id-v1",
+        ccan_map(
+            {
+                {
+                    "coefficients",
+                    ccan_sequence(encoded_integers),
+                },
+                {
+                    "kind",
+                    ccan_tagged(
+                        curve.is_linear()
+                            ? "line-support-v1"
+                            : "circle-support-v1",
+                        {}),
+                },
+            }));
+    return {
+        kind,
+        std::move(exact_records),
+        std::move(primitive_text),
+        support_id,
+    };
 }
 
 void append_polygon_curves(
@@ -177,11 +330,29 @@ std::size_t find_vertex(
             return point_equal(vertex.point, point);
         });
     if (found == vertices.end()) {
-        throw std::runtime_error(
+        throw BoundaryExtractionError(
             "boundary endpoint is absent from vertex state");
     }
     return static_cast<std::size_t>(
         std::distance(vertices.begin(), found));
+}
+
+std::string incident_record(
+    const std::string& support_id,
+    std::string_view orientation_tag)
+{
+    return ccan_tagged(
+        "incident-support-v1",
+        ccan_map(
+            {
+                {
+                    "orientation",
+                    ccan_tagged(
+                        std::string(orientation_tag),
+                        {}),
+                },
+                {"support-id", support_id},
+            }));
 }
 
 std::vector<VertexState> build_vertices(
@@ -190,8 +361,15 @@ std::vector<VertexState> build_vertices(
 {
     std::vector<VertexState> vertices;
     for (std::size_t index = 0; index < curves.size(); ++index) {
-        for (const GpsPoint& point :
-             {curves[index].source(), curves[index].target()}) {
+        for (const auto& [point, orientation] :
+             {
+                 std::pair{
+                     curves[index].source(),
+                     std::string_view("trim-leaving-v1")},
+                 std::pair{
+                     curves[index].target(),
+                     std::string_view("trim-entering-v1")},
+             }) {
             auto found = std::find_if(
                 vertices.begin(),
                 vertices.end(),
@@ -203,17 +381,16 @@ std::vector<VertexState> build_vertices(
                     {point, exact_point_record(point), {}, {}});
                 found = std::prev(vertices.end());
             }
-            found->incidents.push_back(support_ids[index]);
+            found->incidents.emplace_back(
+                support_ids[index],
+                incident_record(
+                    support_ids[index],
+                    orientation));
         }
     }
     for (VertexState& vertex : vertices) {
         std::sort(
             vertex.incidents.begin(),
-            vertex.incidents.end());
-        vertex.incidents.erase(
-            std::unique(
-                vertex.incidents.begin(),
-                vertex.incidents.end()),
             vertex.incidents.end());
     }
     std::sort(
@@ -227,24 +404,64 @@ std::vector<VertexState> build_vertices(
         });
     for (std::size_t index = 0; index < vertices.size(); ++index) {
         std::size_t ordinal = 0;
+        std::vector<std::string> support_ids_at_vertex;
+        std::vector<std::string> incident_records;
+        for (const auto& [support_id, incident] :
+             vertices[index].incidents) {
+            if (support_ids_at_vertex.empty()
+                || support_ids_at_vertex.back() != support_id) {
+                support_ids_at_vertex.push_back(support_id);
+                incident_records.push_back(incident);
+            }
+        }
         for (std::size_t previous = 0;
              previous < index;
              ++previous) {
-            if (vertices[previous].incidents
-                == vertices[index].incidents) {
+            std::vector<std::string> previous_supports;
+            for (const auto& [support_id, incident] :
+                 vertices[previous].incidents) {
+                static_cast<void>(incident);
+                if (previous_supports.empty()
+                    || previous_supports.back() != support_id) {
+                    previous_supports.push_back(support_id);
+                }
+            }
+            if (previous_supports == support_ids_at_vertex) {
                 ++ordinal;
             }
         }
-        std::vector<std::string> fields =
-            vertices[index].incidents;
-        fields.push_back(u64_record(ordinal));
-        vertices[index].vertex_id = tagged_record(
-            "boundary-vertex-id-v1",
-            {
-                tagged_record(
+        if (support_ids_at_vertex.size() >= 2) {
+            vertices[index].vertex_id = ccan_tagged(
+                "boundary-vertex-id-v1",
+                ccan_tagged(
                     "support-intersection-v1",
-                    fields),
-            });
+                    ccan_map(
+                        {
+                            {
+                                "incident-supports",
+                                ccan_sequence(
+                                    incident_records),
+                            },
+                            {
+                                "intersection-ordinal",
+                                ccan_integer(ordinal),
+                            },
+                        })));
+        } else {
+            vertices[index].vertex_id = ccan_tagged(
+                "boundary-trim-seam-v1",
+                ccan_map(
+                    {
+                        {
+                            "seam-ordinal",
+                            ccan_integer(ordinal),
+                        },
+                        {
+                            "support-id",
+                            support_ids_at_vertex.front(),
+                        },
+                    }));
+        }
     }
     return vertices;
 }
@@ -252,17 +469,14 @@ std::vector<VertexState> build_vertices(
 std::vector<BoundaryFeatureRecord2> records_from_curves(
     const std::vector<GpsXCurve>& curves)
 {
-    std::vector<std::vector<std::string>> coefficients;
+    std::vector<SupportState> supports;
     std::vector<std::string> support_ids;
-    coefficients.reserve(curves.size());
+    supports.reserve(curves.size());
     support_ids.reserve(curves.size());
     for (const GpsXCurve& curve : curves) {
-        coefficients.push_back(
-            normalized_support_coefficients(curve));
+        supports.push_back(support_state(curve));
         support_ids.push_back(
-            support_record(
-                curve.is_linear() ? "line" : "circle",
-                coefficients.back()));
+            supports.back().support_id);
     }
     const std::vector<VertexState> vertices =
         build_vertices(curves, support_ids);
@@ -283,20 +497,37 @@ std::vector<BoundaryFeatureRecord2> records_from_curves(
                     ? "directed-right"
                     : "directed-left",
             });
-        const std::string feature_id = tagged_record(
+        std::size_t overlap_multiplicity = 0;
+        for (const GpsXCurve& candidate : curves) {
+            if (curve.equals(candidate)) {
+                ++overlap_multiplicity;
+            }
+        }
+        const std::string feature_id = ccan_tagged(
             "boundary-feature-id-v1",
-            {
-                support_ids[index],
-                source.vertex_id,
-                target.vertex_id,
-                "material-left",
-                u64_record(1),
-            });
+            ccan_map(
+                {
+                    {
+                        "material-side",
+                        ccan_tagged(
+                            "material-side-inside-v1",
+                            {}),
+                    },
+                    {
+                        "overlap-multiplicity",
+                        ccan_integer(
+                            overlap_multiplicity),
+                    },
+                    {"source-vertex", source.vertex_id},
+                    {"support-id", support_ids[index]},
+                    {"target-vertex", target.vertex_id},
+                }));
         records.push_back(
             {
                 curve,
-                curve.is_linear() ? "line" : "circle",
-                coefficients[index],
+                supports[index].kind,
+                supports[index].exact_coefficients,
+                supports[index].primitive_coefficients,
                 support_ids[index],
                 source.exact_record,
                 target.exact_record,
@@ -305,6 +536,7 @@ std::vector<BoundaryFeatureRecord2> records_from_curves(
                 "left",
                 trim,
                 feature_id,
+                overlap_multiplicity,
             });
     }
     std::sort(
@@ -353,7 +585,7 @@ std::string point_vertex_id(
             return point_equal(candidate, point);
         });
     if (found == points.end()) {
-        throw std::runtime_error(
+        throw BoundaryExtractionError(
             "intersection point is absent from exact pair results");
     }
     std::vector<std::string> incidents{
@@ -361,19 +593,21 @@ std::string point_vertex_id(
         second.support_id,
     };
     std::sort(incidents.begin(), incidents.end());
-    return tagged_record(
-        "boundary-vertex-id-v1",
-        {
-            tagged_record(
-                "support-intersection-v1",
+    return ccan_tagged(
+        "boundary-event-intersection-v1",
+        ccan_map(
+            {
                 {
-                    incidents[0],
-                    incidents[1],
-                    u64_record(
+                    "intersection-ordinal",
+                    ccan_integer(
                         static_cast<std::size_t>(
                             std::distance(points.begin(), found))),
-                }),
-        });
+                },
+                {
+                    "support-ids",
+                    ccan_sequence(incidents),
+                },
+            }));
 }
 
 std::vector<BoundaryEvent2> classify_pair(
@@ -387,9 +621,42 @@ std::vector<BoundaryEvent2> classify_pair(
         second.curve,
         std::back_inserter(intersections));
     std::vector<BoundaryEvent2> events;
+    const unsigned int overlap_multiplicity =
+        static_cast<unsigned int>(
+            std::count_if(
+                intersections.begin(),
+                intersections.end(),
+                [](const IntersectionResult& result) {
+                    return std::holds_alternative<GpsXCurve>(
+                        result);
+                }));
     for (const IntersectionResult& intersection :
          intersections) {
-        if (std::holds_alternative<GpsXCurve>(intersection)) {
+        if (const auto* overlap =
+                std::get_if<GpsXCurve>(&intersection)) {
+            const std::string overlap_record = ccan_tagged(
+                "exact-boundary-overlap-v1",
+                ccan_map(
+                    {
+                        {
+                            "first-support",
+                            first.support_id,
+                        },
+                        {
+                            "second-support",
+                            second.support_id,
+                        },
+                        {
+                            "source",
+                            exact_point_record(
+                                overlap->source()),
+                        },
+                        {
+                            "target",
+                            exact_point_record(
+                                overlap->target()),
+                        },
+                    }));
             events.push_back(
                 {
                     "overlap",
@@ -400,7 +667,8 @@ std::vector<BoundaryEvent2> classify_pair(
                         first.feature_id,
                         second.feature_id),
                     {},
-                    0,
+                    overlap_record,
+                    overlap_multiplicity,
                 });
             continue;
         }
@@ -411,12 +679,17 @@ std::vector<BoundaryEvent2> classify_pair(
             || point_equal(hit.first, first.curve.target())
             || point_equal(hit.first, second.curve.source())
             || point_equal(hit.first, second.curve.target());
+        const bool support_seam =
+            endpoint
+            && first.support_id == second.support_id;
         events.push_back(
             {
-                endpoint
-                    ? "vertex"
+                support_seam
+                    ? "seam"
                     : hit.second > 1
                     ? "tangent"
+                    : endpoint
+                    ? "vertex"
                     : "transverse",
                 std::min(
                     first.feature_id,
@@ -429,6 +702,7 @@ std::vector<BoundaryEvent2> classify_pair(
                     first,
                     second,
                     intersections),
+                {},
                 hit.second,
             });
     }
@@ -440,13 +714,17 @@ std::vector<BoundaryEvent2> classify_pair(
             return std::tie(
                        left.kind,
                        left.vertex_id,
+                       left.exact_overlap_record,
                        left.first_feature_id,
-                       left.second_feature_id)
+                       left.second_feature_id,
+                       left.multiplicity)
                 < std::tie(
                        right.kind,
                        right.vertex_id,
+                       right.exact_overlap_record,
                        right.first_feature_id,
-                       right.second_feature_id);
+                       right.second_feature_id,
+                       right.multiplicity);
         });
     return events;
 }
@@ -468,7 +746,7 @@ std::vector<BoundaryEvent2> classify_boundary_pair(
         extract_boundary_records(stock);
     if (first_index >= records.size()
         || second_index >= records.size()) {
-        throw std::out_of_range(
+        throw BoundaryFeatureIndexError(
             "boundary feature index is out of range");
     }
     return classify_pair(
@@ -506,13 +784,17 @@ std::vector<BoundaryEvent2> extract_boundary_events(
             return std::tie(
                        left.kind,
                        left.vertex_id,
+                       left.exact_overlap_record,
                        left.first_feature_id,
-                       left.second_feature_id)
+                       left.second_feature_id,
+                       left.multiplicity)
                 < std::tie(
                        right.kind,
                        right.vertex_id,
+                       right.exact_overlap_record,
                        right.first_feature_id,
-                       right.second_feature_id);
+                       right.second_feature_id,
+                       right.multiplicity);
         });
     events.erase(
         std::unique(
@@ -521,7 +803,15 @@ std::vector<BoundaryEvent2> extract_boundary_events(
             [](const BoundaryEvent2& left,
                const BoundaryEvent2& right) {
                 return left.kind == right.kind
-                    && left.vertex_id == right.vertex_id;
+                    && left.vertex_id == right.vertex_id
+                    && left.exact_overlap_record
+                        == right.exact_overlap_record
+                    && left.first_feature_id
+                        == right.first_feature_id
+                    && left.second_feature_id
+                        == right.second_feature_id
+                    && left.multiplicity
+                        == right.multiplicity;
             }),
         events.end());
     return events;

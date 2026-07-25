@@ -26,6 +26,14 @@ nb::list coefficient_bytes(
 
 NB_MODULE(_continuous_tea_2, m)
 {
+    nb::exception<BoundaryExtractionError> extraction_error(
+        m,
+        "BoundaryExtractionError");
+    nb::exception<BoundaryFeatureIndexError>(
+        m,
+        "BoundaryFeatureIndexError",
+        extraction_error.ptr());
+
     nb::enum_<ContinuousTeaVerdict>(
         m,
         "ContinuousTeaVerdict")
@@ -59,6 +67,14 @@ NB_MODULE(_continuous_tea_2, m)
             [](const BoundaryFeatureRecord2& record) {
                 return coefficient_bytes(
                     record.support_coefficients);
+            })
+        .def_ro(
+            "primitive_coefficients",
+            &BoundaryFeatureRecord2::primitive_coefficients)
+        .def_prop_ro(
+            "support_id",
+            [](const BoundaryFeatureRecord2& record) {
+                return as_bytes(record.support_id);
             })
         .def_prop_ro(
             "source_exact",
@@ -94,7 +110,10 @@ NB_MODULE(_continuous_tea_2, m)
             "feature_id",
             [](const BoundaryFeatureRecord2& record) {
                 return as_bytes(record.feature_id);
-            });
+            })
+        .def_ro(
+            "overlap_multiplicity",
+            &BoundaryFeatureRecord2::overlap_multiplicity);
 
     nb::class_<BoundaryEvent2>(m, "BoundaryEvent2")
         .def_ro("kind", &BoundaryEvent2::kind)
@@ -112,6 +131,12 @@ NB_MODULE(_continuous_tea_2, m)
             "vertex_id",
             [](const BoundaryEvent2& event) {
                 return as_bytes(event.vertex_id);
+            })
+        .def_prop_ro(
+            "exact_overlap_record",
+            [](const BoundaryEvent2& event) {
+                return as_bytes(
+                    event.exact_overlap_record);
             })
         .def_ro(
             "multiplicity",

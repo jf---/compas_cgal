@@ -10,6 +10,7 @@ struct BoundaryFeatureRecord2 {
     GpsXCurve curve;
     std::string support_kind;
     std::vector<std::string> support_coefficients;
+    std::vector<std::string> primitive_coefficients;
     std::string support_id;
     std::string source_exact;
     std::string target_exact;
@@ -18,6 +19,7 @@ struct BoundaryFeatureRecord2 {
     std::string material_side;
     std::string trim_predicate;
     std::string feature_id;
+    std::size_t overlap_multiplicity;
 };
 
 struct BoundaryEvent2 {
@@ -25,6 +27,7 @@ struct BoundaryEvent2 {
     std::string first_feature_id;
     std::string second_feature_id;
     std::string vertex_id;
+    std::string exact_overlap_record;
     unsigned int multiplicity;
 };
 
