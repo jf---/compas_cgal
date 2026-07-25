@@ -775,17 +775,6 @@ void classify_faces_by_primitive_parity(
     const ReachPrimitiveKinds2& primitive_kinds)
 {
     ReachableDomainBuildAudit2 audit;
-    classify_faces_by_primitive_parity(
-        arrangement,
-        primitive_kinds,
-        audit);
-}
-
-void classify_faces_by_primitive_parity(
-    ReachArrangement2& arrangement,
-    const ReachPrimitiveKinds2& primitive_kinds,
-    ReachableDomainBuildAudit2& audit)
-{
     const DenseArrangementIndex2 dense =
         compile_dense_arrangement(
             arrangement,

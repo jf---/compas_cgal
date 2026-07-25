@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace the rejected Task 3 spike with a one-pass exact reachable-domain and incremental coverage implementation whose structural operation counts satisfy the approved performance axiom.
+**Goal:** Replace the rejected Task 3 spike with a one-pass exact reachable-domain and incremental coverage implementation, complete the end-to-end pipeline, then use structural counts and bounded timing to decide any deeper indexing refactor.
 
 **Architecture:** One `Arr_curve_data_traits_2` arrangement carries primitive and source-piece provenance through exact splits and overlaps. Exact face parity selects every `C_r` cell; the same DCEL yields `C_r` geometry and certificate records. Immutable exact regions share storage, `M_r` uses one batched range union, and coverage advances by the exact induction `R_next = R_previous \ W`.
 
@@ -22,7 +22,7 @@
 - Native structural records contain no handles, pointer values, iteration order, rounded coordinates, or raw algebraic-number serialization.
 - Python owns the sole CCAN SHA-256 content identity.
 - One reachable owner constructs one provenance arrangement and one each of `D`, `C_r`, `M_r`, and `D \ M_r`.
-- Outside arrangement construction, every DCEL feature is visited `O(1)` times; no post-arrangement predicate scans all sources.
+- Outside arrangement construction, every DCEL feature is visited `O(1)` times; no post-arrangement predicate scans all sources. Pre-sized ephemeral hashes currently provide expected `O(k + z)` dense compilation and never determine serialized identity.
 - Canonical ring and cycle rotation is linear; ordinary record collections are sorted.
 - Read-only exact-region accessors and ledger clones share immutable geometry.
 - One coverage transition constructs one sweep, one accumulated union, and one residual difference.
@@ -32,7 +32,8 @@
 - Every pytest command includes `-n auto`. After changes, the focused GREEN command includes `--testmon` with a fresh `TESTMON_DATAFILE`.
 - Native algorithm gates and pytest commands run through Pixi.
 - Apply a hard 180-second external process-group watchdog to each isolated diagnostic and to the complete focused Task 3 pair. A timeout stops broader testing.
-- Do not profile unless all structural operation-count assertions pass and one bounded fixture remains slow.
+- Do not profile unless Tasks 3 through 5 are complete, all structural operation-count assertions pass, and one bounded end-to-end fixture remains slow.
+- Deterministic collision-independent indexing is deferred to the final post-Task5 measurement/refactor-decision gate; it is not a precondition for completing Tasks 3 through 5.
 - Run Ruff before every Python commit.
 - Author and committer for every commit: `Jelle Feringa <jelleferinga@gmail.com>`.
 
@@ -41,7 +42,8 @@
 - Create `src/exact_region_2.h/.cpp`: immutable shared exact-region storage and basic set predicates.
 - Create `src/exact_sweep_2.h/.cpp`: exact disk, capsule, arc-sweep, full-circle, and batched-union primitives.
 - Create `src/exact_build_audit_2.h`: native structural operation-count contracts.
-- Create `src/reachable_arrangement_2.h/.cpp`: canonical input, primitive labels, provenance arrangement, face parity, and selected topology.
+- Create `src/reachable_input_2.h/.cpp`: canonical input ownership and validation.
+- Create `src/reachable_arrangement_2.h/.cpp`: primitive labels, provenance arrangement, face parity, and selected topology.
 - Create `src/canonical_rotation_2.h`: shared linear minimal-rotation template.
 - Create `src/reachable_certificate_2.h/.cpp`: stable source, vertex, cell, component, and recipe records.
 - Modify `src/reachable_domain_2.h/.cpp`: public one-pass owner orchestration only.
@@ -345,6 +347,8 @@ git commit -m "feat(coverage): add exact core"
 
 **Files:**
 - Create: `src/canonical_rotation_2.h`
+- Create: `src/reachable_input_2.h`
+- Create: `src/reachable_input_2.cpp`
 - Create: `src/reachable_arrangement_2.h`
 - Create: `src/reachable_arrangement_2.cpp`
 - Create: `src/reachable_errors_2.h`
@@ -445,7 +449,7 @@ ReachableArrangement2 build_reachable_arrangement(
     CanonicalReachInput2 input);
 ```
 
-`reachable_arrangement_2.cpp` owns:
+`reachable_arrangement_2.cpp` exposes exactly:
 
 ```cpp
 void classify_faces_by_primitive_parity(
@@ -644,6 +648,7 @@ Expected: exit 0; one arrangement, one center extraction, zero rematches.
 ```bash
 git add CMakeLists.txt src/exact_build_audit_2.h \
   src/canonical_rotation_2.h \
+  src/reachable_input_2.h src/reachable_input_2.cpp \
   src/reachable_arrangement_2.h src/reachable_arrangement_2.cpp \
   src/reachable_errors_2.h tests/native/task3_algorithm_gate.cpp
 git commit -m "feat(coverage): build exact center cells"
@@ -1431,3 +1436,50 @@ Append the accepted commit range, native operation counts, focused test count
 and wall time, full baseline count and wall time, Ruff result, strict-mypy
 result, wheel result, native-lock result, and review verdict to this plan's SDD
 ledger. Do not edit the master resume file.
+
+---
+
+### Final post-Task5 measurement/refactor-decision gate
+
+This gate runs only after Tasks 3 through 5 produce the complete native and
+Python pipeline. It decides whether the current pre-sized ephemeral hash
+boundary needs deterministic collision-independent replacement.
+
+- [ ] **Step 1: Prove structural and exact contracts first**
+
+Under separate 180-second external process-group watchdogs, run the native
+algorithm gate and complete focused reachable-domain/coverage pair. Require:
+
+- one provenance arrangement;
+- one center-domain extraction;
+- zero source geometric rematches;
+- the established face, halfedge, label, parity, component, and boundary visit
+  bounds;
+- exact geometry and certificate assertions;
+- one sweep, accumulated union, and residual difference per transition.
+
+Do not time or profile a structurally failing path.
+
+- [ ] **Step 2: Record bounded end-to-end timing**
+
+With structural counts green, run the complete focused pair once in a fresh
+process under the standard 180-second watchdog. Record fixture count, pass
+count, process wall time, and whether containment was approached. Timing is
+decision evidence, not a correctness assertion.
+
+- [ ] **Step 3: Make the refactor decision**
+
+- If the focused end-to-end gate completes comfortably, retain the pre-sized
+  nonserialized hashes and proceed.
+- If counts pass but the bounded pipeline remains slow or reaches containment,
+  write one runtime hypothesis and profile one bounded fixture only.
+- Replace hashes with deterministic collision-independent indexing only if the
+  profile makes primitive/handle lookup material. Preserve the exact kernel,
+  one-arrangement/one-extraction/zero-rematch contracts, public signatures, and
+  stable serialized identities.
+- Rerun Steps 1 and 2 after any measured refactor and record before/after
+  structural counts and end-to-end timing.
+
+Every measurement or profiler process receives two to three minutes of
+external process-group containment; use 180 seconds unless a narrower
+120-second fixture budget is explicitly recorded.
