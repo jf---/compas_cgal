@@ -16,6 +16,8 @@ struct BoundaryFeatureRecord2 {
     std::string target_exact;
     std::string source_vertex_id;
     std::string target_vertex_id;
+    std::string source_incidence;
+    std::string target_incidence;
     std::string material_side;
     std::string trim_predicate;
     std::string feature_id;

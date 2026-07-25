@@ -538,6 +538,12 @@ std::vector<BoundaryFeatureRecord2> records_from_curves(
                 target.exact_record,
                 source.vertex_id,
                 target.vertex_id,
+                incident_record(
+                    support_ids[index],
+                    "trim-leaving-v1"),
+                incident_record(
+                    support_ids[index],
+                    "trim-entering-v1"),
                 "left",
                 trim,
                 feature_id,

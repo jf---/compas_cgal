@@ -23,6 +23,7 @@ from compas_cgal.adaptive.identity import IncidentSupportIdV1
 from compas_cgal.adaptive.identity import InputRingVertexIdV1
 from compas_cgal.adaptive.identity import IntersectionBoundaryVertexIdV1
 from compas_cgal.adaptive.identity import NativeSourceTreeDigest
+from compas_cgal.adaptive.identity import ParameterSeamBoundaryVertexIdV1
 from compas_cgal.adaptive.identity import SourceRevision
 from compas_cgal.adaptive.identity import StrategyVersion
 from compas_cgal.adaptive.identity import SupportKind
@@ -267,6 +268,61 @@ def test_intersection_boundary_vertex_rejects_duplicate_supports() -> None:
         IntersectionBoundaryVertexIdV1.build(
             incident_supports=(incidence, incidence),
             intersection_ordinal=0,
+        )
+
+
+def test_parameter_seam_vertex_preserves_both_oriented_incidences() -> None:
+    support = _line_support(0, 1, 0)
+    entering = IncidentSupport.build(
+        support_id=support,
+        trim_incidence_orientation=TrimIncidenceOrientation.ENTERING,
+    )
+    leaving = IncidentSupport.build(
+        support_id=support,
+        trim_incidence_orientation=TrimIncidenceOrientation.LEAVING,
+    )
+
+    forward = ParameterSeamBoundaryVertexIdV1.build(
+        incident_supports=(entering, leaving),
+        seam_ordinal=0,
+    )
+    reverse = ParameterSeamBoundaryVertexIdV1.build(
+        incident_supports=(leaving, entering),
+        seam_ordinal=0,
+    )
+    changed_ordinal = ParameterSeamBoundaryVertexIdV1.build(
+        incident_supports=(entering, leaving),
+        seam_ordinal=1,
+    )
+    boundary_vertex: BoundaryVertexIdV1 = forward
+
+    assert forward == reverse
+    assert boundary_vertex.canonical_bytes != changed_ordinal.canonical_bytes
+
+
+def test_parameter_seam_vertex_rejects_non_seam_incidences() -> None:
+    first = IncidentSupport.build(
+        support_id=_line_support(0, 1, 0),
+        trim_incidence_orientation=TrimIncidenceOrientation.ENTERING,
+    )
+    second_support = IncidentSupport.build(
+        support_id=_line_support(1, 0, 0),
+        trim_incidence_orientation=TrimIncidenceOrientation.LEAVING,
+    )
+    same_orientation = IncidentSupport.build(
+        support_id=first.support_id,
+        trim_incidence_orientation=TrimIncidenceOrientation.ENTERING,
+    )
+
+    with pytest.raises(InvalidBoundaryVertexIdentityError, match="same support"):
+        ParameterSeamBoundaryVertexIdV1.build(
+            incident_supports=(first, second_support),
+            seam_ordinal=0,
+        )
+    with pytest.raises(InvalidBoundaryVertexIdentityError, match="entering and leaving"):
+        ParameterSeamBoundaryVertexIdV1.build(
+            incident_supports=(first, same_orientation),
+            seam_ordinal=0,
         )
 
 

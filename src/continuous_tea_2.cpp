@@ -109,6 +109,16 @@ NB_MODULE(_continuous_tea_2, m)
                 return as_bytes(record.target_vertex_id);
             })
         .def_prop_ro(
+            "source_incidence",
+            [](const BoundaryFeatureRecord2& record) {
+                return as_bytes(record.source_incidence);
+            })
+        .def_prop_ro(
+            "target_incidence",
+            [](const BoundaryFeatureRecord2& record) {
+                return as_bytes(record.target_incidence);
+            })
+        .def_prop_ro(
             "material_side",
             [](const BoundaryFeatureRecord2& record) {
                 return record.material_side;
