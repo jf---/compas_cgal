@@ -6,6 +6,7 @@
 #include "continuous_tea_2/parameter_charts.h"
 #include "continuous_tea_2/partition_certificate.h"
 #include "continuous_tea_2/result.h"
+#include "continuous_tea_2/segment_source.h"
 #include "continuous_tea_2/sha256.h"
 #include "exact_algebraic_1.h"
 
@@ -130,6 +131,22 @@ NB_MODULE(_continuous_tea_2, m)
         m,
         "EventPartitionVerificationError",
         substrate_error.ptr());
+    nb::exception<NonFiniteSegmentInputError>(
+        m,
+        "NonFiniteSegmentInputError",
+        substrate_error.ptr());
+    nb::exception<ZeroLengthSegmentMotionError>(
+        m,
+        "ZeroLengthSegmentMotionError",
+        substrate_error.ptr());
+    nb::exception<NonPositiveToolRadiusError>(
+        m,
+        "NonPositiveToolRadiusError",
+        substrate_error.ptr());
+    nb::exception<InvalidCapChordRatioError>(
+        m,
+        "InvalidCapChordRatioError",
+        substrate_error.ptr());
 
     nb::enum_<ContinuousTeaVerdict>(
         m,
@@ -167,6 +184,74 @@ NB_MODULE(_continuous_tea_2, m)
             [](const AlgebraicBackendEvidence2& evidence) {
                 return string_tuple(
                     evidence.compile_definitions);
+            });
+
+    nb::class_<ExactBinary64Rational2>(
+        m,
+        "ExactBinary64Rational2")
+        .def_prop_ro(
+            "numerator",
+            &ExactBinary64Rational2::numerator)
+        .def_prop_ro(
+            "denominator",
+            &ExactBinary64Rational2::denominator)
+        .def_prop_ro(
+            "text",
+            &ExactBinary64Rational2::text);
+
+    nb::class_<SegmentEventSource2>(
+        m,
+        "SegmentEventSource2")
+        .def_static(
+            "from_binary64",
+            &SegmentEventSource2::from_binary64,
+            "x0"_a,
+            "y0"_a,
+            "x1"_a,
+            "y1"_a,
+            "tool_radius"_a,
+            "cap_chord_ratio"_a)
+        .def_prop_ro(
+            "x0",
+            &SegmentEventSource2::x0,
+            nb::rv_policy::reference_internal)
+        .def_prop_ro(
+            "y0",
+            &SegmentEventSource2::y0,
+            nb::rv_policy::reference_internal)
+        .def_prop_ro(
+            "x1",
+            &SegmentEventSource2::x1,
+            nb::rv_policy::reference_internal)
+        .def_prop_ro(
+            "y1",
+            &SegmentEventSource2::y1,
+            nb::rv_policy::reference_internal)
+        .def_prop_ro(
+            "tool_radius",
+            &SegmentEventSource2::tool_radius,
+            nb::rv_policy::reference_internal)
+        .def_prop_ro(
+            "cap_chord_ratio",
+            &SegmentEventSource2::cap_chord_ratio,
+            nb::rv_policy::reference_internal)
+        .def_prop_ro(
+            "motion_data",
+            [](const SegmentEventSource2& source) {
+                return string_tuple(
+                    source.motion_data());
+            })
+        .def_prop_ro(
+            "canonical_bytes",
+            [](const SegmentEventSource2& source) {
+                return as_bytes(
+                    source.canonical_bytes());
+            })
+        .def_prop_ro(
+            "canonical_digest",
+            [](const SegmentEventSource2& source) {
+                return as_bytes(
+                    source.canonical_digest());
             });
 
     nb::class_<ParameterChart2>(m, "ParameterChart2")
