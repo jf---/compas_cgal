@@ -102,9 +102,10 @@ std::string source_record(
     double binary64_radius)
 {
     return reach_tagged_record(
-        "source-curve-v1",
+        "source-curve-v2",
         {
-            ring_id(ring),
+            ring.outer ? "outer" : "hole",
+            reach_u64_record(ring.canonical_ordinal),
             reach_u64_record(ordinal),
             std::string(role),
             reach_binary64_record(binary64_radius),
