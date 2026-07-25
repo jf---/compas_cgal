@@ -192,3 +192,7 @@ wheel = "python -m build --wheel --no-isolation"
 _native-lock-configure = "cmake -S . -B build/native-lock-check -G Ninja -Dnanobind_DIR=$(python -m nanobind --cmake_dir)"
 _native-lock-build = "cmake --build build/native-lock-check --target external_downloads"
 native-lock-check = { depends-on = ["_native-lock-configure", "_native-lock-build"], description = "Verify locked native archives and source trees" }
+_task3-gate-configure = "cmake -S . -B build/task3-algorithm -G Ninja -Dnanobind_DIR=$(python -m nanobind --cmake_dir)"
+_task3-gate-build = "cmake --build build/task3-algorithm --target task3_algorithm_gate"
+_task3-gate-run = "build/task3-algorithm/task3_algorithm_gate"
+task3-algorithm-gate = { depends-on = ["_task3-gate-configure", "_task3-gate-build", "_task3-gate-run"], description = "Prove bounded exact Task 3 construction" }

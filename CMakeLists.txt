@@ -197,6 +197,26 @@ function(add_nanobind_module module_name source_file)
     install(TARGETS ${module_name} LIBRARY DESTINATION compas_cgal)
 endfunction()
 
+add_library(coverage_exact_core STATIC
+    src/exact_region_2.cpp
+    src/exact_sweep_2.cpp
+)
+set_target_properties(coverage_exact_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
+target_compile_definitions(coverage_exact_core PRIVATE CGAL_USE_CORE=1)
+target_include_directories(coverage_exact_core
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src
+    PRIVATE
+        ${CGAL_INCLUDE_DIR}
+        ${BOOST_INCLUDE_DIR}
+        ${EIGEN_INCLUDE_DIR}
+)
+
+add_executable(task3_algorithm_gate EXCLUDE_FROM_ALL
+    tests/native/task3_algorithm_gate.cpp
+)
+target_link_libraries(task3_algorithm_gate PRIVATE coverage_exact_core)
+target_compile_definitions(task3_algorithm_gate PRIVATE CGAL_USE_CORE=1)
+
 # Add new modules here
 add_nanobind_module(_types_std src/types_std.cpp)
 add_nanobind_module(_booleans src/booleans.cpp)
