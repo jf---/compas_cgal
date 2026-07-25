@@ -99,6 +99,113 @@ def _two_disk_merge_split_trace() -> object:
     )[1]
 
 
+def _verified_circle_order_fixture() -> tuple[
+    _continuous_tea_2.VerifiedEventPartition2,
+    tuple[_continuous_tea_2.EventTraceEvent2, ...],
+]:
+    certificate = _continuous_tea_2.partition_cap_crossings(
+        ("0", "1"),
+        ("1",),
+        ("0", "3"),
+        ("1",),
+        "64",
+        "65",
+        _continuous_tea_2.PartitionEvent2(
+            "cap",
+            b"feature-cap",
+            b"support-cap",
+            b"trim-cap",
+            b"vertex-cap",
+            b"branch-cap",
+            "equal",
+        ),
+    )
+    verified = _continuous_tea_2.verify_event_partition(certificate)
+    center_charts = tuple(chart for chart in verified.partition.charts if chart.family == "center-circle")
+    center_seams = tuple(seam for seam in verified.partition.seams if seam.owner_chart_id in CENTER_CHART_IDS)
+    assert verified.verdict is _continuous_tea_2.ContinuousTeaVerdict.CERTIFIED
+    assert tuple(chart.chart_id for chart in center_charts) == CENTER_CHART_IDS
+    assert tuple(seam.owner_chart_id for seam in center_seams) == CENTER_CHART_IDS
+
+    first_root = verified.partition.roots[0].root_id
+    second_root = verified.partition.roots[1].root_id
+
+    def event(
+        label: bytes,
+        *,
+        root_id: bytes,
+        global_fibre_id: bytes,
+        kind: str,
+        motion_order: int,
+        feature_id: bytes | None = None,
+    ) -> _continuous_tea_2.EventTraceEvent2:
+        return _continuous_tea_2.EventTraceEvent2(
+            root_id,
+            global_fibre_id,
+            kind,
+            (feature_id or b"feature-" + label,),
+            (b"branch-" + label,),
+            1,
+            "owned" if kind == "seam" else "transverse",
+            motion_order,
+        )
+
+    return (
+        verified,
+        (
+            event(
+                b"quarter-2",
+                root_id=second_root,
+                global_fibre_id=b"circle-fibre-2",
+                kind="endpoint-order",
+                motion_order=2,
+            ),
+            event(
+                b"quarter-1-b",
+                root_id=first_root,
+                global_fibre_id=b"circle-fibre-1",
+                kind="endpoint-order",
+                motion_order=1,
+            ),
+            event(
+                b"anchor",
+                root_id=first_root,
+                global_fibre_id=b"circle-fibre-anchor",
+                kind="seam",
+                motion_order=0,
+                feature_id=center_charts[0].start_seam_id,
+            ),
+            event(
+                b"quarter-3",
+                root_id=first_root,
+                global_fibre_id=b"circle-fibre-3",
+                kind="endpoint-order",
+                motion_order=3,
+            ),
+            event(
+                b"quarter-1-a",
+                root_id=first_root,
+                global_fibre_id=b"circle-fibre-1",
+                kind="endpoint-order",
+                motion_order=1,
+            ),
+        ),
+    )
+
+
+def _event_blocks(
+    events: tuple[_continuous_tea_2.EventTraceEvent2, ...],
+) -> tuple[tuple[bytes, ...], ...]:
+    blocks: list[list[bytes]] = []
+    previous_fibre_id: bytes | None = None
+    for event in events:
+        if event.global_fibre_id != previous_fibre_id:
+            blocks.append([])
+            previous_fibre_id = event.global_fibre_id
+        blocks[-1].append(event.canonical_id)
+    return tuple(tuple(block) for block in blocks)
+
+
 def _quarter_phase(
     phase: tuple[float, float],
     chart: int,
@@ -207,6 +314,64 @@ def test_zero_phase_is_rejected_before_native_dispatch(
         )
 
     assert not dispatched
+
+
+def test_full_circle_order_is_ccw_canonical_and_insertion_independent() -> None:
+    verified, events = _verified_circle_order_fixture()
+
+    ordered = tuple(
+        _continuous_tea_2.order_full_circle_events(
+            verified,
+            False,
+            events,
+        )
+    )
+    permuted = tuple(
+        _continuous_tea_2.order_full_circle_events(
+            verified,
+            False,
+            tuple(reversed(events)),
+        )
+    )
+    expected = tuple(
+        event.canonical_id
+        for event in sorted(
+            events,
+            key=lambda event: (
+                event.motion_order,
+                event.canonical_id,
+            ),
+        )
+    )
+
+    assert tuple(event.canonical_id for event in ordered) == expected
+    assert tuple(event.canonical_id for event in permuted) == expected
+
+
+def test_clockwise_full_circle_order_keeps_anchor_and_reverses_remaining_fibres() -> None:
+    verified, events = _verified_circle_order_fixture()
+
+    counterclockwise = tuple(
+        _continuous_tea_2.order_full_circle_events(
+            verified,
+            False,
+            events,
+        )
+    )
+    clockwise = tuple(
+        _continuous_tea_2.order_full_circle_events(
+            verified,
+            True,
+            tuple(reversed(events)),
+        )
+    )
+    counterclockwise_blocks = _event_blocks(counterclockwise)
+    clockwise_blocks = _event_blocks(clockwise)
+
+    assert counterclockwise[0].kind == clockwise[0].kind == "seam"
+    assert counterclockwise_blocks[0] == clockwise_blocks[0]
+    assert clockwise_blocks[1:] == tuple(reversed(counterclockwise_blocks[1:]))
+    assert all(block == tuple(sorted(block)) for block in clockwise_blocks)
 
 
 def test_full_circle_trace_covers_four_center_charts_and_owns_each_seam_once() -> None:

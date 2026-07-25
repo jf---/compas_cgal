@@ -1,6 +1,7 @@
 #include "compas.h"
 #include "continuous_tea_2/boundary_events.h"
 #include "continuous_tea_2/cap_partition.h"
+#include "continuous_tea_2/circle_oracle.h"
 #include "continuous_tea_2/event_certificate.h"
 #include "continuous_tea_2/event_partition.h"
 #include "continuous_tea_2/event_trace.h"
@@ -973,6 +974,12 @@ NB_MODULE(_continuous_tea_2, m)
             const EventPartitionCertificate2&)>(
             &verify_event_partition),
         "certificate"_a);
+    m.def(
+        "order_full_circle_events",
+        &order_full_circle_events,
+        "verified_partition"_a,
+        "clockwise"_a,
+        "events"_a);
     m.def(
         "build_event_trace",
         [](const EventPartitionCertificate2& partition,

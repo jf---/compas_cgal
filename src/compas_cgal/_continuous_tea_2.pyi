@@ -382,6 +382,11 @@ def partition_cap_crossings(
 def verify_event_partition(
     certificate: EventPartitionCertificate2,
 ) -> VerifiedEventPartition2: ...
+def order_full_circle_events(
+    verified_partition: VerifiedEventPartition2,
+    clockwise: bool,
+    events: Sequence[EventTraceEvent2],
+) -> Sequence[EventTraceEvent2]: ...
 def build_event_trace(
     partition: EventPartitionCertificate2,
     motion_chart_id: str,
