@@ -5,6 +5,7 @@ import numpy as np
 import pytest
 
 from compas_cgal import _coverage_2
+from compas_cgal.adaptive import reachable_domain as reachable_domain_module
 from compas_cgal.adaptive.canonical import CanonicalRingV1
 from compas_cgal.adaptive.errors import InvalidReachableDomainInputError
 from compas_cgal.adaptive.errors import InvalidReachableDomainCertificateError
@@ -511,6 +512,12 @@ def test_python_certificate_rejects_noncanonical_cycle_rotation() -> None:
     )
 
     _assert_certificate_rejected(malformed, "canonical rotation")
+
+
+def test_minimal_rotation_index_handles_repeated_prefixes() -> None:
+    elements = (b"a", b"a", b"a", b"d", b"a", b"a", b"a", b"c")
+
+    assert reachable_domain_module._minimal_rotation_index(elements) == 4
 
 
 def test_python_certificate_rejects_unknown_component_cell() -> None:
