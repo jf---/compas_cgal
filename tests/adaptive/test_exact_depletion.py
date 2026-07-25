@@ -12,6 +12,7 @@ from compas_cgal.adaptive.canonical import ExactCenterParameterV1
 from compas_cgal.adaptive.errors import ExactDepletionCenterLimitError
 from compas_cgal.adaptive.errors import InvalidDepletionTraceError
 from compas_cgal.adaptive.errors import InvalidDepletionWitnessError
+from compas_cgal.adaptive.errors import InvalidStockAreaError
 from compas_cgal.adaptive.motion import ExactCircleMotion
 from compas_cgal.adaptive.motion import ExactSegmentMotion
 from compas_cgal.adaptive.policy import DepletionPolicy
@@ -172,6 +173,48 @@ def test_minimum_density_and_repeated_overlap_preserve_exact_induction() -> None
 
     assert segment_trace.center_count == 2
     assert circle_trace.center_count == 4
+    assert _stock_2.exact_segment_undercover_holds(
+        -3.0,
+        -1.0,
+        3.0,
+        7.0,
+        10.0,
+        0.75,
+        10.0,
+        2,
+    )
+    assert _stock_2.exact_segment_induction_holds(
+        _raw_stock(),
+        -3.0,
+        -1.0,
+        3.0,
+        7.0,
+        10.0,
+        0.75,
+        10.0,
+        2,
+    )
+    assert _stock_2.exact_full_circle_undercover_holds(
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        1.0,
+        0.25,
+        2.0,
+        4,
+    )
+    assert _stock_2.exact_full_circle_induction_holds(
+        _raw_stock(),
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        1.0,
+        0.25,
+        2.0,
+        4,
+    )
 
     once = _raw_stock()
     twice = once.clone()
@@ -262,6 +305,14 @@ def test_public_area_construction_deep_copies_mutable_native_input() -> None:
 
     assert area.raw.exactly_equals(snapshot)
     assert area.lineage == ()
+
+
+def test_public_area_construction_rejects_native_stock_subclass() -> None:
+    class DerivedStock2(_stock_2.Stock2):
+        pass
+
+    with pytest.raises(InvalidStockAreaError, match="native Stock2"):
+        Stock2Area(DerivedStock2(SQUARE, []), ())
 
 
 def test_public_raw_access_returns_an_independent_snapshot() -> None:
@@ -374,8 +425,33 @@ def test_direct_witness_rejects_circle_chart_denominator_and_order_mutations() -
             _rebuild_witness(witness, center_parameters=mutation)
 
 
-def test_direct_valid_witness_reconstruction_preserves_identity() -> None:
-    witness = Stock2Area.build(_stock()).deplete(_circle(clockwise=True), ToolRadius.build(0.75), _policy())
+def test_direct_witness_rejects_minimum_segment_density_for_tight_bound() -> None:
+    witness = Stock2Area.build(_stock()).deplete(_segment(), ToolRadius.build(0.75), _policy())
+    minimum_centers = (
+        ExactCenterParameterV1.build(chart=-1, numerator=0, denominator=1),
+        ExactCenterParameterV1.build(chart=-1, numerator=1, denominator=1),
+    )
+
+    with pytest.raises(InvalidDepletionWitnessError, match="density"):
+        _rebuild_witness(witness, center_parameters=minimum_centers)
+
+
+def test_direct_witness_rejects_minimum_circle_density_for_tight_bound() -> None:
+    witness = Stock2Area.build(_stock()).deplete(_circle(clockwise=False), ToolRadius.build(0.75), _policy())
+    minimum_centers = tuple(ExactCenterParameterV1.build(chart=chart, numerator=0, denominator=1) for chart in range(4))
+
+    with pytest.raises(InvalidDepletionWitnessError, match="density"):
+        _rebuild_witness(witness, center_parameters=minimum_centers)
+
+
+@pytest.mark.parametrize(
+    "motion",
+    [_segment(), _circle(clockwise=False), _circle(clockwise=True)],
+)
+def test_direct_valid_witness_reconstruction_preserves_identity(
+    motion: ExactSegmentMotion | ExactCircleMotion,
+) -> None:
+    witness = Stock2Area.build(_stock()).deplete(motion, ToolRadius.build(0.75), _policy())
 
     rebuilt = _rebuild_witness(witness)
 

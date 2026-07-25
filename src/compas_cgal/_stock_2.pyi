@@ -98,6 +98,23 @@ def exact_circle_point_is_incident(
     px: float,
     py: float,
 ) -> bool: ...
+def exact_segment_structural_density_holds(
+    x0: float,
+    y0: float,
+    x1: float,
+    y1: float,
+    max_chord: float,
+    parameters: Sequence[tuple[int, int, int]],
+) -> bool: ...
+def exact_full_circle_structural_density_holds(
+    cx: float,
+    cy: float,
+    phase_x: float,
+    phase_y: float,
+    clockwise: bool,
+    max_chord: float,
+    parameters: Sequence[tuple[int, int, int]],
+) -> bool: ...
 def exact_segment_undercover_holds(
     x0: float,
     y0: float,

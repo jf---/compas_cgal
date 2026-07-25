@@ -208,6 +208,64 @@ bool circle_anchors_present(const std::vector<ExactCenterParameter2>& parameters
     return true;
 }
 
+bool is_power_of_two(std::size_t value)
+{
+    return value != 0 && (value & (value - 1)) == 0;
+}
+
+bool same_parameter(
+    const ExactCenterParameter2& lhs,
+    const ExactCenterParameter2& rhs)
+{
+    return lhs.chart == rhs.chart
+        && lhs.numerator == rhs.numerator
+        && lhs.denominator == rhs.denominator;
+}
+
+bool exact_incidence_holds(
+    const ExactSegmentMotion2& motion,
+    const std::vector<EPoint>& centers)
+{
+    return std::all_of(
+        centers.begin(),
+        centers.end(),
+        [&motion](const EPoint& center) {
+            return exact_segment_point_is_incident(motion, center);
+        });
+}
+
+bool exact_incidence_holds(
+    const ExactCircleMotion2& motion,
+    const std::vector<EPoint>& centers)
+{
+    return std::all_of(
+        centers.begin(),
+        centers.end(),
+        [&motion](const EPoint& center) {
+            return exact_circle_point_is_incident(motion, center);
+        });
+}
+
+bool exact_chords_hold(
+    const std::vector<EPoint>& centers,
+    const Epeck::FT& max_chord_squared,
+    bool cyclic)
+{
+    for (std::size_t index = 1; index < centers.size(); ++index) {
+        if (CGAL::compare(
+                CGAL::squared_distance(centers[index - 1], centers[index]),
+                max_chord_squared)
+            == CGAL::LARGER) {
+            return false;
+        }
+    }
+    return !cyclic
+        || CGAL::compare(
+               CGAL::squared_distance(centers.back(), centers.front()),
+               max_chord_squared)
+            != CGAL::LARGER;
+}
+
 } // namespace
 
 const std::string& exact_depletion_strategy_version()
@@ -242,6 +300,87 @@ bool exact_circle_point_is_incident(
                CGAL::squared_distance(motion.center, point),
                motion.phase_vector.squared_length())
         == CGAL::EQUAL;
+}
+
+bool exact_segment_structural_density_holds(
+    const ExactSegmentMotion2& motion,
+    const Epeck::FT& max_chord,
+    const std::vector<ExactCenterParameter2>& parameters)
+{
+    if (!is_positive(max_chord)
+        || motion.start == motion.end
+        || parameters.size() < 2
+        || !segment_parameters_in_range(parameters)) {
+        return false;
+    }
+
+    const std::size_t intervals = parameters.front().denominator;
+    if (!is_power_of_two(intervals)
+        || intervals == std::numeric_limits<std::size_t>::max()
+        || parameters.size() != intervals + 1) {
+        return false;
+    }
+
+    std::vector<EPoint> centers;
+    centers.reserve(parameters.size());
+    for (std::size_t index = 0; index < parameters.size(); ++index) {
+        const ExactCenterParameter2 expected{-1, index, intervals};
+        if (!same_parameter(parameters[index], expected)) {
+            return false;
+        }
+        centers.push_back(segment_center(
+            motion,
+            parameters[index].numerator,
+            parameters[index].denominator));
+    }
+
+    return centers.front() == motion.start
+        && centers.back() == motion.end
+        && exact_incidence_holds(motion, centers)
+        && exact_chords_hold(centers, max_chord * max_chord, false);
+}
+
+bool exact_full_circle_structural_density_holds(
+    const ExactCircleMotion2& motion,
+    const Epeck::FT& max_chord,
+    const std::vector<ExactCenterParameter2>& parameters)
+{
+    if (!is_positive(max_chord)
+        || motion.phase_vector == EVector(CGAL::NULL_VECTOR)
+        || parameters.size() < 4
+        || !circle_parameters_in_range(parameters)) {
+        return false;
+    }
+
+    const std::size_t intervals = parameters.front().denominator;
+    if (!is_power_of_two(intervals)
+        || intervals > std::numeric_limits<std::size_t>::max() / 4) {
+        return false;
+    }
+    const std::size_t center_count = 4 * intervals;
+    if (parameters.size() != center_count) {
+        return false;
+    }
+
+    std::vector<EPoint> centers;
+    centers.reserve(parameters.size());
+    for (std::size_t index = 0; index < parameters.size(); ++index) {
+        const ExactCenterParameter2 expected =
+            ordered_circle_parameter(index, intervals, center_count, motion.clockwise);
+        if (!same_parameter(parameters[index], expected)) {
+            return false;
+        }
+        centers.push_back(circle_center(
+            motion,
+            parameters[index].chart,
+            parameters[index].numerator,
+            parameters[index].denominator));
+    }
+
+    return circle_anchors_present(parameters)
+        && centers.front() == motion.center + motion.phase_vector
+        && exact_incidence_holds(motion, centers)
+        && exact_chords_hold(centers, max_chord * max_chord, true);
 }
 
 ExactDepletionConstruction2 construct_exact_segment_depletion(
