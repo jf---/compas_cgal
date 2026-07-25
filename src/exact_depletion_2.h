@@ -36,6 +36,11 @@ struct DepletionTrace {
     bool exact_removal_radius_valid;
     bool exact_chord_bound_holds;
     bool exact_seam_chord_bound_holds;
+
+    bool matches_exact_inputs(
+        const Epeck::FT& expected_tool_radius,
+        const Epeck::FT& expected_max_chord,
+        std::size_t expected_center_count_limit) const;
 };
 
 struct ExactDepletionConstruction2 {
@@ -62,3 +67,5 @@ bool exact_segment_point_is_incident(
 bool exact_circle_point_is_incident(
     const ExactCircleMotion2& motion,
     const EPoint& point);
+
+const std::string& exact_depletion_strategy_version();
