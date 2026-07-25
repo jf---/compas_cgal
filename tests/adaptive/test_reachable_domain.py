@@ -380,10 +380,14 @@ def test_circle_vertical_trim_extrema_have_distinct_stable_structural_ordinals(
     assert len(repeated_source_members) >= 2
 
 
-def test_native_binding_does_not_publish_deferred_coverage_api() -> None:
-    assert not hasattr(_coverage_2, "CoverageConstructionError")
-    assert not hasattr(_coverage_2, "CoverageSweepRecord2")
-    assert not hasattr(_coverage_2, "Coverage2")
+def test_native_binding_preserves_task4_surface_and_private_audit() -> None:
+    assert hasattr(_coverage_2, "ReachableDomainConstructionError")
+    assert hasattr(_coverage_2, "ReachableDomainCertificate2")
+    assert hasattr(_coverage_2, "ReachableDomain2")
+    assert not hasattr(
+        _coverage_2.ReachableDomain2,
+        "build_audit_for_native_gate",
+    )
 
 
 def test_python_certificate_rejects_unknown_strategy() -> None:
