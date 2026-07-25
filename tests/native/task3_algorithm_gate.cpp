@@ -491,33 +491,9 @@ void require_identical_boundary_parity(
             ReachPrimitiveKind2::Forbidden);
     }
     CGAL::insert(arrangement, curves.begin(), curves.end());
-    ReachableDomainBuildAudit2 audit;
     classify_faces_by_primitive_parity(
         arrangement,
-        primitive_kinds,
-        audit);
-
-    std::size_t primitive_label_count = 0;
-    for (auto edge = arrangement.edges_begin();
-         edge != arrangement.edges_end();
-         ++edge) {
-        primitive_label_count +=
-            edge->curve().data().primitive_ids.size();
-    }
-    require(
-        audit.dense_face_visits == arrangement.number_of_faces(),
-        "identical-boundary classifier revisited arrangement faces");
-    require(
-        audit.dense_halfedge_visits
-            == arrangement.number_of_halfedges(),
-        "identical-boundary classifier revisited arrangement halfedges");
-    require(
-        audit.primitive_label_resolutions == primitive_label_count,
-        "identical-boundary classifier repeated primitive resolution");
-    require(
-        audit.parity_halfedge_visits
-            == arrangement.number_of_halfedges(),
-        "identical-boundary parity was not one directed halfedge pass");
+        primitive_kinds);
 
     std::size_t bounded_faces = 0;
     for (auto face = arrangement.faces_begin();

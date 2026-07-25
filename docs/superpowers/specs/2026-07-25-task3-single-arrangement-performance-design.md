@@ -61,13 +61,20 @@ Let:
 - `q` be the number of canonical records;
 - `b` be the total serialized certificate byte count.
 
-Outside CGAL's unavoidable arrangement construction, the reachable-domain
-overhead is bounded by:
-
-`O(n log n + k + z + b log q)`.
+The completion target first removes duplicated exact geometry,
+post-construction `O(kn)` source rematching, and replay. The current dense
+compiler uses pre-sized, nonserialized hashes to resolve primitive IDs and DCEL
+handles, so its post-arrangement `O(k + z)` overhead is an expected-time bound,
+not yet a collision-independent worst-case theorem. Canonical record sorting
+remains `O(b log q)`.
 
 There is no `O(kn)` post-construction geometric rematching and no quadratic
 rotation enumeration.
+
+Deterministic collision-independent indexing is a measurement-triggered
+refactor after Tasks 3 through 5 complete the end-to-end pipeline. It is not a
+precondition for completing those tasks. The post-Task5 gate below decides
+whether the hash boundary is material enough to replace.
 
 For one coverage transition, the exact sweep, accumulated union, and next
 residual are each constructed once. A ledger clone shares immutable geometry.
@@ -148,6 +155,12 @@ labels but no source-curve identity. Offset sides and vertex circles carry both.
 If a selected-cell boundary halfedge lacks source-piece provenance, construction
 fails. Such an edge would mean the primitive decomposition or cell-selection
 logic is wrong.
+
+Primitive IDs and DCEL handles are compiled once into dense vector slots using
+pre-sized ephemeral hashes. Hash iteration never determines geometry,
+selection, or serialized identity. Operation counters require one face pass,
+one halfedge pass, one primitive-label resolution per propagated label, and
+bounded parity/component/boundary visits.
 
 ## Exact face classification
 
@@ -335,6 +348,8 @@ Keep each file below the project size thresholds and give it one job:
   predicates;
 - `exact_sweep_2.h/.cpp`: exact disk, capsule, arc-sweep, and full-circle
   primitives;
+- `reachable_input_2.h/.cpp`: canonical input ownership, validation, and
+  factory identity;
 - `reachable_arrangement_2.h/.cpp`: primitive generation, propagated metadata,
   face classification, and selected topology;
 - `reachable_certificate_2.h/.cpp`: canonical vertex, cell, component, and
@@ -371,8 +386,9 @@ A native algorithm gate records structural work counts and asserts:
 - no replay builds;
 - no post-arrangement source-rematching predicates.
 
-These are operation-count assertions, not wall-clock assertions. They are the
-falsifiable performance axiom.
+These are operation-count assertions, not wall-clock assertions. They
+falsify duplicate application-level work but do not prove hash
+collision-independent runtime.
 
 Every pytest invocation uses `-n auto`. After one editable native build:
 
@@ -385,6 +401,23 @@ Every pytest invocation uses `-n auto`. After one editable native build:
 If profiling becomes necessary, it tests one written hypothesis about an
 unavoidable CGAL stage. It is not used to discover the architecture.
 
+After Tasks 3 through 5 are complete, run one final end-to-end
+measurement/refactor-decision gate under a 180-second external process-group
+watchdog:
+
+1. require all structural counts, one-arrangement/one-extraction/zero-rematch
+   contracts, exact predicates, and focused correctness tests to pass;
+2. record complete focused end-to-end timing on the bounded fixtures;
+3. if counts pass and runtime is acceptable, retain the pre-sized hashes;
+4. if counts pass but runtime remains slow or reaches containment, profile one
+   bounded fixture to test the identified runtime hypothesis;
+5. replace hashes with deterministic collision-independent indexing only when
+   that evidence makes the lookup boundary material, then rerun the same gate.
+
+Containment is two to three minutes per isolated process; the standard gate
+uses 180 seconds. Timing and profiling never weaken exactness or substitute
+for structural correctness.
+
 ## Non-goals
 
 - changing the locked exact-with-sqrt kernel or CGAL version;
@@ -392,4 +425,6 @@ unavoidable CGAL stage. It is not used to discover the architecture.
 - test-fixture caching that conceals construction cost;
 - independent artifact replay before Task 13;
 - modifying accepted Tasks 0 through 2;
-- optimizing CGAL internals before the application-level operation bound holds.
+- optimizing CGAL internals before the application-level operation bound holds;
+- requiring deterministic collision-independent indexing before the
+  end-to-end post-Task5 measurement gate.
