@@ -326,4 +326,64 @@ class IntersectionBoundaryVertexIdV1:
         return IdentityDigest(hashlib.sha256(self.canonical_bytes).digest())
 
 
-BoundaryVertexIdV1: TypeAlias = InputRingVertexIdV1 | IntersectionBoundaryVertexIdV1
+@dataclass(frozen=True)
+class ParameterSeamBoundaryVertexIdV1:
+    incident_supports: tuple[IncidentSupport, IncidentSupport]
+    seam_ordinal: int
+
+    def __post_init__(self) -> None:
+        if type(self.incident_supports) is not tuple or len(self.incident_supports) != 2:
+            raise InvalidBoundaryVertexIdentityError("parameter seam requires exactly two incident supports.")
+        if any(type(incident) is not IncidentSupport for incident in self.incident_supports):
+            raise InvalidBoundaryVertexIdentityError("parameter seam incident supports must be exact IncidentSupport.")
+        canonical = tuple(sorted(self.incident_supports, key=lambda incident: incident.canonical_bytes))
+        if canonical != self.incident_supports:
+            raise InvalidBoundaryVertexIdentityError("parameter seam incident supports must use canonical order.")
+        support_bytes = {incident.support_id.canonical_bytes for incident in self.incident_supports}
+        if len(support_bytes) != 1:
+            raise InvalidBoundaryVertexIdentityError("parameter seam incidences must use the same support.")
+        orientations = {incident.trim_incidence_orientation for incident in self.incident_supports}
+        if orientations != {TrimIncidenceOrientation.ENTERING, TrimIncidenceOrientation.LEAVING}:
+            raise InvalidBoundaryVertexIdentityError("parameter seam requires one entering and leaving incidence.")
+        if type(self.seam_ordinal) is not int or self.seam_ordinal < 0:
+            raise InvalidBoundaryVertexIdentityError("parameter seam ordinal must be an exact nonnegative integer.")
+
+    @classmethod
+    def build(
+        cls,
+        *,
+        incident_supports: Sequence[IncidentSupport],
+        seam_ordinal: int,
+    ) -> Self:
+        try:
+            supports = tuple(incident_supports)
+        except TypeError:
+            raise InvalidBoundaryVertexIdentityError("parameter seam incident supports must be finite.") from None
+        if len(supports) != 2 or any(type(incident) is not IncidentSupport for incident in supports):
+            raise InvalidBoundaryVertexIdentityError("parameter seam requires exactly two exact IncidentSupport values.")
+        canonical = tuple(sorted(supports, key=lambda incident: incident.canonical_bytes))
+        return cls((canonical[0], canonical[1]), seam_ordinal)
+
+    @property
+    def canonical_bytes(self) -> bytes:
+        if type(self) is not ParameterSeamBoundaryVertexIdV1:
+            raise InvalidBoundaryVertexIdentityError("parameter seam identity must be exact ParameterSeamBoundaryVertexIdV1, not a subclass.")
+        return encode_tagged_union(
+            BOUNDARY_VERTEX_ID_VERSION,
+            encode_tagged_union(
+                b"parameter-seam-v1",
+                encode_component_map(
+                    {
+                        b"incident-supports": encode_sequence(tuple(incident.canonical_bytes for incident in self.incident_supports)),
+                        b"seam-ordinal": encode_integer(self.seam_ordinal),
+                    }
+                ),
+            ),
+        )
+
+    @property
+    def digest(self) -> IdentityDigest:
+        return IdentityDigest(hashlib.sha256(self.canonical_bytes).digest())
+
+
+BoundaryVertexIdV1: TypeAlias = InputRingVertexIdV1 | IntersectionBoundaryVertexIdV1 | ParameterSeamBoundaryVertexIdV1

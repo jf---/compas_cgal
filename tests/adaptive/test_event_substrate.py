@@ -11,6 +11,7 @@ from compas_cgal.adaptive.canonical import require_canonical_record
 from compas_cgal.adaptive.identity import IncidentSupport
 from compas_cgal.adaptive.identity import IncidentSupportIdV1
 from compas_cgal.adaptive.identity import IntersectionBoundaryVertexIdV1
+from compas_cgal.adaptive.identity import ParameterSeamBoundaryVertexIdV1
 from compas_cgal.adaptive.identity import SupportKind
 from compas_cgal.adaptive.identity import TrimIncidenceOrientation
 
@@ -90,6 +91,9 @@ def test_native_boundary_ids_byte_match_task1a_canonical_identity() -> None:
             tuple(int(value) for value in record.primitive_coefficients),
         )
         assert record.support_id == support.canonical_bytes
+        assert require_canonical_record(record.source_incidence) == record.source_incidence
+        assert require_canonical_record(record.target_incidence) == record.target_incidence
+        assert record.source_incidence != record.target_incidence
         support_by_id[record.support_id] = support
     for record in records:
         support = support_by_id[record.support_id]
@@ -166,6 +170,21 @@ def test_segment_and_full_circle_split_are_explicit_seams() -> None:
     )
     assert len(segment_events) == 1
     assert {event.kind for event in segment_events} == {"seam"}
+    segment_support = IncidentSupportIdV1(
+        SupportKind.LINE,
+        tuple(int(value) for value in segment_records[segment_indices[0]].primitive_coefficients),
+    )
+    segment_incidents = (
+        IncidentSupport(segment_support, TrimIncidenceOrientation.ENTERING),
+        IncidentSupport(segment_support, TrimIncidenceOrientation.LEAVING),
+    )
+    assert (
+        segment_events[0].vertex_id
+        == ParameterSeamBoundaryVertexIdV1.build(
+            incident_supports=segment_incidents,
+            seam_ordinal=0,
+        ).canonical_bytes
+    )
 
     geometry = _case("segment-full-circle-parameter-seams")["geometry"]
     stock = _stock_2.Stock2(SQUARE, [])
@@ -177,6 +196,22 @@ def test_segment_and_full_circle_split_are_explicit_seams() -> None:
     events = _continuous_tea_2.classify_boundary_pair(stock, *circle_indices)
     assert len(events) == 2
     assert {event.kind for event in events} == {"seam"}
+    circle_record = records[circle_indices[0]]
+    circle_support = IncidentSupportIdV1(
+        SupportKind.CIRCLE,
+        tuple(int(value) for value in circle_record.primitive_coefficients),
+    )
+    circle_incidents = (
+        IncidentSupport(circle_support, TrimIncidenceOrientation.ENTERING),
+        IncidentSupport(circle_support, TrimIncidenceOrientation.LEAVING),
+    )
+    assert {event.vertex_id for event in events} == {
+        ParameterSeamBoundaryVertexIdV1.build(
+            incident_supports=circle_incidents,
+            seam_ordinal=ordinal,
+        ).canonical_bytes
+        for ordinal in (0, 1)
+    }
 
 
 @pytest.mark.parametrize("key", ["external_disks", "internal_disk"])
