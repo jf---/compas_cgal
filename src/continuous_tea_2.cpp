@@ -3,6 +3,7 @@
 #include "continuous_tea_2/cap_partition.h"
 #include "continuous_tea_2/event_certificate.h"
 #include "continuous_tea_2/event_partition.h"
+#include "continuous_tea_2/event_trace.h"
 #include "continuous_tea_2/parameter_charts.h"
 #include "continuous_tea_2/partition_certificate.h"
 #include "continuous_tea_2/result.h"
@@ -39,6 +40,37 @@ std::string from_bytes(const nb::bytes& value)
         static_cast<std::size_t>(size));
 }
 
+std::string from_bytes_handle(nb::handle value)
+{
+    if (!PyBytes_Check(value.ptr())) {
+        throw nb::type_error(
+            "canonical identity sequence entries must be bytes");
+    }
+    char* data = nullptr;
+    Py_ssize_t size = 0;
+    if (PyBytes_AsStringAndSize(
+            value.ptr(),
+            &data,
+            &size)
+        != 0) {
+        throw nb::python_error();
+    }
+    return std::string(
+        data,
+        static_cast<std::size_t>(size));
+}
+
+std::vector<std::string> from_byte_sequence(
+    const nb::sequence& values)
+{
+    std::vector<std::string> result;
+    for (nb::handle value : values) {
+        result.push_back(
+            from_bytes_handle(value));
+    }
+    return result;
+}
+
 nb::list coefficient_bytes(
     const std::vector<std::string>& values)
 {
@@ -69,6 +101,32 @@ nb::object string_matrix_tuple(
     }
     return nb::module_::import_("builtins")
         .attr("tuple")(result);
+}
+
+nb::object bytes_tuple(
+    const std::vector<std::string>& values)
+{
+    nb::list result;
+    for (const std::string& value : values) {
+        result.append(as_bytes(value));
+    }
+    return nb::module_::import_("builtins")
+        .attr("tuple")(result);
+}
+
+std::string continuous_tea_verdict_text(
+    ContinuousTeaVerdict verdict)
+{
+    switch (verdict) {
+    case ContinuousTeaVerdict::CERTIFIED:
+        return "certified";
+    case ContinuousTeaVerdict::CAP_EXCEEDED:
+        return "cap_exceeded";
+    case ContinuousTeaVerdict::UNRESOLVED_DEGENERACY:
+        return "unresolved";
+    }
+    throw EventTraceVerificationError(
+        "unknown continuous TEA verdict");
 }
 
 } // namespace
@@ -129,6 +187,10 @@ NB_MODULE(_continuous_tea_2, m)
     nb::exception<EventPartitionVerificationError>(
         m,
         "EventPartitionVerificationError",
+        substrate_error.ptr());
+    nb::exception<EventTraceVerificationError>(
+        m,
+        "EventTraceVerificationError",
         substrate_error.ptr());
 
     nb::enum_<ContinuousTeaVerdict>(
@@ -588,6 +650,125 @@ NB_MODULE(_continuous_tea_2, m)
             "partition",
             &VerifiedEventPartition2::partition);
 
+    nb::class_<EventTraceEvent2>(
+        m,
+        "EventTraceEvent2")
+        .def(
+            "__init__",
+            [](EventTraceEvent2* self,
+               const nb::bytes& root_id,
+               const nb::bytes& global_fibre_id,
+               std::string kind,
+               const nb::sequence& feature_ids,
+               const nb::sequence& branch_ids,
+               unsigned int multiplicity,
+               std::string disposition,
+               std::size_t motion_order) {
+                new (self) EventTraceEvent2(
+                    make_event_trace_event(
+                        from_bytes(root_id),
+                        from_bytes(global_fibre_id),
+                        kind,
+                        from_byte_sequence(feature_ids),
+                        from_byte_sequence(branch_ids),
+                        multiplicity,
+                        disposition,
+                        motion_order));
+            },
+            "root_id"_a,
+            "global_fibre_id"_a,
+            "kind"_a,
+            "feature_ids"_a,
+            "branch_ids"_a,
+            "multiplicity"_a,
+            "disposition"_a,
+            "motion_order"_a)
+        .def_prop_ro(
+            "root_id",
+            [](const EventTraceEvent2& event) {
+                return as_bytes(event.root_id);
+            })
+        .def_prop_ro(
+            "global_fibre_id",
+            [](const EventTraceEvent2& event) {
+                return as_bytes(event.global_fibre_id);
+            })
+        .def_ro("kind", &EventTraceEvent2::kind)
+        .def_prop_ro(
+            "feature_ids",
+            [](const EventTraceEvent2& event) {
+                return bytes_tuple(event.feature_ids);
+            })
+        .def_prop_ro(
+            "branch_ids",
+            [](const EventTraceEvent2& event) {
+                return bytes_tuple(event.branch_ids);
+            })
+        .def_ro(
+            "multiplicity",
+            &EventTraceEvent2::multiplicity)
+        .def_ro(
+            "disposition",
+            &EventTraceEvent2::disposition)
+        .def_ro(
+            "motion_order",
+            &EventTraceEvent2::motion_order)
+        .def_prop_ro(
+            "canonical_bytes",
+            [](const EventTraceEvent2& event) {
+                return as_bytes(event.canonical_bytes);
+            })
+        .def_prop_ro(
+            "canonical_id",
+            [](const EventTraceEvent2& event) {
+                return as_bytes(event.canonical_id);
+            });
+
+    nb::class_<EventTrace2>(m, "EventTrace2")
+        .def_prop_ro(
+            "exact_verdict",
+            [](const EventTrace2& trace) {
+                return continuous_tea_verdict_text(
+                    trace.verdict);
+            })
+        .def_ro(
+            "partition",
+            &EventTrace2::partition)
+        .def_ro("events", &EventTrace2::events)
+        .def_ro(
+            "motion_chart_id",
+            &EventTrace2::motion_chart_id)
+        .def_prop_ro(
+            "motion_identity",
+            [](const EventTrace2& trace) {
+                return as_bytes(trace.motion_identity);
+            })
+        .def_prop_ro(
+            "effective_cap_bytes",
+            [](const EventTrace2& trace) {
+                return as_bytes(
+                    trace.effective_cap_bytes);
+            })
+        .def_ro(
+            "whole_rim_disposition",
+            &EventTrace2::whole_rim_disposition)
+        .def_ro(
+            "oracle_strategy_version",
+            &EventTrace2::oracle_strategy_version)
+        .def_ro(
+            "event_cell_count",
+            &EventTrace2::event_cell_count)
+        .def_prop_ro(
+            "canonical_bytes",
+            [](const EventTrace2& trace) {
+                return as_bytes(trace.canonical_bytes);
+            })
+        .def_prop_ro(
+            "canonical_digest",
+            [](const EventTrace2& trace) {
+                return as_bytes(trace.canonical_digest);
+            });
+
     m.attr("BOUNDARY_EVENT_KINDS") = nb::make_tuple(
         "transverse",
         "tangent",
@@ -792,6 +973,34 @@ NB_MODULE(_continuous_tea_2, m)
             const EventPartitionCertificate2&)>(
             &verify_event_partition),
         "certificate"_a);
+    m.def(
+        "build_event_trace",
+        [](const EventPartitionCertificate2& partition,
+           const std::string& motion_chart_id,
+           const nb::bytes& motion_identity,
+           const nb::bytes& effective_cap_bytes,
+           ContinuousTeaVerdict verdict,
+           const std::string& whole_rim_disposition,
+           const std::string& oracle_strategy_version,
+           std::vector<EventTraceEvent2> events) {
+            return build_event_trace(
+                partition,
+                motion_chart_id,
+                from_bytes(motion_identity),
+                from_bytes(effective_cap_bytes),
+                verdict,
+                whole_rim_disposition,
+                oracle_strategy_version,
+                std::move(events));
+        },
+        "partition"_a,
+        "motion_chart_id"_a,
+        "motion_identity"_a,
+        "effective_cap_bytes"_a,
+        "verdict"_a,
+        "whole_rim_disposition"_a,
+        "oracle_strategy_version"_a,
+        "events"_a);
     m.def(
         "mutate_certificate_record",
         &mutate_certificate_record,

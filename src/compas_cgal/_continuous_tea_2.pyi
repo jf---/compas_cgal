@@ -57,6 +57,9 @@ class TrimFilterError(EventSubstrateError): ...
 class EventPartitionVerificationError(EventSubstrateError): ...
 
 
+class EventTraceVerificationError(EventSubstrateError): ...
+
+
 class ContinuousTeaVerdict:
     CERTIFIED: ContinuousTeaVerdict
     CAP_EXCEEDED: ContinuousTeaVerdict
@@ -278,6 +281,44 @@ class VerifiedEventPartition2:
     partition: EventPartitionCertificate2
 
 
+class EventTraceEvent2:
+    def __init__(
+        self,
+        root_id: bytes,
+        global_fibre_id: bytes,
+        kind: str,
+        feature_ids: Sequence[bytes],
+        branch_ids: Sequence[bytes],
+        multiplicity: int,
+        disposition: str,
+        motion_order: int,
+    ) -> None: ...
+    root_id: bytes
+    global_fibre_id: bytes
+    kind: str
+    feature_ids: tuple[bytes, ...]
+    branch_ids: tuple[bytes, ...]
+    multiplicity: int
+    disposition: str
+    motion_order: int
+    canonical_bytes: bytes
+    canonical_id: bytes
+
+
+class EventTrace2:
+    exact_verdict: Literal["certified", "cap_exceeded", "unresolved"]
+    partition: EventPartitionCertificate2
+    events: Sequence[EventTraceEvent2]
+    motion_chart_id: str
+    motion_identity: bytes
+    effective_cap_bytes: bytes
+    whole_rim_disposition: Literal["clear", "material", "partial", "unresolved"]
+    oracle_strategy_version: str
+    event_cell_count: int
+    canonical_bytes: bytes
+    canonical_digest: bytes
+
+
 def extract_boundary_records(stock: Stock2) -> Sequence[BoundaryFeatureRecord2]: ...
 def classify_boundary_pair(
     stock: Stock2,
@@ -341,6 +382,16 @@ def partition_cap_crossings(
 def verify_event_partition(
     certificate: EventPartitionCertificate2,
 ) -> VerifiedEventPartition2: ...
+def build_event_trace(
+    partition: EventPartitionCertificate2,
+    motion_chart_id: str,
+    motion_identity: bytes,
+    effective_cap_bytes: bytes,
+    verdict: ContinuousTeaVerdict,
+    whole_rim_disposition: str,
+    oracle_strategy_version: str,
+    events: Sequence[EventTraceEvent2],
+) -> EventTrace2: ...
 def mutate_certificate_record(
     certificate: EventPartitionCertificate2,
     mutation: str,

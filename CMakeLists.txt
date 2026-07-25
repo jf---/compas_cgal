@@ -240,7 +240,7 @@ add_nanobind_module(_toolpath src/toolpath.cpp)
 add_nanobind_module(_stock_2 "src/stock_2.cpp;src/exact_depletion_2.cpp;src/engagement_2.cpp")
 add_nanobind_module(
     _continuous_tea_2
-    "src/continuous_tea_2.cpp;src/continuous_tea_2/boundary_events.cpp;src/continuous_tea_2/parameter_charts.cpp;src/exact_algebraic_1.cpp;src/continuous_tea_2/event_partition.cpp;src/continuous_tea_2/cap_partition.cpp;src/continuous_tea_2/event_certificate.cpp;src/continuous_tea_2/sha256.cpp"
+    "src/continuous_tea_2.cpp;src/continuous_tea_2/boundary_events.cpp;src/continuous_tea_2/parameter_charts.cpp;src/exact_algebraic_1.cpp;src/continuous_tea_2/event_partition.cpp;src/continuous_tea_2/cap_partition.cpp;src/continuous_tea_2/event_certificate.cpp;src/continuous_tea_2/event_trace.cpp;src/continuous_tea_2/sha256.cpp"
 )
 target_compile_definitions(
     _continuous_tea_2

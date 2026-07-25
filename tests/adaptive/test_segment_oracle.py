@@ -1,3 +1,4 @@
+import hashlib
 from fractions import Fraction
 
 import numpy as np
@@ -374,3 +375,103 @@ def test_trace_identity_is_independent_of_boundary_insertion_order() -> None:
     assert [(event.root_id, event.kind, event.feature_ids, event.branch_ids) for event in forward_trace.events] == [
         (event.root_id, event.kind, event.feature_ids, event.branch_ids) for event in reverse_trace.events
     ]
+
+
+def _shared_trace_certificate(
+    cap_chord_ratio: float,
+) -> _continuous_tea_2.EventPartitionCertificate2:
+    cap = Fraction.from_float(cap_chord_ratio)
+    return _continuous_tea_2.partition_cap_crossings(
+        ("0", "1"),
+        ("1",),
+        ("0", "3"),
+        ("1",),
+        str(cap.numerator),
+        str(cap.denominator),
+        _continuous_tea_2.PartitionEvent2(
+            "cap",
+            b"feature-cap",
+            b"support-cap",
+            b"trim-cap",
+            b"vertex-cap",
+            b"branch-cap",
+            "equal",
+        ),
+    )
+
+
+def test_shared_event_trace_requires_verification_and_canonicalizes_events() -> None:
+    cap_chord_ratio = 64.0 / 65.0
+    certificate = _shared_trace_certificate(cap_chord_ratio)
+    first_root = certificate.roots[0].root_id
+    event = _continuous_tea_2.EventTraceEvent2(
+        first_root,
+        first_root,
+        "endpoint-order",
+        (b"feature-b", b"feature-a"),
+        (b"branch-b", b"branch-a"),
+        1,
+        "merge",
+        0,
+    )
+    reversed_event = _continuous_tea_2.EventTraceEvent2(
+        first_root,
+        first_root,
+        "endpoint-order",
+        (b"feature-a", b"feature-b"),
+        (b"branch-a", b"branch-b"),
+        1,
+        "merge",
+        0,
+    )
+
+    trace = _continuous_tea_2.build_event_trace(
+        certificate,
+        "segment-linear-0-1-v1",
+        certificate.source_payload,
+        certificate.canonical_digest,
+        _continuous_tea_2.ContinuousTeaVerdict.CERTIFIED,
+        "partial",
+        "segment-event-exact-v1",
+        (event,),
+    )
+    reordered = _continuous_tea_2.build_event_trace(
+        certificate,
+        "segment-linear-0-1-v1",
+        certificate.source_payload,
+        certificate.canonical_digest,
+        _continuous_tea_2.ContinuousTeaVerdict.CERTIFIED,
+        "partial",
+        "segment-event-exact-v1",
+        (reversed_event,),
+    )
+
+    assert trace.exact_verdict == "certified"
+    assert trace.partition.canonical_digest == certificate.canonical_digest
+    assert trace.events[0].feature_ids == (b"feature-a", b"feature-b")
+    assert trace.events[0].branch_ids == (b"branch-a", b"branch-b")
+    assert trace.events[0].canonical_id == reordered.events[0].canonical_id
+    assert trace.canonical_bytes == reordered.canonical_bytes
+    assert trace.canonical_digest == hashlib.sha256(trace.canonical_bytes).digest()
+    assert trace.event_cell_count == len(certificate.cells)
+
+
+def test_shared_event_trace_rejects_unverified_partition() -> None:
+    cap_chord_ratio = 64.0 / 65.0
+    certificate = _shared_trace_certificate(cap_chord_ratio)
+    mutation = _continuous_tea_2.mutate_certificate_record(
+        certificate,
+        "alter-multiplicity",
+    )
+
+    with pytest.raises(_continuous_tea_2.EventTraceVerificationError):
+        _continuous_tea_2.build_event_trace(
+            mutation,
+            "segment-linear-0-1-v1",
+            certificate.source_payload,
+            certificate.canonical_digest,
+            _continuous_tea_2.ContinuousTeaVerdict.CERTIFIED,
+            "partial",
+            "segment-event-exact-v1",
+            (),
+        )
