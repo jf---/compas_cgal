@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from collections import Counter
 from fractions import Fraction
@@ -388,6 +389,26 @@ def _cell_witnesses(
         )
         for cell in certificate.cells
     )
+
+
+def _replace_certificate(
+    certificate: _continuous_tea_2.EventPartitionCertificate2,
+    **changes: object,
+) -> _continuous_tea_2.EventPartitionCertificate2:
+    fields = {
+        "build_evidence": certificate.build_evidence,
+        "charts": certificate.charts,
+        "projections": certificate.projections,
+        "roots": certificate.roots,
+        "cells": certificate.cells,
+        "fibres": certificate.fibres,
+        "overlaps": certificate.overlaps,
+        "seams": certificate.seams,
+        "source_kind": certificate.source_kind,
+        "source_payload": certificate.source_payload,
+    }
+    fields.update(changes)
+    return _continuous_tea_2.EventPartitionCertificate2(**fields)
 
 
 def test_locked_algebraic_backend_evidence_is_immutable_and_exact() -> None:
@@ -809,3 +830,173 @@ def test_quadratic_regularization_vertex_filters_the_conjugate_exactly() -> None
     assert projected.first_trim_disposition == "accepted"
     assert projected.second_trim_disposition == "accepted"
     assert projected.conjugate_disposition == "rejected-vertex-identity"
+
+
+def test_two_moving_branch_cap_resultant_is_exact_and_complete() -> None:
+    certificate = _continuous_tea_2.partition_cap_crossings(
+        ("0", "1"),
+        ("1",),
+        ("0", "3"),
+        ("1",),
+        "64",
+        "65",
+        _event(b"cap", kind="cap-crossing"),
+    )
+
+    assert certificate.projections[0].factor_coefficients == (
+        ("-1", "2"),
+        ("1", "2"),
+        ("-2", "3"),
+        ("2", "3"),
+    )
+    assert [root.root_id for root in certificate.roots] == [
+        _root_id((-1, 2), 0),
+        _root_id((-2, 3), 0),
+    ]
+    assert _cell_witnesses(certificate) == (
+        Fraction(1, 4),
+        Fraction(7, 12),
+        Fraction(5, 6),
+    )
+    assert [cell.disposition for cell in certificate.cells] == [
+        "below-cap",
+        "cap-exceeds",
+        "below-cap",
+    ]
+    assert all(
+        event.original_equations_rechecked and event.orientation_rechecked and event.trim_disposition == "accepted" for fibre in certificate.fibres for event in fibre.events
+    )
+
+
+def test_squared_chord_complement_is_rejected_by_exact_ccw_orientation() -> None:
+    certificate = _continuous_tea_2.partition_cap_crossings(
+        ("0", "3"),
+        ("1",),
+        ("0", "1"),
+        ("1",),
+        "64",
+        "65",
+        _event(b"complement", kind="cap-crossing"),
+    )
+
+    assert not certificate.roots
+    assert not certificate.fibres
+    assert certificate.overlaps[0].kind == "filtered-cap-complement"
+    assert certificate.overlaps[0].orientation_disposition == "clockwise-complement"
+
+
+def test_identically_equal_cap_is_an_explicit_oriented_interval() -> None:
+    certificate = _continuous_tea_2.partition_cap_crossings(
+        ("0", "1"),
+        ("1",),
+        ("1", "1"),
+        ("1", "-1"),
+        "2",
+        "1",
+        _event(b"identical", kind="cap-crossing"),
+    )
+
+    assert not certificate.roots
+    assert len(certificate.overlaps) == 1
+    overlap = certificate.overlaps[0]
+    assert overlap.kind == "identically-equal-cap-interval"
+    assert overlap.orientation_disposition == "ccw"
+    assert (overlap.domain_low, overlap.domain_high) == ("0", "1")
+
+
+def test_determinant_zero_uses_dot_sign_to_separate_zero_from_pi() -> None:
+    zero = _continuous_tea_2.classify_ccw_orientation(
+        ("0",),
+        ("1",),
+        ("0",),
+        ("1",),
+        "1/2",
+    )
+    pi = _continuous_tea_2.classify_ccw_orientation(
+        ("0",),
+        ("1",),
+        ("0",),
+        ("-1",),
+        "1/2",
+    )
+
+    assert zero.disposition == "zero"
+    assert zero.determinant_sign == "zero"
+    assert zero.dot_sign == "positive"
+    assert pi.disposition == "pi"
+    assert pi.determinant_sign == "zero"
+    assert pi.dot_sign == "negative"
+
+
+def test_certificate_roundtrip_reconstructs_partition_and_excludes_intervals_from_identity() -> None:
+    certificate = _continuous_tea_2.partition_cap_crossings(
+        ("0", "1"),
+        ("1",),
+        ("0", "3"),
+        ("1",),
+        "64",
+        "65",
+        _event(b"roundtrip", kind="cap-crossing"),
+    )
+    verified = _continuous_tea_2.verify_event_partition(certificate)
+
+    assert verified.verdict.name == "CERTIFIED"
+    assert verified.partition.canonical_bytes == certificate.canonical_bytes
+    assert verified.partition.canonical_digest == certificate.canonical_digest
+    assert len(certificate.canonical_digest) == 32
+    assert certificate.canonical_digest == hashlib.sha256(certificate.canonical_bytes).digest()
+    refined_root = _continuous_tea_2.AlgebraicRootRecord2(
+        certificate.roots[0].root_id,
+        certificate.roots[0].factor_coefficients,
+        certificate.roots[0].root_ordinal,
+        certificate.roots[0].multiplicity,
+        "7/16",
+        "9/16",
+    )
+    regenerated = _replace_certificate(
+        certificate,
+        roots=(refined_root, *certificate.roots[1:]),
+    )
+    assert regenerated.canonical_digest == certificate.canonical_digest
+    assert _continuous_tea_2.verify_event_partition(regenerated).verdict.name == "CERTIFIED"
+
+
+def test_native_sha256_matches_known_vector() -> None:
+    assert _continuous_tea_2.sha256_bytes(b"abc") == hashlib.sha256(b"abc").digest()
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    (
+        "delete-seam",
+        "delete-root",
+        "delete-cell",
+        "delete-fibre",
+        "delete-factor",
+        "coalesce-roots",
+        "witness-outside-cell",
+        "alter-multiplicity",
+        "alter-event-identity",
+        "alter-disposition",
+        "alter-degree",
+        "alter-bound",
+        "double-own-seam",
+    ),
+)
+def test_certificate_mutation_is_unresolved_degeneracy(mutation: str) -> None:
+    certificate = _continuous_tea_2.partition_cap_crossings(
+        ("0", "1"),
+        ("1",),
+        ("0", "3"),
+        ("1",),
+        "64",
+        "65",
+        _event(b"mutation", kind="cap-crossing"),
+    )
+    mutated = _continuous_tea_2.mutate_certificate_record(
+        certificate,
+        mutation,
+    )
+
+    verified = _continuous_tea_2.verify_event_partition(mutated)
+    assert verified.verdict.name == "UNRESOLVED_DEGENERACY"

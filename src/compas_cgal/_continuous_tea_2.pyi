@@ -165,6 +165,15 @@ class ProjectionInput2:
 
 
 class AlgebraicRootRecord2:
+    def __init__(
+        self,
+        root_id: bytes,
+        factor_coefficients: Sequence[str],
+        root_ordinal: int,
+        multiplicity: int,
+        interval_low: str,
+        interval_high: str,
+    ) -> None: ...
     root_id: bytes
     factor_coefficients: tuple[str, ...]
     root_ordinal: int
@@ -205,6 +214,12 @@ class ProjectedRegularizationVertex2:
     conjugate_disposition: str
 
 
+class CcwOrientation2:
+    disposition: str
+    determinant_sign: str
+    dot_sign: str
+
+
 class ProjectionRecord2:
     projection_id: str
     coefficient_rows: Sequence[Sequence[str]]
@@ -230,6 +245,20 @@ class ChartSeam2:
 
 
 class EventPartitionCertificate2:
+    def __init__(
+        self,
+        *,
+        build_evidence: AlgebraicBackendEvidence2,
+        charts: Sequence[ParameterChart2],
+        projections: Sequence[ProjectionRecord2],
+        roots: Sequence[AlgebraicRootRecord2],
+        cells: Sequence[ParameterCell2],
+        fibres: Sequence[EventFibre2],
+        overlaps: Sequence[OverlapInterval2],
+        seams: Sequence[ChartSeam2],
+        source_kind: str,
+        source_payload: bytes,
+    ) -> None: ...
     build_evidence: AlgebraicBackendEvidence2
     charts: Sequence[ParameterChart2]
     projections: Sequence[ProjectionRecord2]
@@ -293,6 +322,30 @@ def project_regularization_vertex(
     second_index: int,
     vertex_id: bytes,
 ) -> ProjectedRegularizationVertex2: ...
+def classify_ccw_orientation(
+    first_numerator: Sequence[str],
+    first_denominator: Sequence[str],
+    second_numerator: Sequence[str],
+    second_denominator: Sequence[str],
+    motion_parameter: str,
+) -> CcwOrientation2: ...
+def partition_cap_crossings(
+    first_numerator: Sequence[str],
+    first_denominator: Sequence[str],
+    second_numerator: Sequence[str],
+    second_denominator: Sequence[str],
+    cap_numerator: str,
+    cap_denominator: str,
+    event: PartitionEvent2,
+) -> EventPartitionCertificate2: ...
+def verify_event_partition(
+    certificate: EventPartitionCertificate2,
+) -> VerifiedEventPartition2: ...
+def mutate_certificate_record(
+    certificate: EventPartitionCertificate2,
+    mutation: str,
+) -> EventPartitionCertificate2: ...
+def sha256_bytes(input: bytes) -> bytes: ...
 def partition_projections(
     projections: Sequence[ProjectionInput2],
 ) -> EventPartitionCertificate2: ...
