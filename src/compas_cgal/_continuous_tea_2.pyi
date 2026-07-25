@@ -57,12 +57,51 @@ class TrimFilterError(EventSubstrateError): ...
 class EventPartitionVerificationError(EventSubstrateError): ...
 
 
+class NonFiniteSegmentInputError(EventSubstrateError): ...
+
+
+class ZeroLengthSegmentMotionError(EventSubstrateError): ...
+
+
+class NonPositiveToolRadiusError(EventSubstrateError): ...
+
+
+class InvalidCapChordRatioError(EventSubstrateError): ...
+
+
 class ContinuousTeaVerdict:
     CERTIFIED: ContinuousTeaVerdict
     CAP_EXCEEDED: ContinuousTeaVerdict
     UNRESOLVED_DEGENERACY: ContinuousTeaVerdict
     @property
     def name(self) -> str: ...
+
+
+class ExactBinary64Rational2:
+    numerator: str
+    denominator: str
+    text: str
+
+
+class SegmentEventSource2:
+    @staticmethod
+    def from_binary64(
+        x0: float,
+        y0: float,
+        x1: float,
+        y1: float,
+        tool_radius: float,
+        cap_chord_ratio: float,
+    ) -> SegmentEventSource2: ...
+    x0: ExactBinary64Rational2
+    y0: ExactBinary64Rational2
+    x1: ExactBinary64Rational2
+    y1: ExactBinary64Rational2
+    tool_radius: ExactBinary64Rational2
+    cap_chord_ratio: ExactBinary64Rational2
+    motion_data: tuple[str, str, str, str]
+    canonical_bytes: bytes
+    canonical_digest: bytes
 
 
 class BoundaryFeatureRecord2:
