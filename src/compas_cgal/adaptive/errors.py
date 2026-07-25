@@ -8,7 +8,6 @@ InvalidReachableDomainInputError = _coverage_2.InvalidReachableDomainInputError
 ReachableArrangementTopologyError = _coverage_2.ReachableArrangementTopologyError
 PocketNotMachinableError = _coverage_2.PocketNotMachinableError
 ReachableMaterialContainmentError = _coverage_2.ReachableMaterialContainmentError
-CoverageConstructionError = _coverage_2.CoverageConstructionError
 
 
 class InvalidUnitValueError(ValueError):
@@ -89,15 +88,3 @@ class InvalidOperationIdentityError(ArtifactIdentityError):
 
 class InvalidReachableDomainCertificateError(ValueError):
     """Reachable-domain reconstruction evidence violates its exact contract."""
-
-
-class InvalidCoverageCertificateError(ValueError):
-    """Coverage evidence contradicts its exact native residual."""
-
-
-class InvalidCoverageSweepError(ValueError):
-    """A full-sweep witness omits or contradicts exact native evidence."""
-
-
-class IncompletePocketCoverageError(RuntimeError):
-    """Exact reachable material retains one or more residual components."""
