@@ -440,6 +440,109 @@ def test_frozen_center_and_rim_charts_cover_each_seam_once() -> None:
     assert len(verified.partition.seams) == 6
 
 
+@pytest.mark.parametrize(
+    (
+        "motion_kind",
+        "motion_data",
+        "support_kind",
+        "support_data",
+        "center_chart",
+        "expected_rows",
+        "expected_degree",
+        "bound_id",
+    ),
+    (
+        (
+            "segment",
+            ("0", "0", "1", "0"),
+            "line",
+            ("1", "0", "0"),
+            "",
+            (("1", "0", "-1"), ("1", "0", "1")),
+            (1, 2),
+            "segment-line-(1,2)-v1",
+        ),
+        (
+            "segment",
+            ("-1", "0", "1", "0"),
+            "circle",
+            ("0", "0", "1"),
+            "",
+            (
+                ("-1", "0", "2", "0", "3"),
+                ("0", "0", "-8", "0", "-8"),
+                ("4", "0", "8", "0", "4"),
+            ),
+            (2, 4),
+            "segment-circle-(2,4)-v1",
+        ),
+        (
+            "full-circle",
+            ("0", "0", "1"),
+            "line",
+            ("1", "0", "0"),
+            "center-quarter-0-v1",
+            (("1", "0", "0"), ("0", "0", "0"), ("0", "0", "-1")),
+            (2, 2),
+            "full-circle-line-(2,2)-v1",
+        ),
+        (
+            "full-circle",
+            ("0", "0", "1"),
+            "circle",
+            ("3", "0", "1"),
+            "center-quarter-0-v1",
+            (
+                ("0", "0", "1", "0", "1"),
+                ("0", "1", "0", "1", "0"),
+                ("1", "0", "5", "0", "4"),
+                ("0", "1", "0", "1", "0"),
+                ("1", "0", "4", "0", "3"),
+            ),
+            (4, 4),
+            "full-circle-circle-(4,4)-v1",
+        ),
+    ),
+)
+def test_exact_pullbacks_match_literal_coefficient_grids_and_bounds(
+    motion_kind: str,
+    motion_data: tuple[str, ...],
+    support_kind: str,
+    support_data: tuple[str, ...],
+    center_chart: str,
+    expected_rows: tuple[tuple[str, ...], ...],
+    expected_degree: tuple[int, int],
+    bound_id: str,
+) -> None:
+    projection = _continuous_tea_2.construct_pullback(
+        motion_kind,
+        motion_data,
+        support_kind,
+        support_data,
+        "1",
+        center_chart,
+        "rim-half-0-v1",
+    )
+
+    assert projection.coefficient_rows == expected_rows
+    assert projection.actual_degree == expected_degree
+    assert projection.degree_bound == expected_degree
+    assert projection.degree_bound_id == bound_id
+    assert projection.normalized_coefficient_bytes
+
+
+def test_projection_degree_overflow_fails_before_partitioning() -> None:
+    with pytest.raises(
+        _continuous_tea_2.ProjectionDegreeBoundError,
+        match="degree bound",
+    ):
+        _continuous_tea_2.projection_from_grid(
+            "overflow",
+            (("1", "0", "0", "1"), ("0",), ("1",)),
+            "segment-line-(1,2)-v1",
+        )
+
+
 def test_repeated_tangency_root_is_one_fibre_with_multiplicity_two() -> None:
     certificate = _continuous_tea_2.partition_projections(
         (

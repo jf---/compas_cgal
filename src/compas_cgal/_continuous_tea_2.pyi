@@ -239,6 +239,20 @@ def parameter_charts() -> Sequence[ParameterChart2]: ...
 def verify_chart_coverage(
     charts: Sequence[ParameterChart2],
 ) -> VerifiedEventPartition2: ...
+def construct_pullback(
+    motion_kind: str,
+    motion_data: Sequence[str],
+    support_kind: str,
+    support_data: Sequence[str],
+    cutter_radius: str,
+    center_chart: str,
+    rim_chart: str,
+) -> ProjectionRecord2: ...
+def projection_from_grid(
+    projection_id: str,
+    coefficient_rows: Sequence[Sequence[str]],
+    degree_bound_id: str,
+) -> ProjectionRecord2: ...
 def partition_projections(
     projections: Sequence[ProjectionInput2],
 ) -> EventPartitionCertificate2: ...

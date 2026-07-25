@@ -57,6 +57,17 @@ nb::object string_tuple(
         .attr("tuple")(result);
 }
 
+nb::object string_matrix_tuple(
+    const std::vector<std::vector<std::string>>& rows)
+{
+    nb::list result;
+    for (const auto& row : rows) {
+        result.append(string_tuple(row));
+    }
+    return nb::module_::import_("builtins")
+        .attr("tuple")(result);
+}
+
 } // namespace
 
 NB_MODULE(_continuous_tea_2, m)
@@ -314,12 +325,18 @@ NB_MODULE(_continuous_tea_2, m)
         .def_ro(
             "projection_id",
             &ProjectionRecord2::projection_id)
-        .def_ro(
+        .def_prop_ro(
             "coefficient_rows",
-            &ProjectionRecord2::coefficient_rows)
-        .def_ro(
+            [](const ProjectionRecord2& projection) {
+                return string_matrix_tuple(
+                    projection.coefficient_rows);
+            })
+        .def_prop_ro(
             "factor_coefficients",
-            &ProjectionRecord2::factor_coefficients)
+            [](const ProjectionRecord2& projection) {
+                return string_matrix_tuple(
+                    projection.factor_coefficients);
+            })
         .def_prop_ro(
             "actual_degree",
             [](const ProjectionRecord2& projection) {
@@ -565,6 +582,22 @@ NB_MODULE(_continuous_tea_2, m)
         "verify_chart_coverage",
         &verify_chart_coverage,
         "charts"_a);
+    m.def(
+        "construct_pullback",
+        &construct_pullback,
+        "motion_kind"_a,
+        "motion_data"_a,
+        "support_kind"_a,
+        "support_data"_a,
+        "cutter_radius"_a,
+        "center_chart"_a,
+        "rim_chart"_a);
+    m.def(
+        "projection_from_grid",
+        &projection_from_grid,
+        "projection_id"_a,
+        "coefficient_rows"_a,
+        "degree_bound_id"_a);
     m.def(
         "partition_projections",
         &partition_projections,
