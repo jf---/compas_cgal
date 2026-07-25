@@ -1,24 +1,22 @@
 #include "reachable_arrangement_2.h"
 
-#include "canonical_rotation_2.h"
 #include "exact_sweep_2.h"
 #include "reachable_errors_2.h"
+#include "reachable_input_2.h"
 
 #include <algorithm>
-#include <cmath>
 #include <cstddef>
 #include <iterator>
 #include <memory>
-#include <set>
+#include <optional>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
 #include <CGAL/Boolean_set_operations_2/Gps_polygon_validation.h>
-#include <CGAL/Polygon_2.h>
 #include <CGAL/enum.h>
-#include <CGAL/number_utils.h>
 
 namespace {
 
@@ -28,117 +26,6 @@ std::vector<T> sorted_unique(std::vector<T> values)
     std::sort(values.begin(), values.end());
     values.erase(std::unique(values.begin(), values.end()), values.end());
     return values;
-}
-
-bool point_equal(
-    const ReachKernelPoint& left,
-    const ReachKernelPoint& right)
-{
-    return CGAL::compare_xy(left, right) == CGAL::EQUAL;
-}
-
-std::string ring_record(
-    bool outer,
-    const std::vector<std::array<double, 2>>& points)
-{
-    std::vector<std::string> fields;
-    fields.reserve(points.size() + 1);
-    fields.emplace_back(outer ? "outer" : "hole");
-    for (const std::array<double, 2>& point : points) {
-        fields.push_back(reach_tagged_record(
-            "binary64-point-v1",
-            {
-                reach_binary64_record(point[0]),
-                reach_binary64_record(point[1]),
-            }));
-    }
-    return reach_tagged_record("input-ring-v1", fields);
-}
-
-void rotate_ring(
-    CanonicalReachRing2& ring,
-    std::size_t& comparison_count)
-{
-    const std::size_t first = minimal_rotation_index(
-        ring.points,
-        [](const ReachKernelPoint& left, const ReachKernelPoint& right) {
-            return CGAL::compare_xy(left, right);
-        },
-        comparison_count);
-    std::rotate(
-        ring.points.begin(),
-        ring.points.begin() + static_cast<std::ptrdiff_t>(first),
-        ring.points.end());
-    std::rotate(
-        ring.binary64_points.begin(),
-        ring.binary64_points.begin() + static_cast<std::ptrdiff_t>(first),
-        ring.binary64_points.end());
-}
-
-CanonicalReachRing2 canonical_ring(
-    Eigen::Ref<const compas::RowMatrixXd> vertices,
-    bool outer,
-    std::size_t& comparison_count)
-{
-    if (vertices.cols() < 2 || vertices.rows() < 3) {
-        throw InvalidReachableDomainInputError(
-            "reachable-domain rings require at least three XY vertices");
-    }
-    CanonicalReachRing2 ring{outer, 0, {}, {}, {}};
-    ring.points.reserve(static_cast<std::size_t>(vertices.rows()));
-    ring.binary64_points.reserve(
-        static_cast<std::size_t>(vertices.rows()));
-    for (Eigen::Index row = 0; row < vertices.rows(); ++row) {
-        const double x = vertices(row, 0);
-        const double y = vertices(row, 1);
-        if (!std::isfinite(x) || !std::isfinite(y)) {
-            throw InvalidReachableDomainInputError(
-                "reachable-domain vertices must be finite binary64 values");
-        }
-        const double canonical_x = x == 0.0 ? 0.0 : x;
-        const double canonical_y = y == 0.0 ? 0.0 : y;
-        ring.points.emplace_back(canonical_x, canonical_y);
-        ring.binary64_points.push_back({canonical_x, canonical_y});
-    }
-    if (ring.points.size() > 3
-        && point_equal(ring.points.front(), ring.points.back())) {
-        ring.points.pop_back();
-        ring.binary64_points.pop_back();
-    }
-    if (ring.points.size() < 3) {
-        throw InvalidReachableDomainInputError(
-            "reachable-domain rings require three distinct vertices");
-    }
-    for (std::size_t index = 0; index < ring.points.size(); ++index) {
-        if (point_equal(
-                ring.points[index],
-                ring.points[(index + 1) % ring.points.size()])) {
-            throw InvalidReachableDomainInputError(
-                "reachable-domain edges must be nondegenerate");
-        }
-    }
-
-    CGAL::Polygon_2<ReachKernel> polygon(
-        ring.points.begin(),
-        ring.points.end());
-    if (!polygon.is_simple()) {
-        throw InvalidReachableDomainInputError(
-            "reachable-domain rings must be exact simple polygons");
-    }
-    const CGAL::Orientation orientation = polygon.orientation();
-    if (orientation == CGAL::COLLINEAR) {
-        throw InvalidReachableDomainInputError(
-            "reachable-domain rings must have nonzero exact area");
-    }
-    if ((orientation == CGAL::COUNTERCLOCKWISE) != outer) {
-        std::reverse(ring.points.begin(), ring.points.end());
-        std::reverse(
-            ring.binary64_points.begin(),
-            ring.binary64_points.end());
-    }
-    rotate_ring(ring, comparison_count);
-    ring.record = ring_record(outer, ring.binary64_points);
-    return ring;
 }
 
 ReachPolygon ring_polygon(const CanonicalReachRing2& ring)
@@ -377,60 +264,177 @@ void append_ring_primitives(
 using FaceHandle2 = ReachArrangement2::Face_handle;
 using HalfedgeHandle2 = ReachArrangement2::Halfedge_handle;
 
-template <typename CcbIterator>
-void append_ccb_halfedges(
-    CcbIterator begin,
-    CcbIterator end,
-    std::vector<HalfedgeHandle2>& halfedges)
+template <typename Handle>
+const void* handle_address(const Handle& handle)
 {
-    for (auto ccb = begin; ccb != end; ++ccb) {
-        auto first = *ccb;
-        auto current = first;
-        do {
-            halfedges.push_back(current);
-            ++current;
-        } while (current != first);
-    }
+    return static_cast<const void*>(std::addressof(*handle));
 }
 
-std::vector<HalfedgeHandle2> face_halfedges(FaceHandle2 face)
+struct DenseHalfedge2 {
+    HalfedgeHandle2 handle;
+    std::size_t face_slot;
+    std::size_t neighbor_slot;
+    std::size_t edge_slot;
+};
+
+struct DenseArrangementIndex2 {
+    std::vector<FaceHandle2> faces;
+    std::vector<DenseHalfedge2> halfedges;
+    std::vector<std::vector<std::size_t>> halfedge_slots_by_face;
+    std::vector<std::vector<std::size_t>> primitive_slots_by_edge;
+    std::vector<ReachPrimitiveKind2> primitive_kinds;
+    std::unordered_map<const void*, std::size_t>
+        halfedge_slot_by_address;
+    std::size_t unbounded_face_slot = 0;
+};
+
+DenseArrangementIndex2 compile_dense_arrangement(
+    ReachArrangement2& arrangement,
+    const ReachPrimitiveKinds2& primitive_kinds,
+    ReachableDomainBuildAudit2& audit)
 {
-    std::vector<HalfedgeHandle2> halfedges;
-    append_ccb_halfedges(
-        face->outer_ccbs_begin(),
-        face->outer_ccbs_end(),
-        halfedges);
-    append_ccb_halfedges(
-        face->inner_ccbs_begin(),
-        face->inner_ccbs_end(),
-        halfedges);
-    return halfedges;
+    DenseArrangementIndex2 dense;
+    const std::size_t face_count = arrangement.number_of_faces();
+    const std::size_t halfedge_count =
+        arrangement.number_of_halfedges();
+    dense.faces.reserve(face_count);
+    dense.halfedges.reserve(halfedge_count);
+    dense.halfedge_slots_by_face.resize(face_count);
+    dense.primitive_slots_by_edge.reserve(
+        arrangement.number_of_edges());
+    dense.primitive_kinds.reserve(primitive_kinds.size());
+    dense.halfedge_slot_by_address.reserve(halfedge_count);
+
+    std::unordered_map<const void*, std::size_t>
+        face_slot_by_address;
+    face_slot_by_address.reserve(face_count);
+    for (auto face = arrangement.faces_begin();
+         face != arrangement.faces_end();
+         ++face) {
+        const std::size_t slot = dense.faces.size();
+        if (!face_slot_by_address.emplace(
+                handle_address(face),
+                slot).second) {
+            throw ReachableArrangementTopologyError(
+                "dense arrangement contains a duplicate face address");
+        }
+        dense.faces.push_back(face);
+        ++audit.dense_face_visits;
+    }
+
+    std::unordered_map<std::string, std::size_t>
+        primitive_slot_by_id;
+    primitive_slot_by_id.reserve(primitive_kinds.size());
+    std::size_t outer_count = 0;
+    for (const auto& [id, kind] : primitive_kinds) {
+        const std::size_t slot = dense.primitive_kinds.size();
+        primitive_slot_by_id.emplace(id, slot);
+        dense.primitive_kinds.push_back(kind);
+        outer_count += kind == ReachPrimitiveKind2::Outer ? 1 : 0;
+    }
+    if (outer_count != 1) {
+        throw ReachableArrangementTopologyError(
+            "reachable parity requires exactly one outer primitive");
+    }
+
+    const auto face_slot = [&face_slot_by_address](
+                               FaceHandle2 face) {
+        const auto found =
+            face_slot_by_address.find(handle_address(face));
+        if (found == face_slot_by_address.end()) {
+            throw ReachableArrangementTopologyError(
+                "dense arrangement references an unknown face");
+        }
+        return found->second;
+    };
+    for (auto edge = arrangement.edges_begin();
+         edge != arrangement.edges_end();
+         ++edge) {
+        const std::vector<std::string>& primitive_ids =
+            edge->curve().data().primitive_ids;
+        if (!std::is_sorted(
+                primitive_ids.begin(),
+                primitive_ids.end())
+            || std::adjacent_find(
+                   primitive_ids.begin(),
+                   primitive_ids.end())
+                != primitive_ids.end()) {
+            throw ReachableArrangementTopologyError(
+                "arrangement primitive labels must be sorted and unique");
+        }
+        std::vector<std::size_t> primitive_slots;
+        primitive_slots.reserve(primitive_ids.size());
+        for (const std::string& id : primitive_ids) {
+            ++audit.primitive_label_resolutions;
+            const auto found = primitive_slot_by_id.find(id);
+            if (found == primitive_slot_by_id.end()) {
+                throw ReachableArrangementTopologyError(
+                    "arrangement edge references an unknown primitive");
+            }
+            primitive_slots.push_back(found->second);
+        }
+        const std::size_t edge_slot =
+            dense.primitive_slots_by_edge.size();
+        dense.primitive_slots_by_edge.push_back(
+            std::move(primitive_slots));
+        for (const HalfedgeHandle2 halfedge :
+             {HalfedgeHandle2(edge), edge->twin()}) {
+            const std::size_t halfedge_slot =
+                dense.halfedges.size();
+            const std::size_t owner_slot =
+                face_slot(halfedge->face());
+            if (!dense.halfedge_slot_by_address.emplace(
+                    handle_address(halfedge),
+                    halfedge_slot).second) {
+                throw ReachableArrangementTopologyError(
+                    "dense arrangement contains a duplicate halfedge address");
+            }
+            dense.halfedges.push_back(
+                {
+                    halfedge,
+                    owner_slot,
+                    face_slot(halfedge->twin()->face()),
+                    edge_slot,
+                });
+            dense.halfedge_slots_by_face[owner_slot].push_back(
+                halfedge_slot);
+            ++audit.dense_halfedge_visits;
+        }
+    }
+    if (dense.faces.size() != face_count
+        || dense.halfedges.size() != halfedge_count) {
+        throw ReachableArrangementTopologyError(
+            "dense arrangement indexing did not cover the complete DCEL");
+    }
+    dense.unbounded_face_slot =
+        face_slot(arrangement.unbounded_face());
+    return dense;
 }
 
 class ActivePrimitiveParity2 {
 public:
     explicit ActivePrimitiveParity2(
-        const ReachPrimitiveKinds2& primitive_kinds)
-        : primitive_kinds_(primitive_kinds)
+        const std::vector<ReachPrimitiveKind2>& primitive_kinds)
+        : primitive_kinds_(primitive_kinds),
+          active_(primitive_kinds.size(), false)
     {
     }
 
-    void toggle(const std::vector<std::string>& primitive_ids)
+    void toggle(const std::vector<std::size_t>& primitive_slots)
     {
-        for (const std::string& id : primitive_ids) {
-            const auto kind = primitive_kinds_.find(id);
-            if (kind == primitive_kinds_.end()) {
+        for (const std::size_t slot : primitive_slots) {
+            if (slot >= active_.size()) {
                 throw ReachableArrangementTopologyError(
-                    "arrangement edge references an unknown primitive");
+                    "primitive parity references an invalid dense slot");
             }
-            const bool activated = active_ids_.insert(id).second;
+            const bool activated = active_[slot] == 0;
             const std::size_t increment = activated ? 1 : 0;
             const std::size_t decrement = activated ? 0 : 1;
-            if (!activated && active_ids_.erase(id) != 1) {
-                throw ReachableArrangementTopologyError(
-                    "primitive parity state could not deactivate an active ID");
-            }
-            std::size_t& count = count_for(kind->second);
+            active_[slot] = activated;
+            active_count_ += increment;
+            active_count_ -= decrement;
+            std::size_t& count =
+                count_for(primitive_kinds_[slot]);
             if (count < decrement) {
                 throw ReachableArrangementTopologyError(
                     "primitive parity count underflow");
@@ -460,7 +464,7 @@ public:
 
     bool empty() const
     {
-        return active_ids_.empty()
+        return active_count_ == 0
             && active_outer_ == 0
             && active_holes_ == 0
             && active_forbidden_ == 0;
@@ -481,8 +485,9 @@ private:
             "unknown reachable primitive kind");
     }
 
-    const ReachPrimitiveKinds2& primitive_kinds_;
-    std::set<std::string> active_ids_;
+    const std::vector<ReachPrimitiveKind2>& primitive_kinds_;
+    std::vector<unsigned char> active_;
+    std::size_t active_count_ = 0;
     std::size_t active_outer_ = 0;
     std::size_t active_holes_ = 0;
     std::size_t active_forbidden_ = 0;
@@ -499,37 +504,101 @@ bool same_face_state(
 }
 
 struct ParityFrame2 {
-    FaceHandle2 face;
-    std::vector<HalfedgeHandle2> halfedges;
+    std::size_t face_slot;
     std::size_t next_halfedge = 0;
-    std::vector<std::string> entering_primitives;
+    std::optional<std::size_t> entering_edge_slot;
 };
 
-std::size_t selected_component_count(
-    ReachArrangement2& arrangement)
+void classify_dense_faces(
+    const DenseArrangementIndex2& dense,
+    ReachableDomainBuildAudit2& audit)
 {
-    std::set<const void*> visited;
+    for (const FaceHandle2 face : dense.faces) {
+        face->set_data(ReachFaceState2{});
+    }
+    ActivePrimitiveParity2 active(dense.primitive_kinds);
+    dense.faces[dense.unbounded_face_slot]->set_data(
+        active.face_state());
+    std::vector<ParityFrame2> stack{
+        {dense.unbounded_face_slot, 0, std::nullopt},
+    };
+    while (!stack.empty()) {
+        ParityFrame2& frame = stack.back();
+        const std::vector<std::size_t>& face_halfedges =
+            dense.halfedge_slots_by_face[frame.face_slot];
+        if (frame.next_halfedge == face_halfedges.size()) {
+            const std::optional<std::size_t> entering =
+                frame.entering_edge_slot;
+            stack.pop_back();
+            if (entering.has_value()) {
+                active.toggle(
+                    dense.primitive_slots_by_edge[*entering]);
+            }
+            continue;
+        }
+        const DenseHalfedge2& crossed =
+            dense.halfedges[face_halfedges[frame.next_halfedge++]];
+        ++audit.parity_halfedge_visits;
+        active.toggle(
+            dense.primitive_slots_by_edge[crossed.edge_slot]);
+        const ReachFaceState2 predicted = active.face_state();
+        if (!dense.faces[crossed.neighbor_slot]
+                 ->data()
+                 .classified) {
+            dense.faces[crossed.neighbor_slot]->set_data(
+                predicted);
+            stack.push_back(
+                {crossed.neighbor_slot, 0, crossed.edge_slot});
+            continue;
+        }
+        if (!same_face_state(
+                dense.faces[crossed.neighbor_slot]->data(),
+                predicted)) {
+            throw ReachableArrangementTopologyError(
+                "dual routes disagree on aggregate face parity");
+        }
+        active.toggle(
+            dense.primitive_slots_by_edge[crossed.edge_slot]);
+    }
+    if (!active.empty()) {
+        throw ReachableArrangementTopologyError(
+            "dual parity traversal did not restore the unbounded state");
+    }
+    for (const FaceHandle2 face : dense.faces) {
+        if (!face->data().classified) {
+            throw ReachableArrangementTopologyError(
+                "dual parity traversal left a face unclassified");
+        }
+    }
+}
+
+std::size_t selected_component_count(
+    const DenseArrangementIndex2& dense,
+    ReachableDomainBuildAudit2& audit)
+{
+    std::vector<unsigned char> visited(dense.faces.size(), false);
     std::size_t component_count = 0;
-    for (auto face = arrangement.faces_begin();
-         face != arrangement.faces_end();
-         ++face) {
-        if (!face->data().selected
-            || visited.contains(std::addressof(*face))) {
+    for (std::size_t face_slot = 0;
+         face_slot < dense.faces.size();
+         ++face_slot) {
+        if (!dense.faces[face_slot]->data().selected
+            || visited[face_slot] != 0) {
             continue;
         }
         ++component_count;
-        std::vector<FaceHandle2> pending{face};
-        visited.insert(std::addressof(*face));
+        std::vector<std::size_t> pending{face_slot};
+        visited[face_slot] = true;
         while (!pending.empty()) {
-            const FaceHandle2 current = pending.back();
+            const std::size_t current = pending.back();
             pending.pop_back();
-            for (const HalfedgeHandle2 halfedge :
-                 face_halfedges(current)) {
-                const FaceHandle2 neighbor =
-                    halfedge->twin()->face();
-                if (neighbor->data().selected
-                    && visited.insert(
-                        std::addressof(*neighbor)).second) {
+            for (const std::size_t halfedge_slot :
+                 dense.halfedge_slots_by_face[current]) {
+                ++audit.component_halfedge_visits;
+                const std::size_t neighbor =
+                    dense.halfedges[halfedge_slot].neighbor_slot;
+                if (dense.faces[neighbor]->data().selected
+                    && visited[neighbor] == 0) {
+                    visited[neighbor] = true;
                     pending.push_back(neighbor);
                 }
             }
@@ -538,20 +607,36 @@ std::size_t selected_component_count(
     return component_count;
 }
 
-HalfedgeHandle2 next_selected_boundary(
-    ReachArrangement2& arrangement,
-    HalfedgeHandle2 current)
+std::size_t halfedge_slot(
+    const DenseArrangementIndex2& dense,
+    HalfedgeHandle2 halfedge)
 {
-    HalfedgeHandle2 candidate = current->next();
+    const auto found = dense.halfedge_slot_by_address.find(
+        handle_address(halfedge));
+    if (found == dense.halfedge_slot_by_address.end()) {
+        throw ReachableArrangementTopologyError(
+            "boundary traversal references an unknown dense halfedge");
+    }
+    return found->second;
+}
+
+std::size_t next_selected_boundary(
+    const DenseArrangementIndex2& dense,
+    std::size_t current_slot,
+    ReachableDomainBuildAudit2& audit)
+{
+    HalfedgeHandle2 candidate =
+        dense.halfedges[current_slot].handle->next();
     for (std::size_t step = 0;
-         step < arrangement.number_of_halfedges();
+         step < dense.halfedges.size();
          ++step) {
+        ++audit.boundary_rotation_halfedge_visits;
         if (!candidate->face()->data().selected) {
             throw ReachableArrangementTopologyError(
                 "selected boundary traversal left the selected face set");
         }
         if (!candidate->twin()->face()->data().selected) {
-            return candidate;
+            return halfedge_slot(dense, candidate);
         }
         candidate = candidate->twin()->next();
     }
@@ -580,37 +665,51 @@ ReachXCurve directed_halfedge_curve(HalfedgeHandle2 halfedge)
 }
 
 ReachPolygonWithHoles extract_center_polygon(
-    ReachArrangement2& arrangement)
+    const DenseArrangementIndex2& dense,
+    ReachableDomainBuildAudit2& audit)
 {
-    std::set<const void*> visited;
+    std::vector<unsigned char> visited(
+        dense.halfedges.size(),
+        false);
     std::vector<ReachPolygon> outer_cycles;
     std::vector<ReachPolygon> hole_cycles;
-    for (auto halfedge = arrangement.halfedges_begin();
-         halfedge != arrangement.halfedges_end();
-         ++halfedge) {
+    for (std::size_t halfedge_slot_value = 0;
+         halfedge_slot_value < dense.halfedges.size();
+         ++halfedge_slot_value) {
+        ++audit.boundary_scan_halfedge_visits;
+        const HalfedgeHandle2 halfedge =
+            dense.halfedges[halfedge_slot_value].handle;
         const bool selected_boundary =
             halfedge->face()->data().selected
             && !halfedge->twin()->face()->data().selected;
         if (!selected_boundary
-            || visited.contains(std::addressof(*halfedge))) {
+            || visited[halfedge_slot_value] != 0) {
             continue;
         }
         ReachPolygon cycle;
-        const HalfedgeHandle2 first = halfedge;
-        HalfedgeHandle2 current = first;
+        const std::size_t first = halfedge_slot_value;
+        std::size_t current = first;
         for (std::size_t step = 0;
-             step < arrangement.number_of_halfedges();
+             step < dense.halfedges.size();
              ++step) {
-            if (!visited.insert(std::addressof(*current)).second) {
+            if (visited[current] != 0) {
                 throw ReachableArrangementTopologyError(
                     "selected boundary cycle revisited a halfedge before closure");
             }
-            if (current->curve().data().source_piece_ids.empty()) {
+            visited[current] = true;
+            ++audit.boundary_cycle_halfedge_visits;
+            const HalfedgeHandle2 current_halfedge =
+                dense.halfedges[current].handle;
+            if (current_halfedge->curve().data().source_piece_ids.empty()) {
                 throw ReachableArrangementTopologyError(
                     "selected boundary edge has no propagated source provenance");
             }
-            cycle.push_back(directed_halfedge_curve(current));
-            current = next_selected_boundary(arrangement, current);
+            cycle.push_back(
+                directed_halfedge_curve(current_halfedge));
+            current = next_selected_boundary(
+                dense,
+                current,
+                audit);
             if (current == first) {
                 break;
             }
@@ -649,20 +748,6 @@ ReachPolygonWithHoles extract_center_polygon(
     return center;
 }
 
-void validate_canonical_radius(const CanonicalReachInput2& input)
-{
-    if (!std::isfinite(input.binary64_radius)
-        || !(input.binary64_radius > 0.0)
-        || CGAL::compare(input.radius, ReachFT(0)) != CGAL::LARGER
-        || CGAL::compare(
-               input.radius,
-               ReachFT(input.binary64_radius))
-            != CGAL::EQUAL) {
-        throw InvalidReachableDomainInputError(
-            "canonical reach radius must be a positive exact binary64 injection");
-    }
-}
-
 } // namespace
 
 ReachCurveLabels2 MergeReachCurveLabels2::operator()(
@@ -685,141 +770,34 @@ ReachCurveLabels2 MergeReachCurveLabels2::operator()(
     };
 }
 
-CanonicalReachInput2 canonical_reach_input(
-    Eigen::Ref<const compas::RowMatrixXd> boundary,
-    const std::vector<compas::RowMatrixXd>& holes,
-    double tool_radius)
-{
-    if (!std::isfinite(tool_radius) || !(tool_radius > 0.0)) {
-        throw InvalidReachableDomainInputError(
-            "reachable-domain tool radius must be finite and positive");
-    }
-    std::size_t comparison_count = 0;
-    CanonicalReachInput2 input;
-    input.outer = canonical_ring(boundary, true, comparison_count);
-    input.radius = ReachFT(tool_radius);
-    input.binary64_radius = tool_radius;
-    input.holes.reserve(holes.size());
-    for (const compas::RowMatrixXd& hole : holes) {
-        input.holes.push_back(
-            canonical_ring(hole, false, comparison_count));
-    }
-    std::sort(
-        input.holes.begin(),
-        input.holes.end(),
-        [](const CanonicalReachRing2& left,
-           const CanonicalReachRing2& right) {
-            return left.record < right.record;
-        });
-    for (std::size_t index = 0; index < input.holes.size(); ++index) {
-        if (index != 0
-            && input.holes[index - 1].record
-                == input.holes[index].record) {
-            throw InvalidReachableDomainInputError(
-                "reachable-domain holes must have distinct exact identities");
-        }
-        input.holes[index].canonical_ordinal = index;
-    }
-    input.input_vertex_count_ = input.outer.points.size();
-    for (const CanonicalReachRing2& hole : input.holes) {
-        input.input_vertex_count_ += hole.points.size();
-    }
-    input.ring_rotation_comparisons_ = comparison_count;
-    std::vector<std::string> fields{
-        input.outer.record,
-        reach_binary64_record(input.binary64_radius),
-    };
-    for (const CanonicalReachRing2& hole : input.holes) {
-        fields.push_back(hole.record);
-    }
-    input.recipe_record =
-        reach_tagged_record("reachable-input-recipe-v1", fields);
-    return input;
-}
-
 void classify_faces_by_primitive_parity(
     ReachArrangement2& arrangement,
     const ReachPrimitiveKinds2& primitive_kinds)
 {
-    const std::size_t outer_count = static_cast<std::size_t>(
-        std::count_if(
-            primitive_kinds.begin(),
-            primitive_kinds.end(),
-            [](const auto& item) {
-                return item.second == ReachPrimitiveKind2::Outer;
-            }));
-    if (outer_count != 1) {
-        throw ReachableArrangementTopologyError(
-            "reachable parity requires exactly one outer primitive");
-    }
-    for (auto face = arrangement.faces_begin();
-         face != arrangement.faces_end();
-         ++face) {
-        face->set_data(ReachFaceState2{});
-    }
+    ReachableDomainBuildAudit2 audit;
+    classify_faces_by_primitive_parity(
+        arrangement,
+        primitive_kinds,
+        audit);
+}
 
-    ActivePrimitiveParity2 active(primitive_kinds);
-    const FaceHandle2 unbounded = arrangement.unbounded_face();
-    unbounded->set_data(active.face_state());
-    std::vector<ParityFrame2> stack{
-        {
-            unbounded,
-            face_halfedges(unbounded),
-            0,
-            {},
-        },
-    };
-    while (!stack.empty()) {
-        ParityFrame2& frame = stack.back();
-        if (frame.next_halfedge == frame.halfedges.size()) {
-            const std::vector<std::string> entering =
-                std::move(frame.entering_primitives);
-            stack.pop_back();
-            active.toggle(entering);
-            continue;
-        }
-        const HalfedgeHandle2 crossed =
-            frame.halfedges[frame.next_halfedge++];
-        const std::vector<std::string>& crossed_primitives =
-            crossed->curve().data().primitive_ids;
-        active.toggle(crossed_primitives);
-        const FaceHandle2 neighbor = crossed->twin()->face();
-        const ReachFaceState2 predicted = active.face_state();
-        if (!neighbor->data().classified) {
-            neighbor->set_data(predicted);
-            stack.push_back(
-                {
-                    neighbor,
-                    face_halfedges(neighbor),
-                    0,
-                    crossed_primitives,
-                });
-            continue;
-        }
-        if (!same_face_state(neighbor->data(), predicted)) {
-            throw ReachableArrangementTopologyError(
-                "dual routes disagree on aggregate face parity");
-        }
-        active.toggle(crossed_primitives);
-    }
-    if (!active.empty()) {
-        throw ReachableArrangementTopologyError(
-            "dual parity traversal did not restore the unbounded state");
-    }
-    for (auto face = arrangement.faces_begin();
-         face != arrangement.faces_end();
-         ++face) {
-        if (!face->data().classified) {
-            throw ReachableArrangementTopologyError(
-                "dual parity traversal left a face unclassified");
-        }
-    }
+void classify_faces_by_primitive_parity(
+    ReachArrangement2& arrangement,
+    const ReachPrimitiveKinds2& primitive_kinds,
+    ReachableDomainBuildAudit2& audit)
+{
+    const DenseArrangementIndex2 dense =
+        compile_dense_arrangement(
+            arrangement,
+            primitive_kinds,
+            audit);
+    classify_dense_faces(dense, audit);
 }
 
 ReachableArrangement2 build_reachable_arrangement(
     CanonicalReachInput2 input)
 {
-    validate_canonical_radius(input);
+    validate_canonical_reach_input(input);
     ReachableArrangement2 result{
         ReachArrangement2{},
         std::move(input),
@@ -857,27 +835,32 @@ ReachableArrangement2 build_reachable_arrangement(
         labelled.begin(),
         labelled.end());
     ++result.audit.provenance_arrangements;
-    classify_faces_by_primitive_parity(
-        result.arrangement,
-        primitive_kinds);
+    const DenseArrangementIndex2 dense =
+        compile_dense_arrangement(
+            result.arrangement,
+            primitive_kinds,
+            result.audit);
+    classify_dense_faces(dense, result.audit);
 
-    for (auto face = result.arrangement.faces_begin();
-         face != result.arrangement.faces_end();
-         ++face) {
+    for (const FaceHandle2 face : dense.faces) {
         if (face->data().selected) {
             ++result.audit.selected_face_count;
         }
     }
-    for (auto edge = result.arrangement.edges_begin();
-         edge != result.arrangement.edges_end();
-         ++edge) {
-        if (edge->face()->data().selected
-            && edge->twin()->face()->data().selected) {
+    for (std::size_t halfedge_slot_value = 0;
+         halfedge_slot_value < dense.halfedges.size();
+         halfedge_slot_value += 2) {
+        const DenseHalfedge2& halfedge =
+            dense.halfedges[halfedge_slot_value];
+        if (dense.faces[halfedge.face_slot]->data().selected
+            && dense.faces[halfedge.neighbor_slot]
+                   ->data()
+                   .selected) {
             ++result.audit.selected_adjacency_count;
         }
     }
     const std::size_t component_count =
-        selected_component_count(result.arrangement);
+        selected_component_count(dense, result.audit);
     if (component_count == 0) {
         throw PocketNotMachinableError(
             "Phase 1 center domain is empty for the declared tool radius");
@@ -887,7 +870,7 @@ ReachableArrangement2 build_reachable_arrangement(
             "Phase 1 requires one connected center domain");
     }
     result.center_polygon =
-        extract_center_polygon(result.arrangement);
+        extract_center_polygon(dense, result.audit);
     ++result.audit.center_extractions;
     return result;
 }

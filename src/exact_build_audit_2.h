@@ -16,6 +16,14 @@ struct ReachableDomainBuildAudit2 {
     std::size_t cycle_rotation_comparisons = 0;
     std::size_t selected_face_count = 0;
     std::size_t selected_adjacency_count = 0;
+    std::size_t dense_face_visits = 0;
+    std::size_t dense_halfedge_visits = 0;
+    std::size_t primitive_label_resolutions = 0;
+    std::size_t parity_halfedge_visits = 0;
+    std::size_t component_halfedge_visits = 0;
+    std::size_t boundary_scan_halfedge_visits = 0;
+    std::size_t boundary_cycle_halfedge_visits = 0;
+    std::size_t boundary_rotation_halfedge_visits = 0;
 };
 
 struct CoverageTransitionAudit2 {
