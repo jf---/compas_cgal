@@ -193,21 +193,18 @@ function(native_add_locked_dependency)
             LOG_DOWNLOAD ON
             TLS_VERIFY ON
         )
-    endif()
-
-    add_custom_target(
-        "verify_${NATIVE_NAME}_source"
-        COMMAND ${verify_command}
-        VERBATIM
-    )
-    if(TARGET "${NATIVE_NAME}_download")
+        add_custom_target(
+            "verify_${NATIVE_NAME}_source"
+            COMMAND ${verify_command}
+            VERBATIM
+        )
         add_dependencies(
             "verify_${NATIVE_NAME}_source"
             "${NATIVE_NAME}_download"
         )
+        add_dependencies(
+            external_downloads
+            "verify_${NATIVE_NAME}_source"
+        )
     endif()
-    add_dependencies(
-        external_downloads
-        "verify_${NATIVE_NAME}_source"
-    )
 endfunction()

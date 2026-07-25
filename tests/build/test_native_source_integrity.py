@@ -10,6 +10,7 @@ import pytest
 
 REPOSITORY_ROOT = Path(__file__).parents[2]
 NATIVE_SOURCE_VERIFIER = REPOSITORY_ROOT / "cmake" / "VerifyNativeSource.cmake"
+NATIVE_DEPENDENCIES = REPOSITORY_ROOT / "cmake" / "NativeDependencies.cmake"
 DIGEST_PATTERN = re.compile(r"source-tree SHA256: ([0-9a-f]{64})")
 
 
@@ -47,6 +48,108 @@ def _digest(source_dir: Path) -> str:
     match = DIGEST_PATTERN.search(result.stdout + result.stderr)
     assert match is not None
     return match.group(1)
+
+
+def _configure_native_dependency_graph(
+    project_dir: Path,
+    source_dir: Path,
+    expected_digest: str,
+) -> Path:
+    project_dir.mkdir()
+    (project_dir / "CMakeLists.txt").write_text(
+        f"""\
+cmake_minimum_required(VERSION 3.20)
+project(native_dependency_graph NONE)
+include(ExternalProject)
+add_custom_target(external_downloads ALL)
+include("{NATIVE_DEPENDENCIES.as_posix()}")
+native_add_locked_dependency(
+    NAME fixture
+    SOURCE_DIR "{source_dir.as_posix()}"
+    VERSION "1.0"
+    URL "https://example.invalid/fixture.tar.gz"
+    ARCHIVE_SHA256 "{'0' * 64}"
+    SOURCE_TREE_SHA256 "{expected_digest}"
+)
+""",
+        encoding="utf-8",
+    )
+    build_dir = project_dir / "build"
+    result = subprocess.run(
+        [
+            "cmake",
+            "-S",
+            str(project_dir),
+            "-B",
+            str(build_dir),
+            "-G",
+            "Ninja",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    return build_dir
+
+
+def _ninja_tool(
+    build_dir: Path,
+    tool: str,
+    target: str,
+) -> str:
+    result = subprocess.run(
+        [
+            "ninja",
+            "-C",
+            str(build_dir),
+            "-t",
+            tool,
+            target,
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    return result.stdout + result.stderr
+
+
+def test_populated_source_is_not_reverified_by_generated_build_graph(
+    tmp_path: Path,
+) -> None:
+    source_dir = tmp_path / "source"
+    _write_fixture(source_dir)
+    expected_digest = _digest(source_dir)
+    build_dir = _configure_native_dependency_graph(
+        tmp_path / "project",
+        source_dir,
+        expected_digest,
+    )
+
+    commands = _ninja_tool(build_dir, "commands", "external_downloads")
+
+    assert "VerifyNativeSource.cmake" not in commands
+
+
+def test_missing_source_retains_post_download_verifier(
+    tmp_path: Path,
+) -> None:
+    build_dir = _configure_native_dependency_graph(
+        tmp_path / "project",
+        tmp_path / "source",
+        "0" * 64,
+    )
+
+    commands = _ninja_tool(build_dir, "commands", "external_downloads")
+    verifier_graph = _ninja_tool(
+        build_dir,
+        "query",
+        "verify_fixture_source",
+    )
+
+    assert "VerifyNativeSource.cmake" in commands
+    assert "fixture_download" in verifier_graph
 
 
 def test_independent_trees_have_identical_digest(tmp_path: Path) -> None:
