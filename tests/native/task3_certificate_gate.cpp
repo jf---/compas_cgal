@@ -395,6 +395,58 @@ void require_cell_schema(
     }
 }
 
+void require_component_boundary_cycles(
+    const ReachableDomainCertificate2& certificate,
+    std::size_t expected_cycle_count)
+{
+    require(
+        certificate.component_records.size() == 1,
+        "boundary fixture requires one selected component");
+    const std::vector<std::string> component =
+        record_fields(
+            certificate.component_records.front(),
+            "selected-component-v1");
+    require(
+        component.size() == 3,
+        "component record lost its boundary-cycle collection");
+    const std::vector<std::string> boundary_cycles =
+        record_fields(
+            component[2],
+            "selected-component-boundary-cycles-v1");
+    require(
+        !boundary_cycles.empty()
+            && boundary_cycles.size() == expected_cycle_count
+            && std::is_sorted(
+                boundary_cycles.begin(),
+                boundary_cycles.end())
+            && std::adjacent_find(
+                boundary_cycles.begin(),
+                boundary_cycles.end())
+                == boundary_cycles.end(),
+        "component boundary cycles are missing, repeated, or noncanonical");
+    std::size_t outer_count = 0;
+    std::size_t hole_count = 0;
+    for (const std::string& cycle : boundary_cycles) {
+        const std::vector<std::string> fields =
+            record_fields(
+                cycle,
+                "selected-boundary-cycle-v1");
+        require(
+            fields.size() == 2
+                && (fields[0] == "outer"
+                    || fields[0] == "hole"),
+            "component boundary cycle has an invalid role");
+        require_cycle_record(cycle, fields[0]);
+        outer_count += fields[0] == "outer" ? 1 : 0;
+        hole_count += fields[0] == "hole" ? 1 : 0;
+    }
+    require(
+        outer_count == 1
+            && outer_count + hole_count
+                == expected_cycle_count,
+        "component boundary cycles lost outer or hole topology");
+}
+
 void cell_schema_gate()
 {
     ReachableArrangement2 rectangle =
@@ -402,6 +454,9 @@ void cell_schema_gate()
     const ReachableDomainCertificate2 rectangle_certificate =
         build_reachable_certificate(rectangle, true);
     require_cell_schema(rectangle_certificate, 0);
+    require_component_boundary_cycles(
+        rectangle_certificate,
+        1);
 
     compas::RowMatrixXd outer(4, 3);
     outer << 0, 0, 0, 20, 0, 0, 20, 20, 0, 0, 20, 0;
@@ -418,6 +473,9 @@ void cell_schema_gate()
             island_reachable,
             true);
     require_cell_schema(island_certificate, 1);
+    require_component_boundary_cycles(
+        island_certificate,
+        2);
 }
 
 void adjacency_gate()
@@ -543,12 +601,23 @@ void source_and_input_gate()
         const std::vector<std::string> fields =
             record_fields(source, "source-curve-v2");
         require(
-            fields.size() == 5
-                && fields[0] == "outer"
+            fields.size() == 5,
+            "source record does not use the direct v2 schema");
+        const std::size_t feature_ordinal =
+            decode_u64_field(
+                fields[2],
+                "source feature ordinal is not u64");
+        require(
+            fields[0] == "outer"
                 && fields[1] == reach_u64_record(0)
+                && feature_ordinal
+                    < rectangle.input.outer.points.size()
                 && (fields[3] == "offset-minus"
                     || fields[3] == "offset-plus"
                     || fields[3] == "vertex-circle")
+                && fields[4]
+                    == reach_binary64_record(
+                        rectangle.input.binary64_radius)
                 && source.size()
                     <= MAX_DIRECT_SOURCE_RECORD_BYTES,
             "source record does not use the bounded direct v2 schema");
@@ -565,6 +634,51 @@ void source_and_input_gate()
             && !certificate.matches_exact_inputs(
                 rectangle_matrix(), {}, 1.5),
         "certificate exact-input binding accepted a mutation");
+    compas::RowMatrixXd rotated(4, 3);
+    rotated << 10, 8, 0, 0, 8, 0, 0, 0, 0, 10, 0, 0;
+    compas::RowMatrixXd reversed(4, 3);
+    reversed << 0, 0, 0, 0, 8, 0, 10, 8, 0, 10, 0, 0;
+    require(
+        certificate.matches_exact_inputs(rotated, {}, 1.0)
+            && certificate.matches_exact_inputs(
+                reversed,
+                {},
+                1.0),
+        "certificate exact-input match is not canonical");
+    ReachableArrangement2 rotated_reachable =
+        build_reachable_arrangement(
+            canonical_reach_input(
+                rotated,
+                {},
+                1.0));
+    ReachableArrangement2 reversed_reachable =
+        build_reachable_arrangement(
+            canonical_reach_input(
+                reversed,
+                {},
+                1.0));
+    const ReachableDomainCertificate2 rotated_certificate =
+        build_reachable_certificate(
+            rotated_reachable,
+            true);
+    const ReachableDomainCertificate2 reversed_certificate =
+        build_reachable_certificate(
+            reversed_reachable,
+            true);
+    require(
+        certificate.source_curve_records
+                == rotated_certificate.source_curve_records
+            && certificate.source_curve_records
+                == reversed_certificate.source_curve_records
+            && certificate.selected_cell_records
+                == rotated_certificate.selected_cell_records
+            && certificate.selected_cell_records
+                == reversed_certificate.selected_cell_records
+            && certificate.component_records
+                == rotated_certificate.component_records
+            && certificate.component_records
+                == reversed_certificate.component_records,
+        "canonical ring variants changed structural certificate");
     require(
         rectangle.audit.cycle_rotation_comparisons
             <= 3 * rectangle.audit.cycle_element_count,
