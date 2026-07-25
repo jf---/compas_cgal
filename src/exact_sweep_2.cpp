@@ -15,6 +15,23 @@ void require_positive(const ReachFT& value, const std::string& name)
     }
 }
 
+ReachPolygon counterclockwise_polygon(ReachPolygon polygon)
+{
+    const CGAL::Orientation orientation = polygon.orientation();
+    if (orientation == CGAL::COLLINEAR) {
+        throw ReachableDomainConstructionError(
+            "exact sweep polygon must enclose nonzero area.");
+    }
+    if (orientation == CGAL::CLOCKWISE) {
+        polygon.reverse_orientation();
+    }
+    if (polygon.orientation() != CGAL::COUNTERCLOCKWISE) {
+        throw ReachableDomainConstructionError(
+            "exact sweep polygon did not normalize counterclockwise.");
+    }
+    return polygon;
+}
+
 ReachPolygon linear_polygon(const std::vector<ReachKernelPoint>& vertices)
 {
     ReachPolygon polygon;
@@ -23,7 +40,7 @@ ReachPolygon linear_polygon(const std::vector<ReachKernelPoint>& vertices)
             vertices[index],
             vertices[(index + 1) % vertices.size()]));
     }
-    return polygon;
+    return counterclockwise_polygon(std::move(polygon));
 }
 
 ReachFT lift_coordinate(const ReachPoint::CoordNT& coordinate)
@@ -84,7 +101,7 @@ ReachPolygon reach_disk_polygon(
         throw ReachableDomainConstructionError(
             "exact disk boundary did not split into two x-monotone arcs.");
     }
-    return polygon;
+    return counterclockwise_polygon(std::move(polygon));
 }
 
 std::vector<ReachPolygon> reach_capsule_parts(
@@ -186,7 +203,7 @@ std::vector<ReachPolygon> reach_arc_sweep_parts(
             outer_start);
     }
     return {
-        std::move(sector),
+        counterclockwise_polygon(std::move(sector)),
         reach_disk_polygon(start, tool_radius),
         reach_disk_polygon(end, tool_radius),
     };
