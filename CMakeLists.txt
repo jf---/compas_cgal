@@ -202,6 +202,7 @@ add_library(coverage_exact_core STATIC
     src/exact_sweep_2.cpp
     src/reachable_input_2.cpp
     src/reachable_arrangement_2.cpp
+    src/reachable_certificate_2.cpp
 )
 set_target_properties(coverage_exact_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_compile_definitions(coverage_exact_core PRIVATE CGAL_USE_CORE=1)
