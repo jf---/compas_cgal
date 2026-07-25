@@ -1,9 +1,12 @@
 #include "compas.h"
 #include "continuous_tea_2/boundary_events.h"
+#include "continuous_tea_2/cap_partition.h"
+#include "continuous_tea_2/event_certificate.h"
 #include "continuous_tea_2/event_partition.h"
 #include "continuous_tea_2/parameter_charts.h"
 #include "continuous_tea_2/partition_certificate.h"
 #include "continuous_tea_2/result.h"
+#include "continuous_tea_2/sha256.h"
 #include "exact_algebraic_1.h"
 
 #include <nanobind/stl/string.h>
@@ -272,6 +275,30 @@ NB_MODULE(_continuous_tea_2, m)
     nb::class_<AlgebraicRootRecord2>(
         m,
         "AlgebraicRootRecord2")
+        .def(
+            "__init__",
+            [](AlgebraicRootRecord2* self,
+               const nb::bytes& root_id,
+               std::vector<std::string> factor_coefficients,
+               std::size_t root_ordinal,
+               unsigned int multiplicity,
+               std::string interval_low,
+               std::string interval_high) {
+                new (self) AlgebraicRootRecord2{
+                    from_bytes(root_id),
+                    std::move(factor_coefficients),
+                    root_ordinal,
+                    multiplicity,
+                    std::move(interval_low),
+                    std::move(interval_high),
+                };
+            },
+            "root_id"_a,
+            "factor_coefficients"_a,
+            "root_ordinal"_a,
+            "multiplicity"_a,
+            "interval_low"_a,
+            "interval_high"_a)
         .def_prop_ro(
             "root_id",
             [](const AlgebraicRootRecord2& root) {
@@ -382,6 +409,17 @@ NB_MODULE(_continuous_tea_2, m)
             &ProjectedRegularizationVertex2::
                 conjugate_disposition);
 
+    nb::class_<CcwOrientation2>(m, "CcwOrientation2")
+        .def_ro(
+            "disposition",
+            &CcwOrientation2::disposition)
+        .def_ro(
+            "determinant_sign",
+            &CcwOrientation2::determinant_sign)
+        .def_ro(
+            "dot_sign",
+            &CcwOrientation2::dot_sign);
+
     nb::class_<ProjectionRecord2>(m, "ProjectionRecord2")
         .def_ro(
             "projection_id",
@@ -453,6 +491,47 @@ NB_MODULE(_continuous_tea_2, m)
     nb::class_<EventPartitionCertificate2>(
         m,
         "EventPartitionCertificate2")
+        .def(
+            "__init__",
+            [](EventPartitionCertificate2* self,
+               AlgebraicBackendEvidence2 build_evidence,
+               std::vector<ParameterChart2> charts,
+               std::vector<ProjectionRecord2> projections,
+               std::vector<AlgebraicRootRecord2> roots,
+               std::vector<ParameterCell2> cells,
+               std::vector<EventFibre2> fibres,
+               std::vector<OverlapInterval2> overlaps,
+               std::vector<ChartSeam2> seams,
+               std::string source_kind,
+               const nb::bytes& source_payload) {
+                EventPartitionCertificate2 certificate{
+                    std::move(build_evidence),
+                    std::move(charts),
+                    std::move(projections),
+                    std::move(roots),
+                    std::move(cells),
+                    std::move(fibres),
+                    std::move(overlaps),
+                    std::move(seams),
+                    std::move(source_kind),
+                    from_bytes(source_payload),
+                    {},
+                    {},
+                };
+                finalize_event_partition(certificate);
+                new (self) EventPartitionCertificate2(
+                    std::move(certificate));
+            },
+            "build_evidence"_a,
+            "charts"_a,
+            "projections"_a,
+            "roots"_a,
+            "cells"_a,
+            "fibres"_a,
+            "overlaps"_a,
+            "seams"_a,
+            "source_kind"_a,
+            "source_payload"_a)
         .def_ro(
             "build_evidence",
             &EventPartitionCertificate2::build_evidence)
@@ -689,6 +768,42 @@ NB_MODULE(_continuous_tea_2, m)
         "first_index"_a,
         "second_index"_a,
         "vertex_id"_a);
+    m.def(
+        "classify_ccw_orientation",
+        &classify_ccw_orientation,
+        "first_numerator"_a,
+        "first_denominator"_a,
+        "second_numerator"_a,
+        "second_denominator"_a,
+        "motion_parameter"_a);
+    m.def(
+        "partition_cap_crossings",
+        &partition_cap_crossings,
+        "first_numerator"_a,
+        "first_denominator"_a,
+        "second_numerator"_a,
+        "second_denominator"_a,
+        "cap_numerator"_a,
+        "cap_denominator"_a,
+        "event"_a);
+    m.def(
+        "verify_event_partition",
+        static_cast<VerifiedEventPartition2 (*)(
+            const EventPartitionCertificate2&)>(
+            &verify_event_partition),
+        "certificate"_a);
+    m.def(
+        "mutate_certificate_record",
+        &mutate_certificate_record,
+        "certificate"_a,
+        "mutation"_a);
+    m.def(
+        "sha256_bytes",
+        [](const nb::bytes& input) {
+            return as_bytes(
+                sha256_bytes(from_bytes(input)));
+        },
+        "input"_a);
     m.def(
         "partition_projections",
         &partition_projections,
