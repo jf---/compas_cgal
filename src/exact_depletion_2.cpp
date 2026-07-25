@@ -8,8 +8,6 @@
 
 namespace {
 
-constexpr char EXACT_DEPLETION_STRATEGY_VERSION[] = "exact-pythagorean-guide-v1";
-
 bool is_positive(const Epeck::FT& value)
 {
     return CGAL::compare(value, Epeck::FT(0)) == CGAL::LARGER;
@@ -212,6 +210,22 @@ bool circle_anchors_present(const std::vector<ExactCenterParameter2>& parameters
 
 } // namespace
 
+const std::string& exact_depletion_strategy_version()
+{
+    static const std::string version = "exact-pythagorean-guide-v1";
+    return version;
+}
+
+bool DepletionTrace::matches_exact_inputs(
+    const Epeck::FT& expected_tool_radius,
+    const Epeck::FT& expected_max_chord,
+    std::size_t expected_center_count_limit) const
+{
+    return CGAL::compare(removal_radius, expected_tool_radius) == CGAL::EQUAL
+        && CGAL::compare(max_chord, expected_max_chord) == CGAL::EQUAL
+        && center_count <= expected_center_count_limit;
+}
+
 bool exact_segment_point_is_incident(
     const ExactSegmentMotion2& motion,
     const EPoint& point)
@@ -275,7 +289,7 @@ ExactDepletionConstruction2 construct_exact_segment_depletion(
         center_count,
         max_chord,
         tool_radius,
-        EXACT_DEPLETION_STRATEGY_VERSION,
+        exact_depletion_strategy_version(),
         false,
         exact_incidence,
         false,
@@ -342,7 +356,7 @@ ExactDepletionConstruction2 construct_exact_full_circle_depletion(
         center_count,
         max_chord,
         tool_radius,
-        EXACT_DEPLETION_STRATEGY_VERSION,
+        exact_depletion_strategy_version(),
         true,
         exact_incidence,
         false,

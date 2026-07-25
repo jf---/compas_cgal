@@ -15,10 +15,12 @@ class DepletionTrace:
     def center_count(self) -> int: ...
     @property
     def center_parameters(self) -> Sequence[tuple[int, int, int]]: ...
-    @property
-    def max_chord(self) -> float: ...
-    @property
-    def removal_radius(self) -> float: ...
+    def matches_exact_inputs(
+        self,
+        expected_tool_radius: float,
+        expected_max_chord: float,
+        expected_center_count_limit: int,
+    ) -> bool: ...
     @property
     def strategy_version(self) -> bytes: ...
     cyclic: bool
@@ -116,6 +118,29 @@ def exact_full_circle_undercover_holds(
     max_chord: float,
     center_count_limit: int,
 ) -> bool: ...
+def exact_segment_induction_holds(
+    initial: Stock2,
+    x0: float,
+    y0: float,
+    x1: float,
+    y1: float,
+    exact_length: float,
+    tool_radius: float,
+    max_chord: float,
+    center_count_limit: int,
+) -> bool: ...
+def exact_full_circle_induction_holds(
+    initial: Stock2,
+    cx: float,
+    cy: float,
+    phase_x: float,
+    phase_y: float,
+    guide_radius: float,
+    tool_radius: float,
+    max_chord: float,
+    center_count_limit: int,
+) -> bool: ...
+def exact_depletion_strategy_version() -> bytes: ...
 
 
 def cap_chord_ratio(cap_radians: float) -> float: ...

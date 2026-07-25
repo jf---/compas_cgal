@@ -293,7 +293,14 @@ DepletionTrace Stock2::subtract_exact_full_circle(
     return std::move(construction.trace);
 }
 
-bool exact_segment_undercover_holds(
+namespace {
+
+struct ExactSweepOracle {
+    Gps removal;
+    Gps sweep;
+};
+
+ExactSweepOracle exact_segment_sweep_oracle(
     const ExactSegmentMotion2& motion,
     const Epeck::FT& exact_length,
     const Epeck::FT& tool_radius,
@@ -332,10 +339,10 @@ bool exact_segment_undercover_holds(
     };
     Gps sweep;
     sweep.join(sweep_parts.begin(), sweep_parts.end());
-    return exact_set_is_subset(removal, sweep);
+    return {std::move(removal), std::move(sweep)};
 }
 
-bool exact_full_circle_undercover_holds(
+ExactSweepOracle exact_full_circle_sweep_oracle(
     const ExactCircleMotion2& motion,
     const Epeck::FT& guide_radius,
     const Epeck::FT& tool_radius,
@@ -368,7 +375,86 @@ bool exact_full_circle_undercover_holds(
             guide_radius - tool_radius));
         sweep.difference(inner);
     }
-    return exact_set_is_subset(removal, sweep);
+    return {std::move(removal), std::move(sweep)};
+}
+
+bool exact_induction_holds(
+    const Stock2& initial,
+    const ExactSweepOracle& oracle)
+{
+    Gps true_remaining(initial.set());
+    true_remaining.difference(oracle.sweep);
+    Gps modeled_remaining(initial.set());
+    modeled_remaining.difference(oracle.removal);
+    return exact_set_is_subset(true_remaining, modeled_remaining);
+}
+
+} // namespace
+
+bool exact_segment_undercover_holds(
+    const ExactSegmentMotion2& motion,
+    const Epeck::FT& exact_length,
+    const Epeck::FT& tool_radius,
+    const Epeck::FT& max_chord,
+    std::size_t center_count_limit)
+{
+    const ExactSweepOracle oracle = exact_segment_sweep_oracle(
+        motion,
+        exact_length,
+        tool_radius,
+        max_chord,
+        center_count_limit);
+    return exact_set_is_subset(oracle.removal, oracle.sweep);
+}
+
+bool exact_full_circle_undercover_holds(
+    const ExactCircleMotion2& motion,
+    const Epeck::FT& guide_radius,
+    const Epeck::FT& tool_radius,
+    const Epeck::FT& max_chord,
+    std::size_t center_count_limit)
+{
+    const ExactSweepOracle oracle = exact_full_circle_sweep_oracle(
+        motion,
+        guide_radius,
+        tool_radius,
+        max_chord,
+        center_count_limit);
+    return exact_set_is_subset(oracle.removal, oracle.sweep);
+}
+
+bool exact_segment_induction_holds(
+    const Stock2& initial,
+    const ExactSegmentMotion2& motion,
+    const Epeck::FT& exact_length,
+    const Epeck::FT& tool_radius,
+    const Epeck::FT& max_chord,
+    std::size_t center_count_limit)
+{
+    const ExactSweepOracle oracle = exact_segment_sweep_oracle(
+        motion,
+        exact_length,
+        tool_radius,
+        max_chord,
+        center_count_limit);
+    return exact_induction_holds(initial, oracle);
+}
+
+bool exact_full_circle_induction_holds(
+    const Stock2& initial,
+    const ExactCircleMotion2& motion,
+    const Epeck::FT& guide_radius,
+    const Epeck::FT& tool_radius,
+    const Epeck::FT& max_chord,
+    std::size_t center_count_limit)
+{
+    const ExactSweepOracle oracle = exact_full_circle_sweep_oracle(
+        motion,
+        guide_radius,
+        tool_radius,
+        max_chord,
+        center_count_limit);
+    return exact_induction_holds(initial, oracle);
 }
 
 NB_MODULE(_stock_2, m)
@@ -396,12 +482,20 @@ NB_MODULE(_stock_2, m)
             }
             return result;
         })
-        .def_prop_ro("max_chord", [](const DepletionTrace& trace) {
-            return CGAL::to_double(trace.max_chord);
-        })
-        .def_prop_ro("removal_radius", [](const DepletionTrace& trace) {
-            return CGAL::to_double(trace.removal_radius);
-        })
+        .def(
+            "matches_exact_inputs",
+            [](const DepletionTrace& trace,
+               double expected_tool_radius,
+               double expected_max_chord,
+               std::size_t expected_center_count_limit) {
+                return trace.matches_exact_inputs(
+                    Epeck::FT(expected_tool_radius),
+                    Epeck::FT(expected_max_chord),
+                    expected_center_count_limit);
+            },
+            "expected_tool_radius"_a,
+            "expected_max_chord"_a,
+            "expected_center_count_limit"_a)
         .def_prop_ro("strategy_version", [](const DepletionTrace& trace) {
             return nb::bytes(
                 trace.strategy_version.data(),
@@ -559,6 +653,66 @@ NB_MODULE(_stock_2, m)
         "tool_radius"_a,
         "max_chord"_a,
         "center_count_limit"_a);
+    m.def(
+        "exact_segment_induction_holds",
+        [](const Stock2& initial,
+           double x0,
+           double y0,
+           double x1,
+           double y1,
+           double exact_length,
+           double tool_radius,
+           double max_chord,
+           std::size_t center_count_limit) {
+            return exact_segment_induction_holds(
+                initial,
+                {EPoint(x0, y0), EPoint(x1, y1)},
+                Epeck::FT(exact_length),
+                Epeck::FT(tool_radius),
+                Epeck::FT(max_chord),
+                center_count_limit);
+        },
+        "initial"_a,
+        "x0"_a,
+        "y0"_a,
+        "x1"_a,
+        "y1"_a,
+        "exact_length"_a,
+        "tool_radius"_a,
+        "max_chord"_a,
+        "center_count_limit"_a);
+    m.def(
+        "exact_full_circle_induction_holds",
+        [](const Stock2& initial,
+           double cx,
+           double cy,
+           double phase_x,
+           double phase_y,
+           double guide_radius,
+           double tool_radius,
+           double max_chord,
+           std::size_t center_count_limit) {
+            return exact_full_circle_induction_holds(
+                initial,
+                {EPoint(cx, cy), EVector(phase_x, phase_y), false},
+                Epeck::FT(guide_radius),
+                Epeck::FT(tool_radius),
+                Epeck::FT(max_chord),
+                center_count_limit);
+        },
+        "initial"_a,
+        "cx"_a,
+        "cy"_a,
+        "phase_x"_a,
+        "phase_y"_a,
+        "guide_radius"_a,
+        "tool_radius"_a,
+        "max_chord"_a,
+        "center_count_limit"_a);
+    m.def("exact_depletion_strategy_version", []() {
+        const std::string& version = exact_depletion_strategy_version();
+        return nb::bytes(version.data(), version.size());
+    });
 
     register_engagement(m);
 }
