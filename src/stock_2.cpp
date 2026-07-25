@@ -88,6 +88,17 @@ void validate_depletion_trace(const DepletionTrace& trace)
     }
 }
 
+std::vector<ExactCenterParameter2> to_exact_center_parameters(
+    const std::vector<std::tuple<int, std::size_t, std::size_t>>& parameters)
+{
+    std::vector<ExactCenterParameter2> result;
+    result.reserve(parameters.size());
+    for (const auto& [chart, numerator, denominator] : parameters) {
+        result.push_back({chart, numerator, denominator});
+    }
+    return result;
+}
+
 bool exact_set_is_subset(const Gps& subset, const Gps& superset)
 {
     Gps difference(subset);
@@ -603,6 +614,46 @@ NB_MODULE(_stock_2, m)
         "phase_y"_a,
         "px"_a,
         "py"_a);
+    m.def(
+        "exact_segment_structural_density_holds",
+        [](double x0,
+           double y0,
+           double x1,
+           double y1,
+           double max_chord,
+           const std::vector<std::tuple<int, std::size_t, std::size_t>>& parameters) {
+            return exact_segment_structural_density_holds(
+                {EPoint(x0, y0), EPoint(x1, y1)},
+                Epeck::FT(max_chord),
+                to_exact_center_parameters(parameters));
+        },
+        "x0"_a,
+        "y0"_a,
+        "x1"_a,
+        "y1"_a,
+        "max_chord"_a,
+        "parameters"_a);
+    m.def(
+        "exact_full_circle_structural_density_holds",
+        [](double cx,
+           double cy,
+           double phase_x,
+           double phase_y,
+           bool clockwise,
+           double max_chord,
+           const std::vector<std::tuple<int, std::size_t, std::size_t>>& parameters) {
+            return exact_full_circle_structural_density_holds(
+                {EPoint(cx, cy), EVector(phase_x, phase_y), clockwise},
+                Epeck::FT(max_chord),
+                to_exact_center_parameters(parameters));
+        },
+        "cx"_a,
+        "cy"_a,
+        "phase_x"_a,
+        "phase_y"_a,
+        "clockwise"_a,
+        "max_chord"_a,
+        "parameters"_a);
     m.def(
         "exact_segment_undercover_holds",
         [](double x0,

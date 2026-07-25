@@ -68,4 +68,14 @@ bool exact_circle_point_is_incident(
     const ExactCircleMotion2& motion,
     const EPoint& point);
 
+bool exact_segment_structural_density_holds(
+    const ExactSegmentMotion2& motion,
+    const Epeck::FT& max_chord,
+    const std::vector<ExactCenterParameter2>& parameters);
+
+bool exact_full_circle_structural_density_holds(
+    const ExactCircleMotion2& motion,
+    const Epeck::FT& max_chord,
+    const std::vector<ExactCenterParameter2>& parameters);
+
 const std::string& exact_depletion_strategy_version();

@@ -105,8 +105,28 @@ class DepletionWitness:
             raise InvalidDepletionWitnessError("depletion witness exceeds the policy center-count limit.")
         if type(self.motion) is ExactSegmentMotion:
             _validate_segment_parameters(self.center_parameters)
+            density_holds = _stock_2.exact_segment_structural_density_holds(
+                self.motion.start.x,
+                self.motion.start.y,
+                self.motion.end.x,
+                self.motion.end.y,
+                self.policy.chord_bound.value,
+                tuple((parameter.chart, parameter.numerator, parameter.denominator) for parameter in self.center_parameters),
+            )
         else:
-            _validate_circle_parameters(cast(ExactCircleMotion, self.motion), self.center_parameters)
+            circle = cast(ExactCircleMotion, self.motion)
+            _validate_circle_parameters(circle, self.center_parameters)
+            density_holds = _stock_2.exact_full_circle_structural_density_holds(
+                circle.center.x,
+                circle.center.y,
+                circle.phase_vector.x,
+                circle.phase_vector.y,
+                circle.clockwise,
+                self.policy.chord_bound.value,
+                tuple((parameter.chart, parameter.numerator, parameter.denominator) for parameter in self.center_parameters),
+            )
+        if not density_holds:
+            raise InvalidDepletionWitnessError("depletion witness structural density does not satisfy its owned motion and chord bound.")
         try:
             self.canonical_bytes
         except ValueError as error:
@@ -155,7 +175,7 @@ class Stock2Area:
         Raises:
             InvalidStockAreaError: If stock or lineage has the wrong runtime type.
         """
-        if not isinstance(raw, _stock_2.Stock2):
+        if type(raw) is not _stock_2.Stock2:
             raise InvalidStockAreaError("stock area requires one owned native Stock2.")
         if type(lineage) is not tuple or any(type(witness) is not DepletionWitness for witness in lineage):
             raise InvalidStockAreaError("stock area lineage must contain exact depletion witnesses.")
