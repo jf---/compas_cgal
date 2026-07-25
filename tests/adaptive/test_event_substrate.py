@@ -563,3 +563,89 @@ def test_repeated_tangency_root_is_one_fibre_with_multiplicity_two() -> None:
     assert _cell_witnesses(certificate) == (Fraction(1, 4), Fraction(3, 4))
     assert len(certificate.fibres) == 1
     assert len(certificate.fibres[0].events) == 1
+
+
+def test_same_root_from_reducible_and_irreducible_projections_merges() -> None:
+    certificate = _continuous_tea_2.partition_projections(
+        (
+            _projection_input(
+                "irreducible",
+                ("-1", "2"),
+                (_event(b"irreducible"),),
+            ),
+            _projection_input(
+                "reducible",
+                ("-1", "1", "2"),
+                (_event(b"reducible"),),
+            ),
+        )
+    )
+
+    assert [root.root_id for root in certificate.roots] == [
+        _root_id((-1, 2), 0),
+    ]
+    assert [root.factor_coefficients for root in certificate.roots] == [
+        ("-1", "2"),
+    ]
+    assert [event.feature_id for event in certificate.fibres[0].events] == [
+        b"feature-irreducible",
+        b"feature-reducible",
+    ]
+
+
+def test_irreducible_quadratic_owns_its_algebraic_root_identity() -> None:
+    certificate = _continuous_tea_2.partition_projections(
+        (
+            _projection_input(
+                "irreducible-quadratic",
+                ("-1", "1", "1"),
+                (_event(b"quadratic"),),
+            ),
+        )
+    )
+
+    assert [root.root_id for root in certificate.roots] == [
+        _root_id((-1, 1, 1), 1),
+    ]
+    assert certificate.roots[0].factor_coefficients == (
+        "-1",
+        "1",
+        "1",
+    )
+
+
+def test_reducible_quartic_without_rational_roots_splits_exactly() -> None:
+    certificate = _continuous_tea_2.partition_projections(
+        (
+            _projection_input(
+                "quadratic-pair",
+                ("1", "0", "-5", "0", "6"),
+                (_event(b"quadratic-pair"),),
+            ),
+        )
+    )
+
+    assert certificate.projections[0].factor_coefficients == (
+        ("-1", "0", "2"),
+        ("-1", "0", "3"),
+    )
+    assert [root.root_id for root in certificate.roots] == [
+        _root_id((-1, 0, 3), 1),
+        _root_id((-1, 0, 2), 1),
+    ]
+
+
+def test_degree_above_frozen_task5_contract_fails_before_solving() -> None:
+    with pytest.raises(
+        _continuous_tea_2.UnsupportedAlgebraicDegreeError,
+        match="degree 4",
+    ):
+        _continuous_tea_2.partition_projections(
+            (
+                _projection_input(
+                    "degree-five",
+                    ("1", "0", "0", "0", "0", "1"),
+                    (_event(b"degree-five"),),
+                ),
+            )
+        )
