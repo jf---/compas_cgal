@@ -130,6 +130,36 @@ struct SourceContract2 {
 using SourceContracts2 =
     std::unordered_map<std::string, SourceContract2>;
 
+std::size_t expected_source_record_count(
+    const ReachableArrangement2& reachable)
+{
+    std::size_t input_vertex_count =
+        reachable.input.outer.points.size();
+    for (const CanonicalReachRing2& hole :
+         reachable.input.holes) {
+        if (input_vertex_count
+            > std::numeric_limits<std::size_t>::max()
+                - hole.points.size()) {
+            throw ReachableArrangementTopologyError(
+                "certificate input vertex count overflows");
+        }
+        input_vertex_count += hole.points.size();
+    }
+    if (input_vertex_count
+        != reachable.audit.input_vertex_count) {
+        throw ReachableArrangementTopologyError(
+            "certificate input vertex count contradicts the canonical recipe");
+    }
+    constexpr std::size_t SOURCE_ROLES_PER_VERTEX = 3;
+    if (input_vertex_count
+        > std::numeric_limits<std::size_t>::max()
+            / SOURCE_ROLES_PER_VERTEX) {
+        throw ReachableArrangementTopologyError(
+            "certificate source-record count overflows");
+    }
+    return SOURCE_ROLES_PER_VERTEX * input_vertex_count;
+}
+
 const CanonicalReachRing2& source_ring(
     const ReachableArrangement2& reachable,
     const std::vector<std::string>& fields)
@@ -154,7 +184,9 @@ const CanonicalReachRing2& source_ring(
 SourceContracts2 validate_source_records(
     const ReachableArrangement2& reachable)
 {
-    if (!std::is_sorted(
+    if (reachable.source_records.size()
+            != expected_source_record_count(reachable)
+        || !std::is_sorted(
             reachable.source_records.begin(),
             reachable.source_records.end())
         || std::adjacent_find(
@@ -162,7 +194,8 @@ SourceContracts2 validate_source_records(
                reachable.source_records.end())
             != reachable.source_records.end()) {
         throw ReachableArrangementTopologyError(
-            "source records must be sorted and unique");
+            "source catalog cardinality, order, or uniqueness "
+            "contradicts the recipe");
     }
     SourceContracts2 contracts;
     contracts.reserve(reachable.source_records.size());
@@ -673,15 +706,23 @@ std::vector<std::string> component_boundary_cycles(
 std::vector<std::string> adjacency_records(
     const ReachArrangement2& arrangement,
     const std::unordered_map<const void*, std::string>&
-        cell_id_by_face)
+        cell_id_by_face,
+    const std::size_t expected_selected_adjacency_edge_count)
 {
-    std::vector<std::string> records;
+    std::vector<std::pair<std::string, std::string>>
+        face_pairs;
+    std::size_t selected_adjacency_edge_count = 0;
     for (auto edge = arrangement.edges_begin();
          edge != arrangement.edges_end();
          ++edge) {
         if (!edge->face()->data().selected
             || !edge->twin()->face()->data().selected) {
             continue;
+        }
+        ++selected_adjacency_edge_count;
+        if (edge->face() == edge->twin()->face()) {
+            throw ReachableArrangementTopologyError(
+                "selected-cell adjacency cannot reference one face twice");
         }
         const auto left = cell_id_by_face.find(
             handle_address(edge->face()));
@@ -692,20 +733,29 @@ std::vector<std::string> adjacency_records(
             throw ReachableArrangementTopologyError(
                 "selected adjacency references an unknown cell");
         }
-        std::vector<std::string> cells{
-            left->second,
-            right->second,
-        };
-        std::sort(cells.begin(), cells.end());
+        if (left->second == right->second) {
+            throw ReachableArrangementTopologyError(
+                "distinct selected faces share one cell identity");
+        }
+        face_pairs.emplace_back(
+            std::min(left->second, right->second),
+            std::max(left->second, right->second));
+    }
+    if (selected_adjacency_edge_count
+        != expected_selected_adjacency_edge_count) {
+        throw ReachableArrangementTopologyError(
+            "selected adjacency edge count contradicts the build audit");
+    }
+    std::sort(face_pairs.begin(), face_pairs.end());
+    face_pairs.erase(
+        std::unique(face_pairs.begin(), face_pairs.end()),
+        face_pairs.end());
+    std::vector<std::string> records;
+    records.reserve(face_pairs.size());
+    for (const auto& [left, right] : face_pairs) {
         records.push_back(reach_tagged_record(
             "selected-cell-adjacency-v1",
-            cells));
-    }
-    std::sort(records.begin(), records.end());
-    if (std::adjacent_find(records.begin(), records.end())
-        != records.end()) {
-        throw ReachableArrangementTopologyError(
-            "selected-cell adjacency record is not unique");
+            {left, right}));
     }
     return records;
 }
@@ -811,12 +861,8 @@ ReachableDomainCertificate2 build_reachable_certificate(
     const std::vector<std::string> adjacencies =
         adjacency_records(
             reachable.arrangement,
-            cell_record_by_face);
-    if (adjacencies.size()
-        != reachable.audit.selected_adjacency_count) {
-        throw ReachableArrangementTopologyError(
-            "certificate omitted selected-cell adjacency");
-    }
+            cell_record_by_face,
+            reachable.audit.selected_adjacency_count);
     const std::vector<std::string> boundary_cycles =
         component_boundary_cycles(
             reachable.arrangement,
