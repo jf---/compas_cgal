@@ -1,6 +1,6 @@
 # Task 3 single-arrangement reachable-domain design
 
-**Status:** architecture approved; written spec pending review
+**Status:** approved
 **Date:** 2026-07-25
 **Scope:** replace the rejected, uncommitted Task 3 spike
 **Governing plan:** `2026-07-24-exact-certified-adaptive-trochoidal-phase1.md`
