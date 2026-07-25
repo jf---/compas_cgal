@@ -327,6 +327,82 @@ class IntersectionBoundaryVertexIdV1:
 
 
 @dataclass(frozen=True)
+class MultiIncidenceIntersectionBoundaryVertexIdV1:
+    incident_supports: tuple[IncidentSupport, ...]
+    intersection_ordinal: int
+
+    def __post_init__(self) -> None:
+        if type(self.incident_supports) is not tuple or len(self.incident_supports) < 3:
+            raise InvalidBoundaryVertexIdentityError("multi-incidence intersection requires at least three incidents.")
+        if any(type(incident) is not IncidentSupport for incident in self.incident_supports):
+            raise InvalidBoundaryVertexIdentityError("multi-incidence intersection supports must be exact IncidentSupport.")
+        canonical = tuple(
+            sorted(
+                self.incident_supports,
+                key=lambda incident: (
+                    incident.support_id.canonical_bytes,
+                    incident.canonical_bytes,
+                ),
+            )
+        )
+        if canonical != self.incident_supports:
+            raise InvalidBoundaryVertexIdentityError("multi-incidence intersection supports must use canonical order.")
+        support_bytes = tuple(incident.support_id.canonical_bytes for incident in self.incident_supports)
+        distinct_supports = set(support_bytes)
+        if len(distinct_supports) < 2:
+            raise InvalidBoundaryVertexIdentityError("multi-incidence intersection requires at least two distinct supports.")
+        if len(distinct_supports) == len(support_bytes):
+            raise InvalidBoundaryVertexIdentityError("multi-incidence intersection requires a repeated support.")
+        if type(self.intersection_ordinal) is not int or self.intersection_ordinal < 0:
+            raise InvalidBoundaryVertexIdentityError("intersection ordinal must be an exact nonnegative integer.")
+
+    @classmethod
+    def build(
+        cls,
+        *,
+        incident_supports: Sequence[IncidentSupport],
+        intersection_ordinal: int,
+    ) -> Self:
+        try:
+            supports = tuple(incident_supports)
+        except TypeError:
+            raise InvalidBoundaryVertexIdentityError("multi-incidence intersection supports must be finite.") from None
+        if any(type(incident) is not IncidentSupport for incident in supports):
+            raise InvalidBoundaryVertexIdentityError("multi-incidence intersection supports must be exact IncidentSupport.")
+        canonical = tuple(
+            sorted(
+                supports,
+                key=lambda incident: (
+                    incident.support_id.canonical_bytes,
+                    incident.canonical_bytes,
+                ),
+            )
+        )
+        return cls(canonical, intersection_ordinal)
+
+    @property
+    def canonical_bytes(self) -> bytes:
+        if type(self) is not MultiIncidenceIntersectionBoundaryVertexIdV1:
+            raise InvalidBoundaryVertexIdentityError("multi-incidence identity must be exact MultiIncidenceIntersectionBoundaryVertexIdV1, not a subclass.")
+        return encode_tagged_union(
+            BOUNDARY_VERTEX_ID_VERSION,
+            encode_tagged_union(
+                b"multi-incidence-intersection-v1",
+                encode_component_map(
+                    {
+                        b"incident-supports": encode_sequence(tuple(incident.canonical_bytes for incident in self.incident_supports)),
+                        b"intersection-ordinal": encode_integer(self.intersection_ordinal),
+                    }
+                ),
+            ),
+        )
+
+    @property
+    def digest(self) -> IdentityDigest:
+        return IdentityDigest(hashlib.sha256(self.canonical_bytes).digest())
+
+
+@dataclass(frozen=True)
 class ParameterSeamBoundaryVertexIdV1:
     incident_supports: tuple[IncidentSupport, IncidentSupport]
     seam_ordinal: int
@@ -386,4 +462,4 @@ class ParameterSeamBoundaryVertexIdV1:
         return IdentityDigest(hashlib.sha256(self.canonical_bytes).digest())
 
 
-BoundaryVertexIdV1: TypeAlias = InputRingVertexIdV1 | IntersectionBoundaryVertexIdV1 | ParameterSeamBoundaryVertexIdV1
+BoundaryVertexIdV1: TypeAlias = InputRingVertexIdV1 | IntersectionBoundaryVertexIdV1 | MultiIncidenceIntersectionBoundaryVertexIdV1 | ParameterSeamBoundaryVertexIdV1

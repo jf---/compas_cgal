@@ -11,6 +11,7 @@ from compas_cgal.adaptive.canonical import require_canonical_record
 from compas_cgal.adaptive.identity import IncidentSupport
 from compas_cgal.adaptive.identity import IncidentSupportIdV1
 from compas_cgal.adaptive.identity import IntersectionBoundaryVertexIdV1
+from compas_cgal.adaptive.identity import MultiIncidenceIntersectionBoundaryVertexIdV1
 from compas_cgal.adaptive.identity import ParameterSeamBoundaryVertexIdV1
 from compas_cgal.adaptive.identity import SupportKind
 from compas_cgal.adaptive.identity import TrimIncidenceOrientation
@@ -226,6 +227,35 @@ def test_external_and_internal_tangencies_retain_multiplicity(key: str) -> None:
     tangent_events = [event for event in _continuous_tea_2.extract_boundary_events(stock) if event.multiplicity > 1]
     assert tangent_events
     assert {event.kind for event in tangent_events} == {"tangent"}
+
+
+def test_external_tangent_vertex_preserves_all_oriented_incidences() -> None:
+    stock = _stock_with_disks("external-internal-tangencies", "external_disks")
+    records = _continuous_tea_2.extract_boundary_records(stock)
+    tangent = next(event for event in _continuous_tea_2.extract_boundary_events(stock) if event.kind == "tangent")
+    incidents: list[IncidentSupport] = []
+    for record in records:
+        support = IncidentSupportIdV1(
+            SupportKind.LINE if record.support_kind == "line" else SupportKind.CIRCLE,
+            tuple(int(value) for value in record.primitive_coefficients),
+        )
+        if record.source_vertex_id == tangent.vertex_id:
+            incident = IncidentSupport(support, TrimIncidenceOrientation.LEAVING)
+            assert record.source_incidence == incident.canonical_bytes
+            incidents.append(incident)
+        if record.target_vertex_id == tangent.vertex_id:
+            incident = IncidentSupport(support, TrimIncidenceOrientation.ENTERING)
+            assert record.target_incidence == incident.canonical_bytes
+            incidents.append(incident)
+
+    assert len(incidents) == 4
+    assert (
+        tangent.vertex_id
+        == MultiIncidenceIntersectionBoundaryVertexIdV1.build(
+            incident_supports=incidents,
+            intersection_ordinal=0,
+        ).canonical_bytes
+    )
 
 
 def test_regularization_vertices_cover_line_circle_and_two_disk_merge_split() -> None:
