@@ -649,3 +649,163 @@ def test_degree_above_frozen_task5_contract_fails_before_solving() -> None:
                 ),
             )
         )
+
+
+def test_simultaneous_events_remain_distinct_in_one_exact_fibre() -> None:
+    certificate = _continuous_tea_2.partition_projections(
+        (
+            _projection_input(
+                "simultaneous",
+                ("-1", "2"),
+                (_event(b"a"), _event(b"b", kind="trimmed-vertex")),
+            ),
+        )
+    )
+
+    assert len(certificate.roots) == 1
+    assert len(certificate.fibres) == 1
+    assert [event.feature_id for event in certificate.fibres[0].events] == [
+        b"feature-a",
+        b"feature-b",
+    ]
+
+
+def test_two_dyadic_roots_are_not_coalesced_or_approximately_sorted() -> None:
+    certificate = _continuous_tea_2.partition_projections(
+        (
+            _projection_input("half", ("-1", "2"), (_event(b"half"),)),
+            _projection_input(
+                "near-half",
+                ("-524289", "1048576"),
+                (_event(b"near"),),
+            ),
+        )
+    )
+
+    assert [root.root_id for root in certificate.roots] == [
+        _root_id((-1, 2), 0),
+        _root_id((-524289, 1048576), 0),
+    ]
+    assert _cell_witnesses(certificate) == (
+        Fraction(1, 4),
+        Fraction(1048577, 2097152),
+        Fraction(3, 4),
+    )
+
+
+def test_identically_zero_pullback_is_positive_width_overlap() -> None:
+    projection = _continuous_tea_2.projection_from_grid(
+        "global-overlap",
+        (("0",),),
+        "segment-line-(1,2)-v1",
+    )
+    certificate = _continuous_tea_2.partition_pullback_overlap(
+        projection,
+        (_event(b"overlap", kind="support-overlap"),),
+    )
+
+    assert not certificate.roots
+    assert not certificate.fibres
+    assert len(certificate.overlaps) == 1
+    overlap = certificate.overlaps[0]
+    assert overlap.kind == "positive-width-motion-overlap"
+    assert (overlap.domain_low, overlap.domain_high) == ("0", "1")
+    assert Fraction(
+        int(overlap.witness_numerator),
+        int(overlap.witness_denominator),
+    ) == Fraction(1, 2)
+
+
+def test_equal_support_coefficient_gcd_is_an_isolated_fibre() -> None:
+    projection = _continuous_tea_2.construct_pullback(
+        "segment",
+        ("-1", "0", "1", "0"),
+        "circle",
+        ("0", "0", "1"),
+        "1",
+        "",
+        "rim-half-0-v1",
+    )
+    certificate = _continuous_tea_2.partition_pullback_overlap(
+        projection,
+        (_event(b"equal", kind="support-overlap"),),
+    )
+
+    assert [root.root_id for root in certificate.roots] == [_root_id((-1, 2), 0)]
+    assert [fibre.root_id for fibre in certificate.fibres] == [_root_id((-1, 2), 0)]
+    assert not certificate.overlaps
+    assert _cell_witnesses(certificate) == (Fraction(1, 4), Fraction(3, 4))
+
+
+def test_native_trim_filter_retains_only_closed_branch_domains() -> None:
+    branches = _continuous_tea_2.solve_trimmed_line_branches(
+        ("5", "0", "-3"),
+        ("3/5", "0"),
+        ("3/5", "1"),
+        ("0", "0", "0", "2"),
+        "1",
+        "rim-half-0-v1",
+    )
+
+    assert [
+        (
+            branch.rim_parameter,
+            branch.motion_domain_low,
+            branch.motion_domain_high,
+            branch.trim_disposition,
+        )
+        for branch in branches
+    ] == [
+        ("1/2", "0", "1/10", "accepted"),
+        ("-1/2", "2/5", "9/10", "accepted"),
+    ]
+    assert all(branch.rejected_outside_closed_domain for branch in branches)
+    assert all(branch.feature_id and branch.trim_id and branch.branch_id for branch in branches)
+
+
+def test_quadratic_regularization_vertex_filters_the_conjugate_exactly() -> None:
+    stock = _stock_with_disks("quadratic-circle-circle-stable-vertex")
+    records = _continuous_tea_2.extract_boundary_records(stock)
+    circle_indices = [index for index, record in enumerate(records) if record.support_kind == "circle"]
+    first, second = next(
+        (first, second)
+        for first in circle_indices
+        for second in circle_indices
+        if first < second
+        and any(
+            event.kind == "vertex"
+            for event in _continuous_tea_2.classify_boundary_pair(
+                stock,
+                first,
+                second,
+            )
+        )
+    )
+    upper = max(
+        (
+            event
+            for event in _continuous_tea_2.classify_boundary_pair(
+                stock,
+                first,
+                second,
+            )
+            if event.kind == "vertex"
+        ),
+        key=lambda event: event.vertex_id,
+    )
+
+    projected = _continuous_tea_2.project_regularization_vertex(
+        stock,
+        first,
+        second,
+        upper.vertex_id,
+    )
+
+    assert projected.root.root_id == _root_id((-3, 0, 4), 1)
+    assert projected.root.factor_coefficients == ("-3", "0", "4")
+    assert Fraction(projected.root.interval_low) < Fraction(3, 4)
+    assert Fraction(projected.root.interval_high) > Fraction(3, 4)
+    assert projected.vertex_id == upper.vertex_id
+    assert projected.first_trim_disposition == "accepted"
+    assert projected.second_trim_disposition == "accepted"
+    assert projected.conjugate_disposition == "rejected-vertex-identity"

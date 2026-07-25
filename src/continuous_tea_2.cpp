@@ -325,6 +325,63 @@ NB_MODULE(_continuous_tea_2, m)
             })
         .def_ro("events", &EventFibre2::events);
 
+    nb::class_<TrimmedLineBranch2>(m, "TrimmedLineBranch2")
+        .def_ro(
+            "rim_parameter",
+            &TrimmedLineBranch2::rim_parameter)
+        .def_ro(
+            "motion_domain_low",
+            &TrimmedLineBranch2::motion_domain_low)
+        .def_ro(
+            "motion_domain_high",
+            &TrimmedLineBranch2::motion_domain_high)
+        .def_ro(
+            "trim_disposition",
+            &TrimmedLineBranch2::trim_disposition)
+        .def_ro(
+            "rejected_outside_closed_domain",
+            &TrimmedLineBranch2::
+                rejected_outside_closed_domain)
+        .def_prop_ro(
+            "feature_id",
+            [](const TrimmedLineBranch2& branch) {
+                return as_bytes(branch.feature_id);
+            })
+        .def_prop_ro(
+            "trim_id",
+            [](const TrimmedLineBranch2& branch) {
+                return as_bytes(branch.trim_id);
+            })
+        .def_prop_ro(
+            "branch_id",
+            [](const TrimmedLineBranch2& branch) {
+                return as_bytes(branch.branch_id);
+            });
+
+    nb::class_<ProjectedRegularizationVertex2>(
+        m,
+        "ProjectedRegularizationVertex2")
+        .def_ro(
+            "root",
+            &ProjectedRegularizationVertex2::root)
+        .def_prop_ro(
+            "vertex_id",
+            [](const ProjectedRegularizationVertex2& projected) {
+                return as_bytes(projected.vertex_id);
+            })
+        .def_ro(
+            "first_trim_disposition",
+            &ProjectedRegularizationVertex2::
+                first_trim_disposition)
+        .def_ro(
+            "second_trim_disposition",
+            &ProjectedRegularizationVertex2::
+                second_trim_disposition)
+        .def_ro(
+            "conjugate_disposition",
+            &ProjectedRegularizationVertex2::
+                conjugate_disposition);
+
     nb::class_<ProjectionRecord2>(m, "ProjectionRecord2")
         .def_ro(
             "projection_id",
@@ -602,6 +659,36 @@ NB_MODULE(_continuous_tea_2, m)
         "projection_id"_a,
         "coefficient_rows"_a,
         "degree_bound_id"_a);
+    m.def(
+        "partition_pullback_overlap",
+        &partition_pullback_overlap,
+        "projection"_a,
+        "events"_a);
+    m.def(
+        "solve_trimmed_line_branches",
+        &solve_trimmed_line_branches,
+        "line_support"_a,
+        "trim_start"_a,
+        "trim_end"_a,
+        "segment_motion"_a,
+        "cutter_radius"_a,
+        "rim_chart"_a);
+    m.def(
+        "project_regularization_vertex",
+        [](const Stock2& stock,
+           std::size_t first_index,
+           std::size_t second_index,
+           const nb::bytes& vertex_id) {
+            return project_regularization_vertex(
+                stock,
+                first_index,
+                second_index,
+                from_bytes(vertex_id));
+        },
+        "stock"_a,
+        "first_index"_a,
+        "second_index"_a,
+        "vertex_id"_a);
     m.def(
         "partition_projections",
         &partition_projections,

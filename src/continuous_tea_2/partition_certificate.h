@@ -100,6 +100,25 @@ struct EventFibre2 {
     std::vector<PartitionEvent2> events;
 };
 
+struct TrimmedLineBranch2 {
+    std::string rim_parameter;
+    std::string motion_domain_low;
+    std::string motion_domain_high;
+    std::string trim_disposition;
+    bool rejected_outside_closed_domain;
+    std::string feature_id;
+    std::string trim_id;
+    std::string branch_id;
+};
+
+struct ProjectedRegularizationVertex2 {
+    AlgebraicRootRecord2 root;
+    std::string vertex_id;
+    std::string first_trim_disposition;
+    std::string second_trim_disposition;
+    std::string conjugate_disposition;
+};
+
 struct ProjectionRecord2 {
     std::string projection_id;
     std::vector<std::vector<std::string>> coefficient_rows;

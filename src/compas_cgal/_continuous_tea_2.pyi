@@ -186,6 +186,25 @@ class EventFibre2:
     events: Sequence[PartitionEvent2]
 
 
+class TrimmedLineBranch2:
+    rim_parameter: str
+    motion_domain_low: str
+    motion_domain_high: str
+    trim_disposition: str
+    rejected_outside_closed_domain: bool
+    feature_id: bytes
+    trim_id: bytes
+    branch_id: bytes
+
+
+class ProjectedRegularizationVertex2:
+    root: AlgebraicRootRecord2
+    vertex_id: bytes
+    first_trim_disposition: str
+    second_trim_disposition: str
+    conjugate_disposition: str
+
+
 class ProjectionRecord2:
     projection_id: str
     coefficient_rows: Sequence[Sequence[str]]
@@ -256,6 +275,24 @@ def projection_from_grid(
     coefficient_rows: Sequence[Sequence[str]],
     degree_bound_id: str,
 ) -> ProjectionRecord2: ...
+def partition_pullback_overlap(
+    projection: ProjectionRecord2,
+    events: Sequence[PartitionEvent2],
+) -> EventPartitionCertificate2: ...
+def solve_trimmed_line_branches(
+    line_support: Sequence[str],
+    trim_start: Sequence[str],
+    trim_end: Sequence[str],
+    segment_motion: Sequence[str],
+    cutter_radius: str,
+    rim_chart: str,
+) -> Sequence[TrimmedLineBranch2]: ...
+def project_regularization_vertex(
+    stock: Stock2,
+    first_index: int,
+    second_index: int,
+    vertex_id: bytes,
+) -> ProjectedRegularizationVertex2: ...
 def partition_projections(
     projections: Sequence[ProjectionInput2],
 ) -> EventPartitionCertificate2: ...
