@@ -200,6 +200,7 @@ endfunction()
 add_library(coverage_exact_core STATIC
     src/exact_region_2.cpp
     src/exact_sweep_2.cpp
+    src/reachable_input_2.cpp
     src/reachable_arrangement_2.cpp
 )
 set_target_properties(coverage_exact_core PROPERTIES POSITION_INDEPENDENT_CODE ON)

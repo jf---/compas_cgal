@@ -233,19 +233,12 @@ CanonicalReachInput2 rectangle_input()
     return canonical_reach_input(rectangle_matrix(), {}, 1.0);
 }
 
-void require_face_parity(const ReachableArrangement2& reachable)
+void require_all_faces_classified(const ReachableArrangement2& reachable)
 {
     for (auto face = reachable.arrangement.faces_begin();
          face != reachable.arrangement.faces_end();
          ++face) {
         require(face->data().classified, "reachable face remained unclassified");
-        const bool expected_selected =
-            face->data().outer_active
-            && face->data().active_holes == 0
-            && face->data().active_forbidden == 0;
-        require(
-            face->data().selected == expected_selected,
-            "reachable face selection contradicted aggregate parity");
     }
 }
 
@@ -290,7 +283,43 @@ void require_reachable_audit(
         reachable.audit.ring_rotation_comparisons
             <= 3 * reachable.audit.input_vertex_count,
         "ring canonicalization exceeded linear comparison bound");
-    require_face_parity(reachable);
+    std::size_t propagated_primitive_labels = 0;
+    for (auto edge = reachable.arrangement.edges_begin();
+         edge != reachable.arrangement.edges_end();
+         ++edge) {
+        propagated_primitive_labels +=
+            edge->curve().data().primitive_ids.size();
+    }
+    const std::size_t face_count =
+        reachable.arrangement.number_of_faces();
+    const std::size_t halfedge_count =
+        reachable.arrangement.number_of_halfedges();
+    require(
+        reachable.audit.dense_face_visits == face_count,
+        "dense index revisited arrangement faces");
+    require(
+        reachable.audit.dense_halfedge_visits == halfedge_count,
+        "dense index revisited arrangement halfedges");
+    require(
+        reachable.audit.primitive_label_resolutions
+            == propagated_primitive_labels,
+        "dense index did not resolve each primitive label exactly once");
+    require(
+        reachable.audit.parity_halfedge_visits == halfedge_count,
+        "parity traversal did not perform exactly one directed halfedge pass");
+    require(
+        reachable.audit.component_halfedge_visits <= halfedge_count,
+        "component traversal exceeded one directed halfedge pass");
+    require(
+        reachable.audit.boundary_scan_halfedge_visits == halfedge_count,
+        "boundary extraction rescanned arrangement halfedges");
+    require(
+        reachable.audit.boundary_cycle_halfedge_visits <= halfedge_count,
+        "boundary extraction revisited selected boundary halfedges");
+    require(
+        reachable.audit.boundary_rotation_halfedge_visits <= halfedge_count,
+        "boundary successor search exceeded one directed halfedge pass");
+    require_all_faces_classified(reachable);
     require_selected_boundary_provenance(reachable);
     const ReachTraits traits;
     require(
@@ -421,6 +450,113 @@ void overlap_label_gate()
         "overlap merge lost sorted unique source-piece labels");
 }
 
+void append_labelled_rectangle(
+    std::vector<ReachDataTraits2::X_monotone_curve_2>& curves,
+    const std::vector<std::string>& primitive_ids)
+{
+    const std::vector<ReachKernelPoint> points{
+        {0, 0},
+        {4, 0},
+        {4, 3},
+        {0, 3},
+    };
+    for (std::size_t index = 0; index < points.size(); ++index) {
+        curves.push_back(
+            {
+                ReachXCurve(
+                    points[index],
+                    points[(index + 1) % points.size()]),
+                ReachCurveLabels2{{}, primitive_ids},
+            });
+    }
+}
+
+void require_identical_boundary_parity(
+    bool add_forbidden,
+    bool expected_bounded_selected,
+    std::size_t expected_bounded_forbidden)
+{
+    ReachArrangement2 arrangement;
+    std::vector<ReachDataTraits2::X_monotone_curve_2> curves;
+    append_labelled_rectangle(curves, {"outer"});
+    append_labelled_rectangle(curves, {"outer"});
+    ReachPrimitiveKinds2 primitive_kinds{
+        {"outer", ReachPrimitiveKind2::Outer},
+    };
+    if (add_forbidden) {
+        append_labelled_rectangle(curves, {"forbidden"});
+        append_labelled_rectangle(curves, {"forbidden"});
+        primitive_kinds.emplace(
+            "forbidden",
+            ReachPrimitiveKind2::Forbidden);
+    }
+    CGAL::insert(arrangement, curves.begin(), curves.end());
+    ReachableDomainBuildAudit2 audit;
+    classify_faces_by_primitive_parity(
+        arrangement,
+        primitive_kinds,
+        audit);
+
+    std::size_t primitive_label_count = 0;
+    for (auto edge = arrangement.edges_begin();
+         edge != arrangement.edges_end();
+         ++edge) {
+        primitive_label_count +=
+            edge->curve().data().primitive_ids.size();
+    }
+    require(
+        audit.dense_face_visits == arrangement.number_of_faces(),
+        "identical-boundary classifier revisited arrangement faces");
+    require(
+        audit.dense_halfedge_visits
+            == arrangement.number_of_halfedges(),
+        "identical-boundary classifier revisited arrangement halfedges");
+    require(
+        audit.primitive_label_resolutions == primitive_label_count,
+        "identical-boundary classifier repeated primitive resolution");
+    require(
+        audit.parity_halfedge_visits
+            == arrangement.number_of_halfedges(),
+        "identical-boundary parity was not one directed halfedge pass");
+
+    std::size_t bounded_faces = 0;
+    for (auto face = arrangement.faces_begin();
+         face != arrangement.faces_end();
+         ++face) {
+        if (face == arrangement.unbounded_face()) {
+            require(
+                !face->data().outer_active
+                    && face->data().active_forbidden == 0
+                    && !face->data().selected,
+                "identical boundary changed unbounded geometric parity");
+            continue;
+        }
+        ++bounded_faces;
+        require(
+            face->data().outer_active,
+            "identical outer boundaries cancelled geometric interior");
+        require(
+            face->data().active_holes == 0,
+            "identical boundary invented hole parity");
+        require(
+            face->data().active_forbidden
+                == expected_bounded_forbidden,
+            "identical forbidden boundaries changed geometric parity");
+        require(
+            face->data().selected == expected_bounded_selected,
+            "identical boundary selected the wrong geometric face");
+    }
+    require(
+        bounded_faces == 1,
+        "identical rectangle boundaries changed exact face count");
+}
+
+void identical_boundary_parity_gate()
+{
+    require_identical_boundary_parity(true, false, 1);
+    require_identical_boundary_parity(false, true, 0);
+}
+
 void disconnected_domain_gate()
 {
     compas::RowMatrixXd boundary(12, 3);
@@ -450,21 +586,74 @@ void disconnected_domain_gate()
         "disconnected center domain did not raise PocketNotMachinableError");
 }
 
-void canonical_input_bypass_gate()
+template <typename Mutate>
+void require_invalid_canonical_mutation(
+    Mutate mutate,
+    const char* message)
 {
     CanonicalReachInput2 input = rectangle_input();
-    input.radius = ReachFT(0);
-    bool raised = false;
+    mutate(input);
     try {
         static_cast<void>(
             build_reachable_arrangement(std::move(input)));
     }
     catch (const InvalidReachableDomainInputError&) {
-        raised = true;
+        return;
     }
-    require(
-        raised,
-        "reachable build did not revalidate canonical input invariants");
+    catch (...) {
+        throw std::runtime_error(message);
+    }
+    throw std::runtime_error(message);
+}
+
+void canonical_input_bypass_gate()
+{
+    try {
+        static_cast<void>(build_reachable_arrangement(
+            CanonicalReachInput2{}));
+        throw std::runtime_error(
+            "reachable build accepted a raw default input");
+    }
+    catch (const InvalidReachableDomainInputError&) {
+    }
+    require_invalid_canonical_mutation(
+        [](CanonicalReachInput2& input) {
+            input.radius = ReachFT(0);
+        },
+        "reachable build leaked invalid radius past its input error boundary");
+    require_invalid_canonical_mutation(
+        [](CanonicalReachInput2& input) {
+            input.recipe_record += "forged";
+        },
+        "reachable build accepted a forged input recipe");
+    require_invalid_canonical_mutation(
+        [](CanonicalReachInput2& input) {
+            input.outer.record += "forged";
+        },
+        "reachable build accepted a forged ring record");
+    require_invalid_canonical_mutation(
+        [](CanonicalReachInput2& input) {
+            input.outer.points[1] = ReachKernelPoint(11, 0);
+        },
+        "reachable build accepted exact-point/binary64 divergence");
+    require_invalid_canonical_mutation(
+        [](CanonicalReachInput2& input) {
+            input.outer.canonical_ordinal = 1;
+        },
+        "reachable build accepted an invalid outer ordinal");
+    require_invalid_canonical_mutation(
+        [](CanonicalReachInput2& input) {
+            input.outer.outer = false;
+        },
+        "reachable build leaked an invalid ring role to topology");
+    require_invalid_canonical_mutation(
+        [](CanonicalReachInput2& input) {
+            input.outer.points[1] = ReachKernelPoint(11, 0);
+            input.outer.points[2] = ReachKernelPoint(11, 8);
+            input.outer.binary64_points[1][0] = 11.0;
+            input.outer.binary64_points[2][0] = 11.0;
+        },
+        "reachable build accepted valid geometry detached from identity");
 }
 
 } // namespace
@@ -480,6 +669,7 @@ int main()
     acute_corner_gate();
     island_gate();
     overlap_label_gate();
+    identical_boundary_parity_gate();
     disconnected_domain_gate();
     canonical_input_bypass_gate();
 }
