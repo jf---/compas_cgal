@@ -1,14 +1,19 @@
 #pragma once
 
-#include "exact_motion_2.h"
-#include "reachable_domain_2.h"
+#include "exact_build_audit_2.h"
+#include "exact_region_2.h"
 
 #include <cstddef>
 #include <stdexcept>
 #include <string>
 #include <vector>
 
-class CoverageConstructionError : public std::runtime_error {
+class InvalidCoverageGeometryError : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
+
+class CoverageTransitionError : public std::runtime_error {
 public:
     using std::runtime_error::runtime_error;
 };
@@ -16,7 +21,6 @@ public:
 struct CoverageSweepRecord2 {
     std::string strategy_version;
     std::string structural_record;
-    bool exact_reconstruction;
     bool segment;
     double center_x;
     double center_y;
@@ -68,15 +72,31 @@ public:
     std::vector<std::string> sweep_records() const;
     bool exact_residual_relation() const;
     const std::string& strategy_version() const;
+    const CoverageTransitionAudit2&
+        last_transition_audit_for_native_gate() const;
+    bool shares_pretransition_storage_with_for_native_gate(
+        const Coverage2& other) const;
 
 private:
-    void apply_sweep(
-        const ReachSet& sweep,
-        const std::string& structural_record);
+    struct State {
+        ExactRegion2 reachable_material;
+        ExactRegion2 accumulated_sweeps;
+        ExactRegion2 residual;
+        std::vector<std::string> sweep_records;
+        bool exact_residual_relation;
+    };
 
-    ExactRegion2 reachable_material_;
-    ExactRegion2 accumulated_sweeps_;
-    ExactRegion2 residual_;
-    std::vector<std::string> sweep_records_;
-    bool exact_residual_relation_;
+    explicit Coverage2(State state);
+    static State build_initial_state(
+        const ExactRegion2& reachable_material,
+        double precleared_x,
+        double precleared_y,
+        double precleared_radius);
+    void apply_sweep(
+        ReachSet sweep,
+        std::string structural_record,
+        CoverageTransitionAudit2 audit);
+
+    State state_;
+    CoverageTransitionAudit2 last_transition_audit_;
 };

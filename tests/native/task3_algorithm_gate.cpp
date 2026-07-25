@@ -1,3 +1,4 @@
+#include "coverage_2.h"
 #include "exact_region_2.h"
 #include "exact_sweep_2.h"
 #include "reachable_arrangement_2.h"
@@ -6,6 +7,7 @@
 #include "task3_certificate_gate.h"
 
 #include <algorithm>
+#include <cmath>
 #include <iterator>
 #include <stdexcept>
 #include <string>
@@ -401,6 +403,164 @@ void reachable_domain_owner_gate()
         "public owner lost exact material containment");
 }
 
+void require_bounded_coverage_transition(
+    const Coverage2& coverage,
+    const char* context)
+{
+    const CoverageTransitionAudit2& audit =
+        coverage.last_transition_audit_for_native_gate();
+    require(
+        audit.sweep_constructions == 1,
+        context);
+    require(
+        audit.accumulated_unions == 1,
+        "coverage accumulated union repeated");
+    require(
+        audit.residual_differences == 1,
+        "coverage residual difference repeated");
+    require(
+        audit.replay_constructions == 0,
+        "coverage replayed exact geometry");
+    require(
+        audit.immutable_region_deep_copies == 0,
+        "coverage deep-copied immutable regions");
+}
+
+void coverage_transition_gate()
+{
+    const ReachableDomain2 domain(rectangle_matrix(), {}, 1.0);
+    Coverage2 coverage(
+        domain.reachable_material(),
+        5.0,
+        4.0,
+        1.0);
+    Coverage2 clone = coverage.clone();
+    require(
+        coverage.shares_pretransition_storage_with_for_native_gate(
+            clone),
+        "coverage clone deep-copied pretransition storage");
+    const ExactRegion2 original_residual = coverage.residual();
+
+    const CoverageSweepRecord2 segment =
+        clone.add_segment_sweep(2.0, 4.0, 8.0, 4.0, 1.0);
+    require(
+        segment.matches_exact_segment(
+            2.0,
+            4.0,
+            8.0,
+            4.0,
+            1.0),
+        "segment record lost exact binary64 inputs");
+    require(
+        !segment.matches_exact_segment(
+            2.0,
+            4.0,
+            8.0,
+            4.0,
+            std::nextafter(1.0, 2.0)),
+        "segment record accepted a different binary64 radius");
+    require_bounded_coverage_transition(
+        clone,
+        "segment sweep replayed");
+    require(
+        coverage.residual().shares_storage_with_for_audit(
+            original_residual),
+        "mutating clone replaced original residual storage");
+    require(
+        coverage.sweep_records().empty(),
+        "mutating clone changed original sweep lineage");
+
+    const CoverageSweepRecord2 circle =
+        clone.add_full_circle_sweep(
+            5.0,
+            4.0,
+            1.0,
+            1.0,
+            1.0);
+    require(
+        circle.matches_exact_full_circle(
+            5.0,
+            4.0,
+            1.0,
+            1.0,
+            1.0),
+        "full-circle record lost exact binary64 inputs");
+    require(
+        !circle.matches_exact_full_circle(
+            5.0,
+            4.0,
+            std::nextafter(1.0, 2.0),
+            1.0,
+            1.0),
+        "full-circle record accepted a different binary64 phase");
+    require_bounded_coverage_transition(
+        clone,
+        "full-circle sweep replayed");
+    require(
+        clone.sweep_records()
+            == std::vector<std::string>{
+                segment.structural_record,
+                circle.structural_record,
+            },
+        "coverage lineage did not preserve transition order");
+}
+
+void coverage_atomic_failure_gate()
+{
+    const ReachableDomain2 domain(rectangle_matrix(), {}, 1.0);
+    Coverage2 coverage(
+        domain.reachable_material(),
+        5.0,
+        4.0,
+        1.0);
+    const ExactRegion2 residual_before = coverage.residual();
+    const ExactRegion2 accumulated_before =
+        coverage.accumulated_sweeps();
+
+    bool invalid_geometry_raised = false;
+    try {
+        static_cast<void>(
+            coverage.add_segment_sweep(
+                2.0,
+                2.0,
+                2.0,
+                2.0,
+                1.0));
+    }
+    catch (const InvalidCoverageGeometryError&) {
+        invalid_geometry_raised = true;
+    }
+    require(
+        invalid_geometry_raised,
+        "degenerate segment did not raise invalid coverage geometry");
+    require(
+        coverage.residual().shares_storage_with_for_audit(
+            residual_before),
+        "failed coverage trial replaced residual storage");
+    require(
+        coverage.accumulated_sweeps().shares_storage_with_for_audit(
+            accumulated_before),
+        "failed coverage trial replaced accumulated storage");
+    require(
+        coverage.sweep_records().empty(),
+        "failed coverage trial appended lineage");
+
+    bool transition_error_raised = false;
+    try {
+        static_cast<void>(Coverage2(
+            domain.design_region(),
+            5.0,
+            4.0,
+            1.0));
+    }
+    catch (const CoverageTransitionError&) {
+        transition_error_raised = true;
+    }
+    require(
+        transition_error_raised,
+        "invalid coverage owner state did not raise transition error");
+}
+
 void canonical_input_invariance_gate()
 {
     compas::RowMatrixXd rotated(4, 3);
@@ -687,6 +847,8 @@ int main()
     full_circle_radius_gate();
     rectangle_reachable_gate();
     reachable_domain_owner_gate();
+    coverage_transition_gate();
+    coverage_atomic_failure_gate();
     canonical_input_invariance_gate();
     acute_corner_gate();
     island_gate();

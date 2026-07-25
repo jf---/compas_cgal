@@ -8,6 +8,8 @@ InvalidReachableDomainInputError = _coverage_2.InvalidReachableDomainInputError
 ReachableArrangementTopologyError = _coverage_2.ReachableArrangementTopologyError
 PocketNotMachinableError = _coverage_2.PocketNotMachinableError
 ReachableMaterialContainmentError = _coverage_2.ReachableMaterialContainmentError
+InvalidCoverageGeometryError = _coverage_2.InvalidCoverageGeometryError
+CoverageTransitionError = _coverage_2.CoverageTransitionError
 
 
 class InvalidUnitValueError(ValueError):
@@ -88,3 +90,15 @@ class InvalidOperationIdentityError(ArtifactIdentityError):
 
 class InvalidReachableDomainCertificateError(ValueError):
     """Reachable-domain reconstruction evidence violates its exact contract."""
+
+
+class InvalidCoverageCertificateError(ValueError):
+    """An exact coverage certificate violates its owned structural contract."""
+
+
+class InvalidCoverageSweepError(ValueError):
+    """A native coverage transition diverges from its exact Python motion."""
+
+
+class IncompletePocketCoverageError(RuntimeError):
+    """Exact reachable material remains after the owned sweep lineage."""

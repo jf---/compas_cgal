@@ -1,3 +1,4 @@
+#include "coverage_2.h"
 #include "reachable_domain_2.h"
 #include "reachable_errors_2.h"
 
@@ -50,6 +51,14 @@ NB_MODULE(_coverage_2, m)
         m,
         "ReachableMaterialContainmentError",
         reachable_error.ptr());
+    nb::exception<InvalidCoverageGeometryError>(
+        m,
+        "InvalidCoverageGeometryError",
+        PyExc_RuntimeError);
+    nb::exception<CoverageTransitionError>(
+        m,
+        "CoverageTransitionError",
+        PyExc_RuntimeError);
     nb::class_<ExactRegion2>(m, "ExactRegion2")
         .def("clone", &ExactRegion2::clone)
         .def("contains", &ExactRegion2::contains, "x"_a, "y"_a)
@@ -125,4 +134,93 @@ NB_MODULE(_coverage_2, m)
             &ReachableDomain2::unreachable_residual)
         .def("certificate", &ReachableDomain2::certificate);
 
+    nb::class_<CoverageSweepRecord2>(m, "CoverageSweepRecord2")
+        .def_prop_ro(
+            "strategy_version",
+            [](const CoverageSweepRecord2& record) {
+                return bytes_value(record.strategy_version);
+            })
+        .def_prop_ro(
+            "structural_record",
+            [](const CoverageSweepRecord2& record) {
+                return bytes_value(record.structural_record);
+            })
+        .def_ro("segment", &CoverageSweepRecord2::segment)
+        .def_ro("center_x", &CoverageSweepRecord2::center_x)
+        .def_ro("center_y", &CoverageSweepRecord2::center_y)
+        .def_ro("first_x", &CoverageSweepRecord2::first_x)
+        .def_ro("first_y", &CoverageSweepRecord2::first_y)
+        .def_ro("tool_radius", &CoverageSweepRecord2::tool_radius)
+        .def(
+            "matches_exact_segment",
+            &CoverageSweepRecord2::matches_exact_segment,
+            "x0"_a,
+            "y0"_a,
+            "x1"_a,
+            "y1"_a,
+            "tool_radius"_a)
+        .def(
+            "matches_exact_full_circle",
+            &CoverageSweepRecord2::matches_exact_full_circle,
+            "center_x"_a,
+            "center_y"_a,
+            "phase_x"_a,
+            "phase_y"_a,
+            "tool_radius"_a);
+
+    nb::class_<Coverage2>(m, "Coverage2")
+        .def(
+            nb::init<
+                const ExactRegion2&,
+                double,
+                double,
+                double>(),
+            "reachable_material"_a,
+            "precleared_x"_a,
+            "precleared_y"_a,
+            "precleared_radius"_a)
+        .def("clone", &Coverage2::clone)
+        .def(
+            "add_segment_sweep",
+            &Coverage2::add_segment_sweep,
+            "x0"_a,
+            "y0"_a,
+            "x1"_a,
+            "y1"_a,
+            "tool_radius"_a)
+        .def(
+            "add_full_circle_sweep",
+            &Coverage2::add_full_circle_sweep,
+            "center_x"_a,
+            "center_y"_a,
+            "phase_x"_a,
+            "phase_y"_a,
+            "tool_radius"_a)
+        .def("residual_is_empty", &Coverage2::residual_is_empty)
+        .def(
+            "residual_component_count",
+            &Coverage2::residual_component_count)
+        .def("residual", &Coverage2::residual)
+        .def(
+            "accumulated_sweeps",
+            &Coverage2::accumulated_sweeps)
+        .def_prop_ro(
+            "residual_component_records",
+            [](const Coverage2& coverage) {
+                return bytes_sequence(
+                    coverage.residual_component_records());
+            })
+        .def_prop_ro(
+            "sweep_records",
+            [](const Coverage2& coverage) {
+                return bytes_sequence(coverage.sweep_records());
+            })
+        .def(
+            "exact_residual_relation",
+            &Coverage2::exact_residual_relation)
+        .def_prop_ro(
+            "strategy_version",
+            [](const Coverage2& coverage) {
+                return bytes_value(coverage.strategy_version());
+            });
 }
