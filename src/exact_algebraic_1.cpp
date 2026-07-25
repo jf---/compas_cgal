@@ -642,16 +642,43 @@ std::pair<Rational, Rational> strict_interval(
     return interval;
 }
 
-Rational rational_between(
+Rational simplest_dyadic_between(
     const AlgebraicReal& left,
     const AlgebraicReal& right)
 {
     Kernel kernel;
-    if (left.low() == left.high()
-        && right.low() == right.high()) {
-        return (left.low() + right.low()) / Rational(2);
+    Integer denominator = 1;
+    while (true) {
+        denominator *= 2;
+        const Rational scaled_upper =
+            left.high() * Rational(denominator);
+        Integer numerator =
+            CORE::numerator(scaled_upper)
+                / CORE::denominator(scaled_upper)
+            + 1;
+        while (numerator < denominator) {
+            const Rational candidate(
+                numerator,
+                denominator);
+            if (kernel.compare_1_object()(
+                    left,
+                    candidate)
+                    == CGAL::SMALLER
+                && kernel.compare_1_object()(
+                    candidate,
+                    right)
+                    == CGAL::SMALLER) {
+                return candidate;
+            }
+            if (kernel.compare_1_object()(
+                    candidate,
+                    right)
+                != CGAL::SMALLER) {
+                break;
+            }
+            ++numerator;
+        }
     }
-    return kernel.bound_between_1_object()(left, right);
 }
 
 bool event_less(
@@ -911,7 +938,7 @@ EventPartitionCertificate2 partition_integer_projections(
             != CGAL::SMALLER) {
             continue;
         }
-        const Rational witness = rational_between(
+        const Rational witness = simplest_dyadic_between(
             boundaries[index],
             boundaries[index + 1]);
         const auto [numerator, denominator] =
