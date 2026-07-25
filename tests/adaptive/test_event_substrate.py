@@ -7,6 +7,7 @@ import pytest
 
 from compas_cgal import _continuous_tea_2
 from compas_cgal import _stock_2
+from compas_cgal.adaptive.canonical import require_canonical_record
 from compas_cgal.adaptive.identity import IncidentSupport
 from compas_cgal.adaptive.identity import IncidentSupportIdV1
 from compas_cgal.adaptive.identity import IntersectionBoundaryVertexIdV1
@@ -49,6 +50,18 @@ def test_result_contract_has_no_boolean_compatibility() -> None:
         "vertex",
         "overlap",
         "seam",
+    )
+    assert issubclass(
+        _continuous_tea_2.DegenerateBoundarySupportError,
+        _continuous_tea_2.BoundaryExtractionError,
+    )
+    assert issubclass(
+        _continuous_tea_2.MissingBoundaryEndpointError,
+        _continuous_tea_2.BoundaryExtractionError,
+    )
+    assert issubclass(
+        _continuous_tea_2.MissingBoundaryIntersectionError,
+        _continuous_tea_2.BoundaryExtractionError,
     )
 
 
@@ -127,11 +140,33 @@ def test_positive_length_overlap_is_not_flattened_to_tangent() -> None:
     events = _continuous_tea_2.classify_boundary_pair(stock, circle_index, circle_index)
     assert [event.kind for event in events] == ["overlap"]
     assert events[0].exact_overlap_record
+    assert require_canonical_record(events[0].overlap_id) == events[0].overlap_id
+    assert events[0].overlap_id != events[0].exact_overlap_record
     assert events[0].multiplicity > 0
     assert records[circle_index].overlap_multiplicity > 0
 
 
 def test_segment_and_full_circle_split_are_explicit_seams() -> None:
+    segmented_square = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [5.0, 0.0, 0.0],
+            [10.0, 0.0, 0.0],
+            [10.0, 10.0, 0.0],
+            [0.0, 10.0, 0.0],
+        ],
+        dtype=np.float64,
+    )
+    segmented_stock = _stock_2.Stock2(segmented_square, [])
+    segment_records = _continuous_tea_2.extract_boundary_records(segmented_stock)
+    segment_indices = [index for index, record in enumerate(segment_records) if tuple(record.primitive_coefficients) == ("0", "1", "0")]
+    segment_events = _continuous_tea_2.classify_boundary_pair(
+        segmented_stock,
+        *segment_indices,
+    )
+    assert len(segment_events) == 1
+    assert {event.kind for event in segment_events} == {"seam"}
+
     geometry = _case("segment-full-circle-parameter-seams")["geometry"]
     stock = _stock_2.Stock2(SQUARE, [])
     stock.subtract_disk(*geometry["disk"])
@@ -220,3 +255,11 @@ def test_quadratic_circle_vertex_identity_is_operand_order_invariant() -> None:
     forward = _continuous_tea_2.classify_boundary_pair(stock, first, second)
     reverse = _continuous_tea_2.classify_boundary_pair(stock, second, first)
     assert [(event.kind, event.vertex_id) for event in forward] == [(event.kind, event.vertex_id) for event in reverse]
+
+    geometry = _case("quadratic-circle-circle-stable-vertex")["geometry"]
+    reversed_stock = _stock_2.Stock2(SQUARE, [])
+    for disk in reversed(geometry["disks"]):
+        reversed_stock.subtract_disk(*disk)
+    forward_vertex_ids = sorted(event.vertex_id for event in _continuous_tea_2.extract_boundary_events(stock) if event.kind == "vertex")
+    reversed_vertex_ids = sorted(event.vertex_id for event in _continuous_tea_2.extract_boundary_events(reversed_stock) if event.kind == "vertex")
+    assert forward_vertex_ids == reversed_vertex_ids

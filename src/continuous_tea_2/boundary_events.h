@@ -27,6 +27,7 @@ struct BoundaryEvent2 {
     std::string first_feature_id;
     std::string second_feature_id;
     std::string vertex_id;
+    std::string overlap_id;
     std::string exact_overlap_record;
     unsigned int multiplicity;
 };

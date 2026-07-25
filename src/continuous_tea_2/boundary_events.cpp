@@ -238,7 +238,7 @@ SupportState support_state(const GpsXCurve& curve)
             primitive.back());
     }
     if (common_factor == 0) {
-        throw BoundaryExtractionError(
+        throw DegenerateBoundarySupportError(
             "boundary support has zero coefficients");
     }
     for (BigInt& coefficient : primitive) {
@@ -330,7 +330,7 @@ std::size_t find_vertex(
             return point_equal(vertex.point, point);
         });
     if (found == vertices.end()) {
-        throw BoundaryExtractionError(
+        throw MissingBoundaryEndpointError(
             "boundary endpoint is absent from vertex state");
     }
     return static_cast<std::size_t>(
@@ -406,8 +406,10 @@ std::vector<VertexState> build_vertices(
         std::size_t ordinal = 0;
         std::vector<std::string> support_ids_at_vertex;
         std::vector<std::string> incident_records;
+        std::vector<std::string> all_incident_records;
         for (const auto& [support_id, incident] :
              vertices[index].incidents) {
+            all_incident_records.push_back(incident);
             if (support_ids_at_vertex.empty()
                 || support_ids_at_vertex.back() != support_id) {
                 support_ids_at_vertex.push_back(support_id);
@@ -449,18 +451,21 @@ std::vector<VertexState> build_vertices(
                         })));
         } else {
             vertices[index].vertex_id = ccan_tagged(
-                "boundary-trim-seam-v1",
-                ccan_map(
-                    {
+                "boundary-vertex-id-v1",
+                ccan_tagged(
+                    "parameter-seam-v1",
+                    ccan_map(
                         {
-                            "seam-ordinal",
-                            ccan_integer(ordinal),
-                        },
-                        {
-                            "support-id",
-                            support_ids_at_vertex.front(),
-                        },
-                    }));
+                            {
+                                "incident-supports",
+                                ccan_sequence(
+                                    all_incident_records),
+                            },
+                            {
+                                "seam-ordinal",
+                                ccan_integer(ordinal),
+                            },
+                        })));
         }
     }
     return vertices;
@@ -585,7 +590,7 @@ std::string point_vertex_id(
             return point_equal(candidate, point);
         });
     if (found == points.end()) {
-        throw BoundaryExtractionError(
+        throw MissingBoundaryIntersectionError(
             "intersection point is absent from exact pair results");
     }
     std::vector<std::string> incidents{
@@ -657,6 +662,43 @@ std::vector<BoundaryEvent2> classify_pair(
                                 overlap->target()),
                         },
                     }));
+            std::vector<std::string> overlap_endpoints{
+                point_vertex_id(
+                    overlap->source(),
+                    first,
+                    second,
+                    intersections),
+                point_vertex_id(
+                    overlap->target(),
+                    first,
+                    second,
+                    intersections),
+            };
+            std::sort(
+                overlap_endpoints.begin(),
+                overlap_endpoints.end());
+            const std::string overlap_id = ccan_tagged(
+                "boundary-overlap-id-v1",
+                ccan_map(
+                    {
+                        {
+                            "endpoint-vertices",
+                            ccan_sequence(
+                                overlap_endpoints),
+                        },
+                        {
+                            "feature-ids",
+                            ccan_sequence(
+                                {
+                                    std::min(
+                                        first.feature_id,
+                                        second.feature_id),
+                                    std::max(
+                                        first.feature_id,
+                                        second.feature_id),
+                                }),
+                        },
+                    }));
             events.push_back(
                 {
                     "overlap",
@@ -667,6 +709,7 @@ std::vector<BoundaryEvent2> classify_pair(
                         first.feature_id,
                         second.feature_id),
                     {},
+                    overlap_id,
                     overlap_record,
                     overlap_multiplicity,
                 });
@@ -703,6 +746,7 @@ std::vector<BoundaryEvent2> classify_pair(
                     second,
                     intersections),
                 {},
+                {},
                 hit.second,
             });
     }
@@ -714,14 +758,14 @@ std::vector<BoundaryEvent2> classify_pair(
             return std::tie(
                        left.kind,
                        left.vertex_id,
-                       left.exact_overlap_record,
+                       left.overlap_id,
                        left.first_feature_id,
                        left.second_feature_id,
                        left.multiplicity)
                 < std::tie(
                        right.kind,
                        right.vertex_id,
-                       right.exact_overlap_record,
+                       right.overlap_id,
                        right.first_feature_id,
                        right.second_feature_id,
                        right.multiplicity);
@@ -784,14 +828,14 @@ std::vector<BoundaryEvent2> extract_boundary_events(
             return std::tie(
                        left.kind,
                        left.vertex_id,
-                       left.exact_overlap_record,
+                       left.overlap_id,
                        left.first_feature_id,
                        left.second_feature_id,
                        left.multiplicity)
                 < std::tie(
                        right.kind,
                        right.vertex_id,
-                       right.exact_overlap_record,
+                       right.overlap_id,
                        right.first_feature_id,
                        right.second_feature_id,
                        right.multiplicity);
@@ -804,8 +848,8 @@ std::vector<BoundaryEvent2> extract_boundary_events(
                const BoundaryEvent2& right) {
                 return left.kind == right.kind
                     && left.vertex_id == right.vertex_id
-                    && left.exact_overlap_record
-                        == right.exact_overlap_record
+                    && left.overlap_id
+                        == right.overlap_id
                     && left.first_feature_id
                         == right.first_feature_id
                     && left.second_feature_id

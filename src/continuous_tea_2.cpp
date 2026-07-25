@@ -29,6 +29,18 @@ NB_MODULE(_continuous_tea_2, m)
     nb::exception<BoundaryExtractionError> extraction_error(
         m,
         "BoundaryExtractionError");
+    nb::exception<DegenerateBoundarySupportError>(
+        m,
+        "DegenerateBoundarySupportError",
+        extraction_error.ptr());
+    nb::exception<MissingBoundaryEndpointError>(
+        m,
+        "MissingBoundaryEndpointError",
+        extraction_error.ptr());
+    nb::exception<MissingBoundaryIntersectionError>(
+        m,
+        "MissingBoundaryIntersectionError",
+        extraction_error.ptr());
     nb::exception<BoundaryFeatureIndexError>(
         m,
         "BoundaryFeatureIndexError",
@@ -131,6 +143,11 @@ NB_MODULE(_continuous_tea_2, m)
             "vertex_id",
             [](const BoundaryEvent2& event) {
                 return as_bytes(event.vertex_id);
+            })
+        .def_prop_ro(
+            "overlap_id",
+            [](const BoundaryEvent2& event) {
+                return as_bytes(event.overlap_id);
             })
         .def_prop_ro(
             "exact_overlap_record",
