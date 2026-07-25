@@ -40,28 +40,36 @@ def _audit(
     tool_radius: float = 0.5,
     cap_chord_ratio: float = 4.0,
 ) -> tuple[str, object]:
+    motion = ExactCircleMotion.build(
+        Point2[WorldXY].build(*center),
+        Vector2[WorldXY].build(*phase),
+        clockwise,
+    )
     return _continuous_tea_2.audit_full_circle_tea_event_exact(
         stock,
-        center[0],
-        center[1],
-        phase[0],
-        phase[1],
-        clockwise,
+        motion.center.x,
+        motion.center.y,
+        motion.phase_vector.x,
+        motion.phase_vector.y,
+        motion.clockwise,
         tool_radius,
         cap_chord_ratio,
     )
 
 
 def _partition_events(trace: object) -> tuple[object, ...]:
-    return tuple(
-        event
-        for fibre in trace.partition.fibres
-        for event in fibre.events
-    )
+    return tuple(event for fibre in trace.partition_certificate.fibres for event in fibre.events)
 
 
-def _event_ids(trace: object) -> tuple[bytes, ...]:
-    return tuple(event.canonical_id for event in trace.events)
+def _oriented_fibre_blocks(trace: object) -> tuple[tuple[bytes, ...], ...]:
+    blocks: list[list[bytes]] = []
+    previous_fibre_id: bytes | None = None
+    for event in trace.events:
+        if event.global_fibre_id != previous_fibre_id:
+            blocks.append([])
+            previous_fibre_id = event.global_fibre_id
+        blocks[-1].append(event.canonical_id)
+    return tuple(tuple(block) for block in blocks)
 
 
 def _stock_with_disks(
@@ -77,6 +85,18 @@ def _slotted_lower_half() -> _stock_2.Stock2:
     stock = _stock_2.Stock2(LOWER_HALF, [])
     stock.subtract_capsule(5.0, 4.30, 5.0, 4.53, 0.05)
     return stock
+
+
+def _two_disk_merge_split_trace() -> object:
+    return _audit(
+        _stock_with_disks(
+            (4.5, 5.0, 1.0),
+            (5.5, 5.0, 1.0),
+        ),
+        center=(5.0, 6.25),
+        phase=(0.0, -0.125),
+        tool_radius=0.5,
+    )[1]
 
 
 def _quarter_phase(
@@ -127,7 +147,7 @@ def _assert_no_violating_dyadic_probe(
                 chart,
                 Fraction(numerator, denominator),
             )
-            assert not _stock_2.engagement_at(
+            rounded_exceeded = _stock_2.engagement_at(
                 stock,
                 float(center_x + dx),
                 float(center_y + dy),
@@ -135,6 +155,24 @@ def _assert_no_violating_dyadic_probe(
                 cap_chord_ratio,
                 0.0,
             )[2]
+            if not rounded_exceeded:
+                continue
+            # The binary64 station is only near the rational chart point. A
+            # hit is a falsifier trigger, never proof, until the original
+            # rational motion point is checked without the rounding detour.
+            exact_exceeded = _continuous_tea_2.full_circle_rational_probe_exceeds_cap_exact(
+                stock,
+                center[0],
+                center[1],
+                phase[0],
+                phase[1],
+                chart,
+                numerator,
+                denominator,
+                tool_radius,
+                cap_chord_ratio,
+            )
+            assert not exact_exceeded
 
 
 def test_zero_phase_is_rejected_by_the_typed_factory() -> None:
@@ -146,25 +184,38 @@ def test_zero_phase_is_rejected_by_the_typed_factory() -> None:
         )
 
 
+def test_zero_phase_is_rejected_before_native_dispatch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dispatched = False
+
+    def record_dispatch(*_args: object) -> None:
+        nonlocal dispatched
+        dispatched = True
+
+    monkeypatch.setattr(
+        _continuous_tea_2,
+        "audit_full_circle_tea_event_exact",
+        record_dispatch,
+        raising=False,
+    )
+
+    with pytest.raises(DegenerateCircleMotionError):
+        _audit(
+            _stock_2.Stock2(SQUARE, []),
+            phase=(0.0, 0.0),
+        )
+
+    assert not dispatched
+
+
 def test_full_circle_trace_covers_four_center_charts_and_owns_each_seam_once() -> None:
     _, trace = _audit(_stock_2.Stock2(SQUARE, []))
 
-    center_charts = tuple(
-        chart
-        for chart in trace.partition.charts
-        if chart.family == "center-circle"
-    )
+    center_charts = tuple(chart for chart in trace.partition_certificate.charts if chart.family == "center-circle")
     assert tuple(chart.chart_id for chart in center_charts) == CENTER_CHART_IDS
-    assert all(
-        (chart.domain_low, chart.domain_high, chart.orientation)
-        == ("0", "1", "ccw")
-        for chart in center_charts
-    )
-    center_seams = tuple(
-        seam
-        for seam in trace.partition.seams
-        if seam.owner_chart_id in CENTER_CHART_IDS
-    )
+    assert all((chart.domain_low, chart.domain_high, chart.orientation) == ("0", "1", "ccw") for chart in center_charts)
+    center_seams = tuple(seam for seam in trace.partition_certificate.seams if seam.owner_chart_id in CENTER_CHART_IDS)
     assert len(center_seams) == 4
     assert tuple(seam.owner_chart_id for seam in center_seams) == CENTER_CHART_IDS
     assert len({seam.seam_id for seam in center_seams}) == 4
@@ -181,8 +232,11 @@ def test_clockwise_and_counterclockwise_have_same_verdict_and_reverse_event_orde
     )
 
     assert counterclockwise_verdict == clockwise_verdict == "cap_exceeded"
-    assert _event_ids(counterclockwise)
-    assert _event_ids(clockwise) == tuple(reversed(_event_ids(counterclockwise)))
+    counterclockwise_blocks = _oriented_fibre_blocks(counterclockwise)
+    clockwise_blocks = _oriented_fibre_blocks(clockwise)
+    assert counterclockwise.events[0].kind == clockwise.events[0].kind == "seam"
+    assert counterclockwise_blocks[0] == clockwise_blocks[0]
+    assert clockwise_blocks[1:] == tuple(reversed(counterclockwise_blocks[1:]))
     assert counterclockwise.canonical_digest != clockwise.canonical_digest
 
 
@@ -196,24 +250,11 @@ def test_coincident_disk_is_one_overlap_fibre_and_near_coincidence_stays_distinc
         tool_radius=1.0,
     )
 
-    coincident_events = tuple(
-        event
-        for event in _partition_events(coincident)
-        if (event.kind, event.disposition)
-        == ("overlap", "isolated-coincidence")
-    )
-    near_events = tuple(
-        event
-        for event in _partition_events(near)
-        if event.kind == "tangency"
-        and event.disposition == "external"
-    )
+    coincident_events = tuple(event for event in _partition_events(coincident) if (event.kind, event.disposition) == ("overlap", "isolated-coincidence"))
+    near_events = tuple(event for event in _partition_events(near) if event.kind == "tangency" and event.disposition == "external")
     assert coincident_verdict == near_verdict == "cap_exceeded"
     assert len(coincident_events) == 1
-    assert not any(
-        event.kind == "overlap"
-        for event in _partition_events(near)
-    )
+    assert not any(event.kind == "overlap" for event in _partition_events(near))
     assert len({event.global_fibre_id for event in near_events}) == 2
 
 
@@ -234,31 +275,31 @@ def test_external_and_internal_tangency_are_exact_fibres(
         tool_radius=tool_radius,
     )
 
-    tangencies = tuple(
-        event
-        for event in _partition_events(trace)
-        if event.kind == "tangency"
-        and event.disposition == expected_disposition
-    )
+    tangencies = tuple(event for event in _partition_events(trace) if event.kind == "tangency" and event.disposition == expected_disposition)
     assert len({event.global_fibre_id for event in tangencies}) == 1
     assert all(event.original_equations_rechecked for event in tangencies)
     assert all(event.trim_disposition == "accepted" for event in tangencies)
 
 
 def test_two_disk_vertex_events_drive_one_merge_and_one_split() -> None:
-    _, trace = _audit(
-        _stock_with_disks(
-            (4.5, 5.0, 1.0),
-            (5.5, 5.0, 1.0),
-        ),
-        tool_radius=1.0,
-    )
+    # The unit holes meet at V+=(5, 5+sqrt(3)/2) and V- below. Cutter-center
+    # events occur when the radius-1/2 cutter rim contains V. For the guide
+    # center O=(5,25/4) and guide radius 1/8,
+    #
+    #   3/8 < |O-V+| = 5/4-sqrt(3)/2 < 5/8,
+    #
+    # because 3 < 49/16 and 25/16 < 3. The guide therefore crosses the V+
+    # event circle exactly twice. V- is farther than 5/8, so it contributes
+    # none. At the start C=(5,49/8), Q=(5,45/8) lies on the cutter rim and
+    # inside both holes since |Q-(4.5,5)|^2=|Q-(5.5,5)|^2=41/64<1: the void
+    # arcs overlap. Opposite, the rim has y>=47/8>5+sqrt(3)/2, while each
+    # hole still intersects it (center-distance squared 137/64<9/4), so the
+    # void arcs are disjoint. The two transverse V+ events are thus one
+    # material-run split and one merge.
+    trace = _two_disk_merge_split_trace()
 
-    dispositions = tuple(
-        event.disposition
-        for event in _partition_events(trace)
-        if event.kind == "endpoint-order"
-    )
+    dispositions = tuple(event.disposition for event in _partition_events(trace) if event.kind == "endpoint-order")
+    assert set(dispositions) == {"merge", "split"}
     assert dispositions.count("merge") == 1
     assert dispositions.count("split") == 1
 
@@ -274,10 +315,7 @@ def test_slotted_full_circle_is_certified_by_events_not_gap_closure_sampling() -
     )
 
     assert verdict == "certified"
-    assert any(
-        event.kind == "endpoint-order"
-        for event in _partition_events(trace)
-    )
+    assert any(event.kind == "endpoint-order" for event in _partition_events(trace))
     _assert_no_violating_dyadic_probe(
         stock,
         center=(5.0, 5.05),
@@ -298,19 +336,9 @@ def test_contour_vertex_retains_all_simultaneous_event_incidences() -> None:
         tool_radius=1.0,
     )
 
-    simultaneous = tuple(
-        fibre
-        for fibre in trace.partition.fibres
-        if len(fibre.events) >= 3
-        and any(event.kind == "vertex" for event in fibre.events)
-    )
+    simultaneous = tuple(fibre for fibre in trace.partition_certificate.fibres if len(fibre.events) >= 3 and any(event.kind == "vertex" for event in fibre.events))
     assert len(simultaneous) == 1
-    assert len(
-        {
-            event.canonical_id
-            for event in simultaneous[0].events
-        }
-    ) >= 3
+    assert len({event.canonical_id for event in simultaneous[0].events}) >= 3
 
 
 def test_exact_pi_cap_equality_certifies_and_retains_the_cap_root() -> None:
@@ -323,14 +351,12 @@ def test_exact_pi_cap_equality_certifies_and_retains_the_cap_root() -> None:
         cap_chord_ratio=4.0,
     )
 
-    cap_equalities = tuple(
-        event
-        for event in _partition_events(trace)
-        if (event.kind, event.disposition)
-        == ("cap-crossing", "equal")
-    )
+    cap_contacts = tuple(event for event in _partition_events(trace) if (event.kind, event.disposition) == ("cap-contact", "touch"))
     assert verdict == "certified"
-    assert len(cap_equalities) == 1
+    assert len(cap_contacts) == 1
+    assert cap_contacts[0].multiplicity % 2 == 0
+    assert cap_contacts[0].adjacent_cap_dispositions == ("below", "below")
+    assert cap_contacts[0].adjacent_run_counts == (1, 1)
     _assert_no_violating_dyadic_probe(
         stock,
         center=(5.0, 6.0),
@@ -364,7 +390,7 @@ def _assert_rejects_mutation(
     trace: object,
     mutate: Callable[[object], bytes],
 ) -> None:
-    mutant = mutate(trace.partition)
+    mutant = mutate(trace.partition_certificate)
     with pytest.raises(_continuous_tea_2.EventPartitionVerificationError):
         _continuous_tea_2.verify_event_partition(mutant)
 
@@ -376,27 +402,15 @@ def test_certificate_rejects_removed_center_chart_and_seam() -> None:
         trace,
         lambda certificate: _certificate_bytes(
             certificate,
-            charts=tuple(
-                chart
-                for chart in certificate.charts
-                if chart.chart_id != "center-quarter-2-v1"
-            ),
+            charts=tuple(chart for chart in certificate.charts if chart.chart_id != "center-quarter-2-v1"),
         ),
     )
-    removed_seam = next(
-        seam
-        for seam in trace.partition.seams
-        if seam.owner_chart_id == "center-quarter-2-v1"
-    )
+    removed_seam = next(seam for seam in trace.partition_certificate.seams if seam.owner_chart_id == "center-quarter-2-v1")
     _assert_rejects_mutation(
         trace,
         lambda certificate: _certificate_bytes(
             certificate,
-            seams=tuple(
-                seam
-                for seam in certificate.seams
-                if seam.seam_id != removed_seam.seam_id
-            ),
+            seams=tuple(seam for seam in certificate.seams if seam.seam_id != removed_seam.seam_id),
         ),
     )
 
@@ -410,24 +424,22 @@ def test_certificate_rejects_removed_center_chart_and_seam() -> None:
                 tool_radius=1.0,
             )[1],
             lambda event: (
-                event.kind,
-                event.disposition,
-            )
-            == ("overlap", "isolated-coincidence"),
+                (
+                    event.kind,
+                    event.disposition,
+                )
+                == ("overlap", "isolated-coincidence")
+            ),
         ),
         (
-            lambda: _audit(
-                _stock_with_disks(
-                    (4.5, 5.0, 1.0),
-                    (5.5, 5.0, 1.0),
-                ),
-                tool_radius=1.0,
-            )[1],
+            _two_disk_merge_split_trace,
             lambda event: (
-                event.kind,
-                event.disposition,
-            )
-            == ("endpoint-order", "merge"),
+                (
+                    event.kind,
+                    event.disposition,
+                )
+                == ("endpoint-order", "merge")
+            ),
         ),
         (
             lambda: _audit(
@@ -438,38 +450,88 @@ def test_certificate_rejects_removed_center_chart_and_seam() -> None:
                 cap_chord_ratio=4.0,
             )[1],
             lambda event: (
-                event.kind,
-                event.disposition,
-            )
-            == ("cap-crossing", "equal"),
+                (
+                    event.kind,
+                    event.disposition,
+                )
+                == ("cap-contact", "touch")
+            ),
         ),
     ),
     ids=("coincidence", "merge", "cap-root"),
 )
-def test_certificate_rejects_removed_required_event_root(
+def test_certificate_rejects_removed_required_root_with_fibre_retained(
     trace_factory: Callable[[], object],
     event_match: Callable[[object], bool],
 ) -> None:
     trace = trace_factory()
-    fibre = next(
-        fibre
-        for fibre in trace.partition.fibres
-        if any(event_match(event) for event in fibre.events)
-    )
+    fibre = next(fibre for fibre in trace.partition_certificate.fibres if any(event_match(event) for event in fibre.events))
 
     _assert_rejects_mutation(
         trace,
         lambda certificate: _certificate_bytes(
             certificate,
-            roots=tuple(
-                root
-                for root in certificate.roots
-                if root.global_fibre_id != fibre.global_fibre_id
+            roots=tuple(root for root in certificate.roots if root.global_fibre_id != fibre.global_fibre_id),
+        ),
+    )
+
+
+@pytest.mark.parametrize(
+    ("trace_factory", "event_match"),
+    (
+        (
+            lambda: _audit(
+                _stock_with_disks((6.0, 5.0, 1.0)),
+                tool_radius=1.0,
+            )[1],
+            lambda event: (
+                (
+                    event.kind,
+                    event.disposition,
+                )
+                == ("overlap", "isolated-coincidence")
             ),
-            fibres=tuple(
-                candidate
-                for candidate in certificate.fibres
-                if candidate.global_fibre_id != fibre.global_fibre_id
+        ),
+        (
+            _two_disk_merge_split_trace,
+            lambda event: (
+                (
+                    event.kind,
+                    event.disposition,
+                )
+                == ("endpoint-order", "merge")
             ),
+        ),
+        (
+            lambda: _audit(
+                _stock_2.Stock2(LOWER_HALF, []),
+                center=(5.0, 6.0),
+                phase=(0.0, -1.0),
+                tool_radius=0.5,
+                cap_chord_ratio=4.0,
+            )[1],
+            lambda event: (
+                (
+                    event.kind,
+                    event.disposition,
+                )
+                == ("cap-contact", "touch")
+            ),
+        ),
+    ),
+    ids=("coincidence", "merge", "cap-root"),
+)
+def test_certificate_rejects_removed_required_fibre_with_root_retained(
+    trace_factory: Callable[[], object],
+    event_match: Callable[[object], bool],
+) -> None:
+    trace = trace_factory()
+    fibre = next(fibre for fibre in trace.partition_certificate.fibres if any(event_match(event) for event in fibre.events))
+
+    _assert_rejects_mutation(
+        trace,
+        lambda certificate: _certificate_bytes(
+            certificate,
+            fibres=tuple(candidate for candidate in certificate.fibres if candidate.global_fibre_id != fibre.global_fibre_id),
         ),
     )
