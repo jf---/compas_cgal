@@ -238,7 +238,16 @@ add_nanobind_module(_subdivision src/subdivision.cpp)
 add_nanobind_module(_polylines src/polylines.cpp)
 add_nanobind_module(_toolpath src/toolpath.cpp)
 add_nanobind_module(_stock_2 "src/stock_2.cpp;src/exact_depletion_2.cpp;src/engagement_2.cpp")
-add_nanobind_module(_continuous_tea_2 "src/continuous_tea_2.cpp;src/continuous_tea_2/boundary_events.cpp")
+add_nanobind_module(
+    _continuous_tea_2
+    "src/continuous_tea_2.cpp;src/continuous_tea_2/boundary_events.cpp;src/continuous_tea_2/parameter_charts.cpp;src/exact_algebraic_1.cpp;src/continuous_tea_2/event_partition.cpp"
+)
+target_compile_definitions(
+    _continuous_tea_2
+    PRIVATE
+        CGAL_USE_CORE=1
+        CGAL_CORE_USE_BOOST_BACKEND=1
+)
 add_nanobind_module(_coverage_2 src/coverage_bindings_2.cpp)
 target_link_libraries(_coverage_2 PRIVATE coverage_exact_core)
 target_compile_definitions(_coverage_2 PRIVATE CGAL_USE_CORE=1)
