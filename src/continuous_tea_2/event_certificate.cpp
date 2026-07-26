@@ -2,6 +2,7 @@
 
 #include "../exact_algebraic_1.h"
 #include "cap_partition.h"
+#include "circle_oracle.h"
 #include "sha256.h"
 
 #include <cstdint>
@@ -282,6 +283,19 @@ PartitionEvent2 decode_event(
 EventPartitionCertificate2 reconstruct(
     const EventPartitionCertificate2& certificate)
 {
+    if (certificate.source_kind
+        == "full-circle-uniform-v1") {
+        const std::vector<std::string> fields =
+            decode_string_sequence(
+                certificate.source_payload);
+        if (fields.size() != 2) {
+            throw EventPartitionVerificationError(
+                "full-circle uniform source payload is malformed");
+        }
+        return construct_full_circle_uniform_partition(
+            fields[0],
+            fields[1]);
+    }
     if (certificate.source_kind != "cap-crossings-v1") {
         throw EventPartitionVerificationError(
             "unsupported certificate source kind");
