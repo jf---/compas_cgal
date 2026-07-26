@@ -229,6 +229,7 @@ add_executable(task9_mat_compile_gate EXCLUDE_FROM_ALL
     src/segment_site_parameterization.cpp
     src/segment_site_clipping.cpp
     src/segment_site_provenance.cpp
+    src/exact_algebraic_1.cpp
 )
 add_dependencies(task9_mat_compile_gate external_downloads)
 target_include_directories(task9_mat_compile_gate PRIVATE

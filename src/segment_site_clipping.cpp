@@ -266,7 +266,6 @@ void append_source_parabola_intersections(
             x_norm,
             y_norm,
             std::back_inserter(solutions));
-        std::size_t solution_index = 0;
         for (const auto& [solution, multiplicity] : solutions) {
             static_cast<void>(multiplicity);
             const auto parameter =
@@ -291,7 +290,6 @@ void append_source_parabola_intersections(
                 || (domain_upper.has_value()
                     && compare(parameter, *domain_upper)
                         == CGAL::LARGER)) {
-                ++solution_index;
                 continue;
             }
             roots.push_back(
@@ -299,12 +297,10 @@ void append_source_parabola_intersections(
                     parameter,
                     {
                         ring_id + "/edge-"
-                        + std::to_string(edge_index)
-                        + "/source-algebraic-solution-"
-                        + std::to_string(solution_index),
+                        + std::to_string(edge_index),
+                        algebraic_root_identity_v1(parameter),
                     },
                 });
-            ++solution_index;
         }
     }
 }
@@ -493,8 +489,8 @@ maximal_clearance_components(
             endpoints,
             upper,
             boundary.roots[index],
-            original_dual_id + "/clearance-root-"
-                + std::to_string(index),
+            algebraic_root_identity_v1(
+                boundary.roots[index]),
             kernel);
     }
     if (endpoints.front().endpoint.parameter.has_value()
@@ -663,8 +659,8 @@ clip_clearance_components_with_domain_roots(
                 {
                     boundary.roots[index],
                     {
-                        original_dual_id + "/clearance-root-"
-                        + std::to_string(index),
+                        algebraic_root_identity_v1(
+                            boundary.roots[index]),
                     },
                 },
                 true,
@@ -864,11 +860,17 @@ clip_linear_clearance_components(
              original_dual_id,
              primitive,
              domain)) {
+        const auto parameter =
+            kernel.construct_algebraic_real_1_object()(
+                root.parameter);
+        std::vector<std::string> provenance =
+            root.provenance_ids;
+        provenance.push_back(
+            algebraic_root_identity_v1(parameter));
         roots.push_back(
             {
-                kernel.construct_algebraic_real_1_object()(
-                    root.parameter),
-                root.provenance_ids,
+                parameter,
+                std::move(provenance),
             });
     }
     return clip_clearance_components_with_domain_roots(
