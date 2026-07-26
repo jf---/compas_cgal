@@ -243,6 +243,54 @@ def test_same_support_endpoint_sheets_remain_distinct() -> None:
     )
 
 
+def test_phase_seam_is_one_owned_fibre_with_oriented_cyclic_order() -> None:
+    stock = _stock_2.Stock2(SQUARE, [])
+    stock.subtract_disk(5.0, 5.0, 2.0)
+    audits = tuple(
+        _continuous_tea_2.audit_full_circle_tea_event_exact(
+            stock,
+            5.0,
+            5.0,
+            2.0,
+            1.0,
+            clockwise,
+            1.0,
+            4.0,
+        )[1]
+        for clockwise in (False, True)
+    )
+    ccw, cw = audits
+
+    seam_fibres = tuple(fibre for fibre in ccw.partition.fibres if len(fibre.local_root_ids) == 2)
+    assert len(seam_fibres) == 1
+    assert seam_fibres[0].events
+    assert seam_fibres[0].seam_id == next(seam.seam_id for seam in ccw.partition.seams if seam.owner_chart_id == "center-quarter-0-v1")
+    assert (seam_fibres[0].ccw_direction, seam_fibres[0].cw_direction) == (
+        "merge",
+        "split",
+    )
+
+    def fibre_order(trace: _continuous_tea_2.EventTrace2) -> tuple[bytes, ...]:
+        return tuple(dict.fromkeys(event.global_fibre_id for event in trace.events))
+
+    ccw_order = fibre_order(ccw)
+    cw_order = fibre_order(cw)
+    assert cw_order == (ccw_order[0], *reversed(ccw_order[1:]))
+    assert len({event.canonical_id for event in ccw.events}) == len(ccw.events)
+    assert sum(global_id == ccw_order[0] for global_id in ccw_order) == 1
+
+    for mutation in (
+        "delete-signed-predicate",
+        "delete-active-sheet",
+        "delete-seam",
+    ):
+        mutated = _continuous_tea_2.mutate_certificate_record(
+            ccw.partition,
+            mutation,
+        )
+        assert _continuous_tea_2.verify_event_partition(mutated).verdict.name == "UNRESOLVED_DEGENERACY"
+
+
 def test_exact_rational_probe_uses_the_circle_chart_not_binary64_sampling() -> None:
     stock = _stock_2.Stock2(SQUARE, [])
     stock.subtract_disk(5.0, 5.0, 100.0)

@@ -195,6 +195,8 @@ std::string canonical_fibre(const EventFibre2& fibre)
     }
     if (fibre.left_active_branches.empty()
         && fibre.right_active_branches.empty()
+        && fibre.local_root_ids.empty()
+        && fibre.seam_id.empty()
         && fibre.ccw_direction.empty()
         && fibre.cw_direction.empty()) {
         return record(
@@ -227,18 +229,30 @@ std::string canonical_fibre(const EventFibre2& fibre)
             }
             return encode_string_sequence(values);
         };
+    std::vector<std::string> fields{
+        fibre.root_id,
+        encode_string_sequence(events),
+        canonical_branches(
+            fibre.left_active_branches),
+        canonical_branches(
+            fibre.right_active_branches),
+        fibre.ccw_direction,
+        fibre.cw_direction,
+    };
+    if (!fibre.local_root_ids.empty()) {
+        fields.insert(
+            fields.begin() + 1,
+            encode_string_sequence(
+                fibre.local_root_ids));
+        fields.insert(
+            fields.begin() + 2,
+            fibre.seam_id);
+    }
     return record(
-        "directed-event-fibre-v2",
-        {
-            fibre.root_id,
-            encode_string_sequence(events),
-            canonical_branches(
-                fibre.left_active_branches),
-            canonical_branches(
-                fibre.right_active_branches),
-            fibre.ccw_direction,
-            fibre.cw_direction,
-        });
+        fibre.local_root_ids.empty()
+            ? "directed-event-fibre-v2"
+            : "cyclic-seam-event-fibre-v3",
+        fields);
 }
 
 std::string canonical_overlap(
@@ -555,6 +569,42 @@ EventPartitionCertificate2 mutate_certificate_record(
             fibre->ccw_direction == "merge"
             ? "split"
             : "merge";
+    } else if (
+        mutation == "delete-signed-predicate") {
+        const auto projection = std::find_if(
+            result.projections.begin(),
+            result.projections.end(),
+            [](const ProjectionRecord2& candidate) {
+                return !candidate
+                            .signed_predicate_coefficients
+                            .empty();
+            });
+        if (projection == result.projections.end()) {
+            throw EventPartitionVerificationError(
+                "certificate has no signed predicate");
+        }
+        projection->signed_predicate_coefficients
+            .clear();
+    } else if (
+        mutation == "delete-active-sheet") {
+        const auto fibre = std::find_if(
+            result.fibres.begin(),
+            result.fibres.end(),
+            [](const EventFibre2& candidate) {
+                return !candidate
+                            .left_active_branches.empty()
+                    || !candidate
+                            .right_active_branches.empty();
+            });
+        if (fibre == result.fibres.end()) {
+            throw EventPartitionVerificationError(
+                "certificate has no active sheet");
+        }
+        std::vector<ActiveBoundaryBranch2>& active =
+            !fibre->left_active_branches.empty()
+            ? fibre->left_active_branches
+            : fibre->right_active_branches;
+        active.pop_back();
     } else if (
         mutation == "alter-degree"
         && !result.projections.empty()) {
