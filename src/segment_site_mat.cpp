@@ -339,6 +339,22 @@ RationalVoronoiNode2 rational_voronoi_node(
     };
 }
 
+void register_voronoi_node_location(
+    const RationalVoronoiNode2& node,
+    std::map<
+        std::pair<CORE::BigRat, CORE::BigRat>,
+        std::string>& node_ids_by_location)
+{
+    const auto [existing, inserted] =
+        node_ids_by_location.emplace(
+            std::make_pair(node.x, node.y),
+            node.node_id);
+    if (!inserted && existing->second != node.node_id) {
+        throw DegeneratePointSiteTopologyError(
+            "distinct point-site triples share an exact Voronoi node");
+    }
+}
+
 struct CanonicalNodeAlias2 {
     std::string node_id;
     std::vector<std::string> generator_site_ids;
@@ -423,6 +439,9 @@ void append_point_site_graph(
     for (const NormalizedPointSource2& point : points) {
         delaunay.insert(MatTraits::Point_2(point.x, point.y));
     }
+    std::map<
+        std::pair<CORE::BigRat, CORE::BigRat>,
+        std::string> node_ids_by_location;
 
     for (auto edge = delaunay.finite_edges_begin();
          edge != delaunay.finite_edges_end();
@@ -466,12 +485,18 @@ void append_point_site_graph(
                 value.first,
                 generators,
                 points);
+            register_voronoi_node_location(
+                *first_node,
+                node_ids_by_location);
         }
         if (second_finite) {
             second_node = rational_voronoi_node(
                 neighbor,
                 generators,
                 points);
+            register_voronoi_node_location(
+                *second_node,
+                node_ids_by_location);
         }
 
         const RationalPrimitiveParameterization2 unbounded =
@@ -861,6 +886,17 @@ MatExactGraph2 exact_point_site_graph(
         node_indices,
         aliases);
     canonicalize_original_nodes(graph, aliases);
+    const auto collapsed_edge = std::find_if(
+        graph.edges.begin(),
+        graph.edges.end(),
+        [](const MatExactGraphEdge2& edge)
+        {
+            return edge.source_node_id == edge.target_node_id;
+        });
+    if (collapsed_edge != graph.edges.end()) {
+        throw DegeneratePointSiteTopologyError(
+            "point-site graph contains a collapsed exact dual");
+    }
     std::sort(
         graph.nodes.begin(),
         graph.nodes.end(),
