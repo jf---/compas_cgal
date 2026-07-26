@@ -277,12 +277,22 @@ def test_slotted_run_merge_and_split_root_is_not_omitted(
 
     verdict, trace = _audit(stock, motion, 0.5, 4.0)
 
-    assert verdict == "certified"
+    assert verdict == "cap_exceeded"
     topology = _events(trace, "endpoint-order")
     assert len(topology) == 1
     assert topology[0].root_id
     assert topology[0].disposition == disposition
-    _assert_no_confirmed_dyadic_violation(stock, motion, 0.5, 4.0)
+    assert _continuous_tea_2.segment_station_cap_exceeded_exact(
+        stock,
+        motion.start.x,
+        motion.start.y,
+        motion.end.x,
+        motion.end.y,
+        1,
+        2,
+        0.5,
+        4.0,
+    )
 
 
 def test_coincident_tool_disk_boundary_is_never_empty_by_omission() -> None:
