@@ -87,6 +87,9 @@ class UnsupportedAlgebraicVertexProjectionError(EventSubstrateError): ...
 class IncompleteSegmentPartitionError(EventSubstrateError): ...
 
 
+class IncompleteSegmentOracleError(EventSubstrateError): ...
+
+
 class ContinuousTeaVerdict:
     CERTIFIED: ContinuousTeaVerdict
     CAP_EXCEEDED: ContinuousTeaVerdict
@@ -591,6 +594,26 @@ def construct_segment_event_partition(
     tool_radius: float,
     cap_chord_ratio: float,
 ) -> SegmentEventPartition2: ...
+def audit_segment_tea_event_exact(
+    stock: Stock2,
+    x0: float,
+    y0: float,
+    x1: float,
+    y1: float,
+    tool_radius: float,
+    cap_chord_ratio: float,
+) -> tuple[Literal["certified", "cap_exceeded", "unresolved"], EventTrace2]: ...
+def segment_station_cap_exceeded_exact(
+    stock: Stock2,
+    x0: float,
+    y0: float,
+    x1: float,
+    y1: float,
+    numerator: int,
+    denominator: int,
+    tool_radius: float,
+    cap_chord_ratio: float,
+) -> bool: ...
 def verify_segment_event_partition(
     stock: Stock2,
     source: SegmentEventSource2,
