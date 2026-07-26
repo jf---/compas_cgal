@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <cstdint>
 #include <iterator>
-#include <optional>
 #include <sstream>
 #include <string_view>
 #include <tuple>
@@ -11,7 +10,6 @@
 #include <utility>
 
 #include <boost/multiprecision/cpp_int/import_export.hpp>
-#include <boost/multiprecision/integer.hpp>
 #include <CGAL/Polynomial_traits_d.h>
 #include <CGAL/version.h>
 
@@ -42,11 +40,11 @@ using Kernel = ExactAlgebraicKernel1;
 using Polynomial = Kernel::Polynomial_1;
 using AlgebraicReal = Kernel::Algebraic_real_1;
 using Rational = Kernel::Bound;
-
-constexpr int MAX_ALGEBRAIC_DEGREE = 4;
+using PolynomialTraits = CGAL::Polynomial_traits_d<Polynomial>;
 
 struct RootCandidate {
     AlgebraicReal value;
+    Polynomial governing_factor;
     AlgebraicRootRecord2 record;
     std::vector<PartitionEvent2> events;
 };
@@ -137,18 +135,6 @@ std::string ccan_tagged(
         ccan_bytes(tag) + ccan_bytes(payload));
 }
 
-Integer greatest_common_divisor(Integer left, Integer right)
-{
-    left = left < 0 ? -left : left;
-    right = right < 0 ? -right : right;
-    while (right != 0) {
-        const Integer remainder = left % right;
-        left = right;
-        right = remainder;
-    }
-    return left;
-}
-
 std::string integer_text(const Integer& value)
 {
     return value.convert_to<std::string>();
@@ -191,13 +177,11 @@ Polynomial polynomial_from_strings(
     while (parsed.size() > 1 && parsed.back() == 0) {
         parsed.pop_back();
     }
-    return typename CGAL::Polynomial_traits_d<
-        Polynomial>::Construct_polynomial()(
-            parsed.begin(),
-            parsed.end());
+    PolynomialTraits::Construct_polynomial construct;
+    return construct(parsed.begin(), parsed.end());
 }
 
-std::vector<Integer> primitive_coefficients(
+Polynomial normalized_polynomial(
     const Polynomial& polynomial)
 {
     if (CGAL::is_zero(polynomial)) {
@@ -209,404 +193,22 @@ std::vector<Integer> primitive_coefficients(
         throw InvalidAlgebraicPolynomialError(
             "constant polynomial has no algebraic root identity");
     }
+    PolynomialTraits::Canonicalize canonicalize;
+    return canonicalize(polynomial);
+}
+
+std::vector<Integer> primitive_coefficients(
+    const Polynomial& polynomial)
+{
+    const Polynomial normalized =
+        normalized_polynomial(polynomial);
+    const int degree = CGAL::degree(normalized);
     std::vector<Integer> result;
     result.reserve(static_cast<std::size_t>(degree + 1));
-    Integer common_factor = 0;
     for (int index = 0; index <= degree; ++index) {
-        const Integer coefficient = polynomial[index];
-        result.push_back(coefficient);
-        common_factor = greatest_common_divisor(
-            common_factor,
-            coefficient);
-    }
-    if (common_factor == 0) {
-        throw InvalidAlgebraicPolynomialError(
-            "zero polynomial has no primitive normalization");
-    }
-    for (Integer& coefficient : result) {
-        coefficient /= common_factor;
-    }
-    if (result.back() < 0) {
-        for (Integer& coefficient : result) {
-            coefficient = -coefficient;
-        }
+        result.push_back(normalized[index]);
     }
     return result;
-}
-
-Polynomial polynomial_from_integers(
-    const std::vector<Integer>& coefficients)
-{
-    return typename CGAL::Polynomial_traits_d<
-        Polynomial>::Construct_polynomial()(
-            coefficients.begin(),
-        coefficients.end());
-}
-
-std::vector<Integer> positive_divisors(Integer value)
-{
-    value = value < 0 ? -value : value;
-    if (value == 0) {
-        throw InvalidAlgebraicPolynomialError(
-            "zero has no finite divisor set");
-    }
-    std::vector<Integer> result;
-    for (Integer divisor = 1;
-         divisor * divisor <= value;
-         ++divisor) {
-        if (value % divisor != 0) {
-            continue;
-        }
-        result.push_back(divisor);
-        const Integer complement = value / divisor;
-        if (complement != divisor) {
-            result.push_back(complement);
-        }
-    }
-    std::sort(result.begin(), result.end());
-    return result;
-}
-
-Integer evaluate_rational_root_numerator(
-    const std::vector<Integer>& coefficients,
-    const Integer& numerator,
-    const Integer& denominator)
-{
-    const std::size_t degree = coefficients.size() - 1;
-    Integer result = 0;
-    Integer numerator_power = 1;
-    Integer denominator_power = 1;
-    for (std::size_t index = 0; index < degree; ++index) {
-        denominator_power *= denominator;
-    }
-    for (std::size_t index = 0;
-         index <= degree;
-         ++index) {
-        result += coefficients[index]
-            * numerator_power * denominator_power;
-        numerator_power *= numerator;
-        if (index < degree && denominator != 0) {
-            denominator_power /= denominator;
-        }
-    }
-    return result;
-}
-
-std::optional<std::vector<Integer>> rational_linear_factor(
-    const std::vector<Integer>& coefficients)
-{
-    if (coefficients.front() == 0) {
-        return std::vector<Integer>{0, 1};
-    }
-    const std::vector<Integer> numerators =
-        positive_divisors(coefficients.front());
-    const std::vector<Integer> denominators =
-        positive_divisors(coefficients.back());
-    for (const Integer& numerator_magnitude : numerators) {
-        for (const Integer& denominator : denominators) {
-            if (greatest_common_divisor(
-                    numerator_magnitude,
-                    denominator)
-                != 1) {
-                continue;
-            }
-            for (const int sign : {-1, 1}) {
-                const Integer numerator =
-                    Integer(sign) * numerator_magnitude;
-                if (evaluate_rational_root_numerator(
-                        coefficients,
-                        numerator,
-                        denominator)
-                    == 0) {
-                    return std::vector<Integer>{
-                        -numerator,
-                        denominator,
-                    };
-                }
-            }
-        }
-    }
-    return std::nullopt;
-}
-
-std::optional<std::vector<Integer>> divide_exact(
-    const std::vector<Integer>& dividend,
-    const std::vector<Integer>& divisor)
-{
-    if (divisor.empty() || divisor.back() == 0
-        || dividend.size() < divisor.size()) {
-        return std::nullopt;
-    }
-    std::vector<Integer> remainder = dividend;
-    std::vector<Integer> quotient(
-        dividend.size() - divisor.size() + 1,
-        Integer(0));
-    for (std::size_t offset = quotient.size();
-         offset-- > 0;) {
-        const std::size_t leading_index =
-            offset + divisor.size() - 1;
-        if (remainder[leading_index]
-                % divisor.back()
-            != 0) {
-            return std::nullopt;
-        }
-        const Integer coefficient =
-            remainder[leading_index]
-            / divisor.back();
-        quotient[offset] = coefficient;
-        for (std::size_t index = 0;
-             index < divisor.size();
-             ++index) {
-            remainder[offset + index] -=
-                coefficient * divisor[index];
-        }
-    }
-    if (std::any_of(
-            remainder.begin(),
-            remainder.end(),
-            [](const Integer& value) {
-                return value != 0;
-            })) {
-        return std::nullopt;
-    }
-    return primitive_coefficients(
-        polynomial_from_integers(quotient));
-}
-
-Integer integer_square_root(const Integer& value)
-{
-    if (value < 0) {
-        throw InvalidAlgebraicPolynomialError(
-            "negative integer has no real square root");
-    }
-    if (value < 2) {
-        return value;
-    }
-    const unsigned int bit_count =
-        boost::multiprecision::msb(value) + 1;
-    Integer estimate =
-        Integer(1) << ((bit_count + 1) / 2);
-    while (true) {
-        const Integer next =
-            (estimate + value / estimate) / 2;
-        if (next >= estimate) {
-            return estimate;
-        }
-        estimate = next;
-    }
-}
-
-std::vector<Integer> quadratic_integer_solutions(
-    const Integer& quadratic,
-    const Integer& linear,
-    const Integer& constant)
-{
-    if (quadratic == 0) {
-        if (linear == 0 || (-constant) % linear != 0) {
-            return {};
-        }
-        return {-constant / linear};
-    }
-    const Integer discriminant =
-        linear * linear
-        - Integer(4) * quadratic * constant;
-    if (discriminant < 0) {
-        return {};
-    }
-    const Integer square_root =
-        integer_square_root(discriminant);
-    if (square_root * square_root != discriminant) {
-        return {};
-    }
-    std::vector<Integer> result;
-    const Integer denominator = Integer(2) * quadratic;
-    for (const int sign : {-1, 1}) {
-        const Integer signed_root =
-            Integer(sign) * square_root;
-        const Integer numerator = -linear + signed_root;
-        if (numerator % denominator == 0) {
-            result.push_back(numerator / denominator);
-        }
-    }
-    std::sort(result.begin(), result.end());
-    result.erase(
-        std::unique(result.begin(), result.end()),
-        result.end());
-    return result;
-}
-
-std::optional<std::vector<Integer>>
-quadratic_factor_of_quartic(
-    const std::vector<Integer>& coefficients)
-{
-    const Integer& constant = coefficients[0];
-    const Integer& linear = coefficients[1];
-    const Integer& quadratic = coefficients[2];
-    const Integer& cubic = coefficients[3];
-    const Integer& quartic = coefficients[4];
-    const std::vector<Integer> leading_divisors =
-        positive_divisors(quartic);
-    const std::vector<Integer> constant_divisors =
-        positive_divisors(constant);
-    for (const Integer& leading_magnitude :
-         leading_divisors) {
-        for (const int leading_sign : {-1, 1}) {
-            const Integer factor_leading =
-                Integer(leading_sign)
-                * leading_magnitude;
-            const Integer quotient_leading =
-                quartic / factor_leading;
-            for (const Integer& constant_magnitude :
-                 constant_divisors) {
-                for (const int constant_sign :
-                     {-1, 1}) {
-                    const Integer factor_constant =
-                        Integer(constant_sign)
-                        * constant_magnitude;
-                    const Integer quotient_constant =
-                        constant / factor_constant;
-                    const Integer determinant =
-                        quotient_leading
-                            * factor_constant
-                        - factor_leading
-                            * quotient_constant;
-                    std::vector<Integer>
-                        factor_linear_candidates;
-                    if (determinant != 0) {
-                        const Integer numerator =
-                            cubic * factor_constant
-                            - factor_leading * linear;
-                        if (numerator % determinant != 0) {
-                            continue;
-                        }
-                        factor_linear_candidates.push_back(
-                            numerator / determinant);
-                    } else {
-                        factor_linear_candidates =
-                            quadratic_integer_solutions(
-                                -quotient_leading,
-                                cubic,
-                                factor_leading
-                                    * (factor_leading
-                                           * quotient_constant
-                                       + factor_constant
-                                           * quotient_leading
-                                       - quadratic));
-                    }
-                    for (const Integer& factor_linear :
-                         factor_linear_candidates) {
-                        const Integer remainder =
-                            cubic
-                            - quotient_leading
-                                * factor_linear;
-                        if (remainder % factor_leading
-                            != 0) {
-                            continue;
-                        }
-                        const Integer quotient_linear =
-                            remainder / factor_leading;
-                        const std::vector<Integer> factor = {
-                            factor_constant,
-                            factor_linear,
-                            factor_leading,
-                        };
-                        const std::vector<Integer> quotient = {
-                            quotient_constant,
-                            quotient_linear,
-                            quotient_leading,
-                        };
-                        if (factor_linear
-                                    * quotient_constant
-                                + factor_constant
-                                    * quotient_linear
-                                != linear
-                            || factor_linear
-                                        * quotient_linear
-                                    + factor_leading
-                                        * quotient_constant
-                                    + factor_constant
-                                        * quotient_leading
-                                != quadratic) {
-                            continue;
-                        }
-                        const std::vector<Integer> primitive =
-                            primitive_coefficients(
-                                polynomial_from_integers(
-                                    factor));
-                        if (divide_exact(
-                                coefficients,
-                                primitive)
-                            .has_value()) {
-                            return primitive;
-                        }
-                    }
-                }
-            }
-        }
-    }
-    return std::nullopt;
-}
-
-std::vector<std::vector<Integer>>
-irreducible_factors_degree_four(
-    const std::vector<Integer>& coefficients)
-{
-    const std::vector<Integer> primitive =
-        primitive_coefficients(
-            polynomial_from_integers(coefficients));
-    const int degree =
-        static_cast<int>(primitive.size()) - 1;
-    if (degree > MAX_ALGEBRAIC_DEGREE) {
-        throw UnsupportedAlgebraicDegreeError(
-            "exact factorization supports degree 4 or lower");
-    }
-    if (degree <= 1) {
-        return {primitive};
-    }
-    if (const auto linear =
-            rational_linear_factor(primitive)) {
-        const auto quotient =
-            divide_exact(primitive, *linear);
-        if (!quotient) {
-            throw InvalidAlgebraicPolynomialError(
-                "proven rational root did not divide polynomial");
-        }
-        std::vector<std::vector<Integer>> result = {
-            primitive_coefficients(
-                polynomial_from_integers(*linear)),
-        };
-        std::vector<std::vector<Integer>> remainder =
-            irreducible_factors_degree_four(*quotient);
-        result.insert(
-            result.end(),
-            remainder.begin(),
-            remainder.end());
-        std::sort(result.begin(), result.end());
-        return result;
-    }
-    if (degree < MAX_ALGEBRAIC_DEGREE) {
-        return {primitive};
-    }
-    if (const auto quadratic =
-            quadratic_factor_of_quartic(primitive)) {
-        const auto quotient =
-            divide_exact(primitive, *quadratic);
-        if (!quotient) {
-            throw InvalidAlgebraicPolynomialError(
-                "proven quadratic factor did not divide polynomial");
-        }
-        std::vector<std::vector<Integer>> result =
-            irreducible_factors_degree_four(*quadratic);
-        std::vector<std::vector<Integer>> remainder =
-            irreducible_factors_degree_four(*quotient);
-        result.insert(
-            result.end(),
-            remainder.begin(),
-            remainder.end());
-        std::sort(result.begin(), result.end());
-        return result;
-    }
-    return {primitive};
 }
 
 std::vector<std::string> coefficient_text(
@@ -640,6 +242,64 @@ std::pair<Rational, Rational> strict_interval(
             "isolating interval is not strict");
     }
     return interval;
+}
+
+std::size_t root_ordinal(
+    const AlgebraicReal& root,
+    const Polynomial& governing_factor)
+{
+    Kernel kernel;
+    std::vector<AlgebraicReal> roots;
+    kernel.solve_1_object()(
+        governing_factor,
+        true,
+        std::back_inserter(roots));
+    for (std::size_t ordinal = 0;
+         ordinal < roots.size();
+         ++ordinal) {
+        if (kernel.compare_1_object()(
+                roots[ordinal],
+                root)
+            == CGAL::EQUAL) {
+            return ordinal;
+        }
+    }
+    throw InvalidAlgebraicPolynomialError(
+        "governing polynomial does not contain merged root");
+}
+
+AlgebraicRootRecord2 root_record(
+    const AlgebraicReal& root,
+    const Polynomial& governing_factor,
+    unsigned int multiplicity)
+{
+    const std::vector<Integer> primitive =
+        primitive_coefficients(governing_factor);
+    const std::size_t ordinal =
+        root_ordinal(root, governing_factor);
+    const auto interval =
+        strict_interval(root, governing_factor);
+    return {
+        algebraic_root_id_v1(primitive, ordinal),
+        coefficient_text(primitive),
+        ordinal,
+        multiplicity,
+        rational_text(interval.first),
+        rational_text(interval.second),
+    };
+}
+
+Polynomial common_governing_factor(
+    const Polynomial& left,
+    const Polynomial& right)
+{
+    PolynomialTraits::Gcd_up_to_constant_factor gcd;
+    const Polynomial common = gcd(left, right);
+    if (CGAL::degree(common) < 1) {
+        throw InvalidAlgebraicPolynomialError(
+            "equal roots have no common governing polynomial");
+    }
+    return normalized_polynomial(common);
 }
 
 Rational simplest_dyadic_between(
@@ -775,11 +435,6 @@ EventPartitionCertificate2 partition_integer_projections(
             throw InvalidAlgebraicPolynomialError(
                 "projection polynomial must be nonzero and nonconstant");
         }
-        if (CGAL::degree(polynomial)
-            > MAX_ALGEBRAIC_DEGREE) {
-            throw UnsupportedAlgebraicDegreeError(
-                "exact factorization supports degree 4 or lower");
-        }
         std::vector<std::pair<Polynomial, int>> factors;
         kernel.square_free_factorize_1_object()(
             polynomial,
@@ -793,56 +448,53 @@ EventPartitionCertificate2 partition_integer_projections(
         };
 
         for (const auto& [raw_factor, multiplicity] : factors) {
-            const auto irreducible_factors =
-                irreducible_factors_degree_four(
-                    primitive_coefficients(raw_factor));
-            for (const std::vector<Integer>& primitive :
-                 irreducible_factors) {
-                const Polynomial factor =
-                    polynomial_from_integers(primitive);
-                const std::vector<std::string> factor_text =
-                    coefficient_text(primitive);
-                projection_record.factor_coefficients.push_back(
-                    factor_text);
+            const Polynomial factor =
+                normalized_polynomial(raw_factor);
+            const std::vector<Integer> primitive =
+                primitive_coefficients(factor);
+            const std::vector<std::string> factor_text =
+                coefficient_text(primitive);
+            projection_record.factor_coefficients.push_back(
+                factor_text);
 
-                std::vector<AlgebraicReal> roots;
-                kernel.solve_1_object()(
-                    factor,
-                    true,
-                    std::back_inserter(roots));
-                for (std::size_t ordinal = 0;
-                     ordinal < roots.size();
-                     ++ordinal) {
-                    const AlgebraicReal& root = roots[ordinal];
-                    if (kernel.compare_1_object()(
-                            root,
-                            Rational(0))
-                            == CGAL::SMALLER
-                        || kernel.compare_1_object()(
-                            root,
-                            Rational(1))
-                            == CGAL::LARGER) {
-                        continue;
-                    }
-                    const auto interval =
-                        strict_interval(root, factor);
-                    candidates.push_back(
-                        {
-                            root,
-                            {
-                                algebraic_root_id_v1(
-                                    primitive,
-                                    ordinal),
-                                factor_text,
-                                ordinal,
-                                static_cast<unsigned int>(
-                                    multiplicity),
-                                rational_text(interval.first),
-                                rational_text(interval.second),
-                            },
-                            input.events,
-                        });
+            std::vector<AlgebraicReal> roots;
+            kernel.solve_1_object()(
+                factor,
+                true,
+                std::back_inserter(roots));
+            for (std::size_t ordinal = 0;
+                 ordinal < roots.size();
+                 ++ordinal) {
+                const AlgebraicReal& root = roots[ordinal];
+                if (kernel.compare_1_object()(
+                        root,
+                        Rational(0))
+                        == CGAL::SMALLER
+                    || kernel.compare_1_object()(
+                        root,
+                        Rational(1))
+                        == CGAL::LARGER) {
+                    continue;
                 }
+                const auto interval =
+                    strict_interval(root, factor);
+                candidates.push_back(
+                    {
+                        root,
+                        factor,
+                        {
+                            algebraic_root_id_v1(
+                                primitive,
+                                ordinal),
+                            factor_text,
+                            ordinal,
+                            static_cast<unsigned int>(
+                                multiplicity),
+                            rational_text(interval.first),
+                            rational_text(interval.second),
+                        },
+                        input.events,
+                    });
             }
         }
         std::sort(
@@ -871,14 +523,17 @@ EventPartitionCertificate2 partition_integer_projections(
                    unique.back().value,
                    candidate.value)
                 == CGAL::EQUAL) {
-            if (unique.back().record.root_id
-                != candidate.record.root_id) {
-                throw InvalidAlgebraicPolynomialError(
-                    "equal roots have different irreducible identities");
-            }
-            unique.back().record.multiplicity = std::max(
+            const unsigned int multiplicity = std::max(
                 unique.back().record.multiplicity,
                 candidate.record.multiplicity);
+            unique.back().governing_factor =
+                common_governing_factor(
+                    unique.back().governing_factor,
+                    candidate.governing_factor);
+            unique.back().record = root_record(
+                unique.back().value,
+                unique.back().governing_factor,
+                multiplicity);
             unique.back().events.insert(
                 unique.back().events.end(),
                 candidate.events.begin(),
