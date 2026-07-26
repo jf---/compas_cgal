@@ -1,9 +1,37 @@
 #include "segment_site_mat.h"
 
+#include <algorithm>
 #include <cstdlib>
 #include <optional>
 
 namespace {
+
+bool has_reconstructible_root_id(
+    const MatParameterEndpoint2& endpoint)
+{
+    if (!endpoint.parameter.has_value()) {
+        return false;
+    }
+    const std::string root_id =
+        algebraic_root_identity_v1(*endpoint.parameter);
+    return std::find(
+               endpoint.provenance_ids.begin(),
+               endpoint.provenance_ids.end(),
+               root_id)
+        != endpoint.provenance_ids.end();
+}
+
+bool has_local_solution_identity(
+    const MatParameterEndpoint2& endpoint)
+{
+    return std::any_of(
+        endpoint.provenance_ids.begin(),
+        endpoint.provenance_ids.end(),
+        [](const std::string& provenance) {
+            return provenance.find("solution-")
+                != std::string::npos;
+        });
+}
 
 bool parameter_domains_are_exact()
 {
@@ -273,12 +301,10 @@ bool clearance_boundaries_are_exact()
         && clipped_line_components.back().upper.parameter.has_value()
         && clipped_line_components.front().component_id
             == "clipped-line-dual/component-0"
-        && clipped_line_components.front()
-            .upper.provenance_ids.front()
-            == "clipped-line-dual/clearance-root-0"
-        && clipped_line_components.back()
-            .lower.provenance_ids.front()
-            == "clipped-line-dual/clearance-root-1"
+        && has_reconstructible_root_id(
+            clipped_line_components.front().upper)
+        && has_reconstructible_root_id(
+            clipped_line_components.back().lower)
         && zero_components.size() == 1
         && positive_components.size() == 1
         && negative_components.empty()
@@ -296,23 +322,19 @@ bool clearance_boundaries_are_exact()
             .upper.provenance_ids.front()
             == "D-segment-dual/D-outer/edge-1"
         && clipped_domain_parabola.size() == 2
-        && clipped_domain_parabola.front()
-            .lower.provenance_ids.front()
-            == "D-parabola-dual/D-outer/edge-2"
-               "/algebraic-solution-0"
-        && clipped_domain_parabola.back()
-            .upper.provenance_ids.front()
-            == "D-parabola-dual/D-outer/edge-2"
-               "/algebraic-solution-1"
+        && has_reconstructible_root_id(
+            clipped_domain_parabola.front().lower)
+        && has_reconstructible_root_id(
+            clipped_domain_parabola.back().upper)
         && source_parabola_components.size() == 2
-        && source_parabola_components.front()
-            .lower.provenance_ids.front()
-            .find("source-algebraic-solution")
-            != std::string::npos
-        && source_parabola_components.back()
-            .upper.provenance_ids.front()
-            .find("source-algebraic-solution")
-            != std::string::npos;
+        && has_reconstructible_root_id(
+            source_parabola_components.front().lower)
+        && has_reconstructible_root_id(
+            source_parabola_components.back().upper)
+        && !has_local_solution_identity(
+            source_parabola_components.front().lower)
+        && !has_local_solution_identity(
+            source_parabola_components.back().upper);
 }
 
 } // namespace

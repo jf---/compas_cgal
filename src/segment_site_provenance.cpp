@@ -1,6 +1,9 @@
 #include "segment_site_provenance.h"
 
+#include <iterator>
 #include <set>
+
+#include <CGAL/Polynomial_traits_d.h>
 
 namespace {
 
@@ -21,6 +24,42 @@ bool exact_site_equal(
 }
 
 } // namespace
+
+std::string algebraic_root_identity_v1(
+    const ExactAlgebraicKernel1::Algebraic_real_1& root)
+{
+    using Polynomial = ExactAlgebraicKernel1::Polynomial_1;
+    ExactAlgebraicKernel1 kernel;
+    const Polynomial factor =
+        typename CGAL::Polynomial_traits_d<
+            Polynomial>::Canonicalize()(
+            kernel.compute_polynomial_1_object()(root));
+    const int degree = CGAL::degree(factor);
+    std::vector<ExactAlgebraicInteger1> coefficients;
+    coefficients.reserve(
+        static_cast<std::size_t>(degree + 1));
+    for (int index = 0; index <= degree; ++index) {
+        coefficients.push_back(factor[index]);
+    }
+
+    std::vector<ExactAlgebraicKernel1::Algebraic_real_1> roots;
+    kernel.solve_1_object()(
+        factor,
+        true,
+        std::back_inserter(roots));
+    for (std::size_t ordinal = 0;
+         ordinal < roots.size();
+         ++ordinal) {
+        if (kernel.compare_1_object()(roots[ordinal], root)
+            == CGAL::EQUAL) {
+            return algebraic_root_id_v1(
+                coefficients,
+                ordinal);
+        }
+    }
+    throw InvalidAlgebraicPolynomialError(
+        "canonical factor does not contain clipping root");
+}
 
 std::size_t matched_generator_site_count(
     const SegmentSiteDelaunay2& delaunay,

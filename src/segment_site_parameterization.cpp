@@ -208,7 +208,6 @@ void append_parabola_polygon_intersections(
             x_equation,
             y_equation,
             std::back_inserter(solutions));
-        std::size_t solution_index = 0;
         for (const auto& [solution, multiplicity] : solutions) {
             static_cast<void>(multiplicity);
             const auto parameter =
@@ -230,7 +229,6 @@ void append_parabola_polygon_intersections(
                            parameter,
                            *primitive.domain_upper)
                         == CGAL::LARGER)) {
-                ++solution_index;
                 continue;
             }
             algebraic_roots.push_back(
@@ -238,12 +236,10 @@ void append_parabola_polygon_intersections(
                     parameter,
                     {
                         ring_id + "/edge-"
-                        + std::to_string(edge_index)
-                        + "/algebraic-solution-"
-                        + std::to_string(solution_index),
+                        + std::to_string(edge_index),
+                        algebraic_root_identity_v1(parameter),
                     },
                 });
-            ++solution_index;
         }
     }
 }
