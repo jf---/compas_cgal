@@ -39,6 +39,11 @@ public:
     using std::runtime_error::runtime_error;
 };
 
+class DegeneratePointSiteTopologyError : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
+
 struct SegmentSiteMatCompileEvidence2 {
     bool delaunay_valid;
     std::size_t assigned_dual_primitives;

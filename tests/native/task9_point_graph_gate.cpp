@@ -100,6 +100,12 @@ bool point_graph_production_gate()
     std::vector<NormalizedPointSource2> coincident = points;
     coincident.back().x = coincident.front().x;
     coincident.back().y = coincident.front().y;
+    const std::vector<NormalizedPointSource2> cocircular{
+        {"square-a", -1, -1},
+        {"square-b", 1, -1},
+        {"square-c", 1, 1},
+        {"square-d", -1, 1},
+    };
 
     return !first.nodes.empty()
         && !first.edges.empty()
@@ -143,5 +149,10 @@ bool point_graph_production_gate()
             [&points, &domain]()
             {
                 exact_point_site_graph(points, domain, -1);
+            })
+        && throws_named<DegeneratePointSiteTopologyError>(
+            [&cocircular, &domain]()
+            {
+                exact_point_site_graph(cocircular, domain, 0);
             });
 }
