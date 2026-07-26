@@ -4,6 +4,9 @@
 #include <cstdlib>
 #include <optional>
 #include <set>
+#include <string>
+#include <utility>
+#include <vector>
 
 namespace {
 
@@ -470,135 +473,403 @@ bool generic_graph_derives_open_segment_bounds()
         });
 }
 
-bool point_limiter_binds_live_parabola_endpoint()
-{
-    const CORE::Expr radical = CORE::sqrt(CORE::Expr(2));
-    const MatTraits::Point_2 segment_source(-100, 0);
-    const MatTraits::Point_2 segment_target(100, 0);
-    const MatTraits::Point_2 focus(radical, 3);
-    const MatTraits::Point_2 limiter(0, CORE::BigRat(2, 3));
-    const MatTraits::Site_2 focus_site =
-        MatTraits::Site_2::construct_site_2(focus);
-    const MatTraits::Site_2 segment_site =
-        MatTraits::Site_2::construct_site_2(segment_source, segment_target);
-    const MatTraits::Site_2 limiter_site =
-        MatTraits::Site_2::construct_site_2(limiter);
-    const auto same_site =
-        [](const MatTraits::Site_2& lhs, const MatTraits::Site_2& rhs)
-    {
-        if (lhs.is_point() != rhs.is_point())
-        {
-            return false;
-        }
-        if (lhs.is_point())
-        {
-            return lhs.point() == rhs.point();
-        }
-        return (lhs.source() == rhs.source() && lhs.target() == rhs.target()) ||
-               (lhs.source() == rhs.target() && lhs.target() == rhs.source());
-    };
+struct PointLimiterFixture2 {
+    MatTraits::Point_2 segment_source;
+    MatTraits::Point_2 segment_target;
+    MatTraits::Point_2 focus;
+    MatTraits::Point_2 limiter;
+    MatExactPointSiteSource2 focus_record;
+    MatExactOpenSegmentSource2 segment_record;
+    MatExactPointSiteSource2 segment_source_record;
+    MatExactPointSiteSource2 segment_target_record;
+    MatExactPointSiteSource2 limiter_record;
+};
 
+SegmentSiteDelaunay2 point_limiter_delaunay(
+    const PointLimiterFixture2& source)
+{
     SegmentSiteDelaunay2 delaunay;
-    delaunay.insert(segment_source, segment_target);
-    delaunay.insert(focus);
-    delaunay.insert(limiter);
-    SegmentSiteVoronoi2 voronoi(delaunay);
-    std::set<std::string> bound_ids;
-    std::size_t bound_calls = 0;
-    std::vector<ExactAlgebraicKernel1::Algebraic_real_1> bound_parameters;
-    std::vector<MatTraits::Point_2> bound_points;
-    std::vector<SegmentSiteVoronoi2::Halfedge_handle> bound_halfedges;
-    for (auto halfedge = voronoi.halfedges_begin();
-         halfedge != voronoi.halfedges_end(); ++halfedge)
+    delaunay.insert(
+        source.segment_source,
+        source.segment_target);
+    delaunay.insert(source.focus);
+    delaunay.insert(source.limiter);
+    return delaunay;
+}
+
+struct LivePointLimiterFixture2 {
+    explicit LivePointLimiterFixture2(
+        PointLimiterFixture2 source)
+        : source(std::move(source)),
+          delaunay(point_limiter_delaunay(this->source)),
+          voronoi(delaunay)
+    {
+    }
+
+    PointLimiterFixture2 source;
+    SegmentSiteDelaunay2 delaunay;
+    SegmentSiteVoronoi2 voronoi;
+};
+
+struct BoundEndpointObservation2 {
+    MatParameterEndpoint2 endpoint;
+    SegmentSiteVoronoi2::Halfedge_handle halfedge;
+    MatTraits::Point_2 point;
+};
+
+bool exact_site_equal(
+    const MatTraits::Site_2& lhs,
+    const MatTraits::Site_2& rhs)
+{
+    if (lhs.is_point() != rhs.is_point()) {
+        return false;
+    }
+    if (lhs.is_point()) {
+        return lhs.point() == rhs.point();
+    }
+    return (lhs.source() == rhs.source()
+            && lhs.target() == rhs.target())
+        || (lhs.source() == rhs.target()
+            && lhs.target() == rhs.source());
+}
+
+std::vector<BoundEndpointObservation2>
+bind_point_limiter_fixture(
+    LivePointLimiterFixture2& fixture)
+{
+    const MatTraits::Site_2 focus_site =
+        MatTraits::Site_2::construct_site_2(
+            fixture.source.focus);
+    const MatTraits::Site_2 segment_site =
+        MatTraits::Site_2::construct_site_2(
+            fixture.source.segment_source,
+            fixture.source.segment_target);
+    const MatTraits::Site_2 limiter_site =
+        MatTraits::Site_2::construct_site_2(
+            fixture.source.limiter);
+    std::vector<BoundEndpointObservation2> result;
+    for (auto halfedge = fixture.voronoi.halfedges_begin();
+         halfedge != fixture.voronoi.halfedges_end();
+         ++halfedge)
     {
         const MatTraits::Site_2 up = halfedge->up()->site();
         const MatTraits::Site_2 down = halfedge->down()->site();
-        if (!((same_site(up, focus_site) && same_site(down, segment_site)) ||
-              (same_site(up, segment_site) && same_site(down, focus_site))))
+        if (!((exact_site_equal(up, focus_site)
+               && exact_site_equal(down, segment_site))
+              || (exact_site_equal(up, segment_site)
+                  && exact_site_equal(down, focus_site))))
         {
             continue;
         }
-        SegmentSiteParabola2 live_parabola;
-        if (!CGAL::assign(live_parabola,
-                          voronoi.dual().primal(halfedge->dual())))
+        const bool limiter_is_left =
+            exact_site_equal(
+                halfedge->left()->site(),
+                limiter_site);
+        const bool limiter_is_right =
+            exact_site_equal(
+                halfedge->right()->site(),
+                limiter_site);
+        if (limiter_is_left == limiter_is_right) {
+            continue;
+        }
+        const MatTraits::Point_2 point =
+            limiter_is_left
+            ? halfedge->source()->point()
+            : halfedge->target()->point();
+        SegmentSiteParabola2 parabola;
+        if (!CGAL::assign(
+                parabola,
+                fixture.voronoi.dual().primal(
+                    halfedge->dual()))
+            || (point != parabola.p1
+                && point != parabola.p2))
         {
             continue;
         }
-        const auto bind =
-            [&](const auto& vertex, const MatTraits::Site_2& live_limiter)
-        {
-            if (!same_site(live_limiter, limiter_site))
+        result.push_back(
             {
-                return;
-            }
-            if (vertex->point() != live_parabola.p1 &&
-                vertex->point() != live_parabola.p2)
-            {
-                return;
-            }
-            const MatLiveParabolaEndpoint2 bound =
                 bind_point_limiter_parabola_endpoint(
-                    {
-                        "focus",
-                        {0, 1},
-                        {3, 0},
-                        2,
-                    },
-                    {
-                        "open-segment",
-                        0,
-                        1,
-                        0,
-                    },
-                    {
-                        "segment-source",
-                        {-100, 0},
-                        {0, 0},
-                        2,
-                    },
-                    {
-                        "segment-target",
-                        {100, 0},
-                        {0, 0},
-                        2,
-                    },
-                    {
-                        "limiter",
-                        {0, 0},
-                        {CORE::BigRat(2, 3), 0},
-                        2,
-                    },
-                    vertex->point(), live_parabola);
-            ++bound_calls;
-            bound_parameters.push_back(*bound.endpoint.parameter);
-            bound_points.push_back(vertex->point());
-            bound_halfedges.push_back(halfedge);
-            bound_ids.insert(
-                algebraic_root_identity_v1(*bound.endpoint.parameter));
-            if (!bound.matches_live_p1_or_p2 ||
-                std::find(bound.endpoint.provenance_ids.begin(),
-                          bound.endpoint.provenance_ids.end(),
-                          "limiter") == bound.endpoint.provenance_ids.end())
-            {
-                bound_ids.clear();
-            }
-        };
-        if (halfedge->has_source())
+                    fixture.source.focus_record,
+                    fixture.source.segment_record,
+                    fixture.source.segment_source_record,
+                    fixture.source.segment_target_record,
+                    fixture.source.limiter_record,
+                    fixture.voronoi,
+                    halfedge),
+                halfedge,
+                point,
+            });
+    }
+    return result;
+}
+
+std::string canonical_endpoint_bytes(
+    const MatParameterEndpoint2& endpoint)
+{
+    if (!endpoint.parameter.has_value()) {
+        return "unbounded";
+    }
+    std::string result =
+        algebraic_root_identity_v1(*endpoint.parameter);
+    for (const std::string& provenance : endpoint.provenance_ids) {
+        result += ":";
+        result += std::to_string(provenance.size());
+        result += ":";
+        result += provenance;
+    }
+    return result;
+}
+
+PointLimiterFixture2 irrational_point_limiter_fixture()
+{
+    const CORE::Expr radical = CORE::sqrt(CORE::Expr(2));
+    return {
+        {-100, 0},
+        {100, 0},
+        {radical, 3},
+        {0, CORE::BigRat(2, 3)},
         {
-            bind(halfedge->source(), halfedge->left()->site());
-        }
-        if (halfedge->has_target())
+            "focus",
+            {0, 1},
+            {3, 0},
+            2,
+        },
         {
-            bind(halfedge->target(), halfedge->right()->site());
-        }
+            "open-segment",
+            0,
+            1,
+            0,
+        },
+        {
+            "segment-source",
+            {-100, 0},
+            {0, 0},
+            2,
+        },
+        {
+            "segment-target",
+            {100, 0},
+            {0, 0},
+            2,
+        },
+        {
+            "limiter",
+            {0, 0},
+            {CORE::BigRat(2, 3), 0},
+            2,
+        },
+    };
+}
+
+PointLimiterFixture2 rational_repeated_factor_fixture()
+{
+    return {
+        {-100, 0},
+        {100, 0},
+        {1, 3},
+        {0, 3},
+        {
+            "focus-rational",
+            {1, 0},
+            {3, 0},
+            1,
+        },
+        {
+            "open-segment-rational",
+            0,
+            1,
+            0,
+        },
+        {
+            "segment-source-rational",
+            {-100, 0},
+            {0, 0},
+            1,
+        },
+        {
+            "segment-target-rational",
+            {100, 0},
+            {0, 0},
+            1,
+        },
+        {
+            "limiter-rational",
+            {0, 0},
+            {3, 0},
+            1,
+        },
+    };
+}
+
+bool point_limiter_binds_live_parabola_endpoint()
+{
+    LivePointLimiterFixture2 fixture(
+        irrational_point_limiter_fixture());
+    const std::vector<BoundEndpointObservation2> observations =
+        bind_point_limiter_fixture(fixture);
+    if (observations.size() != 2) {
+        return false;
     }
     ExactAlgebraicKernel1 kernel;
-    return bound_ids.size() == 1 && bound_calls == 2 &&
-           bound_parameters.size() == 2 &&
-           kernel.compare_1_object()(bound_parameters[0],
-                                     bound_parameters[1]) == CGAL::EQUAL &&
-           bound_points[0] == bound_points[1] &&
-           bound_halfedges[0]->opposite() == bound_halfedges[1];
+    return observations[0].endpoint.parameter.has_value()
+        && observations[1].endpoint.parameter.has_value()
+        && kernel.compare_1_object()(
+               *observations[0].endpoint.parameter,
+               *observations[1].endpoint.parameter)
+            == CGAL::EQUAL
+        && observations[0].point == observations[1].point
+        && observations[0].halfedge->opposite()
+            == observations[1].halfedge
+        && canonical_endpoint_bytes(observations[0].endpoint)
+            == canonical_endpoint_bytes(observations[1].endpoint)
+        && std::none_of(
+               observations[0].endpoint.provenance_ids.begin(),
+               observations[0].endpoint.provenance_ids.end(),
+               [](const std::string& provenance) {
+                   return provenance == "live-parabola/p1"
+                       || provenance == "live-parabola/p2";
+               });
+}
+
+bool rational_repeated_factor_binds_without_solver_precondition()
+{
+    LivePointLimiterFixture2 fixture(
+        rational_repeated_factor_fixture());
+    const std::vector<BoundEndpointObservation2> observations =
+        bind_point_limiter_fixture(fixture);
+    if (observations.size() != 2
+        || !observations[0].endpoint.parameter.has_value()) {
+        return false;
+    }
+    const std::vector<ExactAlgebraicInteger1>
+        governing_factor{-1, 2};
+    const std::string expected_root_id =
+        algebraic_root_id_v1(governing_factor, 0);
+    ExactAlgebraicKernel1 kernel;
+    return kernel.compare_1_object()(
+               *observations[0].endpoint.parameter,
+               CORE::BigRat(1, 2))
+            == CGAL::EQUAL
+        && std::find(
+               observations[0].endpoint.provenance_ids.begin(),
+               observations[0].endpoint.provenance_ids.end(),
+               expected_root_id)
+            != observations[0].endpoint.provenance_ids.end()
+        && std::find(
+               observations[0].endpoint.provenance_ids.begin(),
+               observations[0].endpoint.provenance_ids.end(),
+               "point-limiter/norm-factor-multiplicity/2")
+            != observations[0].endpoint.provenance_ids.end()
+        && canonical_endpoint_bytes(observations[0].endpoint)
+            == canonical_endpoint_bytes(observations[1].endpoint);
+}
+
+bool different_quadratic_field_is_rejected()
+{
+    LivePointLimiterFixture2 fixture(
+        irrational_point_limiter_fixture());
+    const std::vector<BoundEndpointObservation2> observations =
+        bind_point_limiter_fixture(fixture);
+    if (observations.empty()) {
+        return false;
+    }
+    fixture.source.limiter_record.radicand = 3;
+    try {
+        bind_point_limiter_parabola_endpoint(
+            fixture.source.focus_record,
+            fixture.source.segment_record,
+            fixture.source.segment_source_record,
+            fixture.source.segment_target_record,
+            fixture.source.limiter_record,
+            fixture.voronoi,
+            observations[0].halfedge);
+    }
+    catch (const InvalidRationalPrimitiveError&) {
+        return true;
+    }
+    return false;
+}
+
+bool unrelated_live_generator_is_rejected()
+{
+    LivePointLimiterFixture2 fixture(
+        irrational_point_limiter_fixture());
+    const std::vector<BoundEndpointObservation2> observations =
+        bind_point_limiter_fixture(fixture);
+    if (observations.empty()) {
+        return false;
+    }
+    MatExactPointSiteSource2 unrelated_focus =
+        fixture.source.focus_record;
+    unrelated_focus.x = {99, 0};
+    unrelated_focus.y = {99, 0};
+    try {
+        bind_point_limiter_parabola_endpoint(
+            unrelated_focus,
+            fixture.source.segment_record,
+            fixture.source.segment_source_record,
+            fixture.source.segment_target_record,
+            fixture.source.limiter_record,
+            fixture.voronoi,
+            observations[0].halfedge);
+    }
+    catch (const MismatchedLiveParabolaBridgeError&) {
+        return true;
+    }
+    return false;
+}
+
+bool strict_open_segment_feature_rejects_decoy()
+{
+    const PointLimiterFixture2 fixture =
+        rational_repeated_factor_fixture();
+    const MatExactPointSiteSource2 decoy_source{
+        "decoy-source",
+        {2, 0},
+        {0, 0},
+        1,
+    };
+    const MatExactPointSiteSource2 decoy_target{
+        "decoy-target",
+        {3, 0},
+        {0, 0},
+        1,
+    };
+    const SourceParabolaParameterization2 parabola =
+        source_parameterization(
+            fixture.focus_record,
+            fixture.segment_record);
+    ExactAlgebraicKernel1 kernel;
+    const auto parameter =
+        kernel.construct_algebraic_real_1_object()(
+            CORE::BigRat(1, 2));
+    return exact_open_segment_feature_contains(
+               parabola,
+               fixture.segment_source_record,
+               fixture.segment_target_record,
+               parameter)
+        && !exact_open_segment_feature_contains(
+               parabola,
+               decoy_source,
+               decoy_target,
+               parameter);
+}
+
+bool collapsed_live_parabola_is_rejected()
+{
+    SegmentSiteParabola2 collapsed(
+        MatTraits::Point_2(0, 1),
+        MatTraits::Line_2(0, 1, 0),
+        MatTraits::Point_2(0, 1),
+        MatTraits::Point_2(0, 1));
+    try {
+        require_distinct_live_parabola_endpoints(
+            collapsed);
+    }
+    catch (const AmbiguousLiveParabolaEndpointError&) {
+        return true;
+    }
+    return false;
 }
 
 } // namespace
@@ -619,6 +890,11 @@ int main()
             && generic_graph_unions_shared_voronoi_nodes()
             && generic_graph_derives_open_segment_bounds()
             && point_limiter_binds_live_parabola_endpoint()
+            && rational_repeated_factor_binds_without_solver_precondition()
+            && different_quadratic_field_is_rejected()
+            && unrelated_live_generator_is_rejected()
+            && strict_open_segment_feature_rejects_decoy()
+            && collapsed_live_parabola_is_rejected()
         ? EXIT_SUCCESS
         : EXIT_FAILURE;
 }

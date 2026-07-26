@@ -8,9 +8,22 @@
 #include <vector>
 
 #include <CGAL/Segment_Delaunay_graph_2.h>
+#include <CGAL/Segment_Delaunay_graph_adaptation_policies_2.h>
+#include <CGAL/Segment_Delaunay_graph_adaptation_traits_2.h>
+#include <CGAL/Voronoi_diagram_2.h>
 
 using SegmentSiteDelaunay2 =
     CGAL::Segment_Delaunay_graph_2<MatTraits>;
+using SegmentSiteAdaptationTraits2 =
+    CGAL::Segment_Delaunay_graph_adaptation_traits_2<
+        SegmentSiteDelaunay2>;
+using SegmentSiteAdaptationPolicy2 =
+    CGAL::Segment_Delaunay_graph_degeneracy_removal_policy_2<
+        SegmentSiteDelaunay2>;
+using SegmentSiteVoronoi2 = CGAL::Voronoi_diagram_2<
+    SegmentSiteDelaunay2,
+    SegmentSiteAdaptationTraits2,
+    SegmentSiteAdaptationPolicy2>;
 
 struct GeneratorSite2 {
     std::string stable_id;
