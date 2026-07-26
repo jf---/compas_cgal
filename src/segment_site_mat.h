@@ -1,34 +1,13 @@
 #pragma once
 
-#include "exact_algebraic_1.h"
+#include "segment_site_clipping.h"
 
 #include <cstddef>
-#include <optional>
-#include <stdexcept>
-#include <string>
-#include <vector>
-
-#include <CGAL/Algebraic_structure_traits.h>
-#include <CGAL/Cartesian.h>
-#include <CGAL/CORE/BigRat.h>
-#include <CGAL/Exact_predicates_exact_constructions_kernel_with_sqrt.h>
-#include <CGAL/Parabola_segment_2.h>
-#include <CGAL/Polygon_2.h>
-#include <CGAL/Polygon_with_holes_2.h>
 #include <CGAL/Segment_Delaunay_graph_2.h>
 #include <CGAL/Segment_Delaunay_graph_adaptation_policies_2.h>
 #include <CGAL/Segment_Delaunay_graph_adaptation_traits_2.h>
-#include <CGAL/Segment_Delaunay_graph_traits_2.h>
 #include <CGAL/Voronoi_diagram_2.h>
 
-using MatKernel =
-    CGAL::Exact_predicates_exact_constructions_kernel_with_sqrt;
-using MatTraits =
-    CGAL::Segment_Delaunay_graph_traits_without_intersections_2<
-        MatKernel,
-        CGAL::Field_with_sqrt_tag>;
-using SegmentSiteDelaunay2 =
-    CGAL::Segment_Delaunay_graph_2<MatTraits>;
 using SegmentSiteAdaptationTraits2 =
     CGAL::Segment_Delaunay_graph_adaptation_traits_2<
         SegmentSiteDelaunay2>;
@@ -39,119 +18,6 @@ using SegmentSiteVoronoi2 = CGAL::Voronoi_diagram_2<
     SegmentSiteDelaunay2,
     SegmentSiteAdaptationTraits2,
     SegmentSiteAdaptationPolicy2>;
-using SegmentSiteParabola2 =
-    CGAL::Parabola_segment_2<MatTraits>;
-using MatDomainKernel2 = CGAL::Cartesian<CORE::BigRat>;
-using MatDomainPolygon2 = CGAL::Polygon_2<MatDomainKernel2>;
-using MatDomainPolygonWithHoles2 =
-    CGAL::Polygon_with_holes_2<MatDomainKernel2>;
-
-struct MatParameterDomain2 {
-    std::optional<MatTraits::FT> lower;
-    std::optional<MatTraits::FT> upper;
-};
-
-MatParameterDomain2
-exact_parameter_domain(const MatTraits::Line_2& line);
-
-MatParameterDomain2
-exact_parameter_domain(const MatTraits::Ray_2& ray);
-
-MatParameterDomain2
-exact_parameter_domain(const MatTraits::Segment_2& segment);
-
-MatParameterDomain2
-exact_parameter_domain(const SegmentSiteParabola2& parabola);
-
-struct RationalPrimitiveParameterization2 {
-    std::vector<CORE::BigRat> x_coefficients;
-    std::vector<CORE::BigRat> y_coefficients;
-    std::optional<CORE::BigRat> domain_lower;
-    std::optional<CORE::BigRat> domain_upper;
-};
-
-struct MatQuadraticFieldValue2 {
-    CORE::BigRat rational;
-    CORE::BigRat radical;
-};
-
-struct MatExactPointSiteSource2 {
-    std::string stable_site_id;
-    MatQuadraticFieldValue2 x;
-    MatQuadraticFieldValue2 y;
-    CORE::BigRat radicand;
-};
-
-struct MatExactOpenSegmentSource2 {
-    std::string stable_site_id;
-    CORE::BigRat line_a;
-    CORE::BigRat line_b;
-    CORE::BigRat line_c;
-};
-
-class InvalidRationalPrimitiveError : public std::runtime_error {
-public:
-    using std::runtime_error::runtime_error;
-};
-
-class OverlappingDomainBoundaryError : public std::runtime_error {
-public:
-    using std::runtime_error::runtime_error;
-};
-
-struct ClearanceRootBoundary2 {
-    std::optional<CGAL::Sign> constant_sign;
-    std::vector<ExactAlgebraicInteger1> primitive_coefficients;
-    std::vector<ExactAlgebraicKernel1::Algebraic_real_1> roots;
-};
-
-ClearanceRootBoundary2 point_clearance_boundary(
-    const RationalPrimitiveParameterization2& primitive,
-    const CORE::BigRat& site_x,
-    const CORE::BigRat& site_y,
-    const CORE::BigRat& radius_squared);
-
-struct MatParameterEndpoint2 {
-    std::optional<ExactAlgebraicKernel1::Algebraic_real_1>
-        parameter;
-    std::vector<std::string> provenance_ids;
-};
-
-struct MatAdmissibleComponent2 {
-    std::string component_id;
-    MatParameterEndpoint2 lower;
-    MatParameterEndpoint2 upper;
-};
-
-std::vector<MatAdmissibleComponent2>
-maximal_clearance_components(
-    const std::string& original_dual_id,
-    const RationalPrimitiveParameterization2& primitive,
-    const ClearanceRootBoundary2& boundary);
-
-std::vector<MatAdmissibleComponent2>
-clip_linear_clearance_components(
-    const std::string& original_dual_id,
-    const RationalPrimitiveParameterization2& primitive,
-    const ClearanceRootBoundary2& boundary,
-    const MatDomainPolygonWithHoles2& domain);
-
-std::vector<MatAdmissibleComponent2>
-clip_parabola_clearance_components(
-    const std::string& original_dual_id,
-    const RationalPrimitiveParameterization2& primitive,
-    const ClearanceRootBoundary2& boundary,
-    const MatDomainPolygonWithHoles2& domain);
-
-std::vector<MatAdmissibleComponent2>
-clip_source_parabola_clearance_components(
-    const std::string& original_dual_id,
-    const MatExactPointSiteSource2& point_site,
-    const MatExactOpenSegmentSource2& segment_site,
-    const std::optional<CORE::BigRat>& domain_lower,
-    const std::optional<CORE::BigRat>& domain_upper,
-    const ClearanceRootBoundary2& boundary,
-    const MatDomainPolygonWithHoles2& domain);
 
 struct SegmentSiteMatCompileEvidence2 {
     bool delaunay_valid;
