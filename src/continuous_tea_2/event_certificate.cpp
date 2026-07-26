@@ -297,19 +297,20 @@ EventPartitionCertificate2 reconstruct(
             fields[1]);
     }
     if (certificate.source_kind
-        == "full-circle-line-pullbacks-v1") {
+        == "full-circle-boundary-pullbacks-v1") {
         const std::vector<std::string> fields =
             decode_string_sequence(
                 certificate.source_payload);
-        if (fields.size() != 4) {
+        if (fields.size() != 5) {
             throw EventPartitionVerificationError(
                 "full-circle line source payload is malformed");
         }
-        return construct_full_circle_line_pullback_partition(
+        return construct_full_circle_boundary_pullback_partition(
             fields[0],
             decode_string_sequence(fields[1]),
             fields[2],
-            decode_string_sequence(fields[3]));
+            decode_string_sequence(fields[3]),
+            decode_string_sequence(fields[4]));
     }
     if (certificate.source_kind != "cap-crossings-v1") {
         throw EventPartitionVerificationError(
