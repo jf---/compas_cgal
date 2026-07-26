@@ -287,7 +287,7 @@ class LocalEventWitness2:
     support_id: bytes
     trim_id: bytes
     vertex_id: bytes
-    endpoint_role: Literal["source", "target"]
+    endpoint_role: Literal["source", "target", ""]
     disposition: str
     local_branch_id: bytes
     local_root_id: bytes
