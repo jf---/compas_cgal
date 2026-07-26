@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <optional>
 #include <stdexcept>
+#include <string>
 #include <vector>
 
 #include <CGAL/Algebraic_structure_traits.h>
@@ -78,6 +79,24 @@ ClearanceRootBoundary2 point_clearance_boundary(
     const CORE::BigRat& site_x,
     const CORE::BigRat& site_y,
     const CORE::BigRat& radius_squared);
+
+struct MatParameterEndpoint2 {
+    std::optional<ExactAlgebraicKernel1::Algebraic_real_1>
+        parameter;
+    std::vector<std::string> provenance_ids;
+};
+
+struct MatAdmissibleComponent2 {
+    std::string component_id;
+    MatParameterEndpoint2 lower;
+    MatParameterEndpoint2 upper;
+};
+
+std::vector<MatAdmissibleComponent2>
+maximal_clearance_components(
+    const std::string& original_dual_id,
+    const RationalPrimitiveParameterization2& primitive,
+    const ClearanceRootBoundary2& boundary);
 
 struct SegmentSiteMatCompileEvidence2 {
     bool delaunay_valid;

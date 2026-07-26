@@ -153,6 +153,110 @@ std::size_t matched_generator_site_count(
     return matched_ids.size();
 }
 
+using AlgebraicParameter =
+    ExactAlgebraicKernel1::Algebraic_real_1;
+
+struct TaggedEndpoint2 {
+    MatParameterEndpoint2 endpoint;
+    bool clearance_root;
+};
+
+MatParameterEndpoint2 domain_endpoint(
+    const std::string& dual_id,
+    const char* side,
+    const std::optional<CORE::BigRat>& value,
+    const ExactAlgebraicKernel1& kernel)
+{
+    const std::string provenance =
+        dual_id + "/domain-" + side;
+    if (!value.has_value()) {
+        return {
+            std::nullopt,
+            {provenance + "-unbounded"},
+        };
+    }
+    return {
+        kernel.construct_algebraic_real_1_object()(*value),
+        {provenance},
+    };
+}
+
+CGAL::Sign clearance_sign_at(
+    const std::vector<ExactAlgebraicInteger1>& coefficients,
+    const AlgebraicParameter& parameter,
+    const ExactAlgebraicKernel1& kernel)
+{
+    using Polynomial = ExactAlgebraicKernel1::Polynomial_1;
+    const Polynomial polynomial =
+        typename CGAL::Polynomial_traits_d<
+            Polynomial>::Construct_polynomial()(
+            coefficients.begin(),
+            coefficients.end());
+    return kernel.sign_at_1_object()(polynomial, parameter);
+}
+
+CGAL::Sign clearance_sign_on_open_cell(
+    const std::vector<ExactAlgebraicInteger1>& coefficients,
+    const MatParameterEndpoint2& lower,
+    const MatParameterEndpoint2& upper,
+    const ExactAlgebraicKernel1& kernel)
+{
+    CORE::BigRat witness;
+    if (!lower.parameter.has_value()
+        && !upper.parameter.has_value()) {
+        witness = 0;
+    } else if (!lower.parameter.has_value()) {
+        witness = upper.parameter->low() - 1;
+    } else if (!upper.parameter.has_value()) {
+        witness = lower.parameter->high() + 1;
+    } else {
+        witness = kernel.bound_between_1_object()(
+            *lower.parameter,
+            *upper.parameter);
+    }
+
+    CORE::BigRat value = 0;
+    for (auto coefficient = coefficients.rbegin();
+         coefficient != coefficients.rend();
+         ++coefficient) {
+        value *= witness;
+        value += *coefficient;
+    }
+    return CGAL::sign(value);
+}
+
+void append_root_endpoint(
+    std::vector<TaggedEndpoint2>& endpoints,
+    TaggedEndpoint2& upper,
+    const AlgebraicParameter& root,
+    const std::string& root_id,
+    const ExactAlgebraicKernel1& kernel)
+{
+    const auto compare = kernel.compare_1_object();
+    if (endpoints.front().endpoint.parameter.has_value()
+        && compare(
+               root,
+               *endpoints.front().endpoint.parameter)
+            == CGAL::EQUAL) {
+        endpoints.front().clearance_root = true;
+        endpoints.front().endpoint.provenance_ids.push_back(
+            root_id);
+        return;
+    }
+    if (upper.endpoint.parameter.has_value()
+        && compare(root, *upper.endpoint.parameter)
+            == CGAL::EQUAL) {
+        upper.clearance_root = true;
+        upper.endpoint.provenance_ids.push_back(root_id);
+        return;
+    }
+    endpoints.push_back(
+        {
+            {root, {root_id}},
+            true,
+        });
+}
+
 std::size_t exact_clearance_root_count()
 {
     using Polynomial =
@@ -300,6 +404,178 @@ ClearanceRootBoundary2 point_clearance_boundary(
         coefficients,
         roots,
     };
+}
+
+std::vector<MatAdmissibleComponent2>
+maximal_clearance_components(
+    const std::string& original_dual_id,
+    const RationalPrimitiveParameterization2& primitive,
+    const ClearanceRootBoundary2& boundary)
+{
+    if (original_dual_id.empty()) {
+        throw InvalidRationalPrimitiveError(
+            "original dual identity is empty");
+    }
+
+    ExactAlgebraicKernel1 kernel;
+    TaggedEndpoint2 lower{
+        domain_endpoint(
+            original_dual_id,
+            "lower",
+            primitive.domain_lower,
+            kernel),
+        false,
+    };
+    TaggedEndpoint2 upper{
+        domain_endpoint(
+            original_dual_id,
+            "upper",
+            primitive.domain_upper,
+            kernel),
+        false,
+    };
+
+    if (boundary.constant_sign.has_value()) {
+        if (*boundary.constant_sign == CGAL::NEGATIVE) {
+            return {};
+        }
+        return {
+            {
+                original_dual_id + "/component-0",
+                lower.endpoint,
+                upper.endpoint,
+            },
+        };
+    }
+    if (boundary.primitive_coefficients.empty()) {
+        throw InvalidRationalPrimitiveError(
+            "nonconstant clearance boundary has no polynomial");
+    }
+
+    std::vector<TaggedEndpoint2> endpoints{lower};
+    for (std::size_t index = 0;
+         index < boundary.roots.size();
+         ++index) {
+        append_root_endpoint(
+            endpoints,
+            upper,
+            boundary.roots[index],
+            original_dual_id + "/clearance-root-"
+                + std::to_string(index),
+            kernel);
+    }
+    if (endpoints.front().endpoint.parameter.has_value()
+        && upper.endpoint.parameter.has_value()
+        && kernel.compare_1_object()(
+               *endpoints.front().endpoint.parameter,
+               *upper.endpoint.parameter)
+            == CGAL::EQUAL) {
+        endpoints.front().endpoint.provenance_ids.insert(
+            endpoints.front().endpoint.provenance_ids.end(),
+            upper.endpoint.provenance_ids.begin(),
+            upper.endpoint.provenance_ids.end());
+    } else {
+        endpoints.push_back(upper);
+    }
+
+    if (endpoints.size() == 1) {
+        if (clearance_sign_at(
+                boundary.primitive_coefficients,
+                *endpoints.front().endpoint.parameter,
+                kernel)
+            == CGAL::NEGATIVE) {
+            return {};
+        }
+        return {
+            {
+                original_dual_id + "/component-0",
+                endpoints.front().endpoint,
+                endpoints.front().endpoint,
+            },
+        };
+    }
+
+    std::vector<bool> retained_cells;
+    retained_cells.reserve(endpoints.size() - 1);
+    for (std::size_t index = 0;
+         index + 1 < endpoints.size();
+         ++index) {
+        retained_cells.push_back(
+            clearance_sign_on_open_cell(
+                boundary.primitive_coefficients,
+                endpoints[index].endpoint,
+                endpoints[index + 1].endpoint,
+                kernel)
+            == CGAL::POSITIVE);
+    }
+
+    struct OrderedComponent2 {
+        std::size_t order;
+        MatParameterEndpoint2 lower;
+        MatParameterEndpoint2 upper;
+    };
+    std::vector<OrderedComponent2> ordered;
+    for (std::size_t index = 0;
+         index < retained_cells.size();) {
+        if (!retained_cells[index]) {
+            ++index;
+            continue;
+        }
+        const std::size_t first = index;
+        while (index + 1 < retained_cells.size()
+               && retained_cells[index + 1]) {
+            ++index;
+        }
+        ordered.push_back(
+            {
+                2 * first,
+                endpoints[first].endpoint,
+                endpoints[index + 1].endpoint,
+            });
+        ++index;
+    }
+    for (std::size_t index = 0;
+         index < endpoints.size();
+         ++index) {
+        if (!endpoints[index].clearance_root) {
+            continue;
+        }
+        const bool retained_left =
+            index > 0 && retained_cells[index - 1];
+        const bool retained_right =
+            index < retained_cells.size()
+            && retained_cells[index];
+        if (!retained_left && !retained_right) {
+            ordered.push_back(
+                {
+                    2 * index + 1,
+                    endpoints[index].endpoint,
+                    endpoints[index].endpoint,
+                });
+        }
+    }
+    std::sort(
+        ordered.begin(),
+        ordered.end(),
+        [](const OrderedComponent2& lhs,
+           const OrderedComponent2& rhs) {
+            return lhs.order < rhs.order;
+        });
+
+    std::vector<MatAdmissibleComponent2> components;
+    components.reserve(ordered.size());
+    for (std::size_t index = 0;
+         index < ordered.size();
+         ++index) {
+        components.push_back(
+            {
+                original_dual_id + "/component-"
+                    + std::to_string(index),
+                ordered[index].lower,
+                ordered[index].upper,
+            });
+    }
+    return components;
 }
 
 SegmentSiteMatCompileEvidence2

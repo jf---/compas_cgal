@@ -94,6 +94,56 @@ bool clearance_boundaries_are_exact()
             0,
             0,
             1);
+    const RationalPrimitiveParameterization2 clipped_line{
+        line.x_coefficients,
+        line.y_coefficients,
+        CORE::BigRat(-2),
+        CORE::BigRat(2),
+    };
+    const ClearanceRootBoundary2 clipped_line_boundary =
+        point_clearance_boundary(clipped_line, 0, 0, 1);
+
+    const std::vector<MatAdmissibleComponent2> line_components =
+        maximal_clearance_components(
+            "line-dual",
+            line,
+            line_boundary);
+    const std::vector<MatAdmissibleComponent2> ray_components =
+        maximal_clearance_components(
+            "ray-dual",
+            ray,
+            ray_boundary);
+    const std::vector<MatAdmissibleComponent2> segment_components =
+        maximal_clearance_components(
+            "segment-dual",
+            segment,
+            segment_boundary);
+    const std::vector<MatAdmissibleComponent2> parabola_components =
+        maximal_clearance_components(
+            "parabola-dual",
+            parabola,
+            parabola_boundary);
+    const std::vector<MatAdmissibleComponent2>
+        clipped_line_components =
+            maximal_clearance_components(
+                "clipped-line-dual",
+                clipped_line,
+                clipped_line_boundary);
+    const std::vector<MatAdmissibleComponent2> zero_components =
+        maximal_clearance_components(
+            "zero-dual",
+            {{CORE::BigRat(0)}, {CORE::BigRat(0)}, 0, 1},
+            zero);
+    const std::vector<MatAdmissibleComponent2> positive_components =
+        maximal_clearance_components(
+            "positive-dual",
+            {{CORE::BigRat(1)}, {CORE::BigRat(0)}, 0, 1},
+            positive);
+    const std::vector<MatAdmissibleComponent2> negative_components =
+        maximal_clearance_components(
+            "negative-dual",
+            {{CORE::BigRat(0)}, {CORE::BigRat(0)}, 0, 1},
+            negative);
 
     return line_boundary.roots.size() == 2
         && ray_boundary.roots.size() == 1
@@ -101,7 +151,27 @@ bool clearance_boundaries_are_exact()
         && parabola_boundary.roots.size() == 2
         && zero.constant_sign == CGAL::ZERO
         && positive.constant_sign == CGAL::POSITIVE
-        && negative.constant_sign == CGAL::NEGATIVE;
+        && negative.constant_sign == CGAL::NEGATIVE
+        && line_components.size() == 2
+        && !line_components.front().lower.parameter.has_value()
+        && !line_components.back().upper.parameter.has_value()
+        && ray_components.size() == 1
+        && segment_components.size() == 1
+        && parabola_components.size() == 2
+        && clipped_line_components.size() == 2
+        && clipped_line_components.front().lower.parameter.has_value()
+        && clipped_line_components.back().upper.parameter.has_value()
+        && clipped_line_components.front().component_id
+            == "clipped-line-dual/component-0"
+        && clipped_line_components.front()
+            .upper.provenance_ids.front()
+            == "clipped-line-dual/clearance-root-0"
+        && clipped_line_components.back()
+            .lower.provenance_ids.front()
+            == "clipped-line-dual/clearance-root-1"
+        && zero_components.size() == 1
+        && positive_components.size() == 1
+        && negative_components.empty();
 }
 
 } // namespace
