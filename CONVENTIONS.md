@@ -36,9 +36,9 @@ This project uses `Exact_predicates_inexact_constructions_kernel` (Epick). All C
 
 ## Exact-Kernel Discipline (Epeck / circle-segment traits) — MANDATORY
 
-Full doctrine: `docs/exactness.md` (site page, repo-anchored, 12-question
-review checklist) and `docs/dev/exact-cgal-idioms.md` (verbatim reference).
-The rules below are the enforced distillation.
+Full binding doctrine: `docs/exactness.md` (MkDocs page, repo-anchored,
+14-question review checklist). `docs/dev/exact-cgal-idioms.md` is a generic
+primer. The rules below are the enforced distillation.
 
 The stock/engagement modules run on `Exact_predicates_exact_constructions_kernel`
 with `Gps_circle_segment_traits_2` (one-root point coordinates,
@@ -109,11 +109,28 @@ floating-point precision handling is a defect, always.
   `has_smaller_distance_to_point`, traits functors — before writing any
   coordinate arithmetic of your own.
 
+### Exact algebraic code
+- Read `docs/exactness.md`, especially **Algebraic kernels: identify roots
+  without minimal polynomials**, before changing event partitions or
+  algebraic certificates.
+- Root identity is primitive square-free polynomial + ordered-real-root
+  ordinal. Coalesce equal projections with
+  `Polynomial_traits_d::Gcd_up_to_constant_factor` and `Compare_1`; NEVER
+  trial-factor bignum coefficients to manufacture a minimal polynomial.
+- Use `Algebraic_structure_traits`, `Fraction_traits`,
+  `Polynomial_traits_d`, and algebraic-kernel functors before backend
+  representation arithmetic. Explicit backend construction is allowed at
+  the coefficient boundary; representation access is allowed for canonical
+  bytes/build attestation.
+- Zero-set canonicalization does not imply sign preservation. Signed
+  predicates first detect a vanishing source factor, then retain the original
+  unit/content sign and factor multiplicity parity.
+
 ## Build & Test
 
 ```bash
-pip install --no-build-isolation -ve .
-pytest tests/ -v
+pixi run pytest -- tests/ -n auto
+pixi run lint
 ```
 
 ## Stack
