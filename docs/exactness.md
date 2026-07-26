@@ -220,6 +220,75 @@ switch (CGAL::compare(u * u, w * w * CoordNT(beta))) {   // same-root products
 }
 ```
 
+## Algebraic kernels: identify roots without minimal polynomials
+
+CGAL's `Algebraic_kernel_d_1` model represents a real root with a square-free
+polynomial plus an isolating interval. It deliberately does not require a
+minimal polynomial: computing one is usually expensive and does not improve
+the root operations the kernel needs.
+
+The repository therefore uses this canonical identity for a real event root:
+
+1. denominator-clear and primitive-normalize every source polynomial;
+2. square-free-factorize it with the algebraic-kernel or polynomial-traits
+   functor;
+3. solve the factors and group equal roots with `Compare_1`;
+4. for one equality group, fold
+   `Polynomial_traits_d::Gcd_up_to_constant_factor` over its source factors;
+5. primitive-normalize that nonconstant square-free GCD with positive leading
+   coefficient;
+6. solve the GCD and locate the equal root with `Compare_1`; its ordinal is
+   among all ordered real roots of that GCD.
+
+For a root seen through two different projections, the GCD removes
+irrelevant factors shared by neither source. For a root supported by only one
+reducible square-free projection, the complete projection remains the
+representative. This is intentional: trial-dividing arbitrary-precision
+coefficients in search of a minimal polynomial is neither part of the
+identity contract nor an acceptable exact-arithmetic algorithm.
+
+Multiplicity is evidence about a source projection, not the number of times
+the same source evidence was submitted. The aggregate scalar therefore takes
+the maximum multiplicity while the event incidences preserve the distinct
+source projections.
+
+An isolating interval is a witness for locating and verifying the root, not
+the root's identity. Refinement may change the interval without changing the
+ID, but every accepted interval must still isolate the represented root.
+
+## Use CGAL concepts before number backends
+
+Exact code should be written against the algebraic concepts that state the
+operation:
+
+- `CGAL::is_square`, dispatched through
+  `Algebraic_structure_traits<NT>::Is_square`, for exact square tests;
+- `Fraction_traits<NT>::Decompose` and `Compose` for rational
+  numerator/denominator access, including the recursive polynomial
+  specialization;
+- `Polynomial_traits_d<P>::Canonicalize`,
+  `Gcd_up_to_constant_factor`, and the square-free operations for polynomial
+  normalization;
+- algebraic-kernel `Solve_1`, `Compare_1`, `Sign_at_1`/`Sign_at_2`, and
+  `Bound_between_1` for roots, signs, ordering, and separating witnesses.
+
+Backend-specific representation access, handwritten GCD/LCM, manual Newton
+square roots, backend bit scans, and rational-root trial division bypass
+those contracts. Explicit backend construction is allowed at the declared
+coefficient boundary, and representation access is allowed for canonical
+byte serialization and build attestation.
+
+!!! warning "Zero-set normalization is not sign normalization"
+
+    Multiplying by a negative unit preserves a polynomial's zero set while
+    changing its sign. Replacing an even power \(q^{2k}\) by the square-free
+    factor \(q\) also preserves the zero set but changes the sign across
+    \(q=0\). Use the algebraic kernel's documented sign functor on the
+    original polynomial. If an implementation pre-factors a polynomial,
+    first return zero when any source factor vanishes; otherwise multiply the
+    original unit/content sign by factor signs according to multiplicity
+    parity. Never reuse a zero-set-only canonical form as a signed predicate.
+
 ## Avoid square roots; prefer squared quantities
 
 Epeck's field type is rational: a generic square root leaves the field.
@@ -326,7 +395,7 @@ The incident that produced this page, in three acts:
 
 ## Review checklist
 
-Run every exact-kernel change through these twelve questions:
+Run every exact-kernel change through these fourteen questions:
 
 1. Is the kernel appropriate for every construction whose result is reused?
 2. Does any `to_double()` result affect control flow or topology?
@@ -344,16 +413,29 @@ Run every exact-kernel change through these twelve questions:
     `CGAL::Gmpq`; no un-profiled `.exact()`) rather than backend types?
 11. Does it satisfy the specific CGAL package's traits requirements?
 12. Has it been tested on degenerate and nearly degenerate data?
+13. Are algebraic roots represented by square-free polynomial plus isolation,
+    without minimal-polynomial factoring?
+14. Does every normalization used by a sign predicate preserve the original
+    polynomial's sign, not merely its zero set?
 
 ## References
 
-- CGAL Developer Manual — robustness and the exact computation paradigm;
-  kernel design; "use kernel primitives whenever possible."
-- CGAL Kernel manual — Epick/Epeck and the `_with_sqrt` / algebraic kernel
-  family.
-- `CGAL::Sqrt_extension` documentation — accessor API and same-extension
-  arithmetic preconditions.
+- [CGAL Developer Manual — Robustness][cgal-robustness] — exact computation
+  and "use kernel primitives whenever possible."
+- [CGAL Algebraic Kernel manual][cgal-ak] — square-free polynomial,
+  isolating-interval representation and why minimal polynomials are avoided.
+- [CGAL Polynomial traits][cgal-polynomial-traits] and
+  [Algebraic foundations][cgal-algebra] — canonicalization, GCD, square-free
+  factorization, fraction decomposition, and algebraic structure concepts.
+- [CGAL `Sqrt_extension` documentation][cgal-sqrt-extension] — accessor API
+  and same-extension arithmetic preconditions.
 - 2D Arrangements & 2D Regularized Boolean Set-Operations — the
   circle-segment traits contract this repository's stock model lives under.
 - Repo enforcement: the distilled rules in `CLAUDE.md` (binding for every
   change) and the SP1 design documents under `docs/plans/`.
+
+[cgal-robustness]: https://doc.cgal.org/6.0.1/Manual/devman_robustness.html
+[cgal-ak]: https://doc.cgal.org/6.0.1/Algebraic_kernel_d/index.html
+[cgal-polynomial-traits]: https://doc.cgal.org/6.0.1/Polynomial/classPolynomialTraits__d.html
+[cgal-algebra]: https://doc.cgal.org/6.0.1/Algebraic_foundations/index.html
+[cgal-sqrt-extension]: https://doc.cgal.org/6.0.1/Number_types/classCGAL_1_1Sqrt__extension.html

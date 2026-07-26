@@ -1,7 +1,10 @@
 # Idiomatic Exact CGAL
 
-> Canonical exact-kernel doctrine for this repository. The repo `CLAUDE.md`
-> carries the enforced distillation; this file is the full reference.
+> Generic primer retained for background. The binding repository doctrine,
+> including algebraic-root identity and the enforced review checklist, is the
+> MkDocs page [`docs/exactness.md`](../exactness.md) and its distillation in
+> `CLAUDE.md`.
+>
 > The deepest idiom: **exactness is a property of the complete dataflow, not
 > of the kernel typedef.**
 
