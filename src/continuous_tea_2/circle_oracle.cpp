@@ -23,7 +23,12 @@
 #include <utility>
 #include <vector>
 
+#include <boost/multiprecision/cpp_int.hpp>
+
 namespace {
+
+using Integer = boost::multiprecision::cpp_int;
+using IntegerPolynomial = std::vector<Integer>;
 
 constexpr std::array<const char*, 4>
     CENTER_CHART_IDS{
@@ -247,6 +252,118 @@ std::string exact_rational_text(const Epeck::FT& value)
     return stream.str();
 }
 
+IntegerPolynomial polynomial_column(
+    const ProjectionRecord2& projection,
+    std::size_t column)
+{
+    IntegerPolynomial result;
+    result.reserve(
+        projection.coefficient_rows.size());
+    for (const auto& row :
+         projection.coefficient_rows) {
+        result.emplace_back(
+            column < row.size()
+            ? row[column]
+            : "0");
+    }
+    return result;
+}
+
+IntegerPolynomial multiply_polynomials(
+    const IntegerPolynomial& left,
+    const IntegerPolynomial& right)
+{
+    IntegerPolynomial result(
+        left.size() + right.size() - 1,
+        Integer(0));
+    for (std::size_t first = 0;
+         first < left.size();
+         ++first) {
+        for (std::size_t second = 0;
+             second < right.size();
+             ++second) {
+            result[first + second] +=
+                left[first] * right[second];
+        }
+    }
+    return result;
+}
+
+IntegerPolynomial add_polynomials(
+    IntegerPolynomial left,
+    const IntegerPolynomial& right,
+    const Integer& scale)
+{
+    left.resize(
+        std::max(left.size(), right.size()),
+        Integer(0));
+    for (std::size_t index = 0;
+         index < right.size();
+         ++index) {
+        left[index] += scale * right[index];
+    }
+    return left;
+}
+
+IntegerPolynomial compose_global_chart(
+    const IntegerPolynomial& local,
+    std::size_t chart)
+{
+    const IntegerPolynomial affine{
+        -Integer(chart),
+        Integer(4),
+    };
+    IntegerPolynomial result{Integer(0)};
+    IntegerPolynomial power{Integer(1)};
+    for (const Integer& coefficient : local) {
+        result = add_polynomials(
+            std::move(result),
+            power,
+            coefficient);
+        power = multiply_polynomials(
+            power,
+            affine);
+    }
+    while (result.size() > 1
+           && result.back() == 0) {
+        result.pop_back();
+    }
+    return result;
+}
+
+std::vector<std::string> line_tangency_factor(
+    const ProjectionRecord2& pullback,
+    std::size_t chart)
+{
+    const IntegerPolynomial constant =
+        polynomial_column(pullback, 0);
+    const IntegerPolynomial linear =
+        polynomial_column(pullback, 1);
+    const IntegerPolynomial quadratic =
+        polynomial_column(pullback, 2);
+    IntegerPolynomial discriminant =
+        add_polynomials(
+            multiply_polynomials(
+                linear,
+                linear),
+            multiply_polynomials(
+                constant,
+                quadratic),
+            Integer(-4));
+    discriminant =
+        compose_global_chart(
+            discriminant,
+            chart);
+    std::vector<std::string> result;
+    result.reserve(discriminant.size());
+    for (const Integer& coefficient :
+         discriminant) {
+        result.push_back(
+            coefficient.convert_to<std::string>());
+    }
+    return result;
+}
+
 GpsPolygon circle_disk(
     const EPoint& center,
     const Epeck::FT& radius)
@@ -412,20 +529,18 @@ construct_full_circle_line_pullback_partition(
         throw EventPartitionVerificationError(
             "full-circle line source is malformed");
     }
-    EventPartitionCertificate2 certificate;
-    certificate.build_evidence =
-        exact_algebraic_backend_evidence();
-    certificate.charts = parameter_charts();
+    std::vector<ProjectionRecord2> pullbacks;
+    std::vector<ProjectionInput2> tangencies;
     for (const std::string& encoded_source :
          line_sources) {
         const std::vector<std::string> source =
             decode_string_sequence(encoded_source);
-        if (source.size() != 2) {
+        if (source.size() != 4) {
             throw EventPartitionVerificationError(
                 "full-circle line support source is malformed");
         }
         const std::vector<std::string> support =
-            decode_string_sequence(source[1]);
+            decode_string_sequence(source[3]);
         if (support.size() != 3) {
             throw EventPartitionVerificationError(
                 "full-circle line support requires three coefficients");
@@ -457,10 +572,44 @@ construct_full_circle_line_pullback_partition(
                             CENTER_CHART_IDS[center],
                             rim_chart,
                         });
-                certificate.projections.push_back(
+                if (rim == 0) {
+                    PartitionEvent2 event{
+                        "tangent",
+                        source[0],
+                        source[1],
+                        source[2],
+                        {},
+                        encode_string_sequence(
+                            {
+                                "full-circle-line-tangency-v1",
+                                source[0],
+                                CENTER_CHART_IDS[center],
+                            }),
+                        "contact",
+                    };
+                    tangencies.push_back(
+                        {
+                            event.branch_id,
+                            line_tangency_factor(
+                                pullback,
+                                center),
+                            {std::move(event)},
+                        });
+                }
+                pullbacks.push_back(
                     std::move(pullback));
             }
         }
+    }
+    EventPartitionCertificate2 certificate =
+        partition_projections(tangencies);
+    certificate.projections.insert(
+        certificate.projections.end(),
+        pullbacks.begin(),
+        pullbacks.end());
+    for (ParameterCell2& cell :
+         certificate.cells) {
+        cell.disposition = "sign-invariant";
     }
     certificate.seams.reserve(
         certificate.charts.size());
@@ -727,6 +876,8 @@ audit_full_circle_tea_event_exact(
                 encode_string_sequence(
                     {
                         record.feature_id,
+                        record.support_id,
+                        record.trim_predicate,
                         encode_string_sequence(
                             record.primitive_coefficients),
                     }));
