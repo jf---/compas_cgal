@@ -221,6 +221,39 @@ bool clearance_boundaries_are_exact()
                 crossing_parabola,
                 crossing_parabola_boundary,
                 domain);
+    MatDomainPolygon2 source_outer;
+    source_outer.push_back({-4, -1});
+    source_outer.push_back({4, -1});
+    source_outer.push_back({4, 2});
+    source_outer.push_back({-4, 2});
+    const MatDomainPolygonWithHoles2 source_domain(
+        source_outer,
+        holes.begin(),
+        holes.end());
+    const std::vector<MatAdmissibleComponent2>
+        source_parabola_components =
+            clip_source_parabola_clearance_components(
+                "source-parabola-dual",
+                {
+                    "irrational-focus",
+                    {0, 1},
+                    {1, 0},
+                    2,
+                },
+                {
+                    "open-directrix",
+                    0,
+                    1,
+                    1,
+                },
+                CORE::BigRat(-4),
+                CORE::BigRat(4),
+                {
+                    CGAL::POSITIVE,
+                    {},
+                    {},
+                },
+                source_domain);
 
     return line_boundary.roots.size() == 2
         && ray_boundary.roots.size() == 1
@@ -270,7 +303,16 @@ bool clearance_boundaries_are_exact()
         && clipped_domain_parabola.back()
             .upper.provenance_ids.front()
             == "D-parabola-dual/D-outer/edge-2"
-               "/algebraic-solution-1";
+               "/algebraic-solution-1"
+        && source_parabola_components.size() == 2
+        && source_parabola_components.front()
+            .lower.provenance_ids.front()
+            .find("source-algebraic-solution")
+            != std::string::npos
+        && source_parabola_components.back()
+            .upper.provenance_ids.front()
+            .find("source-algebraic-solution")
+            != std::string::npos;
 }
 
 } // namespace
