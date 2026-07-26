@@ -268,10 +268,22 @@ class ActiveBoundaryBranch2:
     root_id: bytes
 
 
+class LocalEventWitness2:
+    kind: str
+    feature_id: bytes
+    support_id: bytes
+    trim_id: bytes
+    vertex_id: bytes
+    local_branch_id: bytes
+    local_root_id: bytes
+    multiplicity: int
+
+
 class EventFibre2:
     root_id: bytes
     local_root_ids: Sequence[bytes]
     seam_id: bytes
+    local_event_witnesses: Sequence[LocalEventWitness2]
     events: Sequence[PartitionEvent2]
     left_active_branches: Sequence[ActiveBoundaryBranch2]
     right_active_branches: Sequence[ActiveBoundaryBranch2]

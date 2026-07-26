@@ -197,6 +197,7 @@ std::string canonical_fibre(const EventFibre2& fibre)
         && fibre.right_active_branches.empty()
         && fibre.local_root_ids.empty()
         && fibre.seam_id.empty()
+        && fibre.local_event_witnesses.empty()
         && fibre.ccw_direction.empty()
         && fibre.cw_direction.empty()) {
         return record(
@@ -240,6 +241,26 @@ std::string canonical_fibre(const EventFibre2& fibre)
         fibre.cw_direction,
     };
     if (!fibre.local_root_ids.empty()) {
+        std::vector<std::string> witnesses;
+        witnesses.reserve(
+            fibre.local_event_witnesses.size());
+        for (const LocalEventWitness2& witness :
+             fibre.local_event_witnesses) {
+            witnesses.push_back(
+                record(
+                    "local-event-witness-v1",
+                    {
+                        witness.kind,
+                        witness.feature_id,
+                        witness.support_id,
+                        witness.trim_id,
+                        witness.vertex_id,
+                        witness.local_branch_id,
+                        witness.local_root_id,
+                        std::to_string(
+                            witness.multiplicity),
+                    }));
+        }
         fields.insert(
             fields.begin() + 1,
             encode_string_sequence(
@@ -247,6 +268,10 @@ std::string canonical_fibre(const EventFibre2& fibre)
         fields.insert(
             fields.begin() + 2,
             fibre.seam_id);
+        fields.insert(
+            fields.begin() + 3,
+            encode_string_sequence(
+                witnesses));
     }
     return record(
         fibre.local_root_ids.empty()

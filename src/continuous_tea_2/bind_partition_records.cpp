@@ -89,6 +89,46 @@ void bind_partition_records(nb::module_& module)
                 return as_bytes(branch.root_id);
             });
 
+    nb::class_<LocalEventWitness2>(
+        module,
+        "LocalEventWitness2")
+        .def_ro("kind", &LocalEventWitness2::kind)
+        .def_prop_ro(
+            "feature_id",
+            [](const LocalEventWitness2& witness) {
+                return as_bytes(witness.feature_id);
+            })
+        .def_prop_ro(
+            "support_id",
+            [](const LocalEventWitness2& witness) {
+                return as_bytes(witness.support_id);
+            })
+        .def_prop_ro(
+            "trim_id",
+            [](const LocalEventWitness2& witness) {
+                return as_bytes(witness.trim_id);
+            })
+        .def_prop_ro(
+            "vertex_id",
+            [](const LocalEventWitness2& witness) {
+                return as_bytes(witness.vertex_id);
+            })
+        .def_prop_ro(
+            "local_branch_id",
+            [](const LocalEventWitness2& witness) {
+                return as_bytes(
+                    witness.local_branch_id);
+            })
+        .def_prop_ro(
+            "local_root_id",
+            [](const LocalEventWitness2& witness) {
+                return as_bytes(
+                    witness.local_root_id);
+            })
+        .def_ro(
+            "multiplicity",
+            &LocalEventWitness2::multiplicity);
+
     nb::class_<EventFibre2>(module, "EventFibre2")
         .def_prop_ro(
             "root_id",
@@ -107,6 +147,9 @@ void bind_partition_records(nb::module_& module)
             [](const EventFibre2& fibre) {
                 return as_bytes(fibre.seam_id);
             })
+        .def_ro(
+            "local_event_witnesses",
+            &EventFibre2::local_event_witnesses)
         .def_ro(
             "left_active_branches",
             &EventFibre2::left_active_branches)

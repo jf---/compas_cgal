@@ -269,6 +269,19 @@ def test_phase_seam_is_one_owned_fibre_with_oriented_cyclic_order() -> None:
         "merge",
         "split",
     )
+    assert {witness.local_root_id for witness in seam_fibres[0].local_event_witnesses} == set(seam_fibres[0].local_root_ids)
+    assert len(seam_fibres[0].local_event_witnesses) > len(
+        {
+            (
+                witness.kind,
+                witness.feature_id,
+                witness.support_id,
+                witness.trim_id,
+                witness.vertex_id,
+            )
+            for witness in seam_fibres[0].local_event_witnesses
+        }
+    )
 
     def fibre_order(trace: _continuous_tea_2.EventTrace2) -> tuple[bytes, ...]:
         return tuple(dict.fromkeys(event.global_fibre_id for event in trace.events))
@@ -278,6 +291,19 @@ def test_phase_seam_is_one_owned_fibre_with_oriented_cyclic_order() -> None:
     assert cw_order == (ccw_order[0], *reversed(ccw_order[1:]))
     assert len({event.canonical_id for event in ccw.events}) == len(ccw.events)
     assert sum(global_id == ccw_order[0] for global_id in ccw_order) == 1
+    seam_trace_events = tuple(event for event in ccw.events if event.global_fibre_id == ccw_order[0])
+    assert len(seam_trace_events) == len(
+        {
+            (
+                witness.kind,
+                witness.feature_id,
+                witness.support_id,
+                witness.trim_id,
+                witness.vertex_id,
+            )
+            for witness in seam_fibres[0].local_event_witnesses
+        }
+    )
 
     for mutation in (
         "delete-signed-predicate",
