@@ -159,17 +159,41 @@ void append_components(
     }
 }
 
-struct NormalizedPointSource2 {
-    std::string stable_site_id;
-    CORE::BigRat x;
-    CORE::BigRat y;
-};
-
 struct NormalizedOpenSegmentSource2 {
     std::string stable_site_id;
     std::string source_point_id;
     std::string target_point_id;
 };
+
+void require_valid_point_graph_inputs(
+    const std::vector<NormalizedPointSource2>& points,
+    const CORE::BigRat& radius_squared)
+{
+    if (points.size() < 2) {
+        throw InsufficientPointSitesError(
+            "point-site graph requires at least two sites");
+    }
+    if (radius_squared < 0) {
+        throw NegativeSquaredRadiusError(
+            "point-site graph squared radius is negative");
+    }
+    std::set<std::string> stable_ids;
+    std::set<std::pair<CORE::BigRat, CORE::BigRat>> coordinates;
+    for (const NormalizedPointSource2& point : points) {
+        if (point.stable_site_id.empty()) {
+            throw EmptyPointSiteIdentityError(
+                "point-site graph identity is empty");
+        }
+        if (!stable_ids.insert(point.stable_site_id).second) {
+            throw DuplicatePointSiteIdentityError(
+                "point-site graph identity is duplicated");
+        }
+        if (!coordinates.emplace(point.x, point.y).second) {
+            throw CoincidentPointSitesError(
+                "point-site graph sites coincide");
+        }
+    }
+}
 
 const NormalizedPointSource2& point_source(
     const std::vector<NormalizedPointSource2>& points,
@@ -388,6 +412,7 @@ void canonicalize_original_nodes(
 void append_point_site_graph(
     const std::vector<NormalizedPointSource2>& points,
     const MatDomainPolygonWithHoles2& domain,
+    const CORE::BigRat& radius_squared,
     MatExactGraph2& graph,
     std::map<std::string, std::size_t>& node_indices,
     std::map<std::string, CanonicalNodeAlias2>& aliases)
@@ -564,7 +589,7 @@ void append_point_site_graph(
                     primitive,
                     first.x,
                     first.y,
-                    0),
+                    radius_squared),
                 domain),
             graph,
             node_indices);
@@ -819,12 +844,44 @@ void append_point_segment_graph(
 
 } // namespace
 
-MatExactGraph2 segment_site_generic_graph_spike()
+MatExactGraph2 exact_point_site_graph(
+    const std::vector<NormalizedPointSource2>& points,
+    const MatDomainPolygonWithHoles2& domain,
+    const CORE::BigRat& radius_squared)
 {
+    require_valid_point_graph_inputs(points, radius_squared);
     MatExactGraph2 graph{{}, {}, 0};
     std::map<std::string, std::size_t> node_indices;
     std::map<std::string, CanonicalNodeAlias2> aliases;
+    append_point_site_graph(
+        points,
+        domain,
+        radius_squared,
+        graph,
+        node_indices,
+        aliases);
+    canonicalize_original_nodes(graph, aliases);
+    std::sort(
+        graph.nodes.begin(),
+        graph.nodes.end(),
+        [](const MatExactGraphNode2& lhs,
+           const MatExactGraphNode2& rhs)
+        {
+            return lhs.node_id < rhs.node_id;
+        });
+    std::sort(
+        graph.edges.begin(),
+        graph.edges.end(),
+        [](const MatExactGraphEdge2& lhs,
+           const MatExactGraphEdge2& rhs)
+        {
+            return lhs.edge_id < rhs.edge_id;
+        });
+    return graph;
+}
 
+MatExactGraph2 segment_site_generic_graph_spike()
+{
     MatDomainPolygon2 linear_outer;
     linear_outer.push_back({-10, -10});
     linear_outer.push_back({10, -10});
@@ -832,7 +889,7 @@ MatExactGraph2 segment_site_generic_graph_spike()
     linear_outer.push_back({-10, 10});
     const MatDomainPolygonWithHoles2 linear_domain(
         linear_outer);
-    append_point_site_graph(
+    MatExactGraph2 graph = exact_point_site_graph(
         {
             {"linear-a", 0, 0},
             {"linear-b", 8, 0},
@@ -840,9 +897,11 @@ MatExactGraph2 segment_site_generic_graph_spike()
             {"linear-interior", 2, 2},
         },
         linear_domain,
-        graph,
-        node_indices,
-        aliases);
+        0);
+    std::map<std::string, std::size_t> node_indices;
+    for (std::size_t index = 0; index < graph.nodes.size(); ++index) {
+        node_indices.emplace(graph.nodes[index].node_id, index);
+    }
 
     MatDomainPolygon2 parabola_outer;
     parabola_outer.push_back({0, 1});
@@ -869,6 +928,5 @@ MatExactGraph2 segment_site_generic_graph_spike()
         graph,
         node_indices);
 
-    canonicalize_original_nodes(graph, aliases);
     return graph;
 }

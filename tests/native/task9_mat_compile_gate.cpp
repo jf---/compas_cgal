@@ -9,6 +9,7 @@
 #include <vector>
 
 bool segment_limiter_gate();
+bool point_graph_production_gate();
 
 namespace {
 
@@ -1061,6 +1062,7 @@ int main()
             && coincident_source_segment_is_rejected()
             && zero_source_line_normal_is_rejected()
             && unbounded_halfedge_is_rejected_without_site_access()
+            && point_graph_production_gate()
             && segment_limiter_gate()
         ? EXIT_SUCCESS
         : EXIT_FAILURE;
