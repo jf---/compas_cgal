@@ -182,11 +182,45 @@ std::string canonical_fibre(const EventFibre2& fibre)
     for (const PartitionEvent2& event : fibre.events) {
         events.push_back(canonical_event(event));
     }
+    if (fibre.left_active_branches.empty()
+        && fibre.right_active_branches.empty()
+        && fibre.ccw_direction.empty()
+        && fibre.cw_direction.empty()) {
+        return record(
+            "event-fibre-v1",
+            {
+                fibre.root_id,
+                encode_string_sequence(events),
+            });
+    }
+    const auto canonical_branches =
+        [](const std::vector<ActiveBoundaryBranch2>&
+               branches) {
+            std::vector<std::string> values;
+            values.reserve(branches.size());
+            for (const ActiveBoundaryBranch2& branch :
+                 branches) {
+                values.push_back(
+                    record(
+                        "active-boundary-branch-v1",
+                        {
+                            branch.branch_id,
+                            branch.support_id,
+                        }));
+            }
+            return encode_string_sequence(values);
+        };
     return record(
-        "event-fibre-v1",
+        "directed-event-fibre-v2",
         {
             fibre.root_id,
             encode_string_sequence(events),
+            canonical_branches(
+                fibre.left_active_branches),
+            canonical_branches(
+                fibre.right_active_branches),
+            fibre.ccw_direction,
+            fibre.cw_direction,
         });
 }
 

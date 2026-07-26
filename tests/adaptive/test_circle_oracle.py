@@ -118,10 +118,19 @@ def test_slotted_stock_replays_circle_tangency_and_coincidence_fibres() -> None:
 
     circle_pullbacks = tuple(projection for projection in trace.partition.projections if projection.degree_bound_id == "full-circle-circle-(4,4)-v1")
     event_kinds = {event.kind for fibre in trace.partition.fibres for event in fibre.events}
+    directed_fibres = tuple(fibre for fibre in trace.partition.fibres if fibre.ccw_direction in {"merge", "split"})
     assert verdict == "unresolved"
     assert circle_pullbacks
     assert event_kinds >= {"tangent", "support-overlap", "cap-crossing"}
     assert any(event.kind == "cap-crossing" and event.support_id in line_support_ids for fibre in trace.partition.fibres for event in fibre.events)
+    assert directed_fibres
+    assert all({fibre.ccw_direction, fibre.cw_direction} == {"merge", "split"} for fibre in directed_fibres)
+    assert all(branch.branch_id and branch.support_id for fibre in directed_fibres for branch in (*fibre.left_active_branches, *fibre.right_active_branches))
+    assert all(
+        {branch.support_id for branch in (*fibre.left_active_branches, *fibre.right_active_branches)}
+        == {event.support_id for event in fibre.events if event.kind == "endpoint-order"}
+        for fibre in directed_fibres
+    )
     assert any(
         len({event.support_id for event in fibre.events if event.kind == "endpoint-order"}) >= 2
         and {event.disposition for event in fibre.events if event.kind == "endpoint-order"} == {"merge-split"}
