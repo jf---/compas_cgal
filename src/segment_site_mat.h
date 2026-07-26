@@ -51,3 +51,5 @@ SegmentSiteMatCompileEvidence2
 segment_site_mat_compile_spike();
 
 MatExactGraph2 segment_site_live_graph_spike();
+
+MatExactGraph2 segment_site_generic_graph_spike();

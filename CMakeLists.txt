@@ -226,6 +226,7 @@ target_compile_definitions(task3_algorithm_gate PRIVATE CGAL_USE_CORE=1)
 add_executable(task9_mat_compile_gate EXCLUDE_FROM_ALL
     tests/native/task9_mat_compile_gate.cpp
     src/segment_site_mat.cpp
+    src/segment_site_mat_spikes.cpp
     src/segment_site_parameterization.cpp
     src/segment_site_clipping.cpp
     src/segment_site_provenance.cpp
