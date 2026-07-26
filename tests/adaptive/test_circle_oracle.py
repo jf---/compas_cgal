@@ -119,7 +119,7 @@ def test_slotted_stock_replays_circle_tangency_and_coincidence_fibres() -> None:
     event_kinds = {event.kind for fibre in trace.partition.fibres for event in fibre.events}
     assert verdict == "unresolved"
     assert circle_pullbacks
-    assert event_kinds >= {"tangent", "support-overlap"}
+    assert event_kinds >= {"tangent", "support-overlap", "cap-crossing"}
     assert any(
         len({event.support_id for event in fibre.events if event.kind == "endpoint-order"}) >= 2
         and {event.disposition for event in fibre.events if event.kind == "endpoint-order"} == {"merge-split"}

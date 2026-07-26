@@ -301,7 +301,7 @@ EventPartitionCertificate2 reconstruct(
         const std::vector<std::string> fields =
             decode_string_sequence(
                 certificate.source_payload);
-        if (fields.size() != 5) {
+        if (fields.size() != 6) {
             throw EventPartitionVerificationError(
                 "full-circle line source payload is malformed");
         }
@@ -309,8 +309,9 @@ EventPartitionCertificate2 reconstruct(
             fields[0],
             decode_string_sequence(fields[1]),
             fields[2],
-            decode_string_sequence(fields[3]),
-            decode_string_sequence(fields[4]));
+            fields[3],
+            decode_string_sequence(fields[4]),
+            decode_string_sequence(fields[5]));
     }
     if (certificate.source_kind != "cap-crossings-v1") {
         throw EventPartitionVerificationError(
