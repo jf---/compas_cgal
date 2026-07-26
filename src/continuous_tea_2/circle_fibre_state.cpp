@@ -3,7 +3,9 @@
 #include "event_certificate.h"
 
 #include <algorithm>
+#include <cstddef>
 #include <map>
+#include <optional>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -176,11 +178,108 @@ bool same_branches(
             });
 }
 
+void coalesce_phase_seam(
+    EventPartitionCertificate2& certificate)
+{
+    std::optional<std::size_t> start_index;
+    std::optional<std::size_t> end_index;
+    for (std::size_t index = 0;
+         index < certificate.fibres.size();
+         ++index) {
+        const std::string& root_id =
+            certificate.fibres[index].root_id;
+        const bool has_left = std::any_of(
+            certificate.cells.begin(),
+            certificate.cells.end(),
+            [&root_id](const ParameterCell2& cell) {
+                return cell.upper_root_id == root_id;
+            });
+        const bool has_right = std::any_of(
+            certificate.cells.begin(),
+            certificate.cells.end(),
+            [&root_id](const ParameterCell2& cell) {
+                return cell.lower_root_id == root_id;
+            });
+        if (!has_left) {
+            start_index = index;
+        }
+        if (!has_right) {
+            end_index = index;
+        }
+    }
+    if (!start_index.has_value()
+        || !end_index.has_value()
+        || start_index == end_index) {
+        return;
+    }
+    EventFibre2& start =
+        certificate.fibres[*start_index];
+    EventFibre2& end =
+        certificate.fibres[*end_index];
+    start.local_root_ids = {
+        start.root_id,
+        end.root_id,
+    };
+    const auto anchor = std::find_if(
+        certificate.charts.begin(),
+        certificate.charts.end(),
+        [](const ParameterChart2& chart) {
+            return chart.chart_id
+                == "center-quarter-0-v1";
+        });
+    if (anchor == certificate.charts.end()
+        || !anchor->owns_start_seam) {
+        throw EventPartitionVerificationError(
+            "full-circle phase seam lacks its anchor chart");
+    }
+    start.seam_id = anchor->start_seam_id;
+    start.events.insert(
+        start.events.end(),
+        end.events.begin(),
+        end.events.end());
+    const auto event_key =
+        [](const PartitionEvent2& event) {
+            return std::tie(
+                event.kind,
+                event.feature_id,
+                event.support_id,
+                event.trim_id,
+                event.vertex_id,
+                event.branch_id,
+                event.disposition);
+        };
+    std::sort(
+        start.events.begin(),
+        start.events.end(),
+        [&event_key](
+            const PartitionEvent2& first,
+            const PartitionEvent2& second) {
+            return event_key(first)
+                < event_key(second);
+        });
+    start.events.erase(
+        std::unique(
+            start.events.begin(),
+            start.events.end(),
+            [&event_key](
+                const PartitionEvent2& first,
+                const PartitionEvent2& second) {
+                return event_key(first)
+                    == event_key(second);
+            }),
+        start.events.end());
+    certificate.fibres.erase(
+        certificate.fibres.begin()
+            + static_cast<std::ptrdiff_t>(
+                *end_index));
+}
+
 } // namespace
 
 void classify_full_circle_endpoint_fibres(
     EventPartitionCertificate2& certificate)
 {
+    coalesce_phase_seam(certificate);
     for (EventFibre2& fibre : certificate.fibres) {
         std::vector<const PartitionEvent2*> endpoints;
         for (const PartitionEvent2& event :
@@ -253,14 +352,22 @@ void classify_full_circle_endpoint_fibres(
                 governing_projection(
                     certificate,
                     *event);
-            if (signed_projection_sign(
+            const bool cyclic_seam =
+                fibre.local_root_ids.size() == 2;
+            if ((!cyclic_seam
+                    || fields[2]
+                        == "center-quarter-3-v1")
+                && signed_projection_sign(
                     projection,
                     left)
                 == CGAL::NEGATIVE) {
                 fibre.left_active_branches.push_back(
                     branch);
             }
-            if (signed_projection_sign(
+            if ((!cyclic_seam
+                    || fields[2]
+                        == "center-quarter-0-v1")
+                && signed_projection_sign(
                     projection,
                     right)
                 == CGAL::NEGATIVE) {
@@ -272,17 +379,54 @@ void classify_full_circle_endpoint_fibres(
         canonicalize(fibre.left_active_branches);
         canonicalize(fibre.right_active_branches);
 
-        if (fibre.left_active_branches.empty()
-            && same_branches(
-                fibre.right_active_branches,
-                incident_branches)) {
+        const auto contained_in_incidents =
+            [&incident_branches](
+                const std::vector<ActiveBoundaryBranch2>&
+                    active) {
+                return std::all_of(
+                    active.begin(),
+                    active.end(),
+                    [&incident_branches](
+                        const ActiveBoundaryBranch2& branch) {
+                        return std::any_of(
+                            incident_branches.begin(),
+                            incident_branches.end(),
+                            [&branch](
+                                const ActiveBoundaryBranch2&
+                                    incident) {
+                                return branch.branch_id
+                                    == incident.branch_id;
+                            });
+                    });
+            };
+        const bool cyclic_seam =
+            fibre.local_root_ids.size() == 2;
+        if (
+            (
+                fibre.left_active_branches.empty()
+                && same_branches(
+                    fibre.right_active_branches,
+                    incident_branches))
+            || (
+                cyclic_seam
+                && fibre.left_active_branches.empty()
+                && !fibre.right_active_branches.empty()
+                && contained_in_incidents(
+                    fibre.right_active_branches))) {
             fibre.ccw_direction = "split";
             fibre.cw_direction = "merge";
         } else if (
-            fibre.right_active_branches.empty()
-            && same_branches(
-                fibre.left_active_branches,
-                incident_branches)) {
+            (
+                fibre.right_active_branches.empty()
+                && same_branches(
+                    fibre.left_active_branches,
+                    incident_branches))
+            || (
+                cyclic_seam
+                && fibre.right_active_branches.empty()
+                && !fibre.left_active_branches.empty()
+                && contained_in_incidents(
+                    fibre.left_active_branches))) {
             fibre.ccw_direction = "merge";
             fibre.cw_direction = "split";
         } else {

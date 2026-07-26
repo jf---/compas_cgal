@@ -28,6 +28,17 @@ nb::object string_tuple(
         .attr("tuple")(result);
 }
 
+nb::object bytes_tuple(
+    const std::vector<std::string>& values)
+{
+    nb::list result;
+    for (const std::string& value : values) {
+        result.append(as_bytes(value));
+    }
+    return nb::module_::import_("builtins")
+        .attr("tuple")(result);
+}
+
 nb::object string_matrix_tuple(
     const std::vector<std::vector<std::string>>& rows)
 {
@@ -85,6 +96,17 @@ void bind_partition_records(nb::module_& module)
                 return as_bytes(fibre.root_id);
             })
         .def_ro("events", &EventFibre2::events)
+        .def_prop_ro(
+            "local_root_ids",
+            [](const EventFibre2& fibre) {
+                return bytes_tuple(
+                    fibre.local_root_ids);
+            })
+        .def_prop_ro(
+            "seam_id",
+            [](const EventFibre2& fibre) {
+                return as_bytes(fibre.seam_id);
+            })
         .def_ro(
             "left_active_branches",
             &EventFibre2::left_active_branches)

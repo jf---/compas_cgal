@@ -270,11 +270,13 @@ class ActiveBoundaryBranch2:
 
 class EventFibre2:
     root_id: bytes
+    local_root_ids: Sequence[bytes]
+    seam_id: bytes
     events: Sequence[PartitionEvent2]
     left_active_branches: Sequence[ActiveBoundaryBranch2]
     right_active_branches: Sequence[ActiveBoundaryBranch2]
-    ccw_direction: str
-    cw_direction: str
+    ccw_direction: Literal["merge", "split", "unchanged", ""]
+    cw_direction: Literal["merge", "split", "unchanged", ""]
 
 
 class RationalTrimInterval2:
