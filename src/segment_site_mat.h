@@ -1,6 +1,7 @@
 #pragma once
 
 #include "segment_site_clipping.h"
+#include "segment_site_endpoint_binding.h"
 
 #include <cstddef>
 #include <CGAL/Segment_Delaunay_graph_2.h>

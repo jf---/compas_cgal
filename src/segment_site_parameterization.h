@@ -58,6 +58,10 @@ struct MatQuadraticFieldValue2 {
     CORE::BigRat radical;
 };
 
+CGAL::Sign quadratic_field_sign(
+    const MatQuadraticFieldValue2& value,
+    const CORE::BigRat& radicand);
+
 struct MatExactPointSiteSource2 {
     std::string stable_site_id;
     MatQuadraticFieldValue2 x;

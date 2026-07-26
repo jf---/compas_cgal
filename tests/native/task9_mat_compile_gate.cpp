@@ -470,6 +470,137 @@ bool generic_graph_derives_open_segment_bounds()
         });
 }
 
+bool point_limiter_binds_live_parabola_endpoint()
+{
+    const CORE::Expr radical = CORE::sqrt(CORE::Expr(2));
+    const MatTraits::Point_2 segment_source(-100, 0);
+    const MatTraits::Point_2 segment_target(100, 0);
+    const MatTraits::Point_2 focus(radical, 3);
+    const MatTraits::Point_2 limiter(0, CORE::BigRat(2, 3));
+    const MatTraits::Site_2 focus_site =
+        MatTraits::Site_2::construct_site_2(focus);
+    const MatTraits::Site_2 segment_site =
+        MatTraits::Site_2::construct_site_2(segment_source, segment_target);
+    const MatTraits::Site_2 limiter_site =
+        MatTraits::Site_2::construct_site_2(limiter);
+    const auto same_site =
+        [](const MatTraits::Site_2& lhs, const MatTraits::Site_2& rhs)
+    {
+        if (lhs.is_point() != rhs.is_point())
+        {
+            return false;
+        }
+        if (lhs.is_point())
+        {
+            return lhs.point() == rhs.point();
+        }
+        return (lhs.source() == rhs.source() && lhs.target() == rhs.target()) ||
+               (lhs.source() == rhs.target() && lhs.target() == rhs.source());
+    };
+
+    SegmentSiteDelaunay2 delaunay;
+    delaunay.insert(segment_source, segment_target);
+    delaunay.insert(focus);
+    delaunay.insert(limiter);
+    SegmentSiteVoronoi2 voronoi(delaunay);
+    std::set<std::string> bound_ids;
+    std::size_t bound_calls = 0;
+    std::vector<ExactAlgebraicKernel1::Algebraic_real_1> bound_parameters;
+    std::vector<MatTraits::Point_2> bound_points;
+    std::vector<SegmentSiteVoronoi2::Halfedge_handle> bound_halfedges;
+    for (auto halfedge = voronoi.halfedges_begin();
+         halfedge != voronoi.halfedges_end(); ++halfedge)
+    {
+        const MatTraits::Site_2 up = halfedge->up()->site();
+        const MatTraits::Site_2 down = halfedge->down()->site();
+        if (!((same_site(up, focus_site) && same_site(down, segment_site)) ||
+              (same_site(up, segment_site) && same_site(down, focus_site))))
+        {
+            continue;
+        }
+        SegmentSiteParabola2 live_parabola;
+        if (!CGAL::assign(live_parabola,
+                          voronoi.dual().primal(halfedge->dual())))
+        {
+            continue;
+        }
+        const auto bind =
+            [&](const auto& vertex, const MatTraits::Site_2& live_limiter)
+        {
+            if (!same_site(live_limiter, limiter_site))
+            {
+                return;
+            }
+            if (vertex->point() != live_parabola.p1 &&
+                vertex->point() != live_parabola.p2)
+            {
+                return;
+            }
+            const MatLiveParabolaEndpoint2 bound =
+                bind_point_limiter_parabola_endpoint(
+                    {
+                        "focus",
+                        {0, 1},
+                        {3, 0},
+                        2,
+                    },
+                    {
+                        "open-segment",
+                        0,
+                        1,
+                        0,
+                    },
+                    {
+                        "segment-source",
+                        {-100, 0},
+                        {0, 0},
+                        2,
+                    },
+                    {
+                        "segment-target",
+                        {100, 0},
+                        {0, 0},
+                        2,
+                    },
+                    {
+                        "limiter",
+                        {0, 0},
+                        {CORE::BigRat(2, 3), 0},
+                        2,
+                    },
+                    vertex->point(), live_parabola);
+            ++bound_calls;
+            bound_parameters.push_back(*bound.endpoint.parameter);
+            bound_points.push_back(vertex->point());
+            bound_halfedges.push_back(halfedge);
+            bound_ids.insert(
+                algebraic_root_identity_v1(*bound.endpoint.parameter));
+            if (!bound.matches_live_p1_or_p2 ||
+                std::find(bound.endpoint.provenance_ids.begin(),
+                          bound.endpoint.provenance_ids.end(),
+                          "limiter") == bound.endpoint.provenance_ids.end())
+            {
+                bound_ids.clear();
+            }
+        };
+        if (halfedge->has_source())
+        {
+            bind(halfedge->source(), halfedge->left()->site());
+        }
+        if (halfedge->has_target())
+        {
+            bind(halfedge->target(), halfedge->right()->site());
+        }
+    }
+    ExactAlgebraicKernel1 kernel;
+    return bound_ids.size() == 1 && bound_calls == 2 &&
+           bound_parameters.size() == 2 &&
+           kernel.compare_1_object()(bound_parameters[0],
+                                     bound_parameters[1]) == CGAL::EQUAL &&
+           bound_points[0] == bound_points[1] &&
+           bound_halfedges[0]->opposite() == bound_halfedges[1];
+}
+
 } // namespace
 
 int main()
@@ -487,6 +618,7 @@ int main()
             && generic_graph_extracts_exact_linear_topology()
             && generic_graph_unions_shared_voronoi_nodes()
             && generic_graph_derives_open_segment_bounds()
+            && point_limiter_binds_live_parabola_endpoint()
         ? EXIT_SUCCESS
         : EXIT_FAILURE;
 }
