@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <optional>
+#include <set>
 
 namespace {
 
@@ -337,6 +338,55 @@ bool clearance_boundaries_are_exact()
             source_parabola_components.back().upper);
 }
 
+bool live_graph_is_exact()
+{
+    const MatExactGraph2 graph =
+        segment_site_live_graph_spike();
+    const std::size_t lines = static_cast<std::size_t>(
+        std::count_if(
+            graph.edges.begin(),
+            graph.edges.end(),
+            [](const MatExactGraphEdge2& edge) {
+                return edge.primitive_kind == "LINE";
+            }));
+    const std::size_t parabolas = static_cast<std::size_t>(
+        std::count_if(
+            graph.edges.begin(),
+            graph.edges.end(),
+            [](const MatExactGraphEdge2& edge) {
+                return edge.primitive_kind == "PARABOLA";
+            }));
+    std::set<std::string> node_ids;
+    std::set<std::string> edge_ids;
+    for (const MatExactGraphNode2& node : graph.nodes) {
+        node_ids.insert(node.node_id);
+    }
+    for (const MatExactGraphEdge2& edge : graph.edges) {
+        edge_ids.insert(edge.edge_id);
+    }
+    return lines == 2
+        && parabolas == 2
+        && graph.rejected_incident_transitions > 0
+        && node_ids.size() == graph.nodes.size()
+        && edge_ids.size() == graph.edges.size()
+        && std::all_of(
+            graph.nodes.begin(),
+            graph.nodes.end(),
+            [](const MatExactGraphNode2& node) {
+                return has_reconstructible_root_id(
+                           node.endpoint)
+                    && node.generator_site_ids.size() >= 2;
+            })
+        && std::all_of(
+            graph.edges.begin(),
+            graph.edges.end(),
+            [](const MatExactGraphEdge2& edge) {
+                return edge.generator_site_ids.size() == 2
+                    && edge.source_node_id
+                        != edge.target_node_id;
+            });
+}
+
 } // namespace
 
 int main()
@@ -350,6 +400,7 @@ int main()
                 == evidence.delaunay_vertices
             && parameter_domains_are_exact()
             && clearance_boundaries_are_exact()
+            && live_graph_is_exact()
         ? EXIT_SUCCESS
         : EXIT_FAILURE;
 }

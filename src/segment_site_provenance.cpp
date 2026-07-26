@@ -87,6 +87,28 @@ std::size_t matched_generator_site_count(
     }
     return matched_ids.size();
 }
+
+std::string stable_generator_site_id(
+    const MatTraits::Site_2& site,
+    const std::vector<GeneratorSite2>& generators)
+{
+    const GeneratorSite2* match = nullptr;
+    for (const GeneratorSite2& generator : generators) {
+        if (!exact_site_equal(site, generator.site)) {
+            continue;
+        }
+        if (match != nullptr) {
+            throw InvalidRationalPrimitiveError(
+                "generator-site provenance is not bijective");
+        }
+        match = &generator;
+    }
+    if (match == nullptr) {
+        throw InvalidRationalPrimitiveError(
+            "generator site has no stable source record");
+    }
+    return match->stable_id;
+}
 MatParameterEndpoint2 domain_endpoint(
     const std::string& dual_id,
     const char* side,

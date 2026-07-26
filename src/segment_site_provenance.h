@@ -47,6 +47,9 @@ struct TaggedEndpoint2 {
 std::size_t matched_generator_site_count(
     const SegmentSiteDelaunay2& delaunay,
     const std::vector<GeneratorSite2>& generators);
+std::string stable_generator_site_id(
+    const MatTraits::Site_2& site,
+    const std::vector<GeneratorSite2>& generators);
 std::string algebraic_root_identity_v1(
     const ExactAlgebraicKernel1::Algebraic_real_1& root);
 MatParameterEndpoint2 domain_endpoint(
