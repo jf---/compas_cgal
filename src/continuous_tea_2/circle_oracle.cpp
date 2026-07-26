@@ -3,7 +3,10 @@
 #include "boundary_events.h"
 #include "cap_partition.h"
 #include "event_certificate.h"
+#include "event_partition.h"
 #include "parameter_charts.h"
+#include "sha256.h"
+#include "../stock_2.h"
 
 #include <algorithm>
 #include <array>
@@ -11,6 +14,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -222,7 +226,168 @@ const ParameterChart2& center_chart(
     return *found;
 }
 
+std::string stock_identity(
+    const std::vector<BoundaryFeatureRecord2>& records)
+{
+    std::vector<std::string> feature_ids;
+    feature_ids.reserve(records.size());
+    for (const BoundaryFeatureRecord2& record : records) {
+        feature_ids.push_back(record.feature_id);
+    }
+    return sha256_bytes(
+        encode_string_sequence(feature_ids));
+}
+
+GpsPolygon circle_disk(
+    const EPoint& center,
+    const Epeck::FT& radius)
+{
+    const ECircle circle(
+        center,
+        radius * radius,
+        CGAL::COUNTERCLOCKWISE);
+    const GpsPoint minimum(
+        center.x() - radius,
+        center.y());
+    const GpsPoint maximum(
+        center.x() + radius,
+        center.y());
+    GpsPolygon polygon;
+    polygon.push_back(
+        GpsXCurve(
+            circle,
+            minimum,
+            maximum,
+            CGAL::COUNTERCLOCKWISE));
+    polygon.push_back(
+        GpsXCurve(
+            circle,
+            maximum,
+            minimum,
+            CGAL::COUNTERCLOCKWISE));
+    return polygon;
+}
+
+std::optional<std::string> uniform_disposition(
+    const Stock2& stock,
+    const std::vector<BoundaryFeatureRecord2>& records,
+    double center_x,
+    double center_y,
+    double phase_dx,
+    double phase_dy,
+    double tool_radius)
+{
+    if (records.empty()) {
+        return "clear";
+    }
+    const Epeck::FT phase_x(phase_dx);
+    const Epeck::FT phase_y(phase_dy);
+    Epeck::FT guide_radius;
+    if (CGAL::is_zero(phase_y)) {
+        guide_radius = CGAL::abs(phase_x);
+    } else if (CGAL::is_zero(phase_x)) {
+        guide_radius = CGAL::abs(phase_y);
+    } else {
+        return std::nullopt;
+    }
+    Gps outer_disk;
+    outer_disk.insert(
+        circle_disk(
+            EPoint(center_x, center_y),
+            guide_radius + Epeck::FT(tool_radius)));
+    outer_disk.difference(stock.set());
+    if (outer_disk.is_empty()) {
+        return "material";
+    }
+    return std::nullopt;
+}
+
 } // namespace
+
+EventPartitionCertificate2
+construct_full_circle_uniform_partition(
+    const std::string& stock_identity_value,
+    const std::string& disposition)
+{
+    if (stock_identity_value.empty()
+        || (disposition != "clear"
+            && disposition != "material")) {
+        throw EventPartitionVerificationError(
+            "full-circle uniform source is malformed");
+    }
+    const std::vector<ParameterChart2> charts =
+        parameter_charts();
+    const std::array<std::array<const char*, 2>, 4>
+        seam_factors{{
+            {{"0", "1"}},
+            {{"-1", "4"}},
+            {{"-1", "2"}},
+            {{"-3", "4"}},
+        }};
+    std::vector<ProjectionInput2> projections;
+    projections.reserve(CENTER_CHART_IDS.size());
+    for (std::size_t index = 0;
+         index < CENTER_CHART_IDS.size();
+         ++index) {
+        const ParameterChart2& chart =
+            center_chart(charts, index);
+        PartitionEvent2 event{
+            "seam",
+            chart.start_seam_id,
+            "full-circle-center-support-v1",
+            "full-circle-center-domain-v1",
+            chart.start_seam_id,
+            chart.chart_id,
+            "owned",
+        };
+        event.original_equations_rechecked = true;
+        event.orientation_rechecked = true;
+        event.trim_disposition = "accepted";
+        projections.push_back(
+            {
+                "full-circle-seam-"
+                    + std::to_string(index)
+                    + "-v1",
+                {
+                    seam_factors[index][0],
+                    seam_factors[index][1],
+                },
+                {std::move(event)},
+            });
+    }
+    EventPartitionCertificate2 certificate =
+        partition_projections(projections);
+    if (certificate.roots.size() != 4
+        || certificate.fibres.size() != 4
+        || certificate.cells.size() != 4) {
+        throw EventPartitionVerificationError(
+            "full-circle uniform partition lacks four cyclic strata");
+    }
+    for (ParameterCell2& cell : certificate.cells) {
+        cell.disposition =
+            disposition == "clear"
+            ? "below-cap"
+            : "cap-exceeds";
+    }
+    certificate.seams.reserve(charts.size());
+    for (const ParameterChart2& chart : charts) {
+        certificate.seams.push_back(
+            {
+                chart.start_seam_id,
+                chart.chart_id,
+            });
+    }
+    certificate.source_kind =
+        "full-circle-uniform-v1";
+    certificate.source_payload =
+        encode_string_sequence(
+            {
+                stock_identity_value,
+                disposition,
+            });
+    finalize_event_partition(certificate);
+    return certificate;
+}
 
 std::vector<EventTraceEvent2> order_full_circle_events(
     const VerifiedEventPartition2& verified_partition,
@@ -334,7 +499,6 @@ audit_full_circle_tea_event_exact(
     double tool_radius,
     double cap_chord_ratio)
 {
-    static_cast<void>(stock);
     require_finite(center_x, "circle center x");
     require_finite(center_y, "circle center y");
     require_finite(phase_dx, "circle phase dx");
@@ -353,6 +517,109 @@ audit_full_circle_tea_event_exact(
           && cap_chord_ratio <= 4.0)) {
         throw IncompleteFullCircleOracleError(
             "cap chord ratio must lie in (0, 4]");
+    }
+
+    const std::vector<BoundaryFeatureRecord2>
+        boundary_records =
+            extract_boundary_records(stock);
+    const std::optional<std::string> uniform =
+        uniform_disposition(
+            stock,
+            boundary_records,
+            center_x,
+            center_y,
+            phase_dx,
+            phase_dy,
+            tool_radius);
+    if (uniform.has_value()) {
+        const EventPartitionCertificate2 partition =
+            construct_full_circle_uniform_partition(
+                stock_identity(boundary_records),
+                *uniform);
+        const VerifiedEventPartition2 verified =
+            verify_event_partition(partition);
+        if (verified.verdict
+            != ContinuousTeaVerdict::CERTIFIED) {
+            throw IncompleteFullCircleOracleError(
+                "full-circle uniform partition failed replay");
+        }
+        std::vector<EventTraceEvent2> events;
+        events.reserve(
+            verified.partition.fibres.size());
+        for (std::size_t index = 0;
+             index < verified.partition.fibres.size();
+             ++index) {
+            const EventFibre2& fibre =
+                verified.partition.fibres[index];
+            if (fibre.events.size() != 1) {
+                throw IncompleteFullCircleOracleError(
+                    "full-circle uniform seam fibre is not singular");
+            }
+            const auto root = std::find_if(
+                verified.partition.roots.begin(),
+                verified.partition.roots.end(),
+                [&fibre](
+                    const AlgebraicRootRecord2& candidate) {
+                    return candidate.root_id
+                        == fibre.root_id;
+                });
+            if (root
+                == verified.partition.roots.end()) {
+                throw IncompleteFullCircleOracleError(
+                    "full-circle uniform seam fibre lacks its exact root");
+            }
+            const PartitionEvent2& event =
+                fibre.events.front();
+            events.push_back(
+                make_event_trace_event(
+                    root->root_id,
+                    encode_canonical_record(
+                        "full-circle-global-fibre-v1",
+                        {
+                            root->root_id,
+                            event.branch_id,
+                        }),
+                    "seam",
+                    {event.feature_id},
+                    {event.branch_id},
+                    root->multiplicity,
+                    event.disposition,
+                    index));
+        }
+        events = order_full_circle_events(
+            verified,
+            clockwise,
+            std::move(events));
+        const ContinuousTeaVerdict verdict =
+            *uniform == "clear"
+            ? ContinuousTeaVerdict::CERTIFIED
+            : ContinuousTeaVerdict::CAP_EXCEEDED;
+        EventTrace2 trace =
+            build_event_trace(
+                verified.partition,
+                "full-circle-four-chart-v1",
+                motion_identity(
+                    center_x,
+                    center_y,
+                    phase_dx,
+                    phase_dy,
+                    clockwise),
+                encode_canonical_record(
+                    "cap-chord-ratio-binary64-v1",
+                    {
+                        binary64_identity(
+                            cap_chord_ratio),
+                    }),
+                verdict,
+                *uniform,
+                "full-circle-uniform-event-exact-v1",
+                std::move(events));
+        return {
+            *uniform == "clear"
+                ? "certified"
+                : "cap_exceeded",
+            std::move(trace),
+        };
     }
 
     const std::vector<ParameterChart2> charts =

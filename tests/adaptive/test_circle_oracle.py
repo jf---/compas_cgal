@@ -35,7 +35,7 @@ def test_full_circle_trace_owns_all_four_exact_center_seams() -> None:
 
     charts = tuple(chart for chart in trace.partition.charts if chart.family == "center-circle")
     seams = tuple(seam for seam in trace.partition.seams if seam.owner_chart_id in CENTER_CHART_IDS)
-    assert verdict == "unresolved"
+    assert verdict == "cap_exceeded"
     assert tuple(chart.chart_id for chart in charts) == CENTER_CHART_IDS
     assert tuple(seam.owner_chart_id for seam in seams) == CENTER_CHART_IDS
     assert len({seam.seam_id for seam in seams}) == 4
@@ -59,6 +59,19 @@ def test_virgin_slotting_proves_cap_exceeded_without_sampling() -> None:
     assert verdict == "cap_exceeded"
     assert trace.exact_verdict == "cap_exceeded"
     assert trace.whole_rim_disposition == "material"
+
+
+def test_uniform_circle_certificate_replays_and_rejects_mutation() -> None:
+    _, trace = _audit(_stock_2.Stock2(SQUARE, []))
+
+    verified = _continuous_tea_2.verify_event_partition(trace.partition)
+    mutated = _continuous_tea_2.mutate_certificate_record(
+        trace.partition,
+        "alter-disposition",
+    )
+
+    assert verified.verdict.name == "CERTIFIED"
+    assert _continuous_tea_2.verify_event_partition(mutated).verdict.name == "UNRESOLVED_DEGENERACY"
 
 
 def test_exact_rational_probe_uses_the_circle_chart_not_binary64_sampling() -> None:
