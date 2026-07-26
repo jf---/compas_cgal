@@ -25,6 +25,7 @@
 #include <vector>
 
 #include <CGAL/CORE/BigRat.h>
+#include <CGAL/number_utils.h>
 
 namespace {
 
@@ -260,15 +261,6 @@ std::string exact_rational_text(const Epeck::FT& value)
     return stream.str();
 }
 
-std::optional<std::string> rational_coordinate_text(
-    const GpsPoint::CoordNT& coordinate)
-{
-    if (!CGAL::is_zero(coordinate.a1())) {
-        return std::nullopt;
-    }
-    return exact_rational_text(coordinate.a0());
-}
-
 Rational parse_rational_text(const std::string& text)
 {
     try {
@@ -292,6 +284,99 @@ Rational parse_rational_text(const std::string& text)
         throw EventPartitionVerificationError(
             "full-circle source contains a malformed rational");
     }
+}
+
+std::string rational_text(const Rational& value)
+{
+    std::ostringstream stream;
+    stream << value;
+    return stream.str();
+}
+
+std::optional<Rational> rational_square_root(
+    const Rational& value)
+{
+    if (value < 0) {
+        return std::nullopt;
+    }
+    Integer numerator_root;
+    Integer denominator_root;
+    if (!CGAL::is_square(
+            CORE::numerator(value),
+            numerator_root)
+        || !CGAL::is_square(
+            CORE::denominator(value),
+            denominator_root)) {
+        return std::nullopt;
+    }
+    return Rational(
+        numerator_root,
+        denominator_root);
+}
+
+std::optional<std::string> rational_coordinate_text(
+    const GpsPoint::CoordNT& coordinate)
+{
+    const Rational base =
+        parse_rational_text(
+            exact_rational_text(
+                coordinate.a0()));
+    if (CGAL::is_zero(coordinate.a1())) {
+        return rational_text(base);
+    }
+    const std::optional<Rational> radical =
+        rational_square_root(
+            parse_rational_text(
+                exact_rational_text(
+                    coordinate.root())));
+    if (!radical.has_value()) {
+        return std::nullopt;
+    }
+    return rational_text(
+        base
+        + parse_rational_text(
+              exact_rational_text(
+                  coordinate.a1()))
+            * *radical);
+}
+
+struct RationalCircleSupport {
+    Rational center_x;
+    Rational center_y;
+    Rational radius_squared;
+    std::optional<Rational> radius;
+};
+
+RationalCircleSupport rational_circle_support(
+    const std::vector<std::string>& coefficients)
+{
+    if (coefficients.size() != 4) {
+        throw EventPartitionVerificationError(
+            "full-circle circle support requires four coefficients");
+    }
+    const Rational quadratic =
+        parse_rational_text(coefficients[0]);
+    if (quadratic == 0) {
+        throw EventPartitionVerificationError(
+            "full-circle circle support is degenerate");
+    }
+    const Rational center_x =
+        -parse_rational_text(coefficients[1])
+        / (Rational(2) * quadratic);
+    const Rational center_y =
+        -parse_rational_text(coefficients[2])
+        / (Rational(2) * quadratic);
+    const Rational radius_squared =
+        center_x * center_x
+        + center_y * center_y
+        - parse_rational_text(coefficients[3])
+            / quadratic;
+    return {
+        center_x,
+        center_y,
+        radius_squared,
+        rational_square_root(radius_squared),
+    };
 }
 
 Integer greatest_common_divisor(
@@ -483,9 +568,9 @@ quarter_unit_numerators(std::size_t chart)
         "full-circle vertex passage has an unknown chart");
 }
 
-std::vector<std::string> vertex_passage_factor(
+std::vector<std::string> radial_passage_factor(
     const std::vector<std::string>& motion_data,
-    const std::string& cutter_radius,
+    const std::string& radial_distance,
     const std::string& vertex_x,
     const std::string& vertex_y,
     std::size_t chart)
@@ -494,7 +579,7 @@ std::vector<std::string> vertex_passage_factor(
         parse_rational_text(motion_data[0]),
         parse_rational_text(motion_data[1]),
         parse_rational_text(motion_data[2]),
-        parse_rational_text(cutter_radius),
+        parse_rational_text(radial_distance),
         parse_rational_text(vertex_x),
         parse_rational_text(vertex_y),
     };
@@ -758,18 +843,20 @@ construct_full_circle_uniform_partition(
 }
 
 EventPartitionCertificate2
-construct_full_circle_line_pullback_partition(
+construct_full_circle_boundary_pullback_partition(
     const std::string& stock_identity_value,
     const std::vector<std::string>& motion_data,
     const std::string& cutter_radius,
-    const std::vector<std::string>& line_sources)
+    const std::vector<std::string>& line_sources,
+    const std::vector<std::string>& circle_sources)
 {
     if (stock_identity_value.empty()
         || motion_data.size() != 3
         || cutter_radius.empty()
-        || line_sources.empty()) {
+        || (line_sources.empty()
+            && circle_sources.empty())) {
         throw EventPartitionVerificationError(
-            "full-circle line source is malformed");
+            "full-circle boundary source is malformed");
     }
     std::vector<ProjectionRecord2> pullbacks;
     std::vector<ProjectionInput2> tangencies;
@@ -869,6 +956,152 @@ construct_full_circle_line_pullback_partition(
             }
         }
     }
+    const Rational exact_cutter_radius =
+        parse_rational_text(cutter_radius);
+    for (const std::string& encoded_source :
+         circle_sources) {
+        const std::vector<std::string> source =
+            decode_string_sequence(encoded_source);
+        if (source.size() != 4) {
+            throw EventPartitionVerificationError(
+                "full-circle circle support source is malformed");
+        }
+        const std::vector<std::string> support =
+            decode_string_sequence(source[3]);
+        const RationalCircleSupport circle =
+            rational_circle_support(support);
+        const std::vector<std::string>
+            pullback_support{
+                rational_text(circle.center_x),
+                rational_text(circle.center_y),
+                rational_text(
+                    circle.radius_squared),
+            };
+        for (std::size_t center = 0;
+             center < CENTER_CHART_IDS.size();
+             ++center) {
+            for (std::size_t rim = 0;
+                 rim < 2;
+                 ++rim) {
+                const std::string rim_chart =
+                    "rim-half-"
+                    + std::to_string(rim)
+                    + "-v1";
+                ProjectionRecord2 pullback =
+                    construct_pullback(
+                        "full-circle",
+                        motion_data,
+                        "circle",
+                        pullback_support,
+                        cutter_radius,
+                        CENTER_CHART_IDS[center],
+                        rim_chart);
+                pullback.projection_id =
+                    encode_string_sequence(
+                        {
+                            "full-circle-circle-pullback-v1",
+                            source[0],
+                            CENTER_CHART_IDS[center],
+                            rim_chart,
+                        });
+                pullbacks.push_back(
+                    std::move(pullback));
+            }
+            if (!circle.radius.has_value()) {
+                continue;
+            }
+            const Rational external_radius =
+                *circle.radius
+                + exact_cutter_radius;
+            const Rational internal_radius =
+                *circle.radius
+                    >= exact_cutter_radius
+                ? *circle.radius
+                    - exact_cutter_radius
+                : exact_cutter_radius
+                    - *circle.radius;
+            for (const auto& [kind, radius] :
+                 std::array<
+                     std::pair<const char*, Rational>,
+                     2>{{
+                     {
+                         "external",
+                         external_radius,
+                     },
+                     {
+                         "internal",
+                         internal_radius,
+                     },
+                 }}) {
+                const std::string branch_id =
+                    encode_string_sequence(
+                        {
+                            "full-circle-circle-tangency-v1",
+                            kind,
+                            source[0],
+                            CENTER_CHART_IDS[center],
+                        });
+                tangencies.push_back(
+                    {
+                        branch_id,
+                        radial_passage_factor(
+                            motion_data,
+                            rational_text(radius),
+                            rational_text(
+                                circle.center_x),
+                            rational_text(
+                                circle.center_y),
+                            center),
+                        {
+                            {
+                                "tangent",
+                                source[0],
+                                source[1],
+                                source[2],
+                                {},
+                                branch_id,
+                                std::string(kind)
+                                    + "-contact",
+                            },
+                        },
+                    });
+            }
+            if (circle.radius_squared
+                == exact_cutter_radius
+                    * exact_cutter_radius) {
+                const std::string branch_id =
+                    encode_string_sequence(
+                        {
+                            "full-circle-circle-coincidence-v1",
+                            source[0],
+                            CENTER_CHART_IDS[center],
+                        });
+                tangencies.push_back(
+                    {
+                        branch_id,
+                        radial_passage_factor(
+                            motion_data,
+                            "0",
+                            rational_text(
+                                circle.center_x),
+                            rational_text(
+                                circle.center_y),
+                            center),
+                        {
+                            {
+                                "support-overlap",
+                                source[0],
+                                source[1],
+                                source[2],
+                                {},
+                                branch_id,
+                                "coincident-support",
+                            },
+                        },
+                    });
+            }
+        }
+    }
     for (const auto& [vertex_id, vertex] :
          vertices) {
         for (std::size_t center = 0;
@@ -904,7 +1137,7 @@ construct_full_circle_line_pullback_partition(
                             vertex_id,
                             CENTER_CHART_IDS[center],
                         }),
-                    vertex_passage_factor(
+                    radial_passage_factor(
                         motion_data,
                         cutter_radius,
                         vertex.x,
@@ -935,7 +1168,7 @@ construct_full_circle_line_pullback_partition(
             });
     }
     certificate.source_kind =
-        "full-circle-line-pullbacks-v1";
+        "full-circle-boundary-pullbacks-v1";
     certificate.source_payload =
         encode_string_sequence(
             {
@@ -943,6 +1176,7 @@ construct_full_circle_line_pullback_partition(
                 encode_string_sequence(motion_data),
                 cutter_radius,
                 encode_string_sequence(line_sources),
+                encode_string_sequence(circle_sources),
             });
     finalize_event_partition(certificate);
     return certificate;
@@ -1182,6 +1416,7 @@ audit_full_circle_tea_event_exact(
     }
 
     std::vector<std::string> line_sources;
+    std::vector<std::string> circle_sources;
     bool rational_line_vertices = true;
     for (const BoundaryFeatureRecord2& record :
          boundary_records) {
@@ -1220,11 +1455,22 @@ audit_full_circle_tea_event_exact(
                         *target_x,
                         *target_y,
                     }));
+        } else if (record.support_kind == "circle") {
+            circle_sources.push_back(
+                encode_string_sequence(
+                    {
+                        record.feature_id,
+                        record.support_id,
+                        record.trim_predicate,
+                        encode_string_sequence(
+                            record.primitive_coefficients),
+                    }));
         }
     }
     const Epeck::FT exact_phase_x(phase_dx);
     const Epeck::FT exact_phase_y(phase_dy);
-    if (!line_sources.empty()
+    if ((!line_sources.empty()
+            || !circle_sources.empty())
         && rational_line_vertices
         && (CGAL::is_zero(exact_phase_x)
             || CGAL::is_zero(exact_phase_y))) {
@@ -1233,7 +1479,7 @@ audit_full_circle_tea_event_exact(
             ? CGAL::abs(exact_phase_x)
             : CGAL::abs(exact_phase_y);
         EventPartitionCertificate2 partition =
-            construct_full_circle_line_pullback_partition(
+            construct_full_circle_boundary_pullback_partition(
                 stock_identity(boundary_records),
                 {
                     exact_rational_text(
@@ -1244,7 +1490,8 @@ audit_full_circle_tea_event_exact(
                 },
                 exact_rational_text(
                     Epeck::FT(tool_radius)),
-                line_sources);
+                line_sources,
+                circle_sources);
         const bool cap_exceeded =
             line_sources.size()
                 == boundary_records.size()

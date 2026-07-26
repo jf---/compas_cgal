@@ -89,7 +89,7 @@ def test_nonuniform_axis_circle_replays_every_exact_line_rim_pullback() -> None:
     assert verdict == "cap_exceeded"
     assert trace.exact_verdict == "cap_exceeded"
     assert trace.whole_rim_disposition == "partial"
-    assert trace.partition.source_kind == "full-circle-line-pullbacks-v1"
+    assert trace.partition.source_kind == "full-circle-boundary-pullbacks-v1"
     pullbacks = tuple(projection for projection in trace.partition.projections if projection.degree_bound_id == "full-circle-line-(2,2)-v1")
     event_projections = tuple(projection for projection in trace.partition.projections if projection.degree_bound_id.startswith("exact-univariate-"))
     assert len(pullbacks) == 32
@@ -97,6 +97,29 @@ def test_nonuniform_axis_circle_replays_every_exact_line_rim_pullback() -> None:
     assert trace.partition.roots
     assert len(trace.partition.fibres) == len(trace.partition.roots)
     assert {event.kind for fibre in trace.partition.fibres for event in fibre.events} >= {"tangent", "endpoint-order"}
+    assert _continuous_tea_2.verify_event_partition(trace.partition).verdict.name == "CERTIFIED"
+
+
+def test_slotted_stock_replays_circle_tangency_and_coincidence_fibres() -> None:
+    stock = _stock_2.Stock2(SQUARE, [])
+    stock.subtract_disk(0.0, 5.0, 2.0)
+
+    verdict, trace = _continuous_tea_2.audit_full_circle_tea_event_exact(
+        stock,
+        1.0,
+        5.0,
+        1.0,
+        0.0,
+        False,
+        2.0,
+        4.0,
+    )
+
+    circle_pullbacks = tuple(projection for projection in trace.partition.projections if projection.degree_bound_id == "full-circle-circle-(4,4)-v1")
+    event_kinds = {event.kind for fibre in trace.partition.fibres for event in fibre.events}
+    assert verdict == "unresolved"
+    assert circle_pullbacks
+    assert event_kinds >= {"tangent", "support-overlap"}
     assert _continuous_tea_2.verify_event_partition(trace.partition).verdict.name == "CERTIFIED"
 
 
