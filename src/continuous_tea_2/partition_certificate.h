@@ -3,6 +3,7 @@
 #include "result.h"
 
 #include <cstddef>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -100,13 +101,31 @@ struct EventFibre2 {
     std::vector<PartitionEvent2> events;
 };
 
+struct RationalTrimInterval2 {
+    std::string rim_parameter;
+    std::string motion_domain_low;
+    std::string motion_domain_high;
+};
+
 struct TrimmedLineBranch2 {
     std::string rim_parameter;
     std::string motion_domain_low;
     std::string motion_domain_high;
+    std::optional<RationalTrimInterval2>
+        rational_convenience;
+    AlgebraicRootRecord2 rim_root;
+    std::vector<std::vector<std::string>>
+        lower_trim_predicate_rows;
+    std::vector<std::vector<std::string>>
+        upper_trim_predicate_rows;
+    bool rational_convenience_available;
+    bool domain_nonempty_rechecked;
+    bool complementarity_rechecked;
     std::string trim_disposition;
     bool rejected_outside_closed_domain;
     std::string feature_id;
+    std::string local_support_id;
+    std::string local_trimmed_feature_id;
     std::string trim_id;
     std::string branch_id;
 };
@@ -203,6 +222,21 @@ public:
 class TrimFilterError : public EventSubstrateError {
 public:
     using EventSubstrateError::EventSubstrateError;
+};
+
+class TrimEndpointOffSupportError : public TrimFilterError {
+public:
+    using TrimFilterError::TrimFilterError;
+};
+
+class DegenerateTrimError : public TrimFilterError {
+public:
+    using TrimFilterError::TrimFilterError;
+};
+
+class UnsupportedLineMotionError : public TrimFilterError {
+public:
+    using TrimFilterError::TrimFilterError;
 };
 
 class EventPartitionVerificationError : public EventSubstrateError {

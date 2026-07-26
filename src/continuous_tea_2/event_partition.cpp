@@ -1,43 +1,20 @@
 #include "event_partition.h"
 
 #include "../exact_algebraic_1.h"
+#include "event_partition_internal.h"
 #include "parameter_charts.h"
 
 #include <algorithm>
-#include <cstdint>
 #include <sstream>
 #include <string_view>
 #include <utility>
 
-#include <boost/multiprecision/integer.hpp>
 #include <CGAL/CORE/BigRat.h>
+#include <CGAL/Fraction_traits.h>
+#include <CGAL/Polynomial.h>
 #include <CGAL/Polynomial_traits_d.h>
 
-namespace {
-
-using Integer = CORE::BigInt;
-using Rational = CORE::BigRat;
-using Polynomial = ExactAlgebraicKernel1::Polynomial_1;
-
-Integer greatest_common_divisor(Integer left, Integer right)
-{
-    left = left < 0 ? -left : left;
-    right = right < 0 ? -right : right;
-    while (right != 0) {
-        const Integer remainder = left % right;
-        left = right;
-        right = remainder;
-    }
-    return left;
-}
-
-Integer least_common_multiple(
-    const Integer& left,
-    const Integer& right)
-{
-    return left / greatest_common_divisor(left, right)
-        * right;
-}
+namespace continuous_tea_2::event_partition_internal {
 
 Rational parse_rational(
     const std::string& text,
@@ -99,24 +76,6 @@ std::string rational_text(const Rational& value)
     return stream.str();
 }
 
-std::string stable_record(
-    std::string_view tag,
-    const std::vector<std::string>& fields)
-{
-    std::string result(tag);
-    result.push_back('\0');
-    for (const std::string& field : fields) {
-        const std::uint64_t size = field.size();
-        for (int shift = 56; shift >= 0; shift -= 8) {
-            result.push_back(
-                static_cast<char>(
-                    (size >> shift) & 0xffU));
-        }
-        result += field;
-    }
-    return result;
-}
-
 Polynomial polynomial_from_integers(
     const std::vector<Integer>& coefficients)
 {
@@ -129,26 +88,18 @@ Polynomial polynomial_from_integers(
 std::vector<Integer> primitive_coefficients(
     const Polynomial& polynomial)
 {
-    if (CGAL::is_zero(polynomial)) {
+    const Polynomial canonical =
+        typename CGAL::Polynomial_traits_d<
+            Polynomial>::Canonicalize()(
+            polynomial);
+    if (CGAL::is_zero(canonical)) {
         return {0};
     }
     std::vector<Integer> result;
-    Integer divisor = 0;
-    const int degree = CGAL::degree(polynomial);
+    const int degree = CGAL::degree(canonical);
     result.reserve(static_cast<std::size_t>(degree + 1));
     for (int index = 0; index <= degree; ++index) {
-        result.push_back(polynomial[index]);
-        divisor = greatest_common_divisor(
-            divisor,
-            polynomial[index]);
-    }
-    for (Integer& value : result) {
-        value /= divisor;
-    }
-    if (result.back() < 0) {
-        for (Integer& value : result) {
-            value = -value;
-        }
+        result.push_back(canonical[index]);
     }
     return result;
 }
@@ -164,6 +115,29 @@ std::vector<std::string> coefficient_text(
     }
     return result;
 }
+
+} // namespace continuous_tea_2::event_partition_internal
+
+namespace {
+
+using continuous_tea_2::event_partition_internal::
+    Integer;
+using continuous_tea_2::event_partition_internal::
+    Polynomial;
+using continuous_tea_2::event_partition_internal::
+    Rational;
+using continuous_tea_2::event_partition_internal::
+    coefficient_text;
+using continuous_tea_2::event_partition_internal::
+    parse_rational;
+using continuous_tea_2::event_partition_internal::
+    parse_values;
+using continuous_tea_2::event_partition_internal::
+    polynomial_from_integers;
+using continuous_tea_2::event_partition_internal::
+    primitive_coefficients;
+using continuous_tea_2::event_partition_internal::
+    rational_text;
 
 bool projection_is_zero(const ProjectionRecord2& projection)
 {
@@ -215,139 +189,28 @@ std::vector<std::string> motion_coefficient_gcd(
         primitive_coefficients(common));
 }
 
-Integer integer_square_root(const Integer& value)
-{
-    if (value < 0) {
-        throw TrimFilterError(
-            "negative discriminant has no rational branch");
-    }
-    if (value < 2) {
-        return value;
-    }
-    const unsigned int bit_count =
-        boost::multiprecision::msb(value) + 1;
-    Integer estimate =
-        Integer(1) << ((bit_count + 1) / 2);
-    while (true) {
-        const Integer next =
-            (estimate + value / estimate) / 2;
-        if (next >= estimate) {
-            return estimate;
-        }
-        estimate = next;
-    }
-}
-
-std::vector<Rational> rational_quadratic_roots(
-    const std::vector<Rational>& coefficients)
-{
-    Integer denominator_lcm = 1;
-    for (const Rational& coefficient : coefficients) {
-        denominator_lcm = least_common_multiple(
-            denominator_lcm,
-            CORE::denominator(coefficient));
-    }
-    std::vector<Integer> integers;
-    integers.reserve(coefficients.size());
-    for (const Rational& coefficient : coefficients) {
-        integers.push_back(
-            CORE::numerator(
-                coefficient
-                * Rational(denominator_lcm)));
-    }
-    Integer divisor = 0;
-    for (const Integer& value : integers) {
-        divisor = greatest_common_divisor(
-            divisor,
-            value);
-    }
-    for (Integer& value : integers) {
-        value /= divisor;
-    }
-
-    std::vector<Rational> roots;
-    if (integers[2] == 0) {
-        if (integers[1] == 0) {
-            throw TrimFilterError(
-                "trim branch equation is constant");
-        }
-        roots.emplace_back(
-            -integers[0],
-            integers[1]);
-        return roots;
-    }
-    const Integer discriminant =
-        integers[1] * integers[1]
-        - Integer(4) * integers[2] * integers[0];
-    const Integer square_root =
-        integer_square_root(discriminant);
-    if (square_root * square_root != discriminant) {
-        throw TrimFilterError(
-            "trim branch requires a non-rational rim root");
-    }
-    const Integer denominator = Integer(2) * integers[2];
-    roots.emplace_back(
-        -integers[1] + square_root,
-        denominator);
-    if (square_root != 0) {
-        roots.emplace_back(
-            -integers[1] - square_root,
-            denominator);
-    }
-    std::sort(
-        roots.begin(),
-        roots.end(),
-        std::greater<>());
-    return roots;
-}
-
-std::pair<Rational, Rational> clipped_unit_interval(
-    const Rational& lambda_zero,
-    const Rational& lambda_velocity)
-{
-    if (lambda_velocity == 0) {
-        if (lambda_zero < 0 || lambda_zero > 1) {
-            throw TrimFilterError(
-                "branch never enters the closed trim");
-        }
-        return {Rational(0), Rational(1)};
-    }
-    Rational low = -lambda_zero / lambda_velocity;
-    Rational high =
-        (Rational(1) - lambda_zero)
-        / lambda_velocity;
-    if (low > high) {
-        std::swap(low, high);
-    }
-    low = std::max(low, Rational(0));
-    high = std::min(high, Rational(1));
-    if (low > high) {
-        throw TrimFilterError(
-            "branch misses the closed trim domain");
-    }
-    return {low, high};
-}
-
 std::vector<std::string> primitive_rational_polynomial(
     const std::vector<Rational>& coefficients)
 {
-    Integer denominator_lcm = 1;
-    for (const Rational& coefficient : coefficients) {
-        denominator_lcm = least_common_multiple(
-            denominator_lcm,
-            CORE::denominator(coefficient));
-    }
-    std::vector<Integer> integers;
-    integers.reserve(coefficients.size());
-    for (const Rational& coefficient : coefficients) {
-        integers.push_back(
-            CORE::numerator(
-                coefficient
-                * Rational(denominator_lcm)));
+    using RationalPolynomial =
+        CGAL::Polynomial<Rational>;
+    using FractionTraits =
+        CGAL::Fraction_traits<RationalPolynomial>;
+    const RationalPolynomial rational_polynomial(
+        coefficients.begin(),
+        coefficients.end());
+    typename FractionTraits::Numerator_type numerator;
+    typename FractionTraits::Denominator_type denominator;
+    typename FractionTraits::Decompose()(
+        rational_polynomial,
+        numerator,
+        denominator);
+    if (denominator <= 0) {
+        throw AlgebraicBackendError(
+            "polynomial fraction decomposition returned a non-positive denominator");
     }
     return coefficient_text(
-        primitive_coefficients(
-            polynomial_from_integers(integers)));
+        primitive_coefficients(numerator));
 }
 
 } // namespace
@@ -411,140 +274,6 @@ EventPartitionCertificate2 partition_pullback_overlap(
     certificate.source_kind =
         "pullback-overlap-v1";
     return certificate;
-}
-
-std::vector<TrimmedLineBranch2> solve_trimmed_line_branches(
-    const std::vector<std::string>& line_support,
-    const std::vector<std::string>& trim_start,
-    const std::vector<std::string>& trim_end,
-    const std::vector<std::string>& segment_motion,
-    const std::string& cutter_radius,
-    const std::string& rim_chart)
-{
-    const std::vector<Rational> line =
-        parse_values(line_support, 3, "line support");
-    const std::vector<Rational> start =
-        parse_values(trim_start, 2, "trim start");
-    const std::vector<Rational> end =
-        parse_values(trim_end, 2, "trim end");
-    const std::vector<Rational> motion =
-        parse_values(
-            segment_motion,
-            4,
-            "segment motion");
-    const Rational radius =
-        parse_rational(cutter_radius, "cutter radius");
-    const Rational start_evaluation =
-        line[0] * motion[0]
-        + line[1] * motion[1] + line[2];
-    const Rational end_evaluation =
-        line[0] * motion[2]
-        + line[1] * motion[3] + line[2];
-    if (start_evaluation != end_evaluation) {
-        throw TrimFilterError(
-            "native line branch solver requires motion parallel to support");
-    }
-    Rational orientation = 1;
-    if (rim_chart == "rim-half-1-v1") {
-        orientation = -1;
-    } else if (rim_chart != "rim-half-0-v1") {
-        throw ChartCoverageError(
-            "trim branch requires a frozen rim chart");
-    }
-    const std::vector<Rational> equation = {
-        start_evaluation
-            + radius * orientation * line[0],
-        radius * orientation * Rational(2) * line[1],
-        start_evaluation
-            - radius * orientation * line[0],
-    };
-    const std::vector<Rational> roots =
-        rational_quadratic_roots(equation);
-    const Rational trim_dx = end[0] - start[0];
-    const Rational trim_dy = end[1] - start[1];
-    if (trim_dx == 0 && trim_dy == 0) {
-        throw TrimFilterError(
-            "trim endpoints must be distinct");
-    }
-    const Rational velocity_x =
-        motion[2] - motion[0];
-    const Rational velocity_y =
-        motion[3] - motion[1];
-    if (velocity_x * trim_dy
-        != velocity_y * trim_dx) {
-        throw TrimFilterError(
-            "motion is not parallel to the closed trim");
-    }
-
-    std::vector<TrimmedLineBranch2> branches;
-    for (const Rational& root : roots) {
-        if (root < -1 || root > 1) {
-            continue;
-        }
-        const Rational denominator =
-            Rational(1) + root * root;
-        const Rational rim_x =
-            orientation
-            * (Rational(1) - root * root)
-            / denominator;
-        const Rational rim_y =
-            orientation * Rational(2) * root
-            / denominator;
-        const Rational point_x =
-            motion[0] + radius * rim_x;
-        const Rational point_y =
-            motion[1] + radius * rim_y;
-        if ((point_x - start[0]) * trim_dy
-            != (point_y - start[1]) * trim_dx) {
-            throw TrimFilterError(
-                "rim root does not lie on the exact trim support");
-        }
-        const bool use_x = trim_dx != 0;
-        const Rational lambda_zero =
-            use_x
-            ? (point_x - start[0]) / trim_dx
-            : (point_y - start[1]) / trim_dy;
-        const Rational lambda_velocity =
-            use_x
-            ? velocity_x / trim_dx
-            : velocity_y / trim_dy;
-        const auto [domain_low, domain_high] =
-            clipped_unit_interval(
-                lambda_zero,
-                lambda_velocity);
-        const std::string rim_parameter =
-            rational_text(root);
-        const std::string feature_id = stable_record(
-            "trimmed-line-feature-v1",
-            line_support);
-        const std::string trim_id = stable_record(
-            "closed-line-trim-v1",
-            {
-                rational_text(start[0]),
-                rational_text(start[1]),
-                rational_text(end[0]),
-                rational_text(end[1]),
-            });
-        branches.push_back(
-            {
-                rim_parameter,
-                rational_text(domain_low),
-                rational_text(domain_high),
-                "accepted",
-                true,
-                feature_id,
-                trim_id,
-                stable_record(
-                    "trimmed-line-branch-v1",
-                    {
-                        feature_id,
-                        trim_id,
-                        rim_chart,
-                        rim_parameter,
-                    }),
-            });
-    }
-    return branches;
 }
 
 ProjectedRegularizationVertex2 project_regularization_vertex(

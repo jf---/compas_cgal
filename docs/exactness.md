@@ -272,6 +272,15 @@ operation:
 - algebraic-kernel `Solve_1`, `Compare_1`, `Sign_at_1`/`Sign_at_2`, and
   `Bound_between_1` for roots, signs, ordering, and separating witnesses.
 
+In the pinned CGAL 6.0.1 algebraic kernel,
+`Algebraic_real_1::is_rational()` means that a rational representation is
+already known; it is not a rationality decision procedure. `Solve_1` can
+therefore return an implicit quadratic representation even when that
+quadratic has rational roots. For the bounded degree-two convenience path,
+the implementation derives the finite candidates with `CGAL::is_square` and
+accepts one only after exact `Compare_1` equality. The algebraic root remains
+the certified value; the rational is only a proven convenience rendering.
+
 Backend-specific representation access, handwritten GCD/LCM, manual Newton
 square roots, backend bit scans, and rational-root trial division bypass
 those contracts. Explicit backend construction is allowed at the declared
