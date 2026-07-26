@@ -49,6 +49,11 @@ struct RootCandidate {
     std::vector<PartitionEvent2> events;
 };
 
+struct FactorRootCacheEntry {
+    Polynomial factor;
+    std::vector<AlgebraicReal> roots;
+};
+
 std::string u64_record(std::size_t value)
 {
     std::string result;
@@ -224,15 +229,24 @@ std::vector<std::string> coefficient_text(
 
 std::pair<Rational, Rational> strict_interval(
     const AlgebraicReal& root,
-    const Polynomial& factor)
+    const Polynomial& factor,
+    const std::vector<AlgebraicReal>& factor_roots,
+    std::size_t ordinal,
+    Kernel& kernel)
 {
-    Kernel kernel;
     auto interval =
         kernel.isolate_1_object()(root, factor);
     if (interval.first == interval.second) {
-        const Rational offset(Integer(1), Integer(16));
-        interval.first -= offset;
-        interval.second += offset;
+        interval.first = ordinal == 0
+            ? interval.first - Rational(1)
+            : kernel.bound_between_1_object()(
+                  factor_roots[ordinal - 1],
+                  factor_roots[ordinal]);
+        interval.second = ordinal + 1 == factor_roots.size()
+            ? interval.second + Rational(1)
+            : kernel.bound_between_1_object()(
+                  factor_roots[ordinal],
+                  factor_roots[ordinal + 1]);
     }
     if (kernel.compare_1_object()(interval.first, root)
             != CGAL::SMALLER
@@ -241,24 +255,61 @@ std::pair<Rational, Rational> strict_interval(
         throw AlgebraicRootIsolationError(
             "isolating interval is not strict");
     }
+    for (std::size_t other = 0;
+         other < factor_roots.size();
+         ++other) {
+        if (other == ordinal) {
+            continue;
+        }
+        if (kernel.compare_1_object()(
+                interval.first,
+                factor_roots[other])
+                == CGAL::SMALLER
+            && kernel.compare_1_object()(
+                factor_roots[other],
+                interval.second)
+                == CGAL::SMALLER) {
+            throw AlgebraicRootIsolationError(
+                "isolating interval contains another factor root");
+        }
+    }
     return interval;
+}
+
+const std::vector<AlgebraicReal>& cached_factor_roots(
+    const Polynomial& factor,
+    std::vector<FactorRootCacheEntry>& cache,
+    Kernel& kernel)
+{
+    const auto cached = std::find_if(
+        cache.begin(),
+        cache.end(),
+        [&factor](const FactorRootCacheEntry& entry) {
+            return entry.factor == factor;
+        });
+    if (cached != cache.end()) {
+        return cached->roots;
+    }
+    FactorRootCacheEntry entry;
+    entry.factor = factor;
+    kernel.solve_1_object()(
+        factor,
+        true,
+        std::back_inserter(entry.roots));
+    cache.push_back(std::move(entry));
+    return cache.back().roots;
 }
 
 std::size_t root_ordinal(
     const AlgebraicReal& root,
-    const Polynomial& governing_factor)
+    const std::vector<AlgebraicReal>& factor_roots,
+    Kernel& kernel)
 {
-    Kernel kernel;
-    std::vector<AlgebraicReal> roots;
-    kernel.solve_1_object()(
-        governing_factor,
-        true,
-        std::back_inserter(roots));
     for (std::size_t ordinal = 0;
-         ordinal < roots.size();
+         ordinal < factor_roots.size();
          ++ordinal) {
         if (kernel.compare_1_object()(
-                roots[ordinal],
+                factor_roots[ordinal],
                 root)
             == CGAL::EQUAL) {
             return ordinal;
@@ -268,25 +319,89 @@ std::size_t root_ordinal(
         "governing polynomial does not contain merged root");
 }
 
-AlgebraicRootRecord2 root_record(
-    const AlgebraicReal& root,
-    const Polynomial& governing_factor,
-    unsigned int multiplicity)
+void finalize_root_records(
+    std::vector<RootCandidate>& roots)
 {
-    const std::vector<Integer> primitive =
-        primitive_coefficients(governing_factor);
-    const std::size_t ordinal =
-        root_ordinal(root, governing_factor);
-    const auto interval =
-        strict_interval(root, governing_factor);
-    return {
-        algebraic_root_id_v1(primitive, ordinal),
-        coefficient_text(primitive),
-        ordinal,
-        multiplicity,
-        rational_text(interval.first),
-        rational_text(interval.second),
-    };
+    Kernel kernel;
+    std::vector<Rational> separators;
+    separators.reserve(
+        roots.empty() ? 0 : roots.size() - 1);
+    for (std::size_t index = 0;
+         index + 1 < roots.size();
+         ++index) {
+        separators.push_back(
+            kernel.bound_between_1_object()(
+                roots[index].value,
+                roots[index + 1].value));
+    }
+    std::vector<FactorRootCacheEntry> factor_root_cache;
+    std::vector<std::pair<Rational, Rational>>
+        certified_intervals;
+    certified_intervals.reserve(roots.size());
+    for (std::size_t index = 0;
+         index < roots.size();
+         ++index) {
+        RootCandidate& candidate = roots[index];
+        const std::vector<AlgebraicReal>& factor_roots =
+            cached_factor_roots(
+                candidate.governing_factor,
+                factor_root_cache,
+                kernel);
+        const std::size_t ordinal = root_ordinal(
+            candidate.value,
+            factor_roots,
+            kernel);
+        auto interval = strict_interval(
+            candidate.value,
+            candidate.governing_factor,
+            factor_roots,
+            ordinal,
+            kernel);
+        if (index > 0) {
+            interval.first =
+                std::max(
+                    interval.first,
+                    separators[index - 1]);
+        }
+        if (index + 1 < roots.size()) {
+            interval.second =
+                std::min(
+                    interval.second,
+                    separators[index]);
+        }
+        if (kernel.compare_1_object()(
+                interval.first,
+                candidate.value)
+                != CGAL::SMALLER
+            || kernel.compare_1_object()(
+                candidate.value,
+                interval.second)
+                != CGAL::SMALLER) {
+            throw AlgebraicRootIsolationError(
+                "global root interval is not strict");
+        }
+        const std::vector<Integer> primitive =
+            primitive_coefficients(
+                candidate.governing_factor);
+        candidate.record = {
+            algebraic_root_id_v1(primitive, ordinal),
+            coefficient_text(primitive),
+            ordinal,
+            candidate.record.multiplicity,
+            rational_text(interval.first),
+            rational_text(interval.second),
+        };
+        certified_intervals.push_back(interval);
+    }
+    for (std::size_t index = 0;
+         index + 1 < certified_intervals.size();
+         ++index) {
+        if (certified_intervals[index].second
+            > certified_intervals[index + 1].first) {
+            throw AlgebraicRootIsolationError(
+                "adjacent global root intervals overlap");
+        }
+    }
 }
 
 Polynomial common_governing_factor(
@@ -482,8 +597,6 @@ EventPartitionCertificate2 partition_integer_projections(
                         == CGAL::LARGER) {
                     continue;
                 }
-                const auto interval =
-                    strict_interval(root, factor);
                 candidates.push_back(
                     {
                         root,
@@ -496,8 +609,8 @@ EventPartitionCertificate2 partition_integer_projections(
                             ordinal,
                             static_cast<unsigned int>(
                                 multiplicity),
-                            rational_text(interval.first),
-                            rational_text(interval.second),
+                            {},
+                            {},
                         },
                         input.events,
                     });
@@ -536,10 +649,8 @@ EventPartitionCertificate2 partition_integer_projections(
                 common_governing_factor(
                     unique.back().governing_factor,
                     candidate.governing_factor);
-            unique.back().record = root_record(
-                unique.back().value,
-                unique.back().governing_factor,
-                multiplicity);
+            unique.back().record.multiplicity =
+                multiplicity;
             unique.back().events.insert(
                 unique.back().events.end(),
                 candidate.events.begin(),
@@ -548,6 +659,7 @@ EventPartitionCertificate2 partition_integer_projections(
         }
         unique.push_back(std::move(candidate));
     }
+    finalize_root_records(unique);
 
     EventPartitionCertificate2 certificate;
     certificate.build_evidence =
