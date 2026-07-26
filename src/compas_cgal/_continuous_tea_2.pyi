@@ -403,6 +403,45 @@ class SegmentEventStratum2:
     trim_predicates_rechecked: bool
 
 
+class EventTraceEvent2:
+    def __init__(
+        self,
+        root_id: bytes,
+        global_fibre_id: bytes,
+        kind: str,
+        feature_ids: Sequence[bytes],
+        branch_ids: Sequence[bytes],
+        multiplicity: int,
+        disposition: str,
+        motion_order: int,
+    ) -> None: ...
+    root_id: bytes
+    global_fibre_id: bytes
+    kind: str
+    feature_ids: tuple[bytes, ...]
+    branch_ids: tuple[bytes, ...]
+    multiplicity: int
+    disposition: str
+    motion_order: int
+    canonical_bytes: bytes
+    canonical_id: bytes
+
+
+class EventTrace2:
+    exact_verdict: Literal["certified", "cap_exceeded", "unresolved"]
+    partition: EventPartitionCertificate2
+    partition_certificate: EventPartitionCertificate2
+    events: Sequence[EventTraceEvent2]
+    motion_chart_id: str
+    motion_identity: bytes
+    effective_cap_bytes: bytes
+    whole_rim_disposition: Literal["clear", "material", "partial", "unresolved"]
+    oracle_strategy_version: str
+    event_cell_count: int
+    canonical_bytes: bytes
+    canonical_digest: bytes
+
+
 class SegmentCellStratum2:
     branches: Sequence[SegmentBoundaryBranch2]
     stratum: SegmentEventStratum2
@@ -487,6 +526,43 @@ def partition_cap_crossings(
 def verify_event_partition(
     certificate: EventPartitionCertificate2,
 ) -> VerifiedEventPartition2: ...
+def order_full_circle_events(
+    verified_partition: VerifiedEventPartition2,
+    clockwise: bool,
+    events: Sequence[EventTraceEvent2],
+) -> Sequence[EventTraceEvent2]: ...
+def audit_full_circle_tea_event_exact(
+    stock: Stock2,
+    center_x: float,
+    center_y: float,
+    phase_dx: float,
+    phase_dy: float,
+    clockwise: bool,
+    tool_radius: float,
+    cap_chord_ratio: float,
+) -> tuple[Literal["certified", "cap_exceeded", "unresolved"], EventTrace2]: ...
+def full_circle_rational_probe_exceeds_cap_exact(
+    stock: Stock2,
+    center_x: float,
+    center_y: float,
+    phase_dx: float,
+    phase_dy: float,
+    chart: int,
+    numerator: int,
+    denominator: int,
+    tool_radius: float,
+    cap_chord_ratio: float,
+) -> bool: ...
+def build_event_trace(
+    partition: EventPartitionCertificate2,
+    motion_chart_id: str,
+    motion_identity: bytes,
+    effective_cap_bytes: bytes,
+    verdict: ContinuousTeaVerdict,
+    whole_rim_disposition: str,
+    oracle_strategy_version: str,
+    events: Sequence[EventTraceEvent2],
+) -> EventTrace2: ...
 def mutate_certificate_record(
     certificate: EventPartitionCertificate2,
     mutation: str,
