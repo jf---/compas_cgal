@@ -1,5 +1,6 @@
 #include "circle_oracle.h"
 
+#include "boundary_events.h"
 #include "cap_partition.h"
 #include "event_certificate.h"
 #include "parameter_charts.h"
@@ -454,19 +455,33 @@ bool full_circle_rational_probe_exceeds_cap_exact(
     double tool_radius,
     double cap_chord_ratio)
 {
-    static_cast<void>(stock);
-    static_cast<void>(center_x);
-    static_cast<void>(center_y);
-    static_cast<void>(phase_dx);
-    static_cast<void>(phase_dy);
-    static_cast<void>(numerator);
-    static_cast<void>(tool_radius);
-    static_cast<void>(cap_chord_ratio);
+    require_finite(center_x, "circle center x");
+    require_finite(center_y, "circle center y");
+    require_finite(phase_dx, "circle phase dx");
+    require_finite(phase_dy, "circle phase dy");
+    require_finite(tool_radius, "tool radius");
+    require_finite(cap_chord_ratio, "cap chord ratio");
     if (chart >= CENTER_CHART_IDS.size()
         || denominator == 0
         || numerator >= denominator) {
         throw IncompleteFullCircleOracleError(
             "invalid full-circle rational probe");
+    }
+    if (phase_dx == 0.0 && phase_dy == 0.0) {
+        throw IncompleteFullCircleOracleError(
+            "full-circle phase vector must be nonzero");
+    }
+    if (!(tool_radius > 0.0)) {
+        throw IncompleteFullCircleOracleError(
+            "tool radius must be positive");
+    }
+    if (!(cap_chord_ratio > 0.0
+          && cap_chord_ratio <= 4.0)) {
+        throw IncompleteFullCircleOracleError(
+            "cap chord ratio must lie in (0, 4]");
+    }
+    if (extract_boundary_records(stock).empty()) {
+        return false;
     }
     throw IncompleteFullCircleOracleError(
         "exact rational probe requires the Task 5 full-circle pullback substrate");
