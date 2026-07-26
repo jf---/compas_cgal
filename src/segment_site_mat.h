@@ -4,21 +4,6 @@
 #include "segment_site_endpoint_binding.h"
 
 #include <cstddef>
-#include <CGAL/Segment_Delaunay_graph_2.h>
-#include <CGAL/Segment_Delaunay_graph_adaptation_policies_2.h>
-#include <CGAL/Segment_Delaunay_graph_adaptation_traits_2.h>
-#include <CGAL/Voronoi_diagram_2.h>
-
-using SegmentSiteAdaptationTraits2 =
-    CGAL::Segment_Delaunay_graph_adaptation_traits_2<
-        SegmentSiteDelaunay2>;
-using SegmentSiteAdaptationPolicy2 =
-    CGAL::Segment_Delaunay_graph_degeneracy_removal_policy_2<
-        SegmentSiteDelaunay2>;
-using SegmentSiteVoronoi2 = CGAL::Voronoi_diagram_2<
-    SegmentSiteDelaunay2,
-    SegmentSiteAdaptationTraits2,
-    SegmentSiteAdaptationPolicy2>;
 
 struct SegmentSiteMatCompileEvidence2 {
     bool delaunay_valid;
