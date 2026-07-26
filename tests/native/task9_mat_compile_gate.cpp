@@ -387,6 +387,89 @@ bool live_graph_is_exact()
             });
 }
 
+const MatExactGraph2& generic_live_graph()
+{
+    static const MatExactGraph2 graph =
+        segment_site_generic_graph_spike();
+    return graph;
+}
+
+bool generic_graph_extracts_exact_linear_topology()
+{
+    const MatExactGraph2& graph = generic_live_graph();
+    const bool has_ray = std::any_of(
+        graph.edges.begin(),
+        graph.edges.end(),
+        [](const MatExactGraphEdge2& edge) {
+            return edge.primitive_kind == "RAY";
+        });
+    const bool has_segment = std::any_of(
+        graph.edges.begin(),
+        graph.edges.end(),
+        [](const MatExactGraphEdge2& edge) {
+            return edge.primitive_kind == "SEGMENT";
+        });
+    return has_ray && has_segment;
+}
+
+bool generic_graph_unions_shared_voronoi_nodes()
+{
+    const MatExactGraph2& graph = generic_live_graph();
+    return std::any_of(
+        graph.nodes.begin(),
+        graph.nodes.end(),
+        [&graph](const MatExactGraphNode2& node) {
+            const std::size_t incident_edges =
+                static_cast<std::size_t>(std::count_if(
+                    graph.edges.begin(),
+                    graph.edges.end(),
+                    [&node](const MatExactGraphEdge2& edge) {
+                        return edge.source_node_id
+                                == node.node_id
+                            || edge.target_node_id
+                                == node.node_id;
+                    }));
+            return incident_edges >= 2
+                && node.generator_site_ids.size() >= 3;
+        });
+}
+
+bool generic_graph_derives_open_segment_bounds()
+{
+    const MatExactGraph2& graph = generic_live_graph();
+    return std::any_of(
+        graph.edges.begin(),
+        graph.edges.end(),
+        [&graph](const MatExactGraphEdge2& edge) {
+            if (edge.primitive_kind != "PARABOLA") {
+                return false;
+            }
+            const auto is_node = [&edge](
+                                     const MatExactGraphNode2& node) {
+                return node.node_id == edge.source_node_id
+                    || node.node_id == edge.target_node_id;
+            };
+            return std::count_if(
+                       graph.nodes.begin(),
+                       graph.nodes.end(),
+                       [&is_node](const MatExactGraphNode2& node) {
+                           return is_node(node)
+                               && std::any_of(
+                                   node.endpoint
+                                       .provenance_ids.begin(),
+                                   node.endpoint
+                                       .provenance_ids.end(),
+                                   [](const std::string& id) {
+                                       return id
+                                               == "segment-source"
+                                           || id
+                                               == "segment-target";
+                                   });
+                       })
+                == 2;
+        });
+}
+
 } // namespace
 
 int main()
@@ -401,6 +484,9 @@ int main()
             && parameter_domains_are_exact()
             && clearance_boundaries_are_exact()
             && live_graph_is_exact()
+            && generic_graph_extracts_exact_linear_topology()
+            && generic_graph_unions_shared_voronoi_nodes()
+            && generic_graph_derives_open_segment_bounds()
         ? EXIT_SUCCESS
         : EXIT_FAILURE;
 }
