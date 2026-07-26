@@ -86,7 +86,9 @@ def test_nonuniform_axis_circle_replays_every_exact_line_rim_pullback() -> None:
         4.0,
     )
 
-    assert verdict == "unresolved"
+    assert verdict == "cap_exceeded"
+    assert trace.exact_verdict == "cap_exceeded"
+    assert trace.whole_rim_disposition == "partial"
     assert trace.partition.source_kind == "full-circle-line-pullbacks-v1"
     pullbacks = tuple(projection for projection in trace.partition.projections if projection.degree_bound_id == "full-circle-line-(2,2)-v1")
     event_projections = tuple(projection for projection in trace.partition.projections if projection.degree_bound_id.startswith("exact-univariate-"))

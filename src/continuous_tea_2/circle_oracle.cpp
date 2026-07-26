@@ -642,6 +642,34 @@ std::optional<std::string> uniform_disposition(
     return std::nullopt;
 }
 
+bool has_material_rational_chart_witness(
+    const Stock2& stock,
+    const Epeck::FT& center_x,
+    const Epeck::FT& center_y,
+    const Epeck::FT& guide_radius,
+    const Epeck::FT& tool_radius)
+{
+    // Quarter-chart t=1/2 gives the exact unit direction (3/5, 4/5).
+    const Epeck::FT chart_denominator(5);
+    const Epeck::FT witness_x =
+        center_x
+        + guide_radius
+            * Epeck::FT(3)
+            / chart_denominator;
+    const Epeck::FT witness_y =
+        center_y
+        + guide_radius
+            * Epeck::FT(4)
+            / chart_denominator;
+    Gps cutter_disk;
+    cutter_disk.insert(
+        circle_disk(
+            EPoint(witness_x, witness_y),
+            tool_radius));
+    cutter_disk.difference(stock.set());
+    return cutter_disk.is_empty();
+}
+
 } // namespace
 
 EventPartitionCertificate2
@@ -1217,6 +1245,15 @@ audit_full_circle_tea_event_exact(
                 exact_rational_text(
                     Epeck::FT(tool_radius)),
                 line_sources);
+        const bool cap_exceeded =
+            line_sources.size()
+                == boundary_records.size()
+            && has_material_rational_chart_witness(
+                stock,
+                Epeck::FT(center_x),
+                Epeck::FT(center_y),
+                guide_radius,
+                Epeck::FT(tool_radius));
         EventTrace2 trace =
             build_event_trace(
                 std::move(partition),
@@ -1233,12 +1270,24 @@ audit_full_circle_tea_event_exact(
                         binary64_identity(
                             cap_chord_ratio),
                     }),
-                ContinuousTeaVerdict::
-                    UNRESOLVED_DEGENERACY,
-                "unresolved",
-                "full-circle-line-pullbacks-exact-v1",
+                cap_exceeded
+                    ? ContinuousTeaVerdict::
+                          CAP_EXCEEDED
+                    : ContinuousTeaVerdict::
+                          UNRESOLVED_DEGENERACY,
+                cap_exceeded
+                    ? "partial"
+                    : "unresolved",
+                cap_exceeded
+                    ? "full-circle-line-vertex-witness-exact-v1"
+                    : "full-circle-line-pullbacks-exact-v1",
                 {});
-        return {"unresolved", std::move(trace)};
+        return {
+            cap_exceeded
+                ? "cap_exceeded"
+                : "unresolved",
+            std::move(trace),
+        };
     }
 
     const std::vector<ParameterChart2> charts =
