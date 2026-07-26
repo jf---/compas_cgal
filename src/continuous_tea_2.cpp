@@ -656,6 +656,9 @@ NB_MODULE(_continuous_tea_2, m)
             "disposition",
             &PartitionEvent2::disposition)
         .def_ro(
+            "endpoint_role",
+            &PartitionEvent2::endpoint_role)
+        .def_ro(
             "left_active_count",
             &PartitionEvent2::left_active_count)
         .def_ro(

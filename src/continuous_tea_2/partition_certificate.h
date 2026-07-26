@@ -38,6 +38,7 @@ struct PartitionEvent2 {
     std::string vertex_id;
     std::string branch_id;
     std::string disposition;
+    std::string endpoint_role;
     std::size_t left_active_count = 0;
     std::size_t right_active_count = 0;
     bool incidence_permutation_rechecked = false;
@@ -113,6 +114,17 @@ struct ParameterCell2 {
     std::string disposition;
 };
 
+struct PhysicalIncidence2 {
+    std::string incidence_id;
+    std::string kind;
+    std::string feature_id;
+    std::string support_id;
+    std::string trim_id;
+    std::string vertex_id;
+    std::string endpoint_role;
+    std::size_t sheet_ordinal = 0;
+};
+
 struct ActiveBoundaryBranch2 {
     std::string branch_id;
     std::string feature_id;
@@ -121,6 +133,7 @@ struct ActiveBoundaryBranch2 {
     std::string chart_id;
     std::size_t sheet_ordinal = 0;
     std::string root_id;
+    PhysicalIncidence2 physical_incidence;
 };
 
 struct LocalEventWitness2 {
@@ -129,8 +142,12 @@ struct LocalEventWitness2 {
     std::string support_id;
     std::string trim_id;
     std::string vertex_id;
+    std::string endpoint_role;
+    std::string disposition;
     std::string local_branch_id;
     std::string local_root_id;
+    std::string source_projection_id;
+    std::string source_factor_id;
     unsigned int multiplicity = 0;
 };
 

@@ -46,7 +46,13 @@ struct RootCandidate {
     AlgebraicReal value;
     Polynomial governing_factor;
     AlgebraicRootRecord2 record;
-    std::vector<PartitionEvent2> events;
+    struct SourceEventEvidence {
+        PartitionEvent2 event;
+        std::string projection_id;
+        std::string factor_id;
+        unsigned int multiplicity;
+    };
+    std::vector<SourceEventEvidence> event_evidence;
 };
 
 struct FactorRootCacheEntry {
@@ -521,6 +527,7 @@ bool event_less(
                left.branch_id,
                left.kind,
                left.disposition,
+               left.endpoint_role,
                left.left_active_count,
                left.right_active_count,
                left.incidence_permutation_rechecked,
@@ -542,6 +549,7 @@ bool event_less(
                right.branch_id,
                right.kind,
                right.disposition,
+               right.endpoint_role,
                right.left_active_count,
                right.right_active_count,
                right.incidence_permutation_rechecked,
@@ -756,6 +764,22 @@ EventPartitionCertificate2 partition_integer_projections(
                         == CGAL::LARGER) {
                     continue;
                 }
+                std::vector<
+                    RootCandidate::SourceEventEvidence>
+                    event_evidence;
+                event_evidence.reserve(
+                    input.events.size());
+                for (const PartitionEvent2& event :
+                     input.events) {
+                    event_evidence.push_back(
+                        {
+                            event,
+                            input.projection_id,
+                            ccan_sequence(factor_text),
+                            static_cast<unsigned int>(
+                                multiplicity),
+                        });
+                }
                 candidates.push_back(
                     {
                         root,
@@ -771,7 +795,7 @@ EventPartitionCertificate2 partition_integer_projections(
                             {},
                             {},
                         },
-                        input.events,
+                        std::move(event_evidence),
                     });
             }
         }
@@ -810,10 +834,10 @@ EventPartitionCertificate2 partition_integer_projections(
                     candidate.governing_factor);
             unique.back().record.multiplicity =
                 multiplicity;
-            unique.back().events.insert(
-                unique.back().events.end(),
-                candidate.events.begin(),
-                candidate.events.end());
+            unique.back().event_evidence.insert(
+                unique.back().event_evidence.end(),
+                candidate.event_evidence.begin(),
+                candidate.event_evidence.end());
             continue;
         }
         unique.push_back(std::move(candidate));
@@ -828,26 +852,86 @@ EventPartitionCertificate2 partition_integer_projections(
     certificate.source_kind = "integer-projections-v1";
 
     for (RootCandidate& root : unique) {
+        std::vector<PartitionEvent2> events;
+        events.reserve(root.event_evidence.size());
+        for (const auto& evidence :
+             root.event_evidence) {
+            events.push_back(evidence.event);
+        }
         std::sort(
-            root.events.begin(),
-            root.events.end(),
+            events.begin(),
+            events.end(),
             event_less);
-        root.events.erase(
+        events.erase(
             std::unique(
-                root.events.begin(),
-                root.events.end(),
+                events.begin(),
+                events.end(),
                 [](const PartitionEvent2& left,
                    const PartitionEvent2& right) {
                     return !event_less(left, right)
                         && !event_less(right, left);
                 }),
-            root.events.end());
-        certificate.roots.push_back(root.record);
-        certificate.fibres.push_back(
-            {
-                root.record.root_id,
-                root.events,
+            events.end());
+        std::vector<LocalEventWitness2>
+            local_event_witnesses;
+        local_event_witnesses.reserve(
+            root.event_evidence.size());
+        for (const auto& evidence :
+             root.event_evidence) {
+            local_event_witnesses.push_back(
+                {
+                    evidence.event.kind,
+                    evidence.event.feature_id,
+                    evidence.event.support_id,
+                    evidence.event.trim_id,
+                    evidence.event.vertex_id,
+                    evidence.event.endpoint_role,
+                    evidence.event.disposition,
+                    evidence.event.branch_id,
+                    root.record.root_id,
+                    evidence.projection_id,
+                    evidence.factor_id,
+                    evidence.multiplicity,
+                });
+        }
+        std::sort(
+            local_event_witnesses.begin(),
+            local_event_witnesses.end(),
+            [](const LocalEventWitness2& left,
+               const LocalEventWitness2& right) {
+                return std::tie(
+                           left.kind,
+                           left.feature_id,
+                           left.support_id,
+                           left.trim_id,
+                           left.vertex_id,
+                           left.endpoint_role,
+                           left.disposition,
+                           left.local_branch_id,
+                           left.source_projection_id,
+                           left.source_factor_id,
+                           left.multiplicity)
+                    < std::tie(
+                           right.kind,
+                           right.feature_id,
+                           right.support_id,
+                           right.trim_id,
+                           right.vertex_id,
+                           right.endpoint_role,
+                           right.disposition,
+                           right.local_branch_id,
+                           right.source_projection_id,
+                           right.source_factor_id,
+                           right.multiplicity);
             });
+        certificate.roots.push_back(root.record);
+        EventFibre2 fibre;
+        fibre.root_id = root.record.root_id;
+        fibre.events = std::move(events);
+        fibre.local_event_witnesses =
+            std::move(local_event_witnesses);
+        certificate.fibres.push_back(
+            std::move(fibre));
     }
 
     std::vector<AlgebraicReal> boundaries;

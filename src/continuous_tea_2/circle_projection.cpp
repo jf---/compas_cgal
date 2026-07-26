@@ -718,6 +718,9 @@ partition_full_circle_boundary_geometry(
                     source[0],
                     source[1],
                     source[2],
+                    offset == 4U
+                        ? "source"
+                        : "target",
                 });
         }
     };
@@ -1064,22 +1067,23 @@ partition_full_circle_boundary_geometry(
                 vertex.incidents.size());
             for (const auto& incident :
                  vertex.incidents) {
-                events.push_back(
-                    {
-                        "endpoint-order",
-                        incident[0],
-                        incident[1],
-                        incident[2],
-                        vertex_id,
-                        encode_string_sequence(
-                            {
-                                "full-circle-vertex-passage-v1",
-                                vertex_id,
-                                CENTER_CHART_IDS[center],
-                                incident[0],
-                            }),
-                        disposition,
-                    });
+                PartitionEvent2 event{
+                    "endpoint-order",
+                    incident[0],
+                    incident[1],
+                    incident[2],
+                    vertex_id,
+                    encode_string_sequence(
+                        {
+                            "full-circle-vertex-passage-v1",
+                            vertex_id,
+                            CENTER_CHART_IDS[center],
+                            incident[0],
+                        }),
+                    disposition,
+                };
+                event.endpoint_role = incident[3];
+                events.push_back(std::move(event));
             }
             RadialPassageFactors passage =
                 radial_passage_factor(

@@ -317,6 +317,79 @@ def test_phase_seam_is_one_owned_fibre_with_oriented_cyclic_order() -> None:
         assert _continuous_tea_2.verify_event_partition(mutated).verdict.name == "UNRESOLVED_DEGENERACY"
 
 
+def test_equal_cardinality_phase_seam_is_classified_as_mixed() -> None:
+    _, trace = _continuous_tea_2.audit_full_circle_tea_event_exact(
+        _stock_2.Stock2(SQUARE, []),
+        5.0,
+        -1.0,
+        0.0,
+        1.0,
+        False,
+        5.0,
+        4.0,
+    )
+
+    seam = next(fibre for fibre in trace.partition.fibres if len(fibre.local_root_ids) == 2)
+    assert len(seam.left_active_branches) == len(seam.right_active_branches) == 2
+    left_ids = {branch.physical_incidence.incidence_id for branch in seam.left_active_branches}
+    right_ids = {branch.physical_incidence.incidence_id for branch in seam.right_active_branches}
+    assert left_ids - right_ids
+    assert right_ids - left_ids
+
+    def physical_key(item: object) -> tuple[object, ...]:
+        return (
+            item.kind,
+            item.feature_id,
+            item.support_id,
+            item.trim_id,
+            item.vertex_id,
+            item.endpoint_role,
+            getattr(item, "sheet_ordinal", 0),
+        )
+
+    active_incidence = {physical_key(branch.physical_incidence) for branch in (*seam.left_active_branches, *seam.right_active_branches)}
+    witnessed_incidence = {physical_key(witness) for witness in seam.local_event_witnesses if witness.kind == "endpoint-order"}
+    assert active_incidence == witnessed_incidence
+    assert seam.ccw_direction == "mixed"
+    assert seam.cw_direction == "mixed"
+    assert _continuous_tea_2.verify_event_partition(trace.partition).verdict.name == "CERTIFIED"
+
+
+def test_phase_seam_rejects_conflicting_branch_local_multiplicity() -> None:
+    stock = _stock_2.Stock2(SQUARE, [])
+    stock.subtract_disk(5.0, 5.0, 2.0)
+    _, trace = _continuous_tea_2.audit_full_circle_tea_event_exact(
+        stock,
+        5.0,
+        5.0,
+        2.0,
+        1.0,
+        False,
+        1.0,
+        4.0,
+    )
+
+    seam = next(fibre for fibre in trace.partition.fibres if len(fibre.local_root_ids) == 2)
+    assert len(seam.left_active_branches) == 2
+    assert not seam.right_active_branches
+    assert seam.ccw_direction == "merge"
+    assert all(witness.source_projection_id and witness.source_factor_id for witness in seam.local_event_witnesses)
+    for mutation in (
+        "alter-seam-incidence-vertex",
+        "alter-seam-incidence-trim",
+    ):
+        mutated_transfer = _continuous_tea_2.mutate_certificate_record(
+            trace.partition,
+            mutation,
+        )
+        assert _continuous_tea_2.verify_event_partition(mutated_transfer).verdict.name == "UNRESOLVED_DEGENERACY"
+    mutated = _continuous_tea_2.mutate_certificate_record(
+        trace.partition,
+        "alter-seam-local-multiplicity",
+    )
+    assert _continuous_tea_2.verify_event_partition(mutated).verdict.name == "UNRESOLVED_DEGENERACY"
+
+
 def test_exact_rational_probe_uses_the_circle_chart_not_binary64_sampling() -> None:
     stock = _stock_2.Stock2(SQUARE, [])
     stock.subtract_disk(5.0, 5.0, 100.0)
