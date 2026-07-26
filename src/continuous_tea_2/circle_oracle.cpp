@@ -19,6 +19,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <tuple>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -267,11 +268,55 @@ std::vector<EventTraceEvent2> boundary_trace_events(
             ? partition.fibres.size()
                 - fibre_index
             : fibre_index;
-        for (const PartitionEvent2& event :
-             fibre.events) {
+        const auto same_physical_incidence =
+            [](const PartitionEvent2& first,
+               const PartitionEvent2& second) {
+                return std::tie(
+                           first.kind,
+                           first.feature_id,
+                           first.support_id,
+                           first.trim_id,
+                           first.vertex_id)
+                    == std::tie(
+                           second.kind,
+                           second.feature_id,
+                           second.support_id,
+                           second.trim_id,
+                           second.vertex_id);
+            };
+        for (std::size_t event_index = 0;
+             event_index < fibre.events.size();
+             ++event_index) {
+            const PartitionEvent2& event =
+                fibre.events[event_index];
+            if (event_index != 0
+                && !fibre.seam_id.empty()
+                && same_physical_incidence(
+                    fibre.events[event_index - 1],
+                    event)) {
+                continue;
+            }
             std::vector<std::string> branch_ids =
                 active_branch_ids;
             branch_ids.push_back(event.branch_id);
+            unsigned int multiplicity =
+                root->multiplicity;
+            for (const LocalEventWitness2& witness :
+                 fibre.local_event_witnesses) {
+                if (witness.kind == event.kind
+                    && witness.feature_id
+                        == event.feature_id
+                    && witness.support_id
+                        == event.support_id
+                    && witness.trim_id == event.trim_id
+                    && witness.vertex_id
+                        == event.vertex_id) {
+                    branch_ids.push_back(
+                        witness.local_branch_id);
+                    multiplicity =
+                        witness.multiplicity;
+                }
+            }
             const std::string disposition =
                 event.kind == "endpoint-order"
                     && !fibre.ccw_direction.empty()
@@ -299,7 +344,7 @@ std::vector<EventTraceEvent2> boundary_trace_events(
                     event.kind,
                     {event.feature_id},
                     std::move(branch_ids),
-                    root->multiplicity,
+                    multiplicity,
                     disposition,
                     motion_order));
         }

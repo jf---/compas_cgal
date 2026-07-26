@@ -123,11 +123,24 @@ struct ActiveBoundaryBranch2 {
     std::string root_id;
 };
 
+struct LocalEventWitness2 {
+    std::string kind;
+    std::string feature_id;
+    std::string support_id;
+    std::string trim_id;
+    std::string vertex_id;
+    std::string local_branch_id;
+    std::string local_root_id;
+    unsigned int multiplicity = 0;
+};
+
 struct EventFibre2 {
     std::string root_id;
     std::vector<PartitionEvent2> events;
     std::vector<std::string> local_root_ids;
     std::string seam_id;
+    std::vector<LocalEventWitness2>
+        local_event_witnesses;
     std::vector<ActiveBoundaryBranch2>
         left_active_branches;
     std::vector<ActiveBoundaryBranch2>
