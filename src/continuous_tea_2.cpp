@@ -10,6 +10,7 @@
 #include "continuous_tea_2/sha256.h"
 #include "exact_algebraic_1.h"
 
+#include <nanobind/stl/optional.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/tuple.h>
 #include <nanobind/stl/vector.h>
@@ -123,10 +124,22 @@ NB_MODULE(_continuous_tea_2, m)
         m,
         "ProjectionDegreeBoundError",
         substrate_error.ptr());
-    nb::exception<TrimFilterError>(
+    nb::exception<TrimFilterError> trim_filter_error(
         m,
         "TrimFilterError",
         substrate_error.ptr());
+    nb::exception<TrimEndpointOffSupportError>(
+        m,
+        "TrimEndpointOffSupportError",
+        trim_filter_error.ptr());
+    nb::exception<DegenerateTrimError>(
+        m,
+        "DegenerateTrimError",
+        trim_filter_error.ptr());
+    nb::exception<UnsupportedLineMotionError>(
+        m,
+        "UnsupportedLineMotionError",
+        trim_filter_error.ptr());
     nb::exception<EventPartitionVerificationError>(
         m,
         "EventPartitionVerificationError",
@@ -437,6 +450,19 @@ NB_MODULE(_continuous_tea_2, m)
             })
         .def_ro("events", &EventFibre2::events);
 
+    nb::class_<RationalTrimInterval2>(
+        m,
+        "RationalTrimInterval2")
+        .def_ro(
+            "rim_parameter",
+            &RationalTrimInterval2::rim_parameter)
+        .def_ro(
+            "motion_domain_low",
+            &RationalTrimInterval2::motion_domain_low)
+        .def_ro(
+            "motion_domain_high",
+            &RationalTrimInterval2::motion_domain_high);
+
     nb::class_<TrimmedLineBranch2>(m, "TrimmedLineBranch2")
         .def_ro(
             "rim_parameter",
@@ -448,6 +474,36 @@ NB_MODULE(_continuous_tea_2, m)
             "motion_domain_high",
             &TrimmedLineBranch2::motion_domain_high)
         .def_ro(
+            "rational_convenience",
+            &TrimmedLineBranch2::rational_convenience)
+        .def_ro(
+            "rim_root",
+            &TrimmedLineBranch2::rim_root)
+        .def_prop_ro(
+            "lower_trim_predicate_rows",
+            [](const TrimmedLineBranch2& branch) {
+                return string_matrix_tuple(
+                    branch.lower_trim_predicate_rows);
+            })
+        .def_prop_ro(
+            "upper_trim_predicate_rows",
+            [](const TrimmedLineBranch2& branch) {
+                return string_matrix_tuple(
+                    branch.upper_trim_predicate_rows);
+            })
+        .def_ro(
+            "rational_convenience_available",
+            &TrimmedLineBranch2::
+                rational_convenience_available)
+        .def_ro(
+            "domain_nonempty_rechecked",
+            &TrimmedLineBranch2::
+                domain_nonempty_rechecked)
+        .def_ro(
+            "complementarity_rechecked",
+            &TrimmedLineBranch2::
+                complementarity_rechecked)
+        .def_ro(
             "trim_disposition",
             &TrimmedLineBranch2::trim_disposition)
         .def_ro(
@@ -458,6 +514,18 @@ NB_MODULE(_continuous_tea_2, m)
             "feature_id",
             [](const TrimmedLineBranch2& branch) {
                 return as_bytes(branch.feature_id);
+            })
+        .def_prop_ro(
+            "local_support_id",
+            [](const TrimmedLineBranch2& branch) {
+                return as_bytes(
+                    branch.local_support_id);
+            })
+        .def_prop_ro(
+            "local_trimmed_feature_id",
+            [](const TrimmedLineBranch2& branch) {
+                return as_bytes(
+                    branch.local_trimmed_feature_id);
             })
         .def_prop_ro(
             "trim_id",

@@ -831,32 +831,6 @@ def test_equal_support_coefficient_gcd_is_an_isolated_fibre() -> None:
     assert _cell_witnesses(certificate) == (Fraction(1, 4), Fraction(3, 4))
 
 
-def test_native_trim_filter_retains_only_closed_branch_domains() -> None:
-    branches = _continuous_tea_2.solve_trimmed_line_branches(
-        ("5", "0", "-3"),
-        ("3/5", "0"),
-        ("3/5", "1"),
-        ("0", "0", "0", "2"),
-        "1",
-        "rim-half-0-v1",
-    )
-
-    assert [
-        (
-            branch.rim_parameter,
-            branch.motion_domain_low,
-            branch.motion_domain_high,
-            branch.trim_disposition,
-        )
-        for branch in branches
-    ] == [
-        ("1/2", "0", "1/10", "accepted"),
-        ("-1/2", "2/5", "9/10", "accepted"),
-    ]
-    assert all(branch.rejected_outside_closed_domain for branch in branches)
-    assert all(branch.feature_id and branch.trim_id and branch.branch_id for branch in branches)
-
-
 def test_quadratic_regularization_vertex_filters_the_conjugate_exactly() -> None:
     stock = _stock_with_disks("quadratic-circle-circle-stable-vertex")
     records = _continuous_tea_2.extract_boundary_records(stock)

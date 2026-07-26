@@ -54,6 +54,15 @@ class ProjectionDegreeBoundError(EventSubstrateError): ...
 class TrimFilterError(EventSubstrateError): ...
 
 
+class TrimEndpointOffSupportError(TrimFilterError): ...
+
+
+class DegenerateTrimError(TrimFilterError): ...
+
+
+class UnsupportedLineMotionError(TrimFilterError): ...
+
+
 class EventPartitionVerificationError(EventSubstrateError): ...
 
 
@@ -234,13 +243,28 @@ class EventFibre2:
     events: Sequence[PartitionEvent2]
 
 
+class RationalTrimInterval2:
+    rim_parameter: str
+    motion_domain_low: str
+    motion_domain_high: str
+
+
 class TrimmedLineBranch2:
     rim_parameter: str
     motion_domain_low: str
     motion_domain_high: str
+    rational_convenience: RationalTrimInterval2 | None
+    rim_root: AlgebraicRootRecord2
+    lower_trim_predicate_rows: Sequence[Sequence[str]]
+    upper_trim_predicate_rows: Sequence[Sequence[str]]
+    rational_convenience_available: bool
+    domain_nonempty_rechecked: bool
+    complementarity_rechecked: bool
     trim_disposition: str
     rejected_outside_closed_domain: bool
     feature_id: bytes
+    local_support_id: bytes
+    local_trimmed_feature_id: bytes
     trim_id: bytes
     branch_id: bytes
 
