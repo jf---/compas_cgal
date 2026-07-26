@@ -296,6 +296,21 @@ EventPartitionCertificate2 reconstruct(
             fields[0],
             fields[1]);
     }
+    if (certificate.source_kind
+        == "full-circle-line-pullbacks-v1") {
+        const std::vector<std::string> fields =
+            decode_string_sequence(
+                certificate.source_payload);
+        if (fields.size() != 4) {
+            throw EventPartitionVerificationError(
+                "full-circle line source payload is malformed");
+        }
+        return construct_full_circle_line_pullback_partition(
+            fields[0],
+            decode_string_sequence(fields[1]),
+            fields[2],
+            decode_string_sequence(fields[3]));
+    }
     if (certificate.source_kind != "cap-crossings-v1") {
         throw EventPartitionVerificationError(
             "unsupported certificate source kind");
