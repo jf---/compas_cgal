@@ -1,6 +1,7 @@
 #include "segment_site_mat.h"
 
 #include <algorithm>
+#include <functional>
 #include <iterator>
 #include <set>
 #include <string>
@@ -632,6 +633,510 @@ std::vector<AlgebraicDomainRoot2> parabola_domain_roots(
     return unique;
 }
 
+MatQuadraticFieldValue2 field_add(
+    const MatQuadraticFieldValue2& lhs,
+    const MatQuadraticFieldValue2& rhs)
+{
+    return {
+        lhs.rational + rhs.rational,
+        lhs.radical + rhs.radical,
+    };
+}
+
+MatQuadraticFieldValue2 field_scale(
+    const MatQuadraticFieldValue2& value,
+    const CORE::BigRat& scale)
+{
+    return {
+        value.rational * scale,
+        value.radical * scale,
+    };
+}
+
+MatQuadraticFieldValue2 field_multiply(
+    const MatQuadraticFieldValue2& lhs,
+    const MatQuadraticFieldValue2& rhs,
+    const CORE::BigRat& radicand)
+{
+    return {
+        lhs.rational * rhs.rational
+            + radicand * lhs.radical * rhs.radical,
+        lhs.rational * rhs.radical
+            + lhs.radical * rhs.rational,
+    };
+}
+
+MatQuadraticFieldValue2 field_divide(
+    const MatQuadraticFieldValue2& numerator,
+    const MatQuadraticFieldValue2& denominator,
+    const CORE::BigRat& radicand)
+{
+    const CORE::BigRat norm =
+        denominator.rational * denominator.rational
+        - radicand
+            * denominator.radical
+            * denominator.radical;
+    if (norm == 0) {
+        throw InvalidRationalPrimitiveError(
+            "source quadratic-field denominator is zero");
+    }
+    return field_scale(
+        field_multiply(
+            numerator,
+            {
+                denominator.rational,
+                -denominator.radical,
+            },
+            radicand),
+        CORE::BigRat(1) / norm);
+}
+
+CGAL::Sign quadratic_field_sign(
+    const MatQuadraticFieldValue2& value,
+    const CORE::BigRat& radicand)
+{
+    if (value.radical == 0) {
+        return CGAL::sign(value.rational);
+    }
+    if (value.rational == 0) {
+        return CGAL::sign(value.radical);
+    }
+    const CGAL::Sign rational_sign =
+        CGAL::sign(value.rational);
+    const CGAL::Sign radical_sign =
+        CGAL::sign(value.radical);
+    if (rational_sign == radical_sign) {
+        return rational_sign;
+    }
+    const CORE::BigRat comparison =
+        value.rational * value.rational
+        - radicand * value.radical * value.radical;
+    const CGAL::Sign magnitude = CGAL::sign(comparison);
+    if (magnitude == CGAL::ZERO) {
+        return CGAL::ZERO;
+    }
+    return magnitude == CGAL::POSITIVE
+        ? rational_sign
+        : radical_sign;
+}
+
+struct SourceParabolaParameterization2 {
+    std::vector<CORE::BigRat> x_rational;
+    std::vector<CORE::BigRat> x_radical;
+    std::vector<CORE::BigRat> y_rational;
+    std::vector<CORE::BigRat> y_radical;
+    CORE::BigRat radicand;
+};
+
+SourceParabolaParameterization2 source_parameterization(
+    const MatExactPointSiteSource2& point,
+    const MatExactOpenSegmentSource2& segment)
+{
+    if (point.stable_site_id.empty()
+        || segment.stable_site_id.empty()) {
+        throw InvalidRationalPrimitiveError(
+            "source site identity is empty");
+    }
+    if (point.radicand <= 0) {
+        throw InvalidRationalPrimitiveError(
+            "source quadratic radicand is not positive");
+    }
+    const CORE::BigRat line_norm =
+        segment.line_a * segment.line_a
+        + segment.line_b * segment.line_b;
+    if (line_norm == 0) {
+        throw InvalidRationalPrimitiveError(
+            "source directrix is degenerate");
+    }
+    const MatQuadraticFieldValue2 signed_distance_numerator =
+        field_add(
+            field_add(
+                field_scale(point.x, segment.line_a),
+                field_scale(point.y, segment.line_b)),
+            {segment.line_c, 0});
+    if (quadratic_field_sign(
+            signed_distance_numerator,
+            point.radicand)
+        == CGAL::ZERO) {
+        throw InvalidRationalPrimitiveError(
+            "source focus lies on directrix");
+    }
+
+    const MatQuadraticFieldValue2 vertex_x =
+        field_add(
+            point.x,
+            field_scale(
+                signed_distance_numerator,
+                -segment.line_a
+                    / (CORE::BigRat(2) * line_norm)));
+    const MatQuadraticFieldValue2 vertex_y =
+        field_add(
+            point.y,
+            field_scale(
+                signed_distance_numerator,
+                -segment.line_b
+                    / (CORE::BigRat(2) * line_norm)));
+    const MatQuadraticFieldValue2 quadratic_scale =
+        field_divide(
+            {line_norm, 0},
+            field_scale(
+                signed_distance_numerator,
+                CORE::BigRat(2)),
+            point.radicand);
+    const MatQuadraticFieldValue2 quadratic_x =
+        field_scale(quadratic_scale, segment.line_a);
+    const MatQuadraticFieldValue2 quadratic_y =
+        field_scale(quadratic_scale, segment.line_b);
+    return {
+        {
+            vertex_x.rational,
+            -segment.line_b,
+            quadratic_x.rational,
+        },
+        {
+            vertex_x.radical,
+            0,
+            quadratic_x.radical,
+        },
+        {
+            vertex_y.rational,
+            segment.line_a,
+            quadratic_y.rational,
+        },
+        {
+            vertex_y.radical,
+            0,
+            quadratic_y.radical,
+        },
+        point.radicand,
+    };
+}
+
+struct RadicalEquation2 {
+    ExactAlgebraicKernel2::Polynomial_2 rational;
+    ExactAlgebraicKernel2::Polynomial_2 radical;
+};
+
+RadicalEquation2 radical_equation(
+    const std::vector<CORE::BigRat>& rational,
+    const std::vector<CORE::BigRat>& radical,
+    const CORE::BigRat& edge_origin,
+    const CORE::BigRat& edge_direction)
+{
+    std::vector<CORE::BigRat> values{
+        rational[0] - edge_origin,
+        rational[1],
+        rational[2],
+        -edge_direction,
+        radical[0],
+        radical[1],
+        radical[2],
+    };
+    const std::vector<ExactAlgebraicInteger1> integer =
+        primitive_integer_coefficients(values);
+    using Polynomial = ExactAlgebraicKernel2::Polynomial_2;
+    const Polynomial parameter =
+        CGAL::shift(Polynomial(ExactAlgebraicInteger1(1)), 1, 0);
+    const Polynomial edge_parameter =
+        CGAL::shift(Polynomial(ExactAlgebraicInteger1(1)), 1, 1);
+    return {
+        Polynomial(integer[0])
+            + integer[1] * parameter
+            + integer[2] * parameter * parameter
+            + integer[3] * edge_parameter,
+        Polynomial(integer[4])
+            + integer[5] * parameter
+            + integer[6] * parameter * parameter,
+    };
+}
+
+ExactAlgebraicKernel2::Polynomial_2 radical_norm(
+    const RadicalEquation2& equation,
+    const CORE::BigRat& radicand)
+{
+    const std::vector<ExactAlgebraicInteger1> integer =
+        primitive_integer_coefficients(
+            {CORE::BigRat(1), -radicand});
+    return integer[0]
+            * equation.rational
+            * equation.rational
+        + integer[1]
+            * equation.radical
+            * equation.radical;
+}
+
+bool radical_equation_holds(
+    const RadicalEquation2& equation,
+    const ExactAlgebraicKernel2::Algebraic_real_2& point,
+    const ExactAlgebraicKernel2& kernel)
+{
+    const CGAL::Sign rational =
+        kernel.sign_at_2_object()(
+            equation.rational,
+            point);
+    const CGAL::Sign radical =
+        kernel.sign_at_2_object()(
+            equation.radical,
+            point);
+    return (rational == CGAL::ZERO
+            && radical == CGAL::ZERO)
+        || rational == -radical;
+}
+
+MatQuadraticFieldValue2 evaluate_source_coordinate(
+    const std::vector<CORE::BigRat>& rational,
+    const std::vector<CORE::BigRat>& radical,
+    const CORE::BigRat& parameter)
+{
+    return {
+        evaluate_rational_polynomial(rational, parameter),
+        evaluate_rational_polynomial(radical, parameter),
+    };
+}
+
+bool quadratic_point_in_polygon(
+    const MatDomainPolygon2& polygon,
+    const MatQuadraticFieldValue2& x,
+    const MatQuadraticFieldValue2& y,
+    const CORE::BigRat& radicand)
+{
+    int winding = 0;
+    for (auto edge = polygon.edges_begin();
+         edge != polygon.edges_end();
+         ++edge) {
+        const MatQuadraticFieldValue2 source_y{
+            edge->source().y() - y.rational,
+            -y.radical,
+        };
+        const MatQuadraticFieldValue2 target_y{
+            edge->target().y() - y.rational,
+            -y.radical,
+        };
+        const MatQuadraticFieldValue2 orientation =
+            field_add(
+                field_scale(
+                    {
+                        edge->target().y() - y.rational,
+                        -y.radical,
+                    },
+                    edge->source().x() - x.rational),
+                field_scale(
+                    {
+                        edge->source().y() - y.rational,
+                        -y.radical,
+                    },
+                    x.rational - edge->target().x()));
+        const CGAL::Sign source_side =
+            quadratic_field_sign(source_y, radicand);
+        const CGAL::Sign target_side =
+            quadratic_field_sign(target_y, radicand);
+        const CGAL::Sign turn =
+            quadratic_field_sign(orientation, radicand);
+        if (source_side != CGAL::POSITIVE
+            && target_side == CGAL::POSITIVE
+            && turn == CGAL::POSITIVE) {
+            ++winding;
+        } else if (
+            source_side == CGAL::POSITIVE
+            && target_side != CGAL::POSITIVE
+            && turn == CGAL::NEGATIVE) {
+            --winding;
+        }
+    }
+    return winding != 0;
+}
+
+bool source_domain_contains(
+    const MatDomainPolygonWithHoles2& domain,
+    const SourceParabolaParameterization2& primitive,
+    const CORE::BigRat& parameter)
+{
+    const MatQuadraticFieldValue2 x =
+        evaluate_source_coordinate(
+            primitive.x_rational,
+            primitive.x_radical,
+            parameter);
+    const MatQuadraticFieldValue2 y =
+        evaluate_source_coordinate(
+            primitive.y_rational,
+            primitive.y_radical,
+            parameter);
+    if (!quadratic_point_in_polygon(
+            domain.outer_boundary(),
+            x,
+            y,
+            primitive.radicand)) {
+        return false;
+    }
+    for (auto hole = domain.holes_begin();
+         hole != domain.holes_end();
+         ++hole) {
+        if (quadratic_point_in_polygon(
+                *hole,
+                x,
+                y,
+                primitive.radicand)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+void append_source_parabola_intersections(
+    const MatDomainPolygon2& polygon,
+    const std::string& ring_id,
+    const SourceParabolaParameterization2& primitive,
+    const std::optional<CORE::BigRat>& domain_lower,
+    const std::optional<CORE::BigRat>& domain_upper,
+    std::vector<AlgebraicDomainRoot2>& roots)
+{
+    ExactAlgebraicKernel1 kernel1;
+    ExactAlgebraicKernel2 kernel2;
+    const auto compare = kernel1.compare_1_object();
+    std::size_t edge_index = 0;
+    for (auto edge = polygon.edges_begin();
+         edge != polygon.edges_end();
+         ++edge, ++edge_index) {
+        const CORE::BigRat ax = edge->source().x();
+        const CORE::BigRat ay = edge->source().y();
+        const CORE::BigRat ex = edge->target().x() - ax;
+        const CORE::BigRat ey = edge->target().y() - ay;
+        const RadicalEquation2 x_equation =
+            radical_equation(
+                primitive.x_rational,
+                primitive.x_radical,
+                ax,
+                ex);
+        const RadicalEquation2 y_equation =
+            radical_equation(
+                primitive.y_rational,
+                primitive.y_radical,
+                ay,
+                ey);
+        const auto x_norm = radical_norm(
+            x_equation,
+            primitive.radicand);
+        const auto y_norm = radical_norm(
+            y_equation,
+            primitive.radicand);
+        if (CGAL::is_zero(x_norm)
+            || CGAL::is_zero(y_norm)
+            || !kernel2.is_coprime_2_object()(
+                x_norm,
+                y_norm)) {
+            throw OverlappingDomainBoundaryError(
+                "source parabola boundary intersection is not isolated");
+        }
+
+        std::vector<
+            std::pair<
+                ExactAlgebraicKernel2::Algebraic_real_2,
+                ExactAlgebraicKernel2::Multiplicity_type>>
+            solutions;
+        kernel2.solve_2_object()(
+            x_norm,
+            y_norm,
+            std::back_inserter(solutions));
+        std::size_t solution_index = 0;
+        for (const auto& [solution, multiplicity] : solutions) {
+            static_cast<void>(multiplicity);
+            const auto parameter =
+                kernel2.compute_x_2_object()(solution);
+            const auto edge_parameter =
+                kernel2.compute_y_2_object()(solution);
+            if (!radical_equation_holds(
+                    x_equation,
+                    solution,
+                    kernel2)
+                || !radical_equation_holds(
+                    y_equation,
+                    solution,
+                    kernel2)
+                || compare(edge_parameter, CORE::BigRat(0))
+                    == CGAL::SMALLER
+                || compare(edge_parameter, CORE::BigRat(1))
+                    == CGAL::LARGER
+                || (domain_lower.has_value()
+                    && compare(parameter, *domain_lower)
+                        == CGAL::SMALLER)
+                || (domain_upper.has_value()
+                    && compare(parameter, *domain_upper)
+                        == CGAL::LARGER)) {
+                ++solution_index;
+                continue;
+            }
+            roots.push_back(
+                {
+                    parameter,
+                    {
+                        ring_id + "/edge-"
+                        + std::to_string(edge_index)
+                        + "/source-algebraic-solution-"
+                        + std::to_string(solution_index),
+                    },
+                });
+            ++solution_index;
+        }
+    }
+}
+
+std::vector<AlgebraicDomainRoot2>
+source_parabola_domain_roots(
+    const std::string& dual_id,
+    const SourceParabolaParameterization2& primitive,
+    const std::optional<CORE::BigRat>& domain_lower,
+    const std::optional<CORE::BigRat>& domain_upper,
+    const MatDomainPolygonWithHoles2& domain)
+{
+    std::vector<AlgebraicDomainRoot2> roots;
+    append_source_parabola_intersections(
+        domain.outer_boundary(),
+        dual_id + "/D-outer",
+        primitive,
+        domain_lower,
+        domain_upper,
+        roots);
+    std::size_t hole_index = 0;
+    for (auto hole = domain.holes_begin();
+         hole != domain.holes_end();
+         ++hole, ++hole_index) {
+        append_source_parabola_intersections(
+            *hole,
+            dual_id + "/D-hole-"
+                + std::to_string(hole_index),
+            primitive,
+            domain_lower,
+            domain_upper,
+            roots);
+    }
+    ExactAlgebraicKernel1 kernel;
+    const auto compare = kernel.compare_1_object();
+    std::sort(
+        roots.begin(),
+        roots.end(),
+        [&compare](const AlgebraicDomainRoot2& lhs,
+                   const AlgebraicDomainRoot2& rhs) {
+            return compare(lhs.parameter, rhs.parameter)
+                == CGAL::SMALLER;
+        });
+    std::vector<AlgebraicDomainRoot2> unique;
+    for (AlgebraicDomainRoot2& root : roots) {
+        if (!unique.empty()
+            && compare(
+                   unique.back().parameter,
+                   root.parameter)
+                == CGAL::EQUAL) {
+            unique.back().provenance_ids.insert(
+                unique.back().provenance_ids.end(),
+                root.provenance_ids.begin(),
+                root.provenance_ids.end());
+        } else {
+            unique.push_back(std::move(root));
+        }
+    }
+    return unique;
+}
+
 std::size_t exact_clearance_root_count()
 {
     using Polynomial =
@@ -958,7 +1463,8 @@ clip_clearance_components_with_domain_roots(
     const std::string& original_dual_id,
     const RationalPrimitiveParameterization2& primitive,
     const ClearanceRootBoundary2& boundary,
-    const MatDomainPolygonWithHoles2& domain,
+    const std::function<bool(const CORE::BigRat&)>&
+        domain_cell_contains,
     const std::vector<AlgebraicDomainRoot2>& domain_roots)
 {
     if (original_dual_id.empty()) {
@@ -1091,14 +1597,7 @@ clip_clearance_components_with_domain_roots(
             endpoints[index].endpoint,
             endpoints[index + 1].endpoint,
             kernel);
-        const bool inside = domain_contains(
-            domain,
-            evaluate_rational_polynomial(
-                primitive.x_coefficients,
-                witness),
-            evaluate_rational_polynomial(
-                primitive.y_coefficients,
-                witness));
+        const bool inside = domain_cell_contains(witness);
         const bool clearance_admissible =
             boundary.constant_sign.has_value()
             ? *boundary.constant_sign != CGAL::NEGATIVE
@@ -1223,7 +1722,16 @@ clip_linear_clearance_components(
         original_dual_id,
         primitive,
         boundary,
-        domain,
+        [&domain, &primitive](const CORE::BigRat& parameter) {
+            return domain_contains(
+                domain,
+                evaluate_rational_polynomial(
+                    primitive.x_coefficients,
+                    parameter),
+                evaluate_rational_polynomial(
+                    primitive.y_coefficients,
+                    parameter));
+        },
         roots);
 }
 
@@ -1238,10 +1746,58 @@ clip_parabola_clearance_components(
         original_dual_id,
         primitive,
         boundary,
-        domain,
+        [&domain, &primitive](const CORE::BigRat& parameter) {
+            return domain_contains(
+                domain,
+                evaluate_rational_polynomial(
+                    primitive.x_coefficients,
+                    parameter),
+                evaluate_rational_polynomial(
+                    primitive.y_coefficients,
+                    parameter));
+        },
         parabola_domain_roots(
             original_dual_id,
             primitive,
+            domain));
+}
+
+std::vector<MatAdmissibleComponent2>
+clip_source_parabola_clearance_components(
+    const std::string& original_dual_id,
+    const MatExactPointSiteSource2& point_site,
+    const MatExactOpenSegmentSource2& segment_site,
+    const std::optional<CORE::BigRat>& domain_lower,
+    const std::optional<CORE::BigRat>& domain_upper,
+    const ClearanceRootBoundary2& boundary,
+    const MatDomainPolygonWithHoles2& domain)
+{
+    const SourceParabolaParameterization2 source =
+        source_parameterization(
+            point_site,
+            segment_site);
+    const RationalPrimitiveParameterization2
+        parameter_domain{
+            {CORE::BigRat(0)},
+            {CORE::BigRat(0)},
+            domain_lower,
+            domain_upper,
+        };
+    return clip_clearance_components_with_domain_roots(
+        original_dual_id,
+        parameter_domain,
+        boundary,
+        [&domain, &source](const CORE::BigRat& parameter) {
+            return source_domain_contains(
+                domain,
+                source,
+                parameter);
+        },
+        source_parabola_domain_roots(
+            original_dual_id,
+            source,
+            domain_lower,
+            domain_upper,
             domain));
 }
 

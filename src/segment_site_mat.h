@@ -70,6 +70,25 @@ struct RationalPrimitiveParameterization2 {
     std::optional<CORE::BigRat> domain_upper;
 };
 
+struct MatQuadraticFieldValue2 {
+    CORE::BigRat rational;
+    CORE::BigRat radical;
+};
+
+struct MatExactPointSiteSource2 {
+    std::string stable_site_id;
+    MatQuadraticFieldValue2 x;
+    MatQuadraticFieldValue2 y;
+    CORE::BigRat radicand;
+};
+
+struct MatExactOpenSegmentSource2 {
+    std::string stable_site_id;
+    CORE::BigRat line_a;
+    CORE::BigRat line_b;
+    CORE::BigRat line_c;
+};
+
 class InvalidRationalPrimitiveError : public std::runtime_error {
 public:
     using std::runtime_error::runtime_error;
@@ -121,6 +140,16 @@ std::vector<MatAdmissibleComponent2>
 clip_parabola_clearance_components(
     const std::string& original_dual_id,
     const RationalPrimitiveParameterization2& primitive,
+    const ClearanceRootBoundary2& boundary,
+    const MatDomainPolygonWithHoles2& domain);
+
+std::vector<MatAdmissibleComponent2>
+clip_source_parabola_clearance_components(
+    const std::string& original_dual_id,
+    const MatExactPointSiteSource2& point_site,
+    const MatExactOpenSegmentSource2& segment_site,
+    const std::optional<CORE::BigRat>& domain_lower,
+    const std::optional<CORE::BigRat>& domain_upper,
     const ClearanceRootBoundary2& boundary,
     const MatDomainPolygonWithHoles2& domain);
 
