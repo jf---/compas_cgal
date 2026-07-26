@@ -737,6 +737,34 @@ bool chart_accepts(
             != CGAL::LARGER;
 }
 
+std::size_t algebraic_root_ordinal(
+    const Polynomial1& factor,
+    const AlgebraicReal1& root)
+{
+    Kernel1 kernel;
+    std::vector<AlgebraicReal1> roots;
+    kernel.solve_1_object()(
+        factor,
+        true,
+        std::back_inserter(roots));
+    const auto found = std::find_if(
+        roots.begin(),
+        roots.end(),
+        [&kernel, &root](
+            const AlgebraicReal1& candidate) {
+            return kernel.compare_1_object()(
+                       candidate,
+                       root)
+                == CGAL::EQUAL;
+        });
+    if (found == roots.end()) {
+        throw IncompleteSegmentPartitionError(
+            "transient branch root is not owned by its exact factor");
+    }
+    return static_cast<std::size_t>(
+        std::distance(roots.begin(), found));
+}
+
 struct ExactBranches {
     std::vector<SegmentBranchState2> finite;
     std::vector<std::string> active_ids;
@@ -884,6 +912,46 @@ ExactBranches exact_fibre_branches(
                 return left.rim_sheet_ordinal
                     < right.rim_sheet_ordinal;
             });
+        const bool isolated_tangent =
+            identities.empty()
+            && std::any_of(
+                events.begin(),
+                events.end(),
+                [&record](
+                    const PartitionEvent2& event) {
+                    return event.kind == "tangent"
+                        && event.feature_id
+                            == record.feature_id;
+                });
+        if (isolated_tangent) {
+            identities.reserve(parameters.size());
+            for (std::size_t index = 0;
+                 index < parameters.size();
+                 ++index) {
+                identities.push_back(
+                    {
+                        encode_string_sequence(
+                            {
+                                "segment-boundary-branch-v1",
+                                record.feature_id,
+                                fields[2],
+                                std::to_string(index),
+                            }),
+                        record.feature_id,
+                        record.support_id,
+                        record.support_kind,
+                        record.trim_predicate,
+                        {},
+                        record.material_side,
+                        "accepted",
+                        fields[2],
+                        index,
+                        {},
+                        {},
+                        0,
+                    });
+            }
+        }
         if (parameters.empty() || identities.empty()) {
             continue;
         }
@@ -906,6 +974,27 @@ ExactBranches exact_fibre_branches(
                     parameter);
             SegmentBoundaryBranch2 identity =
                 identities[index];
+            if (identity.rim_root_id.empty()) {
+                identity.rim_factor_coefficients =
+                    primitive_coefficients(factor);
+                identity.rim_root_ordinal =
+                    algebraic_root_ordinal(
+                        factor,
+                        parameter);
+                std::vector<Integer> coefficients;
+                coefficients.reserve(
+                    identity.rim_factor_coefficients
+                        .size());
+                for (const std::string& coefficient :
+                     identity.rim_factor_coefficients) {
+                    coefficients.emplace_back(
+                        coefficient);
+                }
+                identity.rim_root_id =
+                    algebraic_root_id_v1(
+                        coefficients,
+                        identity.rim_root_ordinal);
+            }
             identity.vertex_id =
                 accepted.vertex_id;
             result.finite.push_back(

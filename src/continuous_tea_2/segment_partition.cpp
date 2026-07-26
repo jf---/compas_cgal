@@ -20,6 +20,45 @@ std::string boolean_text(bool value)
     return value ? "1" : "0";
 }
 
+void normalize_tangent_root_multiplicities(
+    EventPartitionCertificate2& certificate,
+    const std::vector<ProjectionInput2>& projections)
+{
+    std::vector<ProjectionInput2> tangent_projections;
+    for (const ProjectionInput2& projection :
+         projections) {
+        if (std::any_of(
+                projection.events.begin(),
+                projection.events.end(),
+                [](const PartitionEvent2& event) {
+                    return event.kind == "tangent";
+                })) {
+            tangent_projections.push_back(projection);
+        }
+    }
+    if (tangent_projections.empty()) {
+        return;
+    }
+    const EventPartitionCertificate2 tangent_partition =
+        partition_projections(tangent_projections);
+    for (AlgebraicRootRecord2& root :
+         certificate.roots) {
+        const auto tangent_root = std::find_if(
+            tangent_partition.roots.begin(),
+            tangent_partition.roots.end(),
+            [&root](
+                const AlgebraicRootRecord2& candidate) {
+                return candidate.root_id
+                    == root.root_id;
+            });
+        if (tangent_root
+            != tangent_partition.roots.end()) {
+            root.multiplicity =
+                tangent_root->multiplicity;
+        }
+    }
+}
+
 std::string canonical_event(
     const PartitionEvent2& event)
 {
@@ -367,6 +406,9 @@ SegmentEventPartition2 construct_segment_event_partition(
     EventPartitionCertificate2 certificate =
         partition_projections(
             projections.event_projections);
+    normalize_tangent_root_multiplicities(
+        certificate,
+        projections.event_projections);
     certificate.projections.insert(
         certificate.projections.end(),
         projections.constant_event_projections.begin(),
