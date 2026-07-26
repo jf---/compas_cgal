@@ -45,6 +45,37 @@ std::string from_bytes(const nb::bytes& value)
         static_cast<std::size_t>(size));
 }
 
+std::string from_bytes_handle(nb::handle value)
+{
+    if (!PyBytes_Check(value.ptr())) {
+        throw nb::type_error(
+            "canonical identity sequence entries must be bytes");
+    }
+    char* data = nullptr;
+    Py_ssize_t size = 0;
+    if (PyBytes_AsStringAndSize(
+            value.ptr(),
+            &data,
+            &size)
+        != 0) {
+        throw nb::python_error();
+    }
+    return std::string(
+        data,
+        static_cast<std::size_t>(size));
+}
+
+std::vector<std::string> from_byte_sequence(
+    const nb::sequence& values)
+{
+    std::vector<std::string> result;
+    for (nb::handle value : values) {
+        result.push_back(
+            from_bytes_handle(value));
+    }
+    return result;
+}
+
 nb::list coefficient_bytes(
     const std::vector<std::string>& values)
 {
@@ -82,6 +113,21 @@ nb::object string_matrix_tuple(
     }
     return nb::module_::import_("builtins")
         .attr("tuple")(result);
+}
+
+std::string continuous_tea_verdict_text(
+    ContinuousTeaVerdict verdict)
+{
+    switch (verdict) {
+    case ContinuousTeaVerdict::CERTIFIED:
+        return "certified";
+    case ContinuousTeaVerdict::CAP_EXCEEDED:
+        return "cap_exceeded";
+    case ContinuousTeaVerdict::UNRESOLVED_DEGENERACY:
+        return "unresolved";
+    }
+    throw EventTraceVerificationError(
+        "unknown continuous TEA verdict");
 }
 
 } // namespace
@@ -154,6 +200,10 @@ NB_MODULE(_continuous_tea_2, m)
     nb::exception<EventPartitionVerificationError>(
         m,
         "EventPartitionVerificationError",
+        substrate_error.ptr());
+    nb::exception<EventTraceVerificationError>(
+        m,
+        "EventTraceVerificationError",
         substrate_error.ptr());
     nb::exception<NonFiniteSegmentInputError>(
         m,

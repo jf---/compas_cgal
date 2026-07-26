@@ -336,6 +336,13 @@ std::vector<std::string> decode_string_sequence(
     return result;
 }
 
+std::string encode_canonical_record(
+    const std::string& tag,
+    const std::vector<std::string>& fields)
+{
+    return record(tag, fields);
+}
+
 void finalize_event_partition(
     EventPartitionCertificate2& certificate)
 {

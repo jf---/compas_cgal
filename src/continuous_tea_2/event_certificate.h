@@ -11,6 +11,10 @@ std::string encode_string_sequence(
 std::vector<std::string> decode_string_sequence(
     const std::string& encoded);
 
+std::string encode_canonical_record(
+    const std::string& tag,
+    const std::vector<std::string>& fields);
+
 void finalize_event_partition(
     EventPartitionCertificate2& certificate);
 
