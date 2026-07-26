@@ -1,5 +1,6 @@
 #include "circle_projection.h"
 
+#include "circle_fibre_state.h"
 #include "event_certificate.h"
 #include "event_partition.h"
 #include "parameter_charts.h"
@@ -1073,6 +1074,8 @@ partition_full_circle_boundary_geometry(
     }
     EventPartitionCertificate2 certificate =
         partition_projections(tangencies);
+    classify_full_circle_endpoint_fibres(
+        certificate);
     certificate.overlaps.insert(
         certificate.overlaps.end(),
         cap_overlaps.begin(),
