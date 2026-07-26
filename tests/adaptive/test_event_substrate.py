@@ -1004,6 +1004,72 @@ def test_certificate_roundtrip_reconstructs_partition_and_excludes_intervals_fro
     assert _continuous_tea_2.verify_event_partition(regenerated).verdict.name == "CERTIFIED"
 
 
+def test_certificate_verifier_rejects_nonisolating_root_interval() -> None:
+    certificate = _continuous_tea_2.partition_cap_crossings(
+        ("0", "1"),
+        ("1",),
+        ("0", "3"),
+        ("1",),
+        "64",
+        "65",
+        _event(b"invalid-interval", kind="cap-crossing"),
+    )
+    root = certificate.roots[0]
+    nonisolating_root = _continuous_tea_2.AlgebraicRootRecord2(
+        root.root_id,
+        root.factor_coefficients,
+        root.root_ordinal,
+        root.multiplicity,
+        "100",
+        "101",
+    )
+    mutated = _replace_certificate(
+        certificate,
+        roots=(nonisolating_root, *certificate.roots[1:]),
+    )
+
+    assert mutated.canonical_digest == certificate.canonical_digest
+    assert _continuous_tea_2.verify_event_partition(mutated).verdict.name == "UNRESOLVED_DEGENERACY"
+
+
+def test_certificate_verifier_rejects_overlapping_valid_root_intervals() -> None:
+    certificate = _continuous_tea_2.partition_cap_crossings(
+        ("0", "1"),
+        ("1",),
+        ("0", "3"),
+        ("1",),
+        "64",
+        "65",
+        _event(b"overlapping-intervals", kind="cap-crossing"),
+    )
+    first, second = certificate.roots
+    overlapping_roots = (
+        _continuous_tea_2.AlgebraicRootRecord2(
+            first.root_id,
+            first.factor_coefficients,
+            first.root_ordinal,
+            first.multiplicity,
+            "0",
+            "3/5",
+        ),
+        _continuous_tea_2.AlgebraicRootRecord2(
+            second.root_id,
+            second.factor_coefficients,
+            second.root_ordinal,
+            second.multiplicity,
+            "11/20",
+            "1",
+        ),
+    )
+    mutated = _replace_certificate(
+        certificate,
+        roots=overlapping_roots,
+    )
+
+    assert mutated.canonical_digest == certificate.canonical_digest
+    assert _continuous_tea_2.verify_event_partition(mutated).verdict.name == "UNRESOLVED_DEGENERACY"
+
+
 def test_native_sha256_matches_known_vector() -> None:
     assert _continuous_tea_2.sha256_bytes(b"abc") == hashlib.sha256(b"abc").digest()
 

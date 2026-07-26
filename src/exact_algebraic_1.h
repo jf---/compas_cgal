@@ -25,5 +25,8 @@ std::string algebraic_root_id_v1(
     const std::vector<ExactAlgebraicInteger1>& primitive_factor,
     std::size_t root_ordinal);
 
+void validate_algebraic_root_intervals(
+    const std::vector<AlgebraicRootRecord2>& roots);
+
 EventPartitionCertificate2 partition_integer_projections(
     const std::vector<ProjectionInput2>& projections);
