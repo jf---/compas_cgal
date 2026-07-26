@@ -521,9 +521,19 @@ bool event_less(
                left.branch_id,
                left.kind,
                left.disposition,
+               left.left_active_count,
+               left.right_active_count,
+               left.incidence_permutation_rechecked,
                left.original_equations_rechecked,
                left.orientation_rechecked,
-               left.trim_disposition)
+               left.trim_disposition,
+               left.pair_sheet_id,
+               left.first_feature_id,
+               left.second_feature_id,
+               left.first_chart_id,
+               left.second_chart_id,
+               left.first_branch_id,
+               left.second_branch_id)
         < std::tie(
                right.feature_id,
                right.support_id,
@@ -532,9 +542,19 @@ bool event_less(
                right.branch_id,
                right.kind,
                right.disposition,
+               right.left_active_count,
+               right.right_active_count,
+               right.incidence_permutation_rechecked,
                right.original_equations_rechecked,
                right.orientation_rechecked,
-               right.trim_disposition);
+               right.trim_disposition,
+               right.pair_sheet_id,
+               right.first_feature_id,
+               right.second_feature_id,
+               right.first_chart_id,
+               right.second_chart_id,
+               right.first_branch_id,
+               right.second_branch_id);
 }
 
 } // namespace
@@ -679,6 +699,21 @@ EventPartitionCertificate2 partition_integer_projections(
             coefficient_text(
                 primitive_coefficients(polynomial)),
         };
+        const int actual_degree =
+            CGAL::degree(polynomial);
+        projection_record.actual_motion_degree =
+            actual_degree;
+        projection_record.actual_rim_degree = 0;
+        projection_record.bound_motion_degree =
+            actual_degree;
+        projection_record.bound_rim_degree = 0;
+        projection_record.degree_bound_id =
+            "exact-univariate-("
+            + std::to_string(actual_degree)
+            + ",0)-v1";
+        projection_record.normalized_coefficient_bytes =
+            ccan_sequence(
+                projection_record.coefficient_rows.front());
 
         for (const auto& [raw_factor, multiplicity] : factors) {
             const Polynomial factor =

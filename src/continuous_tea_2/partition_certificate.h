@@ -38,9 +38,19 @@ struct PartitionEvent2 {
     std::string vertex_id;
     std::string branch_id;
     std::string disposition;
-    bool original_equations_rechecked = true;
-    bool orientation_rechecked = true;
-    std::string trim_disposition = "accepted";
+    std::size_t left_active_count = 0;
+    std::size_t right_active_count = 0;
+    bool incidence_permutation_rechecked = false;
+    bool original_equations_rechecked = false;
+    bool orientation_rechecked = false;
+    std::string trim_disposition = "unchecked";
+    std::string pair_sheet_id;
+    std::string first_feature_id;
+    std::string second_feature_id;
+    std::string first_chart_id;
+    std::string second_chart_id;
+    std::string first_branch_id;
+    std::string second_branch_id;
 
     PartitionEvent2() = default;
     PartitionEvent2(

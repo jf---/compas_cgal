@@ -78,6 +78,12 @@ class NonPositiveToolRadiusError(EventSubstrateError): ...
 class InvalidCapChordRatioError(EventSubstrateError): ...
 
 
+class UnsupportedAlgebraicVertexProjectionError(EventSubstrateError): ...
+
+
+class IncompleteSegmentPartitionError(EventSubstrateError): ...
+
+
 class ContinuousTeaVerdict:
     CERTIFIED: ContinuousTeaVerdict
     CAP_EXCEEDED: ContinuousTeaVerdict
@@ -90,6 +96,7 @@ class ExactBinary64Rational2:
     numerator: str
     denominator: str
     text: str
+    canonical_bytes: bytes
 
 
 class SegmentEventSource2:
@@ -198,9 +205,19 @@ class PartitionEvent2:
     vertex_id: bytes
     branch_id: bytes
     disposition: str
+    left_active_count: int
+    right_active_count: int
+    incidence_permutation_rechecked: bool
     original_equations_rechecked: bool
     orientation_rechecked: bool
     trim_disposition: str
+    pair_sheet_id: bytes
+    first_feature_id: bytes
+    second_feature_id: bytes
+    first_chart_id: str
+    second_chart_id: str
+    first_branch_id: bytes
+    second_branch_id: bytes
 
 
 class ProjectionInput2:
@@ -341,6 +358,72 @@ class VerifiedEventPartition2:
     partition: EventPartitionCertificate2
 
 
+class SegmentBoundaryBranch2:
+    branch_id: bytes
+    feature_id: bytes
+    support_id: bytes
+    support_kind: Literal["line", "circle"]
+    trim_id: bytes
+    vertex_id: bytes
+    material_side: Literal["left"]
+    trim_disposition: Literal["accepted"]
+    rim_chart_id: Literal["rim-half-0-v1", "rim-half-1-v1"]
+    rim_sheet_ordinal: int
+    rim_root_id: bytes
+    rim_factor_coefficients: Sequence[str]
+    rim_root_ordinal: int
+
+
+class BranchPairDisposition2:
+    pair_sheet_id: bytes
+    first_branch_id: bytes
+    second_branch_id: bytes
+    orientation_disposition: Literal["ccw-forward", "ccw-wrap"]
+    cap_disposition: Literal["below-cap", "equal-cap", "above-cap"]
+
+
+class SegmentEventStratum2:
+    kind: Literal["cell", "fibre"]
+    root_id: bytes
+    local_root_id: bytes
+    global_fibre_id: bytes
+    chart_id: Literal["segment-linear-v1"]
+    witness_numerator: str
+    witness_denominator: str
+    root_factor_coefficients: Sequence[str]
+    root_ordinal: int
+    active_branch_ids: Sequence[bytes]
+    events: Sequence[PartitionEvent2]
+    left_pair_dispositions: Sequence[BranchPairDisposition2]
+    pair_dispositions: Sequence[BranchPairDisposition2]
+    right_pair_dispositions: Sequence[BranchPairDisposition2]
+    algebraic_root_evaluated: bool
+    original_equations_rechecked: bool
+    orientation_rechecked: bool
+    trim_predicates_rechecked: bool
+
+
+class SegmentCellStratum2:
+    branches: Sequence[SegmentBoundaryBranch2]
+    stratum: SegmentEventStratum2
+
+
+class SegmentEventPartition2:
+    source: SegmentEventSource2
+    boundary_feature_ids: Sequence[bytes]
+    projections: Sequence[ProjectionRecord2]
+    branches: Sequence[SegmentBoundaryBranch2]
+    strata: Sequence[SegmentEventStratum2]
+    certificate: EventPartitionCertificate2
+    canonical_bytes: bytes
+    canonical_digest: bytes
+
+
+class VerifiedSegmentEventPartition2:
+    verdict: ContinuousTeaVerdict
+    partition: SegmentEventPartition2
+
+
 def extract_boundary_records(stock: Stock2) -> Sequence[BoundaryFeatureRecord2]: ...
 def classify_boundary_pair(
     stock: Stock2,
@@ -412,3 +495,29 @@ def sha256_bytes(input: bytes) -> bytes: ...
 def partition_projections(
     projections: Sequence[ProjectionInput2],
 ) -> EventPartitionCertificate2: ...
+def construct_segment_cell_stratum(
+    stock: Stock2,
+    source: SegmentEventSource2,
+    witness_numerator: str,
+    witness_denominator: str,
+) -> SegmentCellStratum2: ...
+def segment_pair_literal_signs() -> Sequence[str]: ...
+def segment_rational_square_root_cases() -> Sequence[str]: ...
+def construct_segment_event_partition(
+    stock: Stock2,
+    x0: float,
+    y0: float,
+    x1: float,
+    y1: float,
+    tool_radius: float,
+    cap_chord_ratio: float,
+) -> SegmentEventPartition2: ...
+def verify_segment_event_partition(
+    stock: Stock2,
+    source: SegmentEventSource2,
+    candidate: SegmentEventPartition2,
+) -> VerifiedSegmentEventPartition2: ...
+def mutate_segment_event_partition(
+    partition: SegmentEventPartition2,
+    mutation: str,
+) -> SegmentEventPartition2: ...

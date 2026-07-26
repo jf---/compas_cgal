@@ -684,6 +684,18 @@ EventPartitionCertificate2 partition_cap_crossings(
                 });
         } else {
             assign_rational_cap_witnesses(certificate);
+            for (EventFibre2& fibre :
+                 certificate.fibres) {
+                for (PartitionEvent2& accepted_event :
+                     fibre.events) {
+                    accepted_event
+                        .original_equations_rechecked = true;
+                    accepted_event
+                        .orientation_rechecked = true;
+                    accepted_event.trim_disposition =
+                        "accepted";
+                }
+            }
             for (ParameterCell2& cell : certificate.cells) {
                 const Rational witness(
                     Integer(cell.witness_numerator),

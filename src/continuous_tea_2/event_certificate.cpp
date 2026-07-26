@@ -157,10 +157,21 @@ std::string canonical_event(const PartitionEvent2& event)
             event.vertex_id,
             event.branch_id,
             event.disposition,
+            std::to_string(event.left_active_count),
+            std::to_string(event.right_active_count),
+            boolean_text(
+                event.incidence_permutation_rechecked),
             boolean_text(
                 event.original_equations_rechecked),
             boolean_text(event.orientation_rechecked),
             event.trim_disposition,
+            event.pair_sheet_id,
+            event.first_feature_id,
+            event.second_feature_id,
+            event.first_chart_id,
+            event.second_chart_id,
+            event.first_branch_id,
+            event.second_branch_id,
         });
 }
 
