@@ -9,9 +9,12 @@
 #include <vector>
 
 #include <CGAL/Algebraic_structure_traits.h>
+#include <CGAL/Cartesian.h>
 #include <CGAL/CORE/BigRat.h>
 #include <CGAL/Exact_predicates_exact_constructions_kernel_with_sqrt.h>
 #include <CGAL/Parabola_segment_2.h>
+#include <CGAL/Polygon_2.h>
+#include <CGAL/Polygon_with_holes_2.h>
 #include <CGAL/Segment_Delaunay_graph_2.h>
 #include <CGAL/Segment_Delaunay_graph_adaptation_policies_2.h>
 #include <CGAL/Segment_Delaunay_graph_adaptation_traits_2.h>
@@ -38,6 +41,10 @@ using SegmentSiteVoronoi2 = CGAL::Voronoi_diagram_2<
     SegmentSiteAdaptationPolicy2>;
 using SegmentSiteParabola2 =
     CGAL::Parabola_segment_2<MatTraits>;
+using MatDomainKernel2 = CGAL::Cartesian<CORE::BigRat>;
+using MatDomainPolygon2 = CGAL::Polygon_2<MatDomainKernel2>;
+using MatDomainPolygonWithHoles2 =
+    CGAL::Polygon_with_holes_2<MatDomainKernel2>;
 
 struct MatParameterDomain2 {
     std::optional<MatTraits::FT> lower;
@@ -64,6 +71,11 @@ struct RationalPrimitiveParameterization2 {
 };
 
 class InvalidRationalPrimitiveError : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
+
+class OverlappingDomainBoundaryError : public std::runtime_error {
 public:
     using std::runtime_error::runtime_error;
 };
@@ -97,6 +109,13 @@ maximal_clearance_components(
     const std::string& original_dual_id,
     const RationalPrimitiveParameterization2& primitive,
     const ClearanceRootBoundary2& boundary);
+
+std::vector<MatAdmissibleComponent2>
+clip_linear_clearance_components(
+    const std::string& original_dual_id,
+    const RationalPrimitiveParameterization2& primitive,
+    const ClearanceRootBoundary2& boundary,
+    const MatDomainPolygonWithHoles2& domain);
 
 struct SegmentSiteMatCompileEvidence2 {
     bool delaunay_valid;

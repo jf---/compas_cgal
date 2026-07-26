@@ -145,6 +145,58 @@ bool clearance_boundaries_are_exact()
             {{CORE::BigRat(0)}, {CORE::BigRat(0)}, 0, 1},
             negative);
 
+    MatDomainPolygon2 outer;
+    outer.push_back({-3, -2});
+    outer.push_back({3, -2});
+    outer.push_back({3, 2});
+    outer.push_back({-3, 2});
+    MatDomainPolygon2 hole;
+    hole.push_back({-1, -1});
+    hole.push_back({-1, 1});
+    hole.push_back({1, 1});
+    hole.push_back({1, -1});
+    const std::vector<MatDomainPolygon2> holes{hole};
+    const MatDomainPolygonWithHoles2 domain(
+        outer,
+        holes.begin(),
+        holes.end());
+
+    const std::vector<MatAdmissibleComponent2>
+        clipped_domain_line =
+            clip_linear_clearance_components(
+                "D-line-dual",
+                line,
+                line_boundary,
+                domain);
+    const std::vector<MatAdmissibleComponent2>
+        clipped_domain_ray =
+            clip_linear_clearance_components(
+                "D-ray-dual",
+                ray,
+                ray_boundary,
+                domain);
+    const RationalPrimitiveParameterization2
+        crossing_segment{
+            {CORE::BigRat(-4), CORE::BigRat(8)},
+            {CORE::BigRat(0)},
+            CORE::BigRat(0),
+            CORE::BigRat(1),
+        };
+    const ClearanceRootBoundary2
+        crossing_segment_boundary =
+            point_clearance_boundary(
+                crossing_segment,
+                0,
+                10,
+                0);
+    const std::vector<MatAdmissibleComponent2>
+        clipped_domain_segment =
+            clip_linear_clearance_components(
+                "D-segment-dual",
+                crossing_segment,
+                crossing_segment_boundary,
+                domain);
+
     return line_boundary.roots.size() == 2
         && ray_boundary.roots.size() == 1
         && segment_boundary.roots.size() == 1
@@ -171,7 +223,20 @@ bool clearance_boundaries_are_exact()
             == "clipped-line-dual/clearance-root-1"
         && zero_components.size() == 1
         && positive_components.size() == 1
-        && negative_components.empty();
+        && negative_components.empty()
+        && clipped_domain_line.size() == 2
+        && clipped_domain_line.front().lower.parameter.has_value()
+        && clipped_domain_line.front().upper.parameter.has_value()
+        && clipped_domain_line.back().lower.parameter.has_value()
+        && clipped_domain_line.back().upper.parameter.has_value()
+        && clipped_domain_ray.size() == 1
+        && clipped_domain_segment.size() == 2
+        && clipped_domain_segment.front()
+            .lower.provenance_ids.front()
+            == "D-segment-dual/D-outer/edge-3"
+        && clipped_domain_segment.back()
+            .upper.provenance_ids.front()
+            == "D-segment-dual/D-outer/edge-1";
 }
 
 } // namespace

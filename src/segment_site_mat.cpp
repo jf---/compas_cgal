@@ -225,6 +225,26 @@ CGAL::Sign clearance_sign_on_open_cell(
     return CGAL::sign(value);
 }
 
+CORE::BigRat open_cell_witness(
+    const MatParameterEndpoint2& lower,
+    const MatParameterEndpoint2& upper,
+    const ExactAlgebraicKernel1& kernel)
+{
+    if (!lower.parameter.has_value()
+        && !upper.parameter.has_value()) {
+        return 0;
+    }
+    if (!lower.parameter.has_value()) {
+        return upper.parameter->low() - 1;
+    }
+    if (!upper.parameter.has_value()) {
+        return lower.parameter->high() + 1;
+    }
+    return kernel.bound_between_1_object()(
+        *lower.parameter,
+        *upper.parameter);
+}
+
 void append_root_endpoint(
     std::vector<TaggedEndpoint2>& endpoints,
     TaggedEndpoint2& upper,
@@ -255,6 +275,179 @@ void append_root_endpoint(
             {root, {root_id}},
             true,
         });
+}
+
+CORE::BigRat evaluate_rational_polynomial(
+    const std::vector<CORE::BigRat>& coefficients,
+    const CORE::BigRat& parameter)
+{
+    CORE::BigRat value = 0;
+    for (auto coefficient = coefficients.rbegin();
+         coefficient != coefficients.rend();
+         ++coefficient) {
+        value *= parameter;
+        value += *coefficient;
+    }
+    return value;
+}
+
+bool domain_contains(
+    const MatDomainPolygonWithHoles2& domain,
+    const CORE::BigRat& x,
+    const CORE::BigRat& y)
+{
+    const MatDomainKernel2::Point_2 point(x, y);
+    if (domain.outer_boundary().bounded_side(point)
+        == CGAL::ON_UNBOUNDED_SIDE) {
+        return false;
+    }
+    for (auto hole = domain.holes_begin();
+         hole != domain.holes_end();
+         ++hole) {
+        if (hole->bounded_side(point)
+            == CGAL::ON_BOUNDED_SIDE) {
+            return false;
+        }
+    }
+    return true;
+}
+
+struct RationalDomainRoot2 {
+    CORE::BigRat parameter;
+    std::vector<std::string> provenance_ids;
+};
+
+void append_polygon_intersections(
+    const MatDomainPolygon2& polygon,
+    const std::string& ring_id,
+    const RationalPrimitiveParameterization2& primitive,
+    std::vector<RationalDomainRoot2>& roots)
+{
+    const CORE::BigRat x0 = primitive.x_coefficients.front();
+    const CORE::BigRat y0 = primitive.y_coefficients.front();
+    const CORE::BigRat vx =
+        primitive.x_coefficients.size() == 1
+        ? CORE::BigRat(0)
+        : primitive.x_coefficients[1];
+    const CORE::BigRat vy =
+        primitive.y_coefficients.size() == 1
+        ? CORE::BigRat(0)
+        : primitive.y_coefficients[1];
+
+    std::size_t edge_index = 0;
+    for (auto edge = polygon.edges_begin();
+         edge != polygon.edges_end();
+         ++edge, ++edge_index) {
+        const CORE::BigRat ax = edge->source().x();
+        const CORE::BigRat ay = edge->source().y();
+        const CORE::BigRat ex =
+            edge->target().x() - ax;
+        const CORE::BigRat ey =
+            edge->target().y() - ay;
+        const CORE::BigRat wx = ax - x0;
+        const CORE::BigRat wy = ay - y0;
+        const CORE::BigRat denominator =
+            vx * ey - vy * ex;
+        const CORE::BigRat collinearity =
+            wx * vy - wy * vx;
+        if (denominator == 0) {
+            if (collinearity == 0) {
+                throw OverlappingDomainBoundaryError(
+                    "linear primitive overlaps domain boundary");
+            }
+            continue;
+        }
+
+        const CORE::BigRat parameter =
+            (wx * ey - wy * ex) / denominator;
+        const CORE::BigRat edge_parameter =
+            collinearity / denominator;
+        if (edge_parameter < 0 || edge_parameter > 1) {
+            continue;
+        }
+        if (primitive.domain_lower.has_value()
+            && parameter < *primitive.domain_lower) {
+            continue;
+        }
+        if (primitive.domain_upper.has_value()
+            && parameter > *primitive.domain_upper) {
+            continue;
+        }
+        roots.push_back(
+            {
+                parameter,
+                {
+                    ring_id + "/edge-"
+                    + std::to_string(edge_index),
+                },
+            });
+    }
+}
+
+std::vector<RationalDomainRoot2> linear_domain_roots(
+    const std::string& dual_id,
+    const RationalPrimitiveParameterization2& primitive,
+    const MatDomainPolygonWithHoles2& domain)
+{
+    if (primitive.x_coefficients.size() > 2
+        || primitive.y_coefficients.size() > 2) {
+        throw InvalidRationalPrimitiveError(
+            "D clipping requires a linear primitive");
+    }
+    const CORE::BigRat vx =
+        primitive.x_coefficients.size() == 1
+        ? CORE::BigRat(0)
+        : primitive.x_coefficients[1];
+    const CORE::BigRat vy =
+        primitive.y_coefficients.size() == 1
+        ? CORE::BigRat(0)
+        : primitive.y_coefficients[1];
+    if (vx == 0 && vy == 0) {
+        throw InvalidRationalPrimitiveError(
+            "linear primitive direction is zero");
+    }
+    if (domain.is_unbounded()) {
+        throw InvalidRationalPrimitiveError(
+            "D clipping requires a bounded outer polygon");
+    }
+
+    std::vector<RationalDomainRoot2> roots;
+    append_polygon_intersections(
+        domain.outer_boundary(),
+        dual_id + "/D-outer",
+        primitive,
+        roots);
+    std::size_t hole_index = 0;
+    for (auto hole = domain.holes_begin();
+         hole != domain.holes_end();
+         ++hole, ++hole_index) {
+        append_polygon_intersections(
+            *hole,
+            dual_id + "/D-hole-"
+                + std::to_string(hole_index),
+            primitive,
+            roots);
+    }
+    std::sort(
+        roots.begin(),
+        roots.end(),
+        [](const RationalDomainRoot2& lhs,
+           const RationalDomainRoot2& rhs) {
+            return lhs.parameter < rhs.parameter;
+        });
+    std::vector<RationalDomainRoot2> unique;
+    for (RationalDomainRoot2& root : roots) {
+        if (!unique.empty()
+            && unique.back().parameter == root.parameter) {
+            unique.back().provenance_ids.insert(
+                unique.back().provenance_ids.end(),
+                root.provenance_ids.begin(),
+                root.provenance_ids.end());
+        } else {
+            unique.push_back(std::move(root));
+        }
+    }
+    return unique;
 }
 
 std::size_t exact_clearance_root_count()
@@ -546,6 +739,256 @@ maximal_clearance_components(
             index < retained_cells.size()
             && retained_cells[index];
         if (!retained_left && !retained_right) {
+            ordered.push_back(
+                {
+                    2 * index + 1,
+                    endpoints[index].endpoint,
+                    endpoints[index].endpoint,
+                });
+        }
+    }
+    std::sort(
+        ordered.begin(),
+        ordered.end(),
+        [](const OrderedComponent2& lhs,
+           const OrderedComponent2& rhs) {
+            return lhs.order < rhs.order;
+        });
+
+    std::vector<MatAdmissibleComponent2> components;
+    components.reserve(ordered.size());
+    for (std::size_t index = 0;
+         index < ordered.size();
+         ++index) {
+        components.push_back(
+            {
+                original_dual_id + "/component-"
+                    + std::to_string(index),
+                ordered[index].lower,
+                ordered[index].upper,
+            });
+    }
+    return components;
+}
+
+std::vector<MatAdmissibleComponent2>
+clip_linear_clearance_components(
+    const std::string& original_dual_id,
+    const RationalPrimitiveParameterization2& primitive,
+    const ClearanceRootBoundary2& boundary,
+    const MatDomainPolygonWithHoles2& domain)
+{
+    if (original_dual_id.empty()) {
+        throw InvalidRationalPrimitiveError(
+            "original dual identity is empty");
+    }
+    if (!boundary.constant_sign.has_value()
+        && boundary.primitive_coefficients.empty()) {
+        throw InvalidRationalPrimitiveError(
+            "nonconstant clearance boundary has no polynomial");
+    }
+
+    struct CombinedEndpoint2 {
+        MatParameterEndpoint2 endpoint;
+        bool clearance_root;
+        bool domain_boundary;
+    };
+    ExactAlgebraicKernel1 kernel;
+    CombinedEndpoint2 lower{
+        domain_endpoint(
+            original_dual_id,
+            "lower",
+            primitive.domain_lower,
+            kernel),
+        false,
+        false,
+    };
+    CombinedEndpoint2 upper{
+        domain_endpoint(
+            original_dual_id,
+            "upper",
+            primitive.domain_upper,
+            kernel),
+        false,
+        false,
+    };
+    std::vector<CombinedEndpoint2> candidates;
+    for (std::size_t index = 0;
+         index < boundary.roots.size();
+         ++index) {
+        candidates.push_back(
+            {
+                {
+                    boundary.roots[index],
+                    {
+                        original_dual_id + "/clearance-root-"
+                        + std::to_string(index),
+                    },
+                },
+                true,
+                false,
+            });
+    }
+    const std::vector<RationalDomainRoot2> domain_roots =
+        linear_domain_roots(
+            original_dual_id,
+            primitive,
+            domain);
+    for (const RationalDomainRoot2& root : domain_roots) {
+        candidates.push_back(
+            {
+                {
+                    kernel.construct_algebraic_real_1_object()(
+                        root.parameter),
+                    root.provenance_ids,
+                },
+                false,
+                true,
+            });
+    }
+    const auto compare = kernel.compare_1_object();
+    std::sort(
+        candidates.begin(),
+        candidates.end(),
+        [&compare](const CombinedEndpoint2& lhs,
+                   const CombinedEndpoint2& rhs) {
+            return compare(
+                       *lhs.endpoint.parameter,
+                       *rhs.endpoint.parameter)
+                == CGAL::SMALLER;
+        });
+
+    std::vector<CombinedEndpoint2> endpoints{lower};
+    for (CombinedEndpoint2& candidate : candidates) {
+        CombinedEndpoint2* equal_endpoint = nullptr;
+        if (endpoints.back().endpoint.parameter.has_value()
+            && compare(
+                   *endpoints.back().endpoint.parameter,
+                   *candidate.endpoint.parameter)
+                == CGAL::EQUAL) {
+            equal_endpoint = &endpoints.back();
+        } else if (upper.endpoint.parameter.has_value()
+                   && compare(
+                          *upper.endpoint.parameter,
+                          *candidate.endpoint.parameter)
+                       == CGAL::EQUAL) {
+            equal_endpoint = &upper;
+        }
+        if (equal_endpoint == nullptr) {
+            endpoints.push_back(std::move(candidate));
+            continue;
+        }
+        equal_endpoint->clearance_root =
+            equal_endpoint->clearance_root
+            || candidate.clearance_root;
+        equal_endpoint->domain_boundary =
+            equal_endpoint->domain_boundary
+            || candidate.domain_boundary;
+        equal_endpoint->endpoint.provenance_ids.insert(
+            equal_endpoint->endpoint.provenance_ids.end(),
+            candidate.endpoint.provenance_ids.begin(),
+            candidate.endpoint.provenance_ids.end());
+    }
+    if (endpoints.front().endpoint.parameter.has_value()
+        && upper.endpoint.parameter.has_value()
+        && compare(
+               *endpoints.front().endpoint.parameter,
+               *upper.endpoint.parameter)
+            == CGAL::EQUAL) {
+        endpoints.front().endpoint.provenance_ids.insert(
+            endpoints.front().endpoint.provenance_ids.end(),
+            upper.endpoint.provenance_ids.begin(),
+            upper.endpoint.provenance_ids.end());
+    } else {
+        endpoints.push_back(upper);
+    }
+
+    std::vector<bool> inside_cells;
+    std::vector<bool> retained_cells;
+    inside_cells.reserve(endpoints.size() - 1);
+    retained_cells.reserve(endpoints.size() - 1);
+    for (std::size_t index = 0;
+         index + 1 < endpoints.size();
+         ++index) {
+        const CORE::BigRat witness = open_cell_witness(
+            endpoints[index].endpoint,
+            endpoints[index + 1].endpoint,
+            kernel);
+        const bool inside = domain_contains(
+            domain,
+            evaluate_rational_polynomial(
+                primitive.x_coefficients,
+                witness),
+            evaluate_rational_polynomial(
+                primitive.y_coefficients,
+                witness));
+        const bool clearance_admissible =
+            boundary.constant_sign.has_value()
+            ? *boundary.constant_sign != CGAL::NEGATIVE
+            : clearance_sign_on_open_cell(
+                  boundary.primitive_coefficients,
+                  endpoints[index].endpoint,
+                  endpoints[index + 1].endpoint,
+                  kernel)
+                == CGAL::POSITIVE;
+        inside_cells.push_back(inside);
+        retained_cells.push_back(
+            inside && clearance_admissible);
+    }
+
+    struct OrderedComponent2 {
+        std::size_t order;
+        MatParameterEndpoint2 lower;
+        MatParameterEndpoint2 upper;
+    };
+    std::vector<OrderedComponent2> ordered;
+    for (std::size_t index = 0;
+         index < retained_cells.size();) {
+        if (!retained_cells[index]) {
+            ++index;
+            continue;
+        }
+        const std::size_t first = index;
+        while (index + 1 < retained_cells.size()
+               && retained_cells[index + 1]) {
+            ++index;
+        }
+        ordered.push_back(
+            {
+                2 * first,
+                endpoints[first].endpoint,
+                endpoints[index + 1].endpoint,
+            });
+        ++index;
+    }
+    for (std::size_t index = 0;
+         index < endpoints.size();
+         ++index) {
+        const bool retained_left =
+            index > 0 && retained_cells[index - 1];
+        const bool retained_right =
+            index < retained_cells.size()
+            && retained_cells[index];
+        if (retained_left || retained_right) {
+            continue;
+        }
+        const bool inside =
+            endpoints[index].domain_boundary
+            || (index > 0 && inside_cells[index - 1])
+            || (index < inside_cells.size()
+                && inside_cells[index]);
+        if (!inside) {
+            continue;
+        }
+        const bool clearance_admissible =
+            boundary.constant_sign.has_value()
+            ? *boundary.constant_sign != CGAL::NEGATIVE
+            : clearance_sign_at(
+                  boundary.primitive_coefficients,
+                  *endpoints[index].endpoint.parameter,
+                  kernel)
+                != CGAL::NEGATIVE;
+        if (inside && clearance_admissible) {
             ordered.push_back(
                 {
                     2 * index + 1,
