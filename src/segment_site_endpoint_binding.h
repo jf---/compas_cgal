@@ -28,6 +28,24 @@ public:
     using std::runtime_error::runtime_error;
 };
 
+class NonCanonicalQuadraticFieldError : public std::runtime_error
+{
+public:
+    using std::runtime_error::runtime_error;
+};
+
+class CoincidentSegmentEndpointsError : public std::runtime_error
+{
+public:
+    using std::runtime_error::runtime_error;
+};
+
+class ZeroSegmentLineNormalError : public std::runtime_error
+{
+public:
+    using std::runtime_error::runtime_error;
+};
+
 bool exact_open_segment_feature_contains(
     const SourceParabolaParameterization2& parabola,
     const MatExactPointSiteSource2& segment_source,

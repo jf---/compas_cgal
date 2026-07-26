@@ -538,6 +538,92 @@ bool identical_support_has_no_segment_limiter_owner()
     return owned_halfedges == 0;
 }
 
+bool square_field_radical_segment_is_rejected()
+{
+    LiveSegmentLimiterFixture2 fixture(
+        real_segment_limiter_fixture());
+    const std::vector<BoundEndpointObservation2> observations =
+        bind_segment_limiter_fixture(fixture);
+    if (observations.empty()) {
+        return false;
+    }
+    fixture.source.limiter_source_record.y.radical = 1;
+    try {
+        bind_segment_limiter_parabola_endpoint(
+            fixture.source.focus_record,
+            fixture.source.segment_record,
+            fixture.source.segment_source_record,
+            fixture.source.segment_target_record,
+            fixture.source.limiter_record,
+            fixture.source.limiter_source_record,
+            fixture.source.limiter_target_record,
+            fixture.voronoi,
+            observations[0].halfedge);
+    }
+    catch (const NonCanonicalQuadraticFieldError&) {
+        return true;
+    }
+    return false;
+}
+
+bool coincident_limiter_segment_is_rejected()
+{
+    LiveSegmentLimiterFixture2 fixture(
+        real_segment_limiter_fixture());
+    const std::vector<BoundEndpointObservation2> observations =
+        bind_segment_limiter_fixture(fixture);
+    if (observations.empty()) {
+        return false;
+    }
+    try {
+        bind_segment_limiter_parabola_endpoint(
+            fixture.source.focus_record,
+            fixture.source.segment_record,
+            fixture.source.segment_source_record,
+            fixture.source.segment_target_record,
+            fixture.source.limiter_record,
+            fixture.source.limiter_source_record,
+            fixture.source.limiter_source_record,
+            fixture.voronoi,
+            observations[0].halfedge);
+    }
+    catch (const CoincidentSegmentEndpointsError&) {
+        return true;
+    }
+    return false;
+}
+
+bool zero_limiter_line_normal_is_rejected()
+{
+    LiveSegmentLimiterFixture2 fixture(
+        real_segment_limiter_fixture());
+    const std::vector<BoundEndpointObservation2> observations =
+        bind_segment_limiter_fixture(fixture);
+    if (observations.empty()) {
+        return false;
+    }
+    MatExactOpenSegmentSource2 zero_line =
+        fixture.source.limiter_record;
+    zero_line.line_a = 0;
+    zero_line.line_b = 0;
+    try {
+        bind_segment_limiter_parabola_endpoint(
+            fixture.source.focus_record,
+            fixture.source.segment_record,
+            fixture.source.segment_source_record,
+            fixture.source.segment_target_record,
+            zero_line,
+            fixture.source.limiter_source_record,
+            fixture.source.limiter_target_record,
+            fixture.voronoi,
+            observations[0].halfedge);
+    }
+    catch (const ZeroSegmentLineNormalError&) {
+        return true;
+    }
+    return false;
+}
+
 } // namespace
 
 bool segment_limiter_gate()
@@ -546,5 +632,8 @@ bool segment_limiter_gate()
         && segment_endpoint_reduces_to_point_limiter()
         && unrelated_live_segment_limiter_is_rejected()
         && detached_identical_segment_limiter_fails_provenance()
-        && identical_support_has_no_segment_limiter_owner();
+        && identical_support_has_no_segment_limiter_owner()
+        && square_field_radical_segment_is_rejected()
+        && coincident_limiter_segment_is_rejected()
+        && zero_limiter_line_normal_is_rejected();
 }

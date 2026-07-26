@@ -876,6 +876,163 @@ bool collapsed_live_parabola_is_rejected()
     return false;
 }
 
+bool square_field_radical_point_is_rejected()
+{
+    LivePointLimiterFixture2 fixture(
+        rational_repeated_factor_fixture());
+    const std::vector<BoundEndpointObservation2> observations =
+        bind_point_limiter_fixture(fixture);
+    if (observations.empty()) {
+        return false;
+    }
+    fixture.source.focus_record.x.radical = 1;
+    try {
+        bind_point_limiter_parabola_endpoint(
+            fixture.source.focus_record,
+            fixture.source.segment_record,
+            fixture.source.segment_source_record,
+            fixture.source.segment_target_record,
+            fixture.source.limiter_record,
+            fixture.voronoi,
+            observations[0].halfedge);
+    }
+    catch (const NonCanonicalQuadraticFieldError&) {
+        return true;
+    }
+    return false;
+}
+
+bool nonpositive_quadratic_radicand_is_rejected()
+{
+    LivePointLimiterFixture2 fixture(
+        rational_repeated_factor_fixture());
+    const std::vector<BoundEndpointObservation2> observations =
+        bind_point_limiter_fixture(fixture);
+    if (observations.empty()) {
+        return false;
+    }
+    fixture.source.focus_record.radicand = 0;
+    try {
+        bind_point_limiter_parabola_endpoint(
+            fixture.source.focus_record,
+            fixture.source.segment_record,
+            fixture.source.segment_source_record,
+            fixture.source.segment_target_record,
+            fixture.source.limiter_record,
+            fixture.voronoi,
+            observations[0].halfedge);
+    }
+    catch (const NonCanonicalQuadraticFieldError&) {
+        return true;
+    }
+    return false;
+}
+
+bool coincident_source_segment_is_rejected()
+{
+    LivePointLimiterFixture2 fixture(
+        rational_repeated_factor_fixture());
+    const std::vector<BoundEndpointObservation2> observations =
+        bind_point_limiter_fixture(fixture);
+    if (observations.empty()) {
+        return false;
+    }
+    try {
+        bind_point_limiter_parabola_endpoint(
+            fixture.source.focus_record,
+            fixture.source.segment_record,
+            fixture.source.segment_source_record,
+            fixture.source.segment_source_record,
+            fixture.source.limiter_record,
+            fixture.voronoi,
+            observations[0].halfedge);
+    }
+    catch (const CoincidentSegmentEndpointsError&) {
+        return true;
+    }
+    return false;
+}
+
+bool zero_source_line_normal_is_rejected()
+{
+    LivePointLimiterFixture2 fixture(
+        rational_repeated_factor_fixture());
+    const std::vector<BoundEndpointObservation2> observations =
+        bind_point_limiter_fixture(fixture);
+    if (observations.empty()) {
+        return false;
+    }
+    MatExactOpenSegmentSource2 zero_line =
+        fixture.source.segment_record;
+    zero_line.line_a = 0;
+    zero_line.line_b = 0;
+    try {
+        bind_point_limiter_parabola_endpoint(
+            fixture.source.focus_record,
+            zero_line,
+            fixture.source.segment_source_record,
+            fixture.source.segment_target_record,
+            fixture.source.limiter_record,
+            fixture.voronoi,
+            observations[0].halfedge);
+    }
+    catch (const ZeroSegmentLineNormalError&) {
+        return true;
+    }
+    return false;
+}
+
+bool unbounded_halfedge_is_rejected_without_site_access()
+{
+    const PointLimiterFixture2 fixture =
+        rational_repeated_factor_fixture();
+    SegmentSiteDelaunay2 delaunay;
+    delaunay.insert(
+        fixture.segment_source,
+        fixture.segment_target);
+    delaunay.insert(fixture.focus);
+    SegmentSiteVoronoi2 voronoi(delaunay);
+    const MatTraits::Site_2 focus_site =
+        MatTraits::Site_2::construct_site_2(
+            fixture.segment_source);
+    const MatTraits::Site_2 segment_site =
+        MatTraits::Site_2::construct_site_2(
+            fixture.segment_source,
+            fixture.segment_target);
+    for (auto halfedge = voronoi.halfedges_begin();
+         halfedge != voronoi.halfedges_end();
+         ++halfedge)
+    {
+        const MatTraits::Site_2 up =
+            halfedge->up()->site();
+        const MatTraits::Site_2 down =
+            halfedge->down()->site();
+        const bool generators_match =
+            (exact_site_equal(up, focus_site)
+             && exact_site_equal(down, segment_site))
+            || (exact_site_equal(up, segment_site)
+                && exact_site_equal(down, focus_site));
+        if (!generators_match
+            || !halfedge->is_unbounded()) {
+            continue;
+        }
+        try {
+            bind_point_limiter_parabola_endpoint(
+                fixture.segment_source_record,
+                fixture.segment_record,
+                fixture.segment_source_record,
+                fixture.segment_target_record,
+                fixture.limiter_record,
+                voronoi,
+                halfedge);
+        }
+        catch (const MismatchedLiveParabolaBridgeError&) {
+            return true;
+        }
+    }
+    return false;
+}
+
 } // namespace
 
 int main()
@@ -899,6 +1056,11 @@ int main()
             && unrelated_live_generator_is_rejected()
             && strict_open_segment_feature_rejects_decoy()
             && collapsed_live_parabola_is_rejected()
+            && square_field_radical_point_is_rejected()
+            && nonpositive_quadratic_radicand_is_rejected()
+            && coincident_source_segment_is_rejected()
+            && zero_source_line_normal_is_rejected()
+            && unbounded_halfedge_is_rejected_without_site_access()
             && segment_limiter_gate()
         ? EXIT_SUCCESS
         : EXIT_FAILURE;
