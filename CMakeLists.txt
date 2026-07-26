@@ -223,6 +223,23 @@ add_executable(task3_algorithm_gate EXCLUDE_FROM_ALL
 target_link_libraries(task3_algorithm_gate PRIVATE coverage_exact_core)
 target_compile_definitions(task3_algorithm_gate PRIVATE CGAL_USE_CORE=1)
 
+add_executable(task9_mat_compile_gate EXCLUDE_FROM_ALL
+    tests/native/task9_mat_compile_gate.cpp
+    src/segment_site_mat.cpp
+)
+add_dependencies(task9_mat_compile_gate external_downloads)
+target_include_directories(task9_mat_compile_gate PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CGAL_INCLUDE_DIR}
+    ${BOOST_INCLUDE_DIR}
+)
+target_compile_definitions(
+    task9_mat_compile_gate
+    PRIVATE
+        CGAL_USE_CORE=1
+        CGAL_CORE_USE_BOOST_BACKEND=1
+)
+
 # Add new modules here
 add_nanobind_module(_types_std src/types_std.cpp)
 add_nanobind_module(_booleans src/booleans.cpp)

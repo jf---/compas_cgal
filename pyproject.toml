@@ -211,3 +211,7 @@ _task3-gate-configure = "cmake -S . -B build/task3-algorithm -G Ninja -Dnanobind
 _task3-gate-build = "cmake --build build/task3-algorithm --target task3_algorithm_gate"
 _task3-gate-run = "build/task3-algorithm/task3_algorithm_gate"
 task3-algorithm-gate = { depends-on = ["_task3-gate-configure", "_task3-gate-build", "_task3-gate-run"], description = "Prove bounded exact Task 3 construction" }
+_task9-mat-configure = "cmake -S . -B build/task9-mat -G Ninja -Dnanobind_DIR=$(python -m nanobind --cmake_dir)"
+_task9-mat-build = "cmake --build build/task9-mat --target task9_mat_compile_gate"
+_task9-mat-run = "build/task9-mat/task9_mat_compile_gate"
+task9-mat-compile-gate = { depends-on = ["_task9-mat-configure", "_task9-mat-build", "_task9-mat-run"], description = "Compile exact segment-site MAT primitives" }
