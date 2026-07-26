@@ -106,9 +106,20 @@ struct ParameterCell2 {
     std::string disposition;
 };
 
+struct ActiveBoundaryBranch2 {
+    std::string branch_id;
+    std::string support_id;
+};
+
 struct EventFibre2 {
     std::string root_id;
     std::vector<PartitionEvent2> events;
+    std::vector<ActiveBoundaryBranch2>
+        left_active_branches;
+    std::vector<ActiveBoundaryBranch2>
+        right_active_branches;
+    std::string ccw_direction;
+    std::string cw_direction;
 };
 
 struct RationalTrimInterval2 {

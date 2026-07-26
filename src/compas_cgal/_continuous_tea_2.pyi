@@ -258,9 +258,18 @@ class ParameterCell2:
     disposition: str
 
 
+class ActiveBoundaryBranch2:
+    branch_id: bytes
+    support_id: bytes
+
+
 class EventFibre2:
     root_id: bytes
     events: Sequence[PartitionEvent2]
+    left_active_branches: Sequence[ActiveBoundaryBranch2]
+    right_active_branches: Sequence[ActiveBoundaryBranch2]
+    ccw_direction: str
+    cw_direction: str
 
 
 class RationalTrimInterval2:

@@ -787,13 +787,39 @@ NB_MODULE(_continuous_tea_2, m)
             "disposition",
             &ParameterCell2::disposition);
 
+    nb::class_<ActiveBoundaryBranch2>(
+        m,
+        "ActiveBoundaryBranch2")
+        .def_prop_ro(
+            "branch_id",
+            [](const ActiveBoundaryBranch2& branch) {
+                return as_bytes(branch.branch_id);
+            })
+        .def_prop_ro(
+            "support_id",
+            [](const ActiveBoundaryBranch2& branch) {
+                return as_bytes(branch.support_id);
+            });
+
     nb::class_<EventFibre2>(m, "EventFibre2")
         .def_prop_ro(
             "root_id",
             [](const EventFibre2& fibre) {
                 return as_bytes(fibre.root_id);
             })
-        .def_ro("events", &EventFibre2::events);
+        .def_ro("events", &EventFibre2::events)
+        .def_ro(
+            "left_active_branches",
+            &EventFibre2::left_active_branches)
+        .def_ro(
+            "right_active_branches",
+            &EventFibre2::right_active_branches)
+        .def_ro(
+            "ccw_direction",
+            &EventFibre2::ccw_direction)
+        .def_ro(
+            "cw_direction",
+            &EventFibre2::cw_direction);
 
     nb::class_<RationalTrimInterval2>(
         m,
