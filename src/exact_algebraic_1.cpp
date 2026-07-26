@@ -227,26 +227,50 @@ std::vector<std::string> coefficient_text(
     return result;
 }
 
-std::pair<Rational, Rational> strict_interval(
+Rational parse_rational_interval_bound(
+    const std::string& text)
+{
+    const std::size_t separator = text.find('/');
+    try {
+        if (separator == std::string::npos) {
+            return Rational(Integer(text));
+        }
+        if (text.find('/', separator + 1)
+            != std::string::npos) {
+            throw AlgebraicRootIsolationError(
+                "root interval bound is not an exact rational");
+        }
+        const Integer numerator(
+            text.substr(0, separator));
+        const Integer denominator(
+            text.substr(separator + 1));
+        if (denominator == 0) {
+            throw AlgebraicRootIsolationError(
+                "root interval bound has zero denominator");
+        }
+        return Rational(numerator, denominator);
+    } catch (const EventSubstrateError&) {
+        throw;
+    } catch (const std::exception&) {
+        throw AlgebraicRootIsolationError(
+            "root interval bound is not an exact rational");
+    }
+}
+
+void require_strict_isolating_interval(
     const AlgebraicReal& root,
-    const Polynomial& factor,
     const std::vector<AlgebraicReal>& factor_roots,
     std::size_t ordinal,
+    const std::pair<Rational, Rational>& interval,
     Kernel& kernel)
 {
-    auto interval =
-        kernel.isolate_1_object()(root, factor);
-    if (interval.first == interval.second) {
-        interval.first = ordinal == 0
-            ? interval.first - Rational(1)
-            : kernel.bound_between_1_object()(
-                  factor_roots[ordinal - 1],
-                  factor_roots[ordinal]);
-        interval.second = ordinal + 1 == factor_roots.size()
-            ? interval.second + Rational(1)
-            : kernel.bound_between_1_object()(
-                  factor_roots[ordinal],
-                  factor_roots[ordinal + 1]);
+    if (ordinal >= factor_roots.size()
+        || kernel.compare_1_object()(
+               factor_roots[ordinal],
+               root)
+            != CGAL::EQUAL) {
+        throw AlgebraicRootIsolationError(
+            "governing factor does not contain represented root");
     }
     if (kernel.compare_1_object()(interval.first, root)
             != CGAL::SMALLER
@@ -273,6 +297,35 @@ std::pair<Rational, Rational> strict_interval(
                 "isolating interval contains another factor root");
         }
     }
+}
+
+std::pair<Rational, Rational> strict_interval(
+    const AlgebraicReal& root,
+    const Polynomial& factor,
+    const std::vector<AlgebraicReal>& factor_roots,
+    std::size_t ordinal,
+    Kernel& kernel)
+{
+    auto interval =
+        kernel.isolate_1_object()(root, factor);
+    if (interval.first == interval.second) {
+        interval.first = ordinal == 0
+            ? interval.first - Rational(1)
+            : kernel.bound_between_1_object()(
+                  factor_roots[ordinal - 1],
+                  factor_roots[ordinal]);
+        interval.second = ordinal + 1 == factor_roots.size()
+            ? interval.second + Rational(1)
+            : kernel.bound_between_1_object()(
+                  factor_roots[ordinal],
+                  factor_roots[ordinal + 1]);
+    }
+    require_strict_isolating_interval(
+        root,
+        factor_roots,
+        ordinal,
+        interval,
+        kernel);
     return interval;
 }
 
@@ -534,6 +587,65 @@ std::string algebraic_root_id_v1(
                     ccan_integer(Integer(root_ordinal)),
                 },
             }));
+}
+
+void validate_algebraic_root_intervals(
+    const std::vector<AlgebraicRootRecord2>& roots)
+{
+    Kernel kernel;
+    std::vector<FactorRootCacheEntry> factor_root_cache;
+    std::vector<std::pair<Rational, Rational>> intervals;
+    intervals.reserve(roots.size());
+    for (const AlgebraicRootRecord2& record : roots) {
+        const Polynomial factor = normalized_polynomial(
+            polynomial_from_strings(
+                record.factor_coefficients));
+        const std::vector<Integer> primitive =
+            primitive_coefficients(factor);
+        if (coefficient_text(primitive)
+                != record.factor_coefficients
+            || algebraic_root_id_v1(
+                   primitive,
+                   record.root_ordinal)
+                != record.root_id) {
+            throw AlgebraicRootIsolationError(
+                "root identity does not match governing factor");
+        }
+        const std::vector<AlgebraicReal>& factor_roots =
+            cached_factor_roots(
+                factor,
+                factor_root_cache,
+                kernel);
+        if (record.root_ordinal
+            >= factor_roots.size()) {
+            throw AlgebraicRootIsolationError(
+                "root ordinal exceeds governing factor roots");
+        }
+        const AlgebraicReal& root =
+            factor_roots[record.root_ordinal];
+        const std::pair<Rational, Rational> interval = {
+            parse_rational_interval_bound(
+                record.interval_low),
+            parse_rational_interval_bound(
+                record.interval_high),
+        };
+        require_strict_isolating_interval(
+            root,
+            factor_roots,
+            record.root_ordinal,
+            interval,
+            kernel);
+        intervals.push_back(interval);
+    }
+    for (std::size_t index = 0;
+         index + 1 < intervals.size();
+         ++index) {
+        if (intervals[index].second
+            > intervals[index + 1].first) {
+            throw AlgebraicRootIsolationError(
+                "adjacent certified root intervals overlap");
+        }
+    }
 }
 
 EventPartitionCertificate2 partition_integer_projections(

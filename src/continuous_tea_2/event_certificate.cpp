@@ -1,5 +1,6 @@
 #include "event_certificate.h"
 
+#include "../exact_algebraic_1.h"
 #include "cap_partition.h"
 #include "sha256.h"
 
@@ -343,6 +344,8 @@ VerifiedEventPartition2 verify_event_partition(
         candidate.canonical_digest;
     try {
         finalize_event_partition(candidate);
+        validate_algebraic_root_intervals(
+            candidate.roots);
         const EventPartitionCertificate2 expected =
             reconstruct(candidate);
         const bool valid =
