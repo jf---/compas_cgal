@@ -2,7 +2,7 @@
 
 #include "../exact_algebraic_1.h"
 #include "cap_partition.h"
-#include "circle_oracle.h"
+#include "circle_source.h"
 #include "sha256.h"
 
 #include <cstdint>
