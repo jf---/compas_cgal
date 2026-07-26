@@ -63,6 +63,13 @@ enum class CellDecision {
     UNRESOLVED,
 };
 
+bool overlap_requires_resolution(
+    const OverlapInterval2& overlap)
+{
+    return overlap.kind
+        != "identically-equal-cap-interval";
+}
+
 bool reference_is_material(
     const Stock2& stock,
     const SegmentEventSource2& source,
@@ -452,7 +459,10 @@ SegmentTeaAudit2 audit_segment_tea_event_exact(
     bool any_clear = false;
     bool any_material = false;
     bool unresolved =
-        !partition.certificate.overlaps.empty();
+        std::any_of(
+            partition.certificate.overlaps.begin(),
+            partition.certificate.overlaps.end(),
+            overlap_requires_resolution);
     bool cap_exceeded = false;
     for (const SegmentEventStratum2& stratum :
          partition.strata) {
