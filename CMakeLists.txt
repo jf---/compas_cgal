@@ -229,6 +229,7 @@ add_executable(task9_mat_compile_gate EXCLUDE_FROM_ALL
     src/segment_site_mat_spikes.cpp
     src/segment_site_parameterization.cpp
     src/segment_site_clipping.cpp
+    src/segment_site_endpoint_binding.cpp
     src/segment_site_provenance.cpp
     src/exact_algebraic_1.cpp
 )
