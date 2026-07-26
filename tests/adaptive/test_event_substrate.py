@@ -614,6 +614,34 @@ def test_same_root_from_reducible_and_irreducible_projections_merges() -> None:
     ]
 
 
+def test_same_root_merge_is_independent_of_projection_input_order() -> None:
+    certificate = _continuous_tea_2.partition_projections(
+        (
+            _projection_input(
+                "reducible",
+                ("-1", "1", "2"),
+                (_event(b"reducible"),),
+            ),
+            _projection_input(
+                "irreducible",
+                ("-1", "2"),
+                (_event(b"irreducible"),),
+            ),
+        )
+    )
+
+    assert [root.root_id for root in certificate.roots] == [
+        _root_id((-1, 2), 0),
+    ]
+    assert [root.factor_coefficients for root in certificate.roots] == [
+        ("-1", "2"),
+    ]
+    assert [event.feature_id for event in certificate.fibres[0].events] == [
+        b"feature-irreducible",
+        b"feature-reducible",
+    ]
+
+
 def test_irreducible_quadratic_owns_its_algebraic_root_identity() -> None:
     certificate = _continuous_tea_2.partition_projections(
         (
@@ -635,41 +663,86 @@ def test_irreducible_quadratic_owns_its_algebraic_root_identity() -> None:
     )
 
 
-def test_reducible_quartic_without_rational_roots_splits_exactly() -> None:
+def test_square_free_reducible_witness_remains_whole() -> None:
     certificate = _continuous_tea_2.partition_projections(
         (
             _projection_input(
-                "quadratic-pair",
+                "reducible-witness",
                 ("1", "0", "-5", "0", "6"),
-                (_event(b"quadratic-pair"),),
+                (_event(b"reducible-witness"),),
             ),
         )
     )
 
-    assert certificate.projections[0].factor_coefficients == (
-        ("-1", "0", "2"),
-        ("-1", "0", "3"),
-    )
-    assert [root.root_id for root in certificate.roots] == [
-        _root_id((-1, 0, 3), 1),
-        _root_id((-1, 0, 2), 1),
+    assert certificate.projections[0].factor_coefficients == (("1", "0", "-5", "0", "6"),)
+    assert [
+        (
+            root.root_id,
+            root.factor_coefficients,
+            root.root_ordinal,
+        )
+        for root in certificate.roots
+    ] == [
+        (
+            _root_id((1, 0, -5, 0, 6), 2),
+            ("1", "0", "-5", "0", "6"),
+            2,
+        ),
+        (
+            _root_id((1, 0, -5, 0, 6), 3),
+            ("1", "0", "-5", "0", "6"),
+            3,
+        ),
     ]
 
 
-def test_degree_above_frozen_task5_contract_fails_before_solving() -> None:
-    with pytest.raises(
-        _continuous_tea_2.UnsupportedAlgebraicDegreeError,
-        match="degree 4",
-    ):
-        _continuous_tea_2.partition_projections(
-            (
-                _projection_input(
-                    "degree-five",
-                    ("1", "0", "0", "0", "0", "1"),
-                    (_event(b"degree-five"),),
-                ),
-            )
+def test_degree_five_projection_uses_generic_exact_solver() -> None:
+    certificate = _continuous_tea_2.partition_projections(
+        (
+            _projection_input(
+                "degree-five",
+                ("-1", "1", "0", "0", "0", "1"),
+                (_event(b"degree-five"),),
+            ),
         )
+    )
+
+    assert certificate.projections[0].factor_coefficients == (("-1", "1", "0", "0", "0", "1"),)
+    assert [
+        (
+            root.root_id,
+            root.factor_coefficients,
+            root.root_ordinal,
+        )
+        for root in certificate.roots
+    ] == [
+        (
+            _root_id((-1, 1, 0, 0, 0, 1), 0),
+            ("-1", "1", "0", "0", "0", "1"),
+            0,
+        ),
+    ]
+
+
+def test_same_root_multiplicity_aggregation_uses_maximum() -> None:
+    certificate = _continuous_tea_2.partition_projections(
+        (
+            _projection_input(
+                "double",
+                ("1", "-4", "4"),
+                (_event(b"double"),),
+            ),
+            _projection_input(
+                "triple",
+                ("-1", "6", "-12", "8"),
+                (_event(b"triple"),),
+            ),
+        )
+    )
+
+    assert len(certificate.roots) == 1
+    assert certificate.roots[0].root_id == _root_id((-1, 2), 0)
+    assert certificate.roots[0].multiplicity == 3
 
 
 def test_simultaneous_events_remain_distinct_in_one_exact_fibre() -> None:
@@ -843,20 +916,16 @@ def test_two_moving_branch_cap_resultant_is_exact_and_complete() -> None:
         _event(b"cap", kind="cap-crossing"),
     )
 
-    assert certificate.projections[0].factor_coefficients == (
-        ("-1", "2"),
-        ("1", "2"),
-        ("-2", "3"),
-        ("2", "3"),
-    )
+    representative = (4, 0, -25, 0, 36)
+    assert certificate.projections[0].factor_coefficients == (tuple(str(value) for value in representative),)
     assert [root.root_id for root in certificate.roots] == [
-        _root_id((-1, 2), 0),
-        _root_id((-2, 3), 0),
+        _root_id(representative, 2),
+        _root_id(representative, 3),
     ]
     assert _cell_witnesses(certificate) == (
         Fraction(1, 4),
-        Fraction(7, 12),
-        Fraction(5, 6),
+        Fraction(5, 8),
+        Fraction(3, 4),
     )
     assert [cell.disposition for cell in certificate.cells] == [
         "below-cap",
