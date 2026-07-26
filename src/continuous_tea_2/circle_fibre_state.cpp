@@ -126,15 +126,35 @@ ActiveBoundaryBranch2 active_branch(
         throw EventPartitionVerificationError(
             "full-circle active sheet has malformed event identity");
     }
-    return {
+    PhysicalIncidence2 incidence{
+        {},
+        event.kind,
+        event.feature_id,
+        event.support_id,
+        event.trim_id,
+        event.vertex_id,
+        event.endpoint_role,
+        sheet_ordinal,
+    };
+    incidence.incidence_id =
+        encode_canonical_record(
+            "physical-incidence-v1",
+            {
+                incidence.kind,
+                incidence.feature_id,
+                incidence.support_id,
+                incidence.trim_id,
+                incidence.vertex_id,
+                incidence.endpoint_role,
+                std::to_string(
+                    incidence.sheet_ordinal),
+            });
+    return ActiveBoundaryBranch2{
         encode_string_sequence(
             {
-                "full-circle-active-boundary-sheet-v2",
-                event.feature_id,
-                event.support_id,
-                event.trim_id,
+                "full-circle-active-boundary-sheet-v3",
+                incidence.incidence_id,
                 fields[2],
-                std::to_string(sheet_ordinal),
                 root_id,
             }),
         event.feature_id,
@@ -143,6 +163,7 @@ ActiveBoundaryBranch2 active_branch(
         fields[2],
         sheet_ordinal,
         root_id,
+        std::move(incidence),
     };
 }
 
@@ -154,8 +175,14 @@ void canonicalize(
         branches.end(),
         [](const ActiveBoundaryBranch2& first,
            const ActiveBoundaryBranch2& second) {
-            return first.branch_id
-                < second.branch_id;
+            return std::tie(
+                       first.physical_incidence
+                           .incidence_id,
+                       first.branch_id)
+                < std::tie(
+                       second.physical_incidence
+                           .incidence_id,
+                       second.branch_id);
         });
     branches.erase(
         std::unique(
@@ -163,8 +190,10 @@ void canonicalize(
             branches.end(),
             [](const ActiveBoundaryBranch2& first,
                const ActiveBoundaryBranch2& second) {
-                return first.branch_id
-                    == second.branch_id;
+                return first.physical_incidence
+                           .incidence_id
+                    == second.physical_incidence
+                           .incidence_id;
             }),
         branches.end());
 }
@@ -224,39 +253,10 @@ void coalesce_phase_seam(
             "full-circle phase seam lacks its anchor chart");
     }
     start.seam_id = anchor->start_seam_id;
-    const auto append_witnesses =
-        [&certificate, &start](
-            const EventFibre2& local) {
-        const auto root = std::find_if(
-            certificate.roots.begin(),
-            certificate.roots.end(),
-            [&local](
-                const AlgebraicRootRecord2& candidate) {
-                return candidate.root_id
-                    == local.root_id;
-            });
-        if (root == certificate.roots.end()) {
-            throw EventPartitionVerificationError(
-                "phase-seam event lacks its local root");
-        }
-        for (const PartitionEvent2& event :
-             local.events) {
-            start.local_event_witnesses.push_back(
-                {
-                    event.kind,
-                    event.feature_id,
-                    event.support_id,
-                    event.trim_id,
-                    event.vertex_id,
-                    event.branch_id,
-                    local.root_id,
-                    root->multiplicity,
-                });
-        }
-    };
-    const EventFibre2 start_local = start;
-    append_witnesses(start_local);
-    append_witnesses(end);
+    start.local_event_witnesses.insert(
+        start.local_event_witnesses.end(),
+        end.local_event_witnesses.begin(),
+        end.local_event_witnesses.end());
     std::sort(
         start.local_event_witnesses.begin(),
         start.local_event_witnesses.end(),
@@ -268,40 +268,59 @@ void coalesce_phase_seam(
                        first.support_id,
                        first.trim_id,
                        first.vertex_id,
+                       first.endpoint_role,
+                       first.disposition,
                        first.local_root_id,
-                       first.local_branch_id)
+                       first.local_branch_id,
+                       first.source_projection_id,
+                       first.source_factor_id,
+                       first.multiplicity)
                 < std::tie(
                        second.kind,
                        second.feature_id,
                        second.support_id,
                        second.trim_id,
                        second.vertex_id,
+                       second.endpoint_role,
+                       second.disposition,
                        second.local_root_id,
-                       second.local_branch_id);
+                       second.local_branch_id,
+                       second.source_projection_id,
+                       second.source_factor_id,
+                       second.multiplicity);
         });
-    for (std::size_t index = 1;
-         index < start.local_event_witnesses.size();
-         ++index) {
-        const LocalEventWitness2& previous =
-            start.local_event_witnesses[index - 1];
-        const LocalEventWitness2& current =
-            start.local_event_witnesses[index];
-        if (std::tie(
-                previous.kind,
-                previous.feature_id,
-                previous.support_id,
-                previous.trim_id,
-                previous.vertex_id)
-                == std::tie(
-                    current.kind,
-                    current.feature_id,
-                    current.support_id,
-                    current.trim_id,
-                    current.vertex_id)
-            && previous.multiplicity
-                != current.multiplicity) {
-            throw EventPartitionVerificationError(
-                "phase-seam local event multiplicities disagree");
+    for (std::size_t first = 0;
+         first < start.local_event_witnesses.size();
+         ++first) {
+        for (std::size_t second = first + 1;
+             second
+             < start.local_event_witnesses.size();
+             ++second) {
+            const LocalEventWitness2& left =
+                start.local_event_witnesses[first];
+            const LocalEventWitness2& right =
+                start.local_event_witnesses[second];
+            if (std::tie(
+                    left.kind,
+                    left.feature_id,
+                    left.support_id,
+                    left.trim_id,
+                    left.vertex_id,
+                    left.endpoint_role)
+                    == std::tie(
+                        right.kind,
+                        right.feature_id,
+                        right.support_id,
+                        right.trim_id,
+                        right.vertex_id,
+                        right.endpoint_role)
+                && (left.multiplicity
+                        != right.multiplicity
+                    || left.disposition
+                        != right.disposition)) {
+                throw EventPartitionVerificationError(
+                    "phase-seam local event evidence disagrees");
+            }
         }
     }
     start.events.insert(
@@ -315,7 +334,8 @@ void coalesce_phase_seam(
                 event.feature_id,
                 event.support_id,
                 event.trim_id,
-                event.vertex_id);
+                event.vertex_id,
+                event.endpoint_role);
         };
     std::sort(
         start.events.begin(),
@@ -387,7 +407,10 @@ void classify_full_circle_endpoint_fibres(
                             && event.trim_id
                                 == witness.trim_id
                             && event.vertex_id
-                                == witness.vertex_id;
+                                == witness.vertex_id
+                            && event.endpoint_role
+                                == witness
+                                       .endpoint_role;
                     });
                 if (physical == fibre.events.end()) {
                     throw EventPartitionVerificationError(
@@ -397,6 +420,9 @@ void classify_full_circle_endpoint_fibres(
                     *physical);
                 local_endpoint_events.back().branch_id =
                     witness.local_branch_id;
+                local_endpoint_events.back()
+                    .disposition =
+                    witness.disposition;
             }
         }
         std::vector<const PartitionEvent2*> endpoints;
@@ -420,11 +446,15 @@ void classify_full_circle_endpoint_fibres(
                            first->feature_id,
                            first->support_id,
                            first->trim_id,
+                           first->vertex_id,
+                           first->endpoint_role,
                            first->branch_id)
                     < std::tie(
                            second->feature_id,
                            second->support_id,
                            second->trim_id,
+                           second->vertex_id,
+                           second->endpoint_role,
                            second->branch_id);
             });
         if (endpoints.size() < 2) {
@@ -462,7 +492,11 @@ void classify_full_circle_endpoint_fibres(
                     [event](
                         const LocalEventWitness2& candidate) {
                         return candidate.local_branch_id
-                            == event->branch_id;
+                                == event->branch_id
+                            && candidate.vertex_id
+                                == event->vertex_id
+                            && candidate.endpoint_role
+                                == event->endpoint_role;
                     });
                 if (witness
                     == fibre.local_event_witnesses.end()) {
@@ -510,22 +544,15 @@ void classify_full_circle_endpoint_fibres(
         canonicalize(fibre.right_active_branches);
 
         const auto physical_keys =
-            [](const std::vector<ActiveBoundaryBranch2>&
-                   branches) {
+            [](const std::vector<
+                   ActiveBoundaryBranch2>& branches) {
                 std::vector<std::string> result;
                 result.reserve(branches.size());
                 for (const ActiveBoundaryBranch2& branch :
                      branches) {
                     result.push_back(
-                        encode_string_sequence(
-                            {
-                                "full-circle-physical-incidence-v1",
-                                branch.feature_id,
-                                branch.support_id,
-                                branch.trim_id,
-                                std::to_string(
-                                    branch.sheet_ordinal),
-                            }));
+                        branch.physical_incidence
+                            .incidence_id);
                 }
                 std::sort(
                     result.begin(),
@@ -554,6 +581,15 @@ void classify_full_circle_endpoint_fibres(
                     part.begin(),
                     part.end());
             };
+        if (!contains(
+                incident_keys,
+                left_keys)
+            || !contains(
+                incident_keys,
+                right_keys)) {
+            throw EventPartitionVerificationError(
+                "full-circle active sheet lacks physical incidence evidence");
+        }
         std::vector<std::string> active_union =
             left_keys;
         active_union.insert(
@@ -569,29 +605,35 @@ void classify_full_circle_endpoint_fibres(
                 active_union.end()),
             active_union.end());
         if (left_keys != right_keys
-            && contains(right_keys, left_keys)
-            && contains(incident_keys, right_keys)) {
+            && contains(right_keys, left_keys)) {
             fibre.ccw_direction = "split";
             fibre.cw_direction = "merge";
         } else if (
             left_keys != right_keys
-            && contains(left_keys, right_keys)
-            && contains(incident_keys, left_keys)) {
+            && contains(left_keys, right_keys)) {
             fibre.ccw_direction = "merge";
             fibre.cw_direction = "split";
         } else if (
-            left_keys == right_keys
-            && contains(incident_keys, left_keys)) {
+            left_keys == right_keys) {
             fibre.ccw_direction = "unchanged";
             fibre.cw_direction = "unchanged";
         } else if (
-            left_keys.size() == right_keys.size()
-            && active_union == incident_keys) {
-            fibre.ccw_direction = "unchanged";
-            fibre.cw_direction = "unchanged";
+            active_union == incident_keys) {
+            fibre.ccw_direction = "mixed";
+            fibre.cw_direction = "mixed";
         } else {
             throw EventPartitionVerificationError(
-                "full-circle active sheets do not prove a cyclic merge or split");
+                fibre.seam_id.empty()
+                    ? "full-circle event active sheets do not prove a merge or split: left="
+                        + std::to_string(
+                            left_keys.size())
+                        + ", right="
+                        + std::to_string(
+                            right_keys.size())
+                        + ", incident="
+                        + std::to_string(
+                            incident_keys.size())
+                    : "full-circle phase-seam active sheets do not prove a cyclic merge or split");
         }
     }
 }

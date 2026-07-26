@@ -208,6 +208,7 @@ class PartitionEvent2:
     vertex_id: bytes
     branch_id: bytes
     disposition: str
+    endpoint_role: Literal["source", "target", ""]
     left_active_count: int
     right_active_count: int
     incidence_permutation_rechecked: bool
@@ -258,6 +259,17 @@ class ParameterCell2:
     disposition: str
 
 
+class PhysicalIncidence2:
+    incidence_id: bytes
+    kind: str
+    feature_id: bytes
+    support_id: bytes
+    trim_id: bytes
+    vertex_id: bytes
+    endpoint_role: Literal["source", "target"]
+    sheet_ordinal: int
+
+
 class ActiveBoundaryBranch2:
     branch_id: bytes
     feature_id: bytes
@@ -266,6 +278,7 @@ class ActiveBoundaryBranch2:
     chart_id: str
     sheet_ordinal: int
     root_id: bytes
+    physical_incidence: PhysicalIncidence2
 
 
 class LocalEventWitness2:
@@ -274,8 +287,12 @@ class LocalEventWitness2:
     support_id: bytes
     trim_id: bytes
     vertex_id: bytes
+    endpoint_role: Literal["source", "target"]
+    disposition: str
     local_branch_id: bytes
     local_root_id: bytes
+    source_projection_id: bytes
+    source_factor_id: bytes
     multiplicity: int
 
 
@@ -287,8 +304,8 @@ class EventFibre2:
     events: Sequence[PartitionEvent2]
     left_active_branches: Sequence[ActiveBoundaryBranch2]
     right_active_branches: Sequence[ActiveBoundaryBranch2]
-    ccw_direction: Literal["merge", "split", "unchanged", ""]
-    cw_direction: Literal["merge", "split", "unchanged", ""]
+    ccw_direction: Literal["merge", "split", "mixed", "unchanged", ""]
+    cw_direction: Literal["merge", "split", "mixed", "unchanged", ""]
 
 
 class RationalTrimInterval2:

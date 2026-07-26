@@ -5,9 +5,11 @@
 #include "circle_source.h"
 #include "sha256.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <stdexcept>
 #include <string_view>
+#include <tuple>
 
 namespace {
 
@@ -160,7 +162,7 @@ std::string canonical_cell(const ParameterCell2& cell)
 std::string canonical_event(const PartitionEvent2& event)
 {
     return record(
-        "partition-event-v1",
+        "partition-event-v2",
         {
             event.kind,
             event.feature_id,
@@ -169,6 +171,7 @@ std::string canonical_event(const PartitionEvent2& event)
             event.vertex_id,
             event.branch_id,
             event.disposition,
+            event.endpoint_role,
             std::to_string(event.left_active_count),
             std::to_string(event.right_active_count),
             boolean_text(
@@ -184,6 +187,22 @@ std::string canonical_event(const PartitionEvent2& event)
             event.second_chart_id,
             event.first_branch_id,
             event.second_branch_id,
+        });
+}
+
+std::string canonical_physical_incidence(
+    const PhysicalIncidence2& incidence)
+{
+    return record(
+        "physical-incidence-v1",
+        {
+            incidence.kind,
+            incidence.feature_id,
+            incidence.support_id,
+            incidence.trim_id,
+            incidence.vertex_id,
+            incidence.endpoint_role,
+            std::to_string(incidence.sheet_ordinal),
         });
 }
 
@@ -216,7 +235,7 @@ std::string canonical_fibre(const EventFibre2& fibre)
                  branches) {
                 values.push_back(
                     record(
-                        "active-boundary-sheet-v2",
+                        "active-boundary-sheet-v3",
                         {
                             branch.branch_id,
                             branch.feature_id,
@@ -226,13 +245,43 @@ std::string canonical_fibre(const EventFibre2& fibre)
                             std::to_string(
                                 branch.sheet_ordinal),
                             branch.root_id,
+                            branch.physical_incidence
+                                .incidence_id,
+                            canonical_physical_incidence(
+                                branch
+                                    .physical_incidence),
                         }));
             }
             return encode_string_sequence(values);
         };
+    std::vector<std::string> witnesses;
+    witnesses.reserve(
+        fibre.local_event_witnesses.size());
+    for (const LocalEventWitness2& witness :
+         fibre.local_event_witnesses) {
+        witnesses.push_back(
+            record(
+                "local-event-witness-v2",
+                {
+                    witness.kind,
+                    witness.feature_id,
+                    witness.support_id,
+                    witness.trim_id,
+                    witness.vertex_id,
+                    witness.endpoint_role,
+                    witness.disposition,
+                    witness.local_branch_id,
+                    witness.local_root_id,
+                    witness.source_projection_id,
+                    witness.source_factor_id,
+                    std::to_string(
+                        witness.multiplicity),
+                }));
+    }
     std::vector<std::string> fields{
         fibre.root_id,
         encode_string_sequence(events),
+        encode_string_sequence(witnesses),
         canonical_branches(
             fibre.left_active_branches),
         canonical_branches(
@@ -241,26 +290,6 @@ std::string canonical_fibre(const EventFibre2& fibre)
         fibre.cw_direction,
     };
     if (!fibre.local_root_ids.empty()) {
-        std::vector<std::string> witnesses;
-        witnesses.reserve(
-            fibre.local_event_witnesses.size());
-        for (const LocalEventWitness2& witness :
-             fibre.local_event_witnesses) {
-            witnesses.push_back(
-                record(
-                    "local-event-witness-v1",
-                    {
-                        witness.kind,
-                        witness.feature_id,
-                        witness.support_id,
-                        witness.trim_id,
-                        witness.vertex_id,
-                        witness.local_branch_id,
-                        witness.local_root_id,
-                        std::to_string(
-                            witness.multiplicity),
-                    }));
-        }
         fields.insert(
             fields.begin() + 1,
             encode_string_sequence(
@@ -268,16 +297,99 @@ std::string canonical_fibre(const EventFibre2& fibre)
         fields.insert(
             fields.begin() + 2,
             fibre.seam_id);
-        fields.insert(
-            fields.begin() + 3,
-            encode_string_sequence(
-                witnesses));
     }
     return record(
         fibre.local_root_ids.empty()
-            ? "directed-event-fibre-v2"
-            : "cyclic-seam-event-fibre-v3",
+            ? "evidenced-event-fibre-v3"
+            : "cyclic-seam-event-fibre-v4",
         fields);
+}
+
+void validate_local_event_witnesses(
+    const EventFibre2& fibre)
+{
+    for (const LocalEventWitness2& witness :
+         fibre.local_event_witnesses) {
+        if (witness.source_projection_id.empty()
+            || witness.source_factor_id.empty()
+            || witness.local_root_id.empty()
+            || witness.multiplicity == 0) {
+            throw EventPartitionVerificationError(
+                "local event witness lacks exact source provenance");
+        }
+    }
+    for (std::size_t first = 0;
+         first < fibre.local_event_witnesses.size();
+         ++first) {
+        for (std::size_t second = first + 1;
+             second
+             < fibre.local_event_witnesses.size();
+             ++second) {
+            const LocalEventWitness2& left =
+                fibre.local_event_witnesses[first];
+            const LocalEventWitness2& right =
+                fibre.local_event_witnesses[second];
+            const auto physical_key =
+                [](const LocalEventWitness2& witness) {
+                    return std::tie(
+                        witness.kind,
+                        witness.feature_id,
+                        witness.support_id,
+                        witness.trim_id,
+                        witness.vertex_id,
+                        witness.endpoint_role);
+                };
+            if (physical_key(left)
+                    == physical_key(right)
+                && (left.multiplicity
+                        != right.multiplicity
+                    || left.disposition
+                        != right.disposition)) {
+                throw EventPartitionVerificationError(
+                    "physical event has contradictory local branch evidence");
+            }
+        }
+    }
+}
+
+void validate_phase_seam_incidence(
+    const EventFibre2& fibre)
+{
+    if (fibre.local_root_ids.empty()) {
+        return;
+    }
+    const auto validate_incidence =
+        [](const PhysicalIncidence2& incidence) {
+            if (incidence.incidence_id.empty()
+                || incidence.incidence_id
+                    != canonical_physical_incidence(
+                        incidence)
+                || incidence.vertex_id.empty()
+                || incidence.endpoint_role.empty()) {
+                throw EventPartitionVerificationError(
+                    "phase-seam physical incidence identity is invalid");
+            }
+        };
+    for (const ActiveBoundaryBranch2& branch :
+         fibre.left_active_branches) {
+        validate_incidence(
+            branch.physical_incidence);
+    }
+    for (const ActiveBoundaryBranch2& branch :
+         fibre.right_active_branches) {
+        validate_incidence(
+            branch.physical_incidence);
+    }
+}
+
+void validate_event_evidence(
+    const EventPartitionCertificate2& certificate)
+{
+    for (const EventFibre2& fibre :
+         certificate.fibres) {
+        validate_local_event_witnesses(fibre);
+        validate_phase_seam_incidence(fibre);
+    }
 }
 
 std::string canonical_overlap(
@@ -504,6 +616,7 @@ VerifiedEventPartition2 verify_event_partition(
         finalize_event_partition(candidate);
         validate_algebraic_root_intervals(
             candidate.roots);
+        validate_event_evidence(candidate);
         const EventPartitionCertificate2 expected =
             reconstruct(candidate);
         const bool valid =
@@ -644,6 +757,142 @@ EventPartitionCertificate2 mutate_certificate_record(
         mutation == "double-own-seam"
         && !result.charts.empty()) {
         result.charts.front().owns_end_seam = true;
+    } else if (
+        mutation == "alter-seam-incidence-vertex") {
+        const auto fibre = std::find_if(
+            result.fibres.begin(),
+            result.fibres.end(),
+            [](const EventFibre2& candidate) {
+                return !candidate
+                            .local_root_ids.empty()
+                    && (!candidate
+                             .left_active_branches
+                             .empty()
+                        || !candidate
+                                .right_active_branches
+                                .empty());
+            });
+        if (fibre == result.fibres.end()) {
+            throw EventPartitionVerificationError(
+                "certificate has no active seam incidence");
+        }
+        std::vector<ActiveBoundaryBranch2>& active =
+            !fibre->left_active_branches.empty()
+            ? fibre->left_active_branches
+            : fibre->right_active_branches;
+        active.front()
+            .physical_incidence.vertex_id
+            .push_back('\0');
+    } else if (
+        mutation == "alter-seam-incidence-trim") {
+        const auto fibre = std::find_if(
+            result.fibres.begin(),
+            result.fibres.end(),
+            [](const EventFibre2& candidate) {
+                return !candidate
+                            .local_root_ids.empty()
+                    && (!candidate
+                             .left_active_branches
+                             .empty()
+                        || !candidate
+                                .right_active_branches
+                                .empty());
+            });
+        if (fibre == result.fibres.end()) {
+            throw EventPartitionVerificationError(
+                "certificate has no active seam incidence");
+        }
+        std::vector<ActiveBoundaryBranch2>& active =
+            !fibre->left_active_branches.empty()
+            ? fibre->left_active_branches
+            : fibre->right_active_branches;
+        active.front()
+            .physical_incidence.trim_id
+            .push_back('\0');
+    } else if (
+        mutation == "alter-seam-local-multiplicity") {
+        const auto fibre = std::find_if(
+            result.fibres.begin(),
+            result.fibres.end(),
+            [](const EventFibre2& candidate) {
+                for (std::size_t first = 0;
+                     first
+                     < candidate
+                           .local_event_witnesses
+                           .size();
+                     ++first) {
+                    for (std::size_t second =
+                             first + 1;
+                         second
+                         < candidate
+                               .local_event_witnesses
+                               .size();
+                         ++second) {
+                        const auto physical_key =
+                            [](const LocalEventWitness2&
+                                   witness) {
+                                return std::tie(
+                                    witness.kind,
+                                    witness.feature_id,
+                                    witness.support_id,
+                                    witness.trim_id,
+                                    witness.vertex_id,
+                                    witness
+                                        .endpoint_role);
+                            };
+                        if (physical_key(
+                                candidate
+                                    .local_event_witnesses
+                                        [first])
+                            == physical_key(
+                                candidate
+                                    .local_event_witnesses
+                                        [second])) {
+                            return true;
+                        }
+                    }
+                }
+                return false;
+            });
+        if (fibre == result.fibres.end()) {
+            throw EventPartitionVerificationError(
+                "certificate has no coincident local event evidence");
+        }
+        bool mutated = false;
+        for (std::size_t first = 0;
+             !mutated
+             && first
+             < fibre->local_event_witnesses.size();
+             ++first) {
+            for (std::size_t second = first + 1;
+                 second
+                 < fibre->local_event_witnesses.size();
+                 ++second) {
+                const auto physical_key =
+                    [](const LocalEventWitness2&
+                           witness) {
+                        return std::tie(
+                            witness.kind,
+                            witness.feature_id,
+                            witness.support_id,
+                            witness.trim_id,
+                            witness.vertex_id,
+                            witness.endpoint_role);
+                    };
+                if (physical_key(
+                        fibre->local_event_witnesses
+                            [first])
+                    == physical_key(
+                        fibre->local_event_witnesses
+                            [second])) {
+                    ++fibre->local_event_witnesses
+                          [second]
+                              .multiplicity;
+                    mutated = true;
+                    break;
+                }
+            }
+        }
     } else {
         throw EventPartitionVerificationError(
             "unknown or inapplicable certificate mutation");
