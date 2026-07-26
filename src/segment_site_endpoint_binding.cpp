@@ -7,7 +7,9 @@
 #include <vector>
 
 #include <CGAL/CORE/poly/Poly.h>
+#include <CGAL/Fraction_traits.h>
 #include <CGAL/Polynomial_traits_d.h>
+#include <CGAL/number_utils.h>
 
 namespace
 {
@@ -289,6 +291,95 @@ void require_same_field(const MatExactPointSiteSource2& point,
     }
 }
 
+bool has_radical_coefficient(
+    const MatExactPointSiteSource2& point)
+{
+    return point.x.radical != 0
+        || point.y.radical != 0;
+}
+
+bool rational_is_square(
+    const CORE::BigRat& value)
+{
+    using FractionTraits =
+        CGAL::Fraction_traits<CORE::BigRat>;
+    ExactAlgebraicInteger1 numerator;
+    ExactAlgebraicInteger1 denominator;
+    typename FractionTraits::Decompose()(
+        value,
+        numerator,
+        denominator);
+    ExactAlgebraicInteger1 numerator_root;
+    ExactAlgebraicInteger1 denominator_root;
+    return CGAL::is_square(
+               numerator,
+               numerator_root)
+        && CGAL::is_square(
+               denominator,
+               denominator_root);
+}
+
+template <typename... Points>
+void require_canonical_quadratic_field(
+    const MatExactPointSiteSource2& focus,
+    const Points&... points)
+{
+    const CORE::BigRat radicand = focus.radicand;
+    if (radicand <= 0)
+    {
+        throw NonCanonicalQuadraticFieldError(
+            "quadratic-field radicand must be positive");
+    }
+    (require_same_field(points, radicand), ...);
+    if (!rational_is_square(radicand))
+    {
+        return;
+    }
+    if (has_radical_coefficient(focus)
+        || (has_radical_coefficient(points) || ...))
+    {
+        throw NonCanonicalQuadraticFieldError(
+            "square radicand requires zero radical coefficients");
+    }
+}
+
+bool exact_point_records_equal(
+    const MatExactPointSiteSource2& lhs,
+    const MatExactPointSiteSource2& rhs)
+{
+    return lhs.radicand == rhs.radicand
+        && lhs.x.rational == rhs.x.rational
+        && lhs.x.radical == rhs.x.radical
+        && lhs.y.rational == rhs.y.rational
+        && lhs.y.radical == rhs.y.radical;
+}
+
+void require_distinct_segment_endpoints(
+    const MatExactPointSiteSource2& source,
+    const MatExactPointSiteSource2& target,
+    const char* role)
+{
+    if (exact_point_records_equal(source, target))
+    {
+        throw CoincidentSegmentEndpointsError(
+            std::string(role)
+            + " segment endpoints coincide");
+    }
+}
+
+void require_nonzero_line_normal(
+    const MatExactOpenSegmentSource2& segment,
+    const char* role)
+{
+    if (segment.line_a == 0
+        && segment.line_b == 0)
+    {
+        throw ZeroSegmentLineNormalError(
+            std::string(role)
+            + " segment has a zero line normal");
+    }
+}
+
 FieldPolynomial2 line_value(const MatExactPointSiteSource2& point,
                             const MatExactOpenSegmentSource2& segment)
 {
@@ -341,11 +432,7 @@ FieldPolynomial2 segment_limiter_equation(
     const CORE::BigRat limiter_line_norm =
         limiter.line_a * limiter.line_a
         + limiter.line_b * limiter.line_b;
-    if (limiter_line_norm == 0)
-    {
-        throw InvalidRationalPrimitiveError(
-            "segment limiter has a zero supporting-line normal");
-    }
+    require_nonzero_line_normal(limiter, "limiter");
     const FieldPolynomial2 equation =
         field_subtract(
             field_scale(
@@ -565,10 +652,17 @@ MatParameterEndpoint2 bind_point_limiter_parabola_endpoint(
     const SegmentSiteVoronoi2& voronoi,
     const SegmentSiteVoronoi2::Halfedge_handle& halfedge)
 {
+    require_canonical_quadratic_field(
+        focus,
+        segment_source,
+        segment_target,
+        limiter);
     const CORE::BigRat radicand = focus.radicand;
-    require_same_field(segment_source, radicand);
-    require_same_field(segment_target, radicand);
-    require_same_field(limiter, radicand);
+    require_nonzero_line_normal(segment, "source");
+    require_distinct_segment_endpoints(
+        segment_source,
+        segment_target,
+        "source");
     const MatTraits::Site_2 expected_limiter =
         MatTraits::Site_2::construct_site_2(
             exact_live_point(limiter, radicand));
@@ -704,11 +798,23 @@ MatParameterEndpoint2 bind_segment_limiter_parabola_endpoint(
     const SegmentSiteVoronoi2& voronoi,
     const SegmentSiteVoronoi2::Halfedge_handle& halfedge)
 {
+    require_canonical_quadratic_field(
+        focus,
+        segment_source,
+        segment_target,
+        limiter_source,
+        limiter_target);
     const CORE::BigRat radicand = focus.radicand;
-    require_same_field(segment_source, radicand);
-    require_same_field(segment_target, radicand);
-    require_same_field(limiter_source, radicand);
-    require_same_field(limiter_target, radicand);
+    require_nonzero_line_normal(segment, "source");
+    require_nonzero_line_normal(limiter, "limiter");
+    require_distinct_segment_endpoints(
+        segment_source,
+        segment_target,
+        "source");
+    require_distinct_segment_endpoints(
+        limiter_source,
+        limiter_target,
+        "limiter");
     if (quadratic_field_sign(
             {
                 line_value(segment_source, segment).rational.front(),
