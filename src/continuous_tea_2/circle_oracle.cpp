@@ -15,6 +15,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <map>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -23,12 +24,19 @@
 #include <utility>
 #include <vector>
 
-#include <boost/multiprecision/cpp_int.hpp>
+#include <CGAL/CORE/BigRat.h>
 
 namespace {
 
-using Integer = boost::multiprecision::cpp_int;
+using Integer = CORE::BigInt;
+using Rational = CORE::BigRat;
 using IntegerPolynomial = std::vector<Integer>;
+
+struct CircleVertexSource {
+    std::string x;
+    std::string y;
+    std::vector<std::vector<std::string>> incidents;
+};
 
 constexpr std::array<const char*, 4>
     CENTER_CHART_IDS{
@@ -252,6 +260,100 @@ std::string exact_rational_text(const Epeck::FT& value)
     return stream.str();
 }
 
+std::optional<std::string> rational_coordinate_text(
+    const GpsPoint::CoordNT& coordinate)
+{
+    if (!CGAL::is_zero(coordinate.a1())) {
+        return std::nullopt;
+    }
+    return exact_rational_text(coordinate.a0());
+}
+
+Rational parse_rational_text(const std::string& text)
+{
+    try {
+        const std::size_t separator = text.find('/');
+        if (separator == std::string::npos) {
+            return Rational(Integer(text));
+        }
+        if (text.find('/', separator + 1)
+                != std::string::npos
+            || Integer(text.substr(separator + 1))
+                == 0) {
+            throw EventPartitionVerificationError(
+                "full-circle source contains a malformed rational");
+        }
+        return Rational(
+            Integer(text.substr(0, separator)),
+            Integer(text.substr(separator + 1)));
+    } catch (const EventSubstrateError&) {
+        throw;
+    } catch (const std::exception&) {
+        throw EventPartitionVerificationError(
+            "full-circle source contains a malformed rational");
+    }
+}
+
+Integer greatest_common_divisor(
+    Integer left,
+    Integer right)
+{
+    left = left < 0 ? -left : left;
+    right = right < 0 ? -right : right;
+    while (right != 0) {
+        const Integer remainder = left % right;
+        left = right;
+        right = remainder;
+    }
+    return left;
+}
+
+Integer least_common_multiple(
+    const Integer& left,
+    const Integer& right)
+{
+    return left / greatest_common_divisor(
+                      left,
+                      right)
+        * right;
+}
+
+std::vector<std::string> primitive_factor(
+    IntegerPolynomial polynomial)
+{
+    while (polynomial.size() > 1
+           && polynomial.back() == 0) {
+        polynomial.pop_back();
+    }
+    Integer divisor = 0;
+    for (const Integer& coefficient :
+         polynomial) {
+        divisor = greatest_common_divisor(
+            divisor,
+            coefficient);
+    }
+    if (divisor != 0) {
+        for (Integer& coefficient :
+             polynomial) {
+            coefficient /= divisor;
+        }
+    }
+    if (polynomial.back() < 0) {
+        for (Integer& coefficient :
+             polynomial) {
+            coefficient = -coefficient;
+        }
+    }
+    std::vector<std::string> result;
+    result.reserve(polynomial.size());
+    for (const Integer& coefficient :
+         polynomial) {
+        result.push_back(
+            coefficient.convert_to<std::string>());
+    }
+    return result;
+}
+
 IntegerPolynomial polynomial_column(
     const ProjectionRecord2& projection,
     std::size_t column)
@@ -331,6 +433,124 @@ IntegerPolynomial compose_global_chart(
     return result;
 }
 
+std::pair<IntegerPolynomial, IntegerPolynomial>
+quarter_unit_numerators(std::size_t chart)
+{
+    const IntegerPolynomial cosine{
+        Integer(1),
+        Integer(0),
+        Integer(-1),
+    };
+    const IntegerPolynomial sine{
+        Integer(0),
+        Integer(2),
+        Integer(0),
+    };
+    if (chart == 0) {
+        return {cosine, sine};
+    }
+    if (chart == 1) {
+        return {
+            add_polynomials(
+                {Integer(0)},
+                sine,
+                Integer(-1)),
+            cosine,
+        };
+    }
+    if (chart == 2) {
+        return {
+            add_polynomials(
+                {Integer(0)},
+                cosine,
+                Integer(-1)),
+            add_polynomials(
+                {Integer(0)},
+                sine,
+                Integer(-1)),
+        };
+    }
+    if (chart == 3) {
+        return {
+            sine,
+            add_polynomials(
+                {Integer(0)},
+                cosine,
+                Integer(-1)),
+        };
+    }
+    throw EventPartitionVerificationError(
+        "full-circle vertex passage has an unknown chart");
+}
+
+std::vector<std::string> vertex_passage_factor(
+    const std::vector<std::string>& motion_data,
+    const std::string& cutter_radius,
+    const std::string& vertex_x,
+    const std::string& vertex_y,
+    std::size_t chart)
+{
+    std::vector<Rational> values{
+        parse_rational_text(motion_data[0]),
+        parse_rational_text(motion_data[1]),
+        parse_rational_text(motion_data[2]),
+        parse_rational_text(cutter_radius),
+        parse_rational_text(vertex_x),
+        parse_rational_text(vertex_y),
+    };
+    Integer denominator = 1;
+    for (const Rational& value : values) {
+        denominator = least_common_multiple(
+            denominator,
+            CORE::denominator(value));
+    }
+    std::vector<Integer> scaled;
+    scaled.reserve(values.size());
+    for (const Rational& value : values) {
+        scaled.push_back(
+            CORE::numerator(
+                value * Rational(denominator)));
+    }
+    const IntegerPolynomial unit_denominator{
+        Integer(1),
+        Integer(0),
+        Integer(1),
+    };
+    const auto [unit_x, unit_y] =
+        quarter_unit_numerators(chart);
+    const IntegerPolynomial dx =
+        add_polynomials(
+            add_polynomials(
+                {Integer(0)},
+                unit_denominator,
+                scaled[0] - scaled[4]),
+            unit_x,
+            scaled[2]);
+    const IntegerPolynomial dy =
+        add_polynomials(
+            add_polynomials(
+                {Integer(0)},
+                unit_denominator,
+                scaled[1] - scaled[5]),
+            unit_y,
+            scaled[2]);
+    IntegerPolynomial passage =
+        add_polynomials(
+            multiply_polynomials(dx, dx),
+            multiply_polynomials(dy, dy),
+            Integer(1));
+    passage = add_polynomials(
+        std::move(passage),
+        multiply_polynomials(
+            unit_denominator,
+            unit_denominator),
+        -scaled[3] * scaled[3]);
+    return primitive_factor(
+        compose_global_chart(
+            passage,
+            chart));
+}
+
 std::vector<std::string> line_tangency_factor(
     const ProjectionRecord2& pullback,
     std::size_t chart)
@@ -354,14 +574,8 @@ std::vector<std::string> line_tangency_factor(
         compose_global_chart(
             discriminant,
             chart);
-    std::vector<std::string> result;
-    result.reserve(discriminant.size());
-    for (const Integer& coefficient :
-         discriminant) {
-        result.push_back(
-            coefficient.convert_to<std::string>());
-    }
-    return result;
+    return primitive_factor(
+        std::move(discriminant));
 }
 
 GpsPolygon circle_disk(
@@ -531,11 +745,13 @@ construct_full_circle_line_pullback_partition(
     }
     std::vector<ProjectionRecord2> pullbacks;
     std::vector<ProjectionInput2> tangencies;
+    std::map<std::string, CircleVertexSource>
+        vertices;
     for (const std::string& encoded_source :
          line_sources) {
         const std::vector<std::string> source =
             decode_string_sequence(encoded_source);
-        if (source.size() != 4) {
+        if (source.size() != 10) {
             throw EventPartitionVerificationError(
                 "full-circle line support source is malformed");
         }
@@ -544,6 +760,30 @@ construct_full_circle_line_pullback_partition(
         if (support.size() != 3) {
             throw EventPartitionVerificationError(
                 "full-circle line support requires three coefficients");
+        }
+        for (const std::size_t offset : {4U, 7U}) {
+            auto [vertex, inserted] =
+                vertices.try_emplace(
+                    source[offset],
+                    CircleVertexSource{
+                        source[offset + 1],
+                        source[offset + 2],
+                        {},
+                    });
+            if (!inserted
+                && (vertex->second.x
+                        != source[offset + 1]
+                    || vertex->second.y
+                        != source[offset + 2])) {
+                throw EventPartitionVerificationError(
+                    "full-circle vertex source has inconsistent coordinates");
+            }
+            vertex->second.incidents.push_back(
+                {
+                    source[0],
+                    source[1],
+                    source[2],
+                });
         }
         for (std::size_t center = 0;
              center < CENTER_CHART_IDS.size();
@@ -599,6 +839,51 @@ construct_full_circle_line_pullback_partition(
                 pullbacks.push_back(
                     std::move(pullback));
             }
+        }
+    }
+    for (const auto& [vertex_id, vertex] :
+         vertices) {
+        for (std::size_t center = 0;
+             center < CENTER_CHART_IDS.size();
+             ++center) {
+            std::vector<PartitionEvent2> events;
+            events.reserve(
+                vertex.incidents.size());
+            for (const auto& incident :
+                 vertex.incidents) {
+                events.push_back(
+                    {
+                        "endpoint-order",
+                        incident[0],
+                        incident[1],
+                        incident[2],
+                        vertex_id,
+                        encode_string_sequence(
+                            {
+                                "full-circle-vertex-passage-v1",
+                                vertex_id,
+                                CENTER_CHART_IDS[center],
+                                incident[0],
+                            }),
+                        "merge",
+                    });
+            }
+            tangencies.push_back(
+                {
+                    encode_string_sequence(
+                        {
+                            "full-circle-vertex-passage-v1",
+                            vertex_id,
+                            CENTER_CHART_IDS[center],
+                        }),
+                    vertex_passage_factor(
+                        motion_data,
+                        cutter_radius,
+                        vertex.x,
+                        vertex.y,
+                        center),
+                    std::move(events),
+                });
         }
     }
     EventPartitionCertificate2 certificate =
@@ -869,9 +1154,29 @@ audit_full_circle_tea_event_exact(
     }
 
     std::vector<std::string> line_sources;
+    bool rational_line_vertices = true;
     for (const BoundaryFeatureRecord2& record :
          boundary_records) {
         if (record.support_kind == "line") {
+            const std::optional<std::string> source_x =
+                rational_coordinate_text(
+                    record.curve.source().x());
+            const std::optional<std::string> source_y =
+                rational_coordinate_text(
+                    record.curve.source().y());
+            const std::optional<std::string> target_x =
+                rational_coordinate_text(
+                    record.curve.target().x());
+            const std::optional<std::string> target_y =
+                rational_coordinate_text(
+                    record.curve.target().y());
+            if (!source_x.has_value()
+                || !source_y.has_value()
+                || !target_x.has_value()
+                || !target_y.has_value()) {
+                rational_line_vertices = false;
+                break;
+            }
             line_sources.push_back(
                 encode_string_sequence(
                     {
@@ -880,12 +1185,19 @@ audit_full_circle_tea_event_exact(
                         record.trim_predicate,
                         encode_string_sequence(
                             record.primitive_coefficients),
+                        record.source_vertex_id,
+                        *source_x,
+                        *source_y,
+                        record.target_vertex_id,
+                        *target_x,
+                        *target_y,
                     }));
         }
     }
     const Epeck::FT exact_phase_x(phase_dx);
     const Epeck::FT exact_phase_y(phase_dy);
     if (!line_sources.empty()
+        && rational_line_vertices
         && (CGAL::is_zero(exact_phase_x)
             || CGAL::is_zero(exact_phase_y))) {
         const Epeck::FT guide_radius =
