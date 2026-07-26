@@ -89,11 +89,12 @@ def test_nonuniform_axis_circle_replays_every_exact_line_rim_pullback() -> None:
     assert verdict == "unresolved"
     assert trace.partition.source_kind == "full-circle-line-pullbacks-v1"
     pullbacks = tuple(projection for projection in trace.partition.projections if projection.degree_bound_id == "full-circle-line-(2,2)-v1")
-    tangencies = tuple(projection for projection in trace.partition.projections if projection.degree_bound_id.startswith("exact-univariate-"))
+    event_projections = tuple(projection for projection in trace.partition.projections if projection.degree_bound_id.startswith("exact-univariate-"))
     assert len(pullbacks) == 32
-    assert len(tangencies) == 16
+    assert len(event_projections) == 32
     assert trace.partition.roots
     assert len(trace.partition.fibres) == len(trace.partition.roots)
+    assert {event.kind for fibre in trace.partition.fibres for event in fibre.events} >= {"tangent", "endpoint-order"}
     assert _continuous_tea_2.verify_event_partition(trace.partition).verdict.name == "CERTIFIED"
 
 
