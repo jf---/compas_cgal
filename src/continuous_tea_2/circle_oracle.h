@@ -14,6 +14,11 @@ std::vector<EventTraceEvent2> order_full_circle_events(
     bool clockwise,
     std::vector<EventTraceEvent2> events);
 
+EventPartitionCertificate2
+construct_full_circle_uniform_partition(
+    const std::string& stock_identity,
+    const std::string& disposition);
+
 std::pair<std::string, EventTrace2>
 audit_full_circle_tea_event_exact(
     const Stock2& stock,
