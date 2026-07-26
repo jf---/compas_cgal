@@ -27,5 +27,27 @@ struct SegmentSiteMatCompileEvidence2 {
     std::size_t delaunay_vertices;
 };
 
+struct MatExactGraphNode2 {
+    std::string node_id;
+    MatParameterEndpoint2 endpoint;
+    std::vector<std::string> generator_site_ids;
+};
+
+struct MatExactGraphEdge2 {
+    std::string edge_id;
+    std::string primitive_kind;
+    std::string source_node_id;
+    std::string target_node_id;
+    std::vector<std::string> generator_site_ids;
+};
+
+struct MatExactGraph2 {
+    std::vector<MatExactGraphNode2> nodes;
+    std::vector<MatExactGraphEdge2> edges;
+    std::size_t rejected_incident_transitions;
+};
+
 SegmentSiteMatCompileEvidence2
 segment_site_mat_compile_spike();
+
+MatExactGraph2 segment_site_live_graph_spike();
