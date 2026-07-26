@@ -117,6 +117,13 @@ clip_linear_clearance_components(
     const ClearanceRootBoundary2& boundary,
     const MatDomainPolygonWithHoles2& domain);
 
+std::vector<MatAdmissibleComponent2>
+clip_parabola_clearance_components(
+    const std::string& original_dual_id,
+    const RationalPrimitiveParameterization2& primitive,
+    const ClearanceRootBoundary2& boundary,
+    const MatDomainPolygonWithHoles2& domain);
+
 struct SegmentSiteMatCompileEvidence2 {
     bool delaunay_valid;
     std::size_t assigned_dual_primitives;
