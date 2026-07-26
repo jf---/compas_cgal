@@ -4,6 +4,40 @@
 #include "segment_site_endpoint_binding.h"
 
 #include <cstddef>
+#include <stdexcept>
+#include <string>
+#include <vector>
+
+struct NormalizedPointSource2 {
+    std::string stable_site_id;
+    CORE::BigRat x;
+    CORE::BigRat y;
+};
+
+class InsufficientPointSitesError : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
+
+class EmptyPointSiteIdentityError : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
+
+class DuplicatePointSiteIdentityError : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
+
+class CoincidentPointSitesError : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
+
+class NegativeSquaredRadiusError : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
 
 struct SegmentSiteMatCompileEvidence2 {
     bool delaunay_valid;
@@ -35,6 +69,11 @@ struct MatExactGraph2 {
 
 SegmentSiteMatCompileEvidence2
 segment_site_mat_compile_spike();
+
+MatExactGraph2 exact_point_site_graph(
+    const std::vector<NormalizedPointSource2>& points,
+    const MatDomainPolygonWithHoles2& domain,
+    const CORE::BigRat& radius_squared);
 
 MatExactGraph2 segment_site_live_graph_spike();
 
