@@ -6,7 +6,9 @@
 #include "continuous_tea_2/parameter_charts.h"
 #include "continuous_tea_2/partition_certificate.h"
 #include "continuous_tea_2/result.h"
+#include "continuous_tea_2/segment_partition.h"
 #include "continuous_tea_2/segment_source.h"
+#include "continuous_tea_2/segment_strata.h"
 #include "continuous_tea_2/sha256.h"
 #include "exact_algebraic_1.h"
 
@@ -49,6 +51,13 @@ nb::list coefficient_bytes(
         result.append(as_bytes(value));
     }
     return result;
+}
+
+nb::object bytes_tuple(
+    const std::vector<std::string>& values)
+{
+    return nb::module_::import_("builtins")
+        .attr("tuple")(coefficient_bytes(values));
 }
 
 nb::object string_tuple(
@@ -160,6 +169,14 @@ NB_MODULE(_continuous_tea_2, m)
         m,
         "InvalidCapChordRatioError",
         substrate_error.ptr());
+    nb::exception<UnsupportedAlgebraicVertexProjectionError>(
+        m,
+        "UnsupportedAlgebraicVertexProjectionError",
+        substrate_error.ptr());
+    nb::exception<IncompleteSegmentPartitionError>(
+        m,
+        "IncompleteSegmentPartitionError",
+        substrate_error.ptr());
 
     nb::enum_<ContinuousTeaVerdict>(
         m,
@@ -210,7 +227,13 @@ NB_MODULE(_continuous_tea_2, m)
             &ExactBinary64Rational2::denominator)
         .def_prop_ro(
             "text",
-            &ExactBinary64Rational2::text);
+            &ExactBinary64Rational2::text)
+        .def_prop_ro(
+            "canonical_bytes",
+            [](const ExactBinary64Rational2& value) {
+                return as_bytes(
+                    value.canonical_bytes());
+            });
 
     nb::class_<SegmentEventSource2>(
         m,
@@ -266,6 +289,235 @@ NB_MODULE(_continuous_tea_2, m)
                 return as_bytes(
                     source.canonical_digest());
             });
+
+    nb::class_<SegmentBoundaryBranch2>(
+        m,
+        "SegmentBoundaryBranch2")
+        .def_prop_ro(
+            "branch_id",
+            [](const SegmentBoundaryBranch2& branch) {
+                return as_bytes(branch.branch_id);
+            })
+        .def_prop_ro(
+            "feature_id",
+            [](const SegmentBoundaryBranch2& branch) {
+                return as_bytes(branch.feature_id);
+            })
+        .def_prop_ro(
+            "support_id",
+            [](const SegmentBoundaryBranch2& branch) {
+                return as_bytes(branch.support_id);
+            })
+        .def_ro(
+            "support_kind",
+            &SegmentBoundaryBranch2::support_kind)
+        .def_prop_ro(
+            "trim_id",
+            [](const SegmentBoundaryBranch2& branch) {
+                return as_bytes(branch.trim_id);
+            })
+        .def_prop_ro(
+            "vertex_id",
+            [](const SegmentBoundaryBranch2& branch) {
+                return as_bytes(branch.vertex_id);
+            })
+        .def_ro(
+            "material_side",
+            &SegmentBoundaryBranch2::material_side)
+        .def_ro(
+            "trim_disposition",
+            &SegmentBoundaryBranch2::trim_disposition)
+        .def_ro(
+            "rim_chart_id",
+            &SegmentBoundaryBranch2::rim_chart_id)
+        .def_ro(
+            "rim_sheet_ordinal",
+            &SegmentBoundaryBranch2::
+                rim_sheet_ordinal)
+        .def_prop_ro(
+            "rim_root_id",
+            [](const SegmentBoundaryBranch2& branch) {
+                return as_bytes(branch.rim_root_id);
+            })
+        .def_prop_ro(
+            "rim_factor_coefficients",
+            [](const SegmentBoundaryBranch2& branch) {
+                return string_tuple(
+                    branch.rim_factor_coefficients);
+            })
+        .def_ro(
+            "rim_root_ordinal",
+            &SegmentBoundaryBranch2::
+                rim_root_ordinal);
+
+    nb::class_<BranchPairDisposition2>(
+        m,
+        "BranchPairDisposition2")
+        .def_prop_ro(
+            "pair_sheet_id",
+            [](const BranchPairDisposition2& pair) {
+                return as_bytes(
+                    pair.pair_sheet_id);
+            })
+        .def_prop_ro(
+            "first_branch_id",
+            [](const BranchPairDisposition2& pair) {
+                return as_bytes(
+                    pair.first_branch_id);
+            })
+        .def_prop_ro(
+            "second_branch_id",
+            [](const BranchPairDisposition2& pair) {
+                return as_bytes(
+                    pair.second_branch_id);
+            })
+        .def_ro(
+            "orientation_disposition",
+            &BranchPairDisposition2::
+                orientation_disposition)
+        .def_ro(
+            "cap_disposition",
+            &BranchPairDisposition2::cap_disposition);
+
+    nb::class_<SegmentEventStratum2>(
+        m,
+        "SegmentEventStratum2")
+        .def_ro("kind", &SegmentEventStratum2::kind)
+        .def_prop_ro(
+            "root_id",
+            [](const SegmentEventStratum2& stratum) {
+                return as_bytes(stratum.root_id);
+            })
+        .def_prop_ro(
+            "local_root_id",
+            [](const SegmentEventStratum2& stratum) {
+                return as_bytes(
+                    stratum.local_root_id);
+            })
+        .def_prop_ro(
+            "global_fibre_id",
+            [](const SegmentEventStratum2& stratum) {
+                return as_bytes(
+                    stratum.global_fibre_id);
+            })
+        .def_ro(
+            "chart_id",
+            &SegmentEventStratum2::chart_id)
+        .def_ro(
+            "witness_numerator",
+            &SegmentEventStratum2::
+                witness_numerator)
+        .def_ro(
+            "witness_denominator",
+            &SegmentEventStratum2::
+                witness_denominator)
+        .def_prop_ro(
+            "root_factor_coefficients",
+            [](const SegmentEventStratum2& stratum) {
+                return string_tuple(
+                    stratum.root_factor_coefficients);
+            })
+        .def_ro(
+            "root_ordinal",
+            &SegmentEventStratum2::root_ordinal)
+        .def_prop_ro(
+            "active_branch_ids",
+            [](const SegmentEventStratum2& stratum) {
+                return bytes_tuple(
+                    stratum.active_branch_ids);
+            })
+        .def_ro(
+            "events",
+            &SegmentEventStratum2::events)
+        .def_ro(
+            "left_pair_dispositions",
+            &SegmentEventStratum2::
+                left_pair_dispositions)
+        .def_ro(
+            "pair_dispositions",
+            &SegmentEventStratum2::
+                pair_dispositions)
+        .def_ro(
+            "right_pair_dispositions",
+            &SegmentEventStratum2::
+                right_pair_dispositions)
+        .def_ro(
+            "algebraic_root_evaluated",
+            &SegmentEventStratum2::
+                algebraic_root_evaluated)
+        .def_ro(
+            "original_equations_rechecked",
+            &SegmentEventStratum2::
+                original_equations_rechecked)
+        .def_ro(
+            "orientation_rechecked",
+            &SegmentEventStratum2::
+                orientation_rechecked)
+        .def_ro(
+            "trim_predicates_rechecked",
+            &SegmentEventStratum2::
+                trim_predicates_rechecked);
+
+    nb::class_<SegmentCellStratum2>(
+        m,
+        "SegmentCellStratum2")
+        .def_ro(
+            "branches",
+            &SegmentCellStratum2::branches)
+        .def_ro(
+            "stratum",
+            &SegmentCellStratum2::stratum);
+
+    nb::class_<SegmentEventPartition2>(
+        m,
+        "SegmentEventPartition2")
+        .def_prop_ro(
+            "source",
+            [](const SegmentEventPartition2& partition)
+                -> const SegmentEventSource2& {
+                return partition.source;
+            },
+            nb::rv_policy::reference_internal)
+        .def_prop_ro(
+            "boundary_feature_ids",
+            [](const SegmentEventPartition2& partition) {
+                return bytes_tuple(
+                    partition.boundary_feature_ids);
+            })
+        .def_ro(
+            "projections",
+            &SegmentEventPartition2::projections)
+        .def_ro(
+            "branches",
+            &SegmentEventPartition2::branches)
+        .def_ro(
+            "strata",
+            &SegmentEventPartition2::strata)
+        .def_ro(
+            "certificate",
+            &SegmentEventPartition2::certificate)
+        .def_prop_ro(
+            "canonical_bytes",
+            [](const SegmentEventPartition2& partition) {
+                return as_bytes(
+                    partition.canonical_bytes);
+            })
+        .def_prop_ro(
+            "canonical_digest",
+            [](const SegmentEventPartition2& partition) {
+                return as_bytes(
+                    partition.canonical_digest);
+            });
+
+    nb::class_<VerifiedSegmentEventPartition2>(
+        m,
+        "VerifiedSegmentEventPartition2")
+        .def_ro(
+            "verdict",
+            &VerifiedSegmentEventPartition2::verdict)
+        .def_ro(
+            "partition",
+            &VerifiedSegmentEventPartition2::partition);
 
     nb::class_<ParameterChart2>(m, "ParameterChart2")
         .def_ro("chart_id", &ParameterChart2::chart_id)
@@ -351,6 +603,16 @@ NB_MODULE(_continuous_tea_2, m)
             "disposition",
             &PartitionEvent2::disposition)
         .def_ro(
+            "left_active_count",
+            &PartitionEvent2::left_active_count)
+        .def_ro(
+            "right_active_count",
+            &PartitionEvent2::right_active_count)
+        .def_ro(
+            "incidence_permutation_rechecked",
+            &PartitionEvent2::
+                incidence_permutation_rechecked)
+        .def_ro(
             "original_equations_rechecked",
             &PartitionEvent2::original_equations_rechecked)
         .def_ro(
@@ -358,7 +620,38 @@ NB_MODULE(_continuous_tea_2, m)
             &PartitionEvent2::orientation_rechecked)
         .def_ro(
             "trim_disposition",
-            &PartitionEvent2::trim_disposition);
+            &PartitionEvent2::trim_disposition)
+        .def_prop_ro(
+            "pair_sheet_id",
+            [](const PartitionEvent2& event) {
+                return as_bytes(event.pair_sheet_id);
+            })
+        .def_prop_ro(
+            "first_feature_id",
+            [](const PartitionEvent2& event) {
+                return as_bytes(event.first_feature_id);
+            })
+        .def_prop_ro(
+            "second_feature_id",
+            [](const PartitionEvent2& event) {
+                return as_bytes(event.second_feature_id);
+            })
+        .def_ro(
+            "first_chart_id",
+            &PartitionEvent2::first_chart_id)
+        .def_ro(
+            "second_chart_id",
+            &PartitionEvent2::second_chart_id)
+        .def_prop_ro(
+            "first_branch_id",
+            [](const PartitionEvent2& event) {
+                return as_bytes(event.first_branch_id);
+            })
+        .def_prop_ro(
+            "second_branch_id",
+            [](const PartitionEvent2& event) {
+                return as_bytes(event.second_branch_id);
+            });
 
     nb::class_<ProjectionInput2>(m, "ProjectionInput2")
         .def(
@@ -961,4 +1254,52 @@ NB_MODULE(_continuous_tea_2, m)
         "partition_projections",
         &partition_projections,
         "projections"_a);
+    m.def(
+        "segment_pair_literal_signs",
+        []() {
+            return string_tuple(
+                segment_pair_literal_signs());
+        });
+    m.def(
+        "segment_rational_square_root_cases",
+        []() {
+            return string_tuple(
+                segment_rational_square_root_cases());
+        });
+    m.def(
+        "construct_segment_cell_stratum",
+        &construct_segment_cell_stratum,
+        "stock"_a,
+        "source"_a,
+        "witness_numerator"_a,
+        "witness_denominator"_a);
+    m.def(
+        "construct_segment_event_partition",
+        static_cast<SegmentEventPartition2 (*)(
+            const Stock2&,
+            double,
+            double,
+            double,
+            double,
+            double,
+            double)>(
+            &construct_segment_event_partition),
+        "stock"_a,
+        "x0"_a,
+        "y0"_a,
+        "x1"_a,
+        "y1"_a,
+        "tool_radius"_a,
+        "cap_chord_ratio"_a);
+    m.def(
+        "verify_segment_event_partition",
+        &verify_segment_event_partition,
+        "stock"_a,
+        "source"_a,
+        "candidate"_a);
+    m.def(
+        "mutate_segment_event_partition",
+        &mutate_segment_event_partition,
+        "partition"_a,
+        "mutation"_a);
 }

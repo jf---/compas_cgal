@@ -10,6 +10,7 @@ public:
     const std::string& numerator() const noexcept;
     const std::string& denominator() const noexcept;
     std::string text() const;
+    std::string canonical_bytes() const;
 
 private:
     friend class SegmentEventSource2;

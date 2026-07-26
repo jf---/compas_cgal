@@ -76,6 +76,16 @@ std::string ExactBinary64Rational2::text() const
         : numerator_ + "/" + denominator_;
 }
 
+std::string ExactBinary64Rational2::canonical_bytes() const
+{
+    return encode_string_sequence(
+        {
+            "exact-binary64-rational-v1",
+            numerator_,
+            denominator_,
+        });
+}
+
 SegmentEventSource2 SegmentEventSource2::from_binary64(
     double x0,
     double y0,
@@ -139,12 +149,12 @@ SegmentEventSource2::SegmentEventSource2(
     canonical_bytes_ = encode_string_sequence(
         {
             "segment-event-source-v1",
-            x0_.text(),
-            y0_.text(),
-            x1_.text(),
-            y1_.text(),
-            tool_radius_.text(),
-            cap_chord_ratio_.text(),
+            x0_.canonical_bytes(),
+            y0_.canonical_bytes(),
+            x1_.canonical_bytes(),
+            y1_.canonical_bytes(),
+            tool_radius_.canonical_bytes(),
+            cap_chord_ratio_.canonical_bytes(),
         });
     canonical_digest_ = sha256_bytes(canonical_bytes_);
 }
