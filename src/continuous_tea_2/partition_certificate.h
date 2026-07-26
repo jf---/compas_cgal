@@ -167,6 +167,10 @@ struct OverlapInterval2 {
     std::string witness_numerator;
     std::string witness_denominator;
     std::string orientation_disposition;
+    std::string feature_id;
+    std::string support_id;
+    std::string trim_id;
+    std::string branch_id;
 };
 
 struct ChartSeam2 {

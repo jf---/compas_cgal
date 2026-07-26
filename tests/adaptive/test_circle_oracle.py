@@ -93,7 +93,7 @@ def test_nonuniform_axis_circle_replays_every_exact_line_rim_pullback() -> None:
     pullbacks = tuple(projection for projection in trace.partition.projections if projection.degree_bound_id == "full-circle-line-(2,2)-v1")
     event_projections = tuple(projection for projection in trace.partition.projections if projection.degree_bound_id.startswith("exact-univariate-"))
     assert len(pullbacks) == 32
-    assert len(event_projections) == 32
+    assert len(event_projections) == 48
     assert trace.partition.roots
     assert len(trace.partition.fibres) == len(trace.partition.roots)
     assert {event.kind for fibre in trace.partition.fibres for event in fibre.events} >= {"tangent", "endpoint-order"}
@@ -103,6 +103,7 @@ def test_nonuniform_axis_circle_replays_every_exact_line_rim_pullback() -> None:
 def test_slotted_stock_replays_circle_tangency_and_coincidence_fibres() -> None:
     stock = _stock_2.Stock2(SQUARE, [])
     stock.subtract_disk(0.0, 5.0, 2.0)
+    line_support_ids = {record.support_id for record in _continuous_tea_2.extract_boundary_records(stock) if record.support_kind == "line"}
 
     verdict, trace = _continuous_tea_2.audit_full_circle_tea_event_exact(
         stock,
@@ -120,6 +121,7 @@ def test_slotted_stock_replays_circle_tangency_and_coincidence_fibres() -> None:
     assert verdict == "unresolved"
     assert circle_pullbacks
     assert event_kinds >= {"tangent", "support-overlap", "cap-crossing"}
+    assert any(event.kind == "cap-crossing" and event.support_id in line_support_ids for fibre in trace.partition.fibres for event in fibre.events)
     assert any(
         len({event.support_id for event in fibre.events if event.kind == "endpoint-order"}) >= 2
         and {event.disposition for event in fibre.events if event.kind == "endpoint-order"} == {"merge-split"}

@@ -550,6 +550,102 @@ std::vector<std::string> line_tangency_factor(
         std::move(discriminant));
 }
 
+std::vector<std::string> line_cap_factor(
+    const std::vector<std::string>& motion_data,
+    const std::vector<std::string>& support,
+    const std::string& cutter_radius,
+    const std::string& cap_chord_ratio,
+    std::size_t chart)
+{
+    std::vector<Rational> values{
+        parse_rational_text(motion_data[0]),
+        parse_rational_text(motion_data[1]),
+        parse_rational_text(motion_data[2]),
+        parse_rational_text(cutter_radius),
+        parse_rational_text(support[0]),
+        parse_rational_text(support[1]),
+        parse_rational_text(support[2]),
+    };
+    Integer denominator = 1;
+    for (const Rational& value : values) {
+        denominator = least_common_multiple(
+            denominator,
+            CORE::denominator(value));
+    }
+    std::vector<Integer> scaled;
+    scaled.reserve(values.size());
+    for (const Rational& value : values) {
+        scaled.push_back(
+            CORE::numerator(
+                value * Rational(denominator)));
+    }
+    const IntegerPolynomial unit_denominator{
+        Integer(1),
+        Integer(0),
+        Integer(1),
+    };
+    const auto [unit_x, unit_y] =
+        quarter_unit_numerators(chart);
+    const IntegerPolynomial center_x =
+        add_polynomials(
+            add_polynomials(
+                {Integer(0)},
+                unit_denominator,
+                scaled[0]),
+            unit_x,
+            scaled[2]);
+    const IntegerPolynomial center_y =
+        add_polynomials(
+            add_polynomials(
+                {Integer(0)},
+                unit_denominator,
+                scaled[1]),
+            unit_y,
+            scaled[2]);
+    IntegerPolynomial signed_distance =
+        add_polynomials(
+            multiply_polynomials(
+                {scaled[4]},
+                center_x),
+            multiply_polynomials(
+                {scaled[5]},
+                center_y),
+            Integer(1));
+    signed_distance = add_polynomials(
+        std::move(signed_distance),
+        unit_denominator,
+        scaled[6] * denominator);
+    const Rational cap =
+        parse_rational_text(cap_chord_ratio);
+    const Integer cap_numerator =
+        CORE::numerator(cap);
+    const Integer cap_denominator =
+        CORE::denominator(cap);
+    IntegerPolynomial radial_term =
+        multiply_polynomials(
+            unit_denominator,
+            unit_denominator);
+    for (Integer& coefficient : radial_term) {
+        coefficient *=
+            (Integer(4) * cap_denominator
+                - cap_numerator)
+            * scaled[3] * scaled[3]
+            * (scaled[4] * scaled[4]
+               + scaled[5] * scaled[5]);
+    }
+    IntegerPolynomial equality =
+        add_polynomials(
+            std::move(radial_term),
+            multiply_polynomials(
+                signed_distance,
+                signed_distance),
+            -Integer(4) * cap_denominator);
+    return primitive_factor(
+        compose_global_chart(
+            equality,
+            chart));
+}
+
 EventPartitionCertificate2
 partition_full_circle_boundary_geometry(
     const std::vector<std::string>& motion_data,
@@ -568,6 +664,7 @@ partition_full_circle_boundary_geometry(
     }
     std::vector<ProjectionRecord2> pullbacks;
     std::vector<ProjectionInput2> tangencies;
+    std::vector<OverlapInterval2> cap_overlaps;
     std::map<std::string, CircleVertexSource>
         vertices;
     const auto append_vertices =
@@ -663,6 +760,64 @@ partition_full_circle_boundary_geometry(
                                 center),
                             {std::move(event)},
                         });
+                    const std::string cap_branch_id =
+                        encode_string_sequence(
+                            {
+                                "full-circle-line-cap-v1",
+                                source[0],
+                                CENTER_CHART_IDS[center],
+                            });
+                    std::vector<std::string> cap_factor =
+                        line_cap_factor(
+                            motion_data,
+                            support,
+                            cutter_radius,
+                            cap_chord_ratio,
+                            center);
+                    if (cap_factor.size() > 1) {
+                        tangencies.push_back(
+                            {
+                                cap_branch_id,
+                                std::move(cap_factor),
+                                {
+                                    {
+                                        "cap-crossing",
+                                        source[0],
+                                        source[1],
+                                        source[2],
+                                        {},
+                                        cap_branch_id,
+                                        "equal-cap",
+                                    },
+                                },
+                            });
+                    } else if (
+                        cap_factor.front() == "0") {
+                        const Rational low(
+                            Integer(center),
+                            Integer(4));
+                        const Rational high(
+                            Integer(center + 1),
+                            Integer(4));
+                        const Rational witness(
+                            Integer(2 * center + 1),
+                            Integer(8));
+                        cap_overlaps.push_back(
+                            {
+                                "identically-equal-cap-interval",
+                                rational_text(low),
+                                rational_text(high),
+                                CORE::numerator(witness)
+                                    .convert_to<std::string>(),
+                                CORE::denominator(witness)
+                                    .convert_to<std::string>(),
+                                "equal-cap",
+                                source[0],
+                                source[1],
+                                source[2],
+                                cap_branch_id,
+                            });
+                    }
                 }
                 pullbacks.push_back(
                     std::move(pullback));
@@ -918,6 +1073,10 @@ partition_full_circle_boundary_geometry(
     }
     EventPartitionCertificate2 certificate =
         partition_projections(tangencies);
+    certificate.overlaps.insert(
+        certificate.overlaps.end(),
+        cap_overlaps.begin(),
+        cap_overlaps.end());
     certificate.projections.insert(
         certificate.projections.end(),
         pullbacks.begin(),

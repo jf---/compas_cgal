@@ -974,7 +974,27 @@ NB_MODULE(_continuous_tea_2, m)
             &OverlapInterval2::witness_denominator)
         .def_ro(
             "orientation_disposition",
-            &OverlapInterval2::orientation_disposition);
+            &OverlapInterval2::orientation_disposition)
+        .def_prop_ro(
+            "feature_id",
+            [](const OverlapInterval2& overlap) {
+                return as_bytes(overlap.feature_id);
+            })
+        .def_prop_ro(
+            "support_id",
+            [](const OverlapInterval2& overlap) {
+                return as_bytes(overlap.support_id);
+            })
+        .def_prop_ro(
+            "trim_id",
+            [](const OverlapInterval2& overlap) {
+                return as_bytes(overlap.trim_id);
+            })
+        .def_prop_ro(
+            "branch_id",
+            [](const OverlapInterval2& overlap) {
+                return as_bytes(overlap.branch_id);
+            });
 
     nb::class_<ChartSeam2>(m, "ChartSeam2")
         .def_prop_ro(
