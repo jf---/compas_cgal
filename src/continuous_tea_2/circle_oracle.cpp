@@ -276,13 +276,15 @@ std::vector<EventTraceEvent2> boundary_trace_events(
                            first.feature_id,
                            first.support_id,
                            first.trim_id,
-                           first.vertex_id)
+                           first.vertex_id,
+                           first.endpoint_role)
                     == std::tie(
                            second.kind,
                            second.feature_id,
                            second.support_id,
                            second.trim_id,
-                           second.vertex_id);
+                           second.vertex_id,
+                           second.endpoint_role);
             };
         for (std::size_t event_index = 0;
              event_index < fibre.events.size();
@@ -310,7 +312,12 @@ std::vector<EventTraceEvent2> boundary_trace_events(
                         == event.support_id
                     && witness.trim_id == event.trim_id
                     && witness.vertex_id
-                        == event.vertex_id) {
+                        == event.vertex_id
+                    && witness.endpoint_role
+                        == event.endpoint_role
+                    && (!fibre.seam_id.empty()
+                        || witness.local_branch_id
+                            == event.branch_id)) {
                     branch_ids.push_back(
                         witness.local_branch_id);
                     multiplicity =
@@ -320,6 +327,7 @@ std::vector<EventTraceEvent2> boundary_trace_events(
             const std::string disposition =
                 event.kind == "endpoint-order"
                     && !fibre.ccw_direction.empty()
+                    && fibre.ccw_direction != "mixed"
                 ? (
                       clockwise
                           ? fibre.cw_direction

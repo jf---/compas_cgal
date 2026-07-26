@@ -54,6 +54,43 @@ nb::object string_matrix_tuple(
 
 void bind_partition_records(nb::module_& module)
 {
+    nb::class_<PhysicalIncidence2>(
+        module,
+        "PhysicalIncidence2")
+        .def_prop_ro(
+            "incidence_id",
+            [](const PhysicalIncidence2& incidence) {
+                return as_bytes(
+                    incidence.incidence_id);
+            })
+        .def_ro("kind", &PhysicalIncidence2::kind)
+        .def_prop_ro(
+            "feature_id",
+            [](const PhysicalIncidence2& incidence) {
+                return as_bytes(incidence.feature_id);
+            })
+        .def_prop_ro(
+            "support_id",
+            [](const PhysicalIncidence2& incidence) {
+                return as_bytes(incidence.support_id);
+            })
+        .def_prop_ro(
+            "trim_id",
+            [](const PhysicalIncidence2& incidence) {
+                return as_bytes(incidence.trim_id);
+            })
+        .def_prop_ro(
+            "vertex_id",
+            [](const PhysicalIncidence2& incidence) {
+                return as_bytes(incidence.vertex_id);
+            })
+        .def_ro(
+            "endpoint_role",
+            &PhysicalIncidence2::endpoint_role)
+        .def_ro(
+            "sheet_ordinal",
+            &PhysicalIncidence2::sheet_ordinal);
+
     nb::class_<ActiveBoundaryBranch2>(
         module,
         "ActiveBoundaryBranch2")
@@ -87,7 +124,11 @@ void bind_partition_records(nb::module_& module)
             "root_id",
             [](const ActiveBoundaryBranch2& branch) {
                 return as_bytes(branch.root_id);
-            });
+            })
+        .def_ro(
+            "physical_incidence",
+            &ActiveBoundaryBranch2::
+                physical_incidence);
 
     nb::class_<LocalEventWitness2>(
         module,
@@ -113,6 +154,12 @@ void bind_partition_records(nb::module_& module)
             [](const LocalEventWitness2& witness) {
                 return as_bytes(witness.vertex_id);
             })
+        .def_ro(
+            "endpoint_role",
+            &LocalEventWitness2::endpoint_role)
+        .def_ro(
+            "disposition",
+            &LocalEventWitness2::disposition)
         .def_prop_ro(
             "local_branch_id",
             [](const LocalEventWitness2& witness) {
@@ -124,6 +171,18 @@ void bind_partition_records(nb::module_& module)
             [](const LocalEventWitness2& witness) {
                 return as_bytes(
                     witness.local_root_id);
+            })
+        .def_prop_ro(
+            "source_projection_id",
+            [](const LocalEventWitness2& witness) {
+                return as_bytes(
+                    witness.source_projection_id);
+            })
+        .def_prop_ro(
+            "source_factor_id",
+            [](const LocalEventWitness2& witness) {
+                return as_bytes(
+                    witness.source_factor_id);
             })
         .def_ro(
             "multiplicity",
