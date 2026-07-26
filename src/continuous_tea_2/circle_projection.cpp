@@ -184,7 +184,8 @@ Integer least_common_multiple(
 }
 
 std::vector<std::string> primitive_factor(
-    IntegerPolynomial polynomial)
+    IntegerPolynomial polynomial,
+    bool normalize_sign = true)
 {
     while (polynomial.size() > 1
            && polynomial.back() == 0) {
@@ -203,7 +204,8 @@ std::vector<std::string> primitive_factor(
             coefficient /= divisor;
         }
     }
-    if (polynomial.back() < 0) {
+    if (normalize_sign
+        && polynomial.back() < 0) {
         for (Integer& coefficient :
              polynomial) {
             coefficient = -coefficient;
@@ -218,6 +220,11 @@ std::vector<std::string> primitive_factor(
     }
     return result;
 }
+
+struct RadialPassageFactors {
+    std::vector<std::string> zero_set;
+    std::vector<std::string> signed_predicate;
+};
 
 IntegerPolynomial polynomial_column(
     const ProjectionRecord2& projection,
@@ -348,7 +355,44 @@ quarter_unit_numerators(std::size_t chart)
         "full-circle vertex passage has an unknown chart");
 }
 
-std::vector<std::string> radial_passage_factor(
+std::pair<IntegerPolynomial, IntegerPolynomial>
+scaled_motion_center(
+    const std::vector<Integer>& scaled,
+    std::size_t chart)
+{
+    const IntegerPolynomial denominator{
+        Integer(1),
+        Integer(0),
+        Integer(1),
+    };
+    const auto [unit_x, unit_y] =
+        quarter_unit_numerators(chart);
+    const IntegerPolynomial center_x =
+        add_polynomials(
+            add_polynomials(
+                add_polynomials(
+                    {Integer(0)},
+                    denominator,
+                    scaled[0]),
+                unit_x,
+                scaled[2]),
+            unit_y,
+            -scaled[3]);
+    const IntegerPolynomial center_y =
+        add_polynomials(
+            add_polynomials(
+                add_polynomials(
+                    {Integer(0)},
+                    denominator,
+                    scaled[1]),
+                unit_x,
+                scaled[3]),
+            unit_y,
+            scaled[2]);
+    return {center_x, center_y};
+}
+
+RadialPassageFactors radial_passage_factor(
     const std::vector<std::string>& motion_data,
     const std::string& radial_distance,
     const std::string& vertex_x,
@@ -359,6 +403,7 @@ std::vector<std::string> radial_passage_factor(
         parse_rational_text(motion_data[0]),
         parse_rational_text(motion_data[1]),
         parse_rational_text(motion_data[2]),
+        parse_rational_text(motion_data[3]),
         parse_rational_text(radial_distance),
         parse_rational_text(vertex_x),
         parse_rational_text(vertex_y),
@@ -381,24 +426,18 @@ std::vector<std::string> radial_passage_factor(
         Integer(0),
         Integer(1),
     };
-    const auto [unit_x, unit_y] =
-        quarter_unit_numerators(chart);
+    const auto [center_x, center_y] =
+        scaled_motion_center(scaled, chart);
     const IntegerPolynomial dx =
         add_polynomials(
-            add_polynomials(
-                {Integer(0)},
-                unit_denominator,
-                scaled[0] - scaled[4]),
-            unit_x,
-            scaled[2]);
+            center_x,
+            unit_denominator,
+            -scaled[5]);
     const IntegerPolynomial dy =
         add_polynomials(
-            add_polynomials(
-                {Integer(0)},
-                unit_denominator,
-                scaled[1] - scaled[5]),
-            unit_y,
-            scaled[2]);
+            center_y,
+            unit_denominator,
+            -scaled[6]);
     IntegerPolynomial passage =
         add_polynomials(
             multiply_polynomials(dx, dx),
@@ -409,11 +448,17 @@ std::vector<std::string> radial_passage_factor(
         multiply_polynomials(
             unit_denominator,
             unit_denominator),
-        -scaled[3] * scaled[3]);
-    return primitive_factor(
+        -scaled[4] * scaled[4]);
+    IntegerPolynomial global =
         compose_global_chart(
             passage,
-            chart));
+            chart);
+    return {
+        primitive_factor(global),
+        primitive_factor(
+            std::move(global),
+            false),
+    };
 }
 
 std::vector<std::string> circle_cap_factor(
@@ -427,6 +472,7 @@ std::vector<std::string> circle_cap_factor(
         parse_rational_text(motion_data[0]),
         parse_rational_text(motion_data[1]),
         parse_rational_text(motion_data[2]),
+        parse_rational_text(motion_data[3]),
         parse_rational_text(cutter_radius),
         circle.center_x,
         circle.center_y,
@@ -439,9 +485,9 @@ std::vector<std::string> circle_cap_factor(
             CORE::denominator(value));
     }
     std::vector<Integer> scaled;
-    scaled.reserve(6);
+    scaled.reserve(7);
     for (std::size_t index = 0;
-         index < 6;
+         index < 7;
          ++index) {
         scaled.push_back(
             CORE::numerator(
@@ -450,7 +496,7 @@ std::vector<std::string> circle_cap_factor(
     }
     const Integer support_radius_squared =
         CORE::numerator(
-            values[6]
+            values[7]
             * Rational(
                 denominator * denominator));
     const IntegerPolynomial unit_denominator{
@@ -458,24 +504,18 @@ std::vector<std::string> circle_cap_factor(
         Integer(0),
         Integer(1),
     };
-    const auto [unit_x, unit_y] =
-        quarter_unit_numerators(chart);
+    const auto [center_x, center_y] =
+        scaled_motion_center(scaled, chart);
     const IntegerPolynomial dx =
         add_polynomials(
-            add_polynomials(
-                {Integer(0)},
-                unit_denominator,
-                scaled[0] - scaled[4]),
-            unit_x,
-            scaled[2]);
+            center_x,
+            unit_denominator,
+            -scaled[5]);
     const IntegerPolynomial dy =
         add_polynomials(
-            add_polynomials(
-                {Integer(0)},
-                unit_denominator,
-                scaled[1] - scaled[5]),
-            unit_y,
-            scaled[2]);
+            center_y,
+            unit_denominator,
+            -scaled[6]);
     const IntegerPolynomial distance_squared =
         add_polynomials(
             multiply_polynomials(dx, dx),
@@ -486,7 +526,7 @@ std::vector<std::string> circle_cap_factor(
             unit_denominator,
             unit_denominator);
     const Integer cutter_radius_squared =
-        scaled[3] * scaled[3];
+        scaled[4] * scaled[4];
     const IntegerPolynomial radical_axis =
         add_polynomials(
             distance_squared,
@@ -562,6 +602,7 @@ std::vector<std::string> line_cap_factor(
         parse_rational_text(motion_data[0]),
         parse_rational_text(motion_data[1]),
         parse_rational_text(motion_data[2]),
+        parse_rational_text(motion_data[3]),
         parse_rational_text(cutter_radius),
         parse_rational_text(support[0]),
         parse_rational_text(support[1]),
@@ -585,37 +626,21 @@ std::vector<std::string> line_cap_factor(
         Integer(0),
         Integer(1),
     };
-    const auto [unit_x, unit_y] =
-        quarter_unit_numerators(chart);
-    const IntegerPolynomial center_x =
-        add_polynomials(
-            add_polynomials(
-                {Integer(0)},
-                unit_denominator,
-                scaled[0]),
-            unit_x,
-            scaled[2]);
-    const IntegerPolynomial center_y =
-        add_polynomials(
-            add_polynomials(
-                {Integer(0)},
-                unit_denominator,
-                scaled[1]),
-            unit_y,
-            scaled[2]);
+    const auto [center_x, center_y] =
+        scaled_motion_center(scaled, chart);
     IntegerPolynomial signed_distance =
         add_polynomials(
             multiply_polynomials(
-                {scaled[4]},
+                {scaled[5]},
                 center_x),
             multiply_polynomials(
-                {scaled[5]},
+                {scaled[6]},
                 center_y),
             Integer(1));
     signed_distance = add_polynomials(
         std::move(signed_distance),
         unit_denominator,
-        scaled[6] * denominator);
+        scaled[7] * denominator);
     const Rational cap =
         parse_rational_text(cap_chord_ratio);
     const Integer cap_numerator =
@@ -630,9 +655,9 @@ std::vector<std::string> line_cap_factor(
         coefficient *=
             (Integer(4) * cap_denominator
                 - cap_numerator)
-            * scaled[3] * scaled[3]
-            * (scaled[4] * scaled[4]
-               + scaled[5] * scaled[5]);
+            * scaled[4] * scaled[4]
+            * (scaled[5] * scaled[5]
+               + scaled[6] * scaled[6]);
     }
     IntegerPolynomial equality =
         add_polynomials(
@@ -655,7 +680,7 @@ partition_full_circle_boundary_geometry(
     const std::vector<std::string>& line_sources,
     const std::vector<std::string>& circle_sources)
 {
-    if (motion_data.size() != 3
+    if (motion_data.size() != 4
         || cutter_radius.empty()
         || cap_chord_ratio.empty()
         || (line_sources.empty()
@@ -957,7 +982,8 @@ partition_full_circle_boundary_geometry(
                                 circle.center_x),
                             rational_text(
                                 circle.center_y),
-                            center),
+                            center)
+                            .zero_set,
                         {
                             {
                                 "tangent",
@@ -992,7 +1018,8 @@ partition_full_circle_boundary_geometry(
                                 circle.center_x),
                             rational_text(
                                 circle.center_y),
-                            center),
+                            center)
+                            .zero_set,
                         {
                             {
                                 "support-overlap",
@@ -1054,6 +1081,13 @@ partition_full_circle_boundary_geometry(
                         disposition,
                     });
             }
+            RadialPassageFactors passage =
+                radial_passage_factor(
+                    motion_data,
+                    cutter_radius,
+                    vertex.x,
+                    vertex.y,
+                    center);
             tangencies.push_back(
                 {
                     encode_string_sequence(
@@ -1062,13 +1096,10 @@ partition_full_circle_boundary_geometry(
                             vertex_id,
                             CENTER_CHART_IDS[center],
                         }),
-                    radial_passage_factor(
-                        motion_data,
-                        cutter_radius,
-                        vertex.x,
-                        vertex.y,
-                        center),
+                    std::move(passage.zero_set),
                     std::move(events),
+                    std::move(
+                        passage.signed_predicate),
                 });
         }
     }

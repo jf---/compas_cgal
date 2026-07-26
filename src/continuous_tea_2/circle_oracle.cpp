@@ -229,6 +229,76 @@ const ParameterChart2& center_chart(
     return *found;
 }
 
+std::vector<EventTraceEvent2> boundary_trace_events(
+    const EventPartitionCertificate2& partition,
+    bool clockwise)
+{
+    std::vector<EventTraceEvent2> result;
+    for (std::size_t fibre_index = 0;
+         fibre_index < partition.fibres.size();
+         ++fibre_index) {
+        const EventFibre2& fibre =
+            partition.fibres[fibre_index];
+        const auto root = std::find_if(
+            partition.roots.begin(),
+            partition.roots.end(),
+            [&fibre](
+                const AlgebraicRootRecord2& candidate) {
+                return candidate.root_id
+                    == fibre.root_id;
+            });
+        if (root == partition.roots.end()) {
+            throw IncompleteFullCircleOracleError(
+                "full-circle fibre lacks its exact root");
+        }
+        std::vector<std::string> active_branch_ids;
+        for (const ActiveBoundaryBranch2& branch :
+             fibre.left_active_branches) {
+            active_branch_ids.push_back(
+                branch.branch_id);
+        }
+        for (const ActiveBoundaryBranch2& branch :
+             fibre.right_active_branches) {
+            active_branch_ids.push_back(
+                branch.branch_id);
+        }
+        const std::size_t motion_order =
+            clockwise && fibre_index != 0
+            ? partition.fibres.size()
+                - fibre_index
+            : fibre_index;
+        for (const PartitionEvent2& event :
+             fibre.events) {
+            std::vector<std::string> branch_ids =
+                active_branch_ids;
+            branch_ids.push_back(event.branch_id);
+            const std::string disposition =
+                event.kind == "endpoint-order"
+                    && !fibre.ccw_direction.empty()
+                ? (
+                      clockwise
+                          ? fibre.cw_direction
+                          : fibre.ccw_direction)
+                : event.disposition;
+            result.push_back(
+                make_event_trace_event(
+                    fibre.root_id,
+                    encode_canonical_record(
+                        "full-circle-global-fibre-v2",
+                        {
+                            fibre.root_id,
+                        }),
+                    event.kind,
+                    {event.feature_id},
+                    std::move(branch_ids),
+                    root->multiplicity,
+                    disposition,
+                    motion_order));
+        }
+    }
+    return result;
+}
+
 } // namespace
 
 std::vector<EventTraceEvent2> order_full_circle_events(
@@ -545,13 +615,7 @@ audit_full_circle_tea_event_exact(
     const Epeck::FT exact_phase_y(phase_dy);
     if ((!line_sources.empty()
             || !circle_sources.empty())
-        && rational_boundary_vertices
-        && (CGAL::is_zero(exact_phase_x)
-            || CGAL::is_zero(exact_phase_y))) {
-        const Epeck::FT guide_radius =
-            CGAL::is_zero(exact_phase_y)
-            ? CGAL::abs(exact_phase_x)
-            : CGAL::abs(exact_phase_y);
+        && rational_boundary_vertices) {
         EventPartitionCertificate2 partition =
             construct_full_circle_boundary_pullback_partition(
                 full_circle_stock_identity(boundary_records),
@@ -560,7 +624,10 @@ audit_full_circle_tea_event_exact(
                         Epeck::FT(center_x)),
                     exact_rational_text(
                         Epeck::FT(center_y)),
-                    exact_rational_text(guide_radius),
+                    exact_rational_text(
+                        exact_phase_x),
+                    exact_rational_text(
+                        exact_phase_y),
                 },
                 exact_rational_text(
                     Epeck::FT(tool_radius)),
@@ -575,8 +642,13 @@ audit_full_circle_tea_event_exact(
                 stock,
                 Epeck::FT(center_x),
                 Epeck::FT(center_y),
-                guide_radius,
+                exact_phase_x,
+                exact_phase_y,
                 Epeck::FT(tool_radius));
+        std::vector<EventTraceEvent2> events =
+            boundary_trace_events(
+                partition,
+                clockwise);
         EventTrace2 trace =
             build_event_trace(
                 std::move(partition),
@@ -604,7 +676,7 @@ audit_full_circle_tea_event_exact(
                 cap_exceeded
                     ? "full-circle-line-vertex-witness-exact-v1"
                     : "full-circle-line-pullbacks-exact-v1",
-                {});
+                std::move(events));
         return {
             cap_exceeded
                 ? "cap_exceeded"

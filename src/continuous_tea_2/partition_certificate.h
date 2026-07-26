@@ -76,15 +76,22 @@ struct ProjectionInput2 {
     std::string projection_id;
     std::vector<std::string> coefficients;
     std::vector<PartitionEvent2> events;
+    std::vector<std::string>
+        signed_predicate_coefficients;
 
     ProjectionInput2() = default;
     ProjectionInput2(
         std::string projection_id_,
         std::vector<std::string> coefficients_,
-        std::vector<PartitionEvent2> events_)
+        std::vector<PartitionEvent2> events_,
+        std::vector<std::string>
+            signed_predicate_coefficients_ = {})
         : projection_id(std::move(projection_id_)),
           coefficients(std::move(coefficients_)),
-          events(std::move(events_))
+          events(std::move(events_)),
+          signed_predicate_coefficients(
+              std::move(
+                  signed_predicate_coefficients_))
     {
     }
 };
@@ -108,7 +115,12 @@ struct ParameterCell2 {
 
 struct ActiveBoundaryBranch2 {
     std::string branch_id;
+    std::string feature_id;
     std::string support_id;
+    std::string trim_id;
+    std::string chart_id;
+    std::size_t sheet_ordinal = 0;
+    std::string root_id;
 };
 
 struct EventFibre2 {
@@ -169,6 +181,8 @@ struct ProjectionRecord2 {
     int bound_rim_degree = -1;
     std::string degree_bound_id;
     std::string normalized_coefficient_bytes;
+    std::vector<std::string>
+        signed_predicate_coefficients;
 };
 
 struct OverlapInterval2 {

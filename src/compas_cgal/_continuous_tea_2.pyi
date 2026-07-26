@@ -260,7 +260,12 @@ class ParameterCell2:
 
 class ActiveBoundaryBranch2:
     branch_id: bytes
+    feature_id: bytes
     support_id: bytes
+    trim_id: bytes
+    chart_id: str
+    sheet_ordinal: int
+    root_id: bytes
 
 
 class EventFibre2:
@@ -320,6 +325,7 @@ class ProjectionRecord2:
     degree_bound: tuple[int, int]
     degree_bound_id: str
     normalized_coefficient_bytes: bytes
+    signed_predicate_coefficients: Sequence[str]
 
 
 class OverlapInterval2:
