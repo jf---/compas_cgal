@@ -22,6 +22,12 @@ public:
     using std::runtime_error::runtime_error;
 };
 
+class IdenticallyZeroSegmentLimiterEquationError : public std::runtime_error
+{
+public:
+    using std::runtime_error::runtime_error;
+};
+
 bool exact_open_segment_feature_contains(
     const SourceParabolaParameterization2& parabola,
     const MatExactPointSiteSource2& segment_source,
@@ -37,5 +43,16 @@ MatParameterEndpoint2 bind_point_limiter_parabola_endpoint(
     const MatExactPointSiteSource2& segment_source,
     const MatExactPointSiteSource2& segment_target,
     const MatExactPointSiteSource2& limiter,
+    const SegmentSiteVoronoi2& voronoi,
+    const SegmentSiteVoronoi2::Halfedge_handle& halfedge);
+
+MatParameterEndpoint2 bind_segment_limiter_parabola_endpoint(
+    const MatExactPointSiteSource2& focus,
+    const MatExactOpenSegmentSource2& segment,
+    const MatExactPointSiteSource2& segment_source,
+    const MatExactPointSiteSource2& segment_target,
+    const MatExactOpenSegmentSource2& limiter,
+    const MatExactPointSiteSource2& limiter_source,
+    const MatExactPointSiteSource2& limiter_target,
     const SegmentSiteVoronoi2& voronoi,
     const SegmentSiteVoronoi2::Halfedge_handle& halfedge);

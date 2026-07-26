@@ -298,6 +298,71 @@ FieldPolynomial2 line_value(const MatExactPointSiteSource2& point,
         field_constant({segment.line_c, 0}));
 }
 
+FieldPolynomial2 line_value(const FieldPolynomial2& x,
+                            const FieldPolynomial2& y,
+                            const MatExactOpenSegmentSource2& segment)
+{
+    return field_add(
+        field_add(field_scale(x, segment.line_a),
+                  field_scale(y, segment.line_b)),
+        field_constant({segment.line_c, 0}));
+}
+
+RationalPolynomial field_norm(const FieldPolynomial2& value,
+                              const CORE::BigRat& radicand)
+{
+    RationalPolynomial norm = multiply(value.rational, value.rational);
+    add_in_place(
+        norm,
+        scaled(multiply(value.radical, value.radical), -radicand));
+    normalize(norm);
+    return norm;
+}
+
+std::size_t polynomial_degree(
+    const RationalPolynomial& polynomial)
+{
+    RationalPolynomial normalized = polynomial;
+    normalize(normalized);
+    return normalized.size() - 1;
+}
+
+FieldPolynomial2 segment_limiter_equation(
+    const MatExactPointSiteSource2& focus,
+    const MatExactOpenSegmentSource2& segment,
+    const MatExactOpenSegmentSource2& limiter)
+{
+    const SourceParabolaParameterization2 source =
+        source_parameterization(focus, segment);
+    const FieldPolynomial2 x =
+        field_coordinate(source.x_rational, source.x_radical);
+    const FieldPolynomial2 y =
+        field_coordinate(source.y_rational, source.y_radical);
+    const CORE::BigRat limiter_line_norm =
+        limiter.line_a * limiter.line_a
+        + limiter.line_b * limiter.line_b;
+    if (limiter_line_norm == 0)
+    {
+        throw InvalidRationalPrimitiveError(
+            "segment limiter has a zero supporting-line normal");
+    }
+    const FieldPolynomial2 equation =
+        field_subtract(
+            field_scale(
+                squared_distance(x, y, focus, source.radicand),
+                limiter_line_norm),
+            field_square(
+                line_value(x, y, limiter),
+                source.radicand));
+    if (polynomial_degree(equation.rational) > 4
+        || polynomial_degree(equation.radical) > 4)
+    {
+        throw InvalidRationalPrimitiveError(
+            "segment limiter equation exceeds quartic degree");
+    }
+    return equation;
+}
+
 MatTraits::Point_2 exact_live_point(const MatExactPointSiteSource2& point,
                                     const CORE::BigRat& radicand)
 {
@@ -326,7 +391,7 @@ LiveParabolaEndpointBridge2
 live_endpoint_bridge(const MatExactPointSiteSource2& focus,
                      const MatExactPointSiteSource2& segment_source,
                      const MatExactPointSiteSource2& segment_target,
-                     const MatExactPointSiteSource2& limiter,
+                     const MatTraits::Site_2& expected_limiter,
                      const CORE::BigRat& radicand,
                      const SegmentSiteVoronoi2& voronoi,
                      const SegmentSiteVoronoi2::Halfedge_handle& halfedge)
@@ -337,9 +402,6 @@ live_endpoint_bridge(const MatExactPointSiteSource2& focus,
         MatTraits::Site_2::construct_site_2(
             exact_live_point(segment_source, radicand),
             exact_live_point(segment_target, radicand));
-    const MatTraits::Site_2 expected_limiter =
-        MatTraits::Site_2::construct_site_2(
-            exact_live_point(limiter, radicand));
     const MatTraits::Site_2 live_up_generator = halfedge->up()->site();
     const MatTraits::Site_2 live_down_generator = halfedge->down()->site();
     const bool generators_match =
@@ -353,9 +415,15 @@ live_endpoint_bridge(const MatExactPointSiteSource2& focus,
             "source records do not match live up/down generators");
     }
     const bool limiter_is_left =
-        exact_site_equal(halfedge->left()->site(), expected_limiter);
+        halfedge->has_source()
+        && exact_site_equal(
+            halfedge->left()->site(),
+            expected_limiter);
     const bool limiter_is_right =
-        exact_site_equal(halfedge->right()->site(), expected_limiter);
+        halfedge->has_target()
+        && exact_site_equal(
+            halfedge->right()->site(),
+            expected_limiter);
     if (!limiter_is_left && !limiter_is_right)
     {
         throw MismatchedLiveParabolaBridgeError(
@@ -393,12 +461,12 @@ live_endpoint_bridge(const MatExactPointSiteSource2& focus,
     };
 }
 
-} // namespace
-
-bool exact_open_segment_feature_contains(
+bool exact_segment_feature_contains(
     const SourceParabolaParameterization2& parabola,
     const MatExactPointSiteSource2& segment_source,
-    const MatExactPointSiteSource2& segment_target, const Algebraic& parameter)
+    const MatExactPointSiteSource2& segment_target,
+    const Algebraic& parameter,
+    bool include_endpoints)
 {
     require_same_field(segment_source, parabola.radicand);
     require_same_field(segment_target, parabola.radicand);
@@ -407,22 +475,75 @@ bool exact_open_segment_feature_contains(
     const FieldPolynomial2 y =
         field_coordinate(parabola.y_rational, parabola.y_radical);
     const FieldPolynomial2 segment_dx = field_subtract(
-        field_constant(segment_target.x), field_constant(segment_source.x));
+        field_constant(segment_target.x),
+        field_constant(segment_source.x));
     const FieldPolynomial2 segment_dy = field_subtract(
-        field_constant(segment_target.y), field_constant(segment_source.y));
-    const FieldPolynomial2 projection =
-        dot(field_subtract(x, field_constant(segment_source.x)),
-            field_subtract(y, field_constant(segment_source.y)), segment_dx,
-            segment_dy, parabola.radicand);
+        field_constant(segment_target.y),
+        field_constant(segment_source.y));
     const FieldPolynomial2 segment_length_squared =
-        dot(segment_dx, segment_dy, segment_dx, segment_dy, parabola.radicand);
+        dot(
+            segment_dx,
+            segment_dy,
+            segment_dx,
+            segment_dy,
+            parabola.radicand);
+    ExactAlgebraicKernel1 kernel;
+    if (field_sign_at(
+            segment_length_squared,
+            parabola.radicand,
+            parameter,
+            kernel) != CGAL::POSITIVE)
+    {
+        throw InvalidRationalPrimitiveError(
+            "segment feature endpoints coincide");
+    }
+    const FieldPolynomial2 projection =
+        dot(
+            field_subtract(
+                x,
+                field_constant(segment_source.x)),
+            field_subtract(
+                y,
+                field_constant(segment_source.y)),
+            segment_dx,
+            segment_dy,
+            parabola.radicand);
     const FieldPolynomial2 projection_remainder =
         field_subtract(segment_length_squared, projection);
-    ExactAlgebraicKernel1 kernel;
-    return field_sign_at(projection, parabola.radicand, parameter, kernel) ==
-               CGAL::POSITIVE &&
-           field_sign_at(projection_remainder, parabola.radicand, parameter,
-                         kernel) == CGAL::POSITIVE;
+    const CGAL::Sign projection_sign =
+        field_sign_at(
+            projection,
+            parabola.radicand,
+            parameter,
+            kernel);
+    const CGAL::Sign remainder_sign =
+        field_sign_at(
+            projection_remainder,
+            parabola.radicand,
+            parameter,
+            kernel);
+    if (include_endpoints)
+    {
+        return projection_sign != CGAL::NEGATIVE
+            && remainder_sign != CGAL::NEGATIVE;
+    }
+    return projection_sign == CGAL::POSITIVE
+        && remainder_sign == CGAL::POSITIVE;
+}
+
+} // namespace
+
+bool exact_open_segment_feature_contains(
+    const SourceParabolaParameterization2& parabola,
+    const MatExactPointSiteSource2& segment_source,
+    const MatExactPointSiteSource2& segment_target, const Algebraic& parameter)
+{
+    return exact_segment_feature_contains(
+        parabola,
+        segment_source,
+        segment_target,
+        parameter,
+        false);
 }
 
 void require_distinct_live_parabola_endpoints(
@@ -448,9 +569,18 @@ MatParameterEndpoint2 bind_point_limiter_parabola_endpoint(
     require_same_field(segment_source, radicand);
     require_same_field(segment_target, radicand);
     require_same_field(limiter, radicand);
+    const MatTraits::Site_2 expected_limiter =
+        MatTraits::Site_2::construct_site_2(
+            exact_live_point(limiter, radicand));
     const LiveParabolaEndpointBridge2 live =
-        live_endpoint_bridge(focus, segment_source, segment_target, limiter,
-                             radicand, voronoi, halfedge);
+        live_endpoint_bridge(
+            focus,
+            segment_source,
+            segment_target,
+            expected_limiter,
+            radicand,
+            voronoi,
+            halfedge);
     if (quadratic_field_sign(
             {
                 line_value(segment_source, segment).rational.front(),
@@ -477,10 +607,7 @@ MatParameterEndpoint2 bind_point_limiter_parabola_endpoint(
     const FieldPolynomial2 equation =
         field_subtract(squared_distance(x, y, focus, radicand),
                        squared_distance(x, y, limiter, radicand));
-    RationalPolynomial norm = multiply(equation.rational, equation.rational);
-    add_in_place(
-        norm, scaled(multiply(equation.radical, equation.radical), -radicand));
-    normalize(norm);
+    RationalPolynomial norm = field_norm(equation, radicand);
     if (is_zero(norm))
     {
         throw UnboundLiveParabolaEndpointError(
@@ -562,6 +689,201 @@ MatParameterEndpoint2 bind_point_limiter_parabola_endpoint(
             " radical, " + std::to_string(feature_roots) + " feature, " +
             std::to_string(parameter_matches) + " parameter, " +
             std::to_string(point_matches) + " point matches");
+    }
+    return std::move(matches.front());
+}
+
+MatParameterEndpoint2 bind_segment_limiter_parabola_endpoint(
+    const MatExactPointSiteSource2& focus,
+    const MatExactOpenSegmentSource2& segment,
+    const MatExactPointSiteSource2& segment_source,
+    const MatExactPointSiteSource2& segment_target,
+    const MatExactOpenSegmentSource2& limiter,
+    const MatExactPointSiteSource2& limiter_source,
+    const MatExactPointSiteSource2& limiter_target,
+    const SegmentSiteVoronoi2& voronoi,
+    const SegmentSiteVoronoi2::Halfedge_handle& halfedge)
+{
+    const CORE::BigRat radicand = focus.radicand;
+    require_same_field(segment_source, radicand);
+    require_same_field(segment_target, radicand);
+    require_same_field(limiter_source, radicand);
+    require_same_field(limiter_target, radicand);
+    if (quadratic_field_sign(
+            {
+                line_value(segment_source, segment).rational.front(),
+                line_value(segment_source, segment).radical.front(),
+            },
+            radicand) != CGAL::ZERO
+        || quadratic_field_sign(
+               {
+                   line_value(segment_target, segment).rational.front(),
+                   line_value(segment_target, segment).radical.front(),
+               },
+               radicand) != CGAL::ZERO)
+    {
+        throw InvalidRationalPrimitiveError(
+            "open-segment endpoint is off directrix");
+    }
+    if (quadratic_field_sign(
+            {
+                line_value(limiter_source, limiter).rational.front(),
+                line_value(limiter_source, limiter).radical.front(),
+            },
+            radicand) != CGAL::ZERO
+        || quadratic_field_sign(
+               {
+                   line_value(limiter_target, limiter).rational.front(),
+                   line_value(limiter_target, limiter).radical.front(),
+               },
+               radicand) != CGAL::ZERO)
+    {
+        throw InvalidRationalPrimitiveError(
+            "segment limiter endpoint is off supporting line");
+    }
+
+    const MatTraits::Site_2 expected_limiter =
+        MatTraits::Site_2::construct_site_2(
+            exact_live_point(limiter_source, radicand),
+            exact_live_point(limiter_target, radicand));
+    const LiveParabolaEndpointBridge2 live =
+        live_endpoint_bridge(
+            focus,
+            segment_source,
+            segment_target,
+            expected_limiter,
+            radicand,
+            voronoi,
+            halfedge);
+    const SourceParabolaParameterization2 source =
+        source_parameterization(focus, segment);
+    const FieldPolynomial2 x =
+        field_coordinate(source.x_rational, source.x_radical);
+    const FieldPolynomial2 y =
+        field_coordinate(source.y_rational, source.y_radical);
+    const FieldPolynomial2 equation =
+        segment_limiter_equation(
+            focus,
+            segment,
+            limiter);
+    const RationalPolynomial norm =
+        field_norm(equation, radicand);
+    if (is_zero(norm))
+    {
+        // Unreachable for validated adaptor edges; protects producer drift.
+        throw IdenticallyZeroSegmentLimiterEquationError(
+            "segment limiter equality is identically zero");
+    }
+    const Polynomial norm_polynomial =
+        integer_polynomial(norm);
+    ExactAlgebraicKernel1 kernel;
+    const std::vector<ExactFactorRootWitness2> witnesses =
+        factor_root_witnesses(norm_polynomial, kernel);
+
+    const CORE::Expr vertex_x = core_field_value(
+        {
+            source.x_rational.front(),
+            source.x_radical.front(),
+        },
+        radicand);
+    const CORE::Expr vertex_y = core_field_value(
+        {
+            source.y_rational.front(),
+            source.y_radical.front(),
+        },
+        radicand);
+    const CORE::BigRat line_norm =
+        segment.line_a * segment.line_a
+        + segment.line_b * segment.line_b;
+    const CORE::Expr live_parameter =
+        ((live.point.x() - vertex_x)
+             * CORE::Expr(-segment.line_b)
+         + (live.point.y() - vertex_y)
+             * CORE::Expr(segment.line_a))
+        / CORE::Expr(line_norm);
+
+    std::vector<MatParameterEndpoint2> matches;
+    std::size_t equation_roots = 0;
+    std::size_t source_feature_roots = 0;
+    std::size_t limiter_feature_roots = 0;
+    std::size_t parameter_matches = 0;
+    std::size_t point_matches = 0;
+    for (const ExactFactorRootWitness2& witness : witnesses)
+    {
+        const Algebraic& root = witness.root;
+        if (field_sign_at(
+                equation,
+                radicand,
+                root,
+                kernel) != CGAL::ZERO)
+        {
+            continue;
+        }
+        ++equation_roots;
+        if (!exact_segment_feature_contains(
+                source,
+                segment_source,
+                segment_target,
+                root,
+                false))
+        {
+            continue;
+        }
+        ++source_feature_roots;
+        if (!exact_segment_feature_contains(
+                source,
+                limiter_source,
+                limiter_target,
+                root,
+                true))
+        {
+            continue;
+        }
+        ++limiter_feature_roots;
+        const CORE::Expr parameter =
+            exact_core_root(witness);
+        if (parameter != live_parameter)
+        {
+            continue;
+        }
+        ++parameter_matches;
+        const MatTraits::Point_2 candidate(
+            core_evaluate(x, radicand, parameter),
+            core_evaluate(y, radicand, parameter));
+        if (candidate != live.point)
+        {
+            continue;
+        }
+        ++point_matches;
+        matches.push_back({
+            root,
+            {
+                witness.root_id,
+                limiter.stable_site_id,
+                "segment-limiter/norm-factor-multiplicity/"
+                    + std::to_string(
+                        witness.source_factor_multiplicity),
+            },
+        });
+    }
+    if (matches.size() != 1)
+    {
+        throw UnboundLiveParabolaEndpointError(
+            "live segment-limiter point binds "
+            + std::to_string(matches.size())
+            + " roots from "
+            + std::to_string(witnesses.size())
+            + " square-free factor roots, "
+            + std::to_string(equation_roots)
+            + " equation, "
+            + std::to_string(source_feature_roots)
+            + " source feature, "
+            + std::to_string(limiter_feature_roots)
+            + " limiter feature, "
+            + std::to_string(parameter_matches)
+            + " parameter, "
+            + std::to_string(point_matches)
+            + " point matches");
     }
     return std::move(matches.front());
 }

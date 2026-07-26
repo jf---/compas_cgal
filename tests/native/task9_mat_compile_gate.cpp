@@ -8,6 +8,8 @@
 #include <utility>
 #include <vector>
 
+bool segment_limiter_gate();
+
 namespace {
 
 bool has_reconstructible_root_id(
@@ -562,11 +564,13 @@ bind_point_limiter_fixture(
             continue;
         }
         const bool limiter_is_left =
-            exact_site_equal(
+            halfedge->has_source()
+            && exact_site_equal(
                 halfedge->left()->site(),
                 limiter_site);
         const bool limiter_is_right =
-            exact_site_equal(
+            halfedge->has_target()
+            && exact_site_equal(
                 halfedge->right()->site(),
                 limiter_site);
         if (limiter_is_left == limiter_is_right) {
@@ -895,6 +899,7 @@ int main()
             && unrelated_live_generator_is_rejected()
             && strict_open_segment_feature_rejects_decoy()
             && collapsed_live_parabola_is_rejected()
+            && segment_limiter_gate()
         ? EXIT_SUCCESS
         : EXIT_FAILURE;
 }
