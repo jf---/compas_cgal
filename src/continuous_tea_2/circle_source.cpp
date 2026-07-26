@@ -118,20 +118,23 @@ bool has_material_rational_chart_witness(
     const Stock2& stock,
     const Epeck::FT& center_x,
     const Epeck::FT& center_y,
-    const Epeck::FT& guide_radius,
+    const Epeck::FT& phase_x,
+    const Epeck::FT& phase_y,
     const Epeck::FT& tool_radius)
 {
     // Quarter-chart t=1/2 gives the exact unit direction (3/5, 4/5).
     const Epeck::FT chart_denominator(5);
     const Epeck::FT witness_x =
         center_x
-        + guide_radius
-            * Epeck::FT(3)
+        + (
+              phase_x * Epeck::FT(3)
+              - phase_y * Epeck::FT(4))
             / chart_denominator;
     const Epeck::FT witness_y =
         center_y
-        + guide_radius
-            * Epeck::FT(4)
+        + (
+              phase_y * Epeck::FT(3)
+              + phase_x * Epeck::FT(4))
             / chart_denominator;
     Gps cutter_disk;
     cutter_disk.insert(
@@ -259,7 +262,7 @@ construct_full_circle_boundary_pullback_partition(
             });
     }
     certificate.source_kind =
-        "full-circle-boundary-pullbacks-v1";
+        "full-circle-boundary-pullbacks-v2";
     certificate.source_payload =
         encode_string_sequence(
             {

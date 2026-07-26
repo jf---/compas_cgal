@@ -688,6 +688,16 @@ EventPartitionCertificate2 partition_integer_projections(
             throw InvalidAlgebraicPolynomialError(
                 "projection polynomial must be nonzero and nonconstant");
         }
+        Polynomial signed_predicate;
+        if (!input.signed_predicate_coefficients.empty()) {
+            signed_predicate = polynomial_from_strings(
+                input.signed_predicate_coefficients);
+            if (normalized_polynomial(signed_predicate)
+                != normalized_polynomial(polynomial)) {
+                throw InvalidAlgebraicPolynomialError(
+                    "signed predicate does not govern the projection zero set");
+            }
+        }
         std::vector<std::pair<Polynomial, int>> factors;
         kernel.square_free_factorize_1_object()(
             polynomial,
@@ -714,6 +724,8 @@ EventPartitionCertificate2 partition_integer_projections(
         projection_record.normalized_coefficient_bytes =
             ccan_sequence(
                 projection_record.coefficient_rows.front());
+        projection_record.signed_predicate_coefficients =
+            input.signed_predicate_coefficients;
 
         for (const auto& [raw_factor, multiplicity] : factors) {
             const Polynomial factor =

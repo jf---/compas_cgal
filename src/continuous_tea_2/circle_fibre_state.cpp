@@ -3,40 +3,55 @@
 #include "event_certificate.h"
 
 #include <algorithm>
+#include <map>
 #include <string>
+#include <tuple>
 #include <vector>
 
 #include <CGAL/CORE/BigRat.h>
+#include <CGAL/Polynomial.h>
+#include <CGAL/Polynomial_traits_d.h>
+#include <CGAL/number_utils.h>
 
 namespace {
 
 using Integer = CORE::BigInt;
-using Rational = CORE::BigRat;
+using Polynomial = CGAL::Polynomial<Integer>;
 
-Rational projection_value(
+CGAL::Sign signed_projection_sign(
     const ProjectionRecord2& projection,
     const ParameterCell2& cell)
 {
-    if (projection.coefficient_rows.size() != 1) {
+    if (projection
+            .signed_predicate_coefficients.empty()) {
         throw EventPartitionVerificationError(
-            "full-circle event state requires a univariate projection");
+            "full-circle event state lacks its signed radial predicate");
     }
-    const Rational witness(
-        Integer(cell.witness_numerator),
-        Integer(cell.witness_denominator));
-    Rational value = 0;
-    Rational power = 1;
+    std::vector<Integer> coefficients;
+    coefficients.reserve(
+        projection
+            .signed_predicate_coefficients.size());
     for (const std::string& coefficient :
-         projection.coefficient_rows.front()) {
-        value += Rational(Integer(coefficient))
-            * power;
-        power *= witness;
+         projection.signed_predicate_coefficients) {
+        coefficients.emplace_back(coefficient);
     }
-    if (value == 0) {
+    using Traits =
+        CGAL::Polynomial_traits_d<Polynomial>;
+    const Polynomial predicate =
+        typename Traits::Construct_polynomial()(
+            coefficients.begin(),
+            coefficients.end());
+    const Integer value =
+        typename Traits::Evaluate_homogeneous()(
+            predicate,
+            Integer(cell.witness_numerator),
+            Integer(cell.witness_denominator));
+    const CGAL::Sign sign = CGAL::sign(value);
+    if (sign == CGAL::ZERO) {
         throw EventPartitionVerificationError(
             "full-circle cell witness lies on an event projection");
     }
-    return value;
+    return sign;
 }
 
 const ParameterCell2& adjacent_cell(
@@ -100,16 +115,33 @@ const ProjectionRecord2& governing_projection(
 }
 
 ActiveBoundaryBranch2 active_branch(
-    const PartitionEvent2& event)
+    const PartitionEvent2& event,
+    const std::string& root_id,
+    std::size_t sheet_ordinal)
 {
+    const std::vector<std::string> fields =
+        decode_string_sequence(event.branch_id);
+    if (fields.size() != 4) {
+        throw EventPartitionVerificationError(
+            "full-circle active sheet has malformed event identity");
+    }
     return {
         encode_string_sequence(
             {
-                "full-circle-active-boundary-branch-v1",
+                "full-circle-active-boundary-sheet-v2",
                 event.feature_id,
                 event.support_id,
+                event.trim_id,
+                fields[2],
+                std::to_string(sheet_ordinal),
+                root_id,
             }),
+        event.feature_id,
         event.support_id,
+        event.trim_id,
+        fields[2],
+        sheet_ordinal,
+        root_id,
     };
 }
 
@@ -124,16 +156,6 @@ void canonicalize(
             return first.branch_id
                 < second.branch_id;
         });
-    branches.erase(
-        std::unique(
-            branches.begin(),
-            branches.end(),
-            [](const ActiveBoundaryBranch2& first,
-               const ActiveBoundaryBranch2& second) {
-                return first.branch_id
-                    == second.branch_id;
-            }),
-        branches.end());
 }
 
 bool same_branches(
@@ -148,6 +170,8 @@ bool same_branches(
             [](const ActiveBoundaryBranch2& left,
                const ActiveBoundaryBranch2& right) {
                 return left.branch_id == right.branch_id
+                    && left.feature_id
+                        == right.feature_id
                     && left.support_id == right.support_id;
             });
 }
@@ -165,18 +189,23 @@ void classify_full_circle_endpoint_fibres(
                 endpoints.push_back(&event);
             }
         }
-        std::vector<std::string> supports;
-        for (const PartitionEvent2* event :
-             endpoints) {
-            supports.push_back(event->support_id);
-        }
-        std::sort(supports.begin(), supports.end());
-        supports.erase(
-            std::unique(
-                supports.begin(),
-                supports.end()),
-            supports.end());
-        if (supports.size() < 2) {
+        std::sort(
+            endpoints.begin(),
+            endpoints.end(),
+            [](const PartitionEvent2* first,
+               const PartitionEvent2* second) {
+                return std::tie(
+                           first->feature_id,
+                           first->support_id,
+                           first->trim_id,
+                           first->branch_id)
+                    < std::tie(
+                           second->feature_id,
+                           second->support_id,
+                           second->trim_id,
+                           second->branch_id);
+            });
+        if (endpoints.size() < 2) {
             continue;
         }
 
@@ -193,20 +222,48 @@ void classify_full_circle_endpoint_fibres(
         std::vector<ActiveBoundaryBranch2>
             incident_branches;
         incident_branches.reserve(endpoints.size());
+        std::map<std::string, std::size_t>
+            sheet_ordinals;
         for (const PartitionEvent2* event :
              endpoints) {
+            const std::vector<std::string> fields =
+                decode_string_sequence(
+                    event->branch_id);
+            if (fields.size() != 4) {
+                throw EventPartitionVerificationError(
+                    "full-circle active sheet has malformed event identity");
+            }
+            const std::string sheet_key =
+                encode_string_sequence(
+                    {
+                        event->feature_id,
+                        event->support_id,
+                        event->trim_id,
+                        fields[2],
+                    });
+            const std::size_t sheet_ordinal =
+                sheet_ordinals[sheet_key]++;
             const ActiveBoundaryBranch2 branch =
-                active_branch(*event);
+                active_branch(
+                    *event,
+                    fibre.root_id,
+                    sheet_ordinal);
             incident_branches.push_back(branch);
             const ProjectionRecord2& projection =
                 governing_projection(
                     certificate,
                     *event);
-            if (projection_value(projection, left) < 0) {
+            if (signed_projection_sign(
+                    projection,
+                    left)
+                == CGAL::NEGATIVE) {
                 fibre.left_active_branches.push_back(
                     branch);
             }
-            if (projection_value(projection, right) < 0) {
+            if (signed_projection_sign(
+                    projection,
+                    right)
+                == CGAL::NEGATIVE) {
                 fibre.right_active_branches.push_back(
                     branch);
             }
