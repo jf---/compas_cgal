@@ -193,8 +193,23 @@ std::string canonical_fibre(const EventFibre2& fibre)
 std::string canonical_overlap(
     const OverlapInterval2& overlap)
 {
+    if (overlap.feature_id.empty()
+        && overlap.support_id.empty()
+        && overlap.trim_id.empty()
+        && overlap.branch_id.empty()) {
+        return record(
+            "overlap-interval-v1",
+            {
+                overlap.kind,
+                overlap.domain_low,
+                overlap.domain_high,
+                overlap.witness_numerator,
+                overlap.witness_denominator,
+                overlap.orientation_disposition,
+            });
+    }
     return record(
-        "overlap-interval-v1",
+        "owned-overlap-interval-v2",
         {
             overlap.kind,
             overlap.domain_low,
@@ -202,6 +217,10 @@ std::string canonical_overlap(
             overlap.witness_numerator,
             overlap.witness_denominator,
             overlap.orientation_disposition,
+            overlap.feature_id,
+            overlap.support_id,
+            overlap.trim_id,
+            overlap.branch_id,
         });
 }
 

@@ -320,6 +320,10 @@ class OverlapInterval2:
     witness_numerator: str
     witness_denominator: str
     orientation_disposition: str
+    feature_id: bytes
+    support_id: bytes
+    trim_id: bytes
+    branch_id: bytes
 
 
 class ChartSeam2:
