@@ -7,6 +7,7 @@
 #include "continuous_tea_2/partition_certificate.h"
 #include "continuous_tea_2/result.h"
 #include "continuous_tea_2/segment_partition.h"
+#include "continuous_tea_2/segment_oracle.h"
 #include "continuous_tea_2/segment_source.h"
 #include "continuous_tea_2/segment_strata.h"
 #include "continuous_tea_2/sha256.h"
