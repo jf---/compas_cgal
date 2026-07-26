@@ -1,5 +1,6 @@
 #include "compas.h"
 #include "continuous_tea_2/boundary_events.h"
+#include "continuous_tea_2/bind_partition_records.h"
 #include "continuous_tea_2/cap_partition.h"
 #include "continuous_tea_2/circle_oracle.h"
 #include "continuous_tea_2/event_certificate.h"
@@ -787,40 +788,6 @@ NB_MODULE(_continuous_tea_2, m)
             "disposition",
             &ParameterCell2::disposition);
 
-    nb::class_<ActiveBoundaryBranch2>(
-        m,
-        "ActiveBoundaryBranch2")
-        .def_prop_ro(
-            "branch_id",
-            [](const ActiveBoundaryBranch2& branch) {
-                return as_bytes(branch.branch_id);
-            })
-        .def_prop_ro(
-            "support_id",
-            [](const ActiveBoundaryBranch2& branch) {
-                return as_bytes(branch.support_id);
-            });
-
-    nb::class_<EventFibre2>(m, "EventFibre2")
-        .def_prop_ro(
-            "root_id",
-            [](const EventFibre2& fibre) {
-                return as_bytes(fibre.root_id);
-            })
-        .def_ro("events", &EventFibre2::events)
-        .def_ro(
-            "left_active_branches",
-            &EventFibre2::left_active_branches)
-        .def_ro(
-            "right_active_branches",
-            &EventFibre2::right_active_branches)
-        .def_ro(
-            "ccw_direction",
-            &EventFibre2::ccw_direction)
-        .def_ro(
-            "cw_direction",
-            &EventFibre2::cw_direction);
-
     nb::class_<RationalTrimInterval2>(
         m,
         "RationalTrimInterval2")
@@ -944,83 +911,7 @@ NB_MODULE(_continuous_tea_2, m)
             "dot_sign",
             &CcwOrientation2::dot_sign);
 
-    nb::class_<ProjectionRecord2>(m, "ProjectionRecord2")
-        .def_ro(
-            "projection_id",
-            &ProjectionRecord2::projection_id)
-        .def_prop_ro(
-            "coefficient_rows",
-            [](const ProjectionRecord2& projection) {
-                return string_matrix_tuple(
-                    projection.coefficient_rows);
-            })
-        .def_prop_ro(
-            "factor_coefficients",
-            [](const ProjectionRecord2& projection) {
-                return string_matrix_tuple(
-                    projection.factor_coefficients);
-            })
-        .def_prop_ro(
-            "actual_degree",
-            [](const ProjectionRecord2& projection) {
-                return nb::make_tuple(
-                    projection.actual_motion_degree,
-                    projection.actual_rim_degree);
-            })
-        .def_prop_ro(
-            "degree_bound",
-            [](const ProjectionRecord2& projection) {
-                return nb::make_tuple(
-                    projection.bound_motion_degree,
-                    projection.bound_rim_degree);
-            })
-        .def_ro(
-            "degree_bound_id",
-            &ProjectionRecord2::degree_bound_id)
-        .def_prop_ro(
-            "normalized_coefficient_bytes",
-            [](const ProjectionRecord2& projection) {
-                return as_bytes(
-                    projection.normalized_coefficient_bytes);
-            });
-
-    nb::class_<OverlapInterval2>(m, "OverlapInterval2")
-        .def_ro("kind", &OverlapInterval2::kind)
-        .def_ro(
-            "domain_low",
-            &OverlapInterval2::domain_low)
-        .def_ro(
-            "domain_high",
-            &OverlapInterval2::domain_high)
-        .def_ro(
-            "witness_numerator",
-            &OverlapInterval2::witness_numerator)
-        .def_ro(
-            "witness_denominator",
-            &OverlapInterval2::witness_denominator)
-        .def_ro(
-            "orientation_disposition",
-            &OverlapInterval2::orientation_disposition)
-        .def_prop_ro(
-            "feature_id",
-            [](const OverlapInterval2& overlap) {
-                return as_bytes(overlap.feature_id);
-            })
-        .def_prop_ro(
-            "support_id",
-            [](const OverlapInterval2& overlap) {
-                return as_bytes(overlap.support_id);
-            })
-        .def_prop_ro(
-            "trim_id",
-            [](const OverlapInterval2& overlap) {
-                return as_bytes(overlap.trim_id);
-            })
-        .def_prop_ro(
-            "branch_id",
-            [](const OverlapInterval2& overlap) {
-                return as_bytes(overlap.branch_id);
-            });
+    bind_partition_records(m);
 
     nb::class_<ChartSeam2>(m, "ChartSeam2")
         .def_prop_ro(

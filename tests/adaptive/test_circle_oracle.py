@@ -89,7 +89,7 @@ def test_nonuniform_axis_circle_replays_every_exact_line_rim_pullback() -> None:
     assert verdict == "cap_exceeded"
     assert trace.exact_verdict == "cap_exceeded"
     assert trace.whole_rim_disposition == "partial"
-    assert trace.partition.source_kind == "full-circle-boundary-pullbacks-v1"
+    assert trace.partition.source_kind == "full-circle-boundary-pullbacks-v2"
     pullbacks = tuple(projection for projection in trace.partition.projections if projection.degree_bound_id == "full-circle-line-(2,2)-v1")
     event_projections = tuple(projection for projection in trace.partition.projections if projection.degree_bound_id.startswith("exact-univariate-"))
     assert len(pullbacks) == 32
@@ -137,6 +137,110 @@ def test_slotted_stock_replays_circle_tangency_and_coincidence_fibres() -> None:
         for fibre in trace.partition.fibres
     )
     assert _continuous_tea_2.verify_event_partition(trace.partition).verdict.name == "CERTIFIED"
+
+
+def test_negative_vertex_radial_predicate_preserves_merge_split_sign() -> None:
+    stock = _stock_2.Stock2(
+        np.array(
+            [
+                [-1.5, 0.0, 0.0],
+                [5.0, 0.0, 0.0],
+                [5.0, 5.0, 0.0],
+                [-1.5, 5.0, 0.0],
+            ],
+            dtype=np.float64,
+        ),
+        [],
+    )
+    records = _continuous_tea_2.extract_boundary_records(stock)
+    bottom = next(record for record in records if tuple(record.primitive_coefficients) == ("0", "1", "0"))
+    left = next(record for record in records if tuple(record.primitive_coefficients) == ("2", "0", "3"))
+    target_supports = {bottom.support_id, left.support_id}
+
+    _, trace = _continuous_tea_2.audit_full_circle_tea_event_exact(
+        stock,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        False,
+        2.0,
+        4.0,
+    )
+
+    target_fibres = tuple(fibre for fibre in trace.partition.fibres if {event.support_id for event in fibre.events if event.kind == "endpoint-order"} == target_supports)
+    directions = tuple(fibre.ccw_direction for fibre in target_fibres)
+    assert set(directions) == {"split", "merge"}
+    assert directions == tuple(sorted(directions, key={"split": 0, "merge": 1}.__getitem__))
+    assert any(projection.signed_predicate_coefficients for projection in trace.partition.projections)
+    assert _continuous_tea_2.verify_event_partition(trace.partition).verdict.name == "CERTIFIED"
+
+
+def test_general_phase_replays_tangencies_and_oriented_trace() -> None:
+    stock = _stock_2.Stock2(SQUARE, [])
+    stock.subtract_disk(0.0, 5.0, 2.0)
+
+    ccw_verdict, ccw = _continuous_tea_2.audit_full_circle_tea_event_exact(
+        stock,
+        2.0,
+        5.0,
+        1.2,
+        1.6,
+        False,
+        1.0,
+        4.0,
+    )
+    cw_verdict, cw = _continuous_tea_2.audit_full_circle_tea_event_exact(
+        stock,
+        2.0,
+        5.0,
+        1.2,
+        1.6,
+        True,
+        1.0,
+        4.0,
+    )
+
+    assert ccw_verdict == cw_verdict == "unresolved"
+    assert ccw.events and cw.events
+    assert ccw.canonical_digest != cw.canonical_digest
+    assert tuple(event.canonical_id for event in ccw.events) != tuple(event.canonical_id for event in cw.events)
+    assert {"external-contact", "internal-contact"} <= {event.disposition for event in ccw.events if event.kind == "tangent"}
+    mutated = _continuous_tea_2.mutate_certificate_record(
+        ccw.partition,
+        "alter-fibre-direction",
+    )
+    assert _continuous_tea_2.verify_event_partition(mutated).verdict.name == "UNRESOLVED_DEGENERACY"
+    assert _continuous_tea_2.verify_event_partition(ccw.partition).verdict.name == "CERTIFIED"
+
+
+def test_same_support_endpoint_sheets_remain_distinct() -> None:
+    stock = _stock_2.Stock2(SQUARE, [])
+    stock.subtract_disk(5.0, 5.0, 2.0)
+
+    _, trace = _continuous_tea_2.audit_full_circle_tea_event_exact(
+        stock,
+        5.0,
+        5.0,
+        2.0,
+        1.0,
+        False,
+        1.0,
+        4.0,
+    )
+
+    same_support = tuple(
+        fibre
+        for fibre in trace.partition.fibres
+        if fibre.ccw_direction in {"merge", "split"} and len({event.support_id for event in fibre.events if event.kind == "endpoint-order"}) == 1
+    )
+    assert same_support
+    assert all(
+        len({branch.branch_id for branch in active}) == len(active) and len({branch.feature_id for branch in active}) == len(active)
+        for fibre in same_support
+        for active in (fibre.left_active_branches, fibre.right_active_branches)
+        if active
+    )
 
 
 def test_exact_rational_probe_uses_the_circle_chart_not_binary64_sampling() -> None:

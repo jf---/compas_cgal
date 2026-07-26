@@ -25,7 +25,8 @@ bool has_material_rational_chart_witness(
     const Stock2& stock,
     const Epeck::FT& center_x,
     const Epeck::FT& center_y,
-    const Epeck::FT& guide_radius,
+    const Epeck::FT& phase_x,
+    const Epeck::FT& phase_y,
     const Epeck::FT& tool_radius);
 
 EventPartitionCertificate2

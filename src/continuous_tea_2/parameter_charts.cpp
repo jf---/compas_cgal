@@ -345,8 +345,21 @@ RationalMotion full_circle_motion(
     const std::vector<std::string>& data,
     const std::string& center_chart)
 {
-    const std::vector<Rational> values =
-        parse_data(data, 3, "full-circle motion");
+    std::vector<Rational> values;
+    if (data.size() == 3) {
+        values =
+            parse_data(
+                data,
+                3,
+                "axis-aligned full-circle motion");
+        values.push_back(Rational(0));
+    } else {
+        values =
+            parse_data(
+                data,
+                4,
+                "oriented full-circle motion");
+    }
     const Polynomial2 denominator =
         motion_quadratic(1, 0, 1);
     const auto [unit_x, unit_y] =
@@ -354,10 +367,14 @@ RationalMotion full_circle_motion(
     return {
         add(
             scale(denominator, values[0]),
-            scale(unit_x, values[2])),
+            add(
+                scale(unit_x, values[2]),
+                scale(unit_y, -values[3]))),
         add(
             scale(denominator, values[1]),
-            scale(unit_y, values[2])),
+            add(
+                scale(unit_x, values[3]),
+                scale(unit_y, values[2]))),
         denominator,
     };
 }

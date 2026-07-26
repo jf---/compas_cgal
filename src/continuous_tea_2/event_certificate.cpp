@@ -100,23 +100,34 @@ std::string canonical_projection(
         factors.push_back(
             encode_string_sequence(factor));
     }
+    std::vector<std::string> fields{
+        projection.projection_id,
+        encode_string_sequence(rows),
+        encode_string_sequence(factors),
+        std::to_string(
+            projection.actual_motion_degree),
+        std::to_string(
+            projection.actual_rim_degree),
+        std::to_string(
+            projection.bound_motion_degree),
+        std::to_string(
+            projection.bound_rim_degree),
+        projection.degree_bound_id,
+        projection.normalized_coefficient_bytes,
+    };
+    if (!projection
+             .signed_predicate_coefficients.empty()) {
+        fields.push_back(
+            encode_string_sequence(
+                projection
+                    .signed_predicate_coefficients));
+    }
     return record(
-        "projection-record-v1",
-        {
-            projection.projection_id,
-            encode_string_sequence(rows),
-            encode_string_sequence(factors),
-            std::to_string(
-                projection.actual_motion_degree),
-            std::to_string(
-                projection.actual_rim_degree),
-            std::to_string(
-                projection.bound_motion_degree),
-            std::to_string(
-                projection.bound_rim_degree),
-            projection.degree_bound_id,
-            projection.normalized_coefficient_bytes,
-        });
+        projection.signed_predicate_coefficients
+                .empty()
+            ? "projection-record-v1"
+            : "signed-projection-record-v2",
+        fields);
 }
 
 std::string canonical_root(
@@ -202,10 +213,16 @@ std::string canonical_fibre(const EventFibre2& fibre)
                  branches) {
                 values.push_back(
                     record(
-                        "active-boundary-branch-v1",
+                        "active-boundary-sheet-v2",
                         {
                             branch.branch_id,
+                            branch.feature_id,
                             branch.support_id,
+                            branch.trim_id,
+                            branch.chart_id,
+                            std::to_string(
+                                branch.sheet_ordinal),
+                            branch.root_id,
                         }));
             }
             return encode_string_sequence(values);
@@ -350,7 +367,7 @@ EventPartitionCertificate2 reconstruct(
             fields[1]);
     }
     if (certificate.source_kind
-        == "full-circle-boundary-pullbacks-v1") {
+        == "full-circle-boundary-pullbacks-v2") {
         const std::vector<std::string> fields =
             decode_string_sequence(
                 certificate.source_payload);
@@ -521,6 +538,23 @@ EventPartitionCertificate2 mutate_certificate_record(
         && !result.cells.empty()) {
         result.cells.front().disposition =
             "mutated-disposition";
+    } else if (
+        mutation == "alter-fibre-direction") {
+        const auto fibre = std::find_if(
+            result.fibres.begin(),
+            result.fibres.end(),
+            [](const EventFibre2& candidate) {
+                return !candidate
+                            .ccw_direction.empty();
+            });
+        if (fibre == result.fibres.end()) {
+            throw EventPartitionVerificationError(
+                "certificate has no directed fibre");
+        }
+        fibre->ccw_direction =
+            fibre->ccw_direction == "merge"
+            ? "split"
+            : "merge";
     } else if (
         mutation == "alter-degree"
         && !result.projections.empty()) {
