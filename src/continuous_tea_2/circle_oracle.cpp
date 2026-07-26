@@ -636,6 +636,114 @@ std::vector<std::string> radial_passage_factor(
             chart));
 }
 
+std::vector<std::string> circle_cap_factor(
+    const std::vector<std::string>& motion_data,
+    const std::string& cutter_radius,
+    const RationalCircleSupport& circle,
+    const std::string& cap_chord_ratio,
+    std::size_t chart)
+{
+    std::vector<Rational> values{
+        parse_rational_text(motion_data[0]),
+        parse_rational_text(motion_data[1]),
+        parse_rational_text(motion_data[2]),
+        parse_rational_text(cutter_radius),
+        circle.center_x,
+        circle.center_y,
+        circle.radius_squared,
+    };
+    Integer denominator = 1;
+    for (const Rational& value : values) {
+        denominator = least_common_multiple(
+            denominator,
+            CORE::denominator(value));
+    }
+    std::vector<Integer> scaled;
+    scaled.reserve(6);
+    for (std::size_t index = 0;
+         index < 6;
+         ++index) {
+        scaled.push_back(
+            CORE::numerator(
+                values[index]
+                * Rational(denominator)));
+    }
+    const Integer support_radius_squared =
+        CORE::numerator(
+            values[6]
+            * Rational(
+                denominator * denominator));
+    const IntegerPolynomial unit_denominator{
+        Integer(1),
+        Integer(0),
+        Integer(1),
+    };
+    const auto [unit_x, unit_y] =
+        quarter_unit_numerators(chart);
+    const IntegerPolynomial dx =
+        add_polynomials(
+            add_polynomials(
+                {Integer(0)},
+                unit_denominator,
+                scaled[0] - scaled[4]),
+            unit_x,
+            scaled[2]);
+    const IntegerPolynomial dy =
+        add_polynomials(
+            add_polynomials(
+                {Integer(0)},
+                unit_denominator,
+                scaled[1] - scaled[5]),
+            unit_y,
+            scaled[2]);
+    const IntegerPolynomial distance_squared =
+        add_polynomials(
+            multiply_polynomials(dx, dx),
+            multiply_polynomials(dy, dy),
+            Integer(1));
+    const IntegerPolynomial denominator_squared =
+        multiply_polynomials(
+            unit_denominator,
+            unit_denominator);
+    const Integer cutter_radius_squared =
+        scaled[3] * scaled[3];
+    const IntegerPolynomial radical_axis =
+        add_polynomials(
+            distance_squared,
+            denominator_squared,
+            cutter_radius_squared
+                - support_radius_squared);
+    const Rational cap =
+        parse_rational_text(cap_chord_ratio);
+    const Integer cap_numerator =
+        CORE::numerator(cap);
+    const Integer cap_denominator =
+        CORE::denominator(cap);
+    const IntegerPolynomial radical_squared =
+        multiply_polynomials(
+            radical_axis,
+            radical_axis);
+    IntegerPolynomial first_term =
+        multiply_polynomials(
+            distance_squared,
+            denominator_squared);
+    for (Integer& coefficient :
+         first_term) {
+        coefficient *=
+            (Integer(4) * cap_denominator
+                - cap_numerator)
+            * cutter_radius_squared;
+    }
+    IntegerPolynomial equality = add_polynomials(
+        std::move(first_term),
+        radical_squared,
+        -cap_denominator);
+    return primitive_factor(
+        compose_global_chart(
+            equality,
+            chart));
+}
+
 std::vector<std::string> line_tangency_factor(
     const ProjectionRecord2& pullback,
     std::size_t chart)
@@ -847,12 +955,14 @@ construct_full_circle_boundary_pullback_partition(
     const std::string& stock_identity_value,
     const std::vector<std::string>& motion_data,
     const std::string& cutter_radius,
+    const std::string& cap_chord_ratio,
     const std::vector<std::string>& line_sources,
     const std::vector<std::string>& circle_sources)
 {
     if (stock_identity_value.empty()
         || motion_data.size() != 3
         || cutter_radius.empty()
+        || cap_chord_ratio.empty()
         || (line_sources.empty()
             && circle_sources.empty())) {
         throw EventPartitionVerificationError(
@@ -963,6 +1073,14 @@ construct_full_circle_boundary_pullback_partition(
     }
     const Rational exact_cutter_radius =
         parse_rational_text(cutter_radius);
+    const Rational exact_cap_chord_ratio =
+        parse_rational_text(cap_chord_ratio);
+    if (exact_cutter_radius <= 0
+        || exact_cap_chord_ratio <= 0
+        || exact_cap_chord_ratio > 4) {
+        throw EventPartitionVerificationError(
+            "full-circle boundary source has invalid cutter or cap data");
+    }
     for (const std::string& encoded_source :
          circle_sources) {
         const std::vector<std::string> source =
@@ -1013,6 +1131,34 @@ construct_full_circle_boundary_pullback_partition(
                 pullbacks.push_back(
                     std::move(pullback));
             }
+            const std::string cap_branch_id =
+                encode_string_sequence(
+                    {
+                        "full-circle-circle-cap-v1",
+                        source[0],
+                        CENTER_CHART_IDS[center],
+                    });
+            tangencies.push_back(
+                {
+                    cap_branch_id,
+                    circle_cap_factor(
+                        motion_data,
+                        cutter_radius,
+                        circle,
+                        cap_chord_ratio,
+                        center),
+                    {
+                        {
+                            "cap-crossing",
+                            source[0],
+                            source[1],
+                            source[2],
+                            {},
+                            cap_branch_id,
+                            "equal-cap",
+                        },
+                    },
+                });
             if (!circle.radius.has_value()) {
                 continue;
             }
@@ -1200,6 +1346,7 @@ construct_full_circle_boundary_pullback_partition(
                 stock_identity_value,
                 encode_string_sequence(motion_data),
                 cutter_radius,
+                cap_chord_ratio,
                 encode_string_sequence(line_sources),
                 encode_string_sequence(circle_sources),
             });
@@ -1540,6 +1687,8 @@ audit_full_circle_tea_event_exact(
                 },
                 exact_rational_text(
                     Epeck::FT(tool_radius)),
+                exact_rational_text(
+                    Epeck::FT(cap_chord_ratio)),
                 line_sources,
                 circle_sources);
         const bool cap_exceeded =
