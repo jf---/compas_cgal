@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from fractions import Fraction
+
 from compas_cgal import _continuous_tea_2
 from compas_cgal.adaptive.canonical import encode_component_map
 from compas_cgal.adaptive.canonical import encode_integer
@@ -135,3 +137,64 @@ def test_equivalent_projection_merge_is_input_order_deterministic() -> None:
         )
         for _, feature_ids in _fibre_signature(forward)
     )
+
+
+def test_close_rational_roots_have_disjoint_strict_isolating_intervals() -> None:
+    certificate = _continuous_tea_2.partition_projections(
+        (
+            _projection(
+                "first-close-rational-root",
+                ("-1", "1000"),
+                _event(b"first-close"),
+            ),
+            _projection(
+                "second-close-rational-root",
+                ("-1", "500"),
+                _event(b"second-close"),
+            ),
+        )
+    )
+
+    assert len(certificate.roots) == 2
+    first, second = certificate.roots
+    first_low = Fraction(first.interval_low)
+    first_high = Fraction(first.interval_high)
+    second_low = Fraction(second.interval_low)
+    second_high = Fraction(second.interval_high)
+    first_root = Fraction(1, 1000)
+    second_root = Fraction(1, 500)
+
+    assert first_low < first_root < first_high < second_root
+    assert first_root < second_low < second_root < second_high
+    assert first_high <= second_low
+
+
+def test_irrational_factor_and_interleaved_root_have_disjoint_intervals() -> None:
+    certificate = _continuous_tea_2.partition_projections(
+        (
+            _projection(
+                "irrational-pair",
+                ("1", "-8", "8"),
+                _event(b"irrational"),
+            ),
+            _projection(
+                "interleaved-rational",
+                ("-1", "2"),
+                _event(b"rational"),
+            ),
+        )
+    )
+
+    assert len(certificate.roots) == 3
+    intervals = tuple((Fraction(root.interval_low), Fraction(root.interval_high)) for root in certificate.roots)
+    assert all(low < high for low, high in intervals)
+    assert intervals[0][1] <= intervals[1][0]
+    assert intervals[1][1] <= intervals[2][0]
+
+    first_low, first_high = intervals[0]
+    third_low, third_high = intervals[2]
+    assert 8 * first_low * first_low - 8 * first_low + 1 > 0
+    assert 8 * first_high * first_high - 8 * first_high + 1 < 0
+    assert 8 * third_low * third_low - 8 * third_low + 1 < 0
+    assert 8 * third_high * third_high - 8 * third_high + 1 > 0
+    assert intervals[1][0] < Fraction(1, 2) < intervals[1][1]
