@@ -126,6 +126,8 @@ struct ActiveBoundaryBranch2 {
 struct EventFibre2 {
     std::string root_id;
     std::vector<PartitionEvent2> events;
+    std::vector<std::string> local_root_ids;
+    std::string seam_id;
     std::vector<ActiveBoundaryBranch2>
         left_active_branches;
     std::vector<ActiveBoundaryBranch2>

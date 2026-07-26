@@ -284,10 +284,18 @@ std::vector<EventTraceEvent2> boundary_trace_events(
                 make_event_trace_event(
                     fibre.root_id,
                     encode_canonical_record(
-                        "full-circle-global-fibre-v2",
-                        {
-                            fibre.root_id,
-                        }),
+                        fibre.seam_id.empty()
+                            ? "full-circle-global-fibre-v2"
+                            : "full-circle-phase-seam-fibre-v3",
+                        fibre.seam_id.empty()
+                            ? std::vector<std::string>{
+                                  fibre.root_id,
+                              }
+                            : std::vector<std::string>{
+                                  fibre.seam_id,
+                                  encode_string_sequence(
+                                      fibre.local_root_ids),
+                              }),
                     event.kind,
                     {event.feature_id},
                     std::move(branch_ids),
