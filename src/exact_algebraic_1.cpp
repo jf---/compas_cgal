@@ -352,7 +352,10 @@ bool event_less(
                left.vertex_id,
                left.branch_id,
                left.kind,
-               left.disposition)
+               left.disposition,
+               left.original_equations_rechecked,
+               left.orientation_rechecked,
+               left.trim_disposition)
         < std::tie(
                right.feature_id,
                right.support_id,
@@ -360,7 +363,10 @@ bool event_less(
                right.vertex_id,
                right.branch_id,
                right.kind,
-               right.disposition);
+               right.disposition,
+               right.original_equations_rechecked,
+               right.orientation_rechecked,
+               right.trim_disposition);
 }
 
 } // namespace
