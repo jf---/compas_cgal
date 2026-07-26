@@ -1,12 +1,13 @@
 #include "circle_oracle.h"
 
+#include "../exact_algebraic_1.h"
+#include "../stock_2.h"
 #include "boundary_events.h"
 #include "cap_partition.h"
 #include "event_certificate.h"
 #include "event_partition.h"
 #include "parameter_charts.h"
 #include "sha256.h"
-#include "../stock_2.h"
 
 #include <algorithm>
 #include <array>
@@ -15,6 +16,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -238,6 +240,13 @@ std::string stock_identity(
         encode_string_sequence(feature_ids));
 }
 
+std::string exact_rational_text(const Epeck::FT& value)
+{
+    std::ostringstream stream;
+    stream << CGAL::exact(value);
+    return stream.str();
+}
+
 GpsPolygon circle_disk(
     const EPoint& center,
     const Epeck::FT& radius)
@@ -384,6 +393,94 @@ construct_full_circle_uniform_partition(
             {
                 stock_identity_value,
                 disposition,
+            });
+    finalize_event_partition(certificate);
+    return certificate;
+}
+
+EventPartitionCertificate2
+construct_full_circle_line_pullback_partition(
+    const std::string& stock_identity_value,
+    const std::vector<std::string>& motion_data,
+    const std::string& cutter_radius,
+    const std::vector<std::string>& line_sources)
+{
+    if (stock_identity_value.empty()
+        || motion_data.size() != 3
+        || cutter_radius.empty()
+        || line_sources.empty()) {
+        throw EventPartitionVerificationError(
+            "full-circle line source is malformed");
+    }
+    EventPartitionCertificate2 certificate;
+    certificate.build_evidence =
+        exact_algebraic_backend_evidence();
+    certificate.charts = parameter_charts();
+    for (const std::string& encoded_source :
+         line_sources) {
+        const std::vector<std::string> source =
+            decode_string_sequence(encoded_source);
+        if (source.size() != 2) {
+            throw EventPartitionVerificationError(
+                "full-circle line support source is malformed");
+        }
+        const std::vector<std::string> support =
+            decode_string_sequence(source[1]);
+        if (support.size() != 3) {
+            throw EventPartitionVerificationError(
+                "full-circle line support requires three coefficients");
+        }
+        for (std::size_t center = 0;
+             center < CENTER_CHART_IDS.size();
+             ++center) {
+            for (std::size_t rim = 0;
+                 rim < 2;
+                 ++rim) {
+                const std::string rim_chart =
+                    "rim-half-"
+                    + std::to_string(rim)
+                    + "-v1";
+                ProjectionRecord2 pullback =
+                    construct_pullback(
+                        "full-circle",
+                        motion_data,
+                        "line",
+                        support,
+                        cutter_radius,
+                        CENTER_CHART_IDS[center],
+                        rim_chart);
+                pullback.projection_id =
+                    encode_string_sequence(
+                        {
+                            "full-circle-line-pullback-v1",
+                            source[0],
+                            CENTER_CHART_IDS[center],
+                            rim_chart,
+                        });
+                certificate.projections.push_back(
+                    std::move(pullback));
+            }
+        }
+    }
+    certificate.seams.reserve(
+        certificate.charts.size());
+    for (const ParameterChart2& chart :
+         certificate.charts) {
+        certificate.seams.push_back(
+            {
+                chart.start_seam_id,
+                chart.chart_id,
+            });
+    }
+    certificate.source_kind =
+        "full-circle-line-pullbacks-v1";
+    certificate.source_payload =
+        encode_string_sequence(
+            {
+                stock_identity_value,
+                encode_string_sequence(motion_data),
+                cutter_radius,
+                encode_string_sequence(line_sources),
             });
     finalize_event_partition(certificate);
     return certificate;
@@ -620,6 +717,65 @@ audit_full_circle_tea_event_exact(
                 : "cap_exceeded",
             std::move(trace),
         };
+    }
+
+    std::vector<std::string> line_sources;
+    for (const BoundaryFeatureRecord2& record :
+         boundary_records) {
+        if (record.support_kind == "line") {
+            line_sources.push_back(
+                encode_string_sequence(
+                    {
+                        record.feature_id,
+                        encode_string_sequence(
+                            record.primitive_coefficients),
+                    }));
+        }
+    }
+    const Epeck::FT exact_phase_x(phase_dx);
+    const Epeck::FT exact_phase_y(phase_dy);
+    if (!line_sources.empty()
+        && (CGAL::is_zero(exact_phase_x)
+            || CGAL::is_zero(exact_phase_y))) {
+        const Epeck::FT guide_radius =
+            CGAL::is_zero(exact_phase_y)
+            ? CGAL::abs(exact_phase_x)
+            : CGAL::abs(exact_phase_y);
+        EventPartitionCertificate2 partition =
+            construct_full_circle_line_pullback_partition(
+                stock_identity(boundary_records),
+                {
+                    exact_rational_text(
+                        Epeck::FT(center_x)),
+                    exact_rational_text(
+                        Epeck::FT(center_y)),
+                    exact_rational_text(guide_radius),
+                },
+                exact_rational_text(
+                    Epeck::FT(tool_radius)),
+                line_sources);
+        EventTrace2 trace =
+            build_event_trace(
+                std::move(partition),
+                "full-circle-four-chart-v1",
+                motion_identity(
+                    center_x,
+                    center_y,
+                    phase_dx,
+                    phase_dy,
+                    clockwise),
+                encode_canonical_record(
+                    "cap-chord-ratio-binary64-v1",
+                    {
+                        binary64_identity(
+                            cap_chord_ratio),
+                    }),
+                ContinuousTeaVerdict::
+                    UNRESOLVED_DEGENERACY,
+                "unresolved",
+                "full-circle-line-pullbacks-exact-v1",
+                {});
+        return {"unresolved", std::move(trace)};
     }
 
     const std::vector<ParameterChart2> charts =
