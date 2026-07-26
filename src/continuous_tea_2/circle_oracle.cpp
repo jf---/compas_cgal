@@ -862,20 +862,9 @@ construct_full_circle_boundary_pullback_partition(
     std::vector<ProjectionInput2> tangencies;
     std::map<std::string, CircleVertexSource>
         vertices;
-    for (const std::string& encoded_source :
-         line_sources) {
-        const std::vector<std::string> source =
-            decode_string_sequence(encoded_source);
-        if (source.size() != 10) {
-            throw EventPartitionVerificationError(
-                "full-circle line support source is malformed");
-        }
-        const std::vector<std::string> support =
-            decode_string_sequence(source[3]);
-        if (support.size() != 3) {
-            throw EventPartitionVerificationError(
-                "full-circle line support requires three coefficients");
-        }
+    const auto append_vertices =
+        [&vertices](
+            const std::vector<std::string>& source) {
         for (const std::size_t offset : {4U, 7U}) {
             auto [vertex, inserted] =
                 vertices.try_emplace(
@@ -900,6 +889,22 @@ construct_full_circle_boundary_pullback_partition(
                     source[2],
                 });
         }
+    };
+    for (const std::string& encoded_source :
+         line_sources) {
+        const std::vector<std::string> source =
+            decode_string_sequence(encoded_source);
+        if (source.size() != 10) {
+            throw EventPartitionVerificationError(
+                "full-circle line support source is malformed");
+        }
+        const std::vector<std::string> support =
+            decode_string_sequence(source[3]);
+        if (support.size() != 3) {
+            throw EventPartitionVerificationError(
+                "full-circle line support requires three coefficients");
+        }
+        append_vertices(source);
         for (std::size_t center = 0;
              center < CENTER_CHART_IDS.size();
              ++center) {
@@ -962,12 +967,13 @@ construct_full_circle_boundary_pullback_partition(
          circle_sources) {
         const std::vector<std::string> source =
             decode_string_sequence(encoded_source);
-        if (source.size() != 4) {
+        if (source.size() != 10) {
             throw EventPartitionVerificationError(
                 "full-circle circle support source is malformed");
         }
         const std::vector<std::string> support =
             decode_string_sequence(source[3]);
+        append_vertices(source);
         const RationalCircleSupport circle =
             rational_circle_support(support);
         const std::vector<std::string>
@@ -1104,6 +1110,25 @@ construct_full_circle_boundary_pullback_partition(
     }
     for (const auto& [vertex_id, vertex] :
          vertices) {
+        std::vector<std::string> support_ids;
+        support_ids.reserve(
+            vertex.incidents.size());
+        for (const auto& incident :
+             vertex.incidents) {
+            support_ids.push_back(incident[1]);
+        }
+        std::sort(
+            support_ids.begin(),
+            support_ids.end());
+        support_ids.erase(
+            std::unique(
+                support_ids.begin(),
+                support_ids.end()),
+            support_ids.end());
+        const std::string disposition =
+            support_ids.size() > 1
+            ? "merge-split"
+            : "seam";
         for (std::size_t center = 0;
              center < CENTER_CHART_IDS.size();
              ++center) {
@@ -1126,7 +1151,7 @@ construct_full_circle_boundary_pullback_partition(
                                 CENTER_CHART_IDS[center],
                                 incident[0],
                             }),
-                        "merge",
+                        disposition,
                     });
             }
             tangencies.push_back(
@@ -1417,7 +1442,7 @@ audit_full_circle_tea_event_exact(
 
     std::vector<std::string> line_sources;
     std::vector<std::string> circle_sources;
-    bool rational_line_vertices = true;
+    bool rational_boundary_vertices = true;
     for (const BoundaryFeatureRecord2& record :
          boundary_records) {
         if (record.support_kind == "line") {
@@ -1437,7 +1462,7 @@ audit_full_circle_tea_event_exact(
                 || !source_y.has_value()
                 || !target_x.has_value()
                 || !target_y.has_value()) {
-                rational_line_vertices = false;
+                rational_boundary_vertices = false;
                 break;
             }
             line_sources.push_back(
@@ -1456,6 +1481,25 @@ audit_full_circle_tea_event_exact(
                         *target_y,
                     }));
         } else if (record.support_kind == "circle") {
+            const std::optional<std::string> source_x =
+                rational_coordinate_text(
+                    record.curve.source().x());
+            const std::optional<std::string> source_y =
+                rational_coordinate_text(
+                    record.curve.source().y());
+            const std::optional<std::string> target_x =
+                rational_coordinate_text(
+                    record.curve.target().x());
+            const std::optional<std::string> target_y =
+                rational_coordinate_text(
+                    record.curve.target().y());
+            if (!source_x.has_value()
+                || !source_y.has_value()
+                || !target_x.has_value()
+                || !target_y.has_value()) {
+                rational_boundary_vertices = false;
+                break;
+            }
             circle_sources.push_back(
                 encode_string_sequence(
                     {
@@ -1464,6 +1508,12 @@ audit_full_circle_tea_event_exact(
                         record.trim_predicate,
                         encode_string_sequence(
                             record.primitive_coefficients),
+                        record.source_vertex_id,
+                        *source_x,
+                        *source_y,
+                        record.target_vertex_id,
+                        *target_x,
+                        *target_y,
                     }));
         }
     }
@@ -1471,7 +1521,7 @@ audit_full_circle_tea_event_exact(
     const Epeck::FT exact_phase_y(phase_dy);
     if ((!line_sources.empty()
             || !circle_sources.empty())
-        && rational_line_vertices
+        && rational_boundary_vertices
         && (CGAL::is_zero(exact_phase_x)
             || CGAL::is_zero(exact_phase_y))) {
         const Epeck::FT guide_radius =

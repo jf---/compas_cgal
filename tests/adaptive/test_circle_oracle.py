@@ -120,6 +120,11 @@ def test_slotted_stock_replays_circle_tangency_and_coincidence_fibres() -> None:
     assert verdict == "unresolved"
     assert circle_pullbacks
     assert event_kinds >= {"tangent", "support-overlap"}
+    assert any(
+        len({event.support_id for event in fibre.events if event.kind == "endpoint-order"}) >= 2
+        and {event.disposition for event in fibre.events if event.kind == "endpoint-order"} == {"merge-split"}
+        for fibre in trace.partition.fibres
+    )
     assert _continuous_tea_2.verify_event_partition(trace.partition).verdict.name == "CERTIFIED"
 
 
