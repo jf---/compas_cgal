@@ -317,6 +317,11 @@ struct RationalDomainRoot2 {
     std::vector<std::string> provenance_ids;
 };
 
+struct AlgebraicDomainRoot2 {
+    ExactAlgebraicKernel1::Algebraic_real_1 parameter;
+    std::vector<std::string> provenance_ids;
+};
+
 void append_polygon_intersections(
     const MatDomainPolygon2& polygon,
     const std::string& ring_id,
@@ -439,6 +444,183 @@ std::vector<RationalDomainRoot2> linear_domain_roots(
     for (RationalDomainRoot2& root : roots) {
         if (!unique.empty()
             && unique.back().parameter == root.parameter) {
+            unique.back().provenance_ids.insert(
+                unique.back().provenance_ids.end(),
+                root.provenance_ids.begin(),
+                root.provenance_ids.end());
+        } else {
+            unique.push_back(std::move(root));
+        }
+    }
+    return unique;
+}
+
+ExactAlgebraicKernel2::Polynomial_2
+parabola_edge_equation(
+    const std::vector<CORE::BigRat>& coordinate,
+    const CORE::BigRat& edge_origin,
+    const CORE::BigRat& edge_direction)
+{
+    const CORE::BigRat constant =
+        coordinate.empty()
+        ? CORE::BigRat(0) - edge_origin
+        : coordinate[0] - edge_origin;
+    std::vector<CORE::BigRat> coefficients{
+        constant,
+        coordinate.size() > 1
+            ? coordinate[1]
+            : CORE::BigRat(0),
+        coordinate.size() > 2
+            ? coordinate[2]
+            : CORE::BigRat(0),
+        -edge_direction,
+    };
+    const std::vector<ExactAlgebraicInteger1> integer =
+        primitive_integer_coefficients(coefficients);
+    using Polynomial = ExactAlgebraicKernel2::Polynomial_2;
+    const Polynomial parameter =
+        CGAL::shift(Polynomial(ExactAlgebraicInteger1(1)), 1, 0);
+    const Polynomial edge_parameter =
+        CGAL::shift(Polynomial(ExactAlgebraicInteger1(1)), 1, 1);
+    return Polynomial(integer[0])
+        + integer[1] * parameter
+        + integer[2] * parameter * parameter
+        + integer[3] * edge_parameter;
+}
+
+void append_parabola_polygon_intersections(
+    const MatDomainPolygon2& polygon,
+    const std::string& ring_id,
+    const RationalPrimitiveParameterization2& primitive,
+    std::vector<AlgebraicDomainRoot2>& algebraic_roots)
+{
+    ExactAlgebraicKernel1 kernel1;
+    ExactAlgebraicKernel2 kernel2;
+    std::size_t edge_index = 0;
+    for (auto edge = polygon.edges_begin();
+         edge != polygon.edges_end();
+         ++edge, ++edge_index) {
+        const CORE::BigRat ax = edge->source().x();
+        const CORE::BigRat ay = edge->source().y();
+        const CORE::BigRat ex = edge->target().x() - ax;
+        const CORE::BigRat ey = edge->target().y() - ay;
+        const auto x_equation = parabola_edge_equation(
+            primitive.x_coefficients,
+            ax,
+            ex);
+        const auto y_equation = parabola_edge_equation(
+            primitive.y_coefficients,
+            ay,
+            ey);
+        if (CGAL::is_zero(x_equation)
+            || CGAL::is_zero(y_equation)
+            || !kernel2.is_coprime_2_object()(
+                x_equation,
+                y_equation)) {
+            throw OverlappingDomainBoundaryError(
+                "parabola has a positive-dimensional boundary intersection");
+        }
+
+        std::vector<
+            std::pair<
+                ExactAlgebraicKernel2::Algebraic_real_2,
+                ExactAlgebraicKernel2::Multiplicity_type>>
+            solutions;
+        kernel2.solve_2_object()(
+            x_equation,
+            y_equation,
+            std::back_inserter(solutions));
+        std::size_t solution_index = 0;
+        for (const auto& [solution, multiplicity] : solutions) {
+            static_cast<void>(multiplicity);
+            const auto parameter =
+                kernel2.compute_x_2_object()(solution);
+            const auto edge_parameter =
+                kernel2.compute_y_2_object()(solution);
+            const auto compare = kernel1.compare_1_object();
+            if (compare(edge_parameter, CORE::BigRat(0))
+                    == CGAL::SMALLER
+                || compare(edge_parameter, CORE::BigRat(1))
+                    == CGAL::LARGER
+                || (primitive.domain_lower.has_value()
+                    && compare(
+                           parameter,
+                           *primitive.domain_lower)
+                        == CGAL::SMALLER)
+                || (primitive.domain_upper.has_value()
+                    && compare(
+                           parameter,
+                           *primitive.domain_upper)
+                        == CGAL::LARGER)) {
+                ++solution_index;
+                continue;
+            }
+            algebraic_roots.push_back(
+                {
+                    parameter,
+                    {
+                        ring_id + "/edge-"
+                        + std::to_string(edge_index)
+                        + "/algebraic-solution-"
+                        + std::to_string(solution_index),
+                    },
+                });
+            ++solution_index;
+        }
+    }
+}
+
+std::vector<AlgebraicDomainRoot2> parabola_domain_roots(
+    const std::string& dual_id,
+    const RationalPrimitiveParameterization2& primitive,
+    const MatDomainPolygonWithHoles2& domain)
+{
+    if (primitive.x_coefficients.size() > 3
+        || primitive.y_coefficients.size() > 3
+        || (primitive.x_coefficients.size() < 3
+            && primitive.y_coefficients.size() < 3)) {
+        throw InvalidRationalPrimitiveError(
+            "parabola D clipping requires a quadratic parameterization");
+    }
+    if (domain.is_unbounded()) {
+        throw InvalidRationalPrimitiveError(
+            "D clipping requires a bounded outer polygon");
+    }
+
+    std::vector<AlgebraicDomainRoot2> roots;
+    append_parabola_polygon_intersections(
+        domain.outer_boundary(),
+        dual_id + "/D-outer",
+        primitive,
+        roots);
+    std::size_t hole_index = 0;
+    for (auto hole = domain.holes_begin();
+         hole != domain.holes_end();
+         ++hole, ++hole_index) {
+        append_parabola_polygon_intersections(
+            *hole,
+            dual_id + "/D-hole-"
+                + std::to_string(hole_index),
+            primitive,
+            roots);
+    }
+    ExactAlgebraicKernel1 kernel;
+    const auto compare = kernel.compare_1_object();
+    std::sort(
+        roots.begin(),
+        roots.end(),
+        [&compare](const AlgebraicDomainRoot2& lhs,
+                   const AlgebraicDomainRoot2& rhs) {
+            return compare(lhs.parameter, rhs.parameter)
+                == CGAL::SMALLER;
+        });
+    std::vector<AlgebraicDomainRoot2> unique;
+    for (AlgebraicDomainRoot2& root : roots) {
+        if (!unique.empty()
+            && compare(
+                   unique.back().parameter,
+                   root.parameter)
+                == CGAL::EQUAL) {
             unique.back().provenance_ids.insert(
                 unique.back().provenance_ids.end(),
                 root.provenance_ids.begin(),
@@ -772,11 +954,12 @@ maximal_clearance_components(
 }
 
 std::vector<MatAdmissibleComponent2>
-clip_linear_clearance_components(
+clip_clearance_components_with_domain_roots(
     const std::string& original_dual_id,
     const RationalPrimitiveParameterization2& primitive,
     const ClearanceRootBoundary2& boundary,
-    const MatDomainPolygonWithHoles2& domain)
+    const MatDomainPolygonWithHoles2& domain,
+    const std::vector<AlgebraicDomainRoot2>& domain_roots)
 {
     if (original_dual_id.empty()) {
         throw InvalidRationalPrimitiveError(
@@ -829,17 +1012,11 @@ clip_linear_clearance_components(
                 false,
             });
     }
-    const std::vector<RationalDomainRoot2> domain_roots =
-        linear_domain_roots(
-            original_dual_id,
-            primitive,
-            domain);
-    for (const RationalDomainRoot2& root : domain_roots) {
+    for (const AlgebraicDomainRoot2& root : domain_roots) {
         candidates.push_back(
             {
                 {
-                    kernel.construct_algebraic_real_1_object()(
-                        root.parameter),
+                    root.parameter,
                     root.provenance_ids,
                 },
                 false,
@@ -1019,6 +1196,53 @@ clip_linear_clearance_components(
             });
     }
     return components;
+}
+
+std::vector<MatAdmissibleComponent2>
+clip_linear_clearance_components(
+    const std::string& original_dual_id,
+    const RationalPrimitiveParameterization2& primitive,
+    const ClearanceRootBoundary2& boundary,
+    const MatDomainPolygonWithHoles2& domain)
+{
+    ExactAlgebraicKernel1 kernel;
+    std::vector<AlgebraicDomainRoot2> roots;
+    for (const RationalDomainRoot2& root :
+         linear_domain_roots(
+             original_dual_id,
+             primitive,
+             domain)) {
+        roots.push_back(
+            {
+                kernel.construct_algebraic_real_1_object()(
+                    root.parameter),
+                root.provenance_ids,
+            });
+    }
+    return clip_clearance_components_with_domain_roots(
+        original_dual_id,
+        primitive,
+        boundary,
+        domain,
+        roots);
+}
+
+std::vector<MatAdmissibleComponent2>
+clip_parabola_clearance_components(
+    const std::string& original_dual_id,
+    const RationalPrimitiveParameterization2& primitive,
+    const ClearanceRootBoundary2& boundary,
+    const MatDomainPolygonWithHoles2& domain)
+{
+    return clip_clearance_components_with_domain_roots(
+        original_dual_id,
+        primitive,
+        boundary,
+        domain,
+        parabola_domain_roots(
+            original_dual_id,
+            primitive,
+            domain));
 }
 
 SegmentSiteMatCompileEvidence2

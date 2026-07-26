@@ -196,6 +196,31 @@ bool clearance_boundaries_are_exact()
                 crossing_segment,
                 crossing_segment_boundary,
                 domain);
+    const RationalPrimitiveParameterization2
+        crossing_parabola{
+            {CORE::BigRat(0), CORE::BigRat(1)},
+            {
+                CORE::BigRat(0),
+                CORE::BigRat(0),
+                CORE::BigRat(1),
+            },
+            CORE::BigRat(-2),
+            CORE::BigRat(2),
+        };
+    const ClearanceRootBoundary2
+        crossing_parabola_boundary =
+            point_clearance_boundary(
+                crossing_parabola,
+                0,
+                0,
+                0);
+    const std::vector<MatAdmissibleComponent2>
+        clipped_domain_parabola =
+            clip_parabola_clearance_components(
+                "D-parabola-dual",
+                crossing_parabola,
+                crossing_parabola_boundary,
+                domain);
 
     return line_boundary.roots.size() == 2
         && ray_boundary.roots.size() == 1
@@ -236,7 +261,16 @@ bool clearance_boundaries_are_exact()
             == "D-segment-dual/D-outer/edge-3"
         && clipped_domain_segment.back()
             .upper.provenance_ids.front()
-            == "D-segment-dual/D-outer/edge-1";
+            == "D-segment-dual/D-outer/edge-1"
+        && clipped_domain_parabola.size() == 2
+        && clipped_domain_parabola.front()
+            .lower.provenance_ids.front()
+            == "D-parabola-dual/D-outer/edge-2"
+               "/algebraic-solution-0"
+        && clipped_domain_parabola.back()
+            .upper.provenance_ids.front()
+            == "D-parabola-dual/D-outer/edge-2"
+               "/algebraic-solution-1";
 }
 
 } // namespace
