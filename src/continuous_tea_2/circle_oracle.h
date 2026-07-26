@@ -19,6 +19,13 @@ construct_full_circle_uniform_partition(
     const std::string& stock_identity,
     const std::string& disposition);
 
+EventPartitionCertificate2
+construct_full_circle_line_pullback_partition(
+    const std::string& stock_identity,
+    const std::vector<std::string>& motion_data,
+    const std::string& cutter_radius,
+    const std::vector<std::string>& line_sources);
+
 std::pair<std::string, EventTrace2>
 audit_full_circle_tea_event_exact(
     const Stock2& stock,

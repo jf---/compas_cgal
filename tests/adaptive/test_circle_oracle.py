@@ -74,6 +74,25 @@ def test_uniform_circle_certificate_replays_and_rejects_mutation() -> None:
     assert _continuous_tea_2.verify_event_partition(mutated).verdict.name == "UNRESOLVED_DEGENERACY"
 
 
+def test_nonuniform_axis_circle_replays_every_exact_line_rim_pullback() -> None:
+    verdict, trace = _continuous_tea_2.audit_full_circle_tea_event_exact(
+        _stock_2.Stock2(SQUARE, []),
+        0.5,
+        0.5,
+        1.0,
+        0.0,
+        False,
+        1.0,
+        4.0,
+    )
+
+    assert verdict == "unresolved"
+    assert trace.partition.source_kind == "full-circle-line-pullbacks-v1"
+    assert len(trace.partition.projections) == 32
+    assert all(projection.degree_bound_id == "full-circle-line-(2,2)-v1" for projection in trace.partition.projections)
+    assert _continuous_tea_2.verify_event_partition(trace.partition).verdict.name == "CERTIFIED"
+
+
 def test_exact_rational_probe_uses_the_circle_chart_not_binary64_sampling() -> None:
     stock = _stock_2.Stock2(SQUARE, [])
     stock.subtract_disk(5.0, 5.0, 100.0)
