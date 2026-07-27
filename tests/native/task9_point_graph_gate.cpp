@@ -158,12 +158,20 @@ std::string graph_signature(const MatExactGraph2& graph)
         {
             append_framed(signature, site_id);
         }
+        append_count(
+            signature,
+            node.parent_site_ids.size());
+        for (const std::string& site_id : node.parent_site_ids)
+        {
+            append_framed(signature, site_id);
+        }
     }
     append_framed(signature, "edges");
     append_count(signature, graph.edges.size());
     for (const MatExactGraphEdge2& edge : graph.edges)
     {
         append_framed(signature, edge.edge_id);
+        append_framed(signature, edge.original_dual_id);
         append_framed(signature, edge.primitive_kind);
         append_framed(signature, edge.source_node_id);
         append_framed(signature, edge.target_node_id);
@@ -177,6 +185,13 @@ std::string graph_signature(const MatExactGraph2& graph)
             signature,
             edge.generator_site_ids.size());
         for (const std::string& site_id : edge.generator_site_ids)
+        {
+            append_framed(signature, site_id);
+        }
+        append_count(
+            signature,
+            edge.parent_site_ids.size());
+        for (const std::string& site_id : edge.parent_site_ids)
         {
             append_framed(signature, site_id);
         }

@@ -788,16 +788,17 @@ MatParameterEndpoint2 bind_point_limiter_parabola_endpoint(
     return std::move(matches.front());
 }
 
-MatParameterEndpoint2 bind_segment_limiter_parabola_endpoint(
+namespace
+{
+
+void require_valid_segment_limiter_binding_inputs(
     const MatExactPointSiteSource2& focus,
     const MatExactOpenSegmentSource2& segment,
     const MatExactPointSiteSource2& segment_source,
     const MatExactPointSiteSource2& segment_target,
     const MatExactOpenSegmentSource2& limiter,
     const MatExactPointSiteSource2& limiter_source,
-    const MatExactPointSiteSource2& limiter_target,
-    const SegmentSiteVoronoi2& voronoi,
-    const SegmentSiteVoronoi2::Halfedge_handle& halfedge)
+    const MatExactPointSiteSource2& limiter_target)
 {
     require_canonical_quadratic_field(
         focus,
@@ -848,20 +849,20 @@ MatParameterEndpoint2 bind_segment_limiter_parabola_endpoint(
         throw InvalidRationalPrimitiveError(
             "segment limiter endpoint is off supporting line");
     }
+}
 
-    const MatTraits::Site_2 expected_limiter =
-        MatTraits::Site_2::construct_site_2(
-            exact_live_point(limiter_source, radicand),
-            exact_live_point(limiter_target, radicand));
-    const LiveParabolaEndpointBridge2 live =
-        live_endpoint_bridge(
-            focus,
-            segment_source,
-            segment_target,
-            expected_limiter,
-            radicand,
-            voronoi,
-            halfedge);
+MatParameterEndpoint2
+bind_segment_limiter_parabola_endpoint_from_live(
+    const MatExactPointSiteSource2& focus,
+    const MatExactOpenSegmentSource2& segment,
+    const MatExactPointSiteSource2& segment_source,
+    const MatExactPointSiteSource2& segment_target,
+    const MatExactOpenSegmentSource2& limiter,
+    const MatExactPointSiteSource2& limiter_source,
+    const MatExactPointSiteSource2& limiter_target,
+    const LiveParabolaEndpointBridge2& live)
+{
+    const CORE::BigRat radicand = focus.radicand;
     const SourceParabolaParameterization2 source =
         source_parameterization(focus, segment);
     const FieldPolynomial2 x =
@@ -993,6 +994,90 @@ MatParameterEndpoint2 bind_segment_limiter_parabola_endpoint(
             + " point matches");
     }
     return std::move(matches.front());
+}
+
+} // namespace
+
+MatParameterEndpoint2 bind_segment_limiter_parabola_endpoint(
+    const MatExactPointSiteSource2& focus,
+    const MatExactOpenSegmentSource2& segment,
+    const MatExactPointSiteSource2& segment_source,
+    const MatExactPointSiteSource2& segment_target,
+    const MatExactOpenSegmentSource2& limiter,
+    const MatExactPointSiteSource2& limiter_source,
+    const MatExactPointSiteSource2& limiter_target,
+    const SegmentSiteVoronoi2& voronoi,
+    const SegmentSiteVoronoi2::Halfedge_handle& halfedge)
+{
+    require_valid_segment_limiter_binding_inputs(
+        focus,
+        segment,
+        segment_source,
+        segment_target,
+        limiter,
+        limiter_source,
+        limiter_target);
+    const CORE::BigRat radicand = focus.radicand;
+    const MatTraits::Site_2 expected_limiter =
+        MatTraits::Site_2::construct_site_2(
+            exact_live_point(limiter_source, radicand),
+            exact_live_point(limiter_target, radicand));
+    const LiveParabolaEndpointBridge2 live =
+        live_endpoint_bridge(
+            focus,
+            segment_source,
+            segment_target,
+            expected_limiter,
+            radicand,
+            voronoi,
+            halfedge);
+    return bind_segment_limiter_parabola_endpoint_from_live(
+        focus,
+        segment,
+        segment_source,
+        segment_target,
+        limiter,
+        limiter_source,
+        limiter_target,
+        live);
+}
+
+MatParameterEndpoint2 bind_segment_limiter_parabola_endpoint(
+    const MatExactPointSiteSource2& focus,
+    const MatExactOpenSegmentSource2& segment,
+    const MatExactPointSiteSource2& segment_source,
+    const MatExactPointSiteSource2& segment_target,
+    const MatExactOpenSegmentSource2& limiter,
+    const MatExactPointSiteSource2& limiter_source,
+    const MatExactPointSiteSource2& limiter_target,
+    const SegmentSiteParabola2& live_parabola,
+    const MatTraits::Point_2& live_point)
+{
+    require_valid_segment_limiter_binding_inputs(
+        focus,
+        segment,
+        segment_source,
+        segment_target,
+        limiter,
+        limiter_source,
+        limiter_target);
+    require_distinct_live_parabola_endpoints(
+        live_parabola);
+    if (live_point != live_parabola.p1
+        && live_point != live_parabola.p2)
+    {
+        throw MismatchedLiveParabolaBridgeError(
+            "explicit live point is not a parabola endpoint");
+    }
+    return bind_segment_limiter_parabola_endpoint_from_live(
+        focus,
+        segment,
+        segment_source,
+        segment_target,
+        limiter,
+        limiter_source,
+        limiter_target,
+        {live_point, live_parabola});
 }
 
 std::pair<MatParameterEndpoint2, MatParameterEndpoint2>

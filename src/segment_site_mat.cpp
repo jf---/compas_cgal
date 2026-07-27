@@ -220,6 +220,7 @@ void register_voronoi_node_location(
 struct CanonicalNodeAlias2 {
     std::string node_id;
     std::vector<std::string> generator_site_ids;
+    std::vector<std::string> parent_site_ids;
 };
 
 void register_node_alias(
@@ -239,6 +240,7 @@ void register_node_alias(
             endpoint),
         CanonicalNodeAlias2{
             node.node_id,
+            node.generator_site_ids,
             node.generator_site_ids,
         });
 }
@@ -267,6 +269,9 @@ void canonicalize_original_nodes(
             union_stable_ids(
                 node.generator_site_ids,
                 alias->second.generator_site_ids);
+            union_stable_ids(
+                node.parent_site_ids,
+                alias->second.parent_site_ids);
         }
         const auto existing = indices.find(node.node_id);
         if (existing == indices.end()) {
@@ -279,6 +284,9 @@ void canonicalize_original_nodes(
         union_stable_ids(
             retained.generator_site_ids,
             node.generator_site_ids);
+        union_stable_ids(
+            retained.parent_site_ids,
+            node.parent_site_ids);
         union_stable_ids(
             retained.provenance_ids,
             node.provenance_ids);
@@ -1257,6 +1265,781 @@ void append_parallel_segment_segment_graph(
         node_indices);
 }
 
+bool same_unoriented_segment(
+    const MatTraits::Segment_2& lhs,
+    const MatTraits::Segment_2& rhs)
+{
+    return (lhs.source() == rhs.source()
+            && lhs.target() == rhs.target())
+        || (lhs.source() == rhs.target()
+            && lhs.target() == rhs.source());
+}
+
+std::vector<GeneratorSite2> segment_site_generators(
+    const std::vector<NormalizedPointSource2>& points,
+    const std::vector<NormalizedOpenSegmentSource2>& segments)
+{
+    std::vector<GeneratorSite2> generators;
+    generators.reserve(points.size() + segments.size());
+    for (const NormalizedPointSource2& point : points) {
+        generators.push_back(
+            {
+                point.stable_site_id,
+                MatTraits::Site_2::construct_site_2(
+                    MatTraits::Point_2(point.x, point.y)),
+            });
+    }
+    for (const NormalizedOpenSegmentSource2& segment :
+         segments) {
+        const NormalizedPointSource2& source =
+            point_source(points, segment.source_point_id);
+        const NormalizedPointSource2& target =
+            point_source(points, segment.target_point_id);
+        generators.push_back(
+            {
+                segment.stable_site_id,
+                MatTraits::Site_2::construct_site_2(
+                    MatTraits::Point_2(source.x, source.y),
+                    MatTraits::Point_2(target.x, target.y)),
+            });
+    }
+    return generators;
+}
+
+void insert_segment_site_sources(
+    const std::vector<NormalizedPointSource2>& points,
+    const std::vector<NormalizedOpenSegmentSource2>& segments,
+    SegmentSiteDelaunay2& delaunay)
+{
+    for (const NormalizedOpenSegmentSource2& segment :
+         segments) {
+        const NormalizedPointSource2& source =
+            point_source(points, segment.source_point_id);
+        const NormalizedPointSource2& target =
+            point_source(points, segment.target_point_id);
+        delaunay.insert(
+            MatTraits::Point_2(source.x, source.y),
+            MatTraits::Point_2(target.x, target.y));
+    }
+    for (const NormalizedPointSource2& point : points) {
+        const bool is_segment_endpoint = std::any_of(
+            segments.begin(),
+            segments.end(),
+            [&point](
+                const NormalizedOpenSegmentSource2& segment) {
+                return point.stable_site_id
+                        == segment.source_point_id
+                    || point.stable_site_id
+                        == segment.target_point_id;
+            });
+        if (!is_segment_endpoint) {
+            delaunay.insert(
+                MatTraits::Point_2(point.x, point.y));
+        }
+    }
+}
+
+std::vector<std::string> raw_feature_parent_ids(
+    const std::string& feature_id,
+    const std::vector<NormalizedOpenSegmentSource2>& segments)
+{
+    const auto segment = std::find_if(
+        segments.begin(),
+        segments.end(),
+        [&feature_id](
+            const NormalizedOpenSegmentSource2& candidate) {
+            return candidate.stable_site_id == feature_id;
+        });
+    if (segment != segments.end()) {
+        return {segment->stable_site_id};
+    }
+
+    std::vector<std::string> parents;
+    for (const NormalizedOpenSegmentSource2& candidate :
+         segments) {
+        if (candidate.source_point_id == feature_id
+            || candidate.target_point_id == feature_id) {
+            parents.push_back(candidate.stable_site_id);
+        }
+    }
+    if (parents.empty()) {
+        return {feature_id};
+    }
+    std::sort(parents.begin(), parents.end());
+    parents.erase(
+        std::unique(parents.begin(), parents.end()),
+        parents.end());
+    return parents;
+}
+
+struct RawFeatureParentDisposition2 {
+    bool maps_to_target;
+    bool self_transition;
+};
+
+RawFeatureParentDisposition2 classify_raw_feature_pair(
+    const std::string& first_feature_id,
+    const std::string& second_feature_id,
+    const std::vector<std::string>& target_parent_ids,
+    const std::vector<NormalizedOpenSegmentSource2>& segments)
+{
+    const std::vector<std::string> first_parents =
+        raw_feature_parent_ids(first_feature_id, segments);
+    const std::vector<std::string> second_parents =
+        raw_feature_parent_ids(second_feature_id, segments);
+    std::set<std::vector<std::string>> distinct_pairs;
+    std::set<std::string> self_parents;
+    for (const std::string& first : first_parents) {
+        for (const std::string& second : second_parents) {
+            if (first == second) {
+                self_parents.insert(first);
+            } else {
+                distinct_pairs.insert(
+                    ordered_generator_site_ids(first, second));
+            }
+        }
+    }
+    if (!self_parents.empty() && !distinct_pairs.empty()) {
+        throw AmbiguousCompositeSiteOwnerError(
+            "raw feature pair maps to both self and distinct parents");
+    }
+    if (distinct_pairs.size() > 1) {
+        throw AmbiguousCompositeSiteOwnerError(
+            "raw feature pair maps to multiple parent pairs");
+    }
+    if (!distinct_pairs.empty()) {
+        return {
+            *distinct_pairs.begin() == target_parent_ids,
+            false,
+        };
+    }
+    const bool target_self = std::any_of(
+        self_parents.begin(),
+        self_parents.end(),
+        [&target_parent_ids](const std::string& parent) {
+            return std::find(
+                       target_parent_ids.begin(),
+                       target_parent_ids.end(),
+                       parent)
+                != target_parent_ids.end();
+        });
+    return {false, target_self};
+}
+
+std::string nonparallel_original_dual_id(
+    const int branch_sign,
+    const std::vector<std::string>& parent_site_ids)
+{
+    if (branch_sign != -1 && branch_sign != 1) {
+        throw IncompleteCompositeSegmentChainError(
+            "nonparallel normalized branch sign is invalid");
+    }
+    return stable_dual_identity_v1(
+        branch_sign < 0
+            ? "segment-segment/branch-negative"
+            : "segment-segment/branch-positive",
+        parent_site_ids);
+}
+
+NonparallelSegmentFeatureDomain2
+nonparallel_segment_feature_domain(
+    const NonparallelSegmentBisectorParameterization2& primitive,
+    const std::vector<NormalizedPointSource2>& points,
+    const std::vector<NormalizedOpenSegmentSource2>& segments)
+{
+    const NormalizedOpenSegmentSource2& first_record =
+        normalized_segment_source(
+            segments,
+            primitive.first_segment_id);
+    const NormalizedOpenSegmentSource2& second_record =
+        normalized_segment_source(
+            segments,
+            primitive.second_segment_id);
+    const MatExactOpenSegmentSource2 first =
+        exact_segment_source(first_record, points);
+    const MatExactOpenSegmentSource2 second =
+        exact_segment_source(second_record, points);
+    const auto endpoint =
+        [&primitive, &points](
+            const MatExactOpenSegmentSource2& segment,
+            const std::string& point_id) {
+            const NormalizedPointSource2& point =
+                point_source(points, point_id);
+            return MatQuadraticFieldDomainBoundary2{
+                nonparallel_segment_tangent_parameter(
+                    primitive,
+                    segment,
+                    point.x,
+                    point.y),
+                {point_id},
+            };
+        };
+    return intersect_nonparallel_segment_feature_domains(
+        endpoint(first, first_record.source_point_id),
+        endpoint(first, first_record.target_point_id),
+        endpoint(second, second_record.source_point_id),
+        endpoint(second, second_record.target_point_id),
+        primitive.radicand);
+}
+
+MatQuadraticFieldValue2 multiply_quadratic_field_values(
+    const MatQuadraticFieldValue2& lhs,
+    const MatQuadraticFieldValue2& rhs,
+    const CORE::BigRat& radicand)
+{
+    return {
+        lhs.rational * rhs.rational
+            + radicand * lhs.radical * rhs.radical,
+        lhs.rational * rhs.radical
+            + lhs.radical * rhs.rational,
+    };
+}
+
+MatQuadraticFieldValue2 evaluate_affine_field_coordinate(
+    const std::vector<CORE::BigRat>& rational,
+    const std::vector<CORE::BigRat>& radical,
+    const MatQuadraticFieldValue2& parameter,
+    const CORE::BigRat& radicand)
+{
+    if (rational.size() != 2 || radical.size() != 2) {
+        throw IncompleteCompositeSegmentChainError(
+            "nonparallel segment chart is not affine");
+    }
+    const MatQuadraticFieldValue2 product =
+        multiply_quadratic_field_values(
+            {rational[1], radical[1]},
+            parameter,
+            radicand);
+    return {
+        rational[0] + product.rational,
+        radical[0] + product.radical,
+    };
+}
+
+CORE::Expr composite_core_field_value(
+    const MatQuadraticFieldValue2& value,
+    const CORE::BigRat& radicand)
+{
+    const CORE::Expr root =
+        CORE::sqrt(CORE::Expr(radicand));
+    return CORE::Expr(value.rational)
+        + CORE::Expr(value.radical) * root;
+}
+
+MatTraits::Point_2 nonparallel_segment_point_at(
+    const NonparallelSegmentBisectorParameterization2& primitive,
+    const MatQuadraticFieldValue2& parameter)
+{
+    const MatQuadraticFieldValue2 x =
+        evaluate_affine_field_coordinate(
+            primitive.x_rational,
+            primitive.x_radical,
+            parameter,
+            primitive.radicand);
+    const MatQuadraticFieldValue2 y =
+        evaluate_affine_field_coordinate(
+            primitive.y_rational,
+            primitive.y_radical,
+            parameter,
+            primitive.radicand);
+    return {
+        composite_core_field_value(x, primitive.radicand),
+        composite_core_field_value(y, primitive.radicand),
+    };
+}
+
+struct NormalizedNonparallelSegmentCell2 {
+    MatTraits::Segment_2 representative;
+    MatTraits::Segment_2 adaptor_span;
+    NonparallelSegmentBisectorParameterization2 primitive;
+    std::string original_dual_id;
+};
+
+struct CompositeParabolaPiece2 {
+    SegmentSiteParabola2 parabola;
+    std::string point_feature_id;
+    std::string segment_feature_id;
+    std::vector<std::string> generator_site_ids;
+    std::size_t normalized_cell_index;
+};
+
+struct EmittedExactPoint2 {
+    MatTraits::Point_2 point;
+    std::string node_id;
+};
+
+std::size_t composite_cell_for_parabola(
+    const SegmentSiteParabola2& parabola,
+    const std::vector<NormalizedNonparallelSegmentCell2>& cells)
+{
+    std::optional<std::size_t> match;
+    for (std::size_t index = 0;
+         index < cells.size();
+         ++index) {
+        const MatTraits::Segment_2& representative =
+            cells[index].representative;
+        std::vector<MatTraits::Point_2> shared;
+        for (const MatTraits::Point_2& segment_point :
+             {representative.source(),
+              representative.target()}) {
+            if (segment_point == parabola.p1
+                || segment_point == parabola.p2) {
+                shared.push_back(segment_point);
+            }
+        }
+        if (shared.empty()) {
+            continue;
+        }
+        if (shared.size() != 1) {
+            throw IncompleteCompositeSegmentChainError(
+                "raw parabola shares multiple endpoints with one S-S piece");
+        }
+        const MatTraits::Point_2 segment_terminal =
+            representative.source() == shared.front()
+            ? representative.target()
+            : representative.source();
+        const MatTraits::Point_2 parabola_terminal =
+            parabola.p1 == shared.front()
+            ? parabola.p2
+            : parabola.p1;
+        if (!same_unoriented_segment(
+                MatTraits::Segment_2(
+                    segment_terminal,
+                    parabola_terminal),
+                cells[index].adaptor_span)) {
+            continue;
+        }
+        if (match.has_value()) {
+            throw IncompleteCompositeSegmentChainError(
+                "raw parabola completes multiple normalized cells");
+        }
+        match = index;
+    }
+    if (!match.has_value()) {
+        throw IncompleteCompositeSegmentChainError(
+            "raw parabola completes no normalized cell");
+    }
+    return *match;
+}
+
+void register_composite_transition_aliases(
+    const std::vector<EmittedExactPoint2>& segment_endpoints,
+    const std::vector<EmittedExactPoint2>& parabola_endpoints,
+    const std::vector<std::string>& parent_site_ids,
+    const std::vector<std::string>& transition_feature_ids,
+    std::map<std::string, CanonicalNodeAlias2>& aliases)
+{
+    for (const EmittedExactPoint2& parabola_endpoint :
+         parabola_endpoints) {
+        std::vector<const EmittedExactPoint2*> matches;
+        for (const EmittedExactPoint2& segment_endpoint :
+             segment_endpoints) {
+            if (segment_endpoint.point
+                == parabola_endpoint.point) {
+                matches.push_back(&segment_endpoint);
+            }
+        }
+        if (matches.size() != 1) {
+            throw IncompleteCompositeSegmentChainError(
+                "composite transition has no unique S-S endpoint");
+        }
+        const auto [existing, inserted] = aliases.emplace(
+            matches.front()->node_id,
+            CanonicalNodeAlias2{
+                parabola_endpoint.node_id,
+                transition_feature_ids,
+                parent_site_ids,
+            });
+        if (!inserted
+            && existing->second.node_id
+                != parabola_endpoint.node_id) {
+            throw IncompleteCompositeSegmentChainError(
+                "composite transition aliases disagree");
+        }
+    }
+}
+
+void append_nonparallel_segment_segment_graph(
+    const std::vector<NormalizedPointSource2>& points,
+    const std::vector<NormalizedOpenSegmentSource2>& segments,
+    const std::string& first_segment_id,
+    const std::string& second_segment_id,
+    const MatDomainPolygonWithHoles2& domain,
+    const CORE::BigRat& radius_squared,
+    MatExactGraph2& graph,
+    std::map<std::string, std::size_t>& node_indices)
+{
+    if (radius_squared < 0) {
+        throw NegativeClearanceRadiusSquaredError(
+            "nonparallel S-S graph squared clearance radius is negative");
+    }
+    const std::vector<std::string> parent_site_ids =
+        ordered_generator_site_ids(
+            first_segment_id,
+            second_segment_id);
+    const MatExactOpenSegmentSource2 first_segment =
+        exact_segment_source(
+            normalized_segment_source(
+                segments,
+                parent_site_ids[0]),
+            points);
+    const MatExactOpenSegmentSource2 second_segment =
+        exact_segment_source(
+            normalized_segment_source(
+                segments,
+                parent_site_ids[1]),
+            points);
+    const std::vector<GeneratorSite2> generators =
+        segment_site_generators(points, segments);
+    SegmentSiteDelaunay2 delaunay;
+    insert_segment_site_sources(
+        points,
+        segments,
+        delaunay);
+    graph.matched_generator_sites +=
+        require_generator_site_bijection(
+            delaunay,
+            generators);
+    SegmentSiteVoronoi2 voronoi(delaunay);
+
+    std::vector<NormalizedNonparallelSegmentCell2> cells;
+    for (auto halfedge = voronoi.halfedges_begin();
+         halfedge != voronoi.halfedges_end();
+         ++halfedge) {
+        const MatTraits::Site_2 up = halfedge->up()->site();
+        const MatTraits::Site_2 down =
+            halfedge->down()->site();
+        if (!up.is_segment() || !down.is_segment()) {
+            continue;
+        }
+        const std::string up_id =
+            stable_generator_site_id(up, generators);
+        const std::string down_id =
+            stable_generator_site_id(down, generators);
+        if (ordered_generator_site_ids(up_id, down_id)
+                != parent_site_ids
+            || up_id != parent_site_ids.front()) {
+            continue;
+        }
+        if (!halfedge->has_source()
+            || !halfedge->has_target()) {
+            throw IncompleteCompositeSegmentChainError(
+                "normalized nonparallel S-S cell is unbounded");
+        }
+        MatTraits::Segment_2 representative;
+        if (!CGAL::assign(
+                representative,
+                voronoi.dual().primal(
+                    halfedge->dual()))) {
+            throw UnsupportedCompositeSegmentPrimitiveError(
+                "normalized nonparallel representative is not a segment");
+        }
+        NonparallelSegmentBisectorParameterization2 primitive =
+            nonparallel_segment_bisector_parameterization(
+                first_segment,
+                second_segment,
+                representative);
+        cells.push_back(
+            {
+                representative,
+                MatTraits::Segment_2(
+                    halfedge->source()->point(),
+                    halfedge->target()->point()),
+                primitive,
+                nonparallel_original_dual_id(
+                    primitive.branch_sign,
+                    parent_site_ids),
+            });
+    }
+    if (cells.size() != 2
+        || cells[0].original_dual_id
+            == cells[1].original_dual_id) {
+        throw IncompleteCompositeSegmentChainError(
+            "nonparallel S-S pair has no two stable normalized cells");
+    }
+
+    std::vector<CompositeParabolaPiece2> parabolas;
+    for (auto edge = delaunay.finite_edges_begin();
+         edge != delaunay.finite_edges_end();
+         ++edge) {
+        const auto raw = *edge;
+        const auto face = raw.first;
+        const int index = raw.second;
+        const MatTraits::Site_2 first =
+            face->vertex(delaunay.ccw(index))->site();
+        const MatTraits::Site_2 second =
+            face->vertex(delaunay.cw(index))->site();
+        const std::string first_id =
+            stable_generator_site_id(first, generators);
+        const std::string second_id =
+            stable_generator_site_id(second, generators);
+        const RawFeatureParentDisposition2 disposition =
+            classify_raw_feature_pair(
+                first_id,
+                second_id,
+                parent_site_ids,
+                segments);
+        const bool rejected =
+            voronoi.edge_rejector()(delaunay, raw);
+        if (disposition.self_transition) {
+            if (rejected) {
+                ++graph.rejected_incident_transitions;
+            }
+            continue;
+        }
+        if (!disposition.maps_to_target
+            || !rejected) {
+            continue;
+        }
+        if (first.is_point() == second.is_point()) {
+            throw UnsupportedCompositeSegmentPrimitiveError(
+                "retained composite transition is not point-segment");
+        }
+        SegmentSiteParabola2 parabola;
+        if (!CGAL::assign(
+                parabola,
+                delaunay.primal(raw))) {
+            throw UnsupportedCompositeSegmentPrimitiveError(
+                "retained point-segment transition is not a parabola");
+        }
+        const std::string point_id =
+            first.is_point() ? first_id : second_id;
+        const std::string segment_id =
+            first.is_segment() ? first_id : second_id;
+        parabolas.push_back(
+            {
+                parabola,
+                point_id,
+                segment_id,
+                ordered_generator_site_ids(
+                    point_id,
+                    segment_id),
+                composite_cell_for_parabola(
+                    parabola,
+                    cells),
+            });
+    }
+    if (parabolas.size() != 1
+        || graph.rejected_incident_transitions != 1) {
+        throw IncompleteCompositeSegmentChainError(
+            "nonparallel fixture has no unique retained transition");
+    }
+
+    std::vector<EmittedExactPoint2> segment_endpoints;
+    for (const NormalizedNonparallelSegmentCell2& cell :
+         cells) {
+        const NonparallelSegmentFeatureDomain2 feature_domain =
+            nonparallel_segment_feature_domain(
+                cell.primitive,
+                points,
+                segments);
+        const std::vector<MatAdmissibleComponent2> components =
+            clip_nonparallel_segment_clearance_components(
+                cell.original_dual_id,
+                cell.primitive,
+                feature_domain,
+                nonparallel_segment_clearance_boundary(
+                    cell.primitive,
+                    first_segment,
+                    second_segment,
+                    radius_squared),
+                domain);
+        if (components.size() != 1) {
+            throw IncompleteCompositeSegmentChainError(
+                "nonparallel fixture S-S cell did not retain one component");
+        }
+        const MatTraits::Point_2 lower_point =
+            nonparallel_segment_point_at(
+                cell.primitive,
+                feature_domain.lower.parameter);
+        const MatTraits::Point_2 upper_point =
+            nonparallel_segment_point_at(
+                cell.primitive,
+                feature_domain.upper.parameter);
+        if (!same_unoriented_segment(
+                MatTraits::Segment_2(
+                    lower_point,
+                    upper_point),
+                cell.representative)) {
+            throw IncompleteCompositeSegmentChainError(
+                "S-S feature domain and raw representative disagree");
+        }
+        append_exact_graph_components(
+            cell.original_dual_id,
+            cell.original_dual_id,
+            "LINE",
+            parent_site_ids,
+            parent_site_ids,
+            components,
+            graph,
+            node_indices);
+        segment_endpoints.push_back(
+            {
+                lower_point,
+                stable_endpoint_node_identity_v1(
+                    cell.original_dual_id,
+                    components.front().lower),
+            });
+        segment_endpoints.push_back(
+            {
+                upper_point,
+                stable_endpoint_node_identity_v1(
+                    cell.original_dual_id,
+                    components.front().upper),
+            });
+    }
+
+    std::map<std::string, CanonicalNodeAlias2> aliases;
+    for (const CompositeParabolaPiece2& piece :
+         parabolas) {
+        const NormalizedNonparallelSegmentCell2& cell =
+            cells[piece.normalized_cell_index];
+        const NormalizedPointSource2& focus_record =
+            point_source(points, piece.point_feature_id);
+        const NormalizedOpenSegmentSource2& source_record =
+            normalized_segment_source(
+                segments,
+                piece.segment_feature_id);
+        const std::string limiter_id =
+            parent_site_ids[0] == piece.segment_feature_id
+            ? parent_site_ids[1]
+            : parent_site_ids[0];
+        const NormalizedOpenSegmentSource2& limiter_record =
+            normalized_segment_source(
+                segments,
+                limiter_id);
+        const MatExactPointSiteSource2 focus =
+            exact_point_site_source(focus_record);
+        const MatExactOpenSegmentSource2 source =
+            exact_segment_source(source_record, points);
+        const MatExactOpenSegmentSource2 limiter =
+            exact_segment_source(limiter_record, points);
+        const MatExactPointSiteSource2 source_point =
+            exact_point_site_source(
+                point_source(
+                    points,
+                    source_record.source_point_id));
+        const MatExactPointSiteSource2 source_target =
+            exact_point_site_source(
+                point_source(
+                    points,
+                    source_record.target_point_id));
+        const MatExactPointSiteSource2 limiter_source =
+            exact_point_site_source(
+                point_source(
+                    points,
+                    limiter_record.source_point_id));
+        const MatExactPointSiteSource2 limiter_target =
+            exact_point_site_source(
+                point_source(
+                    points,
+                    limiter_record.target_point_id));
+        EmittedExactPoint2 first_endpoint{
+            piece.parabola.p1,
+            {},
+        };
+        EmittedExactPoint2 second_endpoint{
+            piece.parabola.p2,
+            {},
+        };
+        MatParameterEndpoint2 first_bound =
+            bind_segment_limiter_parabola_endpoint(
+                focus,
+                source,
+                source_point,
+                source_target,
+                limiter,
+                limiter_source,
+                limiter_target,
+                piece.parabola,
+                piece.parabola.p1);
+        MatParameterEndpoint2 second_bound =
+            bind_segment_limiter_parabola_endpoint(
+                focus,
+                source,
+                source_point,
+                source_target,
+                limiter,
+                limiter_source,
+                limiter_target,
+                piece.parabola,
+                piece.parabola.p2);
+        ExactAlgebraicKernel1 kernel;
+        if (kernel.compare_1_object()(
+                *second_bound.parameter,
+                *first_bound.parameter)
+            == CGAL::SMALLER) {
+            std::swap(first_bound, second_bound);
+            std::swap(first_endpoint, second_endpoint);
+        }
+        const std::string piece_dual_id =
+            stable_dual_identity_v1(
+                cell.primitive.branch_sign < 0
+                    ? "point-segment/composite-branch-negative"
+                    : "point-segment/composite-branch-positive",
+                piece.generator_site_ids);
+        const std::vector<MatAdmissibleComponent2> components =
+            clip_source_parabola_clearance_components(
+                piece_dual_id,
+                focus,
+                source,
+                first_bound,
+                second_bound,
+                source_parabola_clearance_boundary(
+                    focus,
+                    source,
+                    radius_squared),
+                domain);
+        if (components.size() != 1) {
+            throw IncompleteCompositeSegmentChainError(
+                "nonparallel fixture parabola did not retain one component");
+        }
+        append_exact_graph_components(
+            piece_dual_id,
+            cell.original_dual_id,
+            "PARABOLA",
+            piece.generator_site_ids,
+            parent_site_ids,
+            components,
+            graph,
+            node_indices);
+        first_endpoint.node_id =
+            stable_endpoint_node_identity_v1(
+                piece_dual_id,
+                first_bound);
+        second_endpoint.node_id =
+            stable_endpoint_node_identity_v1(
+                piece_dual_id,
+                second_bound);
+        std::vector<std::string> transition_feature_ids =
+            piece.generator_site_ids;
+        union_stable_ids(
+            transition_feature_ids,
+            parent_site_ids);
+        register_composite_transition_aliases(
+            segment_endpoints,
+            {first_endpoint, second_endpoint},
+            parent_site_ids,
+            transition_feature_ids,
+            aliases);
+    }
+    canonicalize_original_nodes(graph, aliases);
+    std::sort(
+        graph.nodes.begin(),
+        graph.nodes.end(),
+        [](const MatExactGraphNode2& lhs,
+           const MatExactGraphNode2& rhs) {
+            return lhs.node_id < rhs.node_id;
+        });
+    std::sort(
+        graph.edges.begin(),
+        graph.edges.end(),
+        [](const MatExactGraphEdge2& lhs,
+           const MatExactGraphEdge2& rhs) {
+            return lhs.edge_id < rhs.edge_id;
+        });
+}
+
 } // namespace
 
 MatExactGraph2 exact_point_site_graph(
@@ -1588,6 +2371,53 @@ MatExactGraph2 segment_segment_graph_spike_impl(
     return graph;
 }
 
+MatExactGraph2 nonparallel_segment_graph_spike_impl(
+    const bool reverse_segment_endpoints,
+    const CORE::BigRat& radius_squared)
+{
+    MatDomainPolygon2 outer;
+    outer.push_back({-100, -100});
+    outer.push_back({100, -100});
+    outer.push_back({100, 100});
+    outer.push_back({-100, 100});
+    MatExactGraph2 graph{{}, {}, 0, 0};
+    std::map<std::string, std::size_t> node_indices;
+    append_nonparallel_segment_segment_graph(
+        {
+            {"lower-left", -20, 0},
+            {"lower-right", 8, 0},
+            {"diagonal-lower", 5, -4},
+            {"diagonal-upper", 20, 11},
+        },
+        {
+            {
+                "lower-segment",
+                reverse_segment_endpoints
+                    ? "lower-right"
+                    : "lower-left",
+                reverse_segment_endpoints
+                    ? "lower-left"
+                    : "lower-right",
+            },
+            {
+                "diagonal-segment",
+                reverse_segment_endpoints
+                    ? "diagonal-upper"
+                    : "diagonal-lower",
+                reverse_segment_endpoints
+                    ? "diagonal-lower"
+                    : "diagonal-upper",
+            },
+        },
+        "lower-segment",
+        "diagonal-segment",
+        MatDomainPolygonWithHoles2(outer),
+        radius_squared,
+        graph,
+        node_indices);
+    return graph;
+}
+
 } // namespace
 
 MatExactGraph2
@@ -1618,6 +2448,27 @@ segment_site_reversed_segment_segment_graph_spike()
         false,
         {"limiter", 6, 1},
         segment_segment_spike_domain(-1, 5));
+}
+
+MatExactGraph2
+segment_site_nonparallel_segment_segment_graph_spike()
+{
+    return segment_site_nonparallel_segment_segment_graph_spike(0);
+}
+
+MatExactGraph2
+segment_site_nonparallel_segment_segment_graph_spike(
+    const CORE::BigRat& radius_squared)
+{
+    return nonparallel_segment_graph_spike_impl(
+        false,
+        radius_squared);
+}
+
+MatExactGraph2
+segment_site_reversed_nonparallel_segment_segment_graph_spike()
+{
+    return nonparallel_segment_graph_spike_impl(true, 0);
 }
 
 MatExactGraph2
