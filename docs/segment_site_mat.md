@@ -450,9 +450,11 @@ pair. A foreign segment identity, an endpoint off its declared support, or a
 singular projection fails loud.
 
 Each open segment contributes the interval between its two endpoint
-parameters. Their exact intersection is the S–S feature cell; equal active
-bounds must union all endpoint provenance. In the two-branch native fixture,
-the bounded raw cells are:
+parameters. `intersect_nonparallel_segment_feature_domains` sorts both pairs
+by exact field sign and takes their strict positive-length intersection.
+Equal active bounds union all endpoint provenance. A point-only intersection
+is a feature transition, not an S–S cell, and fails loud at this boundary. In
+the two-branch native fixture, the bounded raw cells are:
 
 ```text
 s = +1: t ∈ [-22 - 11sqrt(2), -1 - sqrt(2)]
@@ -507,6 +509,15 @@ pair fails before it can emit clearance evidence. The native scaled fixture
 proves that this is not an accidental unit-coefficient result:
 `n₂Δ² = 125` reduces `125t² - 5` to primitive polynomial
 `25t² - 1`.
+
+`maximal_nonparallel_segment_clearance_components` embeds the two feature
+bounds into the shared algebraic kernel, inserts only clearance roots inside
+that interval, and emits every maximal retained subcell. The native gate
+exercises full retention, one-root clipping, and complete rejection on the
+upper branch, plus one-root clipping on the lower branch. Physical endpoint
+IDs remain the feature-bound provenance; a coincident clearance event is
+unioned rather than replacing its owner. Exact polygon-domain clipping and
+normalized composite adjacency remain separate pending contracts.
 
 !!! warning "A nonparallel generator pair has two branch identities"
 
@@ -805,7 +816,8 @@ consumers, or evolution differ from graph orchestration.
 | Algebraic point/segment cell bounds | implemented | exact |
 | True-radius point/segment clearance | implemented and native-gated | exact for rational point-site sources; public binding pending |
 | Parallel segment/segment feature domains | implemented and native-gated | exact for positive-length overlap with feature-owned live endpoints |
-| General segment/segment cells | pending | nonparallel and externally limited cells fail loud; no production claim |
+| Nonparallel segment/segment raw cells | implemented and native-gated | exact source-bound branches, feature intervals, algebraic endpoints, and true-radius clipping; normalized composite adjacency pending |
+| General segment/segment cells | pending | normalized composite nonparallel and externally limited cells have no production graph claim |
 | Unified degeneracy-removal traversal | pending | no production claim |
 | Degeneracy-normalized feature CSR | pending | no production claim |
 | Exact neck evidence | pending | no production claim |
@@ -832,9 +844,14 @@ endpoint order. The parallel S–S gate additionally checks live
 `Segment_2`/adaptor equality, horizontal/vertical/diagonal canonical charts,
 partial and empty feature overlap, owner-evidence and rescaled-chart
 mutations, exact positive/zero/negative clearance, and complete-record
-reversal invariance. These gates establish the bounded P–S and feature-owned
-parallel S–S slices. They do not establish nonparallel or externally limited
-S–S cells, degeneracy-normalized feature CSR, or the final unified traversal.
+reversal invariance. The nonparallel raw-cell gate checks both
+`Q(sqrt(2))` branches, rational-field collapse, exact endpoint projection,
+strict feature-domain intersection, algebraic root identity, rational
+quadratic clearance, and maximal feature/clearance components. These gates
+establish the bounded P–S, feature-owned parallel S–S, and raw nonparallel
+S–S algebra. They do not establish normalized composite nonparallel
+adjacency, externally limited S–S cells, degeneracy-normalized feature CSR,
+or the final unified traversal.
 
 The final Task 9 boundary also requires:
 

@@ -1207,6 +1207,43 @@ clip_clearance_components_with_domain_roots(
 }
 
 std::vector<MatAdmissibleComponent2>
+maximal_nonparallel_segment_clearance_components(
+    const std::string& original_dual_id,
+    const NonparallelSegmentFeatureDomain2& feature_domain,
+    const ClearanceRootBoundary2& boundary)
+{
+    const MatParameterEndpoint2 lower{
+        quadratic_field_algebraic_real(
+            feature_domain.lower.parameter,
+            feature_domain.radicand),
+        feature_domain.lower.provenance_ids,
+    };
+    const MatParameterEndpoint2 upper{
+        quadratic_field_algebraic_real(
+            feature_domain.upper.parameter,
+            feature_domain.radicand),
+        feature_domain.upper.provenance_ids,
+    };
+    ExactAlgebraicKernel1 kernel;
+    if (kernel.compare_1_object()(
+            *lower.parameter,
+            *upper.parameter)
+        != CGAL::SMALLER) {
+        throw EmptyNonparallelSegmentFeatureDomainError(
+            "nonparallel S-S algebraic feature domain is not increasing");
+    }
+    return clip_clearance_components_with_domain_roots(
+        original_dual_id,
+        lower,
+        upper,
+        boundary,
+        [](const CORE::BigRat&) {
+            return true;
+        },
+        {});
+}
+
+std::vector<MatAdmissibleComponent2>
 clip_linear_clearance_components(
     const std::string& original_dual_id,
     const RationalPrimitiveParameterization2& primitive,
