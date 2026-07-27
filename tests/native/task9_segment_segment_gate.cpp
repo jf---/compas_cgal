@@ -2509,6 +2509,92 @@ bool segment_limited_parallel_segment_segment_production_graph_gate()
             == CGAL::EQUAL;
 }
 
+bool rectangle_central_parallel_production_graph_gate()
+{
+    bool negative_radius_rejected = false;
+    try {
+        static_cast<void>(
+            segment_site_rectangle_central_parallel_graph_spike(-1));
+    } catch (
+        const NegativeClearanceRadiusSquaredError&) {
+        negative_radius_rejected = true;
+    }
+    const MatExactGraph2 graph =
+        segment_site_rectangle_central_parallel_graph_spike();
+    const MatExactGraph2 repeated =
+        segment_site_rectangle_central_parallel_graph_spike();
+    const MatExactGraph2 reversed =
+        segment_site_reversed_rectangle_central_parallel_graph_spike();
+    const MatExactGraph2 positive =
+        segment_site_rectangle_central_parallel_graph_spike(3);
+    const MatExactGraph2 negative =
+        segment_site_rectangle_central_parallel_graph_spike(5);
+    if (graph.edges.size() != 1
+        || graph.nodes.size() != 2
+        || graph.rejected_incident_transitions != 0
+        || graph.matched_generator_sites != 8
+        || !negative_radius_rejected
+        || !graphs_equal(graph, repeated)
+        || !graphs_equal(graph, reversed)
+        || !graphs_equal(graph, positive)
+        || !negative.edges.empty()
+        || !negative.nodes.empty()
+        || negative.matched_generator_sites != 8) {
+        return false;
+    }
+
+    const std::vector<std::string> parent_sites{
+        "bottom-segment",
+        "top-segment",
+    };
+    const MatExactGraphEdge2& edge =
+        graph.edges.front();
+    if (edge.primitive_kind != "LINE"
+        || edge.original_dual_id
+            != stable_dual_identity_v1(
+                "segment-segment",
+                parent_sites)
+        || edge.generator_site_ids != parent_sites
+        || edge.parent_site_ids != parent_sites
+        || !edge.source_endpoint.parameter.has_value()
+        || !edge.target_endpoint.parameter.has_value()
+        || !has_provenance(
+            edge.source_endpoint,
+            "left-segment")
+        || !has_provenance(
+            edge.source_endpoint,
+            algebraic_root_id_v1(
+                {2, 1},
+                0))
+        || !has_provenance(
+            edge.target_endpoint,
+            "right-segment")
+        || !has_provenance(
+            edge.target_endpoint,
+            algebraic_root_id_v1(
+                {-2, 1},
+                0))
+        || !has_provenance(
+            edge.source_endpoint,
+            "parallel-segment-limiter/"
+            "equation-factor-multiplicity/1")
+        || !has_provenance(
+            edge.target_endpoint,
+            "parallel-segment-limiter/"
+            "equation-factor-multiplicity/1")) {
+        return false;
+    }
+    ExactAlgebraicKernel1 kernel;
+    return kernel.compare_1_object()(
+               *edge.source_endpoint.parameter,
+               kernel.construct_algebraic_real_1_object()(-2))
+            == CGAL::EQUAL
+        && kernel.compare_1_object()(
+               *edge.target_endpoint.parameter,
+               kernel.construct_algebraic_real_1_object()(2))
+            == CGAL::EQUAL;
+}
+
 bool nonparallel_segment_segment_production_graph_gate()
 {
     bool negative_radius_rejected = false;
@@ -3389,6 +3475,7 @@ bool segment_segment_producer_gate()
         && rectangle_adaptor_characterization_gate()
         && point_limited_parallel_segment_segment_production_graph_gate()
         && segment_limited_parallel_segment_segment_production_graph_gate()
+        && rectangle_central_parallel_production_graph_gate()
         && point_limited_parallel_failures_are_named()
         && segment_limited_parallel_failures_are_named()
         && nonparallel_segment_segment_production_graph_gate()
