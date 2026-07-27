@@ -389,7 +389,11 @@ bool live_graph_is_exact()
             [](const MatExactGraphEdge2& edge) {
                 return edge.generator_site_ids.size() == 2
                     && edge.source_node_id
-                        != edge.target_node_id;
+                        != edge.target_node_id
+                    && has_reconstructible_root_id(
+                        edge.source_endpoint)
+                    && has_reconstructible_root_id(
+                        edge.target_endpoint);
             });
 }
 
