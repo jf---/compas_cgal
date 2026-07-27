@@ -37,7 +37,9 @@ needed by every downstream traversal and engagement decision.
     already-normalized rings, emits exact point/open-segment sites with typed
     `(kind, ring, feature)` provenance, retains segment endpoint ownership,
     and maps catalog-bound stable node-site identities to numeric CSR without
-    parsing those identities.
+    parsing those identities. An additive catalog-fed source path now builds a
+    valid segment-Delaunay graph, resolves live generators through one exact
+    geometry index, and proves a complete catalog/live-site bijection.
     General arbitrary-pocket traversal, externally limited and composite
     segment/segment cells, production-graph adoption of the canonical site
     catalog, endpoint-feature CSR, public numeric-table integration, neck
@@ -76,7 +78,7 @@ construction.
 | Dimension | Comparative status | Held–Pfeiffer 2025 | Exact-certified Phase 1 |
 | --- | --- | --- | --- |
 | Pocket geometry | incomplete | Segments and circular arcs; simply connected; machinability assumed after an `r + ε` transformation | Raw MAT primitives now clip exactly against polygonal domains with holes and exact radius clearance; the rectangle `C_r` graph is unified, but general arbitrary-pocket traversal is incomplete; circular boundaries are not supported |
-| MAT backend | stronger exact contract on a bounded fixture; incomplete end-to-end | Vroni/ArcVroni used end-to-end | Exact CGAL point graph plus bounded P–S and parallel/nonparallel S–S cells; one four-segment rectangle build now yields a reversal-invariant five-edge/six-node graph with exact radius clipping, feature-triple node identity, and explicit rejection of eight incident P–S rays; a Task 3-derived typed site catalog prevents a second normalization pass, but arbitrary-pocket traversal and catalog-to-production-graph integration remain incomplete |
+| MAT backend | stronger exact contract on a bounded fixture; incomplete end-to-end | Vroni/ArcVroni used end-to-end | Exact CGAL point graph plus bounded P–S and parallel/nonparallel S–S cells; one four-segment rectangle build now yields a reversal-invariant five-edge/six-node graph with exact radius clipping, feature-triple node identity, and explicit rejection of eight incident P–S rays; a Task 3-derived typed site catalog and exact indexed SDG source prevent second normalization and linear live-site rematching, but arbitrary-pocket traversal and catalog-to-production-graph integration remain incomplete |
 | Engagement limit | stronger contract; incomplete integration | Analytic circle construction followed by bisection until `θmax − 0.001 <= θ <= θmax` radians | Exact rational chord surrogate and event-exact segment/full-circle certification; integration incomplete |
 | Candidate spacing | incomplete | Bisection along the middle curve | Finite candidate lattice; no monotonic-feasibility assumption |
 | Machined state | stronger contract | Ordered contour of prior machining disks; transition sweeps omitted from that contour model | Exact stock mutation and exact full-sweep coverage, ordered certify-before-deplete |
@@ -116,9 +118,18 @@ in-process generations per pocket:
     fast path assembly survived; it does not show that the certified system is
     as fast as Held and Pfeiffer.
 
-Two other clocks must remain separate. The current native Task 9 executable
-runs its complete algebraic fixture suite in 1.21 s, but that is a contract
-gate rather than one pocket generation. The existing exact stock replay
+The additive catalog-fed SDG source removes two structural costs before timing:
+live generators resolve through an exact `O(log S)` geometry index instead of
+an `O(k S)` caller-site scan, and the validated SDG owner cannot be copied or
+moved implicitly. The current unified rectangle traversal has not adopted
+that owner yet, and its Voronoi-adaptor construction still belongs to the
+integration work. These are architectural performance safeguards, not a new
+planner benchmark.
+
+Two other clocks must remain separate. Five warm local Release executions of
+the current native Task 9 algebraic fixture suite took 1.16–1.17 s (1.17 s
+median), but that is a contract gate rather than one pocket generation. The
+existing exact stock replay
 measured 87 s for the kite after a 7x end-to-end speedup; that run certifies and
 depletes every operation and is not comparable to Held and Pfeiffer's planner
 clock. Its cost history and the eliminated incremental-Boolean pathology are
@@ -172,6 +183,9 @@ Task 3 canonical rings + exact radius²
                          │
                          ▼
 typed point/open-segment site catalog
+                         │
+                         ▼
+exact geometry index + one segment insertion pass
                          │
                          ▼
 segment-Delaunay graph with stable caller provenance
@@ -1192,6 +1206,42 @@ its bounded-fixture source names; replacing that construction with direct
 catalog consumption is a later additive production path, not part of this
 slice.
 
+### Catalog-fed segment-Delaunay source
+
+`CanonicalMatDelaunaySource2::build` is the additive input path from the
+canonical site catalog into CGAL. It builds two exact sorted indexes:
+
+- point sites keyed by exact `compare_xy`;
+- open-segment sites keyed by their exact unordered endpoint pair.
+
+Point and segment key spaces stay distinct because a ring vertex is expected
+to coincide with two segment endpoints. Duplicate geometry within either key
+space is ambiguous caller ownership and raises
+`DuplicateCanonicalMatSiteGeometryError`.
+
+Only the canonical open segments are inserted. CGAL materializes their
+endpoint point-sites, so explicit endpoint reinsertion would be redundant.
+After insertion, the factory walks every finite Delaunay vertex, resolves it
+in `O(log S)` exact lookup, rejects duplicate resolutions, and requires the
+matched stable-ID count to equal both the index and catalog cardinalities.
+Invalid or incomplete live graphs raise `CanonicalMatDelaunayBijectionError`;
+an unknown exact generator raises `UnknownCanonicalMatSiteGeometryError`.
+
+!!! note "Constructed graph ownership is immobile"
+
+    `CanonicalMatDelaunaySource2` is neither copyable nor movable. Older CGAL
+    graph types can satisfy an rvalue operation by copying, so a nominal
+    move-only wrapper would not prove that a full graph build was transferred.
+    C++17 guaranteed copy elision initializes the factory result directly.
+    The future catalog-fed adaptor path must consume the private SDG explicitly
+    through CGAL's swap construction rather than copy it.
+
+The source gate proves exact rectangle cardinality, rotation/reversal
+invariance, two-hole insertion, exact catalog/live-site equality, unknown-site
+rejection, and duplicate point geometry rejection. This establishes the
+catalog-to-SDG boundary only. The existing five-edge rectangle traversal still
+uses its validated fixture source path.
+
 ## Failure anatomy: four cocircular point sites
 
 The square fixture
@@ -1272,6 +1322,7 @@ Refinement may change the number and position of samples. It must not change:
 | File | Responsibility |
 | --- | --- |
 | `segment_site_catalog.*` | Task 3-derived exact sites, typed numeric provenance, and stable catalog lookup |
+| `segment_site_delaunay.*` | exact geometry index, one-pass segment insertion, and catalog/live-site bijection |
 | `segment_site_parameterization.*` | exact primitive domains and coordinate functions |
 | `segment_site_clipping.*` | exact domain and clearance roots; maximal admissible cells |
 | `segment_site_provenance.*` | stable site/root provenance and endpoint evidence |
@@ -1310,6 +1361,7 @@ consumers, or evolution differ from graph orchestration.
 | General degeneracy-removal traversal | pending | the rectangle fixture is production-gated; arbitrary pockets and all primitive combinations have no production claim |
 | Degeneracy-normalized node-site CSR | implemented and native-gated | deterministic `int64` offsets and stable feature IDs projected from canonical nodes; six-node rectangle golden and malformed-order failures |
 | Canonical typed site catalog | implemented and native-gated | exact point/open-segment sites derived from Task 3 canonical rings; global ring encoding, endpoint ownership, symmetry, and hole-order invariance |
+| Catalog-fed segment-Delaunay source | implemented and native-gated | exact indexed lookup, one segment insertion pass, complete generator bijection, duplicate-geometry rejection, and immobile graph ownership |
 | Numeric node-site catalog mapping | implemented and native-gated | catalog-bound graph identities map once to `int64` rows; unknown identities fail loud; unified rectangle adoption pending |
 | Endpoint-feature CSR and public numeric table | pending | no public binding or complete certificate claim |
 | Exact neck evidence | pending | no production claim |
@@ -1380,7 +1432,11 @@ distinct named failures for malformed node or feature ordering. The canonical
 site-catalog gate independently locks Task 3 input reuse, point/open-segment
 kind codes, global outer/hole ring rows, exact endpoint ownership, rectangle
 rotation/reversal invariance, canonical hole reordering, numeric CSR lookup,
-the empty sentinel, and named unknown-site rejection.
+the empty sentinel, and named unknown-site rejection. The catalog-fed
+segment-Delaunay gate separately locks one-pass segment insertion, exact
+catalog/live-generator cardinality and identity, indexed lookup across two
+holes, input-symmetry invariance, unknown exact geometry, duplicate exact
+point geometry, and noncopyable/nonmovable graph ownership.
 
 The final Task 9 boundary must add the still-absent Python MAT binding test and
 then requires:
