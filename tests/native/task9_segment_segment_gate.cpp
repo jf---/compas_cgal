@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -92,6 +93,8 @@ bool nonparallel_segment_segment_producer_contract()
     std::size_t rejected_transition_edges = 0;
     std::size_t rejected_transition_segments = 0;
     std::size_t rejected_transition_parabolas = 0;
+    bool distinct_parent_transition_is_parabola = false;
+    bool self_transition_is_segment = false;
     for (auto edge = voronoi.dual().finite_edges_begin();
          edge != voronoi.dual().finite_edges_end();
          ++edge) {
@@ -173,6 +176,21 @@ bool nonparallel_segment_segment_producer_contract()
             || (!segment_matches
                 && !parabola_matches)) {
             return false;
+        }
+        if (pair_ids
+            == std::vector<std::string>{
+                "diagonal-segment",
+                "lower-right",
+            }) {
+            if (!parabola_matches || segment_matches) {
+                return false;
+            }
+            distinct_parent_transition_is_parabola = true;
+        } else {
+            if (!segment_matches || parabola_matches) {
+                return false;
+            }
+            self_transition_is_segment = true;
         }
         ++rejected_transition_edges;
         rejected_transition_segments += segment_matches;
@@ -256,6 +274,8 @@ bool nonparallel_segment_segment_producer_contract()
         && rejected_transition_edges == 2
         && rejected_transition_segments == 1
         && rejected_transition_parabolas == 1
+        && distinct_parent_transition_is_parabola
+        && self_transition_is_segment
         && normalized_segment_segment_edges == 2
         && matching_normalized_primitives == 1
         && composite_normalized_primitives == 1;
@@ -1803,7 +1823,9 @@ bool graphs_equal(
             || lhs.nodes[index].provenance_ids
                 != rhs.nodes[index].provenance_ids
             || lhs.nodes[index].generator_site_ids
-                != rhs.nodes[index].generator_site_ids) {
+                != rhs.nodes[index].generator_site_ids
+            || lhs.nodes[index].parent_site_ids
+                != rhs.nodes[index].parent_site_ids) {
             return false;
         }
     }
@@ -1820,6 +1842,10 @@ bool graphs_equal(
                 != rhs.edges[index].target_node_id
             || lhs.edges[index].generator_site_ids
                 != rhs.edges[index].generator_site_ids
+            || lhs.edges[index].parent_site_ids
+                != rhs.edges[index].parent_site_ids
+            || lhs.edges[index].original_dual_id
+                != rhs.edges[index].original_dual_id
             || !endpoints_equal(
                 lhs.edges[index].source_endpoint,
                 rhs.edges[index].source_endpoint)
@@ -2186,11 +2212,14 @@ bool segment_segment_production_graph_gate()
     }
     const MatExactGraphEdge2& edge = graph.edges.front();
     if (edge.primitive_kind != "LINE"
+        || edge.original_dual_id.empty()
         || edge.generator_site_ids
             != std::vector<std::string>{
                 "lower-segment",
                 "upper-segment",
             }
+        || edge.parent_site_ids
+            != edge.generator_site_ids
         || !edge.source_endpoint.parameter.has_value()
         || !edge.target_endpoint.parameter.has_value()) {
         return false;
@@ -2208,6 +2237,9 @@ bool segment_segment_production_graph_gate()
                 "lower-segment",
                 "upper-segment",
             });
+    if (edge.original_dual_id != dual_id) {
+        return false;
+    }
     std::vector<std::string> expected_source_provenance{
         "upper-left",
         algebraic_root_identity_v1(zero),
@@ -2246,6 +2278,170 @@ bool segment_segment_production_graph_gate()
             == expected_source_provenance
         && coincident_edge.target_endpoint.provenance_ids
             == expected_target_provenance;
+}
+
+bool nonparallel_segment_segment_production_graph_gate()
+{
+    bool negative_radius_rejected = false;
+    try {
+        static_cast<void>(
+            segment_site_nonparallel_segment_segment_graph_spike(-1));
+    } catch (const NegativeClearanceRadiusSquaredError&) {
+        negative_radius_rejected = true;
+    }
+    const MatExactGraph2 graph =
+        segment_site_nonparallel_segment_segment_graph_spike();
+    const MatExactGraph2 repeated =
+        segment_site_nonparallel_segment_segment_graph_spike();
+    const MatExactGraph2 reversed =
+        segment_site_reversed_nonparallel_segment_segment_graph_spike();
+    const MatExactGraph2 radius_one =
+        segment_site_nonparallel_segment_segment_graph_spike(1);
+    const std::vector<std::string> parent_sites{
+        "diagonal-segment",
+        "lower-segment",
+    };
+    const std::vector<std::string> segment_features{
+        "diagonal-segment",
+        "lower-segment",
+    };
+    const std::vector<std::string> parabola_features{
+        "diagonal-segment",
+        "lower-right",
+    };
+    const std::vector<std::string> transition_features{
+        "diagonal-segment",
+        "lower-right",
+        "lower-segment",
+    };
+    if (graph.edges.size() != 3
+        || graph.nodes.size() != 4
+        || graph.rejected_incident_transitions != 1
+        || graph.matched_generator_sites != 6
+        || !negative_radius_rejected
+        || !graphs_equal(graph, repeated)
+        || !graphs_equal(graph, reversed)) {
+        return false;
+    }
+
+    std::map<std::string, std::vector<std::string>>
+        primitive_kinds_by_dual;
+    std::map<std::string, std::size_t> node_degree;
+    std::map<std::string, std::size_t> edge_id_counts;
+    std::size_t parabola_count = 0;
+    std::size_t line_count = 0;
+    for (const MatExactGraphEdge2& edge : graph.edges) {
+        if (edge.parent_site_ids != parent_sites
+            || edge.original_dual_id.empty()
+            || ++edge_id_counts[edge.edge_id] != 1) {
+            return false;
+        }
+        if (edge.primitive_kind == "LINE") {
+            if (edge.generator_site_ids
+                != segment_features) {
+                return false;
+            }
+            ++line_count;
+        } else if (edge.primitive_kind == "PARABOLA") {
+            if (edge.generator_site_ids
+                != parabola_features) {
+                return false;
+            }
+            ++parabola_count;
+        } else {
+            return false;
+        }
+        primitive_kinds_by_dual[edge.original_dual_id]
+            .push_back(edge.primitive_kind);
+        ++node_degree[edge.source_node_id];
+        ++node_degree[edge.target_node_id];
+    }
+    if (line_count != 2 || parabola_count != 1
+        || primitive_kinds_by_dual.size() != 2) {
+        return false;
+    }
+
+    bool single_line_dual = false;
+    bool composite_line_parabola_dual = false;
+    for (auto& [dual_id, primitive_kinds] :
+         primitive_kinds_by_dual) {
+        if (dual_id.empty()) {
+            return false;
+        }
+        std::sort(
+            primitive_kinds.begin(),
+            primitive_kinds.end());
+        if (primitive_kinds
+            == std::vector<std::string>{"LINE"}) {
+            single_line_dual = true;
+        } else if (primitive_kinds
+                   == std::vector<std::string>{
+                       "LINE",
+                       "PARABOLA",
+                   }) {
+            composite_line_parabola_dual = true;
+        } else {
+            return false;
+        }
+    }
+    if (!single_line_dual
+        || !composite_line_parabola_dual) {
+        return false;
+    }
+
+    std::size_t internal_nodes = 0;
+    std::size_t terminal_nodes = 0;
+    for (const MatExactGraphNode2& node : graph.nodes) {
+        const auto degree = node_degree.find(node.node_id);
+        if (degree == node_degree.end()
+            || node.parent_site_ids != parent_sites) {
+            return false;
+        }
+        if (degree->second == 2) {
+            if (node.generator_site_ids
+                != transition_features) {
+                return false;
+            }
+            ++internal_nodes;
+        } else if (degree->second == 1) {
+            if (node.generator_site_ids
+                != segment_features) {
+                return false;
+            }
+            ++terminal_nodes;
+        } else {
+            return false;
+        }
+    }
+    if (internal_nodes != 2
+        || terminal_nodes != 2
+        || radius_one.edges.size() != 3
+        || radius_one.nodes.size() != 5
+        || radius_one.rejected_incident_transitions != 1
+        || radius_one.matched_generator_sites != 6) {
+        return false;
+    }
+    std::map<std::string, std::size_t> clipped_degree;
+    for (const MatExactGraphEdge2& edge :
+         radius_one.edges) {
+        if (edge.parent_site_ids != parent_sites) {
+            return false;
+        }
+        ++clipped_degree[edge.source_node_id];
+        ++clipped_degree[edge.target_node_id];
+    }
+    std::size_t clipped_internal = 0;
+    std::size_t clipped_terminal = 0;
+    for (const auto& [node_id, degree] :
+         clipped_degree) {
+        if (node_id.empty()) {
+            return false;
+        }
+        clipped_internal += degree == 2;
+        clipped_terminal += degree == 1;
+    }
+    return clipped_internal == 1
+        && clipped_terminal == 4;
 }
 
 } // namespace
@@ -2403,6 +2599,7 @@ bool segment_segment_producer_gate()
         return false;
     }
     return segment_segment_production_graph_gate()
+        && nonparallel_segment_segment_production_graph_gate()
         && nonparallel_segment_segment_producer_contract()
         && nonparallel_segment_charts_are_exact()
         && nonparallel_feature_parameters_are_exact()

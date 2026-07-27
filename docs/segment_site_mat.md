@@ -17,9 +17,12 @@ needed by every downstream traversal and engagement decision.
     live endpoints, and classifies constant clearance. Raw nonparallel
     segment/segment branches now have exact source-bound charts, strict
     feature intervals, rational quadratic clearance, and polygon-with-holes
-    clipping. Normalized nonparallel adjacency, externally limited
-    segment/segment cells, the unified segment-site traversal, neck evidence,
-    proposal sampling, and the Python binding are not complete.
+    clipping. A bounded normalized nonparallel slice now reconstructs a
+    two-branch adaptor cell from its exact raw S–S and P–S chain, preserves
+    separate primitive and parent ownership, and survives exact radius
+    clipping. Externally limited and general composite segment/segment cells,
+    the unified segment-site traversal, neck evidence, proposal sampling, and
+    the Python binding are not complete.
 
     Do not treat the current native spike APIs as the final public MAT API.
     The maturity table below is the claim boundary.
@@ -54,7 +57,7 @@ construction.
 | Dimension | Held–Pfeiffer 2025 | Exact-certified Phase 1 |
 | --- | --- | --- |
 | Pocket geometry | Segments and circular arcs; simply connected; machinability assumed after an `r + ε` transformation | Raw MAT primitives now clip exactly against polygonal domains with holes and exact radius clearance; unified `C_r` graph is incomplete; circular boundaries are not supported |
-| MAT backend | Vroni/ArcVroni used end-to-end | Exact CGAL point graph plus bounded P–S and parallel S–S production slices and exact raw nonparallel S–S cells with stable provenance; unified graph incomplete |
+| MAT backend | Vroni/ArcVroni used end-to-end | Exact CGAL point graph plus bounded P–S, parallel S–S, and normalized two-branch nonparallel S–S production slices with distinct raw-generator, parent-site, and branch provenance; unified graph incomplete |
 | Engagement limit | Analytic circle construction followed by bisection until `θmax − 0.001 <= θ <= θmax` radians | Exact rational chord surrogate and event-exact segment/full-circle certification; integration incomplete |
 | Candidate spacing | Bisection along the middle curve | Finite candidate lattice; no monotonic-feasibility assumption |
 | Machined state | Ordered contour of prior machining disks; transition sweeps omitted from that contour model | Exact stock mutation and exact full-sweep coverage, ordered certify-before-deplete |
@@ -418,10 +421,9 @@ classifications:
 
 Complete graph records are identical after reversing both segment endpoint
 orders. Horizontal, vertical, and rational diagonal charts have independent
-native goldens. Nonparallel S–S supports remain outside this completed slice:
-their raw exact primitives now have a canonical quadratic-field
-angle-bisector chart, while algebraic feature and limiter binding and graph
-emission remain incomplete.
+native goldens. Nonparallel S–S support requires a different production
+contract because one normalized adaptor halfedge can span more than one raw
+exact primitive; the bounded composite slice below exercises that contract.
 
 ### Nonparallel S–S branches have exact source-bound charts
 
@@ -632,9 +634,9 @@ raises `MismatchedNonparallelSegmentFeatureDomainError`.
     both exact retained intervals
     `[sqrt(2) - 4, sqrt(2) - 1]` and `[2, 2sqrt(2)]`.
 
-Normalized composite adjacency remains a separate pending contract.
+#### Normalized composite adjacency follows parent ownership
 
-!!! warning "A nonparallel generator pair has two branch identities"
+!!! warning "A rejected raw edge is not necessarily disposable"
 
     The exact producer fixture pairs a horizontal support of squared normal
     length `1` with a 45-degree support of squared normal length `2`. The
@@ -643,17 +645,72 @@ Normalized composite adjacency remains a separate pending contract.
     `Q(sqrt(2))` angle-bisector branch; they meet at the feature transition
     owned by `lower-right`. A generator-pair-only dual ID would collide, and
     the parallel slice's unique-halfedge rule would reject valid topology.
-    The nonparallel implementation must bind a canonical branch identity to
-    every original dual before graph emission.
+    The producer therefore binds a canonical signed-branch identity to every
+    normalized dual before graph emission.
 
     The same fixture also proves that `halfedge->dual()` is not invariably the
     complete geometric payload after degeneracy removal. One normalized
     halfedge reports adaptor endpoint `(8, 1 + sqrt(2))`, while its underlying
     exact primal segment ends at `(8, 1 - sqrt(2))`; the other branch retains
-    adaptor/primal equality. Nonparallel emission must resolve the adaptor's
-    underlying edge-chain semantics or traverse raw SDG primitives and rebuild
-    normalized adjacency. Substituting adaptor endpoints into the representative
-    primal curve is forbidden.
+    adaptor/primal equality. Substituting the adaptor endpoint into that
+    representative primal curve would fabricate geometry.
+
+The bounded production slice rebuilds the normalized adjacency from raw exact
+SDG primitives. A raw segment feature maps to its own parent segment; a raw
+endpoint point maps to every incident parent segment. Each raw feature pair is
+then classified before its reject bit is interpreted:
+
+1. a pair whose two features map to the same parent is a self-transition and
+   is discarded;
+2. a rejected P–S pair that maps to the two distinct target parents is retained
+   as part of the normalized branch;
+3. ownership that maps simultaneously to self and distinct parents, or to more
+   than one distinct parent pair, raises `AmbiguousCompositeSiteOwnerError`.
+
+For the native fixture, the parent sites are:
+
+```text
+lower-segment:    (-20, 0) -> (8, 0)
+diagonal-segment: (5, -4)  -> (20, 11)
+```
+
+The rejected `lower-right`/`lower-segment` LINE is a self-transition and is
+discarded. The rejected `lower-right`/`diagonal-segment` PARABOLA belongs to
+the distinct parent pair and is retained. The normalized result is therefore
+one single-LINE branch and one composite LINE–PARABOLA branch. Exactly one
+self-transition is reported as rejected.
+
+The graph keeps three identity layers because they answer different proof
+questions:
+
+| Record | Meaning |
+| --- | --- |
+| `generator_site_ids` | raw features that define this exact conic piece |
+| `parent_site_ids` | normalized open segments whose MAT adjacency this piece serves |
+| `original_dual_id` | stable signed-bisector branch shared by every piece of one normalized halfedge |
+
+The S–S and P–S pieces initially have different endpoint identities. Their
+transition is joined only after their exact CGAL endpoint values compare
+equal; the existing certificate node identities are then aliased and their
+raw-feature, parent-site, and event provenance is unioned. Coordinates prove
+incidence but never become a replacement node ID.
+
+At `r² = 0`, the native gate requires three edges and four nodes: two LINE
+pieces, one PARABOLA piece, two degree-two transition nodes, and two terminal
+nodes. At `r² = 1`, exact clearance clipping still emits three edges but splits
+the graph into five nodes, with one surviving shared transition and four
+terminals. Negative `r²` fails at the composite producer boundary before SDG
+construction. Repeated construction and reversal of both source segments
+must produce byte-for-byte equal graph records, including all three identity
+layers. Missing cells, ambiguous ownership, unsupported primitive variants,
+or a non-unique chain fail through named exceptions.
+
+!!! note "Current bounded claim"
+
+    This gate proves one two-cell, one-transition normalized nonparallel
+    topology with one admissible component per raw piece. It does not yet
+    prove unbounded cells, external limiters, multiple retained transitions,
+    arbitrary composite-chain length, or the unified pocket traversal.
 
 The following `Parabola_segment_2` APIs are visualization paths and are
 forbidden from proof decisions:
@@ -931,8 +988,9 @@ consumers, or evolution differ from graph orchestration.
 | Algebraic point/segment cell bounds | implemented | exact |
 | True-radius point/segment clearance | implemented and native-gated | exact for rational point-site sources; public binding pending |
 | Parallel segment/segment feature domains | implemented and native-gated | exact for positive-length overlap with feature-owned live endpoints |
-| Nonparallel segment/segment raw cells | implemented and native-gated | exact source-bound branches, feature intervals, algebraic endpoints, true-radius clipping, and polygon-with-holes clipping; normalized composite adjacency pending |
-| General segment/segment cells | pending | normalized composite nonparallel and externally limited cells have no production graph claim |
+| Nonparallel segment/segment raw cells | implemented and native-gated | exact source-bound branches, feature intervals, algebraic endpoints, true-radius clipping, and polygon-with-holes clipping |
+| Normalized nonparallel S–S composite fixture | implemented and native-gated | exact two-branch reconstruction; distinct raw-generator, parent-site, and normalized-dual identity; exact transition aliasing and radius clipping |
+| General segment/segment cells | pending | unbounded, externally limited, multi-transition, and arbitrary-length composite chains have no production graph claim |
 | Unified degeneracy-removal traversal | pending | no production claim |
 | Degeneracy-normalized feature CSR | pending | no production claim |
 | Exact neck evidence | pending | no production claim |
@@ -965,12 +1023,17 @@ strict feature-domain intersection, algebraic root identity, rational
 quadratic clearance, maximal feature/clearance components, and exact
 polygon-with-holes clipping. The same executable locks the full
 quadratic-field winding determinant and sign-preserving conjugate selection
-with analytic P–S and S–S endpoint goldens. These gates establish the bounded
-P–S, feature-owned parallel S–S, and raw nonparallel S–S algebra. They do not
-establish normalized composite nonparallel adjacency, externally limited S–S
-cells, degeneracy-normalized feature CSR, or the final unified traversal.
+with analytic P–S and S–S endpoint goldens. The normalized composite gate
+additionally proves parent-owned rejection classification, one retained raw
+P–S bridge, exact S–S/P–S node aliasing, stable signed-branch identity,
+positive-radius clipping, repeatability, and source-endpoint reversal
+invariance. These gates establish bounded P–S, feature-owned parallel S–S,
+raw nonparallel S–S algebra, and the bounded two-branch normalized fixture.
+They do not establish general or externally limited composite S–S cells,
+degeneracy-normalized feature CSR, or the final unified traversal.
 
-The final Task 9 boundary also requires:
+The final Task 9 boundary must add the still-absent Python MAT binding test and
+then requires:
 
 ```bash
 pixi run format-adaptive

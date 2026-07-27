@@ -99,6 +99,17 @@ MatParameterEndpoint2 bind_segment_limiter_parabola_endpoint(
     const SegmentSiteVoronoi2& voronoi,
     const SegmentSiteVoronoi2::Halfedge_handle& halfedge);
 
+MatParameterEndpoint2 bind_segment_limiter_parabola_endpoint(
+    const MatExactPointSiteSource2& focus,
+    const MatExactOpenSegmentSource2& segment,
+    const MatExactPointSiteSource2& segment_source,
+    const MatExactPointSiteSource2& segment_target,
+    const MatExactOpenSegmentSource2& limiter,
+    const MatExactPointSiteSource2& limiter_source,
+    const MatExactPointSiteSource2& limiter_target,
+    const SegmentSiteParabola2& live_parabola,
+    const MatTraits::Point_2& live_point);
+
 std::pair<MatParameterEndpoint2, MatParameterEndpoint2>
 bind_parallel_segment_segment_cell_endpoints(
     const RationalPrimitiveParameterization2& primitive,

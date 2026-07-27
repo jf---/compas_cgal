@@ -8,13 +8,38 @@ void append_exact_graph_components(
     MatExactGraph2& graph,
     std::map<std::string, std::size_t>& node_indices)
 {
+    append_exact_graph_components(
+        dual_id,
+        dual_id,
+        primitive_kind,
+        generator_ids,
+        generator_ids,
+        components,
+        graph,
+        node_indices);
+}
+
+void append_exact_graph_components(
+    const std::string& piece_dual_id,
+    const std::string& original_dual_id,
+    const std::string& primitive_kind,
+    const std::vector<std::string>& generator_ids,
+    const std::vector<std::string>& parent_site_ids,
+    const std::vector<MatAdmissibleComponent2>& components,
+    MatExactGraph2& graph,
+    std::map<std::string, std::size_t>& node_indices)
+{
     const auto append_node =
-        [&graph, &node_indices, &dual_id, &generator_ids](
+        [&graph,
+         &node_indices,
+         &piece_dual_id,
+         &generator_ids,
+         &parent_site_ids](
             const MatParameterEndpoint2& bound_endpoint)
         {
             const std::string node_id =
                 stable_endpoint_node_identity_v1(
-                    dual_id,
+                    piece_dual_id,
                     bound_endpoint);
             const auto existing = node_indices.find(node_id);
             if (existing != node_indices.end())
@@ -23,6 +48,10 @@ void append_exact_graph_components(
                     graph.nodes[existing->second]
                         .generator_site_ids,
                     generator_ids);
+                union_stable_ids(
+                    graph.nodes[existing->second]
+                        .parent_site_ids,
+                    parent_site_ids);
                 union_stable_ids(
                     graph.nodes[existing->second]
                         .provenance_ids,
@@ -37,6 +66,7 @@ void append_exact_graph_components(
                     node_id,
                     bound_endpoint.provenance_ids,
                     generator_ids,
+                    parent_site_ids,
                 });
             return node_id;
         };
@@ -55,11 +85,13 @@ void append_exact_graph_components(
             {
                 component.component_id,
                 primitive_kind,
+                original_dual_id,
                 source,
                 target,
                 source_endpoint,
                 target_endpoint,
                 generator_ids,
+                parent_site_ids,
             });
     }
 }

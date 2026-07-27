@@ -107,7 +107,9 @@ bool exact_graph_records_equal(
             || lhs_node.provenance_ids
                 != rhs_node.provenance_ids
             || lhs_node.generator_site_ids
-                != rhs_node.generator_site_ids) {
+                != rhs_node.generator_site_ids
+            || lhs_node.parent_site_ids
+                != rhs_node.parent_site_ids) {
             return false;
         }
     }
@@ -119,6 +121,8 @@ bool exact_graph_records_equal(
         const MatExactGraphEdge2& rhs_edge =
             rhs.edges[index];
         if (lhs_edge.edge_id != rhs_edge.edge_id
+            || lhs_edge.original_dual_id
+                != rhs_edge.original_dual_id
             || lhs_edge.primitive_kind
                 != rhs_edge.primitive_kind
             || lhs_edge.source_node_id
@@ -127,6 +131,8 @@ bool exact_graph_records_equal(
                 != rhs_edge.target_node_id
             || lhs_edge.generator_site_ids
                 != rhs_edge.generator_site_ids
+            || lhs_edge.parent_site_ids
+                != rhs_edge.parent_site_ids
             || !exact_endpoint_records_equal(
                 lhs_edge.source_endpoint,
                 rhs_edge.source_endpoint)

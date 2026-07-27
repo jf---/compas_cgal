@@ -44,6 +44,24 @@ public:
     using std::runtime_error::runtime_error;
 };
 
+class AmbiguousCompositeSiteOwnerError
+    : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
+
+class IncompleteCompositeSegmentChainError
+    : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
+
+class UnsupportedCompositeSegmentPrimitiveError
+    : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
+
 struct SegmentSiteMatCompileEvidence2 {
     bool delaunay_valid;
     std::size_t assigned_dual_primitives;
@@ -56,16 +74,19 @@ struct MatExactGraphNode2 {
     std::string node_id;
     std::vector<std::string> provenance_ids;
     std::vector<std::string> generator_site_ids;
+    std::vector<std::string> parent_site_ids;
 };
 
 struct MatExactGraphEdge2 {
     std::string edge_id;
     std::string primitive_kind;
+    std::string original_dual_id;
     std::string source_node_id;
     std::string target_node_id;
     MatParameterEndpoint2 source_endpoint;
     MatParameterEndpoint2 target_endpoint;
     std::vector<std::string> generator_site_ids;
+    std::vector<std::string> parent_site_ids;
 };
 
 struct MatExactGraph2 {
@@ -102,6 +123,16 @@ segment_site_segment_segment_graph_spike(
 
 MatExactGraph2
 segment_site_reversed_segment_segment_graph_spike();
+
+MatExactGraph2
+segment_site_nonparallel_segment_segment_graph_spike();
+
+MatExactGraph2
+segment_site_nonparallel_segment_segment_graph_spike(
+    const CORE::BigRat& radius_squared);
+
+MatExactGraph2
+segment_site_reversed_nonparallel_segment_segment_graph_spike();
 
 MatExactGraph2
 segment_site_disjoint_parallel_segment_graph_spike();
