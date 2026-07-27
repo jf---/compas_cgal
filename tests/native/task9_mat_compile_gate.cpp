@@ -19,6 +19,7 @@ bool site_catalog_gate();
 bool catalog_delaunay_gate();
 bool catalog_voronoi_gate();
 bool rational_sources_gate();
+bool indexed_endpoint_binding_gate();
 
 namespace {
 
@@ -1796,6 +1797,7 @@ int main()
             && catalog_delaunay_gate()
             && catalog_voronoi_gate()
             && rational_sources_gate()
+            && indexed_endpoint_binding_gate()
         ? EXIT_SUCCESS
         : EXIT_FAILURE;
 }

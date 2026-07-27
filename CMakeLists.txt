@@ -233,6 +233,7 @@ add_executable(task9_mat_compile_gate EXCLUDE_FROM_ALL
     tests/native/task9_catalog_delaunay_gate.cpp
     tests/native/task9_catalog_voronoi_gate.cpp
     tests/native/task9_rational_sources_gate.cpp
+    tests/native/task9_indexed_endpoint_binding_gate.cpp
     src/segment_site_mat.cpp
     src/segment_site_catalog.cpp
     src/segment_site_delaunay.cpp
