@@ -7,10 +7,15 @@
 #include <string>
 #include <vector>
 
+struct ClearanceRootEvent2 {
+    ExactAlgebraicKernel1::Algebraic_real_1 parameter;
+    std::string event_id;
+};
+
 struct ClearanceRootBoundary2 {
     std::optional<CGAL::Sign> constant_sign;
     std::vector<ExactAlgebraicInteger1> primitive_coefficients;
-    std::vector<ExactAlgebraicKernel1::Algebraic_real_1> roots;
+    std::vector<ClearanceRootEvent2> roots;
 };
 
 ClearanceRootBoundary2 point_clearance_boundary(

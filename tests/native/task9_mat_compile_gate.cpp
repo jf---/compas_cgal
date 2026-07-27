@@ -40,6 +40,17 @@ bool has_local_solution_identity(
         });
 }
 
+bool has_provenance_id(
+    const MatParameterEndpoint2& endpoint,
+    const std::string& provenance_id)
+{
+    return std::find(
+               endpoint.provenance_ids.begin(),
+               endpoint.provenance_ids.end(),
+               provenance_id)
+        != endpoint.provenance_ids.end();
+}
+
 bool parameter_domains_are_exact()
 {
     using Point = MatTraits::Point_2;
@@ -137,6 +148,8 @@ bool clearance_boundaries_are_exact()
     };
     const ClearanceRootBoundary2 clipped_line_boundary =
         point_clearance_boundary(clipped_line, 0, 0, 1);
+    const ClearanceRootBoundary2 tangent_boundary =
+        point_clearance_boundary(clipped_line, 0, 0, 0);
 
     const std::vector<MatAdmissibleComponent2> line_components =
         maximal_clearance_components(
@@ -290,10 +303,45 @@ bool clearance_boundaries_are_exact()
                 },
                 source_domain);
 
+    const bool filtered_root_ordinal_is_stable =
+        ray_boundary.roots.size() == 1
+        && ray_boundary.roots.front().event_id
+            == algebraic_root_id_v1(
+                {
+                    ExactAlgebraicInteger1(-1),
+                    ExactAlgebraicInteger1(0),
+                    ExactAlgebraicInteger1(1),
+                },
+                1);
+    const bool tangent_root_is_square_free =
+        tangent_boundary.primitive_coefficients
+            == std::vector<ExactAlgebraicInteger1>(
+                {
+                    ExactAlgebraicInteger1(0),
+                    ExactAlgebraicInteger1(0),
+                    ExactAlgebraicInteger1(1),
+                })
+        && tangent_boundary.roots.size() == 1
+        && tangent_boundary.roots.front().event_id
+            == algebraic_root_id_v1(
+                {
+                    ExactAlgebraicInteger1(0),
+                    ExactAlgebraicInteger1(1),
+                },
+                0);
+    if (!filtered_root_ordinal_is_stable) {
+        std::cerr
+            << "clearance root ordinal changed after domain filtering\n";
+    }
+    if (!tangent_root_is_square_free) {
+        std::cerr
+            << "tangent clearance root lacks square-free event identity\n";
+    }
     return line_boundary.roots.size() == 2
-        && ray_boundary.roots.size() == 1
+        && filtered_root_ordinal_is_stable
         && segment_boundary.roots.size() == 1
         && parabola_boundary.roots.size() == 2
+        && tangent_root_is_square_free
         && zero.constant_sign == CGAL::ZERO
         && positive.constant_sign == CGAL::POSITIVE
         && negative.constant_sign == CGAL::NEGATIVE
@@ -308,10 +356,12 @@ bool clearance_boundaries_are_exact()
         && clipped_line_components.back().upper.parameter.has_value()
         && clipped_line_components.front().component_id
             == "clipped-line-dual/component-0"
-        && has_reconstructible_root_id(
-            clipped_line_components.front().upper)
-        && has_reconstructible_root_id(
-            clipped_line_components.back().lower)
+        && has_provenance_id(
+            clipped_line_components.front().upper,
+            clipped_line_boundary.roots.front().event_id)
+        && has_provenance_id(
+            clipped_line_components.back().lower,
+            clipped_line_boundary.roots.back().event_id)
         && zero_components.size() == 1
         && positive_components.size() == 1
         && negative_components.empty()

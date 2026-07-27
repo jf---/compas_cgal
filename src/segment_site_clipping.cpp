@@ -362,6 +362,20 @@ source_parabola_domain_roots(
     return unique;
 }
 
+std::vector<ExactAlgebraicInteger1>
+canonical_polynomial_coefficients(
+    const ExactAlgebraicKernel1::Polynomial_1& polynomial)
+{
+    const int degree = CGAL::degree(polynomial);
+    std::vector<ExactAlgebraicInteger1> coefficients;
+    coefficients.reserve(
+        static_cast<std::size_t>(degree + 1));
+    for (int index = 0; index <= degree; ++index) {
+        coefficients.push_back(polynomial[index]);
+    }
+    return coefficients;
+}
+
 } // namespace
 
 ClearanceRootBoundary2 point_clearance_boundary(
@@ -410,24 +424,40 @@ ClearanceRootBoundary2 point_clearance_boundary(
             coefficients.begin(),
             coefficients.end());
     ExactAlgebraicKernel1 kernel;
+    const Polynomial square_free =
+        typename CGAL::Polynomial_traits_d<
+            Polynomial>::Canonicalize()(
+            kernel.make_square_free_1_object()(
+                polynomial));
+    const std::vector<ExactAlgebraicInteger1>
+        square_free_coefficients =
+            canonical_polynomial_coefficients(
+                square_free);
     std::vector<ExactAlgebraicKernel1::Algebraic_real_1>
         isolated_roots;
     kernel.solve_1_object()(
-        polynomial,
+        square_free,
         true,
         std::back_inserter(isolated_roots));
 
-    std::vector<ExactAlgebraicKernel1::Algebraic_real_1> roots;
-    std::copy_if(
-        isolated_roots.begin(),
-        isolated_roots.end(),
-        std::back_inserter(roots),
-        [&primitive, &kernel](const auto& root) {
-            return root_is_in_domain(
-                root,
+    std::vector<ClearanceRootEvent2> roots;
+    for (std::size_t ordinal = 0;
+         ordinal < isolated_roots.size();
+         ++ordinal) {
+        if (!root_is_in_domain(
+                isolated_roots[ordinal],
                 primitive,
-                kernel);
-        });
+                kernel)) {
+            continue;
+        }
+        roots.push_back(
+            {
+                isolated_roots[ordinal],
+                algebraic_root_id_v1(
+                    square_free_coefficients,
+                    ordinal),
+            });
+    }
     return {
         std::nullopt,
         coefficients,
@@ -488,9 +518,8 @@ maximal_clearance_components(
         append_root_endpoint(
             endpoints,
             upper,
-            boundary.roots[index],
-            algebraic_root_identity_v1(
-                boundary.roots[index]),
+            boundary.roots[index].parameter,
+            boundary.roots[index].event_id,
             kernel);
     }
     if (endpoints.front().endpoint.parameter.has_value()
@@ -657,10 +686,9 @@ clip_clearance_components_with_domain_roots(
         candidates.push_back(
             {
                 {
-                    boundary.roots[index],
+                    boundary.roots[index].parameter,
                     {
-                        algebraic_root_identity_v1(
-                            boundary.roots[index]),
+                        boundary.roots[index].event_id,
                     },
                 },
                 true,
