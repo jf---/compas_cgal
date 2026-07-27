@@ -31,9 +31,13 @@ needed by every downstream traversal and engagement decision.
     A bounded normalized nonparallel slice now reconstructs a two-branch
     adaptor cell from its exact raw S–S and P–S chain, preserves separate
     primitive and parent ownership, and survives exact radius clipping.
+    Canonical graph nodes now project once into deterministic `int64`
+    node-site CSR; the six-node rectangle golden locks offsets and flattened
+    stable feature order.
     General arbitrary-pocket traversal, externally limited and composite
-    segment/segment cells, feature CSR, neck evidence, proposal sampling, and
-    the Python binding are not complete.
+    segment/segment cells, endpoint-feature CSR, numeric site-provenance
+    indexing, neck evidence, proposal sampling, and the Python binding are not
+    complete.
 
     Do not treat the current native spike APIs as the final public MAT API.
     The maturity table below is the claim boundary.
@@ -1101,6 +1105,36 @@ generators and is not sufficient evidence.
     feature evidence. Node CSR must union all incident halfedges and exact
     coincident feature bounds.
 
+### Node-site CSR is a projection of canonical topology
+
+`node_site_csr` consumes the sorted `MatExactGraphNode2` records after adaptor
+incidence has already been normalized. It validates that node identities are
+strictly ordered and nonempty, and that every node's stable feature IDs are
+nonempty, unique, and strictly ordered. It then performs one flattening pass:
+
+```text
+node_site_offsets = [0, 3, 6, 9, 12, 15, 18]
+node_site_ids     = 18 stable feature identities
+```
+
+Those literals are native-gated for the six-node rectangle graph. An empty
+graph has the valid CSR sentinel `[0]`. Offsets are `int64`; overflow raises
+`MatNodeSiteCsrOverflowError`, while malformed node and site ordering raise
+`NonCanonicalMatGraphNodeOrderError` and
+`NonCanonicalMatNodeSiteOrderError`.
+
+!!! warning "Do not rebuild incidence during CSR export"
+
+    The difficult generator union belongs to the degeneracy-removal adaptor
+    traversal. CSR export must serialize those canonical node records, not
+    circulate CGAL halfedges again. Recomputing incidence during export would
+    create a second topology algorithm and could make certificate bytes
+    disagree with the edge graph they encode.
+
+This slice preserves stable string identities. The future public binding must
+map them exactly once through the canonical numeric `site_provenance` table;
+it may not derive integer IDs from iteration order.
+
 ## Failure anatomy: four cocircular point sites
 
 The square fixture
@@ -1185,6 +1219,7 @@ Refinement may change the number and position of samples. It must not change:
 | `segment_site_provenance.*` | stable site/root provenance and endpoint evidence |
 | `segment_site_endpoint_binding.*` | live parabola and bounded parallel/nonparallel S–S endpoint ownership |
 | `segment_site_graph_emission.*` | exact one-dimensional component projection and graph record emission |
+| `segment_site_graph_csr.*` | validated deterministic projection of canonical node-site provenance |
 | `segment_site_mat.*` | graph orchestration and canonical records |
 | `segment_site_neck.*` | exact local minima and separating cuts |
 | `segment_site_mat_sampling.*` | proposal-only samples |
@@ -1215,7 +1250,8 @@ consumers, or evolution differ from graph orchestration.
 | Unified rectangle segment-site graph | implemented and native-gated | one adaptor build; five S–S edges, six canonical nodes, eight authenticated rejected incident P–S rays; exact `r² = 0`, `1`, `4`, and `5` topology; complete-record reversal invariance |
 | General segment/segment cells | pending | unbounded, arbitrary externally limited, multi-transition, and arbitrary-length composite chains have no production graph claim |
 | General degeneracy-removal traversal | pending | the rectangle fixture is production-gated; arbitrary pockets and all primitive combinations have no production claim |
-| Degeneracy-normalized feature CSR | pending | no production claim |
+| Degeneracy-normalized node-site CSR | implemented and native-gated | deterministic `int64` offsets and stable feature IDs projected from canonical nodes; six-node rectangle golden and malformed-order failures |
+| Endpoint-feature CSR and numeric site table | pending | no public binding or complete certificate claim |
 | Exact neck evidence | pending | no production claim |
 | Proposal-only sampling | pending | no production claim |
 | Python fixed-tuple binding | pending | no public API claim |
@@ -1275,10 +1311,12 @@ parallel S–S, raw nonparallel S–S algebra, one externally
 open-segment-limited nonparallel rectangle cell, the bounded two-branch
 normalized fixture, and one unified rectangle graph. They do not establish
 general arbitrary-pocket traversal, externally limited composite S–S cells,
-or degeneracy-normalized feature CSR. A separate graph-emission contract
-retains an increasing algebraic interval, omits an equal-bound singleton, and
-raises `InvalidSegmentSiteGraphComponentError` for unbounded or reversed
-components.
+endpoint-feature CSR, or the numeric site-provenance table. A separate
+graph-emission contract retains an increasing algebraic interval, omits an
+equal-bound singleton, and raises `InvalidSegmentSiteGraphComponentError` for
+unbounded or reversed components. The node-site CSR gate separately locks the
+empty sentinel, `int64` offsets, hand-derived rectangle feature order, and
+distinct named failures for malformed node or feature ordering.
 
 The final Task 9 boundary must add the still-absent Python MAT binding test and
 then requires:
