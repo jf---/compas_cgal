@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <iostream>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -195,78 +196,6 @@ std::string graph_signature(const MatExactGraph2& graph)
     return signature;
 }
 
-std::size_t primitive_count(
-    const MatExactGraph2& graph,
-    const std::string& primitive_kind)
-{
-    return static_cast<std::size_t>(std::count_if(
-        graph.edges.begin(),
-        graph.edges.end(),
-        [&primitive_kind](
-            const MatExactGraphEdge2& edge)
-        {
-            return edge.primitive_kind
-                == primitive_kind;
-        }));
-}
-
-bool exact_topology(
-    const MatExactGraph2& graph,
-    const std::size_t lines,
-    const std::size_t rays,
-    const std::size_t segments)
-{
-    const std::size_t actual_lines =
-        primitive_count(graph, "LINE");
-    const std::size_t actual_rays =
-        primitive_count(graph, "RAY");
-    const std::size_t actual_segments =
-        primitive_count(graph, "SEGMENT");
-    const bool matches =
-        graph.edges.size() == lines + rays + segments
-        && actual_lines == lines
-        && actual_rays == rays
-        && actual_segments == segments;
-    if (!matches)
-    {
-        std::cerr
-            << "topology expected L/R/S "
-            << lines << "/" << rays << "/"
-            << segments << ", observed "
-            << actual_lines << "/" << actual_rays
-            << "/" << actual_segments
-            << ", total " << graph.edges.size()
-            << '\n';
-    }
-    return matches;
-}
-
-bool has_hole_endpoint_provenance(
-    const MatExactGraph2& graph)
-{
-    std::size_t count = 0;
-    for (const MatExactGraphEdge2& edge : graph.edges)
-    {
-        for (const MatParameterEndpoint2* endpoint :
-             {&edge.source_endpoint, &edge.target_endpoint})
-        {
-            if (std::any_of(
-                    endpoint->provenance_ids.begin(),
-                    endpoint->provenance_ids.end(),
-                    [](const std::string& provenance)
-                    {
-                        return provenance.find(
-                                   "/D-hole-0/")
-                            != std::string::npos;
-                    }))
-            {
-                ++count;
-            }
-        }
-    }
-    return count == 2;
-}
-
 bool edge_endpoint_is_bound(
     const MatParameterEndpoint2& endpoint)
 {
@@ -297,6 +226,156 @@ bool edge_bindings_are_exact(
                 && edge_endpoint_is_bound(
                        edge.target_endpoint);
         });
+}
+
+struct ExactEdgeGolden2
+{
+    std::string edge_id;
+    std::string primitive_kind;
+    std::vector<std::string> generator_site_ids;
+    CORE::BigRat source_parameter;
+    CORE::BigRat target_parameter;
+    std::string source_node_id;
+    std::string target_node_id;
+    std::vector<std::string> source_required_provenance_ids;
+    std::vector<std::string> target_required_provenance_ids;
+};
+
+std::string rational_root_identity(
+    const CORE::BigRat& parameter)
+{
+    ExactAlgebraicKernel1 kernel;
+    return algebraic_root_identity_v1(
+        kernel.construct_algebraic_real_1_object()(
+            parameter));
+}
+
+std::string parameter_node_identity(
+    const std::string& dual_id,
+    const CORE::BigRat& parameter)
+{
+    return dual_id + "/node/"
+        + rational_root_identity(parameter);
+}
+
+bool endpoint_matches_golden(
+    const MatParameterEndpoint2& endpoint,
+    const CORE::BigRat& parameter,
+    const std::vector<std::string>&
+        required_provenance_ids)
+{
+    if (!endpoint.parameter.has_value())
+    {
+        return false;
+    }
+    ExactAlgebraicKernel1 kernel;
+    const auto expected =
+        kernel.construct_algebraic_real_1_object()(
+            parameter);
+    const std::string root_id =
+        rational_root_identity(parameter);
+    const bool has_required_provenance =
+        std::all_of(
+            required_provenance_ids.begin(),
+            required_provenance_ids.end(),
+            [&endpoint](const std::string& provenance)
+            {
+                return std::find(
+                           endpoint.provenance_ids.begin(),
+                           endpoint.provenance_ids.end(),
+                           provenance)
+                    != endpoint.provenance_ids.end();
+            });
+    return kernel.compare_1_object()(
+               *endpoint.parameter,
+               expected)
+            == CGAL::EQUAL
+        && algebraic_root_identity_v1(
+               *endpoint.parameter)
+            == root_id
+        && std::find(
+               endpoint.provenance_ids.begin(),
+               endpoint.provenance_ids.end(),
+               root_id)
+            != endpoint.provenance_ids.end()
+        && has_required_provenance;
+}
+
+bool exact_edges_match_golden(
+    const MatExactGraph2& graph,
+    const std::size_t matched_generator_sites,
+    const std::vector<ExactEdgeGolden2>& expected)
+{
+    bool matches =
+        graph.edges.size() == expected.size()
+        && graph.matched_generator_sites
+            == matched_generator_sites
+        && graph.rejected_incident_transitions == 0;
+    std::set<std::string> expected_node_ids;
+    for (const ExactEdgeGolden2& golden : expected)
+    {
+        expected_node_ids.insert(golden.source_node_id);
+        expected_node_ids.insert(golden.target_node_id);
+        const auto edge = std::find_if(
+            graph.edges.begin(),
+            graph.edges.end(),
+            [&golden](const MatExactGraphEdge2& candidate)
+            {
+                return candidate.edge_id
+                    == golden.edge_id;
+            });
+        if (edge == graph.edges.end())
+        {
+            std::cerr
+                << "missing exact edge "
+                << golden.edge_id << '\n';
+            matches = false;
+            continue;
+        }
+        const bool edge_matches =
+            edge->primitive_kind
+                == golden.primitive_kind
+            && edge->generator_site_ids
+                == golden.generator_site_ids
+            && edge->source_node_id
+                == golden.source_node_id
+            && edge->target_node_id
+                == golden.target_node_id
+            && endpoint_matches_golden(
+                edge->source_endpoint,
+                golden.source_parameter,
+                golden.source_required_provenance_ids)
+            && endpoint_matches_golden(
+                edge->target_endpoint,
+                golden.target_parameter,
+                golden.target_required_provenance_ids);
+        if (!edge_matches)
+        {
+            std::cerr
+                << "exact edge mismatch "
+                << golden.edge_id << '\n'
+                << "  primitive: "
+                << edge->primitive_kind << '\n'
+                << "  source node: "
+                << edge->source_node_id << '\n'
+                << "  target node: "
+                << edge->target_node_id << '\n';
+            matches = false;
+        }
+    }
+    std::set<std::string> actual_node_ids;
+    for (const MatExactGraphNode2& node : graph.nodes)
+    {
+        actual_node_ids.insert(node.node_id);
+    }
+    if (actual_node_ids != expected_node_ids
+        || actual_node_ids.size() != graph.nodes.size())
+    {
+        std::cerr
+            << "exact node connectivity mismatch\n";
+        matches = false;
+    }
+    return matches;
 }
 
 bool bijection_audit_rejects_unmatched_site()
@@ -378,22 +457,39 @@ bool identity_helpers_reject_unordered_sites()
 
 bool analytic_two_site_line()
 {
-    return exact_topology(
+    const MatExactGraph2 graph =
         exact_point_site_graph(
             {
                 {"left", -2, 0},
                 {"right", 2, 0},
             },
             line_domain(),
-            0),
-        1,
-        0,
-        0);
+            0);
+    const std::string dual_id =
+        "mat-dual/v1/5:point/4:left/5:right";
+    return exact_edges_match_golden(
+        graph,
+        2,
+        {
+            {
+                dual_id + "/component-0",
+                "LINE",
+                {"left", "right"},
+                CORE::BigRat(-1),
+                CORE::BigRat(1),
+                parameter_node_identity(
+                    dual_id,
+                    CORE::BigRat(-1)),
+                parameter_node_identity(
+                    dual_id,
+                    CORE::BigRat(1)),
+            },
+        });
 }
 
 bool analytic_three_site_hull()
 {
-    return exact_topology(
+    const MatExactGraph2 graph =
         exact_point_site_graph(
             {
                 {"lower-left", -3, -2},
@@ -401,15 +497,58 @@ bool analytic_three_site_hull()
                 {"top", 0, 3},
             },
             production_domain(),
-            0),
-        0,
+            0);
+    const std::string lower_dual =
+        "mat-dual/v1/5:point/10:lower-left/11:lower-right";
+    const std::string left_top_dual =
+        "mat-dual/v1/5:point/10:lower-left/3:top";
+    const std::string right_top_dual =
+        "mat-dual/v1/5:point/11:lower-right/3:top";
+    const std::string circumcenter =
+        "voronoi-node/v1/10:lower-left/11:lower-right/3:top";
+    return exact_edges_match_golden(
+        graph,
         3,
-        0);
+        {
+            {
+                lower_dual + "/component-0",
+                "RAY",
+                {"lower-left", "lower-right"},
+                CORE::BigRat(-1),
+                CORE::BigRat(4, 15),
+                parameter_node_identity(
+                    lower_dual,
+                    CORE::BigRat(-1)),
+                circumcenter,
+            },
+            {
+                left_top_dual + "/component-0",
+                "RAY",
+                {"lower-left", "top"},
+                CORE::BigRat(-3, 10),
+                CORE::BigRat(13, 10),
+                circumcenter,
+                parameter_node_identity(
+                    left_top_dual,
+                    CORE::BigRat(13, 10)),
+            },
+            {
+                right_top_dual + "/component-0",
+                "RAY",
+                {"lower-right", "top"},
+                CORE::BigRat(-13, 10),
+                CORE::BigRat(3, 10),
+                parameter_node_identity(
+                    right_top_dual,
+                    CORE::BigRat(-13, 10)),
+                circumcenter,
+            },
+        });
 }
 
 bool analytic_interior_site()
 {
-    return exact_topology(
+    const MatExactGraph2 graph =
         exact_point_site_graph(
             {
                 {"lower-left", -4, -3},
@@ -418,15 +557,95 @@ bool analytic_interior_site()
                 {"interior", 0, 0},
             },
             production_domain(),
-            0),
-        0,
-        3,
-        3);
+            0);
+    const std::string lower_dual =
+        "mat-dual/v1/5:point/10:lower-left/11:lower-right";
+    const std::string left_top_dual =
+        "mat-dual/v1/5:point/10:lower-left/3:top";
+    const std::string right_top_dual =
+        "mat-dual/v1/5:point/11:lower-right/3:top";
+    const std::string interior_left_dual =
+        "mat-dual/v1/5:point/8:interior/10:lower-left";
+    const std::string interior_right_dual =
+        "mat-dual/v1/5:point/8:interior/11:lower-right";
+    const std::string interior_top_dual =
+        "mat-dual/v1/5:point/8:interior/3:top";
+    const std::string lower_node =
+        "voronoi-node/v1/8:interior/10:lower-left/11:lower-right";
+    const std::string left_node =
+        "voronoi-node/v1/8:interior/10:lower-left/3:top";
+    const std::string right_node =
+        "voronoi-node/v1/8:interior/11:lower-right/3:top";
+    return exact_edges_match_golden(
+        graph,
+        4,
+        {
+            {
+                lower_dual + "/component-0",
+                "RAY",
+                {"lower-left", "lower-right"},
+                CORE::BigRat(-5, 8),
+                CORE::BigRat(-7, 48),
+                parameter_node_identity(
+                    lower_dual,
+                    CORE::BigRat(-5, 8)),
+                lower_node,
+            },
+            {
+                left_top_dual + "/component-0",
+                "RAY",
+                {"lower-left", "top"},
+                CORE::BigRat(3, 8),
+                CORE::BigRat(3, 4),
+                left_node,
+                parameter_node_identity(
+                    left_top_dual,
+                    CORE::BigRat(3, 4)),
+            },
+            {
+                right_top_dual + "/component-0",
+                "RAY",
+                {"lower-right", "top"},
+                CORE::BigRat(-3, 4),
+                CORE::BigRat(-3, 8),
+                parameter_node_identity(
+                    right_top_dual,
+                    CORE::BigRat(-3, 4)),
+                right_node,
+            },
+            {
+                interior_left_dual + "/component-0",
+                "SEGMENT",
+                {"interior", "lower-left"},
+                CORE::BigRat(-1),
+                CORE::BigRat(2, 3),
+                left_node,
+                lower_node,
+            },
+            {
+                interior_right_dual + "/component-0",
+                "SEGMENT",
+                {"interior", "lower-right"},
+                CORE::BigRat(-2, 3),
+                CORE::BigRat(1),
+                lower_node,
+                right_node,
+            },
+            {
+                interior_top_dual + "/component-0",
+                "SEGMENT",
+                {"interior", "top"},
+                CORE::BigRat(-1),
+                CORE::BigRat(1),
+                right_node,
+                left_node,
+            },
+        });
 }
 
 bool analytic_collinear_sites()
 {
-    return exact_topology(
+    const MatExactGraph2 graph =
         exact_point_site_graph(
             {
                 {"left", -3, 0},
@@ -434,10 +653,42 @@ bool analytic_collinear_sites()
                 {"right", 4, 0},
             },
             line_domain(),
-            0),
-        2,
-        0,
-        0);
+            0);
+    const std::string left_dual =
+        "mat-dual/v1/5:point/4:left/6:middle";
+    const std::string right_dual =
+        "mat-dual/v1/5:point/6:middle/5:right";
+    return exact_edges_match_golden(
+        graph,
+        3,
+        {
+            {
+                left_dual + "/component-0",
+                "LINE",
+                {"left", "middle"},
+                CORE::BigRat(-4, 3),
+                CORE::BigRat(4, 3),
+                parameter_node_identity(
+                    left_dual,
+                    CORE::BigRat(-4, 3)),
+                parameter_node_identity(
+                    left_dual,
+                    CORE::BigRat(4, 3)),
+            },
+            {
+                right_dual + "/component-0",
+                "LINE",
+                {"middle", "right"},
+                CORE::BigRat(-1),
+                CORE::BigRat(1),
+                parameter_node_identity(
+                    right_dual,
+                    CORE::BigRat(-1)),
+                parameter_node_identity(
+                    right_dual,
+                    CORE::BigRat(1)),
+            },
+        });
 }
 
 bool analytic_hole_splits_unbounded_line()
@@ -450,9 +701,43 @@ bool analytic_hole_splits_unbounded_line()
             },
             line_domain_with_hole(),
             0);
-    return exact_topology(graph, 2, 0, 0)
-        && graph.nodes.size() == 4
-        && has_hole_endpoint_provenance(graph);
+    const std::string dual_id =
+        "mat-dual/v1/5:point/4:left/5:right";
+    return exact_edges_match_golden(
+        graph,
+        2,
+        {
+            {
+                dual_id + "/component-0",
+                "LINE",
+                {"left", "right"},
+                CORE::BigRat(-1),
+                CORE::BigRat(-1, 4),
+                parameter_node_identity(
+                    dual_id,
+                    CORE::BigRat(-1)),
+                parameter_node_identity(
+                    dual_id,
+                    CORE::BigRat(-1, 4)),
+                {dual_id + "/D-outer/edge-0"},
+                {dual_id + "/D-hole-0/edge-3"},
+            },
+            {
+                dual_id + "/component-1",
+                "LINE",
+                {"left", "right"},
+                CORE::BigRat(1, 4),
+                CORE::BigRat(1),
+                parameter_node_identity(
+                    dual_id,
+                    CORE::BigRat(1, 4)),
+                parameter_node_identity(
+                    dual_id,
+                    CORE::BigRat(1)),
+                {dual_id + "/D-hole-0/edge-1"},
+                {dual_id + "/D-outer/edge-2"},
+            },
+        });
 }
 
 bool analytic_radius_clipping()
@@ -471,10 +756,63 @@ bool analytic_radius_clipping()
             points,
             line_domain(),
             4);
-    return exact_topology(split, 2, 0, 0)
-        && split.nodes.size() == 4
-        && exact_topology(tangent, 1, 0, 0)
-        && tangent.nodes.size() == 2;
+    const std::string dual_id =
+        "mat-dual/v1/5:point/4:left/5:right";
+    return exact_edges_match_golden(
+               split,
+               2,
+               {
+                   {
+                       dual_id + "/component-0",
+                       "LINE",
+                       {"left", "right"},
+                       CORE::BigRat(-1),
+                       CORE::BigRat(-1, 4),
+                       parameter_node_identity(
+                           dual_id,
+                           CORE::BigRat(-1)),
+                       parameter_node_identity(
+                           dual_id,
+                           CORE::BigRat(-1, 4)),
+                       {dual_id + "/D-outer/edge-0"},
+                       {},
+                   },
+                   {
+                       dual_id + "/component-1",
+                       "LINE",
+                       {"left", "right"},
+                       CORE::BigRat(1, 4),
+                       CORE::BigRat(1),
+                       parameter_node_identity(
+                           dual_id,
+                           CORE::BigRat(1, 4)),
+                       parameter_node_identity(
+                           dual_id,
+                           CORE::BigRat(1)),
+                       {},
+                       {dual_id + "/D-outer/edge-2"},
+                   },
+               })
+        && exact_edges_match_golden(
+               tangent,
+               2,
+               {
+                   {
+                       dual_id + "/component-0",
+                       "LINE",
+                       {"left", "right"},
+                       CORE::BigRat(-1),
+                       CORE::BigRat(1),
+                       parameter_node_identity(
+                           dual_id,
+                           CORE::BigRat(-1)),
+                       parameter_node_identity(
+                           dual_id,
+                           CORE::BigRat(1)),
+                       {dual_id + "/D-outer/edge-0"},
+                       {dual_id + "/D-outer/edge-2"},
+                   },
+               });
 }
 
 } // namespace
@@ -570,27 +908,27 @@ bool point_graph_production_gate()
         && valid;
     valid = require_contract(
                 analytic_two_site_line(),
-                "two sites yield one line")
+                "two-site exact line golden")
         && valid;
     valid = require_contract(
                 analytic_three_site_hull(),
-                "three hull sites yield three rays")
+                "three-site ray and circumcenter goldens")
         && valid;
     valid = require_contract(
                 analytic_interior_site(),
-                "interior site yields three rays and three segments")
+                "interior-site exact connectivity golden")
         && valid;
     valid = require_contract(
                 analytic_collinear_sites(),
-                "three collinear sites yield two lines")
+                "collinear dimension-one exact goldens")
         && valid;
     valid = require_contract(
                 analytic_hole_splits_unbounded_line(),
-                "hole splits an unbounded line")
+                "hole split roots and provenance goldens")
         && valid;
     valid = require_contract(
                 analytic_radius_clipping(),
-                "exact radius clipping preserves tangent equality")
+                "clearance split and tangent goldens")
         && valid;
     valid = require_contract(
                 throws_named<DuplicatePointSiteIdentityError>(
