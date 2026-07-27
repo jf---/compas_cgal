@@ -91,6 +91,41 @@ public:
     using std::runtime_error::runtime_error;
 };
 
+class MismatchedLiveNonparallelSegmentBridgeError
+    : public std::runtime_error
+{
+public:
+    using std::runtime_error::runtime_error;
+};
+
+class UnboundLiveNonparallelSegmentEndpointError
+    : public std::runtime_error
+{
+public:
+    using std::runtime_error::runtime_error;
+};
+
+class UnsupportedNonparallelSegmentLimiterError
+    : public std::runtime_error
+{
+public:
+    using std::runtime_error::runtime_error;
+};
+
+class AmbiguousNonparallelSegmentOpenLimiterError
+    : public std::runtime_error
+{
+public:
+    using std::runtime_error::runtime_error;
+};
+
+class IdenticallyZeroNonparallelSegmentLimiterEquationError
+    : public std::runtime_error
+{
+public:
+    using std::runtime_error::runtime_error;
+};
+
 bool exact_open_segment_feature_contains(
     const SourceParabolaParameterization2& parabola,
     const MatExactPointSiteSource2& segment_source,
@@ -136,6 +171,18 @@ bind_parallel_segment_segment_cell_endpoints(
     const RationalPrimitiveParameterization2& primitive,
     const RationalDomainRoot2& lower,
     const RationalDomainRoot2& upper,
+    const std::vector<std::string>& generator_ids,
+    const std::vector<GeneratorSite2>& generators,
+    const SegmentSiteVoronoi2& voronoi,
+    const SegmentSiteVoronoi2::Halfedge_handle& halfedge);
+
+std::pair<MatParameterEndpoint2, MatParameterEndpoint2>
+bind_nonparallel_segment_segment_cell_endpoints(
+    const NonparallelSegmentBisectorParameterization2& primitive,
+    const NonparallelSegmentFeatureDomain2& feature_domain,
+    const MatExactOpenSegmentSource2& first_segment,
+    const MatExactOpenSegmentSource2& second_segment,
+    const std::vector<MatExactOpenSegmentSource2>& segment_limiters,
     const std::vector<std::string>& generator_ids,
     const std::vector<GeneratorSite2>& generators,
     const SegmentSiteVoronoi2& voronoi,
