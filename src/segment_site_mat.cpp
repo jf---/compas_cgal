@@ -988,6 +988,275 @@ void append_point_segment_graph(
     }
 }
 
+struct ParallelSegmentFeatureCell2 {
+    RationalPrimitiveParameterization2 primitive;
+    RationalDomainRoot2 lower;
+    RationalDomainRoot2 upper;
+};
+
+ParallelSegmentFeatureCell2 parallel_segment_feature_cell(
+    const MatExactOpenSegmentSource2& first,
+    const NormalizedOpenSegmentSource2& first_record,
+    const MatExactOpenSegmentSource2& second,
+    const NormalizedOpenSegmentSource2& second_record,
+    const std::vector<NormalizedPointSource2>& points)
+{
+    RationalPrimitiveParameterization2 primitive =
+        parallel_segment_bisector_parameterization(
+            first,
+            second);
+    struct SourceEndpointParameter2 {
+        CORE::BigRat parameter;
+        std::string stable_id;
+        std::string segment_id;
+    };
+    const auto endpoint_parameter =
+        [&primitive, &points](
+            const std::string& endpoint_id,
+            const std::string& segment_id) {
+            const NormalizedPointSource2& endpoint =
+                point_source(points, endpoint_id);
+            return SourceEndpointParameter2{
+                parallel_segment_tangent_parameter(
+                    primitive,
+                    endpoint.x,
+                    endpoint.y),
+                endpoint.stable_site_id,
+                segment_id,
+            };
+        };
+    std::vector<SourceEndpointParameter2> endpoints{
+        endpoint_parameter(
+            first_record.source_point_id,
+            first_record.stable_site_id),
+        endpoint_parameter(
+            first_record.target_point_id,
+            first_record.stable_site_id),
+        endpoint_parameter(
+            second_record.source_point_id,
+            second_record.stable_site_id),
+        endpoint_parameter(
+            second_record.target_point_id,
+            second_record.stable_site_id),
+    };
+    const auto segment_bounds =
+        [&endpoints](const std::string& segment_id) {
+            std::vector<CORE::BigRat> values;
+            for (const SourceEndpointParameter2& endpoint :
+                 endpoints) {
+                if (endpoint.segment_id == segment_id) {
+                    values.push_back(endpoint.parameter);
+                }
+            }
+            if (values.size() != 2) {
+                throw InvalidRationalPrimitiveError(
+                    "parallel S-S source has incomplete endpoints");
+            }
+            if (values[1] < values[0]) {
+                std::swap(values[0], values[1]);
+            }
+            return std::pair<CORE::BigRat, CORE::BigRat>{
+                values[0],
+                values[1],
+            };
+        };
+    const auto first_bounds =
+        segment_bounds(first_record.stable_site_id);
+    const auto second_bounds =
+        segment_bounds(second_record.stable_site_id);
+    const CORE::BigRat lower =
+        std::max(first_bounds.first, second_bounds.first);
+    const CORE::BigRat upper =
+        std::min(first_bounds.second, second_bounds.second);
+    if (lower >= upper) {
+        throw EmptyParallelSegmentFeatureDomainError(
+            "parallel open segments have no positive-length overlap");
+    }
+    const auto provenance_at =
+        [&endpoints](const CORE::BigRat& parameter) {
+            std::vector<std::string> provenance;
+            for (const SourceEndpointParameter2& endpoint :
+                 endpoints) {
+                if (endpoint.parameter == parameter) {
+                    provenance.push_back(endpoint.stable_id);
+                }
+            }
+            union_stable_ids(provenance, {});
+            return provenance;
+        };
+    primitive.domain_lower = lower;
+    primitive.domain_upper = upper;
+    return {
+        std::move(primitive),
+        {
+            lower,
+            provenance_at(lower),
+        },
+        {
+            upper,
+            provenance_at(upper),
+        },
+    };
+}
+
+void append_parallel_segment_segment_graph(
+    const std::vector<NormalizedPointSource2>& points,
+    const std::vector<NormalizedOpenSegmentSource2>& segments,
+    const std::string& first_segment_id,
+    const std::string& second_segment_id,
+    const MatDomainPolygonWithHoles2& domain,
+    const CORE::BigRat& radius_squared,
+    MatExactGraph2& graph,
+    std::map<std::string, std::size_t>& node_indices)
+{
+    const std::vector<std::string> generator_ids =
+        ordered_generator_site_ids(
+            first_segment_id,
+            second_segment_id);
+    const NormalizedOpenSegmentSource2& first_record =
+        normalized_segment_source(
+            segments,
+            generator_ids[0]);
+    const NormalizedOpenSegmentSource2& second_record =
+        normalized_segment_source(
+            segments,
+            generator_ids[1]);
+    const MatExactOpenSegmentSource2 first =
+        exact_segment_source(first_record, points);
+    const MatExactOpenSegmentSource2 second =
+        exact_segment_source(second_record, points);
+    const ParallelSegmentFeatureCell2 feature =
+        parallel_segment_feature_cell(
+            first,
+            first_record,
+            second,
+            second_record,
+            points);
+
+    std::vector<GeneratorSite2> generators;
+    generators.reserve(points.size() + segments.size());
+    for (const NormalizedPointSource2& point : points) {
+        generators.push_back(
+            {
+                point.stable_site_id,
+                MatTraits::Site_2::construct_site_2(
+                    MatTraits::Point_2(point.x, point.y)),
+            });
+    }
+    for (const NormalizedOpenSegmentSource2& segment :
+         segments) {
+        const NormalizedPointSource2& source =
+            point_source(points, segment.source_point_id);
+        const NormalizedPointSource2& target =
+            point_source(points, segment.target_point_id);
+        generators.push_back(
+            {
+                segment.stable_site_id,
+                MatTraits::Site_2::construct_site_2(
+                    MatTraits::Point_2(source.x, source.y),
+                    MatTraits::Point_2(target.x, target.y)),
+            });
+    }
+
+    SegmentSiteDelaunay2 delaunay;
+    for (const NormalizedOpenSegmentSource2& segment :
+         segments) {
+        const NormalizedPointSource2& source =
+            point_source(points, segment.source_point_id);
+        const NormalizedPointSource2& target =
+            point_source(points, segment.target_point_id);
+        delaunay.insert(
+            MatTraits::Point_2(source.x, source.y),
+            MatTraits::Point_2(target.x, target.y));
+    }
+    for (const NormalizedPointSource2& point : points) {
+        const bool is_segment_endpoint =
+            std::any_of(
+                segments.begin(),
+                segments.end(),
+                [&point](
+                    const NormalizedOpenSegmentSource2& segment) {
+                    return point.stable_site_id
+                            == segment.source_point_id
+                        || point.stable_site_id
+                            == segment.target_point_id;
+                });
+        if (!is_segment_endpoint) {
+            delaunay.insert(
+                MatTraits::Point_2(point.x, point.y));
+        }
+    }
+    const std::size_t matched_generator_sites =
+        require_generator_site_bijection(
+            delaunay,
+            generators);
+    SegmentSiteVoronoi2 voronoi(delaunay);
+    const ClearanceRootBoundary2 boundary =
+        parallel_segment_clearance_boundary(
+            feature.primitive,
+            first,
+            second,
+            radius_squared);
+    const std::string dual_id =
+        stable_dual_identity_v1(
+            "segment-segment",
+            generator_ids);
+
+    std::vector<SegmentSiteVoronoi2::Halfedge_handle>
+        matching_halfedges;
+    for (auto halfedge = voronoi.halfedges_begin();
+         halfedge != voronoi.halfedges_end();
+         ++halfedge) {
+        const MatTraits::Site_2 up =
+            halfedge->up()->site();
+        const MatTraits::Site_2 down =
+            halfedge->down()->site();
+        if (!up.is_segment() || !down.is_segment()) {
+            continue;
+        }
+        const std::string up_id =
+            stable_generator_site_id(up, generators);
+        const std::string down_id =
+            stable_generator_site_id(down, generators);
+        if (ordered_generator_site_ids(up_id, down_id)
+                != generator_ids
+            || up_id != generator_ids.front()) {
+            continue;
+        }
+        matching_halfedges.push_back(halfedge);
+    }
+    if (matching_halfedges.size() != 1) {
+        throw UnboundLiveSegmentSegmentEndpointError(
+            "parallel S-S graph has no unique canonical halfedge");
+    }
+    const auto owned_endpoints =
+        bind_parallel_segment_segment_cell_endpoints(
+            feature.primitive,
+            feature.lower,
+            feature.upper,
+            generator_ids,
+            generators,
+            voronoi,
+            matching_halfedges.front());
+    std::vector<MatAdmissibleComponent2> components =
+        clip_owned_linear_clearance_components(
+            dual_id,
+            feature.primitive,
+            owned_endpoints.first,
+            owned_endpoints.second,
+            boundary,
+            domain);
+    graph.matched_generator_sites +=
+        matched_generator_sites;
+    append_exact_graph_components(
+        dual_id,
+        "LINE",
+        generator_ids,
+        components,
+        graph,
+        node_indices);
+}
+
 } // namespace
 
 MatExactGraph2 exact_point_site_graph(
@@ -1249,4 +1518,141 @@ MatExactGraph2
 segment_site_reversed_source_graph_spike()
 {
     return segment_site_generic_graph_spike_impl(true);
+}
+
+namespace {
+
+MatDomainPolygonWithHoles2 segment_segment_spike_domain(
+    const CORE::BigRat& lower_x,
+    const CORE::BigRat& upper_x)
+{
+    MatDomainPolygon2 outer;
+    outer.push_back({lower_x, -1});
+    outer.push_back({upper_x, -1});
+    outer.push_back({upper_x, 4});
+    outer.push_back({lower_x, 4});
+    return MatDomainPolygonWithHoles2(outer);
+}
+
+MatExactGraph2 segment_segment_graph_spike_impl(
+    const bool reverse_segment_endpoints,
+    const CORE::BigRat& radius_squared,
+    const bool disjoint_features,
+    const NormalizedPointSource2& limiter,
+    const MatDomainPolygonWithHoles2& domain)
+{
+    MatExactGraph2 graph{{}, {}, 0, 0};
+    std::map<std::string, std::size_t> node_indices;
+    append_parallel_segment_segment_graph(
+        {
+            {
+                "lower-left",
+                disjoint_features ? -4 : -2,
+                0,
+            },
+            {
+                "lower-right",
+                disjoint_features ? -2 : 6,
+                0,
+            },
+            {"upper-left", 0, 3},
+            {"upper-right", 4, 3},
+            limiter,
+        },
+        {
+            {
+                "lower-segment",
+                reverse_segment_endpoints
+                    ? "lower-right"
+                    : "lower-left",
+                reverse_segment_endpoints
+                    ? "lower-left"
+                    : "lower-right",
+            },
+            {
+                "upper-segment",
+                reverse_segment_endpoints
+                    ? "upper-right"
+                    : "upper-left",
+                reverse_segment_endpoints
+                    ? "upper-left"
+                    : "upper-right",
+            },
+        },
+        "lower-segment",
+        "upper-segment",
+        domain,
+        radius_squared,
+        graph,
+        node_indices);
+    return graph;
+}
+
+} // namespace
+
+MatExactGraph2
+segment_site_segment_segment_graph_spike()
+{
+    return segment_site_segment_segment_graph_spike(
+        CORE::BigRat(9, 4));
+}
+
+MatExactGraph2
+segment_site_segment_segment_graph_spike(
+    const CORE::BigRat& radius_squared)
+{
+    return segment_segment_graph_spike_impl(
+        false,
+        radius_squared,
+        false,
+        {"limiter", 6, 1},
+        segment_segment_spike_domain(-1, 5));
+}
+
+MatExactGraph2
+segment_site_reversed_segment_segment_graph_spike()
+{
+    return segment_segment_graph_spike_impl(
+        true,
+        CORE::BigRat(9, 4),
+        false,
+        {"limiter", 6, 1},
+        segment_segment_spike_domain(-1, 5));
+}
+
+MatExactGraph2
+segment_site_disjoint_parallel_segment_graph_spike()
+{
+    return segment_segment_graph_spike_impl(
+        false,
+        CORE::BigRat(9, 4),
+        true,
+        {"limiter", 6, 1},
+        segment_segment_spike_domain(-1, 5));
+}
+
+MatExactGraph2
+segment_site_external_limited_parallel_segment_graph_spike()
+{
+    return segment_segment_graph_spike_impl(
+        false,
+        CORE::BigRat(9, 4),
+        false,
+        {
+            "external-limiter",
+            5,
+            CORE::BigRat(3, 2),
+        },
+        segment_segment_spike_domain(-1, 5));
+}
+
+MatExactGraph2
+segment_site_domain_coincident_parallel_segment_graph_spike()
+{
+    return segment_segment_graph_spike_impl(
+        false,
+        CORE::BigRat(9, 4),
+        false,
+        {"limiter", 6, 1},
+        segment_segment_spike_domain(0, 4));
 }

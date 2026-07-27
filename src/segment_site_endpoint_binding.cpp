@@ -8,6 +8,7 @@
 
 #include <CGAL/CORE/poly/Poly.h>
 #include <CGAL/Fraction_traits.h>
+#include <CGAL/Object.h>
 #include <CGAL/Polynomial_traits_d.h>
 #include <CGAL/number_utils.h>
 
@@ -992,4 +993,161 @@ MatParameterEndpoint2 bind_segment_limiter_parabola_endpoint(
             + " point matches");
     }
     return std::move(matches.front());
+}
+
+std::pair<MatParameterEndpoint2, MatParameterEndpoint2>
+bind_parallel_segment_segment_cell_endpoints(
+    const RationalPrimitiveParameterization2& primitive,
+    const RationalDomainRoot2& lower,
+    const RationalDomainRoot2& upper,
+    const std::vector<std::string>& generator_ids,
+    const std::vector<GeneratorSite2>& generators,
+    const SegmentSiteVoronoi2& voronoi,
+    const SegmentSiteVoronoi2::Halfedge_handle& halfedge)
+{
+    if (generator_ids.size() != 2
+        || ordered_generator_site_ids(
+               stable_generator_site_id(
+                   halfedge->up()->site(),
+                   generators),
+               stable_generator_site_id(
+                   halfedge->down()->site(),
+                   generators))
+            != generator_ids) {
+        throw MismatchedLiveSegmentSegmentBridgeError(
+            "parallel S-S source records do not match live generators");
+    }
+    if (!halfedge->has_source()
+        || !halfedge->has_target()) {
+        throw UnboundLiveSegmentSegmentEndpointError(
+            "parallel S-S halfedge is not bounded");
+    }
+    if (lower.parameter >= upper.parameter
+        || primitive.domain_lower != lower.parameter
+        || primitive.domain_upper != upper.parameter) {
+        throw MismatchedLiveSegmentSegmentBridgeError(
+            "parallel S-S feature domain is inconsistent");
+    }
+    if (lower.provenance_ids.empty()
+        || upper.provenance_ids.empty()) {
+        throw UnboundLiveSegmentSegmentEndpointError(
+            "parallel S-S feature endpoint provenance is empty");
+    }
+
+    const auto evaluate =
+        [&primitive](const CORE::BigRat& parameter) {
+            return MatTraits::Point_2(
+                evaluate_rational_polynomial(
+                    primitive.x_coefficients,
+                    parameter),
+                evaluate_rational_polynomial(
+                    primitive.y_coefficients,
+                    parameter));
+        };
+    const MatTraits::Point_2 expected_lower =
+        evaluate(lower.parameter);
+    const MatTraits::Point_2 expected_upper =
+        evaluate(upper.parameter);
+    const MatTraits::Point_2 live_source =
+        halfedge->source()->point();
+    const MatTraits::Point_2 live_target =
+        halfedge->target()->point();
+    const std::string source_owner_id =
+        stable_generator_site_id(
+            halfedge->left()->site(),
+            generators);
+    const std::string target_owner_id =
+        stable_generator_site_id(
+            halfedge->right()->site(),
+            generators);
+    const auto is_feature_owner =
+        [&lower, &upper](const std::string& owner_id) {
+            return std::find(
+                       lower.provenance_ids.begin(),
+                       lower.provenance_ids.end(),
+                       owner_id)
+                    != lower.provenance_ids.end()
+                || std::find(
+                       upper.provenance_ids.begin(),
+                       upper.provenance_ids.end(),
+                       owner_id)
+                    != upper.provenance_ids.end();
+        };
+    if (!is_feature_owner(source_owner_id)
+        || !is_feature_owner(target_owner_id)) {
+        throw UnsupportedSegmentSegmentLimiterError(
+            "parallel S-S endpoint is not feature-bound owned");
+    }
+    const bool source_is_lower =
+        live_source == expected_lower;
+    const bool source_is_upper =
+        live_source == expected_upper;
+    const bool target_is_lower =
+        live_target == expected_lower;
+    const bool target_is_upper =
+        live_target == expected_upper;
+    if (source_is_lower == source_is_upper
+        || target_is_lower == target_is_upper
+        || source_is_lower == target_is_lower) {
+        throw MismatchedLiveSegmentSegmentBridgeError(
+            "parallel S-S live endpoints differ from feature bounds");
+    }
+
+    MatTraits::Segment_2 primal;
+    if (!CGAL::assign(
+            primal,
+            voronoi.dual().primal(
+                halfedge->dual()))) {
+        throw MismatchedLiveSegmentSegmentBridgeError(
+            "parallel S-S live dual is not a segment");
+    }
+    const bool primal_matches =
+        (primal.source() == live_source
+         && primal.target() == live_target)
+        || (primal.source() == live_target
+            && primal.target() == live_source);
+    if (!primal_matches) {
+        throw MismatchedLiveSegmentSegmentBridgeError(
+            "parallel S-S primal and adaptor endpoints differ");
+    }
+
+    const auto bind =
+        [](
+            const RationalDomainRoot2& bound,
+            const std::string& owner_id) {
+            if (std::find(
+                    bound.provenance_ids.begin(),
+                    bound.provenance_ids.end(),
+                    owner_id)
+                == bound.provenance_ids.end()) {
+                throw MismatchedLiveSegmentSegmentBridgeError(
+                    "parallel S-S owner differs from matched feature bound");
+            }
+            ExactAlgebraicKernel1 kernel;
+            MatParameterEndpoint2 endpoint{
+                kernel.construct_algebraic_real_1_object()(
+                    bound.parameter),
+                bound.provenance_ids,
+            };
+            union_stable_ids(
+                endpoint.provenance_ids,
+                {owner_id});
+            return exact_graph_endpoint_binding(endpoint);
+        };
+    MatParameterEndpoint2 source = bind(
+        source_is_lower ? lower : upper,
+        source_owner_id);
+    MatParameterEndpoint2 target = bind(
+        target_is_lower ? lower : upper,
+        target_owner_id);
+    if (source_is_lower) {
+        return {
+            std::move(source),
+            std::move(target),
+        };
+    }
+    return {
+        std::move(target),
+        std::move(source),
+    };
 }

@@ -121,12 +121,46 @@ public:
     using std::runtime_error::runtime_error;
 };
 
+class DuplicateOpenSegmentSourceIdentityError
+    : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
+
+class NonparallelSegmentSupportsError
+    : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
+
+class CoincidentSegmentSupportsError
+    : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
+
+class EmptyParallelSegmentFeatureDomainError
+    : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
+
 MatExactOpenSegmentSource2 canonical_open_segment_source(
     std::string stable_site_id,
     const CORE::BigRat& source_x,
     const CORE::BigRat& source_y,
     const CORE::BigRat& target_x,
     const CORE::BigRat& target_y);
+
+RationalPrimitiveParameterization2
+parallel_segment_bisector_parameterization(
+    const MatExactOpenSegmentSource2& first,
+    const MatExactOpenSegmentSource2& second);
+
+CORE::BigRat parallel_segment_tangent_parameter(
+    const RationalPrimitiveParameterization2& primitive,
+    const CORE::BigRat& x,
+    const CORE::BigRat& y);
 
 using RationalPolynomial = std::vector<CORE::BigRat>;
 

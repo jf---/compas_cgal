@@ -12,9 +12,12 @@ needed by every downstream traversal and engagement decision.
     and independently reviewed. The bounded point/segment slice now takes its
     algebraic cell endpoints from live Voronoi halfedge owners, including
     point and segment limiters, and clips rational point/segment parabolas at
-    exact true-radius roots. The unified segment-site traversal,
-    segment/segment cells, neck evidence, proposal sampling, and the Python
-    binding are not complete.
+    exact true-radius roots. A bounded parallel segment/segment production
+    slice now derives its exact feature-overlap interval, binds feature-owned
+    live endpoints, and classifies constant clearance. Nonparallel and
+    externally limited segment/segment cells, the unified segment-site
+    traversal, neck evidence, proposal sampling, and the Python binding are
+    not complete.
 
     Do not treat the current native spike APIs as the final public MAT API.
     The maturity table below is the claim boundary.
@@ -49,7 +52,7 @@ construction.
 | Dimension | Held–Pfeiffer 2025 | Exact-certified Phase 1 |
 | --- | --- | --- |
 | Pocket geometry | Segments and circular arcs; simply connected; machinability assumed after an `r + ε` transformation | Target: polygonal pockets with holes and exact `C_r`/`M_r`; current MAT subset is incomplete; circular boundaries are not supported |
-| MAT backend | Vroni/ArcVroni used end-to-end | Exact CGAL segment-site graph with stable provenance; incomplete |
+| MAT backend | Vroni/ArcVroni used end-to-end | Exact CGAL point graph plus bounded P–S and parallel S–S production slices with stable provenance; unified graph incomplete |
 | Engagement limit | Analytic circle construction followed by bisection until `θmax − 0.001 <= θ <= θmax` radians | Exact rational chord surrogate and event-exact segment/full-circle certification; integration incomplete |
 | Candidate spacing | Bisection along the middle curve | Finite candidate lattice; no monotonic-feasibility assumption |
 | Machined state | Ordered contour of prior machining disks; transition sweeps omitted from that contour model | Exact stock mutation and exact full-sweep coverage, ordered certify-before-deplete |
@@ -279,6 +282,90 @@ the same boundary.
     identities and zero line normals therefore fail before parameterization,
     clipping, or endpoint binding can observe an invalid chart.
 
+### Parallel segment/segment cells
+
+The first S–S production slice covers two distinct parallel open-segment
+supports. Let their canonical supporting lines be:
+
+```text
+ℓ₁(x, y) = ax + by + c₁
+ℓ₂(x, y) = λ(ax + by) + c₂,  λ > 0
+```
+
+Canonical line signs make `λ` positive. After rescaling the second line to the
+first normal, the equal-distance locus between the supports is the rational
+middle line:
+
+```text
+ax + by + (c₁ + c₂/λ)/2 = 0
+```
+
+The chart chooses the exact point on this line closest to the coordinate
+origin and the tangent `(b, -a)`, with its first nonzero component positive.
+Because both supporting lines are canonical, swapping generator arguments or
+reversing either segment's endpoints cannot rescale or reverse `t`.
+
+An S–S line is valid only while the perpendicular projection lies in both
+open-segment features. Each source endpoint has one exact tangent parameter;
+intersecting the two open parameter intervals gives the positive-length
+feature cell. An empty or point-only overlap raises
+`EmptyParallelSegmentFeatureDomainError`.
+
+The live producer contract is stronger than reconstructing that interval:
+
+1. `up()` and `down()` must be the two expected segment generators;
+2. both endpoint sides must exist before reading `left()` or `right()`;
+3. `SDG::primal()` must be an exact `Segment_2`;
+4. its endpoints must equal the adaptor vertices and the derived feature
+   bounds exactly;
+5. each live limiter owner must occur in that endpoint's feature provenance.
+
+The last rule is deliberately bounded. A third point or segment site that
+truncates a parallel S–S cell before a source feature endpoint raises
+`UnsupportedSegmentSegmentLimiterError`; its algebraic limiter equation is
+not approximated or silently treated as a feature bound.
+
+Owner classification must precede feature-bound point equality. The
+adversarial native fixture places an unrelated point at `q = (5, 3/2)`.
+Along `p(t) = (t, 3/2)`, equality with the S–S clearance is
+`(t - 5)² = 9/4`, so the live cell is truncated at `t = 7/2` before the
+upper feature endpoint at `t = 4`. This fixture must reach
+`UnsupportedSegmentSegmentLimiterError`; reporting only that the live point
+differs from the feature bound loses the actionable failure classification.
+
+For the native production fixture, the lower segment is
+`[-2, 6] × {0}` and the upper segment is `[0, 4] × {3}`. The canonical chart
+and feature cell are:
+
+```text
+p(t) = (t, 3/2)
+t ∈ [0, 4]
+```
+
+Clearance is constant:
+
+```text
+δ² = distance(p(t), ℓ₁)² = distance(p(t), ℓ₂)² = 9/4
+```
+
+`parallel_segment_clearance_boundary` reconstructs the canonical chart,
+rejects any rescaled or displaced raw chart, and requires both defining-site
+distances to be exactly equal. A raw affine chart therefore cannot bypass
+the geometry or root-identity invariant. The production gate proves all three
+classifications:
+
+| Exact `r²` | Sign of `δ² - r²` | Production result |
+| --- | --- | --- |
+| `2` | positive | complete feature cell retained |
+| `9/4` | zero | complete closed boundary plateau retained |
+| `5/2` | negative | no S–S component emitted |
+
+Complete graph records are identical after reversing both segment endpoint
+orders. Horizontal, vertical, and rational diagonal charts have independent
+native goldens. Nonparallel S–S supports remain outside this completed slice:
+they require a canonical quadratic-field angle-bisector chart and algebraic
+limiter/domain binding.
+
 The following `Parabola_segment_2` APIs are visualization paths and are
 forbidden from proof decisions:
 
@@ -426,9 +513,29 @@ Coincident events are additive. A point can simultaneously be an original
 Voronoi vertex, a polygon-boundary intersection, and a clearance root; one
 flag must not overwrite another.
 
+Owned feature endpoints enter domain clipping directly. For the parallel
+S–S chart over the rectangle `[0, 4] × [-1, 4]`, the polygon intersections
+at `t = 0` and `t = 4` coincide exactly with the feature bounds. The canonical
+endpoint records retain the feature owner, algebraic-root identity, and
+`D-outer/edge-3` or `D-outer/edge-1`, respectively. A post-clipping endpoint
+replacement would discard the polygon evidence and is therefore forbidden;
+clipping coalesces provenance by exact parameter equality instead.
+`clip_owned_linear_clearance_components` rejects unbounded endpoints,
+parameters that differ from the primitive domain, and empty ownership
+provenance as separate named failures.
+
 At a degeneracy-normalized node, provenance is the union over every incident
 halfedge. A single underlying Delaunay face triple can omit valid incident
 generators and is not sufficient evidence.
+
+!!! warning "A halfedge owner is not the complete node provenance"
+
+    In the native parallel S–S fixture, both segment endpoint pairs meet the
+    same two transition locations, but the adaptor exposes only the upper
+    endpoint point-sites through `left()` and `right()`. Treating those two
+    limiter handles as exhaustive would silently discard the coincident lower
+    feature evidence. Node CSR must union all incident halfedges and exact
+    coincident feature bounds.
 
 ## Failure anatomy: four cocircular point sites
 
@@ -512,7 +619,7 @@ Refinement may change the number and position of samples. It must not change:
 | `segment_site_parameterization.*` | exact primitive domains and coordinate functions |
 | `segment_site_clipping.*` | exact domain and clearance roots; maximal admissible cells |
 | `segment_site_provenance.*` | stable site/root provenance and endpoint evidence |
-| `segment_site_endpoint_binding.*` | live parabola limiter ownership |
+| `segment_site_endpoint_binding.*` | live parabola and bounded parallel S–S endpoint ownership |
 | `segment_site_mat.*` | graph orchestration and canonical records |
 | `segment_site_neck.*` | exact local minima and separating cuts |
 | `segment_site_mat_sampling.*` | proposal-only samples |
@@ -534,7 +641,8 @@ consumers, or evolution differ from graph orchestration.
 | Point/segment endpoint ownership | wired and native-gated | exact for bounded point and segment limiter fixtures |
 | Algebraic point/segment cell bounds | implemented | exact |
 | True-radius point/segment clearance | implemented and native-gated | exact for rational point-site sources; public binding pending |
-| Segment/segment feature domains | pending | no production claim |
+| Parallel segment/segment feature domains | implemented and native-gated | exact for positive-length overlap with feature-owned live endpoints |
+| General segment/segment cells | pending | nonparallel and externally limited cells fail loud; no production claim |
 | Unified degeneracy-removal traversal | pending | no production claim |
 | Degeneracy-normalized feature CSR | pending | no production claim |
 | Exact neck evidence | pending | no production claim |
@@ -557,9 +665,13 @@ coincident endpoints fail with distinct named exceptions. The same
 executable checks production point- and segment-limiter provenance against
 exact root goldens, recomputes each golden from the emitted algebraic
 parameter, and compares complete graph records after reversing every segment
-endpoint order. These gates establish canonical source construction and
-bounded endpoint ownership. They do not establish true-radius parabola
-clipping, segment/segment coverage, or the final unified traversal.
+endpoint order. The parallel S–S gate additionally checks live
+`Segment_2`/adaptor equality, horizontal/vertical/diagonal canonical charts,
+partial and empty feature overlap, owner-evidence and rescaled-chart
+mutations, exact positive/zero/negative clearance, and complete-record
+reversal invariance. These gates establish the bounded P–S and feature-owned
+parallel S–S slices. They do not establish nonparallel or externally limited
+S–S cells, degeneracy-normalized feature CSR, or the final unified traversal.
 
 The final Task 9 boundary also requires:
 
