@@ -62,6 +62,60 @@ construction.
 | Validation | Dense engagement sampling for result plots; complete path and runtime experiments | Fresh replay, mutation gates, artifact identity, and exact residual proof; planned |
 | End-to-end evidence | Complete paths, figures, path-length gains, and 3–100 ms path-generation timings excluding Voronoi construction | Tasks 10–16 remain frozen; no complete path, Fig. 5 reproduction, or performance result yet |
 
+### Performance claim boundary
+
+Held and Pfeiffer report complete path-generation time on their Fig. 5 pocket
+of about 100 ms at `theta_max = 20 degrees`, 30 ms at `40 degrees`, 9 ms at
+`80 degrees`, and 3–6 ms for larger limits. Their scope excludes I/O and
+Voronoi construction; the latter took less than 1 ms on their unspecified
+"standard desktop PC."
+
+The repository's pre-certification
+`trochoidal_mat_toolpath_circular` remains fast. At commit `0365b7a`, a warm
+Release build on an Apple M1 Max measured one untimed warm-up followed by seven
+in-process generations per pocket:
+
+| Pocket | Operations | Median generation time |
+| --- | ---: | ---: |
+| square | 271 | 4.586 ms |
+| irregular | 402 | 6.763 ms |
+| L-shape | 300 | 4.885 ms |
+| star | 611 | 16.519 ms |
+| kite | 335 | 5.997 ms |
+| dumbbell | 732 | 16.363 ms |
+| island | 389 | 6.281 ms |
+
+!!! warning "These millisecond ranges do not establish runtime parity"
+
+    The repository timings use different pockets and the measured generator
+    does not regulate engagement. It is the separate straight-skeleton
+    algorithm described above, not the exact segment-site MAT and adaptive
+    traversal under construction. The overlapping numerical range shows that
+    fast path assembly survived; it does not show that the certified system is
+    as fast as Held and Pfeiffer.
+
+Two other clocks must remain separate. The current native Task 9 executable
+runs its complete algebraic fixture suite in 1.21 s, but that is a contract
+gate rather than one pocket generation. The existing exact stock replay
+measured 87 s for the kite after a 7x end-to-end speedup; that run certifies and
+depletes every operation and is not comparable to Held and Pfeiffer's planner
+clock. Its cost history and the eliminated incremental-Boolean pathology are
+recorded in the
+[engagement-audit performance analysis](superpowers/state/sp1-gate-c-analysis.md).
+
+The first defensible performance comparison therefore comes after Tasks 13–15
+on the provenance-locked Fig. 5 fixture. It must report, on one machine and
+build:
+
+1. segment-site MAT construction;
+2. candidate selection and traversal;
+3. exact certification plus stock replay;
+4. total wall-clock, path length, and emitted operation count.
+
+Until then the accurate status is: **generation mechanics on par in magnitude;
+certified end-to-end performance incomplete and currently much slower where it
+has been measured.**
+
 The stricter contract changes several seemingly small choices:
 
 - the paper's `0.001`-radian bisection band is a numerical acceptance rule;
