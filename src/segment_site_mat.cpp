@@ -812,6 +812,7 @@ void append_point_segment_graph(
     const std::string& source_segment_id,
     const std::string& focus_id,
     const MatDomainPolygonWithHoles2& domain,
+    const CORE::BigRat& radius_squared,
     MatExactGraph2& graph,
     std::map<std::string, std::size_t>& node_indices)
 {
@@ -888,9 +889,10 @@ void append_point_segment_graph(
         delaunay.insert(
             MatTraits::Point_2(point.x, point.y));
     }
-    require_generator_site_bijection(
-        delaunay,
-        generators);
+    graph.matched_generator_sites +=
+        require_generator_site_bijection(
+            delaunay,
+            generators);
     SegmentSiteVoronoi2 voronoi(delaunay);
     const MatExactPointSiteSource2 exact_focus =
         exact_point_site_source(focus);
@@ -901,6 +903,11 @@ void append_point_segment_graph(
         exact_segment,
         segment_record,
         points);
+    const ClearanceRootBoundary2 clearance_boundary =
+        source_parabola_clearance_boundary(
+            exact_focus,
+            exact_segment,
+            radius_squared);
 
     for (auto edge = delaunay.finite_edges_begin();
          edge != delaunay.finite_edges_end();
@@ -969,7 +976,7 @@ void append_point_segment_graph(
                 exact_segment,
                 owned_endpoints.first,
                 owned_endpoints.second,
-                {CGAL::POSITIVE, {}, {}},
+                clearance_boundary,
                 domain);
         append_exact_graph_components(
             dual_id,
@@ -1088,6 +1095,40 @@ MatExactGraph2 segment_site_live_graph_spike()
         "open-segment",
         "focus",
         parabola_domain,
+        0,
+        graph,
+        node_indices);
+    return graph;
+}
+
+MatExactGraph2
+segment_site_true_radius_graph_spike()
+{
+    MatExactGraph2 graph{{}, {}, 0, 0};
+    std::map<std::string, std::size_t> node_indices;
+    MatDomainPolygon2 outer;
+    outer.push_back({-5, 0});
+    outer.push_back({5, 0});
+    outer.push_back({5, 6});
+    outer.push_back({-5, 6});
+    const MatDomainPolygonWithHoles2 domain(outer);
+    append_point_segment_graph(
+        {
+            {"radius-segment-source", -4, 0},
+            {"radius-segment-target", 4, 0},
+            {"radius-focus", 0, 2},
+        },
+        {
+            {
+                "radius-segment",
+                "radius-segment-source",
+                "radius-segment-target",
+            },
+        },
+        "radius-segment",
+        "radius-focus",
+        domain,
+        CORE::BigRat(9, 4),
         graph,
         node_indices);
     return graph;
@@ -1147,6 +1188,7 @@ MatExactGraph2 segment_site_generic_graph_spike_impl(
         "open-segment",
         "focus",
         parabola_domain,
+        0,
         graph,
         node_indices);
 
@@ -1189,6 +1231,7 @@ MatExactGraph2 segment_site_generic_graph_spike_impl(
         "source-open-segment",
         "segment-focus",
         segment_limiter_domain,
+        0,
         graph,
         node_indices);
 

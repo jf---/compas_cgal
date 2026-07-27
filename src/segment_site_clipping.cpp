@@ -469,6 +469,48 @@ ClearanceRootBoundary2 point_clearance_boundary(
     };
 }
 
+ClearanceRootBoundary2
+source_parabola_clearance_boundary(
+    const MatExactPointSiteSource2& point_site,
+    const MatExactOpenSegmentSource2& segment_site,
+    const CORE::BigRat& radius_squared)
+{
+    if (radius_squared < 0) {
+        throw NegativeClearanceRadiusSquaredError(
+            "source parabola squared clearance radius is negative");
+    }
+    const SourceParabolaParameterization2 source =
+        source_parameterization(
+            point_site,
+            segment_site);
+    const auto has_radical_coefficient =
+        [](const std::vector<CORE::BigRat>& coefficients) {
+            return std::any_of(
+                coefficients.begin(),
+                coefficients.end(),
+                [](const CORE::BigRat& coefficient) {
+                    return coefficient != 0;
+                });
+        };
+    if (point_site.x.radical != 0
+        || point_site.y.radical != 0
+        || has_radical_coefficient(source.x_radical)
+        || has_radical_coefficient(source.y_radical)) {
+        throw NonRationalParabolaClearanceError(
+            "source parabola clearance requires a rational point site");
+    }
+    return point_clearance_boundary(
+        {
+            source.x_rational,
+            source.y_rational,
+            std::nullopt,
+            std::nullopt,
+        },
+        point_site.x.rational,
+        point_site.y.rational,
+        radius_squared);
+}
+
 std::vector<MatAdmissibleComponent2>
 maximal_clearance_components(
     const std::string& original_dual_id,

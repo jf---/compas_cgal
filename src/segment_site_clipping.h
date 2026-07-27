@@ -24,10 +24,28 @@ public:
     using std::runtime_error::runtime_error;
 };
 
+class NegativeClearanceRadiusSquaredError
+    : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
+
+class NonRationalParabolaClearanceError
+    : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
+
 ClearanceRootBoundary2 point_clearance_boundary(
     const RationalPrimitiveParameterization2& primitive,
     const CORE::BigRat& site_x,
     const CORE::BigRat& site_y,
+    const CORE::BigRat& radius_squared);
+
+ClearanceRootBoundary2
+source_parabola_clearance_boundary(
+    const MatExactPointSiteSource2& point_site,
+    const MatExactOpenSegmentSource2& segment_site,
     const CORE::BigRat& radius_squared);
 
 std::vector<MatAdmissibleComponent2>
