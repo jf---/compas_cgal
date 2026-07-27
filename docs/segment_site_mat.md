@@ -282,6 +282,12 @@ must not be collapsed merely because they reconstruct the same exact
 parameter. Native goldens compare the complete canonical provenance vector,
 so an omitted or spurious event identity fails the gate.
 
+The original clearance polynomial remains authoritative for sign
+classification. Root isolation uses its canonical square-free part, and each
+event identity is recorded with its ordinal **before** primitive-domain
+filtering. This both satisfies CGAL's square-free solver precondition and
+prevents an out-of-domain root from renumbering retained certificate events.
+
 ## Exact clipping to the admissible-center domain
 
 Let `D` be the pocket polygon with holes and `r` the tool radius. The MAT
