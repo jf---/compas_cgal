@@ -2,6 +2,7 @@
 #include "segment_site_provenance.h"
 
 #include <algorithm>
+#include <iterator>
 #include <optional>
 #include <utility>
 
@@ -419,6 +420,64 @@ nonparallel_segment_bisector_parameterization(
     };
 }
 
+MatQuadraticFieldValue2
+nonparallel_segment_tangent_parameter(
+    const NonparallelSegmentBisectorParameterization2& primitive,
+    const MatExactOpenSegmentSource2& segment,
+    const CORE::BigRat& endpoint_x,
+    const CORE::BigRat& endpoint_y)
+{
+    if (segment.stable_site_id
+            != primitive.first_segment_id
+        && segment.stable_site_id
+            != primitive.second_segment_id) {
+        throw MismatchedNonparallelSegmentSourceError(
+            "nonparallel feature endpoint belongs to another segment");
+    }
+    if (segment.line_a * endpoint_x
+            + segment.line_b * endpoint_y
+            + segment.line_c
+        != 0) {
+        throw OffSupportSegmentEndpointError(
+            "nonparallel feature endpoint is off its segment support");
+    }
+    if (primitive.x_rational.size() != 2
+        || primitive.x_radical.size() != 2
+        || primitive.y_rational.size() != 2
+        || primitive.y_radical.size() != 2
+        || primitive.radicand <= 0) {
+        throw InvalidRationalPrimitiveError(
+            "nonparallel S-S chart is not a valid affine field chart");
+    }
+
+    const CORE::BigRat numerator =
+        segment.line_b
+            * (endpoint_x - primitive.x_rational[0])
+        - segment.line_a
+            * (endpoint_y - primitive.y_rational[0]);
+    const CORE::BigRat denominator_rational =
+        segment.line_b * primitive.x_rational[1]
+        - segment.line_a * primitive.y_rational[1];
+    const CORE::BigRat denominator_radical =
+        segment.line_b * primitive.x_radical[1]
+        - segment.line_a * primitive.y_radical[1];
+    const CORE::BigRat denominator_norm =
+        denominator_rational * denominator_rational
+        - primitive.radicand
+            * denominator_radical
+            * denominator_radical;
+    if (denominator_norm == 0) {
+        throw DegenerateNonparallelFeatureProjectionError(
+            "nonparallel S-S tangent projection is singular");
+    }
+    return {
+        numerator * denominator_rational
+            / denominator_norm,
+        -numerator * denominator_radical
+            / denominator_norm,
+    };
+}
+
 bool root_is_in_domain(
     const ExactAlgebraicKernel1::Algebraic_real_1& root,
     const RationalPrimitiveParameterization2& primitive,
@@ -705,6 +764,10 @@ CGAL::Sign quadratic_field_sign(
     const MatQuadraticFieldValue2& value,
     const CORE::BigRat& radicand)
 {
+    if (radicand <= 0) {
+        throw InvalidQuadraticFieldRadicandError(
+            "quadratic-field radicand is not positive");
+    }
     if (value.radical == 0) {
         return CGAL::sign(value.rational);
     }
@@ -728,6 +791,83 @@ CGAL::Sign quadratic_field_sign(
     return magnitude == CGAL::POSITIVE
         ? rational_sign
         : radical_sign;
+}
+
+CGAL::Comparison_result quadratic_field_compare(
+    const MatQuadraticFieldValue2& lhs,
+    const MatQuadraticFieldValue2& rhs,
+    const CORE::BigRat& radicand)
+{
+    const CGAL::Sign difference =
+        quadratic_field_sign(
+            {
+                lhs.rational - rhs.rational,
+                lhs.radical - rhs.radical,
+            },
+            radicand);
+    if (difference == CGAL::NEGATIVE) {
+        return CGAL::SMALLER;
+    }
+    if (difference == CGAL::POSITIVE) {
+        return CGAL::LARGER;
+    }
+    return CGAL::EQUAL;
+}
+
+ExactAlgebraicKernel1::Algebraic_real_1
+quadratic_field_algebraic_real(
+    const MatQuadraticFieldValue2& value,
+    const CORE::BigRat& radicand)
+{
+    if (radicand <= 0) {
+        throw InvalidQuadraticFieldRadicandError(
+            "quadratic-field radicand is not positive");
+    }
+    ExactAlgebraicKernel1 kernel;
+    const auto construct =
+        kernel.construct_algebraic_real_1_object();
+    if (const std::optional<CORE::BigRat> square_root =
+            rational_square_root(radicand);
+        square_root.has_value()) {
+        return construct(
+            value.rational
+            + value.radical * *square_root);
+    }
+    if (value.radical == 0) {
+        return construct(value.rational);
+    }
+
+    const std::vector<ExactAlgebraicInteger1> coefficients =
+        primitive_integer_coefficients(
+            {
+                value.rational * value.rational
+                    - radicand
+                        * value.radical
+                        * value.radical,
+                -CORE::BigRat(2) * value.rational,
+                1,
+            });
+    using Polynomial =
+        ExactAlgebraicKernel1::Polynomial_1;
+    const Polynomial polynomial =
+        typename CGAL::Polynomial_traits_d<
+            Polynomial>::Construct_polynomial()(
+            coefficients.begin(),
+            coefficients.end());
+    std::vector<
+        ExactAlgebraicKernel1::Algebraic_real_1>
+        roots;
+    kernel.solve_1_object()(
+        polynomial,
+        true,
+        std::back_inserter(roots));
+    if (roots.size() != 2) {
+        throw InvalidQuadraticFieldEmbeddingError(
+            "quadratic-field value did not isolate two conjugate roots");
+    }
+    return value.radical < 0
+        ? roots.front()
+        : roots.back();
 }
 
 SourceParabolaParameterization2 source_parameterization(

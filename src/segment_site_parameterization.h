@@ -59,7 +59,29 @@ struct MatQuadraticFieldValue2 {
     CORE::BigRat radical;
 };
 
+class InvalidQuadraticFieldRadicandError
+    : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
+
+class InvalidQuadraticFieldEmbeddingError
+    : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
+
 CGAL::Sign quadratic_field_sign(
+    const MatQuadraticFieldValue2& value,
+    const CORE::BigRat& radicand);
+
+CGAL::Comparison_result quadratic_field_compare(
+    const MatQuadraticFieldValue2& lhs,
+    const MatQuadraticFieldValue2& rhs,
+    const CORE::BigRat& radicand);
+
+ExactAlgebraicKernel1::Algebraic_real_1
+quadratic_field_algebraic_real(
     const MatQuadraticFieldValue2& value,
     const CORE::BigRat& radicand);
 
@@ -163,6 +185,24 @@ public:
     using std::runtime_error::runtime_error;
 };
 
+class MismatchedNonparallelSegmentSourceError
+    : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
+
+class OffSupportSegmentEndpointError
+    : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
+
+class DegenerateNonparallelFeatureProjectionError
+    : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
+
 MatExactOpenSegmentSource2 canonical_open_segment_source(
     std::string stable_site_id,
     const CORE::BigRat& source_x,
@@ -224,6 +264,13 @@ nonparallel_segment_bisector_parameterization(
     const MatExactOpenSegmentSource2& first,
     const MatExactOpenSegmentSource2& second,
     const MatTraits::Segment_2& live_primitive);
+
+MatQuadraticFieldValue2
+nonparallel_segment_tangent_parameter(
+    const NonparallelSegmentBisectorParameterization2& primitive,
+    const MatExactOpenSegmentSource2& segment,
+    const CORE::BigRat& endpoint_x,
+    const CORE::BigRat& endpoint_y);
 
 using RationalPolynomial = std::vector<CORE::BigRat>;
 
