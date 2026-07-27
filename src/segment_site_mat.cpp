@@ -1,7 +1,7 @@
 #include "segment_site_mat.h"
+#include "segment_site_graph_emission.h"
 
 #include <algorithm>
-#include <iterator>
 #include <map>
 #include <optional>
 #include <set>
@@ -11,122 +11,8 @@
 
 #include <CGAL/Object.h>
 #include <CGAL/Kernel/global_functions_2.h>
-#include <CGAL/Polynomial_traits_d.h>
 
 namespace {
-
-std::size_t exact_clearance_root_count()
-{
-    using Polynomial =
-        ExactAlgebraicKernel1::Polynomial_1;
-    const std::vector<ExactAlgebraicInteger1>
-        coefficients{-1, 0, 1};
-    const Polynomial clearance =
-        typename CGAL::Polynomial_traits_d<
-            Polynomial>::Construct_polynomial()(
-            coefficients.begin(),
-            coefficients.end());
-    std::vector<
-        ExactAlgebraicKernel1::Algebraic_real_1>
-        roots;
-    ExactAlgebraicKernel1 kernel;
-    kernel.solve_1_object()(
-        clearance,
-        true,
-        std::back_inserter(roots));
-    return roots.size();
-}
-
-std::size_t assign_dual_primitive(
-    const CGAL::Object& dual)
-{
-    MatTraits::Line_2 line;
-    MatTraits::Ray_2 ray;
-    MatTraits::Segment_2 segment;
-    SegmentSiteParabola2 parabola;
-    if (CGAL::assign(line, dual)
-        || CGAL::assign(ray, dual)
-        || CGAL::assign(segment, dual)) {
-        return 1;
-    }
-    if (!CGAL::assign(parabola, dual)) {
-        return 0;
-    }
-
-    // `t` and `f` are the exact algebraic parameterization API. Drawing
-    // helpers (`compute_k`, `generate_points`, streaming) are forbidden.
-    const MatTraits::FT first_parameter =
-        parabola.t(parabola.p1);
-    const MatTraits::Point_2 reconstructed =
-        parabola.f(first_parameter);
-    return reconstructed == parabola.p1 ? 1 : 0;
-}
-
-void append_components(
-    const std::string& dual_id,
-    const std::string& primitive_kind,
-    const std::vector<std::string>& generator_ids,
-    const std::vector<MatAdmissibleComponent2>& components,
-    MatExactGraph2& graph,
-    std::map<std::string, std::size_t>& node_indices)
-{
-    const auto append_node =
-        [&graph, &node_indices, &dual_id, &generator_ids](
-            const MatParameterEndpoint2& bound_endpoint) {
-            const std::string node_id =
-                stable_endpoint_node_identity_v1(
-                    dual_id,
-                    bound_endpoint);
-            const auto existing = node_indices.find(node_id);
-            if (existing != node_indices.end()) {
-                union_stable_ids(
-                    graph.nodes[existing->second]
-                        .generator_site_ids,
-                    generator_ids);
-                union_stable_ids(
-                    graph.nodes[existing->second]
-                        .endpoint.provenance_ids,
-                    bound_endpoint.provenance_ids);
-                union_stable_ids(
-                    graph.nodes[existing->second]
-                        .provenance_ids,
-                    bound_endpoint.provenance_ids);
-                return node_id;
-            }
-            node_indices.emplace(
-                node_id,
-                graph.nodes.size());
-            graph.nodes.push_back(
-                {
-                    node_id,
-                    bound_endpoint,
-                    bound_endpoint.provenance_ids,
-                    generator_ids,
-                });
-            return node_id;
-    };
-
-    for (const MatAdmissibleComponent2& component : components) {
-        const MatParameterEndpoint2 source_endpoint =
-            exact_graph_endpoint_binding(component.lower);
-        const MatParameterEndpoint2 target_endpoint =
-            exact_graph_endpoint_binding(component.upper);
-        const std::string source =
-            append_node(source_endpoint);
-        const std::string target =
-            append_node(target_endpoint);
-        graph.edges.push_back(
-            {
-                component.component_id,
-                primitive_kind,
-                source,
-                target,
-                source_endpoint,
-                target_endpoint,
-                generator_ids,
-            });
-    }
-}
 
 struct NormalizedOpenSegmentSource2 {
     std::string stable_site_id;
@@ -363,9 +249,6 @@ void canonicalize_original_nodes(
             union_stable_ids(
                 node.generator_site_ids,
                 alias->second.generator_site_ids);
-            union_stable_ids(
-                node.endpoint.provenance_ids,
-                alias->second.generator_site_ids);
         }
         const auto existing = indices.find(node.node_id);
         if (existing == indices.end()) {
@@ -378,9 +261,6 @@ void canonicalize_original_nodes(
         union_stable_ids(
             retained.generator_site_ids,
             node.generator_site_ids);
-        union_stable_ids(
-            retained.endpoint.provenance_ids,
-            node.endpoint.provenance_ids);
         union_stable_ids(
             retained.provenance_ids,
             node.provenance_ids);
@@ -430,7 +310,7 @@ void append_dimension_one_point_site_graph(
                 std::nullopt);
         const std::string dual_id =
             stable_dual_identity_v1("point", generator_ids);
-        append_components(
+        append_exact_graph_components(
             dual_id,
             "LINE",
             generator_ids,
@@ -640,7 +520,7 @@ void append_point_site_graph(
                 second,
                 lower,
                 upper);
-        append_components(
+        append_exact_graph_components(
             dual_id,
             primitive_kind,
             generator_ids,
@@ -895,7 +775,7 @@ void append_point_segment_graph(
             bounds.first.second,
             bounds.second.first,
             bounds.second.second);
-        append_components(
+        append_exact_graph_components(
             dual_id,
             "PARABOLA",
             generator_ids,
