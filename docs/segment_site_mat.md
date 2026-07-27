@@ -39,7 +39,9 @@ needed by every downstream traversal and engagement decision.
     and maps catalog-bound stable node-site identities to numeric CSR without
     parsing those identities. An additive catalog-fed source path now builds a
     valid segment-Delaunay graph, resolves live generators through one exact
-    geometry index, and proves a complete catalog/live-site bijection.
+    geometry index, and proves a complete catalog/live-site bijection. A typed
+    consuming transform now swaps that validated SDG into the
+    degeneracy-removal Voronoi adaptor without a duplicate graph build.
     General arbitrary-pocket traversal, externally limited and composite
     segment/segment cells, production-graph adoption of the canonical site
     catalog, endpoint-feature CSR, public numeric-table integration, neck
@@ -78,7 +80,7 @@ construction.
 | Dimension | Comparative status | Held–Pfeiffer 2025 | Exact-certified Phase 1 |
 | --- | --- | --- | --- |
 | Pocket geometry | incomplete | Segments and circular arcs; simply connected; machinability assumed after an `r + ε` transformation | Raw MAT primitives now clip exactly against polygonal domains with holes and exact radius clearance; the rectangle `C_r` graph is unified, but general arbitrary-pocket traversal is incomplete; circular boundaries are not supported |
-| MAT backend | stronger exact contract on a bounded fixture; incomplete end-to-end | Vroni/ArcVroni used end-to-end | Exact CGAL point graph plus bounded P–S and parallel/nonparallel S–S cells; one four-segment rectangle build now yields a reversal-invariant five-edge/six-node graph with exact radius clipping, feature-triple node identity, and explicit rejection of eight incident P–S rays; a Task 3-derived typed site catalog and exact indexed SDG source prevent second normalization and linear live-site rematching, but arbitrary-pocket traversal and catalog-to-production-graph integration remain incomplete |
+| MAT backend | stronger exact contract on a bounded fixture; incomplete end-to-end | Vroni/ArcVroni used end-to-end | Exact CGAL point graph plus bounded P–S and parallel/nonparallel S–S cells; one four-segment rectangle build now yields a reversal-invariant five-edge/six-node graph with exact radius clipping, feature-triple node identity, and explicit rejection of eight incident P–S rays; a Task 3-derived typed site catalog, exact indexed SDG source, and swap-owned adaptor prevent second normalization, linear live-site rematching, and a duplicate SDG build, but arbitrary-pocket traversal and catalog-to-production-graph integration remain incomplete |
 | Engagement limit | stronger contract; incomplete integration | Analytic circle construction followed by bisection until `θmax − 0.001 <= θ <= θmax` radians | Exact rational chord surrogate and event-exact segment/full-circle certification; integration incomplete |
 | Candidate spacing | incomplete | Bisection along the middle curve | Finite candidate lattice; no monotonic-feasibility assumption |
 | Machined state | stronger contract | Ordered contour of prior machining disks; transition sweeps omitted from that contour model | Exact stock mutation and exact full-sweep coverage, ordered certify-before-deplete |
@@ -118,16 +120,16 @@ in-process generations per pocket:
     fast path assembly survived; it does not show that the certified system is
     as fast as Held and Pfeiffer.
 
-The additive catalog-fed SDG source removes two structural costs before timing:
+The additive catalog-fed SDG/adaptor path removes three structural costs before
+timing:
 live generators resolve through an exact `O(log S)` geometry index instead of
-an `O(k S)` caller-site scan, and the validated SDG owner cannot be copied or
-moved implicitly. The current unified rectangle traversal has not adopted
-that owner yet, and its Voronoi-adaptor construction still belongs to the
-integration work. These are architectural performance safeguards, not a new
-planner benchmark.
+an `O(k S)` caller-site scan, the validated SDG owner cannot be copied or moved
+implicitly, and adaptor construction swaps rather than copies the complete
+SDG. The current unified rectangle traversal has not adopted that owner yet.
+These are architectural performance safeguards, not a new planner benchmark.
 
 Two other clocks must remain separate. Five warm local Release executions of
-the current native Task 9 algebraic fixture suite took 1.16–1.17 s (1.17 s
+the current native Task 9 algebraic fixture suite took 1.19–1.21 s (1.20 s
 median), but that is a contract gate rather than one pocket generation. The
 existing exact stock replay
 measured 87 s for the kite after a 7x end-to-end speedup; that run certifies and
@@ -191,7 +193,7 @@ exact geometry index + one segment insertion pass
 segment-Delaunay graph with stable caller provenance
                          │
                          ▼
-degeneracy-removal Voronoi adaptor
+swap-owned degeneracy-removal Voronoi adaptor
                          │
                          ▼
 LINE / RAY / SEGMENT / PARABOLA dual ownership
@@ -1233,14 +1235,46 @@ an unknown exact generator raises `UnknownCanonicalMatSiteGeometryError`.
     graph types can satisfy an rvalue operation by copying, so a nominal
     move-only wrapper would not prove that a full graph build was transferred.
     C++17 guaranteed copy elision initializes the factory result directly.
-    The future catalog-fed adaptor path must consume the private SDG explicitly
-    through CGAL's swap construction rather than copy it.
+    `CanonicalMatVoronoiSource2::build(std::move(source))` is the sole consuming
+    boundary and invokes CGAL's explicit swap construction.
 
 The source gate proves exact rectangle cardinality, rotation/reversal
 invariance, two-hole insertion, exact catalog/live-site equality, unknown-site
 rejection, and duplicate point geometry rejection. This establishes the
 catalog-to-SDG boundary only. The existing five-edge rectangle traversal still
 uses its validated fixture source path.
+
+### No-copy Voronoi-adaptor transfer
+
+CGAL's ordinary `SegmentSiteVoronoi2(delaunay)` constructor copies the complete
+segment-Delaunay graph. Passing `true` as its `swap_dg` argument transfers the
+graph instead. `CanonicalMatVoronoiSource2` makes that easily missed
+performance choice structural:
+
+1. reject an already-empty source with
+   `ConsumedCanonicalMatDelaunaySourceError`;
+2. construct the degeneracy-removal adaptor with `swap_dg=true`;
+3. require the source SDG to contain no finite vertices after transfer;
+4. revalidate the adaptor and every live generator through the transferred
+   exact geometry index;
+5. require the post-transfer generator count to equal the index cardinality.
+
+The resulting adaptor owner is also noncopyable and nonmovable. A failed
+source-empty, adaptor-validity, or generator-bijection check raises
+`InvalidCanonicalMatVoronoiTransferError`.
+
+The rectangle transfer gate independently recovers 13 canonical raw dual
+pairs from the new owner: five segment/segment pairs and the eight incident
+point/segment pairs that the graph layer rejects. The complete signature is
+invariant under ring rotation/reversal, and consuming one source twice fails
+loudly.
+
+!!! warning "No-copy ownership is not graph adoption"
+
+    This proves the catalog-to-adaptor execution boundary. The existing
+    five-edge/six-node rectangle graph still traverses its prior validated
+    adaptor path. Its replacement must be an additive, complete-record
+    equivalence step before the earlier path can be considered for removal.
 
 ## Failure anatomy: four cocircular point sites
 
@@ -1323,6 +1357,7 @@ Refinement may change the number and position of samples. It must not change:
 | --- | --- |
 | `segment_site_catalog.*` | Task 3-derived exact sites, typed numeric provenance, and stable catalog lookup |
 | `segment_site_delaunay.*` | exact geometry index, one-pass segment insertion, and catalog/live-site bijection |
+| `segment_site_voronoi.*` | explicit no-copy SDG consumption and post-transfer adaptor validation |
 | `segment_site_parameterization.*` | exact primitive domains and coordinate functions |
 | `segment_site_clipping.*` | exact domain and clearance roots; maximal admissible cells |
 | `segment_site_provenance.*` | stable site/root provenance and endpoint evidence |
@@ -1362,6 +1397,7 @@ consumers, or evolution differ from graph orchestration.
 | Degeneracy-normalized node-site CSR | implemented and native-gated | deterministic `int64` offsets and stable feature IDs projected from canonical nodes; six-node rectangle golden and malformed-order failures |
 | Canonical typed site catalog | implemented and native-gated | exact point/open-segment sites derived from Task 3 canonical rings; global ring encoding, endpoint ownership, symmetry, and hole-order invariance |
 | Catalog-fed segment-Delaunay source | implemented and native-gated | exact indexed lookup, one segment insertion pass, complete generator bijection, duplicate-geometry rejection, and immobile graph ownership |
+| Catalog-fed Voronoi owner | implemented and native-gated | explicit `swap_dg=true` transfer, source-empty proof, post-transfer indexed bijection, raw rectangle-pair signature, and double-consume rejection |
 | Numeric node-site catalog mapping | implemented and native-gated | catalog-bound graph identities map once to `int64` rows; unknown identities fail loud; unified rectangle adoption pending |
 | Endpoint-feature CSR and public numeric table | pending | no public binding or complete certificate claim |
 | Exact neck evidence | pending | no production claim |
@@ -1436,7 +1472,11 @@ the empty sentinel, and named unknown-site rejection. The catalog-fed
 segment-Delaunay gate separately locks one-pass segment insertion, exact
 catalog/live-generator cardinality and identity, indexed lookup across two
 holes, input-symmetry invariance, unknown exact geometry, duplicate exact
-point geometry, and noncopyable/nonmovable graph ownership.
+point geometry, and noncopyable/nonmovable graph ownership. The catalog-fed
+Voronoi gate separately locks source-empty swap transfer, adaptor validity,
+post-transfer indexed identity, the five-S–S/eight-P–S raw rectangle
+signature, reversal invariance, owner immobility, and named double-consume
+rejection.
 
 The final Task 9 boundary must add the still-absent Python MAT binding test and
 then requires:
