@@ -203,6 +203,18 @@ public:
     using std::runtime_error::runtime_error;
 };
 
+class MissingNonparallelSegmentFeatureProvenanceError
+    : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
+
+class EmptyNonparallelSegmentFeatureDomainError
+    : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
+
 MatExactOpenSegmentSource2 canonical_open_segment_source(
     std::string stable_site_id,
     const CORE::BigRat& source_x,
@@ -271,6 +283,45 @@ nonparallel_segment_tangent_parameter(
     const MatExactOpenSegmentSource2& segment,
     const CORE::BigRat& endpoint_x,
     const CORE::BigRat& endpoint_y);
+
+struct MatQuadraticFieldDomainBoundary2 {
+    MatQuadraticFieldValue2 parameter;
+    std::vector<std::string> provenance_ids;
+};
+
+class NonparallelSegmentFeatureDomain2 {
+public:
+    const MatQuadraticFieldDomainBoundary2 lower;
+    const MatQuadraticFieldDomainBoundary2 upper;
+    const CORE::BigRat radicand;
+
+private:
+    NonparallelSegmentFeatureDomain2(
+        MatQuadraticFieldDomainBoundary2 lower,
+        MatQuadraticFieldDomainBoundary2 upper,
+        CORE::BigRat radicand)
+        : lower(std::move(lower)),
+          upper(std::move(upper)),
+          radicand(std::move(radicand))
+    {
+    }
+
+    friend NonparallelSegmentFeatureDomain2
+    intersect_nonparallel_segment_feature_domains(
+        MatQuadraticFieldDomainBoundary2 first_source,
+        MatQuadraticFieldDomainBoundary2 first_target,
+        MatQuadraticFieldDomainBoundary2 second_source,
+        MatQuadraticFieldDomainBoundary2 second_target,
+        const CORE::BigRat& radicand);
+};
+
+NonparallelSegmentFeatureDomain2
+intersect_nonparallel_segment_feature_domains(
+    MatQuadraticFieldDomainBoundary2 first_source,
+    MatQuadraticFieldDomainBoundary2 first_target,
+    MatQuadraticFieldDomainBoundary2 second_source,
+    MatQuadraticFieldDomainBoundary2 second_target,
+    const CORE::BigRat& radicand);
 
 using RationalPolynomial = std::vector<CORE::BigRat>;
 

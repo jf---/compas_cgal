@@ -478,6 +478,107 @@ nonparallel_segment_tangent_parameter(
     };
 }
 
+NonparallelSegmentFeatureDomain2
+intersect_nonparallel_segment_feature_domains(
+    MatQuadraticFieldDomainBoundary2 first_source,
+    MatQuadraticFieldDomainBoundary2 first_target,
+    MatQuadraticFieldDomainBoundary2 second_source,
+    MatQuadraticFieldDomainBoundary2 second_target,
+    const CORE::BigRat& radicand)
+{
+    const auto canonicalize_provenance =
+        [](MatQuadraticFieldDomainBoundary2& boundary) {
+            if (boundary.provenance_ids.empty()
+                || std::any_of(
+                    boundary.provenance_ids.begin(),
+                    boundary.provenance_ids.end(),
+                    [](const std::string& stable_id) {
+                        return stable_id.empty();
+                    })) {
+                throw MissingNonparallelSegmentFeatureProvenanceError(
+                    "nonparallel S-S feature bound has no stable owner");
+            }
+            union_stable_ids(
+                boundary.provenance_ids,
+                {});
+        };
+    canonicalize_provenance(first_source);
+    canonicalize_provenance(first_target);
+    canonicalize_provenance(second_source);
+    canonicalize_provenance(second_target);
+
+    const auto ordered_interval =
+        [&radicand](
+            MatQuadraticFieldDomainBoundary2 source,
+            MatQuadraticFieldDomainBoundary2 target) {
+            if (quadratic_field_compare(
+                    target.parameter,
+                    source.parameter,
+                    radicand)
+                == CGAL::SMALLER) {
+                std::swap(source, target);
+            }
+            return std::pair<
+                MatQuadraticFieldDomainBoundary2,
+                MatQuadraticFieldDomainBoundary2>{
+                std::move(source),
+                std::move(target),
+            };
+        };
+    auto first_interval =
+        ordered_interval(
+            std::move(first_source),
+            std::move(first_target));
+    auto second_interval =
+        ordered_interval(
+            std::move(second_source),
+            std::move(second_target));
+
+    MatQuadraticFieldDomainBoundary2 lower =
+        first_interval.first;
+    const CGAL::Comparison_result lower_order =
+        quadratic_field_compare(
+            first_interval.first.parameter,
+            second_interval.first.parameter,
+            radicand);
+    if (lower_order == CGAL::SMALLER) {
+        lower = second_interval.first;
+    } else if (lower_order == CGAL::EQUAL) {
+        union_stable_ids(
+            lower.provenance_ids,
+            second_interval.first.provenance_ids);
+    }
+
+    MatQuadraticFieldDomainBoundary2 upper =
+        first_interval.second;
+    const CGAL::Comparison_result upper_order =
+        quadratic_field_compare(
+            first_interval.second.parameter,
+            second_interval.second.parameter,
+            radicand);
+    if (upper_order == CGAL::LARGER) {
+        upper = second_interval.second;
+    } else if (upper_order == CGAL::EQUAL) {
+        union_stable_ids(
+            upper.provenance_ids,
+            second_interval.second.provenance_ids);
+    }
+
+    if (quadratic_field_compare(
+            lower.parameter,
+            upper.parameter,
+            radicand)
+        != CGAL::SMALLER) {
+        throw EmptyNonparallelSegmentFeatureDomainError(
+            "nonparallel open segments have no positive-length feature overlap");
+    }
+    return {
+        std::move(lower),
+        std::move(upper),
+        radicand,
+    };
+}
+
 bool root_is_in_domain(
     const ExactAlgebraicKernel1::Algebraic_real_1& root,
     const RationalPrimitiveParameterization2& primitive,

@@ -589,6 +589,144 @@ bool nonparallel_feature_parameters_are_exact()
                0);
 }
 
+bool nonparallel_feature_domains_are_exact()
+{
+    const NonparallelSegmentFeatureDomain2 upper =
+        intersect_nonparallel_segment_feature_domains(
+            {
+                {8, 4},
+                {"diagonal-lower"},
+            },
+            {
+                {-22, -11},
+                {"diagonal-upper"},
+            },
+            {
+                {-29, -29},
+                {"lower-left"},
+            },
+            {
+                {-1, -1},
+                {"lower-right"},
+            },
+            2);
+    const NonparallelSegmentFeatureDomain2 upper_reversed =
+        intersect_nonparallel_segment_feature_domains(
+            {
+                {-22, -11},
+                {"diagonal-upper"},
+            },
+            {
+                {8, 4},
+                {"diagonal-lower"},
+            },
+            {
+                {-1, -1},
+                {"lower-right"},
+            },
+            {
+                {-29, -29},
+                {"lower-left"},
+            },
+            2);
+    const NonparallelSegmentFeatureDomain2 lower =
+        intersect_nonparallel_segment_feature_domains(
+            {
+                {-8, 4},
+                {"diagonal-lower"},
+            },
+            {
+                {22, -11},
+                {"diagonal-upper"},
+            },
+            {
+                {29, -29},
+                {"lower-left"},
+            },
+            {
+                {1, -1},
+                {"lower-right"},
+            },
+            2);
+    const auto same_boundary =
+        [](const MatQuadraticFieldDomainBoundary2& lhs,
+           const MatQuadraticFieldDomainBoundary2& rhs) {
+            return lhs.parameter.rational
+                    == rhs.parameter.rational
+                && lhs.parameter.radical
+                    == rhs.parameter.radical
+                && lhs.provenance_ids
+                    == rhs.provenance_ids;
+        };
+    if (upper.radicand != 2
+        || upper.lower.parameter.rational != -22
+        || upper.lower.parameter.radical != -11
+        || upper.lower.provenance_ids
+            != std::vector<std::string>{
+                "diagonal-upper",
+            }
+        || upper.upper.parameter.rational != -1
+        || upper.upper.parameter.radical != -1
+        || upper.upper.provenance_ids
+            != std::vector<std::string>{
+                "lower-right",
+            }
+        || upper_reversed.radicand != upper.radicand
+        || !same_boundary(
+            upper_reversed.lower,
+            upper.lower)
+        || !same_boundary(
+            upper_reversed.upper,
+            upper.upper)
+        || lower.lower.parameter.rational != -8
+        || lower.lower.parameter.radical != 4
+        || lower.lower.provenance_ids
+            != std::vector<std::string>{
+                "diagonal-lower",
+            }
+        || lower.upper.parameter.rational != 1
+        || lower.upper.parameter.radical != -1
+        || lower.upper.provenance_ids
+            != std::vector<std::string>{
+                "lower-right",
+            }) {
+        return false;
+    }
+
+    const NonparallelSegmentFeatureDomain2 tied =
+        intersect_nonparallel_segment_feature_domains(
+            {
+                {0, 0},
+                {"first-lower"},
+            },
+            {
+                {2, 0},
+                {"first-upper"},
+            },
+            {
+                {0, 0},
+                {"second-lower"},
+            },
+            {
+                {3, 0},
+                {"second-upper"},
+            },
+            2);
+    return tied.lower.parameter.rational == 0
+        && tied.lower.parameter.radical == 0
+        && tied.lower.provenance_ids
+            == std::vector<std::string>{
+                "first-lower",
+                "second-lower",
+            }
+        && tied.upper.parameter.rational == 2
+        && tied.upper.parameter.radical == 0
+        && tied.upper.provenance_ids
+            == std::vector<std::string>{
+                "first-upper",
+            };
+}
+
 bool quadratic_feature_parameters_order_and_embed()
 {
     const CORE::BigRat radicand = 2;
@@ -857,6 +995,203 @@ bool nonparallel_clearance_is_rational_quadratic()
                 1);
 }
 
+bool nonparallel_feature_clearance_components_are_exact()
+{
+    const MatExactOpenSegmentSource2 diagonal =
+        canonical_open_segment_source(
+            "diagonal-segment",
+            5,
+            -4,
+            20,
+            11);
+    const MatExactOpenSegmentSource2 lower =
+        canonical_open_segment_source(
+            "lower-segment",
+            -20,
+            0,
+            8,
+            0);
+    const CORE::Expr sqrt_two =
+        CORE::sqrt(CORE::Expr(2));
+    const MatTraits::Point_2 upper_feature(
+        CORE::Expr(9)
+            - CORE::Expr(11) * sqrt_two,
+        CORE::Expr(22)
+            + CORE::Expr(11) * sqrt_two);
+    const MatTraits::Point_2 upper_transition(
+        8,
+        CORE::Expr(1) + sqrt_two);
+    const MatTraits::Point_2 lower_transition(
+        8,
+        CORE::Expr(1) - sqrt_two);
+    const MatTraits::Point_2 lower_feature(
+        CORE::Expr(9)
+            - CORE::Expr(4) * sqrt_two,
+        CORE::Expr(-8)
+            + CORE::Expr(4) * sqrt_two);
+    const NonparallelSegmentBisectorParameterization2 upper =
+        nonparallel_segment_bisector_parameterization(
+            diagonal,
+            lower,
+            {
+                upper_feature,
+                upper_transition,
+            });
+    const NonparallelSegmentBisectorParameterization2 lower_branch =
+        nonparallel_segment_bisector_parameterization(
+            diagonal,
+            lower,
+            {
+                lower_transition,
+                lower_feature,
+            });
+    const NonparallelSegmentFeatureDomain2 upper_feature_domain =
+        intersect_nonparallel_segment_feature_domains(
+            {
+                {8, 4},
+                {"diagonal-lower"},
+            },
+            {
+                {-22, -11},
+                {"diagonal-upper"},
+            },
+            {
+                {-29, -29},
+                {"lower-left"},
+            },
+            {
+                {-1, -1},
+                {"lower-right"},
+            },
+            2);
+    const NonparallelSegmentFeatureDomain2 lower_feature_domain =
+        intersect_nonparallel_segment_feature_domains(
+            {
+                {-8, 4},
+                {"diagonal-lower"},
+            },
+            {
+                {22, -11},
+                {"diagonal-upper"},
+            },
+            {
+                {29, -29},
+                {"lower-left"},
+            },
+            {
+                {1, -1},
+                {"lower-right"},
+            },
+            2);
+    const std::vector<MatAdmissibleComponent2>
+        upper_radius_three =
+            maximal_nonparallel_segment_clearance_components(
+                "nonparallel-upper",
+                upper_feature_domain,
+                nonparallel_segment_clearance_boundary(
+                    upper,
+                    diagonal,
+                    lower,
+                    9));
+    const std::vector<MatAdmissibleComponent2>
+        upper_radius_two =
+            maximal_nonparallel_segment_clearance_components(
+                "nonparallel-upper",
+                upper_feature_domain,
+                nonparallel_segment_clearance_boundary(
+                    upper,
+                    diagonal,
+                    lower,
+                    4));
+    const std::vector<MatAdmissibleComponent2>
+        upper_radius_forty =
+            maximal_nonparallel_segment_clearance_components(
+                "nonparallel-upper",
+                upper_feature_domain,
+                nonparallel_segment_clearance_boundary(
+                    upper,
+                    diagonal,
+                    lower,
+                    1600));
+    const std::vector<MatAdmissibleComponent2>
+        lower_radius_two =
+            maximal_nonparallel_segment_clearance_components(
+                "nonparallel-lower",
+                lower_feature_domain,
+                nonparallel_segment_clearance_boundary(
+                    lower_branch,
+                    diagonal,
+                    lower,
+                    4));
+    ExactAlgebraicKernel1 kernel;
+    const auto compare = kernel.compare_1_object();
+    const auto construct =
+        kernel.construct_algebraic_real_1_object();
+    const auto endpoint_is =
+        [&compare](
+            const MatParameterEndpoint2& endpoint,
+            const ExactAlgebraicKernel1::Algebraic_real_1&
+                parameter,
+            const std::vector<std::string>& provenance) {
+            return endpoint.parameter.has_value()
+                && compare(
+                       *endpoint.parameter,
+                       parameter)
+                    == CGAL::EQUAL
+                && endpoint.provenance_ids == provenance;
+        };
+    if (upper_radius_three.size() != 1
+        || upper_radius_three[0].component_id
+            != "nonparallel-upper/component-0"
+        || !endpoint_is(
+            upper_radius_three[0].lower,
+            quadratic_field_algebraic_real(
+                {-22, -11},
+                2),
+            {"diagonal-upper"})
+        || !endpoint_is(
+            upper_radius_three[0].upper,
+            construct(-3),
+            {
+                algebraic_root_id_v1(
+                    {-9, 0, 1},
+                    0),
+            })
+        || upper_radius_two.size() != 1
+        || !endpoint_is(
+            upper_radius_two[0].lower,
+            quadratic_field_algebraic_real(
+                {-22, -11},
+                2),
+            {"diagonal-upper"})
+        || !endpoint_is(
+            upper_radius_two[0].upper,
+            quadratic_field_algebraic_real(
+                {-1, -1},
+                2),
+            {"lower-right"})
+        || !upper_radius_forty.empty()) {
+        return false;
+    }
+    return lower_radius_two.size() == 1
+        && lower_radius_two[0].component_id
+            == "nonparallel-lower/component-0"
+        && endpoint_is(
+            lower_radius_two[0].lower,
+            quadratic_field_algebraic_real(
+                {-8, 4},
+                2),
+            {"diagonal-lower"})
+        && endpoint_is(
+            lower_radius_two[0].upper,
+            construct(-2),
+            {
+                algebraic_root_id_v1(
+                    {-4, 0, 1},
+                    0),
+            });
+}
+
 bool unsupported_nonparallel_charts_fail_loudly()
 {
     const MatExactOpenSegmentSource2 horizontal =
@@ -902,6 +1237,8 @@ bool unsupported_nonparallel_charts_fail_loudly()
     bool mismatched_clearance_sources_rejected = false;
     bool nonrational_clearance_rejected = false;
     bool negative_clearance_radius_rejected = false;
+    bool empty_feature_domain_rejected = false;
+    bool missing_feature_provenance_rejected = false;
     try {
         static_cast<void>(
             nonparallel_segment_bisector_parameterization(
@@ -1008,6 +1345,54 @@ bool unsupported_nonparallel_charts_fail_loudly()
         const NegativeClearanceRadiusSquaredError&) {
         negative_clearance_radius_rejected = true;
     }
+    try {
+        static_cast<void>(
+            intersect_nonparallel_segment_feature_domains(
+                {
+                    {0, 0},
+                    {"first-lower"},
+                },
+                {
+                    {1, 0},
+                    {"first-upper"},
+                },
+                {
+                    {1, 0},
+                    {"second-lower"},
+                },
+                {
+                    {2, 0},
+                    {"second-upper"},
+                },
+                2));
+    } catch (
+        const EmptyNonparallelSegmentFeatureDomainError&) {
+        empty_feature_domain_rejected = true;
+    }
+    try {
+        static_cast<void>(
+            intersect_nonparallel_segment_feature_domains(
+                {
+                    {0, 0},
+                    {},
+                },
+                {
+                    {2, 0},
+                    {"first-upper"},
+                },
+                {
+                    {0, 0},
+                    {"second-lower"},
+                },
+                {
+                    {3, 0},
+                    {"second-upper"},
+                },
+                2));
+    } catch (
+        const MissingNonparallelSegmentFeatureProvenanceError&) {
+        missing_feature_provenance_rejected = true;
+    }
     return parallel_rejected
         && degenerate_primitive_rejected
         && unbound_branch_rejected
@@ -1016,7 +1401,9 @@ bool unsupported_nonparallel_charts_fail_loudly()
         && invalid_radicand_rejected
         && mismatched_clearance_sources_rejected
         && nonrational_clearance_rejected
-        && negative_clearance_radius_rejected;
+        && negative_clearance_radius_rejected
+        && empty_feature_domain_rejected
+        && missing_feature_provenance_rejected;
 }
 
 bool has_provenance(
@@ -1672,7 +2059,9 @@ bool segment_segment_producer_gate()
         && nonparallel_segment_segment_producer_contract()
         && nonparallel_segment_charts_are_exact()
         && nonparallel_feature_parameters_are_exact()
+        && nonparallel_feature_domains_are_exact()
         && quadratic_feature_parameters_order_and_embed()
         && nonparallel_clearance_is_rational_quadratic()
+        && nonparallel_feature_clearance_components_are_exact()
         && unsupported_nonparallel_charts_fail_loudly();
 }
