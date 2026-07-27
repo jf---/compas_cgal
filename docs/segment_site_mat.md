@@ -429,6 +429,49 @@ bisector cannot retain a cosmetically quadratic representation. The native
 goldens cover both branches in `Q(sqrt(2))` and a perpendicular rational
 fixture.
 
+For a source endpoint `e` on support `ℓᵢ`, let
+`vᵢ = (bᵢ, -aᵢ)` be the support tangent and let the bisector chart be
+`p(t) = o + ut`. The feature-transition parameter is not obtained by
+substituting `e` into the bisector: `e` is generally not on that line.
+Instead, the perpendicular foot reaches `e` exactly when
+
+```text
+vᵢ · (p(t) - e) = 0,
+
+               vᵢ · (e - o)
+t_endpoint = -----------------.
+                    vᵢ · u
+```
+
+The numerator is rational and the denominator is in `Q(sqrt(d))`.
+`nonparallel_segment_tangent_parameter` divides by multiplying the exact
+quadratic conjugate, returning the canonical rational/radical coefficient
+pair. A foreign segment identity, an endpoint off its declared support, or a
+singular projection fails loud.
+
+Each open segment contributes the interval between its two endpoint
+parameters. Their exact intersection is the S–S feature cell; equal active
+bounds must union all endpoint provenance. In the two-branch native fixture,
+the bounded raw cells are:
+
+```text
+s = +1: t ∈ [-22 - 11sqrt(2), -1 - sqrt(2)]
+s = -1: t ∈ [ -8 +  4sqrt(2),  1 - sqrt(2)]
+```
+
+Field bounds are compared by the exact sign of their difference. To enter the
+shared algebraic endpoint and node-identity substrate, `a + bsqrt(d)` is
+embedded as the root selected by the sign of `b` from
+
+```text
+(x - a)² - b²d = 0.
+```
+
+The primitive integer factor plus its ordered real-root ordinal is identity;
+an isolating interval is not. For example, `-22 - 11sqrt(2)` is root `0` of
+`x² + 44x + 242`, while `-8 + 4sqrt(2)` is root `1` of
+`x² + 16x + 32`. Rational fields collapse before embedding.
+
 !!! warning "A nonparallel generator pair has two branch identities"
 
     The exact producer fixture pairs a horizontal support of squared normal

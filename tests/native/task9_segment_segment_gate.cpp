@@ -409,6 +409,295 @@ bool nonparallel_segment_charts_are_exact()
             == std::vector<CORE::BigRat>{0, 0};
 }
 
+bool nonparallel_feature_parameters_are_exact()
+{
+    const MatExactOpenSegmentSource2 diagonal =
+        canonical_open_segment_source(
+            "diagonal-segment",
+            5,
+            -4,
+            20,
+            11);
+    const MatExactOpenSegmentSource2 lower =
+        canonical_open_segment_source(
+            "lower-segment",
+            -20,
+            0,
+            8,
+            0);
+    const CORE::Expr sqrt_two =
+        CORE::sqrt(CORE::Expr(2));
+    const MatTraits::Point_2 upper_feature(
+        CORE::Expr(9)
+            - CORE::Expr(11) * sqrt_two,
+        CORE::Expr(22)
+            + CORE::Expr(11) * sqrt_two);
+    const MatTraits::Point_2 upper_transition(
+        8,
+        CORE::Expr(1) + sqrt_two);
+    const MatTraits::Point_2 lower_transition(
+        8,
+        CORE::Expr(1) - sqrt_two);
+    const MatTraits::Point_2 lower_feature(
+        CORE::Expr(9)
+            - CORE::Expr(4) * sqrt_two,
+        CORE::Expr(-8)
+            + CORE::Expr(4) * sqrt_two);
+    const NonparallelSegmentBisectorParameterization2 upper =
+        nonparallel_segment_bisector_parameterization(
+            diagonal,
+            lower,
+            {
+                upper_feature,
+                upper_transition,
+            });
+    const NonparallelSegmentBisectorParameterization2 lower_branch =
+        nonparallel_segment_bisector_parameterization(
+            diagonal,
+            lower,
+            {
+                lower_transition,
+                lower_feature,
+            });
+    const auto equals =
+        [](const MatQuadraticFieldValue2& value,
+           const CORE::BigRat& rational,
+           const CORE::BigRat& radical) {
+            return value.rational == rational
+                && value.radical == radical;
+        };
+    if (!equals(
+            nonparallel_segment_tangent_parameter(
+                upper,
+                diagonal,
+                20,
+                11),
+            -22,
+            -11)
+        || !equals(
+            nonparallel_segment_tangent_parameter(
+                upper,
+                diagonal,
+                5,
+                -4),
+            8,
+            4)
+        || !equals(
+            nonparallel_segment_tangent_parameter(
+                upper,
+                lower,
+                -20,
+                0),
+            -29,
+            -29)
+        || !equals(
+            nonparallel_segment_tangent_parameter(
+                upper,
+                lower,
+                8,
+                0),
+            -1,
+            -1)
+        || !equals(
+            nonparallel_segment_tangent_parameter(
+                lower_branch,
+                diagonal,
+                5,
+                -4),
+            -8,
+            4)
+        || !equals(
+            nonparallel_segment_tangent_parameter(
+                lower_branch,
+                diagonal,
+                20,
+                11),
+            22,
+            -11)
+        || !equals(
+            nonparallel_segment_tangent_parameter(
+                lower_branch,
+                lower,
+                -20,
+                0),
+            29,
+            -29)
+        || !equals(
+            nonparallel_segment_tangent_parameter(
+                lower_branch,
+                lower,
+                8,
+                0),
+            1,
+            -1)) {
+        return false;
+    }
+
+    const MatExactOpenSegmentSource2 horizontal =
+        canonical_open_segment_source(
+            "horizontal",
+            -4,
+            0,
+            4,
+            0);
+    const MatExactOpenSegmentSource2 vertical =
+        canonical_open_segment_source(
+            "vertical",
+            5,
+            -4,
+            5,
+            4);
+    const NonparallelSegmentBisectorParameterization2 rational =
+        nonparallel_segment_bisector_parameterization(
+            horizontal,
+            vertical,
+            {
+                {1, 4},
+                {4, 1},
+            });
+    return equals(
+               nonparallel_segment_tangent_parameter(
+                   rational,
+                   horizontal,
+                   -4,
+                   0),
+               -9,
+               0)
+        && equals(
+               nonparallel_segment_tangent_parameter(
+                   rational,
+                   horizontal,
+                   4,
+                   0),
+               -1,
+               0)
+        && equals(
+               nonparallel_segment_tangent_parameter(
+                   rational,
+                   vertical,
+                   5,
+                   -4),
+               4,
+               0)
+        && equals(
+               nonparallel_segment_tangent_parameter(
+                   rational,
+                   vertical,
+                   5,
+                   4),
+               -4,
+               0);
+}
+
+bool quadratic_feature_parameters_order_and_embed()
+{
+    const CORE::BigRat radicand = 2;
+    const MatQuadraticFieldValue2 upper_lower{
+        -22,
+        -11,
+    };
+    const MatQuadraticFieldValue2 upper_upper{
+        -1,
+        -1,
+    };
+    const MatQuadraticFieldValue2 lower_lower{
+        -8,
+        4,
+    };
+    const MatQuadraticFieldValue2 lower_upper{
+        1,
+        -1,
+    };
+    if (quadratic_field_compare(
+            upper_lower,
+            upper_upper,
+            radicand)
+            != CGAL::SMALLER
+        || quadratic_field_compare(
+               lower_lower,
+               lower_upper,
+               radicand)
+            != CGAL::SMALLER
+        || quadratic_field_compare(
+               upper_lower,
+               upper_lower,
+               radicand)
+            != CGAL::EQUAL) {
+        return false;
+    }
+
+    ExactAlgebraicKernel1 kernel;
+    const auto compare = kernel.compare_1_object();
+    const auto construct =
+        kernel.construct_algebraic_real_1_object();
+    const auto upper_lower_algebraic =
+        quadratic_field_algebraic_real(
+            upper_lower,
+            radicand);
+    const auto upper_upper_algebraic =
+        quadratic_field_algebraic_real(
+            upper_upper,
+            radicand);
+    const auto lower_lower_algebraic =
+        quadratic_field_algebraic_real(
+            lower_lower,
+            radicand);
+    const auto lower_upper_algebraic =
+        quadratic_field_algebraic_real(
+            lower_upper,
+            radicand);
+    return compare(
+               construct(-38),
+               upper_lower_algebraic)
+            == CGAL::SMALLER
+        && compare(
+               upper_lower_algebraic,
+               construct(-37))
+            == CGAL::SMALLER
+        && compare(
+               construct(-3),
+               upper_upper_algebraic)
+            == CGAL::SMALLER
+        && compare(
+               upper_upper_algebraic,
+               construct(-2))
+            == CGAL::SMALLER
+        && compare(
+               upper_lower_algebraic,
+               upper_upper_algebraic)
+            == CGAL::SMALLER
+        && compare(
+               lower_lower_algebraic,
+               lower_upper_algebraic)
+            == CGAL::SMALLER
+        && algebraic_root_identity_v1(
+               upper_lower_algebraic)
+            == algebraic_root_id_v1(
+                {242, 44, 1},
+                0)
+        && algebraic_root_identity_v1(
+               upper_upper_algebraic)
+            == algebraic_root_id_v1(
+                {-1, 2, 1},
+                0)
+        && algebraic_root_identity_v1(
+               lower_lower_algebraic)
+            == algebraic_root_id_v1(
+                {32, 16, 1},
+                1)
+        && algebraic_root_identity_v1(
+               lower_upper_algebraic)
+            == algebraic_root_id_v1(
+                {-1, -2, 1},
+                0)
+        && compare(
+               quadratic_field_algebraic_real(
+                   {-9, 0},
+                   1),
+               construct(-9))
+            == CGAL::EQUAL;
+}
+
 bool unsupported_nonparallel_charts_fail_loudly()
 {
     const MatExactOpenSegmentSource2 horizontal =
@@ -432,9 +721,25 @@ bool unsupported_nonparallel_charts_fail_loudly()
             -4,
             20,
             11);
+    const CORE::Expr sqrt_two =
+        CORE::sqrt(CORE::Expr(2));
+    const NonparallelSegmentBisectorParameterization2 valid =
+        nonparallel_segment_bisector_parameterization(
+            horizontal,
+            diagonal,
+            {
+                {9, 0},
+                {
+                    8,
+                    CORE::Expr(1) + sqrt_two,
+                },
+            });
     bool parallel_rejected = false;
     bool degenerate_primitive_rejected = false;
     bool unbound_branch_rejected = false;
+    bool mismatched_source_rejected = false;
+    bool off_support_endpoint_rejected = false;
+    bool invalid_radicand_rejected = false;
     try {
         static_cast<void>(
             nonparallel_segment_bisector_parameterization(
@@ -472,9 +777,43 @@ bool unsupported_nonparallel_charts_fail_loudly()
         const UnboundNonparallelSegmentBranchError&) {
         unbound_branch_rejected = true;
     }
+    try {
+        static_cast<void>(
+            nonparallel_segment_tangent_parameter(
+                valid,
+                parallel,
+                0,
+                3));
+    } catch (
+        const MismatchedNonparallelSegmentSourceError&) {
+        mismatched_source_rejected = true;
+    }
+    try {
+        static_cast<void>(
+            nonparallel_segment_tangent_parameter(
+                valid,
+                horizontal,
+                0,
+                1));
+    } catch (const OffSupportSegmentEndpointError&) {
+        off_support_endpoint_rejected = true;
+    }
+    try {
+        static_cast<void>(
+            quadratic_field_compare(
+                {0, 0},
+                {1, 0},
+                0));
+    } catch (
+        const InvalidQuadraticFieldRadicandError&) {
+        invalid_radicand_rejected = true;
+    }
     return parallel_rejected
         && degenerate_primitive_rejected
-        && unbound_branch_rejected;
+        && unbound_branch_rejected
+        && mismatched_source_rejected
+        && off_support_endpoint_rejected
+        && invalid_radicand_rejected;
 }
 
 bool has_provenance(
@@ -1129,5 +1468,7 @@ bool segment_segment_producer_gate()
     return segment_segment_production_graph_gate()
         && nonparallel_segment_segment_producer_contract()
         && nonparallel_segment_charts_are_exact()
+        && nonparallel_feature_parameters_are_exact()
+        && quadratic_feature_parameters_order_and_embed()
         && unsupported_nonparallel_charts_fail_loudly();
 }
