@@ -7,6 +7,10 @@
 #include <string>
 #include <vector>
 
+std::vector<MatAdmissibleComponent2>
+one_dimensional_graph_components(
+    const std::vector<MatAdmissibleComponent2>& components);
+
 void append_exact_graph_components(
     const std::string& dual_id,
     const std::string& primitive_kind,

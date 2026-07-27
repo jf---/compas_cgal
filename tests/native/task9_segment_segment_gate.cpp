@@ -1,3 +1,4 @@
+#include "segment_site_graph_emission.h"
 #include "segment_site_mat.h"
 
 #include <algorithm>
@@ -2684,6 +2685,325 @@ bool rectangle_lower_left_nonparallel_production_graph_gate()
             == CGAL::EQUAL;
 }
 
+bool unified_rectangle_production_graph_gate()
+{
+    bool negative_radius_rejected = false;
+    try {
+        static_cast<void>(
+            segment_site_rectangle_graph_spike(-1));
+    } catch (
+        const NegativeClearanceRadiusSquaredError&) {
+        negative_radius_rejected = true;
+    }
+    const MatExactGraph2 graph =
+        segment_site_rectangle_graph_spike();
+    const MatExactGraph2 repeated =
+        segment_site_rectangle_graph_spike();
+    const MatExactGraph2 reversed =
+        segment_site_reversed_rectangle_graph_spike();
+    const MatExactGraph2 radius_one =
+        segment_site_rectangle_graph_spike(1);
+    const MatExactGraph2 plateau =
+        segment_site_rectangle_graph_spike(4);
+    const MatExactGraph2 rejected =
+        segment_site_rectangle_graph_spike(5);
+    if (!negative_radius_rejected
+        || graph.edges.size() != 5
+        || graph.nodes.size() != 6
+        || graph.rejected_incident_transitions != 8
+        || graph.matched_generator_sites != 8
+        || !graphs_equal(graph, repeated)
+        || !graphs_equal(graph, reversed)
+        || radius_one.edges.size() != 5
+        || radius_one.nodes.size() != 6
+        || radius_one.rejected_incident_transitions != 8
+        || radius_one.matched_generator_sites != 8
+        || plateau.edges.size() != 1
+        || plateau.nodes.size() != 2
+        || plateau.rejected_incident_transitions != 8
+        || plateau.matched_generator_sites != 8
+        || !rejected.edges.empty()
+        || !rejected.nodes.empty()
+        || rejected.rejected_incident_transitions != 8
+        || rejected.matched_generator_sites != 8) {
+        return false;
+    }
+
+    const std::set<std::vector<std::string>>
+        expected_parent_pairs{
+            {"bottom-segment", "left-segment"},
+            {"bottom-segment", "right-segment"},
+            {"bottom-segment", "top-segment"},
+            {"left-segment", "top-segment"},
+            {"right-segment", "top-segment"},
+        };
+    std::set<std::vector<std::string>>
+        parent_pairs;
+    std::map<std::string, std::size_t> degree;
+    for (const MatExactGraphEdge2& edge :
+         graph.edges) {
+        if (edge.primitive_kind != "LINE"
+            || edge.generator_site_ids
+                != edge.parent_site_ids) {
+            return false;
+        }
+        parent_pairs.insert(
+            edge.parent_site_ids);
+        ++degree[edge.source_node_id];
+        ++degree[edge.target_node_id];
+    }
+    if (parent_pairs != expected_parent_pairs) {
+        return false;
+    }
+
+    const std::set<std::vector<std::string>>
+        expected_node_features{
+            {
+                "bottom-segment",
+                "left-segment",
+                "lower-left",
+            },
+            {
+                "bottom-segment",
+                "lower-right",
+                "right-segment",
+            },
+            {
+                "left-segment",
+                "top-segment",
+                "upper-left",
+            },
+            {
+                "right-segment",
+                "top-segment",
+                "upper-right",
+            },
+            {
+                "bottom-segment",
+                "left-segment",
+                "top-segment",
+            },
+            {
+                "bottom-segment",
+                "right-segment",
+                "top-segment",
+            },
+        };
+    const std::map<
+        std::vector<std::string>,
+        std::vector<std::string>>
+        expected_node_parents{
+            {
+                {
+                    "bottom-segment",
+                    "left-segment",
+                    "lower-left",
+                },
+                {
+                    "bottom-segment",
+                    "left-segment",
+                },
+            },
+            {
+                {
+                    "bottom-segment",
+                    "lower-right",
+                    "right-segment",
+                },
+                {
+                    "bottom-segment",
+                    "right-segment",
+                },
+            },
+            {
+                {
+                    "left-segment",
+                    "top-segment",
+                    "upper-left",
+                },
+                {
+                    "left-segment",
+                    "top-segment",
+                },
+            },
+            {
+                {
+                    "right-segment",
+                    "top-segment",
+                    "upper-right",
+                },
+                {
+                    "right-segment",
+                    "top-segment",
+                },
+            },
+            {
+                {
+                    "bottom-segment",
+                    "left-segment",
+                    "top-segment",
+                },
+                {
+                    "bottom-segment",
+                    "left-segment",
+                    "top-segment",
+                },
+            },
+            {
+                {
+                    "bottom-segment",
+                    "right-segment",
+                    "top-segment",
+                },
+                {
+                    "bottom-segment",
+                    "right-segment",
+                    "top-segment",
+                },
+            },
+        };
+    std::set<std::vector<std::string>>
+        node_features;
+    std::size_t junctions = 0;
+    std::size_t terminals = 0;
+    for (const MatExactGraphNode2& node :
+         graph.nodes) {
+        node_features.insert(
+            node.generator_site_ids);
+        if (node.node_id
+            != stable_voronoi_node_identity_v1(
+                node.generator_site_ids)) {
+            return false;
+        }
+        const auto found =
+            degree.find(node.node_id);
+        const auto expected_parents =
+            expected_node_parents.find(
+                node.generator_site_ids);
+        if (found == degree.end()
+            || expected_parents
+                == expected_node_parents.end()
+            || node.parent_site_ids
+                != expected_parents->second
+            || node.provenance_ids.empty()) {
+            return false;
+        }
+        junctions += found->second == 3;
+        terminals += found->second == 1;
+    }
+    if (node_features != expected_node_features
+        || junctions != 2
+        || terminals != 4) {
+        return false;
+    }
+
+    const std::set<std::vector<std::string>>
+        expected_junction_features{
+            {
+                "bottom-segment",
+                "left-segment",
+                "top-segment",
+            },
+            {
+                "bottom-segment",
+                "right-segment",
+                "top-segment",
+            },
+        };
+    std::set<std::vector<std::string>>
+        plateau_junction_features;
+    for (const MatExactGraphNode2& node :
+         plateau.nodes) {
+        plateau_junction_features.insert(
+            node.generator_site_ids);
+        if (node.node_id
+                != stable_voronoi_node_identity_v1(
+                    node.generator_site_ids)
+            || node.parent_site_ids
+                != node.generator_site_ids) {
+            return false;
+        }
+    }
+    if (plateau.edges.front().parent_site_ids
+            != std::vector<std::string>{
+                "bottom-segment",
+                "top-segment",
+            }
+        || plateau_junction_features
+            != expected_junction_features) {
+        return false;
+    }
+
+    std::size_t clipped_junctions = 0;
+    std::size_t clipped_terminals = 0;
+    for (const MatExactGraphNode2& node :
+         radius_one.nodes) {
+        clipped_junctions +=
+            node.generator_site_ids.size() == 3;
+        clipped_terminals +=
+            node.generator_site_ids.size() == 2;
+    }
+    return clipped_junctions == 2
+        && clipped_terminals == 4;
+}
+
+bool graph_dimension_projection_gate()
+{
+    ExactAlgebraicKernel1 kernel;
+    const auto construct =
+        kernel.construct_algebraic_real_1_object();
+    const MatAdmissibleComponent2 interval{
+        "interval",
+        {construct(0), {"lower"}},
+        {construct(1), {"upper"}},
+    };
+    const MatAdmissibleComponent2 singleton{
+        "singleton",
+        {construct(2), {"point"}},
+        {construct(2), {"point"}},
+    };
+    const std::vector<MatAdmissibleComponent2>
+        retained =
+            one_dimensional_graph_components(
+                {interval, singleton});
+
+    bool unbounded_rejected = false;
+    try {
+        static_cast<void>(
+            one_dimensional_graph_components(
+                {
+                    {
+                        "unbounded",
+                        {std::nullopt, {"lower"}},
+                        {construct(1), {"upper"}},
+                    },
+                }));
+    } catch (
+        const InvalidSegmentSiteGraphComponentError&) {
+        unbounded_rejected = true;
+    }
+    bool reversed_rejected = false;
+    try {
+        static_cast<void>(
+            one_dimensional_graph_components(
+                {
+                    {
+                        "reversed",
+                        {construct(2), {"lower"}},
+                        {construct(1), {"upper"}},
+                    },
+                }));
+    } catch (
+        const InvalidSegmentSiteGraphComponentError&) {
+        reversed_rejected = true;
+    }
+    return retained.size() == 1
+        && retained.front().component_id
+            == interval.component_id
+        && unbounded_rejected
+        && reversed_rejected;
+}
+
 bool nonparallel_segment_segment_production_graph_gate()
 {
     bool negative_radius_rejected = false;
@@ -3841,6 +4161,8 @@ bool segment_segment_producer_gate()
         && segment_limited_parallel_segment_segment_production_graph_gate()
         && rectangle_central_parallel_production_graph_gate()
         && rectangle_lower_left_nonparallel_production_graph_gate()
+        && unified_rectangle_production_graph_gate()
+        && graph_dimension_projection_gate()
         && point_limited_parallel_failures_are_named()
         && segment_limited_parallel_failures_are_named()
         && rectangle_nonparallel_failures_are_named()

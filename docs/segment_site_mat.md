@@ -22,13 +22,18 @@ needed by every downstream traversal and engagement decision.
     strict feature intervals, rational quadratic clearance, and
     polygon-with-holes clipping. The rectangle's lower-left nonparallel cell
     now binds its shared feature endpoint and opposite open-segment limiter
-    through the same live adaptor contract.
+    through the same live adaptor contract. One rectangle production path now
+    traverses a single four-segment adaptor build, emits all five interior S–S
+    cells, rejects all eight incident exterior P–S rays, and canonicalizes the
+    six exact nodes from live degree-three feature incidence. Repeat,
+    four-segment reversal, and exact `r² = 0`, `1`, `4`, and `5` states are
+    native-gated.
     A bounded normalized nonparallel slice now reconstructs a two-branch
     adaptor cell from its exact raw S–S and P–S chain, preserves separate
     primitive and parent ownership, and survives exact radius clipping.
-    General externally limited and composite segment/segment cells, the
-    remaining rectangle cells, the unified segment-site traversal, neck
-    evidence, proposal sampling, and the Python binding are not complete.
+    General arbitrary-pocket traversal, externally limited and composite
+    segment/segment cells, feature CSR, neck evidence, proposal sampling, and
+    the Python binding are not complete.
 
     Do not treat the current native spike APIs as the final public MAT API.
     The maturity table below is the claim boundary.
@@ -62,8 +67,8 @@ construction.
 
 | Dimension | Comparative status | Held–Pfeiffer 2025 | Exact-certified Phase 1 |
 | --- | --- | --- | --- |
-| Pocket geometry | incomplete | Segments and circular arcs; simply connected; machinability assumed after an `r + ε` transformation | Raw MAT primitives now clip exactly against polygonal domains with holes and exact radius clearance; unified `C_r` graph is incomplete; circular boundaries are not supported |
-| MAT backend | incomplete | Vroni/ArcVroni used end-to-end | Exact CGAL point graph plus bounded P–S, feature-, point-, and one- or two-sided open-segment-limited parallel S–S, one externally limited nonparallel rectangle cell, and normalized two-branch nonparallel S–S production slices with distinct raw-generator, parent-site, and branch provenance; unified graph incomplete |
+| Pocket geometry | incomplete | Segments and circular arcs; simply connected; machinability assumed after an `r + ε` transformation | Raw MAT primitives now clip exactly against polygonal domains with holes and exact radius clearance; the rectangle `C_r` graph is unified, but general arbitrary-pocket traversal is incomplete; circular boundaries are not supported |
+| MAT backend | stronger exact contract on a bounded fixture; incomplete end-to-end | Vroni/ArcVroni used end-to-end | Exact CGAL point graph plus bounded P–S and parallel/nonparallel S–S cells; one four-segment rectangle build now yields a reversal-invariant five-edge/six-node graph with exact radius clipping, feature-triple node identity, and explicit rejection of eight incident P–S rays; arbitrary-pocket traversal remains incomplete |
 | Engagement limit | stronger contract; incomplete integration | Analytic circle construction followed by bisection until `θmax − 0.001 <= θ <= θmax` radians | Exact rational chord surrogate and event-exact segment/full-circle certification; integration incomplete |
 | Candidate spacing | incomplete | Bisection along the middle curve | Finite candidate lattice; no monotonic-feasibility assumption |
 | Machined state | stronger contract | Ordered contour of prior machining disks; transition sweeps omitted from that contour model | Exact stock mutation and exact full-sweep coverage, ordered certify-before-deplete |
@@ -569,6 +574,72 @@ Negative radius fails before graph construction. Complete records are
 unchanged after reversing all four rectangle segments. Missing, duplicate,
 and support-mismatched limiter records, reversed live bounds, and ownerless
 live bounds each raise distinct named errors.
+
+### One adaptor build yields a unified rectangle graph
+
+The isolated center and lower-left cells are now consumed by one production
+traversal over the four rectangle segments. The producer inserts the four
+open segments once, proves an eight-feature source bijection for the four
+segments and their four endpoint point-sites, and constructs one
+degeneracy-removal Voronoi adaptor. Each undirected adaptor edge has one
+canonical orientation, selected by the ordered `up()`/`down()` stable IDs.
+
+The traversal authenticates two disjoint classes:
+
+- five bounded S–S halfedges become exact `LINE` graph edges;
+- eight unbounded P–S rays are proved incident to their parent segment and
+  rejected from the interior MAT.
+
+No coordinate rematching reconstructs adjacency. Parallel versus nonparallel
+dispatch is the exact determinant of the two supporting-line normals. Every
+S–S endpoint is bound to its live `left()` or `right()` owner, clipped by the
+appropriate exact clearance polynomial, and emitted with its original dual,
+generator pair, parent pair, root, owner, and multiplicity provenance.
+
+An emitted edge-local endpoint initially has identity
+`stable_endpoint_node_identity_v1(dual_id, endpoint)`. At an adaptor vertex,
+the producer circulates all incident halfedges and unions their `up()` and
+`down()` feature IDs. The rectangle contract requires exactly three distinct
+features. Their ordered triple becomes the canonical
+`stable_voronoi_node_identity_v1(...)`; point features map back to both
+incident parent segments when parent ownership is assembled.
+
+This yields five edges and six nodes:
+
+| Node class | Count | Degree | Exact feature identity |
+| --- | ---: | ---: | --- |
+| Corner terminal | 4 | 1 | corner point plus its two incident segments |
+| Interior junction | 2 | 3 | bottom/top plus left or right segment |
+
+The complete graph record is identical on repeat and after reversing every
+source segment. Exact clearance changes the graph without changing the
+underlying adaptor:
+
+| Exact `r²` | One-dimensional graph |
+| --- | --- |
+| `0` | five edges, six feature-triple nodes |
+| `1` | five edges, two feature-triple junctions, four exact clearance-root terminals |
+| `4` | one central plateau edge and its two junction nodes |
+| `5` | empty |
+
+!!! warning "Certified set components are not automatically graph edges"
+
+    The exact clipper returns maximal **closed admissible sets**. At `r² = 4`,
+    each corner branch survives at its junction as a valid isolated point.
+    Emitting that zero-dimensional component as an edge creates a self-loop
+    and corrupts degree. The one-dimensional graph boundary therefore compares
+    its two algebraic bounds exactly: increasing intervals become edges,
+    equal bounds remain certified-set events but are not emitted as edges, and
+    reversed bounds raise `InvalidSegmentSiteGraphComponentError`. The retained
+    central plateau edge still owns both shared junction nodes.
+
+!!! note "Canonical node identity comes from incidence, not position"
+
+    A degree-three node belongs to the exact union of features around the live
+    adaptor vertex. Edge-local endpoint identities are aliases into that
+    feature triple. Matching rendered coordinates would create a second,
+    weaker identity system and would not prove which generator sites or parent
+    segments own the junction.
 
 ### Nonparallel S–S branches have exact source-bound charts
 
@@ -1113,6 +1184,7 @@ Refinement may change the number and position of samples. It must not change:
 | `segment_site_clipping.*` | exact domain and clearance roots; maximal admissible cells |
 | `segment_site_provenance.*` | stable site/root provenance and endpoint evidence |
 | `segment_site_endpoint_binding.*` | live parabola and bounded parallel/nonparallel S–S endpoint ownership |
+| `segment_site_graph_emission.*` | exact one-dimensional component projection and graph record emission |
 | `segment_site_mat.*` | graph orchestration and canonical records |
 | `segment_site_neck.*` | exact local minima and separating cuts |
 | `segment_site_mat_sampling.*` | proposal-only samples |
@@ -1140,8 +1212,9 @@ consumers, or evolution differ from graph orchestration.
 | Nonparallel segment/segment raw cells | implemented and native-gated | exact source-bound branches, feature intervals, algebraic endpoints, true-radius clipping, and polygon-with-holes clipping |
 | External open-segment-limited nonparallel S–S cell | implemented and native-gated | exact for the lower-left rectangle branch: mixed feature/segment ownership, field-equation filtering, live interval clipping, and event multiplicity |
 | Normalized nonparallel S–S composite fixture | implemented and native-gated | exact two-branch reconstruction; distinct raw-generator, parent-site, and normalized-dual identity; exact transition aliasing and radius clipping |
+| Unified rectangle segment-site graph | implemented and native-gated | one adaptor build; five S–S edges, six canonical nodes, eight authenticated rejected incident P–S rays; exact `r² = 0`, `1`, `4`, and `5` topology; complete-record reversal invariance |
 | General segment/segment cells | pending | unbounded, arbitrary externally limited, multi-transition, and arbitrary-length composite chains have no production graph claim |
-| Unified degeneracy-removal traversal | pending | no production claim |
+| General degeneracy-removal traversal | pending | the rectangle fixture is production-gated; arbitrary pockets and all primitive combinations have no production claim |
 | Degeneracy-normalized feature CSR | pending | no production claim |
 | Exact neck evidence | pending | no production claim |
 | Proposal-only sampling | pending | no production claim |
@@ -1192,12 +1265,20 @@ with analytic P–S and S–S endpoint goldens. The normalized composite gate
 additionally proves parent-owned rejection classification, one retained raw
 P–S bridge, exact S–S/P–S node aliasing, stable signed-branch identity,
 positive-radius clipping, repeatability, and source-endpoint reversal
-invariance. These gates establish bounded P–S, feature-owned parallel S–S,
-point- and open-segment-limited parallel S–S, raw nonparallel S–S algebra, and
-one externally open-segment-limited nonparallel rectangle cell, plus the
-bounded two-branch normalized fixture. They do not establish general or
-externally limited composite S–S cells, degeneracy-normalized feature CSR, or
-the final unified traversal.
+invariance. The unified rectangle gate additionally proves one-build
+enumeration of all five S–S cells, exact rejection of all eight incident P–S
+rays, six feature-triple node identities, the two-degree-three/four-degree-one
+distribution, exact dimensional filtering at the `r² = 4` plateau, complete
+record repeatability, and reversal of all four segments. These gates establish
+bounded P–S, feature-owned parallel S–S, point- and open-segment-limited
+parallel S–S, raw nonparallel S–S algebra, one externally
+open-segment-limited nonparallel rectangle cell, the bounded two-branch
+normalized fixture, and one unified rectangle graph. They do not establish
+general arbitrary-pocket traversal, externally limited composite S–S cells,
+or degeneracy-normalized feature CSR. A separate graph-emission contract
+retains an increasing algebraic interval, omits an equal-bound singleton, and
+raises `InvalidSegmentSiteGraphComponentError` for unbounded or reversed
+components.
 
 The final Task 9 boundary must add the still-absent Python MAT binding test and
 then requires:

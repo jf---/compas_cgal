@@ -1,5 +1,36 @@
 #include "segment_site_graph_emission.h"
 
+std::vector<MatAdmissibleComponent2>
+one_dimensional_graph_components(
+    const std::vector<MatAdmissibleComponent2>& components)
+{
+    ExactAlgebraicKernel1 kernel;
+    const auto compare =
+        kernel.compare_1_object();
+    std::vector<MatAdmissibleComponent2> retained;
+    retained.reserve(components.size());
+    for (const MatAdmissibleComponent2& component :
+         components) {
+        if (!component.lower.parameter.has_value()
+            || !component.upper.parameter.has_value()) {
+            throw InvalidSegmentSiteGraphComponentError(
+                "segment-site graph component is unbounded");
+        }
+        const CGAL::Comparison_result order =
+            compare(
+                *component.lower.parameter,
+                *component.upper.parameter);
+        if (order == CGAL::LARGER) {
+            throw InvalidSegmentSiteGraphComponentError(
+                "segment-site graph component bounds are reversed");
+        }
+        if (order == CGAL::SMALLER) {
+            retained.push_back(component);
+        }
+    }
+    return retained;
+}
+
 void append_exact_graph_components(
     const std::string& dual_id,
     const std::string& primitive_kind,
