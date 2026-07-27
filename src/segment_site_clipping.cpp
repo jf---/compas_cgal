@@ -303,12 +303,10 @@ void append_source_parabola_intersections(
                 kernel2.compute_y_2_object()(solution);
             if (!radical_equation_holds(
                     x_equation,
-                    solution,
-                    kernel2)
+                    solution)
                 || !radical_equation_holds(
                     y_equation,
-                    solution,
-                    kernel2)
+                    solution)
                 || compare(edge_parameter, CORE::BigRat(0))
                     == CGAL::SMALLER
                 || compare(edge_parameter, CORE::BigRat(1))
@@ -1241,6 +1239,48 @@ maximal_nonparallel_segment_clearance_components(
             return true;
         },
         {});
+}
+
+std::vector<MatAdmissibleComponent2>
+clip_nonparallel_segment_clearance_components(
+    const std::string& original_dual_id,
+    const NonparallelSegmentBisectorParameterization2& primitive,
+    const NonparallelSegmentFeatureDomain2& feature_domain,
+    const ClearanceRootBoundary2& boundary,
+    const MatDomainPolygonWithHoles2& domain)
+{
+    if (primitive.radicand != feature_domain.radicand) {
+        throw MismatchedNonparallelSegmentFeatureDomainError(
+            "nonparallel S-S chart and feature domain use different fields");
+    }
+    const MatParameterEndpoint2 lower{
+        quadratic_field_algebraic_real(
+            feature_domain.lower.parameter,
+            feature_domain.radicand),
+        feature_domain.lower.provenance_ids,
+    };
+    const MatParameterEndpoint2 upper{
+        quadratic_field_algebraic_real(
+            feature_domain.upper.parameter,
+            feature_domain.radicand),
+        feature_domain.upper.provenance_ids,
+    };
+    return clip_clearance_components_with_domain_roots(
+        original_dual_id,
+        lower,
+        upper,
+        boundary,
+        [&domain, &primitive](const CORE::BigRat& parameter) {
+            return nonparallel_segment_domain_contains(
+                domain,
+                primitive,
+                parameter);
+        },
+        nonparallel_segment_domain_roots(
+            original_dual_id,
+            primitive,
+            feature_domain,
+            domain));
 }
 
 std::vector<MatAdmissibleComponent2>

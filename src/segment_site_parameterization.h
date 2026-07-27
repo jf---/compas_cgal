@@ -215,6 +215,12 @@ public:
     using std::runtime_error::runtime_error;
 };
 
+class MismatchedNonparallelSegmentFeatureDomainError
+    : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
+
 MatExactOpenSegmentSource2 canonical_open_segment_source(
     std::string stable_site_id,
     const CORE::BigRat& source_x,
@@ -370,11 +376,14 @@ ExactAlgebraicKernel2::Polynomial_2 radical_norm(
     const CORE::BigRat& radicand);
 bool radical_equation_holds(
     const RadicalEquation2& equation,
-    const ExactAlgebraicKernel2::Algebraic_real_2& point,
-    const ExactAlgebraicKernel2& kernel);
+    const ExactAlgebraicKernel2::Algebraic_real_2& point);
 bool source_domain_contains(
     const MatDomainPolygonWithHoles2& domain,
     const SourceParabolaParameterization2& primitive,
+    const CORE::BigRat& parameter);
+bool nonparallel_segment_domain_contains(
+    const MatDomainPolygonWithHoles2& domain,
+    const NonparallelSegmentBisectorParameterization2& primitive,
     const CORE::BigRat& parameter);
 bool domain_contains(
     const MatDomainPolygonWithHoles2& domain,

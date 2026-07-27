@@ -117,6 +117,14 @@ maximal_nonparallel_segment_clearance_components(
     const ClearanceRootBoundary2& boundary);
 
 std::vector<MatAdmissibleComponent2>
+clip_nonparallel_segment_clearance_components(
+    const std::string& original_dual_id,
+    const NonparallelSegmentBisectorParameterization2& primitive,
+    const NonparallelSegmentFeatureDomain2& feature_domain,
+    const ClearanceRootBoundary2& boundary,
+    const MatDomainPolygonWithHoles2& domain);
+
+std::vector<MatAdmissibleComponent2>
 clip_linear_clearance_components(
     const std::string& original_dual_id,
     const RationalPrimitiveParameterization2& primitive,

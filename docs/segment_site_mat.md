@@ -14,10 +14,12 @@ needed by every downstream traversal and engagement decision.
     point and segment limiters, and clips rational point/segment parabolas at
     exact true-radius roots. A bounded parallel segment/segment production
     slice now derives its exact feature-overlap interval, binds feature-owned
-    live endpoints, and classifies constant clearance. Nonparallel and
-    externally limited segment/segment cells, the unified segment-site
-    traversal, neck evidence, proposal sampling, and the Python binding are
-    not complete.
+    live endpoints, and classifies constant clearance. Raw nonparallel
+    segment/segment branches now have exact source-bound charts, strict
+    feature intervals, rational quadratic clearance, and polygon-with-holes
+    clipping. Normalized nonparallel adjacency, externally limited
+    segment/segment cells, the unified segment-site traversal, neck evidence,
+    proposal sampling, and the Python binding are not complete.
 
     Do not treat the current native spike APIs as the final public MAT API.
     The maturity table below is the claim boundary.
@@ -51,8 +53,8 @@ construction.
 
 | Dimension | Held–Pfeiffer 2025 | Exact-certified Phase 1 |
 | --- | --- | --- |
-| Pocket geometry | Segments and circular arcs; simply connected; machinability assumed after an `r + ε` transformation | Target: polygonal pockets with holes and exact `C_r`/`M_r`; current MAT subset is incomplete; circular boundaries are not supported |
-| MAT backend | Vroni/ArcVroni used end-to-end | Exact CGAL point graph plus bounded P–S and parallel S–S production slices with stable provenance; unified graph incomplete |
+| Pocket geometry | Segments and circular arcs; simply connected; machinability assumed after an `r + ε` transformation | Raw MAT primitives now clip exactly against polygonal domains with holes and exact radius clearance; unified `C_r` graph is incomplete; circular boundaries are not supported |
+| MAT backend | Vroni/ArcVroni used end-to-end | Exact CGAL point graph plus bounded P–S and parallel S–S production slices and exact raw nonparallel S–S cells with stable provenance; unified graph incomplete |
 | Engagement limit | Analytic circle construction followed by bisection until `θmax − 0.001 <= θ <= θmax` radians | Exact rational chord surrogate and event-exact segment/full-circle certification; integration incomplete |
 | Candidate spacing | Bisection along the middle curve | Finite candidate lattice; no monotonic-feasibility assumption |
 | Machined state | Ordered contour of prior machining disks; transition sweeps omitted from that contour model | Exact stock mutation and exact full-sweep coverage, ordered certify-before-deplete |
@@ -516,8 +518,67 @@ that interval, and emits every maximal retained subcell. The native gate
 exercises full retention, one-root clipping, and complete rejection on the
 upper branch, plus one-root clipping on the lower branch. Physical endpoint
 IDs remain the feature-bound provenance; a coincident clearance event is
-unioned rather than replacing its owner. Exact polygon-domain clipping and
-normalized composite adjacency remain separate pending contracts.
+unioned rather than replacing its owner.
+
+#### Polygon-with-holes clipping stays in one quadratic field
+
+For an affine nonparallel chart
+
+```text
+p(t) = o + ut,  o,u ∈ Q(sqrt(d))²
+```
+
+and a rational polygon edge `a + es`, the exact intersection solves
+
+```text
+ut - es = a - o.
+```
+
+`nonparallel_segment_domain_roots` evaluates the two-by-two determinant in
+`Q(sqrt(d))`. Both the chart parameter `t` and edge parameter `s` remain
+quadratic-field values. Exact field comparisons enforce `s ∈ [0,1]` and the
+strict feature interval before `t` is embedded in the shared algebraic root
+kernel. Parallel-disjoint edges contribute no root. Collinear supports are
+intersected as exact parameter intervals: a disjoint interval contributes
+nothing, a one-point contact contributes one provenance-bearing root, and a
+positive-length overlap raises `OverlappingDomainBoundaryError` because an
+isolated event list cannot represent an interval intersection.
+
+Open cells are classified by a winding predicate whose sidedness and
+orientation determinants use the complete quadratic-field coordinates. The
+upper `Q(sqrt(2))` fixture clips against an outer rectangle and an interior
+rectangular hole. With `r² = 9`, it emits exactly:
+
+```text
+t ∈ [-10, -8]  with outer-to-hole endpoint provenance
+t ∈ [ -6, -4]  with hole-to-outer endpoint provenance
+```
+
+Every boundary endpoint carries both its stable ring-edge ID and its
+reconstructible algebraic-root identity. A mismatched chart/feature radicand
+raises `MismatchedNonparallelSegmentFeatureDomainError`.
+
+!!! warning "Exact arithmetic does not repair an incomplete expression"
+
+    A winding determinant that retained radical `y` terms but multiplied
+    them by only the rational parts of `x` was exactly evaluated and still
+    geometrically wrong. Rational fixtures could not expose the omission.
+    Domain predicates over `Q(sqrt(d))` must form the complete field
+    determinant first and only then take its exact sign.
+
+!!! warning "Zero-set canonicalization can reverse conjugate selection"
+
+    CGAL's bivariate curve cache canonicalizes a polynomial up to a nonzero
+    unit. This is valid for root isolation but can reverse the sign returned
+    for a source polynomial such as `-4 - t`. Conjugate filtering for
+    `R + sqrt(d)S = 0` therefore uses
+    `exact_polynomial_sign_at_2`, which restores the original leading-unit
+    sign and factor-multiplicity parity. The regression fixture has focus
+    `(sqrt(2), 1)`, directrix `y = -1`, and a rectangular hole; it requires
+    both exact retained intervals
+    `[sqrt(2) - 4, sqrt(2) - 1]` and `[2, 2sqrt(2)]`.
+
+Normalized composite adjacency remains a separate pending contract.
 
 !!! warning "A nonparallel generator pair has two branch identities"
 
@@ -816,7 +877,7 @@ consumers, or evolution differ from graph orchestration.
 | Algebraic point/segment cell bounds | implemented | exact |
 | True-radius point/segment clearance | implemented and native-gated | exact for rational point-site sources; public binding pending |
 | Parallel segment/segment feature domains | implemented and native-gated | exact for positive-length overlap with feature-owned live endpoints |
-| Nonparallel segment/segment raw cells | implemented and native-gated | exact source-bound branches, feature intervals, algebraic endpoints, and true-radius clipping; normalized composite adjacency pending |
+| Nonparallel segment/segment raw cells | implemented and native-gated | exact source-bound branches, feature intervals, algebraic endpoints, true-radius clipping, and polygon-with-holes clipping; normalized composite adjacency pending |
 | General segment/segment cells | pending | normalized composite nonparallel and externally limited cells have no production graph claim |
 | Unified degeneracy-removal traversal | pending | no production claim |
 | Degeneracy-normalized feature CSR | pending | no production claim |
@@ -847,11 +908,13 @@ mutations, exact positive/zero/negative clearance, and complete-record
 reversal invariance. The nonparallel raw-cell gate checks both
 `Q(sqrt(2))` branches, rational-field collapse, exact endpoint projection,
 strict feature-domain intersection, algebraic root identity, rational
-quadratic clearance, and maximal feature/clearance components. These gates
-establish the bounded P–S, feature-owned parallel S–S, and raw nonparallel
-S–S algebra. They do not establish normalized composite nonparallel
-adjacency, externally limited S–S cells, degeneracy-normalized feature CSR,
-or the final unified traversal.
+quadratic clearance, maximal feature/clearance components, and exact
+polygon-with-holes clipping. The same executable locks the full
+quadratic-field winding determinant and sign-preserving conjugate selection
+with analytic P–S and S–S endpoint goldens. These gates establish the bounded
+P–S, feature-owned parallel S–S, and raw nonparallel S–S algebra. They do not
+establish normalized composite nonparallel adjacency, externally limited S–S
+cells, degeneracy-normalized feature CSR, or the final unified traversal.
 
 The final Task 9 boundary also requires:
 

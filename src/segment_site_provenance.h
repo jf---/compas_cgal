@@ -110,3 +110,9 @@ std::vector<AlgebraicDomainRoot2> parabola_domain_roots(
     const std::string& dual_id,
     const RationalPrimitiveParameterization2& primitive,
     const MatDomainPolygonWithHoles2& domain);
+std::vector<AlgebraicDomainRoot2>
+nonparallel_segment_domain_roots(
+    const std::string& dual_id,
+    const NonparallelSegmentBisectorParameterization2& primitive,
+    const NonparallelSegmentFeatureDomain2& feature_domain,
+    const MatDomainPolygonWithHoles2& domain);
