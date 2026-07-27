@@ -126,6 +126,31 @@ floating-point precision handling is a defect, always.
   predicates first detect a vanishing source factor, then retain the original
   unit/content sign and factor multiplicity parity.
 
+## Development-Stage Documentation — MANDATORY
+
+Documentation is a completion artifact for every task or coherent set of tasks,
+not a retrospective project-end activity. Before a stage is declared complete
+or handed off, produce or update its durable MkDocs documentation in the same
+worktree.
+
+- Capture implemented behavior, architecture and invariants, consequential
+  design decisions, proof/test/measurement evidence, limitations, exact
+  maturity, and remaining work. Code and continuation notes do not substitute
+  for the developer page.
+- Write at the coherent stage boundary, not after every edit. A review or
+  completion claim is invalid while the relevant documentation is absent or
+  describes the previous state.
+- For exact-certified adaptive trochoidal/MAT work, the current stage page is
+  `docs/segment_site_mat.md`. Its Held–Pfeiffer comparison is one required part
+  of the engineering record, not the reason documentation exists. Update it
+  when a completed stage changes proof strength, topology/equality handling,
+  pocket scope, stock/coverage authority, replay identity, traversal policy,
+  runtime, or end-to-end evidence.
+- Comparative claims must state `stronger | equivalent | weaker | incomplete`,
+  bind advantages to concrete evidence, preserve the compared system's
+  advantages, and never promote a stronger certificate contract into an
+  unsupported claim of stronger completed software.
+
 ## Build & Test
 
 ```bash
