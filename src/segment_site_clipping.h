@@ -141,6 +141,15 @@ clip_owned_linear_clearance_components(
     const MatDomainPolygonWithHoles2& domain);
 
 std::vector<MatAdmissibleComponent2>
+clip_bounded_linear_clearance_components(
+    const std::string& original_dual_id,
+    const RationalPrimitiveParameterization2& primitive,
+    const MatParameterEndpoint2& domain_lower,
+    const MatParameterEndpoint2& domain_upper,
+    const ClearanceRootBoundary2& boundary,
+    const MatDomainPolygonWithHoles2& domain);
+
+std::vector<MatAdmissibleComponent2>
 clip_parabola_clearance_components(
     const std::string& original_dual_id,
     const RationalPrimitiveParameterization2& primitive,

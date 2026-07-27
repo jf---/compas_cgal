@@ -2003,6 +2003,8 @@ bool unsupported_parallel_inputs_fail_loudly()
     bool external_limiter_rejected = false;
     bool mismatched_owned_domain_rejected = false;
     bool ownerless_domain_rejected = false;
+    bool bounded_outside_feature_rejected = false;
+    bool bounded_ownerless_domain_rejected = false;
     try {
         static_cast<void>(
             parallel_segment_bisector_parameterization(
@@ -2172,6 +2174,75 @@ bool unsupported_parallel_inputs_fail_loudly()
         const MissingOwnedLinearCellProvenanceError&) {
         ownerless_domain_rejected = true;
     }
+    try {
+        RationalPrimitiveParameterization2 primitive =
+            parallel_segment_bisector_parameterization(
+                horizontal,
+                upper);
+        primitive.domain_lower = 0;
+        primitive.domain_upper = 4;
+        ExactAlgebraicKernel1 kernel;
+        MatDomainPolygon2 outer;
+        outer.push_back({-2, -1});
+        outer.push_back({5, -1});
+        outer.push_back({5, 4});
+        outer.push_back({-2, 4});
+        static_cast<void>(
+            clip_bounded_linear_clearance_components(
+                "outside-bounded-domain",
+                primitive,
+                {
+                    kernel.construct_algebraic_real_1_object()(-1),
+                    {"external-lower"},
+                },
+                {
+                    kernel.construct_algebraic_real_1_object()(3),
+                    {"external-upper"},
+                },
+                parallel_segment_clearance_boundary(
+                    primitive,
+                    horizontal,
+                    upper,
+                    2),
+                MatDomainPolygonWithHoles2(outer)));
+    } catch (const MismatchedLinearCellDomainError&) {
+        bounded_outside_feature_rejected = true;
+    }
+    try {
+        RationalPrimitiveParameterization2 primitive =
+            parallel_segment_bisector_parameterization(
+                horizontal,
+                upper);
+        primitive.domain_lower = 0;
+        primitive.domain_upper = 4;
+        ExactAlgebraicKernel1 kernel;
+        MatDomainPolygon2 outer;
+        outer.push_back({-1, -1});
+        outer.push_back({5, -1});
+        outer.push_back({5, 4});
+        outer.push_back({-1, 4});
+        static_cast<void>(
+            clip_bounded_linear_clearance_components(
+                "ownerless-bounded-domain",
+                primitive,
+                {
+                    kernel.construct_algebraic_real_1_object()(0),
+                    {},
+                },
+                {
+                    kernel.construct_algebraic_real_1_object()(3),
+                    {"external-upper"},
+                },
+                parallel_segment_clearance_boundary(
+                    primitive,
+                    horizontal,
+                    upper,
+                    2),
+                MatDomainPolygonWithHoles2(outer)));
+    } catch (
+        const MissingOwnedLinearCellProvenanceError&) {
+        bounded_ownerless_domain_rejected = true;
+    }
     return nonparallel_rejected
         && coincident_rejected
         && duplicate_identity_rejected
@@ -2181,7 +2252,9 @@ bool unsupported_parallel_inputs_fail_loudly()
         && empty_feature_rejected
         && external_limiter_rejected
         && mismatched_owned_domain_rejected
-        && ownerless_domain_rejected;
+        && ownerless_domain_rejected
+        && bounded_outside_feature_rejected
+        && bounded_ownerless_domain_rejected;
 }
 
 bool segment_segment_production_graph_gate()
@@ -2278,6 +2351,79 @@ bool segment_segment_production_graph_gate()
             == expected_source_provenance
         && coincident_edge.target_endpoint.provenance_ids
             == expected_target_provenance;
+}
+
+bool point_limited_parallel_segment_segment_production_graph_gate()
+{
+    const MatExactGraph2 graph =
+        segment_site_point_limited_parallel_segment_graph_spike();
+    const MatExactGraph2 repeated =
+        segment_site_point_limited_parallel_segment_graph_spike();
+    const MatExactGraph2 reversed =
+        segment_site_reversed_point_limited_parallel_segment_graph_spike();
+    const MatExactGraph2 positive =
+        segment_site_point_limited_parallel_segment_graph_spike(2);
+    const MatExactGraph2 negative =
+        segment_site_point_limited_parallel_segment_graph_spike(
+            CORE::BigRat(5, 2));
+    if (graph.edges.size() != 1
+        || graph.nodes.size() != 2
+        || graph.rejected_incident_transitions != 0
+        || graph.matched_generator_sites != 7
+        || !graphs_equal(graph, repeated)
+        || !graphs_equal(graph, reversed)
+        || !graphs_equal(graph, positive)
+        || !negative.edges.empty()
+        || !negative.nodes.empty()
+        || negative.matched_generator_sites != 7) {
+        return false;
+    }
+
+    const std::vector<std::string> parent_sites{
+        "lower-segment",
+        "upper-segment",
+    };
+    const std::string dual_id =
+        stable_dual_identity_v1(
+            "segment-segment",
+            parent_sites);
+    const std::string limiter_root_id =
+        algebraic_root_id_v1(
+            {-7, 2},
+            0);
+    const MatExactGraphEdge2& edge =
+        graph.edges.front();
+    if (edge.primitive_kind != "LINE"
+        || edge.original_dual_id != dual_id
+        || edge.generator_site_ids != parent_sites
+        || edge.parent_site_ids != parent_sites
+        || !edge.source_endpoint.parameter.has_value()
+        || !edge.target_endpoint.parameter.has_value()
+        || !has_provenance(
+            edge.source_endpoint,
+            "upper-left")
+        || !has_provenance(
+            edge.target_endpoint,
+            "external-limiter")
+        || !has_provenance(
+            edge.target_endpoint,
+            limiter_root_id)
+        || !has_provenance(
+            edge.target_endpoint,
+            "parallel-point-limiter/"
+            "equation-factor-multiplicity/1")) {
+        return false;
+    }
+    ExactAlgebraicKernel1 kernel;
+    return kernel.compare_1_object()(
+               *edge.source_endpoint.parameter,
+               kernel.construct_algebraic_real_1_object()(0))
+            == CGAL::EQUAL
+        && kernel.compare_1_object()(
+               *edge.target_endpoint.parameter,
+               kernel.construct_algebraic_real_1_object()(
+                   CORE::BigRat(7, 2)))
+            == CGAL::EQUAL;
 }
 
 bool nonparallel_segment_segment_production_graph_gate()
@@ -2444,6 +2590,239 @@ bool nonparallel_segment_segment_production_graph_gate()
         && clipped_terminal == 4;
 }
 
+bool point_limited_parallel_failures_are_named()
+{
+    using Point = MatTraits::Point_2;
+    using Site = MatTraits::Site_2;
+    const Point lower_left(-2, 0);
+    const Point lower_right(6, 0);
+    const Point upper_left(0, 3);
+    const Point upper_right(4, 3);
+    const Point limiter_point(
+        5,
+        CORE::BigRat(3, 2));
+    const std::vector<GeneratorSite2> generators{
+        {"lower-left", Site::construct_site_2(lower_left)},
+        {"lower-right", Site::construct_site_2(lower_right)},
+        {"upper-left", Site::construct_site_2(upper_left)},
+        {"upper-right", Site::construct_site_2(upper_right)},
+        {
+            "external-limiter",
+            Site::construct_site_2(limiter_point),
+        },
+        {
+            "lower-segment",
+            Site::construct_site_2(
+                lower_left,
+                lower_right),
+        },
+        {
+            "upper-segment",
+            Site::construct_site_2(
+                upper_left,
+                upper_right),
+        },
+    };
+    SegmentSiteDelaunay2 delaunay;
+    delaunay.insert(lower_left, lower_right);
+    delaunay.insert(upper_left, upper_right);
+    delaunay.insert(limiter_point);
+    require_generator_site_bijection(
+        delaunay,
+        generators);
+    SegmentSiteVoronoi2 voronoi(delaunay);
+    const std::vector<std::string> generator_ids{
+        "lower-segment",
+        "upper-segment",
+    };
+    std::vector<SegmentSiteVoronoi2::Halfedge_handle>
+        matching;
+    for (auto halfedge = voronoi.halfedges_begin();
+         halfedge != voronoi.halfedges_end();
+         ++halfedge) {
+        const MatTraits::Site_2 up =
+            halfedge->up()->site();
+        const MatTraits::Site_2 down =
+            halfedge->down()->site();
+        if (up.is_segment()
+            && down.is_segment()
+            && ordered_generator_site_ids(
+                   stable_generator_site_id(
+                       up,
+                       generators),
+                   stable_generator_site_id(
+                       down,
+                       generators))
+                == generator_ids
+            && stable_generator_site_id(
+                   up,
+                   generators)
+                == generator_ids.front()) {
+            matching.push_back(halfedge);
+        }
+    }
+    if (matching.size() != 1) {
+        return false;
+    }
+
+    const MatExactOpenSegmentSource2 lower_segment =
+        canonical_open_segment_source(
+            "lower-segment",
+            -2,
+            0,
+            6,
+            0);
+    const MatExactOpenSegmentSource2 upper_segment =
+        canonical_open_segment_source(
+            "upper-segment",
+            0,
+            3,
+            4,
+            3);
+    RationalPrimitiveParameterization2 primitive =
+        parallel_segment_bisector_parameterization(
+            lower_segment,
+            upper_segment);
+    primitive.domain_lower = 0;
+    primitive.domain_upper = 4;
+    const RationalDomainRoot2 lower{
+        0,
+        {"upper-left"},
+    };
+    const RationalDomainRoot2 upper{
+        4,
+        {"upper-right"},
+    };
+    const MatExactPointSiteSource2 limiter{
+        "external-limiter",
+        {5, 0},
+        {
+            CORE::BigRat(3, 2),
+            0,
+        },
+        1,
+    };
+
+    bool missing_rejected = false;
+    bool duplicate_rejected = false;
+    bool nonrational_rejected = false;
+    bool mismatch_rejected = false;
+    bool chart_rejected = false;
+    try {
+        static_cast<void>(
+            bind_parallel_segment_segment_cell_endpoints(
+                primitive,
+                lower,
+                upper,
+                lower_segment,
+                upper_segment,
+                {},
+                generator_ids,
+                generators,
+                voronoi,
+                matching.front()));
+    } catch (
+        const UnsupportedSegmentSegmentLimiterError&) {
+        missing_rejected = true;
+    }
+    try {
+        static_cast<void>(
+            bind_parallel_segment_segment_cell_endpoints(
+                primitive,
+                lower,
+                upper,
+                lower_segment,
+                upper_segment,
+                {limiter, limiter},
+                generator_ids,
+                generators,
+                voronoi,
+                matching.front()));
+    } catch (
+        const AmbiguousParallelSegmentPointLimiterError&) {
+        duplicate_rejected = true;
+    }
+    try {
+        static_cast<void>(
+            bind_parallel_segment_segment_cell_endpoints(
+                primitive,
+                lower,
+                upper,
+                lower_segment,
+                upper_segment,
+                {
+                    {
+                        "external-limiter",
+                        {5, 1},
+                        {
+                            CORE::BigRat(3, 2),
+                            0,
+                        },
+                        2,
+                    },
+                },
+                generator_ids,
+                generators,
+                voronoi,
+                matching.front()));
+    } catch (
+        const NonRationalParallelSegmentPointLimiterError&) {
+        nonrational_rejected = true;
+    }
+    try {
+        static_cast<void>(
+            bind_parallel_segment_segment_cell_endpoints(
+                primitive,
+                lower,
+                upper,
+                lower_segment,
+                upper_segment,
+                {
+                    {
+                        "external-limiter",
+                        {4, 0},
+                        {
+                            CORE::BigRat(3, 2),
+                            0,
+                        },
+                        1,
+                    },
+                },
+                generator_ids,
+                generators,
+                voronoi,
+                matching.front()));
+    } catch (
+        const MismatchedLiveSegmentSegmentBridgeError&) {
+        mismatch_rejected = true;
+    }
+    try {
+        RationalPrimitiveParameterization2 mutated =
+            primitive;
+        mutated.x_coefficients[1] *= 2;
+        static_cast<void>(
+            bind_parallel_segment_segment_cell_endpoints(
+                mutated,
+                lower,
+                upper,
+                lower_segment,
+                upper_segment,
+                {limiter},
+                generator_ids,
+                generators,
+                voronoi,
+                matching.front()));
+    } catch (
+        const MismatchedLiveSegmentSegmentBridgeError&) {
+        chart_rejected = true;
+    }
+    return missing_rejected
+        && duplicate_rejected
+        && nonrational_rejected
+        && mismatch_rejected
+        && chart_rejected;
+}
+
 } // namespace
 
 bool segment_segment_producer_gate()
@@ -2599,6 +2978,8 @@ bool segment_segment_producer_gate()
         return false;
     }
     return segment_segment_production_graph_gate()
+        && point_limited_parallel_segment_segment_production_graph_gate()
+        && point_limited_parallel_failures_are_named()
         && nonparallel_segment_segment_production_graph_gate()
         && nonparallel_segment_segment_producer_contract()
         && nonparallel_segment_charts_are_exact()

@@ -1321,7 +1321,7 @@ clip_linear_clearance_components(
 }
 
 std::vector<MatAdmissibleComponent2>
-clip_owned_linear_clearance_components(
+clip_bounded_linear_clearance_components(
     const std::string& original_dual_id,
     const RationalPrimitiveParameterization2& primitive,
     const MatParameterEndpoint2& domain_lower,
@@ -1329,36 +1329,39 @@ clip_owned_linear_clearance_components(
     const ClearanceRootBoundary2& boundary,
     const MatDomainPolygonWithHoles2& domain)
 {
-    if (!primitive.domain_lower.has_value()
-        || !primitive.domain_upper.has_value()
-        || !domain_lower.parameter.has_value()
+    if (!domain_lower.parameter.has_value()
         || !domain_upper.parameter.has_value()) {
         throw MismatchedLinearCellDomainError(
-            "owned linear cell requires bounded matching endpoints");
+            "bounded linear cell requires two exact endpoints");
     }
     if (domain_lower.provenance_ids.empty()
         || domain_upper.provenance_ids.empty()) {
         throw MissingOwnedLinearCellProvenanceError(
-            "owned linear cell endpoint provenance is empty");
+            "bounded linear cell endpoint provenance is empty");
     }
     ExactAlgebraicKernel1 kernel;
     const auto construct =
         kernel.construct_algebraic_real_1_object();
     const auto compare = kernel.compare_1_object();
     if (compare(
-            *domain_lower.parameter,
-            construct(*primitive.domain_lower))
-            != CGAL::EQUAL
-        || compare(
-               *domain_upper.parameter,
-               construct(*primitive.domain_upper))
-            != CGAL::EQUAL
-        || compare(
                *domain_lower.parameter,
                *domain_upper.parameter)
             != CGAL::SMALLER) {
         throw MismatchedLinearCellDomainError(
-            "owned linear endpoints differ from primitive domain");
+            "bounded linear cell endpoints are not increasing");
+    }
+    if ((primitive.domain_lower.has_value()
+         && compare(
+                *domain_lower.parameter,
+                construct(*primitive.domain_lower))
+             == CGAL::SMALLER)
+        || (primitive.domain_upper.has_value()
+            && compare(
+                   *domain_upper.parameter,
+                   construct(*primitive.domain_upper))
+                == CGAL::LARGER)) {
+        throw MismatchedLinearCellDomainError(
+            "bounded linear cell exceeds primitive domain");
     }
     return clip_clearance_components_with_domain_roots(
         original_dual_id,
@@ -1379,6 +1382,46 @@ clip_owned_linear_clearance_components(
             original_dual_id,
             primitive,
             domain));
+}
+
+std::vector<MatAdmissibleComponent2>
+clip_owned_linear_clearance_components(
+    const std::string& original_dual_id,
+    const RationalPrimitiveParameterization2& primitive,
+    const MatParameterEndpoint2& domain_lower,
+    const MatParameterEndpoint2& domain_upper,
+    const ClearanceRootBoundary2& boundary,
+    const MatDomainPolygonWithHoles2& domain)
+{
+    if (!primitive.domain_lower.has_value()
+        || !primitive.domain_upper.has_value()
+        || !domain_lower.parameter.has_value()
+        || !domain_upper.parameter.has_value()) {
+        throw MismatchedLinearCellDomainError(
+            "owned linear cell requires bounded matching endpoints");
+    }
+    ExactAlgebraicKernel1 kernel;
+    const auto construct =
+        kernel.construct_algebraic_real_1_object();
+    const auto compare = kernel.compare_1_object();
+    if (compare(
+            *domain_lower.parameter,
+            construct(*primitive.domain_lower))
+            != CGAL::EQUAL
+        || compare(
+               *domain_upper.parameter,
+               construct(*primitive.domain_upper))
+            != CGAL::EQUAL) {
+        throw MismatchedLinearCellDomainError(
+            "owned linear endpoints differ from primitive domain");
+    }
+    return clip_bounded_linear_clearance_components(
+        original_dual_id,
+        primitive,
+        domain_lower,
+        domain_upper,
+        boundary,
+        domain);
 }
 
 std::vector<MatAdmissibleComponent2>
