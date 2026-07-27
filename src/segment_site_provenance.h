@@ -4,6 +4,7 @@
 
 #include <cstddef>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -57,14 +58,43 @@ struct TaggedEndpoint2 {
     bool clearance_root;
 };
 
+class GeneratorSiteBijectionError : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
+
+class InvalidDualIdentityError : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
+
 std::size_t matched_generator_site_count(
+    const SegmentSiteDelaunay2& delaunay,
+    const std::vector<GeneratorSite2>& generators);
+std::size_t require_generator_site_bijection(
     const SegmentSiteDelaunay2& delaunay,
     const std::vector<GeneratorSite2>& generators);
 std::string stable_generator_site_id(
     const MatTraits::Site_2& site,
     const std::vector<GeneratorSite2>& generators);
+std::vector<std::string> ordered_generator_site_ids(
+    std::string first,
+    std::string second);
+void union_stable_ids(
+    std::vector<std::string>& target,
+    const std::vector<std::string>& source);
+std::string stable_dual_identity_v1(
+    const std::string& dual_kind,
+    const std::vector<std::string>& ordered_generator_ids);
+std::string stable_voronoi_node_identity_v1(
+    const std::vector<std::string>& ordered_generator_ids);
 std::string algebraic_root_identity_v1(
     const ExactAlgebraicKernel1::Algebraic_real_1& root);
+MatParameterEndpoint2 exact_graph_endpoint_binding(
+    const MatParameterEndpoint2& endpoint);
+std::string stable_endpoint_node_identity_v1(
+    const std::string& dual_id,
+    const MatParameterEndpoint2& endpoint);
 MatParameterEndpoint2 domain_endpoint(
     const std::string& dual_id,
     const char* side,

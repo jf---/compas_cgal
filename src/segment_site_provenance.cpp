@@ -1,7 +1,9 @@
 #include "segment_site_provenance.h"
 
+#include <algorithm>
 #include <iterator>
 #include <set>
+#include <utility>
 
 #include <CGAL/Polynomial_traits_d.h>
 
@@ -21,6 +23,11 @@ bool exact_site_equal(
             && lhs.target() == rhs.target())
         || (lhs.source() == rhs.target()
             && lhs.target() == rhs.source());
+}
+
+std::string length_framed(const std::string& value)
+{
+    return std::to_string(value.size()) + ":" + value;
 }
 
 } // namespace
@@ -88,6 +95,42 @@ std::size_t matched_generator_site_count(
     return matched_ids.size();
 }
 
+std::size_t require_generator_site_bijection(
+    const SegmentSiteDelaunay2& delaunay,
+    const std::vector<GeneratorSite2>& generators)
+{
+    std::set<std::string> matched_ids;
+    for (auto vertex = delaunay.finite_vertices_begin();
+         vertex != delaunay.finite_vertices_end();
+         ++vertex) {
+        const MatTraits::Site_2& site = vertex->site();
+        const GeneratorSite2* match = nullptr;
+        for (const GeneratorSite2& generator : generators) {
+            if (!exact_site_equal(site, generator.site)) {
+                continue;
+            }
+            if (match != nullptr) {
+                throw GeneratorSiteBijectionError(
+                    "live site maps to multiple caller identities");
+            }
+            match = &generator;
+        }
+        if (match == nullptr) {
+            throw GeneratorSiteBijectionError(
+                "live site has no caller identity");
+        }
+        if (!matched_ids.insert(match->stable_id).second) {
+            throw GeneratorSiteBijectionError(
+                "caller identity maps to multiple live sites");
+        }
+    }
+    if (matched_ids.size() != generators.size()) {
+        throw GeneratorSiteBijectionError(
+            "caller identity has no live site");
+    }
+    return matched_ids.size();
+}
+
 std::string stable_generator_site_id(
     const MatTraits::Site_2& site,
     const std::vector<GeneratorSite2>& generators)
@@ -109,6 +152,113 @@ std::string stable_generator_site_id(
     }
     return match->stable_id;
 }
+
+std::vector<std::string> ordered_generator_site_ids(
+    std::string first,
+    std::string second)
+{
+    if (second < first) {
+        std::swap(first, second);
+    }
+    return {std::move(first), std::move(second)};
+}
+
+void union_stable_ids(
+    std::vector<std::string>& target,
+    const std::vector<std::string>& source)
+{
+    target.insert(
+        target.end(),
+        source.begin(),
+        source.end());
+    std::sort(target.begin(), target.end());
+    target.erase(
+        std::unique(target.begin(), target.end()),
+        target.end());
+}
+
+std::string stable_dual_identity_v1(
+    const std::string& dual_kind,
+    const std::vector<std::string>& ordered_generator_ids)
+{
+    if (dual_kind.empty()) {
+        throw InvalidDualIdentityError(
+            "dual kind is empty");
+    }
+    if (ordered_generator_ids.size() != 2) {
+        throw InvalidDualIdentityError(
+            "dual identity requires two generators");
+    }
+    if (ordered_generator_ids[0].empty()
+        || ordered_generator_ids[1].empty()) {
+        throw InvalidDualIdentityError(
+            "dual generator identity is empty");
+    }
+    if (ordered_generator_ids[1]
+        <= ordered_generator_ids[0]) {
+        throw InvalidDualIdentityError(
+            "dual generator identities are not strictly ordered");
+    }
+    return "mat-dual/v1/"
+        + length_framed(dual_kind)
+        + "/" + length_framed(ordered_generator_ids[0])
+        + "/" + length_framed(ordered_generator_ids[1]);
+}
+
+std::string stable_voronoi_node_identity_v1(
+    const std::vector<std::string>& ordered_generator_ids)
+{
+    if (ordered_generator_ids.size() != 3) {
+        throw InvalidDualIdentityError(
+            "Voronoi node identity requires three generators");
+    }
+    std::string identity = "voronoi-node/v1";
+    for (std::size_t index = 0;
+         index < ordered_generator_ids.size();
+         ++index) {
+        const std::string& generator_id =
+            ordered_generator_ids[index];
+        if (generator_id.empty()) {
+            throw InvalidDualIdentityError(
+                "Voronoi node generator identity is empty");
+        }
+        if (index > 0
+            && generator_id
+                <= ordered_generator_ids[index - 1]) {
+            throw InvalidDualIdentityError(
+                "Voronoi node generators are not strictly ordered");
+        }
+        identity += "/" + length_framed(generator_id);
+    }
+    return identity;
+}
+
+MatParameterEndpoint2 exact_graph_endpoint_binding(
+    const MatParameterEndpoint2& endpoint)
+{
+    if (!endpoint.parameter.has_value()) {
+        throw InvalidRationalPrimitiveError(
+            "exact graph endpoint is unbounded");
+    }
+    MatParameterEndpoint2 bound = endpoint;
+    union_stable_ids(
+        bound.provenance_ids,
+        {algebraic_root_identity_v1(*bound.parameter)});
+    return bound;
+}
+
+std::string stable_endpoint_node_identity_v1(
+    const std::string& dual_id,
+    const MatParameterEndpoint2& endpoint)
+{
+    if (!endpoint.parameter.has_value()) {
+        throw InvalidRationalPrimitiveError(
+            "exact graph endpoint is unbounded");
+    }
+    return dual_id + "/node/"
+        + algebraic_root_identity_v1(*endpoint.parameter);
+}
+
 MatParameterEndpoint2 domain_endpoint(
     const std::string& dual_id,
     const char* side,
