@@ -698,6 +698,165 @@ bool quadratic_feature_parameters_order_and_embed()
             == CGAL::EQUAL;
 }
 
+bool nonparallel_clearance_is_rational_quadratic()
+{
+    const MatExactOpenSegmentSource2 diagonal =
+        canonical_open_segment_source(
+            "diagonal-segment",
+            5,
+            -4,
+            20,
+            11);
+    const MatExactOpenSegmentSource2 lower =
+        canonical_open_segment_source(
+            "lower-segment",
+            -20,
+            0,
+            8,
+            0);
+    const CORE::Expr sqrt_two =
+        CORE::sqrt(CORE::Expr(2));
+    const MatTraits::Point_2 upper_feature(
+        CORE::Expr(9)
+            - CORE::Expr(11) * sqrt_two,
+        CORE::Expr(22)
+            + CORE::Expr(11) * sqrt_two);
+    const MatTraits::Point_2 upper_transition(
+        8,
+        CORE::Expr(1) + sqrt_two);
+    const MatTraits::Point_2 lower_transition(
+        8,
+        CORE::Expr(1) - sqrt_two);
+    const MatTraits::Point_2 lower_feature(
+        CORE::Expr(9)
+            - CORE::Expr(4) * sqrt_two,
+        CORE::Expr(-8)
+            + CORE::Expr(4) * sqrt_two);
+    const NonparallelSegmentBisectorParameterization2 upper =
+        nonparallel_segment_bisector_parameterization(
+            diagonal,
+            lower,
+            {
+                upper_feature,
+                upper_transition,
+            });
+    const NonparallelSegmentBisectorParameterization2 lower_branch =
+        nonparallel_segment_bisector_parameterization(
+            diagonal,
+            lower,
+            {
+                lower_transition,
+                lower_feature,
+            });
+    const ClearanceRootBoundary2 upper_boundary =
+        nonparallel_segment_clearance_boundary(
+            upper,
+            diagonal,
+            lower,
+            4);
+    const ClearanceRootBoundary2 lower_boundary =
+        nonparallel_segment_clearance_boundary(
+            lower_branch,
+            lower,
+            diagonal,
+            4);
+    ExactAlgebraicKernel1 kernel;
+    const auto compare = kernel.compare_1_object();
+    const auto construct =
+        kernel.construct_algebraic_real_1_object();
+    if (upper_boundary.constant_sign.has_value()
+        || lower_boundary.constant_sign.has_value()
+        || upper_boundary.primitive_coefficients
+            != std::vector<ExactAlgebraicInteger1>{
+                -4,
+                0,
+                1,
+            }
+        || lower_boundary.primitive_coefficients
+            != upper_boundary.primitive_coefficients
+        || upper_boundary.roots.size() != 2
+        || lower_boundary.roots.size() != 2) {
+        return false;
+    }
+    for (std::size_t index = 0; index < 2; ++index) {
+        if (compare(
+                upper_boundary.roots[index].parameter,
+                lower_boundary.roots[index].parameter)
+                != CGAL::EQUAL
+            || upper_boundary.roots[index].event_id
+                != algebraic_root_id_v1(
+                    {-4, 0, 1},
+                    index)
+            || lower_boundary.roots[index].event_id
+                != upper_boundary.roots[index].event_id) {
+            return false;
+        }
+    }
+    if (compare(
+            upper_boundary.roots[0].parameter,
+            construct(-2))
+            != CGAL::EQUAL
+        || compare(
+               upper_boundary.roots[1].parameter,
+               construct(2))
+            != CGAL::EQUAL) {
+        return false;
+    }
+
+    const MatExactOpenSegmentSource2 steep =
+        canonical_open_segment_source(
+            "first",
+            -1,
+            2,
+            1,
+            -2);
+    const MatExactOpenSegmentSource2 crossing =
+        canonical_open_segment_source(
+            "second",
+            -2,
+            -1,
+            2,
+            1);
+    const NonparallelSegmentBisectorParameterization2 scaled =
+        nonparallel_segment_bisector_parameterization(
+            steep,
+            crossing,
+            {
+                {0, 0},
+                {1, 3},
+            });
+    const ClearanceRootBoundary2 scaled_boundary =
+        nonparallel_segment_clearance_boundary(
+            scaled,
+            steep,
+            crossing,
+            5);
+    return !scaled_boundary.constant_sign.has_value()
+        && scaled_boundary.primitive_coefficients
+            == std::vector<ExactAlgebraicInteger1>{
+                -1,
+                0,
+                25,
+            }
+        && scaled_boundary.roots.size() == 2
+        && compare(
+               scaled_boundary.roots[0].parameter,
+               construct(CORE::BigRat(-1, 5)))
+            == CGAL::EQUAL
+        && compare(
+               scaled_boundary.roots[1].parameter,
+               construct(CORE::BigRat(1, 5)))
+            == CGAL::EQUAL
+        && scaled_boundary.roots[0].event_id
+            == algebraic_root_id_v1(
+                {-1, 0, 25},
+                0)
+        && scaled_boundary.roots[1].event_id
+            == algebraic_root_id_v1(
+                {-1, 0, 25},
+                1);
+}
+
 bool unsupported_nonparallel_charts_fail_loudly()
 {
     const MatExactOpenSegmentSource2 horizontal =
@@ -740,6 +899,9 @@ bool unsupported_nonparallel_charts_fail_loudly()
     bool mismatched_source_rejected = false;
     bool off_support_endpoint_rejected = false;
     bool invalid_radicand_rejected = false;
+    bool mismatched_clearance_sources_rejected = false;
+    bool nonrational_clearance_rejected = false;
+    bool negative_clearance_radius_rejected = false;
     try {
         static_cast<void>(
             nonparallel_segment_bisector_parameterization(
@@ -808,12 +970,53 @@ bool unsupported_nonparallel_charts_fail_loudly()
         const InvalidQuadraticFieldRadicandError&) {
         invalid_radicand_rejected = true;
     }
+    try {
+        static_cast<void>(
+            nonparallel_segment_clearance_boundary(
+                valid,
+                horizontal,
+                parallel,
+                1));
+    } catch (
+        const MismatchedNonparallelSegmentClearanceError&) {
+        mismatched_clearance_sources_rejected = true;
+    }
+    try {
+        static_cast<void>(
+            nonparallel_segment_clearance_boundary(
+                valid,
+                horizontal,
+                canonical_open_segment_source(
+                    "diagonal",
+                    5,
+                    -4,
+                    5,
+                    4),
+                1));
+    } catch (
+        const NonrationalNonparallelSegmentClearanceError&) {
+        nonrational_clearance_rejected = true;
+    }
+    try {
+        static_cast<void>(
+            nonparallel_segment_clearance_boundary(
+                valid,
+                horizontal,
+                diagonal,
+                -1));
+    } catch (
+        const NegativeClearanceRadiusSquaredError&) {
+        negative_clearance_radius_rejected = true;
+    }
     return parallel_rejected
         && degenerate_primitive_rejected
         && unbound_branch_rejected
         && mismatched_source_rejected
         && off_support_endpoint_rejected
-        && invalid_radicand_rejected;
+        && invalid_radicand_rejected
+        && mismatched_clearance_sources_rejected
+        && nonrational_clearance_rejected
+        && negative_clearance_radius_rejected;
 }
 
 bool has_provenance(
@@ -1470,5 +1673,6 @@ bool segment_segment_producer_gate()
         && nonparallel_segment_charts_are_exact()
         && nonparallel_feature_parameters_are_exact()
         && quadratic_feature_parameters_order_and_embed()
+        && nonparallel_clearance_is_rational_quadratic()
         && unsupported_nonparallel_charts_fail_loudly();
 }

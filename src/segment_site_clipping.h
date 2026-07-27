@@ -48,6 +48,24 @@ public:
     using std::runtime_error::runtime_error;
 };
 
+class MismatchedNonparallelSegmentClearanceError
+    : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
+
+class NonrationalNonparallelSegmentClearanceError
+    : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
+
+class DegenerateNonparallelSegmentClearanceError
+    : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
+
 class MismatchedLinearCellDomainError
     : public std::runtime_error {
 public:
@@ -75,6 +93,13 @@ source_parabola_clearance_boundary(
 ClearanceRootBoundary2
 parallel_segment_clearance_boundary(
     const RationalPrimitiveParameterization2& primitive,
+    const MatExactOpenSegmentSource2& first_segment,
+    const MatExactOpenSegmentSource2& second_segment,
+    const CORE::BigRat& radius_squared);
+
+ClearanceRootBoundary2
+nonparallel_segment_clearance_boundary(
+    const NonparallelSegmentBisectorParameterization2& primitive,
     const MatExactOpenSegmentSource2& first_segment,
     const MatExactOpenSegmentSource2& second_segment,
     const CORE::BigRat& radius_squared);
