@@ -62,6 +62,18 @@ public:
     using std::runtime_error::runtime_error;
 };
 
+class InvalidSegmentSiteNodeProvenanceError
+    : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
+
+class InvalidSegmentSiteGraphComponentError
+    : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
+
 struct SegmentSiteMatCompileEvidence2 {
     bool delaunay_valid;
     std::size_t assigned_dual_primitives;
@@ -163,6 +175,16 @@ segment_site_rectangle_lower_left_graph_spike(
 
 MatExactGraph2
 segment_site_reversed_rectangle_lower_left_graph_spike();
+
+MatExactGraph2
+segment_site_rectangle_graph_spike();
+
+MatExactGraph2
+segment_site_rectangle_graph_spike(
+    const CORE::BigRat& radius_squared);
+
+MatExactGraph2
+segment_site_reversed_rectangle_graph_spike();
 
 MatExactGraph2
 segment_site_nonparallel_segment_segment_graph_spike();

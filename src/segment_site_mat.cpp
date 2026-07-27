@@ -2520,6 +2520,532 @@ MatDomainPolygonWithHoles2 rectangle_domain()
     return MatDomainPolygonWithHoles2(outer);
 }
 
+std::vector<MatExactOpenSegmentSource2>
+exact_segment_sources(
+    const std::vector<NormalizedPointSource2>& points,
+    const std::vector<NormalizedOpenSegmentSource2>& segments)
+{
+    std::vector<MatExactOpenSegmentSource2> sources;
+    sources.reserve(segments.size());
+    for (const NormalizedOpenSegmentSource2& segment :
+         segments) {
+        sources.push_back(
+            exact_segment_source(segment, points));
+    }
+    return sources;
+}
+
+CanonicalNodeAlias2 rectangle_vertex_alias(
+    const SegmentSiteVoronoi2::Vertex_handle& vertex,
+    const std::vector<GeneratorSite2>& generators,
+    const std::vector<NormalizedOpenSegmentSource2>& segments)
+{
+    std::vector<std::string> feature_ids;
+    auto first = vertex->incident_halfedges();
+    auto halfedge = first;
+    do {
+        union_stable_ids(
+            feature_ids,
+            {
+                stable_generator_site_id(
+                    halfedge->up()->site(),
+                    generators),
+                stable_generator_site_id(
+                    halfedge->down()->site(),
+                    generators),
+            });
+    } while (++halfedge != first);
+    if (feature_ids.size() != 3) {
+        throw InvalidSegmentSiteNodeProvenanceError(
+            "rectangle adaptor vertex does not have three exact features");
+    }
+
+    std::vector<std::string> parent_ids;
+    for (const std::string& feature_id : feature_ids) {
+        union_stable_ids(
+            parent_ids,
+            raw_feature_parent_ids(
+                feature_id,
+                segments));
+    }
+    return {
+        stable_voronoi_node_identity_v1(
+            feature_ids),
+        std::move(feature_ids),
+        std::move(parent_ids),
+    };
+}
+
+const MatParameterEndpoint2& endpoint_owned_by(
+    const std::pair<
+        MatParameterEndpoint2,
+        MatParameterEndpoint2>& endpoints,
+    const std::string& owner_id)
+{
+    const auto has_owner =
+        [&owner_id](
+            const MatParameterEndpoint2& endpoint) {
+            return std::find(
+                       endpoint.provenance_ids.begin(),
+                       endpoint.provenance_ids.end(),
+                       owner_id)
+                != endpoint.provenance_ids.end();
+        };
+    const bool first_matches =
+        has_owner(endpoints.first);
+    const bool second_matches =
+        has_owner(endpoints.second);
+    if (first_matches == second_matches) {
+        throw InvalidSegmentSiteNodeProvenanceError(
+            "rectangle endpoint does not have one exact adaptor owner");
+    }
+    return first_matches
+        ? endpoints.first
+        : endpoints.second;
+}
+
+void register_rectangle_vertex_alias(
+    const std::string& dual_id,
+    const MatParameterEndpoint2& endpoint,
+    const CanonicalNodeAlias2& alias,
+    const std::string& owner_id,
+    std::map<std::string, CanonicalNodeAlias2>& aliases)
+{
+    if (std::find(
+            alias.generator_site_ids.begin(),
+            alias.generator_site_ids.end(),
+            owner_id)
+        == alias.generator_site_ids.end()) {
+        throw InvalidSegmentSiteNodeProvenanceError(
+            "rectangle endpoint owner is absent from its adaptor vertex");
+    }
+    const std::string endpoint_node_id =
+        stable_endpoint_node_identity_v1(
+            dual_id,
+            endpoint);
+    const auto [existing, inserted] =
+        aliases.emplace(
+            endpoint_node_id,
+            alias);
+    if (!inserted
+        && (existing->second.node_id
+                != alias.node_id
+            || existing->second.generator_site_ids
+                != alias.generator_site_ids
+            || existing->second.parent_site_ids
+                != alias.parent_site_ids)) {
+        throw InvalidSegmentSiteNodeProvenanceError(
+            "rectangle exact endpoint aliases disagree");
+    }
+}
+
+void register_rectangle_halfedge_aliases(
+    const std::string& dual_id,
+    const std::pair<
+        MatParameterEndpoint2,
+        MatParameterEndpoint2>& endpoints,
+    const SegmentSiteVoronoi2::Halfedge_handle& halfedge,
+    const std::vector<GeneratorSite2>& generators,
+    const std::vector<NormalizedOpenSegmentSource2>& segments,
+    std::map<std::string, CanonicalNodeAlias2>& aliases)
+{
+    const std::string source_owner_id =
+        stable_generator_site_id(
+            halfedge->left()->site(),
+            generators);
+    const std::string target_owner_id =
+        stable_generator_site_id(
+            halfedge->right()->site(),
+            generators);
+    const CanonicalNodeAlias2 source_alias =
+        rectangle_vertex_alias(
+            halfedge->source(),
+            generators,
+            segments);
+    const CanonicalNodeAlias2 target_alias =
+        rectangle_vertex_alias(
+            halfedge->target(),
+            generators,
+            segments);
+    if (source_alias.node_id == target_alias.node_id) {
+        throw InvalidSegmentSiteNodeProvenanceError(
+            "rectangle live endpoints share a feature triple; left="
+            + source_owner_id
+            + "; right="
+            + target_owner_id
+            + "; node="
+            + source_alias.node_id);
+    }
+    register_rectangle_vertex_alias(
+        dual_id,
+        endpoint_owned_by(
+            endpoints,
+            source_owner_id),
+        source_alias,
+        source_owner_id,
+        aliases);
+    register_rectangle_vertex_alias(
+        dual_id,
+        endpoint_owned_by(
+            endpoints,
+            target_owner_id),
+        target_alias,
+        target_owner_id,
+        aliases);
+}
+
+bool is_normalized_segment_endpoint(
+    const NormalizedOpenSegmentSource2& segment,
+    const std::string& point_id)
+{
+    return segment.source_point_id == point_id
+        || segment.target_point_id == point_id;
+}
+
+MatExactGraph2 rectangle_graph_spike_impl(
+    const bool reverse_segment_endpoints,
+    const CORE::BigRat& radius_squared)
+{
+    if (radius_squared < 0) {
+        throw NegativeClearanceRadiusSquaredError(
+            "rectangle graph squared clearance radius is negative");
+    }
+    const std::vector<NormalizedPointSource2> points =
+        rectangle_points();
+    const std::vector<NormalizedOpenSegmentSource2> segments =
+        rectangle_segments(
+            reverse_segment_endpoints);
+    const std::vector<GeneratorSite2> generators =
+        segment_site_generators(points, segments);
+    const std::vector<MatExactOpenSegmentSource2>
+        exact_segments =
+            exact_segment_sources(
+                points,
+                segments);
+    SegmentSiteDelaunay2 delaunay;
+    insert_segment_site_sources(
+        points,
+        segments,
+        delaunay);
+
+    MatExactGraph2 graph{{}, {}, 0, 0};
+    graph.matched_generator_sites =
+        require_generator_site_bijection(
+            delaunay,
+            generators);
+    SegmentSiteVoronoi2 voronoi(delaunay);
+    const MatDomainPolygonWithHoles2 domain =
+        rectangle_domain();
+    std::map<std::string, std::size_t> node_indices;
+    std::map<std::string, CanonicalNodeAlias2> aliases;
+    std::set<std::vector<std::string>>
+        segment_pairs;
+    std::set<std::vector<std::string>>
+        incident_pairs;
+
+    for (auto halfedge = voronoi.halfedges_begin();
+         halfedge != voronoi.halfedges_end();
+         ++halfedge) {
+        const MatTraits::Site_2 up =
+            halfedge->up()->site();
+        const MatTraits::Site_2 down =
+            halfedge->down()->site();
+        const std::string up_id =
+            stable_generator_site_id(
+                up,
+                generators);
+        const std::string down_id =
+            stable_generator_site_id(
+                down,
+                generators);
+        const std::vector<std::string> pair =
+            ordered_generator_site_ids(
+                up_id,
+                down_id);
+        if (up_id != pair.front()) {
+            continue;
+        }
+
+        if (up.is_segment() && down.is_segment()) {
+            if (!halfedge->has_source()
+                || !halfedge->has_target()) {
+                throw IncompleteCompositeSegmentChainError(
+                    "rectangle S-S halfedge is unbounded");
+            }
+            MatTraits::Segment_2 representative;
+            if (!CGAL::assign(
+                    representative,
+                    voronoi.dual().primal(
+                        halfedge->dual()))) {
+                throw UnsupportedCompositeSegmentPrimitiveError(
+                    "rectangle S-S dual is not a segment");
+            }
+            if (!segment_pairs.insert(pair).second) {
+                throw IncompleteCompositeSegmentChainError(
+                    "rectangle has duplicate canonical S-S cells");
+            }
+
+            const NormalizedOpenSegmentSource2&
+                first_record =
+                    normalized_segment_source(
+                        segments,
+                        pair[0]);
+            const NormalizedOpenSegmentSource2&
+                second_record =
+                    normalized_segment_source(
+                        segments,
+                        pair[1]);
+            const MatExactOpenSegmentSource2 first =
+                exact_segment_source(
+                    first_record,
+                    points);
+            const MatExactOpenSegmentSource2 second =
+                exact_segment_source(
+                    second_record,
+                    points);
+            const CORE::BigRat support_determinant =
+                first.line_a * second.line_b
+                - first.line_b * second.line_a;
+
+            std::string dual_id;
+            std::pair<
+                MatParameterEndpoint2,
+                MatParameterEndpoint2> endpoints;
+            std::vector<MatAdmissibleComponent2>
+                components;
+            if (support_determinant == 0) {
+                const ParallelSegmentFeatureCell2
+                    feature =
+                        parallel_segment_feature_cell(
+                            first,
+                            first_record,
+                            second,
+                            second_record,
+                            points);
+                dual_id =
+                    stable_dual_identity_v1(
+                        "segment-segment",
+                        pair);
+                endpoints =
+                    bind_parallel_segment_segment_cell_endpoints(
+                        feature.primitive,
+                        feature.lower,
+                        feature.upper,
+                        first,
+                        second,
+                        {},
+                        exact_segments,
+                        pair,
+                        generators,
+                        voronoi,
+                        halfedge);
+                components =
+                    clip_bounded_linear_clearance_components(
+                        dual_id,
+                        feature.primitive,
+                        endpoints.first,
+                        endpoints.second,
+                        parallel_segment_clearance_boundary(
+                            feature.primitive,
+                            first,
+                            second,
+                            radius_squared),
+                        domain);
+            } else {
+                const NonparallelSegmentBisectorParameterization2
+                    primitive =
+                        nonparallel_segment_bisector_parameterization(
+                            first,
+                            second,
+                            representative);
+                const NonparallelSegmentFeatureDomain2
+                    feature_domain =
+                        nonparallel_segment_feature_domain(
+                            primitive,
+                            points,
+                            segments);
+                dual_id =
+                    nonparallel_original_dual_id(
+                        primitive.branch_sign,
+                        pair);
+                endpoints =
+                    bind_nonparallel_segment_segment_cell_endpoints(
+                        primitive,
+                        feature_domain,
+                        first,
+                        second,
+                        exact_segments,
+                        pair,
+                        generators,
+                        voronoi,
+                        halfedge);
+                ExactAlgebraicKernel1 kernel;
+                const CORE::BigRat live_cell_witness =
+                    kernel.bound_between_1_object()(
+                        *endpoints.first.parameter,
+                        *endpoints.second.parameter);
+                if (!nonparallel_segment_domain_contains(
+                        domain,
+                        primitive,
+                        live_cell_witness)) {
+                    throw IncompleteCompositeSegmentChainError(
+                        "rectangle live S-S open cell is outside its domain");
+                }
+                components =
+                    clip_bounded_nonparallel_segment_clearance_components(
+                        dual_id,
+                        primitive,
+                        feature_domain,
+                        endpoints.first,
+                        endpoints.second,
+                        nonparallel_segment_clearance_boundary(
+                            primitive,
+                            first,
+                            second,
+                            radius_squared),
+                        domain);
+            }
+            components =
+                one_dimensional_graph_components(
+                    components);
+            append_exact_graph_components(
+                dual_id,
+                "LINE",
+                pair,
+                components,
+                graph,
+                node_indices);
+            register_rectangle_halfedge_aliases(
+                dual_id,
+                endpoints,
+                halfedge,
+                generators,
+                segments,
+                aliases);
+            continue;
+        }
+
+        if (up.is_point() == down.is_point()) {
+            throw UnsupportedCompositeSegmentPrimitiveError(
+                "rectangle raw transition is not point-segment");
+        }
+        const std::string point_id =
+            up.is_point() ? up_id : down_id;
+        const std::string segment_id =
+            up.is_segment() ? up_id : down_id;
+        if (!is_normalized_segment_endpoint(
+                normalized_segment_source(
+                    segments,
+                    segment_id),
+                point_id)) {
+            throw IncompleteCompositeSegmentChainError(
+                "rectangle has a nonincident point-segment transition");
+        }
+        MatTraits::Ray_2 ray;
+        if (halfedge->has_source()
+                == halfedge->has_target()
+            || !CGAL::assign(
+                ray,
+                voronoi.dual().primal(
+                    halfedge->dual()))) {
+            throw UnsupportedCompositeSegmentPrimitiveError(
+                "rectangle incident point-segment transition is not a ray");
+        }
+        if (!incident_pairs.insert(pair).second) {
+            throw IncompleteCompositeSegmentChainError(
+                "rectangle has duplicate incident point-segment transitions");
+        }
+        ++graph.rejected_incident_transitions;
+    }
+
+    const std::set<std::vector<std::string>>
+        expected_segment_pairs{
+            {"bottom-segment", "left-segment"},
+            {"bottom-segment", "right-segment"},
+            {"bottom-segment", "top-segment"},
+            {"left-segment", "top-segment"},
+            {"right-segment", "top-segment"},
+        };
+    const std::set<std::vector<std::string>>
+        expected_incident_pairs{
+            {"bottom-segment", "lower-left"},
+            {"bottom-segment", "lower-right"},
+            {"left-segment", "lower-left"},
+            {"left-segment", "upper-left"},
+            {"lower-right", "right-segment"},
+            {"right-segment", "upper-right"},
+            {"top-segment", "upper-left"},
+            {"top-segment", "upper-right"},
+        };
+    if (segment_pairs != expected_segment_pairs
+        || incident_pairs != expected_incident_pairs
+        || graph.rejected_incident_transitions
+            != expected_incident_pairs.size()) {
+        throw IncompleteCompositeSegmentChainError(
+            "rectangle adaptor traversal is incomplete");
+    }
+
+    for (const MatExactGraphEdge2& edge : graph.edges) {
+        if (edge.source_node_id == edge.target_node_id) {
+            throw InvalidSegmentSiteNodeProvenanceError(
+                "rectangle graph emitted a zero-dimensional edge; dual="
+                + edge.original_dual_id);
+        }
+        const auto source_alias =
+            aliases.find(edge.source_node_id);
+        const auto target_alias =
+            aliases.find(edge.target_node_id);
+        if (source_alias != aliases.end()
+            && target_alias != aliases.end()
+            && source_alias->second.node_id
+                == target_alias->second.node_id) {
+            throw InvalidSegmentSiteNodeProvenanceError(
+                std::string(
+                    "rectangle endpoint aliases collapse; reversed=")
+                + (reverse_segment_endpoints
+                       ? "true"
+                       : "false")
+                + "; dual="
+                + edge.original_dual_id
+                + "; node="
+                + source_alias->second.node_id);
+        }
+    }
+    canonicalize_original_nodes(
+        graph,
+        aliases);
+    const auto collapsed_edge =
+        std::find_if(
+            graph.edges.begin(),
+            graph.edges.end(),
+            [](const MatExactGraphEdge2& edge) {
+                return edge.source_node_id
+                    == edge.target_node_id;
+            });
+    if (collapsed_edge != graph.edges.end()) {
+        throw InvalidSegmentSiteNodeProvenanceError(
+            "rectangle graph collapsed dual "
+            + collapsed_edge->original_dual_id
+            + " at "
+            + collapsed_edge->source_node_id);
+    }
+    std::sort(
+        graph.nodes.begin(),
+        graph.nodes.end(),
+        [](const MatExactGraphNode2& lhs,
+           const MatExactGraphNode2& rhs) {
+            return lhs.node_id < rhs.node_id;
+        });
+    std::sort(
+        graph.edges.begin(),
+        graph.edges.end(),
+        [](const MatExactGraphEdge2& lhs,
+           const MatExactGraphEdge2& rhs) {
+            return lhs.edge_id < rhs.edge_id;
+        });
+    return graph;
+}
+
 MatExactGraph2 rectangle_central_parallel_graph_spike_impl(
     const bool reverse_segment_endpoints,
     const CORE::BigRat& radius_squared)
@@ -2880,6 +3406,29 @@ MatExactGraph2
 segment_site_reversed_rectangle_lower_left_graph_spike()
 {
     return rectangle_lower_left_graph_spike_impl(
+        true,
+        0);
+}
+
+MatExactGraph2
+segment_site_rectangle_graph_spike()
+{
+    return segment_site_rectangle_graph_spike(0);
+}
+
+MatExactGraph2
+segment_site_rectangle_graph_spike(
+    const CORE::BigRat& radius_squared)
+{
+    return rectangle_graph_spike_impl(
+        false,
+        radius_squared);
+}
+
+MatExactGraph2
+segment_site_reversed_rectangle_graph_spike()
+{
+    return rectangle_graph_spike_impl(
         true,
         0);
 }
