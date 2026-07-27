@@ -2,9 +2,46 @@
 #include "segment_site_provenance.h"
 
 #include <algorithm>
+#include <optional>
 #include <utility>
 
+#include <CGAL/Fraction_traits.h>
 #include <CGAL/Polynomial_traits_d.h>
+#include <CGAL/number_utils.h>
+
+namespace
+{
+
+std::optional<CORE::BigRat> rational_square_root(
+    const CORE::BigRat& value)
+{
+    if (value < 0) {
+        return std::nullopt;
+    }
+    using FractionTraits =
+        CGAL::Fraction_traits<CORE::BigRat>;
+    ExactAlgebraicInteger1 numerator;
+    ExactAlgebraicInteger1 denominator;
+    typename FractionTraits::Decompose()(
+        value,
+        numerator,
+        denominator);
+    ExactAlgebraicInteger1 numerator_root;
+    ExactAlgebraicInteger1 denominator_root;
+    if (!CGAL::is_square(
+            numerator,
+            numerator_root)
+        || !CGAL::is_square(
+            denominator,
+            denominator_root)) {
+        return std::nullopt;
+    }
+    return typename FractionTraits::Compose()(
+        numerator_root,
+        denominator_root);
+}
+
+}  // namespace
 
 void trim(RationalPolynomial& polynomial)
 {
@@ -220,6 +257,166 @@ CORE::BigRat parallel_segment_tangent_parameter(
         (x - primitive.x_coefficients[0]) * direction_x
         + (y - primitive.y_coefficients[0]) * direction_y)
         / direction_squared;
+}
+
+NonparallelSegmentBisectorParameterization2
+nonparallel_segment_bisector_parameterization(
+    const MatExactOpenSegmentSource2& first,
+    const MatExactOpenSegmentSource2& second,
+    const MatTraits::Segment_2& live_primitive)
+{
+    if (first.stable_site_id == second.stable_site_id) {
+        throw DuplicateOpenSegmentSourceIdentityError(
+            "nonparallel segment sources share one stable identity");
+    }
+    const MatExactOpenSegmentSource2* ordered_first =
+        &first;
+    const MatExactOpenSegmentSource2* ordered_second =
+        &second;
+    if (ordered_second->stable_site_id
+        < ordered_first->stable_site_id) {
+        std::swap(ordered_first, ordered_second);
+    }
+
+    const CORE::BigRat determinant =
+        ordered_first->line_a * ordered_second->line_b
+        - ordered_second->line_a * ordered_first->line_b;
+    if (determinant == 0) {
+        throw ParallelSegmentSupportsError(
+            "nonparallel S-S chart received parallel supports");
+    }
+    if (live_primitive.source()
+        == live_primitive.target()) {
+        throw DegenerateLiveSegmentPrimitiveError(
+            "nonparallel S-S live primitive has zero length");
+    }
+
+    const CORE::BigRat first_norm =
+        ordered_first->line_a * ordered_first->line_a
+        + ordered_first->line_b * ordered_first->line_b;
+    const CORE::BigRat second_norm =
+        ordered_second->line_a * ordered_second->line_a
+        + ordered_second->line_b * ordered_second->line_b;
+    const CORE::BigRat radicand =
+        first_norm * second_norm;
+    const CORE::Expr radical =
+        CORE::sqrt(CORE::Expr(radicand));
+
+    int branch_sign = 0;
+    for (const int candidate_sign : {1, -1}) {
+        const CORE::Expr candidate_a =
+            CORE::Expr(
+                second_norm * ordered_first->line_a)
+            + CORE::Expr(
+                  candidate_sign
+                  * ordered_second->line_a)
+                * radical;
+        const CORE::Expr candidate_b =
+            CORE::Expr(
+                second_norm * ordered_first->line_b)
+            + CORE::Expr(
+                  candidate_sign
+                  * ordered_second->line_b)
+                * radical;
+        const CORE::Expr candidate_c =
+            CORE::Expr(
+                second_norm * ordered_first->line_c)
+            + CORE::Expr(
+                  candidate_sign
+                  * ordered_second->line_c)
+                * radical;
+        const MatTraits::Line_2 candidate(
+            candidate_a,
+            candidate_b,
+            candidate_c);
+        if (candidate.has_on(live_primitive.source())
+            && candidate.has_on(
+                live_primitive.target())) {
+            branch_sign = candidate_sign;
+            break;
+        }
+    }
+    if (branch_sign == 0) {
+        throw UnboundNonparallelSegmentBranchError(
+            "live S-S primitive lies on neither exact bisector branch");
+    }
+
+    const CORE::BigRat intersection_x =
+        (
+            ordered_first->line_b
+                * ordered_second->line_c
+            - ordered_second->line_b
+                * ordered_first->line_c)
+        / determinant;
+    const CORE::BigRat intersection_y =
+        (
+            ordered_first->line_c
+                * ordered_second->line_a
+            - ordered_second->line_c
+                * ordered_first->line_a)
+        / determinant;
+    CORE::BigRat direction_x_rational =
+        second_norm * ordered_first->line_b;
+    CORE::BigRat direction_x_radical =
+        branch_sign * ordered_second->line_b;
+    CORE::BigRat direction_y_rational =
+        -second_norm * ordered_first->line_a;
+    CORE::BigRat direction_y_radical =
+        -branch_sign * ordered_second->line_a;
+    const CGAL::Sign direction_x_sign =
+        quadratic_field_sign(
+            {
+                direction_x_rational,
+                direction_x_radical,
+            },
+            radicand);
+    const CGAL::Sign leading_sign =
+        direction_x_sign != CGAL::ZERO
+        ? direction_x_sign
+        : quadratic_field_sign(
+              {
+                  direction_y_rational,
+                  direction_y_radical,
+              },
+              radicand);
+    if (leading_sign == CGAL::ZERO) {
+        throw InvalidRationalPrimitiveError(
+            "nonparallel S-S chart direction is zero");
+    }
+    if (leading_sign == CGAL::NEGATIVE) {
+        direction_x_rational =
+            -direction_x_rational;
+        direction_x_radical =
+            -direction_x_radical;
+        direction_y_rational =
+            -direction_y_rational;
+        direction_y_radical =
+            -direction_y_radical;
+    }
+
+    CORE::BigRat canonical_radicand = radicand;
+    if (const std::optional<CORE::BigRat> square_root =
+            rational_square_root(radicand);
+        square_root.has_value()) {
+        direction_x_rational +=
+            direction_x_radical * *square_root;
+        direction_y_rational +=
+            direction_y_radical * *square_root;
+        direction_x_radical = 0;
+        direction_y_radical = 0;
+        canonical_radicand = 1;
+    }
+
+    return {
+        ordered_first->stable_site_id,
+        ordered_second->stable_site_id,
+        branch_sign,
+        {intersection_x, direction_x_rational},
+        {0, direction_x_radical},
+        {intersection_y, direction_y_rational},
+        {0, direction_y_radical},
+        canonical_radicand,
+    };
 }
 
 bool root_is_in_domain(

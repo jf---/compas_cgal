@@ -145,6 +145,24 @@ public:
     using std::runtime_error::runtime_error;
 };
 
+class ParallelSegmentSupportsError
+    : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
+
+class DegenerateLiveSegmentPrimitiveError
+    : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
+
+class UnboundNonparallelSegmentBranchError
+    : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
+
 MatExactOpenSegmentSource2 canonical_open_segment_source(
     std::string stable_site_id,
     const CORE::BigRat& source_x,
@@ -161,6 +179,51 @@ CORE::BigRat parallel_segment_tangent_parameter(
     const RationalPrimitiveParameterization2& primitive,
     const CORE::BigRat& x,
     const CORE::BigRat& y);
+
+class NonparallelSegmentBisectorParameterization2 {
+public:
+    const std::string first_segment_id;
+    const std::string second_segment_id;
+    const int branch_sign;
+    const std::vector<CORE::BigRat> x_rational;
+    const std::vector<CORE::BigRat> x_radical;
+    const std::vector<CORE::BigRat> y_rational;
+    const std::vector<CORE::BigRat> y_radical;
+    const CORE::BigRat radicand;
+
+private:
+    NonparallelSegmentBisectorParameterization2(
+        std::string first_segment_id,
+        std::string second_segment_id,
+        int branch_sign,
+        std::vector<CORE::BigRat> x_rational,
+        std::vector<CORE::BigRat> x_radical,
+        std::vector<CORE::BigRat> y_rational,
+        std::vector<CORE::BigRat> y_radical,
+        CORE::BigRat radicand)
+        : first_segment_id(std::move(first_segment_id)),
+          second_segment_id(std::move(second_segment_id)),
+          branch_sign(branch_sign),
+          x_rational(std::move(x_rational)),
+          x_radical(std::move(x_radical)),
+          y_rational(std::move(y_rational)),
+          y_radical(std::move(y_radical)),
+          radicand(std::move(radicand))
+    {
+    }
+
+    friend NonparallelSegmentBisectorParameterization2
+    nonparallel_segment_bisector_parameterization(
+        const MatExactOpenSegmentSource2& first,
+        const MatExactOpenSegmentSource2& second,
+        const MatTraits::Segment_2& live_primitive);
+};
+
+NonparallelSegmentBisectorParameterization2
+nonparallel_segment_bisector_parameterization(
+    const MatExactOpenSegmentSource2& first,
+    const MatExactOpenSegmentSource2& second,
+    const MatTraits::Segment_2& live_primitive);
 
 using RationalPolynomial = std::vector<CORE::BigRat>;
 
