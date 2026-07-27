@@ -25,6 +25,8 @@ public:
     using std::runtime_error::runtime_error;
 };
 
+class CanonicalMatVoronoiSource2;
+
 class CanonicalMatSiteGeometryIndex2 {
 public:
     std::size_t size() const noexcept;
@@ -83,4 +85,6 @@ private:
 
     CanonicalMatSiteGeometryIndex2 site_index_;
     SegmentSiteDelaunay2 delaunay_;
+
+    friend class CanonicalMatVoronoiSource2;
 };
