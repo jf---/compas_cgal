@@ -237,8 +237,8 @@ struct ExactEdgeGolden2
     CORE::BigRat target_parameter;
     std::string source_node_id;
     std::string target_node_id;
-    std::vector<std::string> source_required_provenance_ids;
-    std::vector<std::string> target_required_provenance_ids;
+    std::vector<std::string> source_event_provenance_ids;
+    std::vector<std::string> target_event_provenance_ids;
 };
 
 std::string rational_root_identity(
@@ -248,6 +248,18 @@ std::string rational_root_identity(
     return algebraic_root_identity_v1(
         kernel.construct_algebraic_real_1_object()(
             parameter));
+}
+
+std::string radius_five_clearance_root_identity(
+    const std::size_t ordinal)
+{
+    return algebraic_root_id_v1(
+        {
+            ExactAlgebraicInteger1(-1),
+            ExactAlgebraicInteger1(0),
+            ExactAlgebraicInteger1(16),
+        },
+        ordinal);
 }
 
 std::string parameter_node_identity(
@@ -262,7 +274,7 @@ bool endpoint_matches_golden(
     const MatParameterEndpoint2& endpoint,
     const CORE::BigRat& parameter,
     const std::vector<std::string>&
-        required_provenance_ids)
+        event_provenance_ids)
 {
     if (!endpoint.parameter.has_value())
     {
@@ -274,31 +286,47 @@ bool endpoint_matches_golden(
             parameter);
     const std::string root_id =
         rational_root_identity(parameter);
-    const bool has_required_provenance =
-        std::all_of(
-            required_provenance_ids.begin(),
-            required_provenance_ids.end(),
-            [&endpoint](const std::string& provenance)
-            {
-                return std::find(
-                           endpoint.provenance_ids.begin(),
-                           endpoint.provenance_ids.end(),
-                           provenance)
-                    != endpoint.provenance_ids.end();
-            });
-    return kernel.compare_1_object()(
-               *endpoint.parameter,
-               expected)
+    std::vector<std::string> expected_provenance_ids =
+        event_provenance_ids;
+    expected_provenance_ids.push_back(root_id);
+    std::sort(
+        expected_provenance_ids.begin(),
+        expected_provenance_ids.end());
+    expected_provenance_ids.erase(
+        std::unique(
+            expected_provenance_ids.begin(),
+            expected_provenance_ids.end()),
+        expected_provenance_ids.end());
+    const bool matches =
+        kernel.compare_1_object()(
+            *endpoint.parameter,
+            expected)
             == CGAL::EQUAL
         && algebraic_root_identity_v1(
                *endpoint.parameter)
             == root_id
-        && std::find(
-               endpoint.provenance_ids.begin(),
-               endpoint.provenance_ids.end(),
-               root_id)
-            != endpoint.provenance_ids.end()
-        && has_required_provenance;
+        && endpoint.provenance_ids
+            == expected_provenance_ids;
+    if (!matches)
+    {
+        std::cerr << "  expected endpoint events:";
+        for (const std::string& provenance :
+             event_provenance_ids)
+        {
+            std::cerr << " [" << provenance << "]";
+        }
+        std::cerr << "\n  actual endpoint events:";
+        for (const std::string& provenance :
+             endpoint.provenance_ids)
+        {
+            if (provenance != root_id)
+            {
+                std::cerr << " [" << provenance << "]";
+            }
+        }
+        std::cerr << '\n';
+    }
+    return matches;
 }
 
 bool exact_edges_match_golden(
@@ -344,11 +372,11 @@ bool exact_edges_match_golden(
             && endpoint_matches_golden(
                 edge->source_endpoint,
                 golden.source_parameter,
-                golden.source_required_provenance_ids)
+                golden.source_event_provenance_ids)
             && endpoint_matches_golden(
                 edge->target_endpoint,
                 golden.target_parameter,
-                golden.target_required_provenance_ids);
+                golden.target_event_provenance_ids);
         if (!edge_matches)
         {
             std::cerr
@@ -483,6 +511,8 @@ bool analytic_two_site_line()
                 parameter_node_identity(
                     dual_id,
                     CORE::BigRat(1)),
+                {dual_id + "/D-outer/edge-0"},
+                {dual_id + "/D-outer/edge-2"},
             },
         });
 }
@@ -520,6 +550,8 @@ bool analytic_three_site_hull()
                     lower_dual,
                     CORE::BigRat(-1)),
                 circumcenter,
+                {lower_dual + "/D-outer/edge-0"},
+                {lower_dual + "/domain-upper"},
             },
             {
                 left_top_dual + "/component-0",
@@ -531,6 +563,8 @@ bool analytic_three_site_hull()
                 parameter_node_identity(
                     left_top_dual,
                     CORE::BigRat(13, 10)),
+                {left_top_dual + "/domain-lower"},
+                {left_top_dual + "/D-outer/edge-3"},
             },
             {
                 right_top_dual + "/component-0",
@@ -542,6 +576,8 @@ bool analytic_three_site_hull()
                     right_top_dual,
                     CORE::BigRat(-13, 10)),
                 circumcenter,
+                {right_top_dual + "/D-outer/edge-1"},
+                {right_top_dual + "/domain-upper"},
             },
         });
 }
@@ -590,6 +626,8 @@ bool analytic_interior_site()
                     lower_dual,
                     CORE::BigRat(-5, 8)),
                 lower_node,
+                {lower_dual + "/D-outer/edge-0"},
+                {lower_dual + "/domain-upper"},
             },
             {
                 left_top_dual + "/component-0",
@@ -601,6 +639,8 @@ bool analytic_interior_site()
                 parameter_node_identity(
                     left_top_dual,
                     CORE::BigRat(3, 4)),
+                {left_top_dual + "/domain-lower"},
+                {left_top_dual + "/D-outer/edge-3"},
             },
             {
                 right_top_dual + "/component-0",
@@ -612,6 +652,8 @@ bool analytic_interior_site()
                     right_top_dual,
                     CORE::BigRat(-3, 4)),
                 right_node,
+                {right_top_dual + "/D-outer/edge-1"},
+                {right_top_dual + "/domain-upper"},
             },
             {
                 interior_left_dual + "/component-0",
@@ -621,6 +663,8 @@ bool analytic_interior_site()
                 CORE::BigRat(2, 3),
                 left_node,
                 lower_node,
+                {interior_left_dual + "/domain-lower"},
+                {interior_left_dual + "/domain-upper"},
             },
             {
                 interior_right_dual + "/component-0",
@@ -630,6 +674,8 @@ bool analytic_interior_site()
                 CORE::BigRat(1),
                 lower_node,
                 right_node,
+                {interior_right_dual + "/domain-lower"},
+                {interior_right_dual + "/domain-upper"},
             },
             {
                 interior_top_dual + "/component-0",
@@ -639,6 +685,8 @@ bool analytic_interior_site()
                 CORE::BigRat(1),
                 right_node,
                 left_node,
+                {interior_top_dual + "/domain-lower"},
+                {interior_top_dual + "/domain-upper"},
             },
         });
 }
@@ -674,6 +722,8 @@ bool analytic_collinear_sites()
                 parameter_node_identity(
                     left_dual,
                     CORE::BigRat(4, 3)),
+                {left_dual + "/D-outer/edge-0"},
+                {left_dual + "/D-outer/edge-2"},
             },
             {
                 right_dual + "/component-0",
@@ -687,6 +737,8 @@ bool analytic_collinear_sites()
                 parameter_node_identity(
                     right_dual,
                     CORE::BigRat(1)),
+                {right_dual + "/D-outer/edge-0"},
+                {right_dual + "/D-outer/edge-2"},
             },
         });
 }
@@ -775,7 +827,10 @@ bool analytic_radius_clipping()
                            dual_id,
                            CORE::BigRat(-1, 4)),
                        {dual_id + "/D-outer/edge-0"},
-                       {},
+                       {
+                           radius_five_clearance_root_identity(
+                               0),
+                       },
                    },
                    {
                        dual_id + "/component-1",
@@ -789,7 +844,10 @@ bool analytic_radius_clipping()
                        parameter_node_identity(
                            dual_id,
                            CORE::BigRat(1)),
-                       {},
+                       {
+                           radius_five_clearance_root_identity(
+                               1),
+                       },
                        {dual_id + "/D-outer/edge-2"},
                    },
                })
