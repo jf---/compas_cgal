@@ -179,12 +179,12 @@ SegmentLimiterFixture2 real_segment_limiter_fixture()
             {3, 0},
             1,
         },
-        {
+        canonical_open_segment_source(
             "segment-open-segment",
+            -100,
             0,
-            1,
-            0,
-        },
+            100,
+            0),
         {
             "segment-source",
             {-100, 0},
@@ -197,12 +197,12 @@ SegmentLimiterFixture2 real_segment_limiter_fixture()
             {0, 0},
             1,
         },
-        {
+        canonical_open_segment_source(
             "segment-limiter",
+            0,
             1,
             0,
-            0,
-        },
+            5),
         {
             "limiter-source",
             {0, 0},
@@ -232,12 +232,12 @@ SegmentLimiterFixture2 endpoint_reduction_fixture()
             {3, 0},
             1,
         },
-        {
+        canonical_open_segment_source(
             "endpoint-open-segment",
+            -100,
             0,
-            1,
-            0,
-        },
+            100,
+            0),
         {
             "endpoint-segment-source",
             {-100, 0},
@@ -250,12 +250,12 @@ SegmentLimiterFixture2 endpoint_reduction_fixture()
             {0, 0},
             1,
         },
-        {
+        canonical_open_segment_source(
             "endpoint-limiter-segment",
-            1,
-            0,
-            CORE::BigRat(1, 2),
-        },
+            CORE::BigRat(-1, 2),
+            CORE::BigRat(3, 2),
+            CORE::BigRat(-1, 2),
+            5),
         {
             "endpoint-limiter",
             {CORE::BigRat(-1, 2), 0},
@@ -285,12 +285,12 @@ SegmentLimiterFixture2 identical_support_fixture()
             {3, 0},
             1,
         },
-        {
+        canonical_open_segment_source(
             "identical-open-segment",
+            -2,
             0,
-            1,
-            0,
-        },
+            2,
+            0),
         {
             "identical-segment-source",
             {-2, 0},
@@ -303,12 +303,12 @@ SegmentLimiterFixture2 identical_support_fixture()
             {0, 0},
             1,
         },
-        {
+        canonical_open_segment_source(
             "identical-limiter",
+            2,
             0,
-            1,
-            0,
-        },
+            4,
+            0),
         {
             "identical-limiter-source",
             {2, 0},
@@ -593,32 +593,18 @@ bool coincident_limiter_segment_is_rejected()
     return false;
 }
 
-bool zero_limiter_line_normal_is_rejected()
+bool degenerate_limiter_is_rejected_at_construction()
 {
-    LiveSegmentLimiterFixture2 fixture(
-        real_segment_limiter_fixture());
-    const std::vector<BoundEndpointObservation2> observations =
-        bind_segment_limiter_fixture(fixture);
-    if (observations.empty()) {
-        return false;
-    }
-    MatExactOpenSegmentSource2 zero_line =
-        fixture.source.limiter_record;
-    zero_line.line_a = 0;
-    zero_line.line_b = 0;
     try {
-        bind_segment_limiter_parabola_endpoint(
-            fixture.source.focus_record,
-            fixture.source.segment_record,
-            fixture.source.segment_source_record,
-            fixture.source.segment_target_record,
-            zero_line,
-            fixture.source.limiter_source_record,
-            fixture.source.limiter_target_record,
-            fixture.voronoi,
-            observations[0].halfedge);
+        static_cast<void>(
+            canonical_open_segment_source(
+                "zero-limiter-line",
+                CORE::BigRat(-2, 5),
+                CORE::BigRat(7, 11),
+                CORE::BigRat(-2, 5),
+                CORE::BigRat(7, 11)));
     }
-    catch (const ZeroSegmentLineNormalError&) {
+    catch (const DegenerateOpenSegmentSourceError&) {
         return true;
     }
     return false;
@@ -635,5 +621,5 @@ bool segment_limiter_gate()
         && identical_support_has_no_segment_limiter_owner()
         && square_field_radical_segment_is_rejected()
         && coincident_limiter_segment_is_rejected()
-        && zero_limiter_line_normal_is_rejected();
+        && degenerate_limiter_is_rejected_at_construction();
 }

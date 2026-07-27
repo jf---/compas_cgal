@@ -82,6 +82,51 @@ std::vector<ExactAlgebraicInteger1> primitive_integer_coefficients(
     return primitive;
 }
 
+MatExactOpenSegmentSource2 canonical_open_segment_source(
+    std::string stable_site_id,
+    const CORE::BigRat& source_x,
+    const CORE::BigRat& source_y,
+    const CORE::BigRat& target_x,
+    const CORE::BigRat& target_y)
+{
+    if (stable_site_id.empty()) {
+        throw EmptyOpenSegmentSourceIdentityError(
+            "open segment source identity is empty");
+    }
+
+    const CORE::BigRat line_a = source_y - target_y;
+    const CORE::BigRat line_b = target_x - source_x;
+    if (line_a == 0 && line_b == 0) {
+        throw DegenerateOpenSegmentSourceError(
+            "open segment source endpoints coincide");
+    }
+
+    std::vector<ExactAlgebraicInteger1> line =
+        primitive_integer_coefficients({
+            line_a,
+            line_b,
+            source_x * target_y - target_x * source_y,
+        });
+    const auto first_nonzero = std::find_if(
+        line.begin(),
+        line.end(),
+        [](const ExactAlgebraicInteger1& coefficient) {
+            return coefficient != 0;
+        });
+    if (*first_nonzero < 0) {
+        for (ExactAlgebraicInteger1& coefficient : line) {
+            coefficient = -coefficient;
+        }
+    }
+
+    return {
+        std::move(stable_site_id),
+        CORE::BigRat(line[0]),
+        CORE::BigRat(line[1]),
+        CORE::BigRat(line[2]),
+    };
+}
+
 bool root_is_in_domain(
     const ExactAlgebraicKernel1::Algebraic_real_1& root,
     const RationalPrimitiveParameterization2& primitive,

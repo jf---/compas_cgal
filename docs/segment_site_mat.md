@@ -8,21 +8,21 @@ needed by every downstream traversal and engagement decision.
 
 !!! warning "Implementation maturity"
 
-    Task 9 is in progress. The point/point linear production slice is locally
-    green at `b3c0f94`, but its publication review found open stable-identity,
-    contract-test, and file-responsibility defects. Point/segment and
-    segment/segment helpers exist at different maturity levels, but the
-    unified segment-site adaptor, neck evidence, proposal sampling, and Python
-    binding are not complete.
+    Task 9 is in progress. The point/point production graph is locally green
+    and independently reviewed. The bounded point/segment slice now takes its
+    algebraic cell endpoints from live Voronoi halfedge owners, including
+    point and segment limiters. True-radius parabola clipping, the unified
+    segment-site traversal, segment/segment cells, neck evidence, proposal
+    sampling, and the Python binding are not complete.
 
     Do not treat the current native spike APIs as the final public MAT API.
     The maturity table below is the claim boundary.
 
 ## Why a separate exact MAT exists
 
-The older trochoidal example derives centerlines from a straight skeleton.
-That path remains useful and unchanged, but it cannot establish the segment
-Voronoi facts required by the certified adaptive design:
+The repository's straight-skeleton trochoidal example is a separate
+algorithm. It cannot establish the segment Voronoi facts required by the
+certified adaptive design:
 
 - a point/open-segment bisector is a parabola, not a straight-skeleton edge;
 - tool-center admissibility is the exact set `C_r = D ⊖ B_r`, not an offset
@@ -47,7 +47,7 @@ construction.
 
 | Dimension | Held–Pfeiffer 2025 | Exact-certified Phase 1 |
 | --- | --- | --- |
-| Pocket geometry | Segments and circular arcs; simply connected; machinability assumed after an `r + ε` transformation | Polygonal pockets with holes; exact `C_r` and `M_r`; circular boundaries not yet supported |
+| Pocket geometry | Segments and circular arcs; simply connected; machinability assumed after an `r + ε` transformation | Target: polygonal pockets with holes and exact `C_r`/`M_r`; current MAT subset is incomplete; circular boundaries are not supported |
 | MAT backend | Vroni/ArcVroni used end-to-end | Exact CGAL segment-site graph with stable provenance; incomplete |
 | Engagement limit | Analytic circle construction followed by bisection until `θmax − 0.001 <= θ <= θmax` radians | Exact rational chord surrogate and event-exact segment/full-circle certification; integration incomplete |
 | Candidate spacing | Bisection along the middle curve | Finite candidate lattice; no monotonic-feasibility assumption |
@@ -83,7 +83,7 @@ certificate from Hausdorff closeness.
 
 ## Proof-boundary dataflow
 
-The completed Task 9 dataflow is:
+The target Task 9 dataflow is:
 
 ```text
 normalized ring vertices + open segments + exact radius²
@@ -236,6 +236,47 @@ The source and target of the open segment bound the feature domain. Live
 Voronoi endpoint limiters then bind the actual halfedge endpoints. The
 accepted binders distinguish point limiters from segment limiters and reject
 ambiguous, unbounded, or mismatched producer states.
+
+#### The supporting-line chart is canonical
+
+A supporting line is geometrically projective: `(a, b, c)` and
+`λ(a, b, c)` describe the same line for every nonzero `λ`. The parabola
+parameter chart is not scale-free, however. Its tangent basis is `(-b, a)`,
+so scaling the line by `λ` maps the same geometric point from `t` to
+`t / λ`. Any algebraic-root identity formed in that chart would therefore
+depend on endpoint spacing or endpoint order unless the line is canonical.
+
+`canonical_open_segment_source` fixes the chart at the exact-source
+boundary:
+
+1. derive `(a, b, c)` from the two exact rational endpoints;
+2. reject an empty stable site identity;
+3. reject coincident endpoints;
+4. clear all rational denominators and divide by the integer gcd;
+5. choose the sign whose first nonzero coefficient is positive.
+
+The result is one primitive integer triple for every rational representation
+of the same orientation-independent supporting line. For example, both
+vertical endpoint orders reduce to `(1, 0, 0)`, while
+`(-100, 0) → (100, 0)` reduces from the raw `(0, 200, 0)` to
+`(0, 1, 0)`. Production source and limiter construction both pass through
+this factory.
+
+This normalization changes coordinates, not geometry. In the bounded
+point-limiter fixture, the raw endpoint-length chart produced the factor
+`1 + 8t`; the canonical chart produces `1 + t` for the same Voronoi
+endpoint. The native golden records the latter as
+`AlgebraicRootIdV1({1, 1}, 0)`. The segment-limiter fixture likewise binds
+its predeclared canonical root only after both supporting lines pass through
+the same boundary.
+
+!!! note "Canonical source is a value-type invariant"
+
+    `MatExactOpenSegmentSource2` is immutable and is not an aggregate. Its
+    constructor is private; `canonical_open_segment_source` is the only
+    construction boundary used by production and native fixtures. Empty
+    identities and zero line normals therefore fail before parameterization,
+    clipping, or endpoint binding can observe an invalid chart.
 
 The following `Parabola_segment_2` APIs are visualization paths and are
 forbidden from proof decisions:
@@ -445,10 +486,11 @@ consumers, or evolution differ from graph orchestration.
 | --- | --- | --- |
 | Point/point linear parameterization | implemented | exact |
 | Point/point domain and radius clipping | implemented | exact |
-| Point-graph deterministic records | implemented | publication blockers open |
-| Cocircular point topology | guarded | named fail-loud boundary |
-| Point/segment source parameterization | implemented helper | not fully wired |
-| Point/segment endpoint binders | implemented and reviewed | not production graph |
+| Point-graph deterministic records | implemented and reviewed | exact |
+| Cocircular point topology | guarded | exact collision detection and named fail-loud boundary; normalization pending |
+| Point/segment source parameterization | implemented and native-gated | exact canonical supporting-line chart |
+| Point/segment endpoint ownership | wired and native-gated | exact for bounded point and segment limiter fixtures |
+| Algebraic point/segment cell bounds | implemented | exact |
 | True-radius parabola clearance | pending | no production claim |
 | Segment/segment feature domains | pending | no production claim |
 | Unified degeneracy-removal traversal | pending | no production claim |
@@ -466,6 +508,16 @@ pixi run _task9-mat-build
 pixi run _task9-mat-run
 git diff --check
 ```
+
+The canonical-source slice is bounded by native contracts for horizontal,
+vertical, reversed, and rational endpoint pairs; empty identities and
+coincident endpoints fail with distinct named exceptions. The same
+executable checks production point- and segment-limiter provenance against
+exact root goldens, recomputes each golden from the emitted algebraic
+parameter, and compares complete graph records after reversing every segment
+endpoint order. These gates establish canonical source construction and
+bounded endpoint ownership. They do not establish true-radius parabola
+clipping, segment/segment coverage, or the final unified traversal.
 
 The final Task 9 boundary also requires:
 
