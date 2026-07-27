@@ -211,6 +211,35 @@ std::vector<RationalDomainRoot2> linear_domain_roots(
     return unique;
 }
 
+std::vector<AlgebraicDomainRoot2>
+algebraic_linear_domain_roots(
+    const std::string& original_dual_id,
+    const RationalPrimitiveParameterization2& primitive,
+    const MatDomainPolygonWithHoles2& domain)
+{
+    ExactAlgebraicKernel1 kernel;
+    std::vector<AlgebraicDomainRoot2> roots;
+    for (const RationalDomainRoot2& root :
+         linear_domain_roots(
+             original_dual_id,
+             primitive,
+             domain)) {
+        const auto parameter =
+            kernel.construct_algebraic_real_1_object()(
+                root.parameter);
+        std::vector<std::string> provenance =
+            root.provenance_ids;
+        provenance.push_back(
+            algebraic_root_identity_v1(parameter));
+        roots.push_back(
+            {
+                parameter,
+                std::move(provenance),
+            });
+    }
+    return roots;
+}
+
 void append_source_parabola_intersections(
     const MatDomainPolygon2& polygon,
     const std::string& ring_id,
@@ -509,6 +538,78 @@ source_parabola_clearance_boundary(
         point_site.x.rational,
         point_site.y.rational,
         radius_squared);
+}
+
+ClearanceRootBoundary2
+parallel_segment_clearance_boundary(
+    const RationalPrimitiveParameterization2& primitive,
+    const MatExactOpenSegmentSource2& first_segment,
+    const MatExactOpenSegmentSource2& second_segment,
+    const CORE::BigRat& radius_squared)
+{
+    if (radius_squared < 0) {
+        throw NegativeClearanceRadiusSquaredError(
+            "parallel S-S squared clearance radius is negative");
+    }
+    if (primitive.x_coefficients.size() != 2
+        || primitive.y_coefficients.size() != 2) {
+        throw InvalidRationalPrimitiveError(
+            "parallel S-S clearance requires an affine chart");
+    }
+    const RationalPrimitiveParameterization2 canonical =
+        parallel_segment_bisector_parameterization(
+            first_segment,
+            second_segment);
+    if (primitive.x_coefficients
+            != canonical.x_coefficients
+        || primitive.y_coefficients
+            != canonical.y_coefficients) {
+        throw MismatchedParallelSegmentClearanceError(
+            "parallel S-S clearance chart is not canonical");
+    }
+    const auto squared_distance_to_support =
+        [&primitive](
+            const MatExactOpenSegmentSource2& segment)
+            -> CORE::BigRat {
+            const CORE::BigRat line_constant =
+                segment.line_a
+                    * primitive.x_coefficients[0]
+                + segment.line_b
+                    * primitive.y_coefficients[0]
+                + segment.line_c;
+            const CORE::BigRat line_direction =
+                segment.line_a
+                    * primitive.x_coefficients[1]
+                + segment.line_b
+                    * primitive.y_coefficients[1];
+            if (line_direction != 0) {
+                throw NonconstantParallelSegmentClearanceError(
+                    "parallel S-S chart is not parallel to a source support");
+            }
+            const CORE::BigRat line_norm =
+                segment.line_a * segment.line_a
+                + segment.line_b * segment.line_b;
+            if (line_norm == 0) {
+                throw InvalidRationalPrimitiveError(
+                    "parallel S-S source support has zero normal");
+            }
+            return line_constant * line_constant / line_norm;
+        };
+    const CORE::BigRat first_distance =
+        squared_distance_to_support(first_segment);
+    const CORE::BigRat second_distance =
+        squared_distance_to_support(second_segment);
+    if (first_distance != second_distance) {
+        throw MismatchedParallelSegmentClearanceError(
+            "parallel S-S chart is not equidistant from both sources");
+    }
+    const CORE::BigRat clearance =
+        first_distance - radius_squared;
+    return {
+        CGAL::sign(clearance),
+        {},
+        {},
+    };
 }
 
 std::vector<MatAdmissibleComponent2>
@@ -944,25 +1045,6 @@ clip_linear_clearance_components(
     const MatDomainPolygonWithHoles2& domain)
 {
     ExactAlgebraicKernel1 kernel;
-    std::vector<AlgebraicDomainRoot2> roots;
-    for (const RationalDomainRoot2& root :
-         linear_domain_roots(
-             original_dual_id,
-             primitive,
-             domain)) {
-        const auto parameter =
-            kernel.construct_algebraic_real_1_object()(
-                root.parameter);
-        std::vector<std::string> provenance =
-            root.provenance_ids;
-        provenance.push_back(
-            algebraic_root_identity_v1(parameter));
-        roots.push_back(
-            {
-                parameter,
-                std::move(provenance),
-            });
-    }
     return clip_clearance_components_with_domain_roots(
         original_dual_id,
         domain_endpoint(
@@ -986,7 +1068,71 @@ clip_linear_clearance_components(
                     primitive.y_coefficients,
                     parameter));
         },
-        roots);
+        algebraic_linear_domain_roots(
+            original_dual_id,
+            primitive,
+            domain));
+}
+
+std::vector<MatAdmissibleComponent2>
+clip_owned_linear_clearance_components(
+    const std::string& original_dual_id,
+    const RationalPrimitiveParameterization2& primitive,
+    const MatParameterEndpoint2& domain_lower,
+    const MatParameterEndpoint2& domain_upper,
+    const ClearanceRootBoundary2& boundary,
+    const MatDomainPolygonWithHoles2& domain)
+{
+    if (!primitive.domain_lower.has_value()
+        || !primitive.domain_upper.has_value()
+        || !domain_lower.parameter.has_value()
+        || !domain_upper.parameter.has_value()) {
+        throw MismatchedLinearCellDomainError(
+            "owned linear cell requires bounded matching endpoints");
+    }
+    if (domain_lower.provenance_ids.empty()
+        || domain_upper.provenance_ids.empty()) {
+        throw MissingOwnedLinearCellProvenanceError(
+            "owned linear cell endpoint provenance is empty");
+    }
+    ExactAlgebraicKernel1 kernel;
+    const auto construct =
+        kernel.construct_algebraic_real_1_object();
+    const auto compare = kernel.compare_1_object();
+    if (compare(
+            *domain_lower.parameter,
+            construct(*primitive.domain_lower))
+            != CGAL::EQUAL
+        || compare(
+               *domain_upper.parameter,
+               construct(*primitive.domain_upper))
+            != CGAL::EQUAL
+        || compare(
+               *domain_lower.parameter,
+               *domain_upper.parameter)
+            != CGAL::SMALLER) {
+        throw MismatchedLinearCellDomainError(
+            "owned linear endpoints differ from primitive domain");
+    }
+    return clip_clearance_components_with_domain_roots(
+        original_dual_id,
+        domain_lower,
+        domain_upper,
+        boundary,
+        [&domain, &primitive](const CORE::BigRat& parameter) {
+            return domain_contains(
+                domain,
+                evaluate_rational_polynomial(
+                    primitive.x_coefficients,
+                    parameter),
+                evaluate_rational_polynomial(
+                    primitive.y_coefficients,
+                    parameter));
+        },
+        algebraic_linear_domain_roots(
+            original_dual_id,
+            primitive,
+            domain));
 }
 
 std::vector<MatAdmissibleComponent2>

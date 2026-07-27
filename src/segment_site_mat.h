@@ -92,3 +92,22 @@ segment_site_reversed_source_graph_spike();
 
 MatExactGraph2
 segment_site_true_radius_graph_spike();
+
+MatExactGraph2
+segment_site_segment_segment_graph_spike();
+
+MatExactGraph2
+segment_site_segment_segment_graph_spike(
+    const CORE::BigRat& radius_squared);
+
+MatExactGraph2
+segment_site_reversed_segment_segment_graph_spike();
+
+MatExactGraph2
+segment_site_disjoint_parallel_segment_graph_spike();
+
+MatExactGraph2
+segment_site_external_limited_parallel_segment_graph_spike();
+
+MatExactGraph2
+segment_site_domain_coincident_parallel_segment_graph_spike();

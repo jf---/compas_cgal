@@ -125,6 +125,10 @@ floating-point precision handling is a defect, always.
 - Zero-set canonicalization does not imply sign preservation. Signed
   predicates first detect a vanishing source factor, then retain the original
   unit/content sign and factor multiplicity parity.
+- CORE/Boost multiprecision arithmetic uses lazy expression templates. NEVER
+  return an `auto`-deduced arithmetic expression whose operands are local
+  variables; return the concrete exact number type so the value materializes
+  before those operands die.
 
 ## Development-Stage Documentation — MANDATORY
 
@@ -140,6 +144,9 @@ worktree.
 - Write at the coherent stage boundary, not after every edit. A review or
   completion claim is invalid while the relevant documentation is absent or
   describes the previous state.
+- When `insight-capture` identifies a durable finding, write it immediately in
+  the appropriate docs without waiting for acknowledgement. Capture while the
+  reasoning is live; pruning later is cheaper than reconstructing it.
 - For exact-certified adaptive trochoidal/MAT work, the current stage page is
   `docs/segment_site_mat.md`. Its Held–Pfeiffer comparison is one required part
   of the engineering record, not the reason documentation exists. Update it

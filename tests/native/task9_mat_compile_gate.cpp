@@ -13,6 +13,7 @@
 
 bool segment_limiter_gate();
 bool point_graph_production_gate();
+bool segment_segment_producer_gate();
 
 namespace {
 
@@ -1736,6 +1737,7 @@ int main()
             && unbounded_halfedge_is_rejected_without_site_access()
             && point_graph_production_gate()
             && segment_limiter_gate()
+            && segment_segment_producer_gate()
         ? EXIT_SUCCESS
         : EXIT_FAILURE;
 }

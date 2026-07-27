@@ -287,6 +287,16 @@ those contracts. Explicit backend construction is allowed at the declared
 coefficient boundary, and representation access is allowed for canonical
 byte serialization and build attestation.
 
+!!! warning "Materialize multiprecision expressions before locals die"
+
+    CORE and Boost multiprecision arithmetic uses lazy expression templates.
+    An `auto`-deduced function or lambda return can therefore retain references
+    to local operands instead of returning a number. The expression later
+    dereferences dead storage, often crashing only in optimized arithmetic.
+    Give such returns the concrete exact number type (`CORE::BigRat`,
+    `CORE::Expr`, or the kernel `FT`) so materialization happens before the
+    operands leave scope.
+
 !!! warning "Zero-set normalization is not sign normalization"
 
     Multiplying by a negative unit preserves a polynomial's zero set while

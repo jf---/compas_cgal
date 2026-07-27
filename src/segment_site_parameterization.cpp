@@ -127,6 +127,101 @@ MatExactOpenSegmentSource2 canonical_open_segment_source(
     };
 }
 
+RationalPrimitiveParameterization2
+parallel_segment_bisector_parameterization(
+    const MatExactOpenSegmentSource2& first,
+    const MatExactOpenSegmentSource2& second)
+{
+    if (first.stable_site_id == second.stable_site_id) {
+        throw DuplicateOpenSegmentSourceIdentityError(
+            "parallel segment sources share one stable identity");
+    }
+    const MatExactOpenSegmentSource2* ordered_first =
+        &first;
+    const MatExactOpenSegmentSource2* ordered_second =
+        &second;
+    if (ordered_second->stable_site_id
+        < ordered_first->stable_site_id) {
+        std::swap(ordered_first, ordered_second);
+    }
+
+    const CORE::BigRat determinant =
+        ordered_first->line_a * ordered_second->line_b
+        - ordered_second->line_a * ordered_first->line_b;
+    if (determinant != 0) {
+        throw NonparallelSegmentSupportsError(
+            "parallel S-S chart received nonparallel supports");
+    }
+    const CORE::BigRat normal_scale =
+        ordered_first->line_a != 0
+        ? ordered_second->line_a / ordered_first->line_a
+        : ordered_second->line_b / ordered_first->line_b;
+    if (normal_scale <= 0) {
+        throw InvalidRationalPrimitiveError(
+            "canonical parallel support normals disagree");
+    }
+    const CORE::BigRat second_constant =
+        ordered_second->line_c / normal_scale;
+    if (second_constant == ordered_first->line_c) {
+        throw CoincidentSegmentSupportsError(
+            "parallel segment supports coincide");
+    }
+
+    const CORE::BigRat middle_constant =
+        (ordered_first->line_c + second_constant) / 2;
+    const CORE::BigRat normal_squared =
+        ordered_first->line_a * ordered_first->line_a
+        + ordered_first->line_b * ordered_first->line_b;
+    CORE::BigRat direction_x = ordered_first->line_b;
+    CORE::BigRat direction_y = -ordered_first->line_a;
+    if (direction_x < 0
+        || (direction_x == 0 && direction_y < 0)) {
+        direction_x = -direction_x;
+        direction_y = -direction_y;
+    }
+    return {
+        {
+            -ordered_first->line_a
+                * middle_constant / normal_squared,
+            direction_x,
+        },
+        {
+            -ordered_first->line_b
+                * middle_constant / normal_squared,
+            direction_y,
+        },
+        std::nullopt,
+        std::nullopt,
+    };
+}
+
+CORE::BigRat parallel_segment_tangent_parameter(
+    const RationalPrimitiveParameterization2& primitive,
+    const CORE::BigRat& x,
+    const CORE::BigRat& y)
+{
+    if (primitive.x_coefficients.size() != 2
+        || primitive.y_coefficients.size() != 2) {
+        throw InvalidRationalPrimitiveError(
+            "parallel S-S chart must be affine linear");
+    }
+    const CORE::BigRat direction_x =
+        primitive.x_coefficients[1];
+    const CORE::BigRat direction_y =
+        primitive.y_coefficients[1];
+    const CORE::BigRat direction_squared =
+        direction_x * direction_x
+        + direction_y * direction_y;
+    if (direction_squared == 0) {
+        throw InvalidRationalPrimitiveError(
+            "parallel S-S chart direction is zero");
+    }
+    return (
+        (x - primitive.x_coefficients[0]) * direction_x
+        + (y - primitive.y_coefficients[0]) * direction_y)
+        / direction_squared;
+}
+
 bool root_is_in_domain(
     const ExactAlgebraicKernel1::Algebraic_real_1& root,
     const RationalPrimitiveParameterization2& primitive,

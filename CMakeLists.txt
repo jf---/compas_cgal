@@ -227,6 +227,7 @@ add_executable(task9_mat_compile_gate EXCLUDE_FROM_ALL
     tests/native/task9_mat_compile_gate.cpp
     tests/native/task9_point_graph_gate.cpp
     tests/native/task9_segment_limiter_gate.cpp
+    tests/native/task9_segment_segment_gate.cpp
     src/segment_site_mat.cpp
     src/segment_site_graph_emission.cpp
     src/segment_site_mat_spikes.cpp
