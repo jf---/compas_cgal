@@ -147,8 +147,9 @@ Complete only plan Task 9 in this continuation:
    `tests/adaptive/test_medial_axis.py`; return the fixed 20-field tuple from
    the governing plan and bind the Task 3 `C_r` digest.
 
-Preserve all existing spike paths until the new unified path is independently
-validated. Removal or replacement of an old path requires user permission.
+Maintain one canonical exact-MAT production path. Native compile spikes are
+contract evidence only; they must call the same production graph machinery and
+must not retain a parallel or transitional MAT representation.
 
 ## 5. Exit gates
 
@@ -210,8 +211,8 @@ certificate bytes may not.
   producer state. No fallback behavior or parallel calling conventions.
 - Use Pixi exclusively. Never invoke pip, conda, Homebrew, or a venv.
 - Never edit a reference test merely to make it pass. Never skip or xfail.
-- Use `apply_patch` for edits. Preserve old paths until the replacement passes
-  and the user permits removal.
+- Use `apply_patch` for edits. Exact MAT has one production path; compile
+  spikes exercise it without duplicating its state or implementation.
 - Commit focused slices proactively on this agent branch with author and
   committer `Jelle Feringa <jelleferinga@gmail.com>`, concise message, no
   attribution.
