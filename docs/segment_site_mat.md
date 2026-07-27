@@ -41,7 +41,9 @@ needed by every downstream traversal and engagement decision.
     valid segment-Delaunay graph, resolves live generators through one exact
     geometry index, and proves a complete catalog/live-site bijection. A typed
     consuming transform now swaps that validated SDG into the
-    degeneracy-removal Voronoi adaptor without a duplicate graph build.
+    degeneracy-removal Voronoi adaptor without a duplicate graph build. The
+    same catalog now projects into exact rational point sources and directed
+    open-segment supports for the algebraic parameterization layer.
     General arbitrary-pocket traversal, externally limited and composite
     segment/segment cells, production-graph adoption of the canonical site
     catalog, endpoint-feature CSR, public numeric-table integration, neck
@@ -80,7 +82,7 @@ construction.
 | Dimension | Comparative status | Held–Pfeiffer 2025 | Exact-certified Phase 1 |
 | --- | --- | --- | --- |
 | Pocket geometry | incomplete | Segments and circular arcs; simply connected; machinability assumed after an `r + ε` transformation | Raw MAT primitives now clip exactly against polygonal domains with holes and exact radius clearance; the rectangle `C_r` graph is unified, but general arbitrary-pocket traversal is incomplete; circular boundaries are not supported |
-| MAT backend | stronger exact contract on a bounded fixture; incomplete end-to-end | Vroni/ArcVroni used end-to-end | Exact CGAL point graph plus bounded P–S and parallel/nonparallel S–S cells; one four-segment rectangle build now yields a reversal-invariant five-edge/six-node graph with exact radius clipping, feature-triple node identity, and explicit rejection of eight incident P–S rays; a Task 3-derived typed site catalog, exact indexed SDG source, and swap-owned adaptor prevent second normalization, linear live-site rematching, and a duplicate SDG build, but arbitrary-pocket traversal and catalog-to-production-graph integration remain incomplete |
+| MAT backend | stronger exact contract on a bounded fixture; incomplete end-to-end | Vroni/ArcVroni used end-to-end | Exact CGAL point graph plus bounded P–S and parallel/nonparallel S–S cells; one four-segment rectangle build now yields a reversal-invariant five-edge/six-node graph with exact radius clipping, feature-triple node identity, and explicit rejection of eight incident P–S rays; a Task 3-derived typed site catalog, exact rational feature-source projection, indexed SDG source, and swap-owned adaptor prevent second normalization, decimal coercion, linear live-site rematching, and a duplicate SDG build, but arbitrary-pocket traversal and catalog-to-production-graph integration remain incomplete |
 | Engagement limit | stronger contract; incomplete integration | Analytic circle construction followed by bisection until `θmax − 0.001 <= θ <= θmax` radians | Exact rational chord surrogate and event-exact segment/full-circle certification; integration incomplete |
 | Candidate spacing | incomplete | Bisection along the middle curve | Finite candidate lattice; no monotonic-feasibility assumption |
 | Machined state | stronger contract | Ordered contour of prior machining disks; transition sweeps omitted from that contour model | Exact stock mutation and exact full-sweep coverage, ordered certify-before-deplete |
@@ -129,7 +131,7 @@ SDG. The current unified rectangle traversal has not adopted that owner yet.
 These are architectural performance safeguards, not a new planner benchmark.
 
 Two other clocks must remain separate. Five warm local Release executions of
-the current native Task 9 algebraic fixture suite took 1.19–1.21 s (1.20 s
+the current native Task 9 algebraic fixture suite took 1.20–1.23 s (1.21 s
 median), but that is a contract gate rather than one pocket generation. The
 existing exact stock replay
 measured 87 s for the kite after a 7x end-to-end speedup; that run certifies and
@@ -1208,6 +1210,50 @@ its bounded-fixture source names; replacing that construction with direct
 catalog consumption is a later additive production path, not part of this
 slice.
 
+### Exact rational graph sources
+
+The live adaptor and the algebraic clipping layer consume the same catalog in
+different exact forms. `CanonicalMatRationalSources2::build` projects each
+input point coordinate from `CORE::Expr` to `CORE::BigRat` without decimal
+text, `double`, or approximation:
+
+1. obtain a candidate with `BigRatValue()`;
+2. inject that candidate back into `CORE::Expr`;
+3. require exact equality with the original coordinate.
+
+`BigRatValue()` alone is not sufficient because an algebraic expression can
+yield a rational approximation. Failure of candidate extraction or exact
+round-trip equality raises `NonRationalCanonicalMatCoordinateError`.
+
+The native non-dyadic oracle locks:
+
+```text
+binary64(0.1) = 3602879701896397 / 2^55
+binary64(0.2) = 3602879701896397 / 2^54
+```
+
+It independently rejects `sqrt(2)`, proving that the seam accepts exact
+rational input coordinates rather than arbitrary algebraic values.
+
+Each rational segment record resolves the catalog's ordered source and target
+point identities, verifies their exact geometry, and constructs one primitive
+integer support line through `canonical_open_segment_source`. Missing endpoint
+records and exact endpoint disagreement raise
+`MissingCanonicalMatEndpointSourceError` and
+`MismatchedCanonicalMatEndpointGeometryError`, respectively.
+
+!!! note "Ordered ownership, unordered live geometry"
+
+    The geometry index treats a segment's endpoint pair as unordered because
+    reversing a CGAL segment does not change its generator. Rational source
+    projection preserves canonical ring direction because feature intervals,
+    limiter ownership, and endpoint provenance do depend on source versus
+    target. These contracts are complementary, not interchangeable.
+
+The rectangle gate locks exact point rows, the four support lines `y + 2`,
+`x - 4`, `y - 2`, and `x + 4`, endpoint wraparound, non-dyadic binary64
+fractions, radical rejection, and complete input-symmetry invariance.
+
 ### Catalog-fed segment-Delaunay source
 
 `CanonicalMatDelaunaySource2::build` is the additive input path from the
@@ -1358,6 +1404,7 @@ Refinement may change the number and position of samples. It must not change:
 | `segment_site_catalog.*` | Task 3-derived exact sites, typed numeric provenance, and stable catalog lookup |
 | `segment_site_delaunay.*` | exact geometry index, one-pass segment insertion, and catalog/live-site bijection |
 | `segment_site_voronoi.*` | explicit no-copy SDG consumption and post-transfer adaptor validation |
+| `segment_site_rational_sources.*` | exact rational coordinates, directed endpoint ownership, and normalized support lines |
 | `segment_site_parameterization.*` | exact primitive domains and coordinate functions |
 | `segment_site_clipping.*` | exact domain and clearance roots; maximal admissible cells |
 | `segment_site_provenance.*` | stable site/root provenance and endpoint evidence |
@@ -1396,6 +1443,7 @@ consumers, or evolution differ from graph orchestration.
 | General degeneracy-removal traversal | pending | the rectangle fixture is production-gated; arbitrary pockets and all primitive combinations have no production claim |
 | Degeneracy-normalized node-site CSR | implemented and native-gated | deterministic `int64` offsets and stable feature IDs projected from canonical nodes; six-node rectangle golden and malformed-order failures |
 | Canonical typed site catalog | implemented and native-gated | exact point/open-segment sites derived from Task 3 canonical rings; global ring encoding, endpoint ownership, symmetry, and hole-order invariance |
+| Catalog-derived rational sources | implemented and native-gated | exact `CORE::Expr` round-trip to `BigRat`, directed endpoint ownership, primitive support lines, non-dyadic goldens, and radical rejection |
 | Catalog-fed segment-Delaunay source | implemented and native-gated | exact indexed lookup, one segment insertion pass, complete generator bijection, duplicate-geometry rejection, and immobile graph ownership |
 | Catalog-fed Voronoi owner | implemented and native-gated | explicit `swap_dg=true` transfer, source-empty proof, post-transfer indexed bijection, raw rectangle-pair signature, and double-consume rejection |
 | Numeric node-site catalog mapping | implemented and native-gated | catalog-bound graph identities map once to `int64` rows; unknown identities fail loud; unified rectangle adoption pending |
@@ -1476,7 +1524,10 @@ point geometry, and noncopyable/nonmovable graph ownership. The catalog-fed
 Voronoi gate separately locks source-empty swap transfer, adaptor validity,
 post-transfer indexed identity, the five-S–S/eight-P–S raw rectangle
 signature, reversal invariance, owner immobility, and named double-consume
-rejection.
+rejection. The rational-source gate separately locks exact rectangle point
+coordinates, four primitive support lines, directed endpoint wraparound,
+binary64 `0.1`/`0.2` fractions, algebraic-radical rejection, and full source
+record invariance under input rotation/reversal.
 
 The final Task 9 boundary must add the still-absent Python MAT binding test and
 then requires:

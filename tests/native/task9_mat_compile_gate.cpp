@@ -18,6 +18,7 @@ bool graph_csr_gate();
 bool site_catalog_gate();
 bool catalog_delaunay_gate();
 bool catalog_voronoi_gate();
+bool rational_sources_gate();
 
 namespace {
 
@@ -1794,6 +1795,7 @@ int main()
             && site_catalog_gate()
             && catalog_delaunay_gate()
             && catalog_voronoi_gate()
+            && rational_sources_gate()
         ? EXIT_SUCCESS
         : EXIT_FAILURE;
 }
