@@ -54,7 +54,9 @@ struct SegmentSiteMatCompileEvidence2 {
 
 struct MatExactGraphNode2 {
     std::string node_id;
+    // Transitional only; edge endpoint bindings are authoritative.
     MatParameterEndpoint2 endpoint;
+    std::vector<std::string> provenance_ids;
     std::vector<std::string> generator_site_ids;
 };
 
@@ -63,6 +65,8 @@ struct MatExactGraphEdge2 {
     std::string primitive_kind;
     std::string source_node_id;
     std::string target_node_id;
+    MatParameterEndpoint2 source_endpoint;
+    MatParameterEndpoint2 target_endpoint;
     std::vector<std::string> generator_site_ids;
 };
 
@@ -70,6 +74,7 @@ struct MatExactGraph2 {
     std::vector<MatExactGraphNode2> nodes;
     std::vector<MatExactGraphEdge2> edges;
     std::size_t rejected_incident_transitions;
+    std::size_t matched_generator_sites;
 };
 
 SegmentSiteMatCompileEvidence2

@@ -62,42 +62,6 @@ std::size_t assign_dual_primitive(
     return reconstructed == parabola.p1 ? 1 : 0;
 }
 
-std::vector<std::string> ordered_generator_ids(
-    std::string first,
-    std::string second)
-{
-    if (second < first) {
-        std::swap(first, second);
-    }
-    return {std::move(first), std::move(second)};
-}
-
-std::string endpoint_node_id(
-    const std::string& dual_id,
-    const MatParameterEndpoint2& endpoint)
-{
-    if (!endpoint.parameter.has_value()) {
-        throw InvalidRationalPrimitiveError(
-            "emitted exact graph endpoint is unbounded");
-    }
-    return dual_id + "/node/"
-        + algebraic_root_identity_v1(*endpoint.parameter);
-}
-
-void union_generator_ids(
-    std::vector<std::string>& target,
-    const std::vector<std::string>& source)
-{
-    target.insert(
-        target.end(),
-        source.begin(),
-        source.end());
-    std::sort(target.begin(), target.end());
-    target.erase(
-        std::unique(target.begin(), target.end()),
-        target.end());
-}
-
 void append_components(
     const std::string& dual_id,
     const std::string& primitive_kind,
@@ -108,27 +72,25 @@ void append_components(
 {
     const auto append_node =
         [&graph, &node_indices, &dual_id, &generator_ids](
-            const MatParameterEndpoint2& endpoint) {
+            const MatParameterEndpoint2& bound_endpoint) {
             const std::string node_id =
-                endpoint_node_id(dual_id, endpoint);
-            MatParameterEndpoint2 bound_endpoint = endpoint;
-            const std::string root_id =
-                algebraic_root_identity_v1(
-                    *endpoint.parameter);
-            if (std::find(
-                    bound_endpoint.provenance_ids.begin(),
-                    bound_endpoint.provenance_ids.end(),
-                    root_id)
-                == bound_endpoint.provenance_ids.end()) {
-                bound_endpoint.provenance_ids.push_back(
-                    root_id);
-            }
+                stable_endpoint_node_identity_v1(
+                    dual_id,
+                    bound_endpoint);
             const auto existing = node_indices.find(node_id);
             if (existing != node_indices.end()) {
-                union_generator_ids(
+                union_stable_ids(
                     graph.nodes[existing->second]
                         .generator_site_ids,
                     generator_ids);
+                union_stable_ids(
+                    graph.nodes[existing->second]
+                        .endpoint.provenance_ids,
+                    bound_endpoint.provenance_ids);
+                union_stable_ids(
+                    graph.nodes[existing->second]
+                        .provenance_ids,
+                    bound_endpoint.provenance_ids);
                 return node_id;
             }
             node_indices.emplace(
@@ -137,23 +99,30 @@ void append_components(
             graph.nodes.push_back(
                 {
                     node_id,
-                    std::move(bound_endpoint),
+                    bound_endpoint,
+                    bound_endpoint.provenance_ids,
                     generator_ids,
                 });
             return node_id;
-        };
+    };
 
     for (const MatAdmissibleComponent2& component : components) {
+        const MatParameterEndpoint2 source_endpoint =
+            exact_graph_endpoint_binding(component.lower);
+        const MatParameterEndpoint2 target_endpoint =
+            exact_graph_endpoint_binding(component.upper);
         const std::string source =
-            append_node(component.lower);
+            append_node(source_endpoint);
         const std::string target =
-            append_node(component.upper);
+            append_node(target_endpoint);
         graph.edges.push_back(
             {
                 component.component_id,
                 primitive_kind,
                 source,
                 target,
+                source_endpoint,
+                target_endpoint,
                 generator_ids,
             });
     }
@@ -281,17 +250,6 @@ struct RationalVoronoiNode2 {
     std::vector<std::string> generator_site_ids;
 };
 
-std::string stable_voronoi_node_id(
-    const std::vector<std::string>& generator_ids)
-{
-    std::string identity = "voronoi-node/v1";
-    for (const std::string& id : generator_ids) {
-        identity += "/" + std::to_string(id.size())
-            + ":" + id;
-    }
-    return identity;
-}
-
 RationalVoronoiNode2 rational_voronoi_node(
     const SegmentSiteDelaunay2::Face_handle& face,
     const std::vector<GeneratorSite2>& generators,
@@ -334,7 +292,7 @@ RationalVoronoiNode2 rational_voronoi_node(
     return {
         circumcenter.x(),
         circumcenter.y(),
-        stable_voronoi_node_id(ids),
+        stable_voronoi_node_identity_v1(ids),
         std::move(ids),
     };
 }
@@ -372,7 +330,9 @@ void register_node_alias(
         {},
     };
     aliases.emplace(
-        endpoint_node_id(dual_id, endpoint),
+        stable_endpoint_node_identity_v1(
+            dual_id,
+            endpoint),
         CanonicalNodeAlias2{
             node.node_id,
             node.generator_site_ids,
@@ -400,10 +360,10 @@ void canonicalize_original_nodes(
         const auto alias = aliases.find(node.node_id);
         if (alias != aliases.end()) {
             node.node_id = alias->second.node_id;
-            union_generator_ids(
+            union_stable_ids(
                 node.generator_site_ids,
                 alias->second.generator_site_ids);
-            union_generator_ids(
+            union_stable_ids(
                 node.endpoint.provenance_ids,
                 alias->second.generator_site_ids);
         }
@@ -415,14 +375,77 @@ void canonicalize_original_nodes(
         }
         MatExactGraphNode2& retained =
             canonical[existing->second];
-        union_generator_ids(
+        union_stable_ids(
             retained.generator_site_ids,
             node.generator_site_ids);
-        union_generator_ids(
+        union_stable_ids(
             retained.endpoint.provenance_ids,
             node.endpoint.provenance_ids);
+        union_stable_ids(
+            retained.provenance_ids,
+            node.provenance_ids);
     }
     graph.nodes = std::move(canonical);
+}
+
+void append_dimension_one_point_site_graph(
+    const SegmentSiteDelaunay2& delaunay,
+    const std::vector<GeneratorSite2>& generators,
+    const std::vector<NormalizedPointSource2>& points,
+    const MatDomainPolygonWithHoles2& domain,
+    const CORE::BigRat& radius_squared,
+    MatExactGraph2& graph,
+    std::map<std::string, std::size_t>& node_indices)
+{
+    for (auto edge = delaunay.finite_edges_begin();
+         edge != delaunay.finite_edges_end();
+         ++edge) {
+        const auto value = *edge;
+        const std::vector<std::string> generator_ids =
+            ordered_generator_site_ids(
+                stable_generator_site_id(
+                    value.first->vertex(
+                        CGAL::Triangulation_cw_ccw_2::ccw(
+                            value.second))->site(),
+                    generators),
+                stable_generator_site_id(
+                    value.first->vertex(
+                        CGAL::Triangulation_cw_ccw_2::cw(
+                            value.second))->site(),
+                    generators));
+        MatTraits::Line_2 live_line;
+        if (!CGAL::assign(
+                live_line,
+                delaunay.primal(edge))) {
+            throw InvalidRationalPrimitiveError(
+                "dimension-one point dual is not a line");
+        }
+        const NormalizedPointSource2& first =
+            point_source(points, generator_ids[0]);
+        const RationalPrimitiveParameterization2 primitive =
+            point_bisector(
+                first,
+                point_source(points, generator_ids[1]),
+                std::nullopt,
+                std::nullopt);
+        const std::string dual_id =
+            stable_dual_identity_v1("point", generator_ids);
+        append_components(
+            dual_id,
+            "LINE",
+            generator_ids,
+            clip_linear_clearance_components(
+                dual_id,
+                primitive,
+                point_clearance_boundary(
+                    primitive,
+                    first.x,
+                    first.y,
+                    radius_squared),
+                domain),
+            graph,
+            node_indices);
+    }
 }
 
 void append_point_site_graph(
@@ -438,6 +461,19 @@ void append_point_site_graph(
     SegmentSiteDelaunay2 delaunay;
     for (const NormalizedPointSource2& point : points) {
         delaunay.insert(MatTraits::Point_2(point.x, point.y));
+    }
+    graph.matched_generator_sites =
+        require_generator_site_bijection(delaunay, generators);
+    if (delaunay.dimension() == 1) {
+        append_dimension_one_point_site_graph(
+            delaunay,
+            generators,
+            points,
+            domain,
+            radius_squared,
+            graph,
+            node_indices);
+        return;
     }
     std::map<
         std::pair<CORE::BigRat, CORE::BigRat>,
@@ -457,7 +493,7 @@ void append_point_site_graph(
                 CGAL::Triangulation_cw_ccw_2::cw(
                     opposite))->site();
         const std::vector<std::string> generator_ids =
-            ordered_generator_ids(
+            ordered_generator_site_ids(
                 stable_generator_site_id(
                     first_site,
                     generators),
@@ -469,8 +505,9 @@ void append_point_site_graph(
         const NormalizedPointSource2& second =
             point_source(points, generator_ids[1]);
         const std::string dual_id =
-            "generic-dual/" + generator_ids[0]
-            + "/" + generator_ids[1];
+            stable_dual_identity_v1(
+                "point",
+                generator_ids);
 
         const auto neighbor =
             value.first->neighbor(opposite);
@@ -832,7 +869,7 @@ void append_point_segment_graph(
             continue;
         }
         const std::vector<std::string> generator_ids =
-            ordered_generator_ids(
+            ordered_generator_site_ids(
                 stable_generator_site_id(
                     point,
                     generators),
@@ -840,8 +877,9 @@ void append_point_segment_graph(
                     segment,
                     generators));
         const std::string dual_id =
-            "generic-dual/" + generator_ids[0]
-            + "/" + generator_ids[1];
+            stable_dual_identity_v1(
+                "point-segment",
+                generator_ids);
         std::vector<MatAdmissibleComponent2> components =
             clip_source_parabola_clearance_components(
                 dual_id,
@@ -875,7 +913,7 @@ MatExactGraph2 exact_point_site_graph(
     const CORE::BigRat& radius_squared)
 {
     require_valid_point_graph_inputs(points, radius_squared);
-    MatExactGraph2 graph{{}, {}, 0};
+    MatExactGraph2 graph{{}, {}, 0, 0};
     std::map<std::string, std::size_t> node_indices;
     std::map<std::string, CanonicalNodeAlias2> aliases;
     append_point_site_graph(

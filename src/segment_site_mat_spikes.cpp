@@ -128,6 +128,10 @@ void append_components(
                     graph.nodes[existing->second]
                         .generator_site_ids,
                     generator_ids);
+                union_generator_ids(
+                    graph.nodes[existing->second]
+                        .provenance_ids,
+                    bound_endpoint.provenance_ids);
                 return node_id;
             }
             node_indices.emplace(
@@ -136,7 +140,8 @@ void append_components(
             graph.nodes.push_back(
                 {
                     node_id,
-                    std::move(bound_endpoint),
+                    bound_endpoint,
+                    bound_endpoint.provenance_ids,
                     generator_ids,
                 });
             return node_id;
@@ -153,6 +158,8 @@ void append_components(
                 primitive_kind,
                 source,
                 target,
+                component.lower,
+                component.upper,
                 generator_ids,
             });
     }
@@ -388,4 +395,3 @@ MatExactGraph2 segment_site_live_graph_spike()
     }
     return graph;
 }
-
