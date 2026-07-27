@@ -1114,6 +1114,7 @@ void append_parallel_segment_segment_graph(
     const std::string& second_segment_id,
     const MatDomainPolygonWithHoles2& domain,
     const CORE::BigRat& radius_squared,
+    const std::vector<MatExactPointSiteSource2>& point_limiters,
     MatExactGraph2& graph,
     std::map<std::string, std::size_t>& node_indices)
 {
@@ -1242,12 +1243,15 @@ void append_parallel_segment_segment_graph(
             feature.primitive,
             feature.lower,
             feature.upper,
+            first,
+            second,
+            point_limiters,
             generator_ids,
             generators,
             voronoi,
             matching_halfedges.front());
     std::vector<MatAdmissibleComponent2> components =
-        clip_owned_linear_clearance_components(
+        clip_bounded_linear_clearance_components(
             dual_id,
             feature.primitive,
             owned_endpoints.first,
@@ -2322,6 +2326,7 @@ MatExactGraph2 segment_segment_graph_spike_impl(
     const CORE::BigRat& radius_squared,
     const bool disjoint_features,
     const NormalizedPointSource2& limiter,
+    const std::vector<MatExactPointSiteSource2>& point_limiters,
     const MatDomainPolygonWithHoles2& domain)
 {
     MatExactGraph2 graph{{}, {}, 0, 0};
@@ -2366,9 +2371,37 @@ MatExactGraph2 segment_segment_graph_spike_impl(
         "upper-segment",
         domain,
         radius_squared,
+        point_limiters,
         graph,
         node_indices);
     return graph;
+}
+
+MatExactGraph2 point_limited_parallel_segment_graph_spike_impl(
+    const bool reverse_segment_endpoints,
+    const CORE::BigRat& radius_squared)
+{
+    return segment_segment_graph_spike_impl(
+        reverse_segment_endpoints,
+        radius_squared,
+        false,
+        {
+            "external-limiter",
+            5,
+            CORE::BigRat(3, 2),
+        },
+        {
+            {
+                "external-limiter",
+                {5, 0},
+                {
+                    CORE::BigRat(3, 2),
+                    0,
+                },
+                1,
+            },
+        },
+        segment_segment_spike_domain(-1, 5));
 }
 
 MatExactGraph2 nonparallel_segment_graph_spike_impl(
@@ -2436,6 +2469,7 @@ segment_site_segment_segment_graph_spike(
         radius_squared,
         false,
         {"limiter", 6, 1},
+        {},
         segment_segment_spike_domain(-1, 5));
 }
 
@@ -2447,7 +2481,32 @@ segment_site_reversed_segment_segment_graph_spike()
         CORE::BigRat(9, 4),
         false,
         {"limiter", 6, 1},
+        {},
         segment_segment_spike_domain(-1, 5));
+}
+
+MatExactGraph2
+segment_site_point_limited_parallel_segment_graph_spike()
+{
+    return segment_site_point_limited_parallel_segment_graph_spike(
+        CORE::BigRat(9, 4));
+}
+
+MatExactGraph2
+segment_site_point_limited_parallel_segment_graph_spike(
+    const CORE::BigRat& radius_squared)
+{
+    return point_limited_parallel_segment_graph_spike_impl(
+        false,
+        radius_squared);
+}
+
+MatExactGraph2
+segment_site_reversed_point_limited_parallel_segment_graph_spike()
+{
+    return point_limited_parallel_segment_graph_spike_impl(
+        true,
+        CORE::BigRat(9, 4));
 }
 
 MatExactGraph2
@@ -2479,6 +2538,7 @@ segment_site_disjoint_parallel_segment_graph_spike()
         CORE::BigRat(9, 4),
         true,
         {"limiter", 6, 1},
+        {},
         segment_segment_spike_domain(-1, 5));
 }
 
@@ -2494,6 +2554,7 @@ segment_site_external_limited_parallel_segment_graph_spike()
             5,
             CORE::BigRat(3, 2),
         },
+        {},
         segment_segment_spike_domain(-1, 5));
 }
 
@@ -2505,5 +2566,6 @@ segment_site_domain_coincident_parallel_segment_graph_spike()
         CORE::BigRat(9, 4),
         false,
         {"limiter", 6, 1},
+        {},
         segment_segment_spike_domain(0, 4));
 }
