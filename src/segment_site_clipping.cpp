@@ -1284,6 +1284,83 @@ clip_nonparallel_segment_clearance_components(
 }
 
 std::vector<MatAdmissibleComponent2>
+clip_bounded_nonparallel_segment_clearance_components(
+    const std::string& original_dual_id,
+    const NonparallelSegmentBisectorParameterization2& primitive,
+    const NonparallelSegmentFeatureDomain2& feature_domain,
+    const MatParameterEndpoint2& domain_lower,
+    const MatParameterEndpoint2& domain_upper,
+    const ClearanceRootBoundary2& boundary,
+    const MatDomainPolygonWithHoles2& domain)
+{
+    if (!domain_lower.parameter.has_value()
+        || !domain_upper.parameter.has_value())
+    {
+        throw MismatchedNonparallelSegmentCellDomainError(
+            "bounded nonparallel S-S cell requires two exact endpoints");
+    }
+    if (domain_lower.provenance_ids.empty()
+        || domain_upper.provenance_ids.empty())
+    {
+        throw MissingOwnedNonparallelSegmentCellProvenanceError(
+            "bounded nonparallel S-S endpoint provenance is empty");
+    }
+    if (primitive.radicand
+        != feature_domain.radicand)
+    {
+        throw MismatchedNonparallelSegmentCellDomainError(
+            "bounded nonparallel S-S cell and feature domain use different fields");
+    }
+    ExactAlgebraicKernel1 kernel;
+    const auto compare =
+        kernel.compare_1_object();
+    const AlgebraicParameter feature_lower =
+        quadratic_field_algebraic_real(
+            feature_domain.lower.parameter,
+            feature_domain.radicand);
+    const AlgebraicParameter feature_upper =
+        quadratic_field_algebraic_real(
+            feature_domain.upper.parameter,
+            feature_domain.radicand);
+    if (compare(
+            *domain_lower.parameter,
+            *domain_upper.parameter)
+            != CGAL::SMALLER)
+    {
+        throw MismatchedNonparallelSegmentCellDomainError(
+            "bounded nonparallel S-S endpoints are not increasing");
+    }
+    if (compare(
+            *domain_lower.parameter,
+            feature_lower)
+            == CGAL::SMALLER
+        || compare(
+               *domain_upper.parameter,
+               feature_upper)
+            == CGAL::LARGER)
+    {
+        throw MismatchedNonparallelSegmentCellDomainError(
+            "bounded nonparallel S-S cell exceeds its feature domain");
+    }
+    return clip_clearance_components_with_domain_roots(
+        original_dual_id,
+        domain_lower,
+        domain_upper,
+        boundary,
+        [&domain, &primitive](const CORE::BigRat& parameter) {
+            return nonparallel_segment_domain_contains(
+                domain,
+                primitive,
+                parameter);
+        },
+        nonparallel_segment_domain_roots(
+            original_dual_id,
+            primitive,
+            feature_domain,
+            domain));
+}
+
+std::vector<MatAdmissibleComponent2>
 clip_linear_clearance_components(
     const std::string& original_dual_id,
     const RationalPrimitiveParameterization2& primitive,

@@ -2457,17 +2457,20 @@ MatExactGraph2 segment_limited_parallel_segment_graph_spike_impl(
         segment_segment_spike_domain(-1, 5));
 }
 
-MatExactGraph2 rectangle_central_parallel_graph_spike_impl(
-    const bool reverse_segment_endpoints,
-    const CORE::BigRat& radius_squared)
+std::vector<NormalizedPointSource2> rectangle_points()
 {
-    const std::vector<NormalizedPointSource2> points{
+    return {
         {"lower-left", -4, -2},
         {"lower-right", 4, -2},
         {"upper-right", 4, 2},
         {"upper-left", -4, 2},
     };
-    const std::vector<NormalizedOpenSegmentSource2> segments{
+}
+
+std::vector<NormalizedOpenSegmentSource2> rectangle_segments(
+    const bool reverse_segment_endpoints)
+{
+    return {
         {
             "bottom-segment",
             reverse_segment_endpoints
@@ -2505,11 +2508,27 @@ MatExactGraph2 rectangle_central_parallel_graph_spike_impl(
                 : "lower-left",
         },
     };
+}
+
+MatDomainPolygonWithHoles2 rectangle_domain()
+{
     MatDomainPolygon2 outer;
     outer.push_back({-4, -2});
     outer.push_back({4, -2});
     outer.push_back({4, 2});
     outer.push_back({-4, 2});
+    return MatDomainPolygonWithHoles2(outer);
+}
+
+MatExactGraph2 rectangle_central_parallel_graph_spike_impl(
+    const bool reverse_segment_endpoints,
+    const CORE::BigRat& radius_squared)
+{
+    const std::vector<NormalizedPointSource2> points =
+        rectangle_points();
+    const std::vector<NormalizedOpenSegmentSource2> segments =
+        rectangle_segments(
+            reverse_segment_endpoints);
     MatExactGraph2 graph{{}, {}, 0, 0};
     std::map<std::string, std::size_t> node_indices;
     append_parallel_segment_segment_graph(
@@ -2517,7 +2536,7 @@ MatExactGraph2 rectangle_central_parallel_graph_spike_impl(
         segments,
         "bottom-segment",
         "top-segment",
-        MatDomainPolygonWithHoles2(outer),
+        rectangle_domain(),
         radius_squared,
         {},
         {
@@ -2532,6 +2551,155 @@ MatExactGraph2 rectangle_central_parallel_graph_spike_impl(
                     "right-segment"),
                 points),
         },
+        graph,
+        node_indices);
+    return graph;
+}
+
+MatExactGraph2 rectangle_lower_left_graph_spike_impl(
+    const bool reverse_segment_endpoints,
+    const CORE::BigRat& radius_squared)
+{
+    if (radius_squared < 0)
+    {
+        throw NegativeClearanceRadiusSquaredError(
+            "rectangle corner squared clearance radius is negative");
+    }
+    const std::vector<NormalizedPointSource2> points =
+        rectangle_points();
+    const std::vector<NormalizedOpenSegmentSource2> segments =
+        rectangle_segments(
+            reverse_segment_endpoints);
+    const std::vector<std::string> parent_site_ids{
+        "bottom-segment",
+        "left-segment",
+    };
+    const MatExactOpenSegmentSource2 first_segment =
+        exact_segment_source(
+            normalized_segment_source(
+                segments,
+                parent_site_ids[0]),
+            points);
+    const MatExactOpenSegmentSource2 second_segment =
+        exact_segment_source(
+            normalized_segment_source(
+                segments,
+                parent_site_ids[1]),
+            points);
+    const std::vector<GeneratorSite2> generators =
+        segment_site_generators(
+            points,
+            segments);
+    SegmentSiteDelaunay2 delaunay;
+    insert_segment_site_sources(
+        points,
+        segments,
+        delaunay);
+    MatExactGraph2 graph{{}, {}, 0, 0};
+    graph.matched_generator_sites =
+        require_generator_site_bijection(
+            delaunay,
+            generators);
+    SegmentSiteVoronoi2 voronoi(delaunay);
+    std::vector<SegmentSiteVoronoi2::Halfedge_handle>
+        matching_halfedges;
+    for (auto halfedge = voronoi.halfedges_begin();
+         halfedge != voronoi.halfedges_end();
+         ++halfedge)
+    {
+        const MatTraits::Site_2 up =
+            halfedge->up()->site();
+        const MatTraits::Site_2 down =
+            halfedge->down()->site();
+        if (!up.is_segment()
+            || !down.is_segment())
+        {
+            continue;
+        }
+        const std::string up_id =
+            stable_generator_site_id(
+                up,
+                generators);
+        const std::string down_id =
+            stable_generator_site_id(
+                down,
+                generators);
+        if (ordered_generator_site_ids(
+                up_id,
+                down_id)
+                == parent_site_ids
+            && up_id == parent_site_ids.front())
+        {
+            matching_halfedges.push_back(
+                halfedge);
+        }
+    }
+    if (matching_halfedges.size() != 1)
+    {
+        throw IncompleteCompositeSegmentChainError(
+            "rectangle lower-left corner has no unique S-S halfedge");
+    }
+    const SegmentSiteVoronoi2::Halfedge_handle& halfedge =
+        matching_halfedges.front();
+    MatTraits::Segment_2 representative;
+    if (!CGAL::assign(
+            representative,
+            voronoi.dual().primal(
+                halfedge->dual())))
+    {
+        throw UnsupportedCompositeSegmentPrimitiveError(
+            "rectangle lower-left S-S dual is not a segment");
+    }
+    const NonparallelSegmentBisectorParameterization2 primitive =
+        nonparallel_segment_bisector_parameterization(
+            first_segment,
+            second_segment,
+            representative);
+    const NonparallelSegmentFeatureDomain2 feature_domain =
+        nonparallel_segment_feature_domain(
+            primitive,
+            points,
+            segments);
+    const auto endpoints =
+        bind_nonparallel_segment_segment_cell_endpoints(
+            primitive,
+            feature_domain,
+            first_segment,
+            second_segment,
+            {
+                exact_segment_source(
+                    normalized_segment_source(
+                        segments,
+                        "top-segment"),
+                    points),
+            },
+            parent_site_ids,
+            generators,
+            voronoi,
+            halfedge);
+    const std::string dual_id =
+        nonparallel_original_dual_id(
+            primitive.branch_sign,
+            parent_site_ids);
+    const std::vector<MatAdmissibleComponent2> components =
+        clip_bounded_nonparallel_segment_clearance_components(
+            dual_id,
+            primitive,
+            feature_domain,
+            endpoints.first,
+            endpoints.second,
+            nonparallel_segment_clearance_boundary(
+                primitive,
+                first_segment,
+                second_segment,
+                radius_squared),
+            rectangle_domain());
+    std::map<std::string, std::size_t> node_indices;
+    append_exact_graph_components(
+        dual_id,
+        "LINE",
+        parent_site_ids,
+        components,
         graph,
         node_indices);
     return graph;
@@ -2691,6 +2859,29 @@ segment_site_reversed_rectangle_central_parallel_graph_spike()
     return rectangle_central_parallel_graph_spike_impl(
         true,
         4);
+}
+
+MatExactGraph2
+segment_site_rectangle_lower_left_graph_spike()
+{
+    return segment_site_rectangle_lower_left_graph_spike(0);
+}
+
+MatExactGraph2
+segment_site_rectangle_lower_left_graph_spike(
+    const CORE::BigRat& radius_squared)
+{
+    return rectangle_lower_left_graph_spike_impl(
+        false,
+        radius_squared);
+}
+
+MatExactGraph2
+segment_site_reversed_rectangle_lower_left_graph_spike()
+{
+    return rectangle_lower_left_graph_spike_impl(
+        true,
+        0);
 }
 
 MatExactGraph2

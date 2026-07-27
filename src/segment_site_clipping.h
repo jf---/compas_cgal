@@ -78,6 +78,18 @@ public:
     using std::runtime_error::runtime_error;
 };
 
+class MismatchedNonparallelSegmentCellDomainError
+    : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
+
+class MissingOwnedNonparallelSegmentCellProvenanceError
+    : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
+
 ClearanceRootBoundary2 point_clearance_boundary(
     const RationalPrimitiveParameterization2& primitive,
     const CORE::BigRat& site_x,
@@ -121,6 +133,16 @@ clip_nonparallel_segment_clearance_components(
     const std::string& original_dual_id,
     const NonparallelSegmentBisectorParameterization2& primitive,
     const NonparallelSegmentFeatureDomain2& feature_domain,
+    const ClearanceRootBoundary2& boundary,
+    const MatDomainPolygonWithHoles2& domain);
+
+std::vector<MatAdmissibleComponent2>
+clip_bounded_nonparallel_segment_clearance_components(
+    const std::string& original_dual_id,
+    const NonparallelSegmentBisectorParameterization2& primitive,
+    const NonparallelSegmentFeatureDomain2& feature_domain,
+    const MatParameterEndpoint2& domain_lower,
+    const MatParameterEndpoint2& domain_upper,
     const ClearanceRootBoundary2& boundary,
     const MatDomainPolygonWithHoles2& domain);
 
