@@ -14,6 +14,7 @@
 bool segment_limiter_gate();
 bool point_graph_production_gate();
 bool segment_segment_producer_gate();
+bool graph_csr_gate();
 
 namespace {
 
@@ -1786,6 +1787,7 @@ int main()
             && point_graph_production_gate()
             && segment_limiter_gate()
             && segment_segment_producer_gate()
+            && graph_csr_gate()
         ? EXIT_SUCCESS
         : EXIT_FAILURE;
 }
