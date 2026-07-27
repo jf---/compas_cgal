@@ -407,9 +407,9 @@ Refinement may change the number and position of samples. It must not change:
 | `segment_site_mat_sampling.*` | proposal-only samples |
 | `medial_axis_2.cpp` | nanobind adapter only |
 
-`segment_site_mat.cpp` is already close to the 1,000-line native file limit.
-New neck, sampling, binding, or algebraic responsibilities belong in their
-named files rather than extending the orchestration unit.
+File length is not a quality gate. New neck, sampling, binding, or algebraic
+responsibilities belong in their named files only when their invariants,
+consumers, or evolution differ from graph orchestration.
 
 ## Maturity and claim matrix
 
