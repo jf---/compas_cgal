@@ -16,6 +16,7 @@ bool point_graph_production_gate();
 bool segment_segment_producer_gate();
 bool graph_csr_gate();
 bool site_catalog_gate();
+bool catalog_delaunay_gate();
 
 namespace {
 
@@ -1790,6 +1791,7 @@ int main()
             && segment_segment_producer_gate()
             && graph_csr_gate()
             && site_catalog_gate()
+            && catalog_delaunay_gate()
         ? EXIT_SUCCESS
         : EXIT_FAILURE;
 }
