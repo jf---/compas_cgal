@@ -107,21 +107,9 @@ void append_components(
 {
     const auto append_node =
         [&graph, &node_indices, &dual_id, &generator_ids](
-            const MatParameterEndpoint2& endpoint) {
+            const MatParameterEndpoint2& bound_endpoint) {
             const std::string node_id =
-                endpoint_node_id(dual_id, endpoint);
-            MatParameterEndpoint2 bound_endpoint = endpoint;
-            const std::string root_id =
-                algebraic_root_identity_v1(
-                    *endpoint.parameter);
-            if (std::find(
-                    bound_endpoint.provenance_ids.begin(),
-                    bound_endpoint.provenance_ids.end(),
-                    root_id)
-                == bound_endpoint.provenance_ids.end()) {
-                bound_endpoint.provenance_ids.push_back(
-                    root_id);
-            }
+                endpoint_node_id(dual_id, bound_endpoint);
             const auto existing = node_indices.find(node_id);
             if (existing != node_indices.end()) {
                 union_generator_ids(
@@ -145,21 +133,25 @@ void append_components(
                     generator_ids,
                 });
             return node_id;
-        };
+    };
 
     for (const MatAdmissibleComponent2& component : components) {
+        const MatParameterEndpoint2 source_endpoint =
+            exact_graph_endpoint_binding(component.lower);
+        const MatParameterEndpoint2 target_endpoint =
+            exact_graph_endpoint_binding(component.upper);
         const std::string source =
-            append_node(component.lower);
+            append_node(source_endpoint);
         const std::string target =
-            append_node(component.upper);
+            append_node(target_endpoint);
         graph.edges.push_back(
             {
                 component.component_id,
                 primitive_kind,
                 source,
                 target,
-                component.lower,
-                component.upper,
+                source_endpoint,
+                target_endpoint,
                 generator_ids,
             });
     }
