@@ -1192,6 +1192,255 @@ bool nonparallel_feature_clearance_components_are_exact()
             });
 }
 
+bool nonparallel_domain_clipping_is_exact()
+{
+    const MatExactOpenSegmentSource2 diagonal =
+        canonical_open_segment_source(
+            "diagonal-segment",
+            5,
+            -4,
+            20,
+            11);
+    const MatExactOpenSegmentSource2 lower =
+        canonical_open_segment_source(
+            "lower-segment",
+            -20,
+            0,
+            8,
+            0);
+    const CORE::Expr sqrt_two =
+        CORE::sqrt(CORE::Expr(2));
+    const MatTraits::Point_2 upper_feature(
+        CORE::Expr(9)
+            - CORE::Expr(11) * sqrt_two,
+        CORE::Expr(22)
+            + CORE::Expr(11) * sqrt_two);
+    const MatTraits::Point_2 upper_transition(
+        8,
+        CORE::Expr(1) + sqrt_two);
+    const NonparallelSegmentBisectorParameterization2 upper =
+        nonparallel_segment_bisector_parameterization(
+            diagonal,
+            lower,
+            {
+                upper_feature,
+                upper_transition,
+            });
+    const NonparallelSegmentFeatureDomain2 feature =
+        intersect_nonparallel_segment_feature_domains(
+            {
+                {8, 4},
+                {"diagonal-lower"},
+            },
+            {
+                {-22, -11},
+                {"diagonal-upper"},
+            },
+            {
+                {-29, -29},
+                {"lower-left"},
+            },
+            {
+                {-1, -1},
+                {"lower-right"},
+            },
+            2);
+    MatDomainPolygon2 outer;
+    outer.push_back({0, 4});
+    outer.push_back({10, 4});
+    outer.push_back({10, 10});
+    outer.push_back({0, 10});
+    MatDomainPolygon2 hole;
+    hole.push_back({5, 6});
+    hole.push_back({5, 8});
+    hole.push_back({8, 8});
+    hole.push_back({8, 6});
+    const std::vector<MatDomainPolygon2> holes{hole};
+    const MatDomainPolygonWithHoles2 domain(
+        outer,
+        holes.begin(),
+        holes.end());
+    const std::vector<MatAdmissibleComponent2> components =
+        clip_nonparallel_segment_clearance_components(
+            "nonparallel-D",
+            upper,
+            feature,
+            nonparallel_segment_clearance_boundary(
+                upper,
+                diagonal,
+                lower,
+                9),
+            domain);
+    if (components.size() != 2) {
+        return false;
+    }
+    ExactAlgebraicKernel1 kernel;
+    const auto compare = kernel.compare_1_object();
+    const auto construct =
+        kernel.construct_algebraic_real_1_object();
+    const auto endpoint_has =
+        [&compare](
+            const MatParameterEndpoint2& endpoint,
+            const CORE::BigRat& parameter,
+            const std::string& provenance) {
+            return endpoint.parameter.has_value()
+                && compare(
+                       *endpoint.parameter,
+                       parameter)
+                    == CGAL::EQUAL
+                && std::find(
+                       endpoint.provenance_ids.begin(),
+                       endpoint.provenance_ids.end(),
+                       provenance)
+                    != endpoint.provenance_ids.end()
+                && std::find(
+                       endpoint.provenance_ids.begin(),
+                       endpoint.provenance_ids.end(),
+                       algebraic_root_identity_v1(
+                           ExactAlgebraicKernel1()
+                               .construct_algebraic_real_1_object()(
+                                   parameter)))
+                    != endpoint.provenance_ids.end();
+        };
+    return components[0].component_id
+            == "nonparallel-D/component-0"
+        && components[1].component_id
+            == "nonparallel-D/component-1"
+        && endpoint_has(
+            components[0].lower,
+            -10,
+            "nonparallel-D/D-outer/edge-2")
+        && endpoint_has(
+            components[0].upper,
+            -8,
+            "nonparallel-D/D-hole-0/edge-1")
+        && endpoint_has(
+            components[1].lower,
+            -6,
+            "nonparallel-D/D-hole-0/edge-3")
+        && endpoint_has(
+            components[1].upper,
+            -4,
+            "nonparallel-D/D-outer/edge-0")
+        && compare(
+               *components[0].lower.parameter,
+               construct(-10))
+            == CGAL::EQUAL;
+}
+
+bool collinear_domain_intersections_are_exact()
+{
+    const MatExactOpenSegmentSource2 horizontal =
+        canonical_open_segment_source(
+            "horizontal",
+            -4,
+            0,
+            4,
+            0);
+    const MatExactOpenSegmentSource2 vertical =
+        canonical_open_segment_source(
+            "vertical",
+            5,
+            -4,
+            5,
+            4);
+    const NonparallelSegmentBisectorParameterization2 primitive =
+        nonparallel_segment_bisector_parameterization(
+            horizontal,
+            vertical,
+            {
+                {1, 4},
+                {4, 1},
+            });
+    const NonparallelSegmentFeatureDomain2 feature =
+        intersect_nonparallel_segment_feature_domains(
+            {
+                {-9, 0},
+                {"horizontal-left"},
+            },
+            {
+                {-1, 0},
+                {"horizontal-right"},
+            },
+            {
+                {4, 0},
+                {"vertical-lower"},
+            },
+            {
+                {-4, 0},
+                {"vertical-upper"},
+            },
+            1);
+    const ClearanceRootBoundary2 clearance =
+        nonparallel_segment_clearance_boundary(
+            primitive,
+            horizontal,
+            vertical,
+            0);
+
+    MatDomainPolygon2 disjoint;
+    disjoint.push_back({6, -1});
+    disjoint.push_back({7, -2});
+    disjoint.push_back({8, 0});
+    if (!clip_nonparallel_segment_clearance_components(
+             "collinear-disjoint",
+             primitive,
+             feature,
+             clearance,
+             MatDomainPolygonWithHoles2(disjoint))
+             .empty()) {
+        return false;
+    }
+
+    MatDomainPolygon2 touching;
+    touching.push_back({0, 3});
+    touching.push_back({1, 4});
+    touching.push_back({0, 5});
+    const std::vector<MatAdmissibleComponent2> components =
+        clip_nonparallel_segment_clearance_components(
+            "collinear-touch",
+            primitive,
+            feature,
+            clearance,
+            MatDomainPolygonWithHoles2(touching));
+    if (components.size() != 1
+        || !components[0].lower.parameter.has_value()
+        || !components[0].upper.parameter.has_value()) {
+        return false;
+    }
+    ExactAlgebraicKernel1 kernel;
+    const auto compare = kernel.compare_1_object();
+    const auto construct =
+        kernel.construct_algebraic_real_1_object();
+    const auto has =
+        [](const MatParameterEndpoint2& endpoint,
+           const std::string& provenance) {
+            return std::find(
+                       endpoint.provenance_ids.begin(),
+                       endpoint.provenance_ids.end(),
+                       provenance)
+                != endpoint.provenance_ids.end();
+        };
+    return compare(
+               *components[0].lower.parameter,
+               construct(-4))
+            == CGAL::EQUAL
+        && compare(
+               *components[0].upper.parameter,
+               construct(-4))
+            == CGAL::EQUAL
+        && has(
+            components[0].lower,
+            "vertical-upper")
+        && has(
+            components[0].lower,
+            "collinear-touch/D-outer/edge-1")
+        && has(
+            components[0].lower,
+            algebraic_root_identity_v1(
+                construct(-4)));
+}
+
 bool unsupported_nonparallel_charts_fail_loudly()
 {
     const MatExactOpenSegmentSource2 horizontal =
@@ -1239,6 +1488,8 @@ bool unsupported_nonparallel_charts_fail_loudly()
     bool negative_clearance_radius_rejected = false;
     bool empty_feature_domain_rejected = false;
     bool missing_feature_provenance_rejected = false;
+    bool mismatched_feature_domain_rejected = false;
+    bool overlapping_domain_boundary_rejected = false;
     try {
         static_cast<void>(
             nonparallel_segment_bisector_parameterization(
@@ -1393,6 +1644,100 @@ bool unsupported_nonparallel_charts_fail_loudly()
         const MissingNonparallelSegmentFeatureProvenanceError&) {
         missing_feature_provenance_rejected = true;
     }
+    try {
+        const NonparallelSegmentFeatureDomain2 wrong_field =
+            intersect_nonparallel_segment_feature_domains(
+                {
+                    {0, 0},
+                    {"first-lower"},
+                },
+                {
+                    {2, 0},
+                    {"first-upper"},
+                },
+                {
+                    {0, 0},
+                    {"second-lower"},
+                },
+                {
+                    {3, 0},
+                    {"second-upper"},
+                },
+                1);
+        MatDomainPolygon2 outer;
+        outer.push_back({-10, -10});
+        outer.push_back({10, -10});
+        outer.push_back({10, 10});
+        outer.push_back({-10, 10});
+        static_cast<void>(
+            clip_nonparallel_segment_clearance_components(
+                "wrong-field",
+                valid,
+                wrong_field,
+                nonparallel_segment_clearance_boundary(
+                    valid,
+                    horizontal,
+                    diagonal,
+                    1),
+                MatDomainPolygonWithHoles2(outer)));
+    } catch (
+        const MismatchedNonparallelSegmentFeatureDomainError&) {
+        mismatched_feature_domain_rejected = true;
+    }
+    try {
+        const MatExactOpenSegmentSource2 vertical =
+            canonical_open_segment_source(
+                "vertical",
+                5,
+                -4,
+                5,
+                4);
+        const NonparallelSegmentBisectorParameterization2 rational =
+            nonparallel_segment_bisector_parameterization(
+                horizontal,
+                vertical,
+                {
+                    {1, 4},
+                    {4, 1},
+                });
+        const NonparallelSegmentFeatureDomain2 rational_feature =
+            intersect_nonparallel_segment_feature_domains(
+                {
+                    {-9, 0},
+                    {"horizontal-left"},
+                },
+                {
+                    {-1, 0},
+                    {"horizontal-right"},
+                },
+                {
+                    {4, 0},
+                    {"vertical-lower"},
+                },
+                {
+                    {-4, 0},
+                    {"vertical-upper"},
+                },
+                1);
+        MatDomainPolygon2 overlapping;
+        overlapping.push_back({1, 4});
+        overlapping.push_back({4, 1});
+        overlapping.push_back({6, 6});
+        static_cast<void>(
+            clip_nonparallel_segment_clearance_components(
+                "overlapping-D",
+                rational,
+                rational_feature,
+                nonparallel_segment_clearance_boundary(
+                    rational,
+                    horizontal,
+                    vertical,
+                    0),
+                MatDomainPolygonWithHoles2(
+                    overlapping)));
+    } catch (const OverlappingDomainBoundaryError&) {
+        overlapping_domain_boundary_rejected = true;
+    }
     return parallel_rejected
         && degenerate_primitive_rejected
         && unbound_branch_rejected
@@ -1403,7 +1748,9 @@ bool unsupported_nonparallel_charts_fail_loudly()
         && nonrational_clearance_rejected
         && negative_clearance_radius_rejected
         && empty_feature_domain_rejected
-        && missing_feature_provenance_rejected;
+        && missing_feature_provenance_rejected
+        && mismatched_feature_domain_rejected
+        && overlapping_domain_boundary_rejected;
 }
 
 bool has_provenance(
@@ -2063,5 +2410,7 @@ bool segment_segment_producer_gate()
         && quadratic_feature_parameters_order_and_embed()
         && nonparallel_clearance_is_rational_quadratic()
         && nonparallel_feature_clearance_components_are_exact()
+        && nonparallel_domain_clipping_is_exact()
+        && collinear_domain_intersections_are_exact()
         && unsupported_nonparallel_charts_fail_loudly();
 }

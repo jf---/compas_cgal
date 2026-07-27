@@ -562,6 +562,10 @@ bool clearance_boundaries_are_exact()
         holes.begin(),
         holes.end());
     ExactAlgebraicKernel1 source_kernel;
+    const auto source_compare =
+        source_kernel.compare_1_object();
+    const auto source_construct =
+        source_kernel.construct_algebraic_real_1_object();
     const std::vector<MatAdmissibleComponent2>
         source_parabola_components =
             clip_source_parabola_clearance_components(
@@ -682,6 +686,44 @@ bool clearance_boundaries_are_exact()
             source_parabola_components.front().lower)
         && has_reconstructible_root_id(
             source_parabola_components.back().upper)
+        && source_compare(
+               *source_parabola_components.front()
+                    .lower.parameter,
+               quadratic_field_algebraic_real(
+                   {-4, 1},
+                   2))
+            == CGAL::EQUAL
+        && has_provenance_id(
+            source_parabola_components.front().lower,
+            "source-parabola-dual/D-outer/edge-1")
+        && source_compare(
+               *source_parabola_components.front()
+                    .upper.parameter,
+               quadratic_field_algebraic_real(
+                   {-1, 1},
+                   2))
+            == CGAL::EQUAL
+        && has_provenance_id(
+            source_parabola_components.front().upper,
+            "source-parabola-dual/D-hole-0/edge-2")
+        && source_compare(
+               *source_parabola_components.back()
+                    .lower.parameter,
+               source_construct(CORE::BigRat(2)))
+            == CGAL::EQUAL
+        && has_provenance_id(
+            source_parabola_components.back().lower,
+            "source-parabola-dual/D-hole-0/edge-1")
+        && source_compare(
+               *source_parabola_components.back()
+                    .upper.parameter,
+               quadratic_field_algebraic_real(
+                   {0, 2},
+                   2))
+            == CGAL::EQUAL
+        && has_provenance_id(
+            source_parabola_components.back().upper,
+            "source-parabola-dual/D-outer/edge-2")
         && !has_local_solution_identity(
             source_parabola_components.front().lower)
         && !has_local_solution_identity(

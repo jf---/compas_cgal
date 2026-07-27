@@ -1,5 +1,6 @@
 #include "segment_site_parameterization.h"
 #include "segment_site_provenance.h"
+#include "continuous_tea_2/exact_polynomial_sign_2.h"
 
 #include <algorithm>
 #include <iterator>
@@ -1105,15 +1106,14 @@ ExactAlgebraicKernel2::Polynomial_2 radical_norm(
 
 bool radical_equation_holds(
     const RadicalEquation2& equation,
-    const ExactAlgebraicKernel2::Algebraic_real_2& point,
-    const ExactAlgebraicKernel2& kernel)
+    const ExactAlgebraicKernel2::Algebraic_real_2& point)
 {
     const CGAL::Sign rational =
-        kernel.sign_at_2_object()(
+        exact_polynomial_sign_at_2(
             equation.rational,
             point);
     const CGAL::Sign radical =
-        kernel.sign_at_2_object()(
+        exact_polynomial_sign_at_2(
             equation.radical,
             point);
     return (rational == CGAL::ZERO
@@ -1150,20 +1150,26 @@ bool quadratic_point_in_polygon(
             edge->target().y() - y.rational,
             -y.radical,
         };
+        const MatQuadraticFieldValue2 source_x{
+            edge->source().x() - x.rational,
+            -x.radical,
+        };
+        const MatQuadraticFieldValue2 target_x{
+            edge->target().x() - x.rational,
+            -x.radical,
+        };
         const MatQuadraticFieldValue2 orientation =
             field_add(
+                field_multiply(
+                    target_y,
+                    source_x,
+                    radicand),
                 field_scale(
-                    {
-                        edge->target().y() - y.rational,
-                        -y.radical,
-                    },
-                    edge->source().x() - x.rational),
-                field_scale(
-                    {
-                        edge->source().y() - y.rational,
-                        -y.radical,
-                    },
-                    x.rational - edge->target().x()));
+                    field_multiply(
+                        source_y,
+                        target_x,
+                        radicand),
+                    -1));
         const CGAL::Sign source_side =
             quadratic_field_sign(source_y, radicand);
         const CGAL::Sign target_side =
@@ -1218,6 +1224,376 @@ bool source_domain_contains(
         }
     }
     return true;
+}
+
+bool nonparallel_segment_domain_contains(
+    const MatDomainPolygonWithHoles2& domain,
+    const NonparallelSegmentBisectorParameterization2& primitive,
+    const CORE::BigRat& parameter)
+{
+    if (primitive.x_rational.size() != 2
+        || primitive.x_radical.size() != 2
+        || primitive.y_rational.size() != 2
+        || primitive.y_radical.size() != 2) {
+        throw InvalidRationalPrimitiveError(
+            "nonparallel S-S domain test requires an affine field chart");
+    }
+    const MatQuadraticFieldValue2 x =
+        evaluate_source_coordinate(
+            primitive.x_rational,
+            primitive.x_radical,
+            parameter);
+    const MatQuadraticFieldValue2 y =
+        evaluate_source_coordinate(
+            primitive.y_rational,
+            primitive.y_radical,
+            parameter);
+    if (!quadratic_point_in_polygon(
+            domain.outer_boundary(),
+            x,
+            y,
+            primitive.radicand)) {
+        return false;
+    }
+    for (auto hole = domain.holes_begin();
+         hole != domain.holes_end();
+         ++hole) {
+        if (quadratic_point_in_polygon(
+                *hole,
+                x,
+                y,
+                primitive.radicand)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+namespace
+{
+
+MatQuadraticFieldValue2 quadratic_field_cross(
+    const MatQuadraticFieldValue2& lhs_x,
+    const MatQuadraticFieldValue2& lhs_y,
+    const MatQuadraticFieldValue2& rhs_x,
+    const MatQuadraticFieldValue2& rhs_y,
+    const CORE::BigRat& radicand)
+{
+    return field_add(
+        field_multiply(
+            lhs_x,
+            rhs_y,
+            radicand),
+        field_scale(
+            field_multiply(
+                lhs_y,
+                rhs_x,
+                radicand),
+            -1));
+}
+
+void append_nonparallel_segment_polygon_intersections(
+    const MatDomainPolygon2& polygon,
+    const std::string& ring_id,
+    const NonparallelSegmentBisectorParameterization2& primitive,
+    const NonparallelSegmentFeatureDomain2& feature_domain,
+    std::vector<AlgebraicDomainRoot2>& roots)
+{
+    const CORE::BigRat radicand = primitive.radicand;
+    const MatQuadraticFieldValue2 origin_x{
+        primitive.x_rational[0],
+        primitive.x_radical[0],
+    };
+    const MatQuadraticFieldValue2 origin_y{
+        primitive.y_rational[0],
+        primitive.y_radical[0],
+    };
+    const MatQuadraticFieldValue2 direction_x{
+        primitive.x_rational[1],
+        primitive.x_radical[1],
+    };
+    const MatQuadraticFieldValue2 direction_y{
+        primitive.y_rational[1],
+        primitive.y_radical[1],
+    };
+    const CGAL::Sign direction_x_sign =
+        quadratic_field_sign(
+            direction_x,
+            radicand);
+    const CGAL::Sign direction_y_sign =
+        quadratic_field_sign(
+            direction_y,
+            radicand);
+    if (direction_x_sign == CGAL::ZERO
+        && direction_y_sign == CGAL::ZERO) {
+        throw InvalidRationalPrimitiveError(
+            "nonparallel S-S D-clipping chart direction is zero");
+    }
+    const auto parameter_at =
+        [&origin_x,
+         &origin_y,
+         &direction_x,
+         &direction_y,
+         direction_x_sign,
+         &radicand](
+            const CORE::BigRat& x,
+            const CORE::BigRat& y) {
+            if (direction_x_sign != CGAL::ZERO) {
+                return field_divide(
+                    {
+                        x - origin_x.rational,
+                        -origin_x.radical,
+                    },
+                    direction_x,
+                    radicand);
+            }
+            return field_divide(
+                {
+                    y - origin_y.rational,
+                    -origin_y.radical,
+                },
+                direction_y,
+                radicand);
+        };
+
+    std::size_t edge_index = 0;
+    for (auto edge = polygon.edges_begin();
+         edge != polygon.edges_end();
+         ++edge, ++edge_index) {
+        const MatQuadraticFieldValue2 edge_x{
+            edge->target().x() - edge->source().x(),
+            0,
+        };
+        const MatQuadraticFieldValue2 edge_y{
+            edge->target().y() - edge->source().y(),
+            0,
+        };
+        const MatQuadraticFieldValue2 offset_x{
+            edge->source().x() - origin_x.rational,
+            -origin_x.radical,
+        };
+        const MatQuadraticFieldValue2 offset_y{
+            edge->source().y() - origin_y.rational,
+            -origin_y.radical,
+        };
+        const MatQuadraticFieldValue2 denominator =
+            quadratic_field_cross(
+                direction_x,
+                direction_y,
+                edge_x,
+                edge_y,
+                radicand);
+        const MatQuadraticFieldValue2 collinearity =
+            quadratic_field_cross(
+                offset_x,
+                offset_y,
+                direction_x,
+                direction_y,
+                radicand);
+        if (quadratic_field_sign(
+                denominator,
+                radicand)
+            == CGAL::ZERO) {
+            if (quadratic_field_sign(
+                    collinearity,
+                    radicand)
+                == CGAL::ZERO) {
+                MatQuadraticFieldValue2 edge_lower =
+                    parameter_at(
+                        edge->source().x(),
+                        edge->source().y());
+                MatQuadraticFieldValue2 edge_upper =
+                    parameter_at(
+                        edge->target().x(),
+                        edge->target().y());
+                if (quadratic_field_compare(
+                        edge_upper,
+                        edge_lower,
+                        radicand)
+                    == CGAL::SMALLER) {
+                    std::swap(edge_lower, edge_upper);
+                }
+                MatQuadraticFieldValue2 overlap_lower =
+                    edge_lower;
+                if (quadratic_field_compare(
+                        overlap_lower,
+                        feature_domain.lower.parameter,
+                        radicand)
+                    == CGAL::SMALLER) {
+                    overlap_lower =
+                        feature_domain.lower.parameter;
+                }
+                MatQuadraticFieldValue2 overlap_upper =
+                    edge_upper;
+                if (quadratic_field_compare(
+                        feature_domain.upper.parameter,
+                        overlap_upper,
+                        radicand)
+                    == CGAL::SMALLER) {
+                    overlap_upper =
+                        feature_domain.upper.parameter;
+                }
+                const CGAL::Comparison_result overlap =
+                    quadratic_field_compare(
+                        overlap_lower,
+                        overlap_upper,
+                        radicand);
+                if (overlap == CGAL::SMALLER) {
+                    throw OverlappingDomainBoundaryError(
+                        "nonparallel S-S feature cell overlaps a domain edge");
+                }
+                if (overlap == CGAL::EQUAL) {
+                    const auto algebraic_parameter =
+                        quadratic_field_algebraic_real(
+                            overlap_lower,
+                            radicand);
+                    roots.push_back(
+                        {
+                            algebraic_parameter,
+                            {
+                                ring_id + "/edge-"
+                                    + std::to_string(
+                                        edge_index),
+                                algebraic_root_identity_v1(
+                                    algebraic_parameter),
+                            },
+                        });
+                }
+            }
+            continue;
+        }
+
+        const MatQuadraticFieldValue2 parameter =
+            field_divide(
+                quadratic_field_cross(
+                    offset_x,
+                    offset_y,
+                    edge_x,
+                    edge_y,
+                    radicand),
+                denominator,
+                radicand);
+        const MatQuadraticFieldValue2 edge_parameter =
+            field_divide(
+                collinearity,
+                denominator,
+                radicand);
+        if (quadratic_field_compare(
+                edge_parameter,
+                {0, 0},
+                radicand)
+                == CGAL::SMALLER
+            || quadratic_field_compare(
+                   edge_parameter,
+                   {1, 0},
+                   radicand)
+                == CGAL::LARGER
+            || quadratic_field_compare(
+                   parameter,
+                   feature_domain.lower.parameter,
+                   radicand)
+                == CGAL::SMALLER
+            || quadratic_field_compare(
+                   parameter,
+                   feature_domain.upper.parameter,
+                   radicand)
+                == CGAL::LARGER) {
+            continue;
+        }
+        const auto algebraic_parameter =
+            quadratic_field_algebraic_real(
+                parameter,
+                radicand);
+        roots.push_back(
+            {
+                algebraic_parameter,
+                {
+                    ring_id + "/edge-"
+                        + std::to_string(edge_index),
+                    algebraic_root_identity_v1(
+                        algebraic_parameter),
+                },
+            });
+    }
+}
+
+}  // namespace
+
+std::vector<AlgebraicDomainRoot2>
+nonparallel_segment_domain_roots(
+    const std::string& dual_id,
+    const NonparallelSegmentBisectorParameterization2& primitive,
+    const NonparallelSegmentFeatureDomain2& feature_domain,
+    const MatDomainPolygonWithHoles2& domain)
+{
+    if (dual_id.empty()) {
+        throw InvalidDualIdentityError(
+            "nonparallel S-S dual identity is empty");
+    }
+    if (primitive.x_rational.size() != 2
+        || primitive.x_radical.size() != 2
+        || primitive.y_rational.size() != 2
+        || primitive.y_radical.size() != 2) {
+        throw InvalidRationalPrimitiveError(
+            "nonparallel S-S D clipping requires an affine field chart");
+    }
+    if (primitive.radicand != feature_domain.radicand) {
+        throw MismatchedNonparallelSegmentFeatureDomainError(
+            "nonparallel S-S chart and feature domain use different fields");
+    }
+    if (domain.is_unbounded()) {
+        throw InvalidRationalPrimitiveError(
+            "nonparallel S-S D clipping requires a bounded outer polygon");
+    }
+
+    std::vector<AlgebraicDomainRoot2> roots;
+    append_nonparallel_segment_polygon_intersections(
+        domain.outer_boundary(),
+        dual_id + "/D-outer",
+        primitive,
+        feature_domain,
+        roots);
+    std::size_t hole_index = 0;
+    for (auto hole = domain.holes_begin();
+         hole != domain.holes_end();
+         ++hole, ++hole_index) {
+        append_nonparallel_segment_polygon_intersections(
+            *hole,
+            dual_id + "/D-hole-"
+                + std::to_string(hole_index),
+            primitive,
+            feature_domain,
+            roots);
+    }
+
+    ExactAlgebraicKernel1 kernel;
+    const auto compare = kernel.compare_1_object();
+    std::sort(
+        roots.begin(),
+        roots.end(),
+        [&compare](const AlgebraicDomainRoot2& lhs,
+                   const AlgebraicDomainRoot2& rhs) {
+            return compare(lhs.parameter, rhs.parameter)
+                == CGAL::SMALLER;
+        });
+    std::vector<AlgebraicDomainRoot2> unique;
+    for (AlgebraicDomainRoot2& root : roots) {
+        if (!unique.empty()
+            && compare(
+                   unique.back().parameter,
+                   root.parameter)
+                == CGAL::EQUAL) {
+            union_stable_ids(
+                unique.back().provenance_ids,
+                root.provenance_ids);
+        } else {
+            union_stable_ids(
+                root.provenance_ids,
+                {});
+            unique.push_back(std::move(root));
+        }
+    }
+    return unique;
 }
 
 MatParameterDomain2
