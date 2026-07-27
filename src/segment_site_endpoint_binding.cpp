@@ -1,4 +1,5 @@
 #include "segment_site_endpoint_binding.h"
+#include "segment_site_delaunay.h"
 
 #include <algorithm>
 #include <iterator>
@@ -1825,6 +1826,7 @@ MatParameterEndpoint2 bind_nonparallel_segment_limiter_endpoint(
         matches.front());
 }
 
+template <typename StableSiteIdentity>
 std::pair<MatParameterEndpoint2, MatParameterEndpoint2>
 bind_parallel_segment_segment_cell_endpoints_impl(
     const RationalPrimitiveParameterization2& primitive,
@@ -1835,18 +1837,16 @@ bind_parallel_segment_segment_cell_endpoints_impl(
     const std::vector<MatExactPointSiteSource2>& point_limiters,
     const std::vector<MatExactOpenSegmentSource2>& segment_limiters,
     const std::vector<std::string>& generator_ids,
-    const std::vector<GeneratorSite2>& generators,
+    const StableSiteIdentity& stable_site_identity,
     const SegmentSiteVoronoi2& voronoi,
     const SegmentSiteVoronoi2::Halfedge_handle& halfedge)
 {
     if (generator_ids.size() != 2
         || ordered_generator_site_ids(
-               stable_generator_site_id(
-                   halfedge->up()->site(),
-                   generators),
-               stable_generator_site_id(
-                   halfedge->down()->site(),
-                   generators))
+               stable_site_identity(
+                   halfedge->up()->site()),
+               stable_site_identity(
+                   halfedge->down()->site()))
             != generator_ids)
     {
         throw MismatchedLiveSegmentSegmentBridgeError(
@@ -1895,13 +1895,9 @@ bind_parallel_segment_segment_cell_endpoints_impl(
     const MatTraits::Site_2 target_owner =
         halfedge->right()->site();
     const std::string source_owner_id =
-        stable_generator_site_id(
-            source_owner,
-            generators);
+        stable_site_identity(source_owner);
     const std::string target_owner_id =
-        stable_generator_site_id(
-            target_owner,
-            generators);
+        stable_site_identity(target_owner);
 
     MatTraits::Segment_2 primal;
     if (!CGAL::assign(
@@ -2112,6 +2108,13 @@ bind_parallel_segment_segment_cell_endpoints(
     const SegmentSiteVoronoi2& voronoi,
     const SegmentSiteVoronoi2::Halfedge_handle& halfedge)
 {
+    const auto stable_site_identity =
+        [&generators](
+            const MatTraits::Site_2& site) {
+            return stable_generator_site_id(
+                site,
+                generators);
+        };
     return bind_parallel_segment_segment_cell_endpoints_impl(
         primitive,
         lower,
@@ -2121,31 +2124,32 @@ bind_parallel_segment_segment_cell_endpoints(
         {},
         {},
         generator_ids,
-        generators,
+        stable_site_identity,
         voronoi,
         halfedge);
 }
 
+namespace {
+
+template <typename StableSiteIdentity>
 std::pair<MatParameterEndpoint2, MatParameterEndpoint2>
-bind_nonparallel_segment_segment_cell_endpoints(
+bind_nonparallel_segment_segment_cell_endpoints_impl(
     const NonparallelSegmentBisectorParameterization2& primitive,
     const NonparallelSegmentFeatureDomain2& feature_domain,
     const MatExactOpenSegmentSource2& first_segment,
     const MatExactOpenSegmentSource2& second_segment,
     const std::vector<MatExactOpenSegmentSource2>& segment_limiters,
     const std::vector<std::string>& generator_ids,
-    const std::vector<GeneratorSite2>& generators,
+    const StableSiteIdentity& stable_site_identity,
     const SegmentSiteVoronoi2& voronoi,
     const SegmentSiteVoronoi2::Halfedge_handle& halfedge)
 {
     if (generator_ids.size() != 2
         || ordered_generator_site_ids(
-               stable_generator_site_id(
-                   halfedge->up()->site(),
-                   generators),
-               stable_generator_site_id(
-                   halfedge->down()->site(),
-                   generators))
+               stable_site_identity(
+                   halfedge->up()->site()),
+               stable_site_identity(
+                   halfedge->down()->site()))
             != generator_ids
         || primitive.first_segment_id
             != generator_ids[0]
@@ -2212,13 +2216,9 @@ bind_nonparallel_segment_segment_cell_endpoints(
     const MatTraits::Site_2 target_owner =
         halfedge->right()->site();
     const std::string source_owner_id =
-        stable_generator_site_id(
-            source_owner,
-            generators);
+        stable_site_identity(source_owner);
     const std::string target_owner_id =
-        stable_generator_site_id(
-            target_owner,
-            generators);
+        stable_site_identity(target_owner);
     const auto feature_owner =
         [&feature_domain](
             const std::string& owner_id) {
@@ -2317,6 +2317,69 @@ bind_nonparallel_segment_segment_cell_endpoints(
     };
 }
 
+} // namespace
+
+std::pair<MatParameterEndpoint2, MatParameterEndpoint2>
+bind_nonparallel_segment_segment_cell_endpoints(
+    const NonparallelSegmentBisectorParameterization2& primitive,
+    const NonparallelSegmentFeatureDomain2& feature_domain,
+    const MatExactOpenSegmentSource2& first_segment,
+    const MatExactOpenSegmentSource2& second_segment,
+    const std::vector<MatExactOpenSegmentSource2>& segment_limiters,
+    const std::vector<std::string>& generator_ids,
+    const std::vector<GeneratorSite2>& generators,
+    const SegmentSiteVoronoi2& voronoi,
+    const SegmentSiteVoronoi2::Halfedge_handle& halfedge)
+{
+    const auto stable_site_identity =
+        [&generators](
+            const MatTraits::Site_2& site) {
+            return stable_generator_site_id(
+                site,
+                generators);
+        };
+    return bind_nonparallel_segment_segment_cell_endpoints_impl(
+        primitive,
+        feature_domain,
+        first_segment,
+        second_segment,
+        segment_limiters,
+        generator_ids,
+        stable_site_identity,
+        voronoi,
+        halfedge);
+}
+
+std::pair<MatParameterEndpoint2, MatParameterEndpoint2>
+bind_nonparallel_segment_segment_cell_endpoints(
+    const NonparallelSegmentBisectorParameterization2& primitive,
+    const NonparallelSegmentFeatureDomain2& feature_domain,
+    const MatExactOpenSegmentSource2& first_segment,
+    const MatExactOpenSegmentSource2& second_segment,
+    const std::vector<MatExactOpenSegmentSource2>& segment_limiters,
+    const std::vector<std::string>& generator_ids,
+    const CanonicalMatSiteGeometryIndex2& site_index,
+    const SegmentSiteVoronoi2& voronoi,
+    const SegmentSiteVoronoi2::Halfedge_handle& halfedge)
+{
+    const auto stable_site_identity =
+        [&site_index](
+            const MatTraits::Site_2& site)
+            -> const std::string& {
+            return site_index.stable_id(site);
+        };
+    return bind_nonparallel_segment_segment_cell_endpoints_impl(
+        primitive,
+        feature_domain,
+        first_segment,
+        second_segment,
+        segment_limiters,
+        generator_ids,
+        stable_site_identity,
+        voronoi,
+        halfedge);
+}
+
 std::pair<MatParameterEndpoint2, MatParameterEndpoint2>
 bind_parallel_segment_segment_cell_endpoints(
     const RationalPrimitiveParameterization2& primitive,
@@ -2335,6 +2398,13 @@ bind_parallel_segment_segment_cell_endpoints(
         first_segment,
         second_segment,
         generator_ids);
+    const auto stable_site_identity =
+        [&generators](
+            const MatTraits::Site_2& site) {
+            return stable_generator_site_id(
+                site,
+                generators);
+        };
     return bind_parallel_segment_segment_cell_endpoints_impl(
         primitive,
         lower,
@@ -2344,7 +2414,7 @@ bind_parallel_segment_segment_cell_endpoints(
         point_limiters,
         {},
         generator_ids,
-        generators,
+        stable_site_identity,
         voronoi,
         halfedge);
 }
@@ -2368,6 +2438,13 @@ bind_parallel_segment_segment_cell_endpoints(
         first_segment,
         second_segment,
         generator_ids);
+    const auto stable_site_identity =
+        [&generators](
+            const MatTraits::Site_2& site) {
+            return stable_generator_site_id(
+                site,
+                generators);
+        };
     return bind_parallel_segment_segment_cell_endpoints_impl(
         primitive,
         lower,
@@ -2377,7 +2454,46 @@ bind_parallel_segment_segment_cell_endpoints(
         point_limiters,
         segment_limiters,
         generator_ids,
-        generators,
+        stable_site_identity,
+        voronoi,
+        halfedge);
+}
+
+std::pair<MatParameterEndpoint2, MatParameterEndpoint2>
+bind_parallel_segment_segment_cell_endpoints(
+    const RationalPrimitiveParameterization2& primitive,
+    const RationalDomainRoot2& lower,
+    const RationalDomainRoot2& upper,
+    const MatExactOpenSegmentSource2& first_segment,
+    const MatExactOpenSegmentSource2& second_segment,
+    const std::vector<MatExactPointSiteSource2>& point_limiters,
+    const std::vector<MatExactOpenSegmentSource2>& segment_limiters,
+    const std::vector<std::string>& generator_ids,
+    const CanonicalMatSiteGeometryIndex2& site_index,
+    const SegmentSiteVoronoi2& voronoi,
+    const SegmentSiteVoronoi2::Halfedge_handle& halfedge)
+{
+    require_canonical_parallel_segment_chart(
+        primitive,
+        first_segment,
+        second_segment,
+        generator_ids);
+    const auto stable_site_identity =
+        [&site_index](
+            const MatTraits::Site_2& site)
+            -> const std::string& {
+            return site_index.stable_id(site);
+        };
+    return bind_parallel_segment_segment_cell_endpoints_impl(
+        primitive,
+        lower,
+        upper,
+        &first_segment,
+        &second_segment,
+        point_limiters,
+        segment_limiters,
+        generator_ids,
+        stable_site_identity,
         voronoi,
         halfedge);
 }

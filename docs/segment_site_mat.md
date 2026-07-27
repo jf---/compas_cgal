@@ -43,7 +43,11 @@ needed by every downstream traversal and engagement decision.
     consuming transform now swaps that validated SDG into the
     degeneracy-removal Voronoi adaptor without a duplicate graph build. The
     same catalog now projects into exact rational point sources and directed
-    open-segment supports for the algebraic parameterization layer.
+    open-segment supports for the algebraic parameterization layer. Parallel
+    and nonparallel S–S endpoint binders now accept the transferred exact
+    geometry index directly; a catalog-owned rectangle gate proves that this
+    indexed path emits the same algebraic parameters and complete provenance
+    as the earlier validated identity table.
     General arbitrary-pocket traversal, externally limited and composite
     segment/segment cells, production-graph adoption of the canonical site
     catalog, endpoint-feature CSR, public numeric-table integration, neck
@@ -82,7 +86,7 @@ construction.
 | Dimension | Comparative status | Held–Pfeiffer 2025 | Exact-certified Phase 1 |
 | --- | --- | --- | --- |
 | Pocket geometry | incomplete | Segments and circular arcs; simply connected; machinability assumed after an `r + ε` transformation | Raw MAT primitives now clip exactly against polygonal domains with holes and exact radius clearance; the rectangle `C_r` graph is unified, but general arbitrary-pocket traversal is incomplete; circular boundaries are not supported |
-| MAT backend | stronger exact contract on a bounded fixture; incomplete end-to-end | Vroni/ArcVroni used end-to-end | Exact CGAL point graph plus bounded P–S and parallel/nonparallel S–S cells; one four-segment rectangle build now yields a reversal-invariant five-edge/six-node graph with exact radius clipping, feature-triple node identity, and explicit rejection of eight incident P–S rays; a Task 3-derived typed site catalog, exact rational feature-source projection, indexed SDG source, and swap-owned adaptor prevent second normalization, decimal coercion, linear live-site rematching, and a duplicate SDG build, but arbitrary-pocket traversal and catalog-to-production-graph integration remain incomplete |
+| MAT backend | stronger exact contract on a bounded fixture; incomplete end-to-end | Vroni/ArcVroni used end-to-end | Exact CGAL point graph plus bounded P–S and parallel/nonparallel S–S cells; one four-segment rectangle build now yields a reversal-invariant five-edge/six-node graph with exact radius clipping, feature-triple node identity, and explicit rejection of eight incident P–S rays; a Task 3-derived typed site catalog, exact rational feature-source projection, indexed SDG source, swap-owned adaptor, and catalog-indexed endpoint binders prevent second normalization, decimal coercion, endpoint-level live-site rematching, and a duplicate SDG build, but arbitrary-pocket traversal and catalog-to-production-graph integration remain incomplete |
 | Engagement limit | stronger contract; incomplete integration | Analytic circle construction followed by bisection until `θmax − 0.001 <= θ <= θmax` radians | Exact rational chord surrogate and event-exact segment/full-circle certification; integration incomplete |
 | Candidate spacing | incomplete | Bisection along the middle curve | Finite candidate lattice; no monotonic-feasibility assumption |
 | Machined state | stronger contract | Ordered contour of prior machining disks; transition sweeps omitted from that contour model | Exact stock mutation and exact full-sweep coverage, ordered certify-before-deplete |
@@ -123,15 +127,16 @@ in-process generations per pocket:
     as fast as Held and Pfeiffer.
 
 The additive catalog-fed SDG/adaptor path removes three structural costs before
-timing:
-live generators resolve through an exact `O(log S)` geometry index instead of
-an `O(k S)` caller-site scan, the validated SDG owner cannot be copied or moved
-implicitly, and adaptor construction swaps rather than copies the complete
-SDG. The current unified rectangle traversal has not adopted that owner yet.
-These are architectural performance safeguards, not a new planner benchmark.
+timing: live generators resolve through an exact `O(log S)` geometry index
+instead of an `O(k S)` caller-site scan, the validated SDG owner cannot be
+copied or moved implicitly, and adaptor construction swaps rather than copies
+the complete SDG. The indexed resolver now reaches every parallel and
+nonparallel S–S endpoint-owner lookup. The current unified rectangle
+orchestration has not adopted that owner yet. These are architectural
+performance safeguards, not a new planner benchmark.
 
 Two other clocks must remain separate. Five warm local Release executions of
-the current native Task 9 algebraic fixture suite took 1.20–1.23 s (1.21 s
+the current native Task 9 algebraic fixture suite took 1.21–1.24 s (1.22 s
 median), but that is a contract gate rather than one pocket generation. The
 existing exact stock replay
 measured 87 s for the kite after a 7x end-to-end speedup; that run certifies and
@@ -1322,6 +1327,41 @@ loudly.
     adaptor path. Its replacement must be an additive, complete-record
     equivalence step before the earlier path can be considered for removal.
 
+### Indexed endpoint binding preserves the exact contract
+
+The parallel and nonparallel S–S endpoint algorithms used to accept only a
+`GeneratorSite2` table. Every live up/down and left/right owner lookup scanned
+that table by exact geometry. This remained correct, but feeding the canonical
+adaptor through that interface would discard the geometry index immediately
+before the most lookup-intensive part of traversal.
+
+Both binder families now expose overloads that accept
+`CanonicalMatSiteGeometryIndex2`. The original table overloads remain
+available. All overloads delegate to one resolver-parameterized implementation,
+so the following checks are shared rather than reimplemented:
+
+- exact up/down generator agreement;
+- exact primal/adaptor endpoint agreement;
+- canonical parallel chart or signed nonparallel branch;
+- exact feature interval and live owner;
+- external point/open-segment limiter equations;
+- algebraic root identity, multiplicity, and endpoint provenance.
+
+!!! warning "Do not rebuild a linear identity table at the binder boundary"
+
+    The transferred geometry index authenticates the relation between every
+    live CGAL site and the canonical input catalog. Converting it back into a
+    vector would preserve answers on small fixtures but reintroduce
+    `O(k S)` rematching and a second identity representation. Pass the index
+    through traversal and keep geometry-to-identity resolution in `O(log S)`.
+
+The native equivalence gate runs on the catalog-owned, swap-transferred
+rectangle adaptor. It binds the externally segment-limited central parallel
+cell and the lower-left nonparallel cell through both overload families, then
+requires exact algebraic parameter equality and identical complete provenance
+vectors. This establishes the endpoint-binding seam only; full graph-record
+equivalence remains the next additive adoption gate.
+
 ## Failure anatomy: four cocircular point sites
 
 The square fixture
@@ -1408,7 +1448,7 @@ Refinement may change the number and position of samples. It must not change:
 | `segment_site_parameterization.*` | exact primitive domains and coordinate functions |
 | `segment_site_clipping.*` | exact domain and clearance roots; maximal admissible cells |
 | `segment_site_provenance.*` | stable site/root provenance and endpoint evidence |
-| `segment_site_endpoint_binding.*` | live parabola and bounded parallel/nonparallel S–S endpoint ownership |
+| `segment_site_endpoint_binding.*` | live parabola and bounded parallel/nonparallel S–S endpoint ownership with linear-table and canonical-index overloads sharing one exact algorithm |
 | `segment_site_graph_emission.*` | exact one-dimensional component projection and graph record emission |
 | `segment_site_graph_csr.*` | validated deterministic projection of canonical node-site provenance |
 | `segment_site_mat.*` | graph orchestration and canonical records |
@@ -1446,6 +1486,7 @@ consumers, or evolution differ from graph orchestration.
 | Catalog-derived rational sources | implemented and native-gated | exact `CORE::Expr` round-trip to `BigRat`, directed endpoint ownership, primitive support lines, non-dyadic goldens, and radical rejection |
 | Catalog-fed segment-Delaunay source | implemented and native-gated | exact indexed lookup, one segment insertion pass, complete generator bijection, duplicate-geometry rejection, and immobile graph ownership |
 | Catalog-fed Voronoi owner | implemented and native-gated | explicit `swap_dg=true` transfer, source-empty proof, post-transfer indexed bijection, raw rectangle-pair signature, and double-consume rejection |
+| Catalog-indexed S–S endpoint binding | implemented and native-gated | parallel and nonparallel catalog-owned rectangle cells match the earlier validated path in exact algebraic parameters and complete provenance; graph orchestration adoption pending |
 | Numeric node-site catalog mapping | implemented and native-gated | catalog-bound graph identities map once to `int64` rows; unknown identities fail loud; unified rectangle adoption pending |
 | Endpoint-feature CSR and public numeric table | pending | no public binding or complete certificate claim |
 | Exact neck evidence | pending | no production claim |
@@ -1527,7 +1568,11 @@ signature, reversal invariance, owner immobility, and named double-consume
 rejection. The rational-source gate separately locks exact rectangle point
 coordinates, four primitive support lines, directed endpoint wraparound,
 binary64 `0.1`/`0.2` fractions, algebraic-radical rejection, and full source
-record invariance under input rotation/reversal.
+record invariance under input rotation/reversal. The indexed endpoint gate
+then uses the catalog-owned swap-transferred adaptor to bind one parallel and
+one nonparallel S–S cell through both identity interfaces. It requires exact
+equality of both algebraic endpoint parameters and their complete provenance
+vectors.
 
 The final Task 9 boundary must add the still-absent Python MAT binding test and
 then requires:

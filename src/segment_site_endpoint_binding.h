@@ -7,6 +7,8 @@
 #include <utility>
 #include <vector>
 
+class CanonicalMatSiteGeometryIndex2;
+
 class UnboundLiveParabolaEndpointError : public std::runtime_error
 {
 public:
@@ -189,6 +191,18 @@ bind_nonparallel_segment_segment_cell_endpoints(
     const SegmentSiteVoronoi2::Halfedge_handle& halfedge);
 
 std::pair<MatParameterEndpoint2, MatParameterEndpoint2>
+bind_nonparallel_segment_segment_cell_endpoints(
+    const NonparallelSegmentBisectorParameterization2& primitive,
+    const NonparallelSegmentFeatureDomain2& feature_domain,
+    const MatExactOpenSegmentSource2& first_segment,
+    const MatExactOpenSegmentSource2& second_segment,
+    const std::vector<MatExactOpenSegmentSource2>& segment_limiters,
+    const std::vector<std::string>& generator_ids,
+    const CanonicalMatSiteGeometryIndex2& site_index,
+    const SegmentSiteVoronoi2& voronoi,
+    const SegmentSiteVoronoi2::Halfedge_handle& halfedge);
+
+std::pair<MatParameterEndpoint2, MatParameterEndpoint2>
 bind_parallel_segment_segment_cell_endpoints(
     const RationalPrimitiveParameterization2& primitive,
     const RationalDomainRoot2& lower,
@@ -199,6 +213,20 @@ bind_parallel_segment_segment_cell_endpoints(
     const std::vector<MatExactOpenSegmentSource2>& segment_limiters,
     const std::vector<std::string>& generator_ids,
     const std::vector<GeneratorSite2>& generators,
+    const SegmentSiteVoronoi2& voronoi,
+    const SegmentSiteVoronoi2::Halfedge_handle& halfedge);
+
+std::pair<MatParameterEndpoint2, MatParameterEndpoint2>
+bind_parallel_segment_segment_cell_endpoints(
+    const RationalPrimitiveParameterization2& primitive,
+    const RationalDomainRoot2& lower,
+    const RationalDomainRoot2& upper,
+    const MatExactOpenSegmentSource2& first_segment,
+    const MatExactOpenSegmentSource2& second_segment,
+    const std::vector<MatExactPointSiteSource2>& point_limiters,
+    const std::vector<MatExactOpenSegmentSource2>& segment_limiters,
+    const std::vector<std::string>& generator_ids,
+    const CanonicalMatSiteGeometryIndex2& site_index,
     const SegmentSiteVoronoi2& voronoi,
     const SegmentSiteVoronoi2::Halfedge_handle& halfedge);
 
