@@ -232,10 +232,12 @@ add_executable(task9_mat_compile_gate EXCLUDE_FROM_ALL
     tests/native/task9_site_catalog_gate.cpp
     tests/native/task9_catalog_delaunay_gate.cpp
     tests/native/task9_catalog_voronoi_gate.cpp
+    tests/native/task9_rational_sources_gate.cpp
     src/segment_site_mat.cpp
     src/segment_site_catalog.cpp
     src/segment_site_delaunay.cpp
     src/segment_site_voronoi.cpp
+    src/segment_site_rational_sources.cpp
     src/segment_site_graph_emission.cpp
     src/segment_site_graph_csr.cpp
     src/segment_site_mat_spikes.cpp
