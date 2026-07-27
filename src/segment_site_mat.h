@@ -89,3 +89,6 @@ MatExactGraph2 segment_site_generic_graph_spike();
 
 MatExactGraph2
 segment_site_reversed_source_graph_spike();
+
+MatExactGraph2
+segment_site_true_radius_graph_spike();

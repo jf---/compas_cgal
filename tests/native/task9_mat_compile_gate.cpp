@@ -249,6 +249,126 @@ bool parameter_domains_are_exact()
             != CGAL::LARGER;
 }
 
+bool source_parabola_clearance_is_exact()
+{
+    const MatExactPointSiteSource2 focus{
+        "radius-focus",
+        {0, 0},
+        {2, 0},
+        1,
+    };
+    const MatExactOpenSegmentSource2 segment =
+        canonical_open_segment_source(
+            "radius-segment",
+            -4,
+            0,
+            4,
+            0);
+    const ClearanceRootBoundary2 boundary =
+        source_parabola_clearance_boundary(
+            focus,
+            segment,
+            CORE::BigRat(9, 4));
+    const std::vector<ExactAlgebraicInteger1>
+        expected_coefficients{-20, 0, 8, 0, 1};
+    if (boundary.constant_sign.has_value()
+        || boundary.primitive_coefficients
+            != expected_coefficients
+        || boundary.roots.size() != 2
+        || boundary.roots[0].event_id
+            != algebraic_root_id_v1(
+                expected_coefficients,
+                0)
+        || boundary.roots[1].event_id
+            != algebraic_root_id_v1(
+                expected_coefficients,
+                1)) {
+        return false;
+    }
+    ExactAlgebraicKernel1 kernel;
+    if (kernel.compare_1_object()(
+            boundary.roots[0].parameter,
+            CORE::BigRat(0))
+            != CGAL::SMALLER
+        || kernel.compare_1_object()(
+               boundary.roots[1].parameter,
+               CORE::BigRat(0))
+            != CGAL::LARGER) {
+        return false;
+    }
+
+    MatDomainPolygon2 outer;
+    outer.push_back({-10, -1});
+    outer.push_back({10, -1});
+    outer.push_back({10, 10});
+    outer.push_back({-10, 10});
+    const MatDomainPolygonWithHoles2 domain(outer);
+    const std::vector<MatAdmissibleComponent2>
+        positive_cell_components =
+            clip_source_parabola_clearance_components(
+                "positive-radius-cell",
+                focus,
+                segment,
+                {
+                    kernel
+                        .construct_algebraic_real_1_object()(0),
+                    {"positive-cell-lower"},
+                },
+                {
+                    kernel
+                        .construct_algebraic_real_1_object()(4),
+                    {"positive-cell-upper"},
+                },
+                boundary,
+                domain);
+    const std::string positive_root_event =
+        algebraic_root_id_v1(
+            expected_coefficients,
+            1);
+    if (positive_cell_components.size() != 1
+        || !has_provenance_id(
+            positive_cell_components.front().lower,
+            positive_root_event)
+        || algebraic_root_identity_v1(
+               *positive_cell_components.front().lower.parameter)
+            != positive_root_event
+        || !has_provenance_id(
+            positive_cell_components.front().upper,
+            "positive-cell-upper")) {
+        return false;
+    }
+
+    bool negative_radius_rejected = false;
+    try {
+        static_cast<void>(
+            source_parabola_clearance_boundary(
+                focus,
+                segment,
+                -1));
+    }
+    catch (const NegativeClearanceRadiusSquaredError&) {
+        negative_radius_rejected = true;
+    }
+    bool nonrational_source_rejected = false;
+    try {
+        static_cast<void>(
+            source_parabola_clearance_boundary(
+                {
+                    "irrational-radius-focus",
+                    {0, 1},
+                    {2, 0},
+                    2,
+                },
+                segment,
+                1));
+    }
+    catch (const NonRationalParabolaClearanceError&) {
+        nonrational_source_rejected = true;
+    }
+    return negative_radius_rejected
+        && nonrational_source_rejected;
+}
+
 bool clearance_boundaries_are_exact()
 {
     const RationalPrimitiveParameterization2 line{
@@ -938,6 +1058,102 @@ bool generic_graph_is_source_endpoint_reversal_invariant()
         segment_site_reversed_source_graph_spike());
 }
 
+bool generic_graph_clips_true_radius_parabola()
+{
+    const MatExactGraph2 graph =
+        segment_site_true_radius_graph_spike();
+    const std::vector<ExactAlgebraicInteger1>
+        coefficients{-20, 0, 8, 0, 1};
+    const std::string negative_event =
+        algebraic_root_id_v1(coefficients, 0);
+    const std::string positive_event =
+        algebraic_root_id_v1(coefficients, 1);
+    const std::set<std::string> expected_events{
+        negative_event,
+        positive_event,
+    };
+    std::map<std::string, std::size_t> event_counts;
+    const MatExactGraphEdge2* negative_component = nullptr;
+    const MatExactGraphEdge2* positive_component = nullptr;
+    std::size_t parabola_count = 0;
+    for (const MatExactGraphEdge2& edge : graph.edges) {
+        if (edge.primitive_kind != "PARABOLA"
+            || edge.generator_site_ids
+                != std::vector<std::string>(
+                    {"radius-focus", "radius-segment"})) {
+            continue;
+        }
+        ++parabola_count;
+        for (const MatParameterEndpoint2* endpoint :
+             {&edge.source_endpoint,
+              &edge.target_endpoint}) {
+            for (const std::string& provenance :
+                 endpoint->provenance_ids) {
+                if (expected_events.contains(provenance)) {
+                    if (!endpoint->parameter.has_value()
+                        || algebraic_root_identity_v1(
+                               *endpoint->parameter)
+                            != provenance) {
+                        return false;
+                    }
+                    ++event_counts[provenance];
+                }
+            }
+        }
+        if (has_provenance_id(
+                edge.source_endpoint,
+                "radius-segment-target")
+            && has_provenance_id(
+                edge.target_endpoint,
+                negative_event)) {
+            negative_component = &edge;
+        }
+        if (has_provenance_id(
+                edge.source_endpoint,
+                positive_event)
+            && has_provenance_id(
+                edge.target_endpoint,
+                "radius-segment-source")) {
+            positive_component = &edge;
+        }
+    }
+    if (graph.matched_generator_sites != 4
+        || parabola_count != 2
+        || negative_component == nullptr
+        || positive_component == nullptr
+        || !negative_component
+                ->source_endpoint.parameter.has_value()
+        || !negative_component
+                ->target_endpoint.parameter.has_value()
+        || !positive_component
+                ->source_endpoint.parameter.has_value()
+        || !positive_component
+                ->target_endpoint.parameter.has_value()) {
+        return false;
+    }
+    ExactAlgebraicKernel1 kernel;
+    return event_counts[negative_event] == 1
+        && event_counts[positive_event] == 1
+        && kernel.compare_1_object()(
+               *negative_component
+                    ->source_endpoint.parameter,
+               CORE::BigRat(-4))
+            == CGAL::EQUAL
+        && algebraic_root_identity_v1(
+               *negative_component
+                    ->target_endpoint.parameter)
+            == negative_event
+        && algebraic_root_identity_v1(
+               *positive_component
+                    ->source_endpoint.parameter)
+            == positive_event
+        && kernel.compare_1_object()(
+               *positive_component
+                    ->target_endpoint.parameter,
+               CORE::BigRat(4))
+            == CGAL::EQUAL;
+}
+
 struct PointLimiterFixture2 {
     MatTraits::Point_2 segment_source;
     MatTraits::Point_2 segment_target;
@@ -1498,6 +1714,7 @@ int main()
             && canonical_open_segment_sources_are_primitive()
             && canonical_open_segment_sources_reject_invalid_input()
             && parameter_domains_are_exact()
+            && source_parabola_clearance_is_exact()
             && clearance_boundaries_are_exact()
             && source_parabola_cell_bounds_stay_algebraic()
             && live_graph_is_exact()
@@ -1505,6 +1722,7 @@ int main()
             && generic_graph_unions_shared_voronoi_nodes()
             && generic_graph_binds_open_segment_endpoint_owners()
             && generic_graph_is_source_endpoint_reversal_invariant()
+            && generic_graph_clips_true_radius_parabola()
             && point_limiter_binds_live_parabola_endpoint()
             && rational_repeated_factor_binds_without_solver_precondition()
             && different_quadratic_field_is_rejected()

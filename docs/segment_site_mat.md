@@ -11,9 +11,10 @@ needed by every downstream traversal and engagement decision.
     Task 9 is in progress. The point/point production graph is locally green
     and independently reviewed. The bounded point/segment slice now takes its
     algebraic cell endpoints from live Voronoi halfedge owners, including
-    point and segment limiters. True-radius parabola clipping, the unified
-    segment-site traversal, segment/segment cells, neck evidence, proposal
-    sampling, and the Python binding are not complete.
+    point and segment limiters, and clips rational point/segment parabolas at
+    exact true-radius roots. The unified segment-site traversal,
+    segment/segment cells, neck evidence, proposal sampling, and the Python
+    binding are not complete.
 
     Do not treat the current native spike APIs as the final public MAT API.
     The maturity table below is the claim boundary.
@@ -357,6 +358,47 @@ An unbounded primitive is never discarded merely because its original domain
 is unbounded. A line or ray can have one or more bounded components inside a
 polygon with holes.
 
+### True-radius point/segment clearance
+
+For a rational point-site focus and canonical open-segment directrix,
+`source_parabola_clearance_boundary` substitutes the exact quadratic
+parameterization into:
+
+```text
+distance(point_site, p(t))² - r²
+```
+
+It clears denominators to one primitive integer polynomial of degree at most
+four, computes its canonical square-free part, and isolates all real roots
+before cell-domain filtering. Root ordinals therefore belong to the complete
+canonical curve chart and cannot change when a bounded Voronoi cell retains
+only a subset of them.
+
+The native production-path fixture uses focus `(0, 2)`, directrix `y = 0`,
+and `r² = 9/4`. Its canonical chart is:
+
+```text
+x(t) = -t
+y(t) = 1 + t²/4
+```
+
+The clearance boundary becomes:
+
+```text
+t⁴ + 8t² - 20 = 0
+```
+
+The exact roots `-√2` and `+√2` split the bounded source feature into two
+retained graph components. Each emitted algebraic endpoint reconstructs the
+same `AlgebraicRootIdV1` carried in its clearance provenance.
+
+Negative `r²` raises `NegativeClearanceRadiusSquaredError`. A source focus
+with a nonzero quadratic-field coefficient raises
+`NonRationalParabolaClearanceError`; normalized pocket point sites are
+rational, while general quadratic-field clearance remains outside this
+bounded slice. The native graph path accepts exact radius squared, but the
+public Python tool-radius binding remains pending.
+
 ### Constant-clearance cells
 
 Constant clearance is classified before square-free normalization:
@@ -491,7 +533,7 @@ consumers, or evolution differ from graph orchestration.
 | Point/segment source parameterization | implemented and native-gated | exact canonical supporting-line chart |
 | Point/segment endpoint ownership | wired and native-gated | exact for bounded point and segment limiter fixtures |
 | Algebraic point/segment cell bounds | implemented | exact |
-| True-radius parabola clearance | pending | no production claim |
+| True-radius point/segment clearance | implemented and native-gated | exact for rational point-site sources; public binding pending |
 | Segment/segment feature domains | pending | no production claim |
 | Unified degeneracy-removal traversal | pending | no production claim |
 | Degeneracy-normalized feature CSR | pending | no production claim |
