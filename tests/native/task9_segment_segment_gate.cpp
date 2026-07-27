@@ -19,6 +19,464 @@ bool same_unoriented_segment(
             && lhs.target() == rhs.source());
 }
 
+bool nonparallel_segment_segment_producer_contract()
+{
+    using Point = MatTraits::Point_2;
+    using Site = MatTraits::Site_2;
+    const Point lower_left(-20, 0);
+    const Point lower_right(8, 0);
+    const Point diagonal_lower(5, -4);
+    const Point diagonal_upper(20, 11);
+    const std::vector<GeneratorSite2> generators{
+        {"lower-left", Site::construct_site_2(lower_left)},
+        {"lower-right", Site::construct_site_2(lower_right)},
+        {
+            "diagonal-lower",
+            Site::construct_site_2(diagonal_lower),
+        },
+        {
+            "diagonal-upper",
+            Site::construct_site_2(diagonal_upper),
+        },
+        {
+            "lower-segment",
+            Site::construct_site_2(lower_left, lower_right),
+        },
+        {
+            "diagonal-segment",
+            Site::construct_site_2(
+                diagonal_lower,
+                diagonal_upper),
+        },
+    };
+    SegmentSiteDelaunay2 delaunay;
+    delaunay.insert(lower_left, lower_right);
+    delaunay.insert(diagonal_lower, diagonal_upper);
+    if (require_generator_site_bijection(
+            delaunay,
+            generators)
+        != 6) {
+        return false;
+    }
+
+    const CORE::Expr sqrt_two =
+        CORE::sqrt(CORE::Expr(2));
+    const Point upper_transition(
+        8,
+        CORE::Expr(1) + sqrt_two);
+    const Point lower_transition(
+        8,
+        CORE::Expr(1) - sqrt_two);
+    const Point upper_feature(
+        CORE::Expr(9)
+            - CORE::Expr(11) * sqrt_two,
+        CORE::Expr(22)
+            + CORE::Expr(11) * sqrt_two);
+    const Point lower_feature(
+        CORE::Expr(9)
+            - CORE::Expr(4) * sqrt_two,
+        CORE::Expr(-8)
+            + CORE::Expr(4) * sqrt_two);
+    const MatTraits::Segment_2 expected_upper(
+        upper_feature,
+        upper_transition);
+    const MatTraits::Segment_2 expected_lower(
+        lower_transition,
+        lower_feature);
+    const MatTraits::Segment_2 transition_span(
+        lower_transition,
+        upper_transition);
+
+    SegmentSiteVoronoi2 voronoi(delaunay);
+    std::size_t raw_segment_segment_edges = 0;
+    std::size_t rejected_transition_edges = 0;
+    std::size_t rejected_transition_segments = 0;
+    std::size_t rejected_transition_parabolas = 0;
+    for (auto edge = voronoi.dual().finite_edges_begin();
+         edge != voronoi.dual().finite_edges_end();
+         ++edge) {
+        const auto raw = *edge;
+        const auto face = raw.first;
+        const int index = raw.second;
+        const std::string first_id =
+            stable_generator_site_id(
+                face->vertex(
+                        voronoi.dual().ccw(index))
+                    ->site(),
+                generators);
+        const std::string second_id =
+            stable_generator_site_id(
+                face->vertex(
+                        voronoi.dual().cw(index))
+                    ->site(),
+                generators);
+        const CGAL::Object primal =
+            voronoi.dual().primal(raw);
+        const MatTraits::Segment_2* segment =
+            CGAL::object_cast<MatTraits::Segment_2>(
+                &primal);
+        const SegmentSiteParabola2* parabola =
+            CGAL::object_cast<SegmentSiteParabola2>(
+                &primal);
+        const std::vector<std::string> pair_ids =
+            ordered_generator_site_ids(
+                first_id,
+                second_id);
+        const bool rejected =
+            voronoi.edge_rejector()(
+                voronoi.dual(),
+                raw);
+        if (pair_ids
+            == std::vector<std::string>{
+                "diagonal-segment",
+                "lower-segment",
+            }) {
+            if (rejected || segment == nullptr
+                || (!same_unoriented_segment(
+                         *segment,
+                         expected_upper)
+                    && !same_unoriented_segment(
+                        *segment,
+                        expected_lower))) {
+                return false;
+            }
+            ++raw_segment_segment_edges;
+            continue;
+        }
+        if (!rejected) {
+            continue;
+        }
+        const bool expected_transition_pair =
+            pair_ids
+                == std::vector<std::string>{
+                    "diagonal-segment",
+                    "lower-right",
+                }
+            || pair_ids
+                == std::vector<std::string>{
+                    "lower-right",
+                    "lower-segment",
+                };
+        const bool segment_matches =
+            segment != nullptr
+            && same_unoriented_segment(
+                *segment,
+                transition_span);
+        const bool parabola_matches =
+            parabola != nullptr
+            && ((parabola->p1 == lower_transition
+                 && parabola->p2 == upper_transition)
+                || (parabola->p1 == upper_transition
+                    && parabola->p2
+                        == lower_transition));
+        if (!expected_transition_pair
+            || (!segment_matches
+                && !parabola_matches)) {
+            return false;
+        }
+        ++rejected_transition_edges;
+        rejected_transition_segments += segment_matches;
+        rejected_transition_parabolas += parabola_matches;
+    }
+
+    std::size_t normalized_segment_segment_edges = 0;
+    std::size_t matching_normalized_primitives = 0;
+    std::size_t composite_normalized_primitives = 0;
+    for (auto halfedge = voronoi.halfedges_begin();
+         halfedge != voronoi.halfedges_end();
+         ++halfedge) {
+        const std::string up_id =
+            stable_generator_site_id(
+                halfedge->up()->site(),
+                generators);
+        const std::string down_id =
+            stable_generator_site_id(
+                halfedge->down()->site(),
+                generators);
+        if (ordered_generator_site_ids(up_id, down_id)
+            != std::vector<std::string>{
+                "diagonal-segment",
+                "lower-segment",
+            }
+            || up_id != "diagonal-segment") {
+            continue;
+        }
+        if (!halfedge->has_source()
+            || !halfedge->has_target()) {
+            return false;
+        }
+        MatTraits::Segment_2 primal_segment;
+        if (!CGAL::assign(
+                primal_segment,
+                voronoi.dual().primal(
+                    halfedge->dual()))) {
+            return false;
+        }
+        const MatTraits::Segment_2 adaptor_segment(
+            halfedge->source()->point(),
+            halfedge->target()->point());
+        const std::string left_id =
+            stable_generator_site_id(
+                halfedge->left()->site(),
+                generators);
+        const std::string right_id =
+            stable_generator_site_id(
+                halfedge->right()->site(),
+                generators);
+        if (same_unoriented_segment(
+                primal_segment,
+                expected_upper)) {
+            if (!same_unoriented_segment(
+                    adaptor_segment,
+                    expected_upper)
+                || left_id != "diagonal-upper"
+                || right_id != "lower-right") {
+                return false;
+            }
+            ++matching_normalized_primitives;
+        } else if (same_unoriented_segment(
+                       primal_segment,
+                       expected_lower)) {
+            if (!same_unoriented_segment(
+                    adaptor_segment,
+                    MatTraits::Segment_2(
+                        lower_feature,
+                        upper_transition))
+                || left_id != "lower-right"
+                || right_id != "diagonal-lower") {
+                return false;
+            }
+            ++composite_normalized_primitives;
+        } else {
+            return false;
+        }
+        ++normalized_segment_segment_edges;
+    }
+    return raw_segment_segment_edges == 2
+        && rejected_transition_edges == 2
+        && rejected_transition_segments == 1
+        && rejected_transition_parabolas == 1
+        && normalized_segment_segment_edges == 2
+        && matching_normalized_primitives == 1
+        && composite_normalized_primitives == 1;
+}
+
+bool nonparallel_charts_equal(
+    const NonparallelSegmentBisectorParameterization2& lhs,
+    const NonparallelSegmentBisectorParameterization2& rhs)
+{
+    return lhs.first_segment_id == rhs.first_segment_id
+        && lhs.second_segment_id == rhs.second_segment_id
+        && lhs.branch_sign == rhs.branch_sign
+        && lhs.x_rational == rhs.x_rational
+        && lhs.x_radical == rhs.x_radical
+        && lhs.y_rational == rhs.y_rational
+        && lhs.y_radical == rhs.y_radical
+        && lhs.radicand == rhs.radicand;
+}
+
+bool nonparallel_segment_charts_are_exact()
+{
+    const MatExactOpenSegmentSource2 diagonal =
+        canonical_open_segment_source(
+            "diagonal-segment",
+            5,
+            -4,
+            20,
+            11);
+    const MatExactOpenSegmentSource2 lower =
+        canonical_open_segment_source(
+            "lower-segment",
+            -20,
+            0,
+            8,
+            0);
+    const CORE::Expr sqrt_two =
+        CORE::sqrt(CORE::Expr(2));
+    const MatTraits::Point_2 upper_feature(
+        CORE::Expr(9)
+            - CORE::Expr(11) * sqrt_two,
+        CORE::Expr(22)
+            + CORE::Expr(11) * sqrt_two);
+    const MatTraits::Point_2 upper_transition(
+        8,
+        CORE::Expr(1) + sqrt_two);
+    const MatTraits::Point_2 lower_transition(
+        8,
+        CORE::Expr(1) - sqrt_two);
+    const MatTraits::Point_2 lower_feature(
+        CORE::Expr(9)
+            - CORE::Expr(4) * sqrt_two,
+        CORE::Expr(-8)
+            + CORE::Expr(4) * sqrt_two);
+    const NonparallelSegmentBisectorParameterization2
+        upper =
+            nonparallel_segment_bisector_parameterization(
+                lower,
+                diagonal,
+                {
+                    upper_feature,
+                    upper_transition,
+                });
+    const NonparallelSegmentBisectorParameterization2
+        upper_reversed =
+            nonparallel_segment_bisector_parameterization(
+                canonical_open_segment_source(
+                    "diagonal-segment",
+                    20,
+                    11,
+                    5,
+                    -4),
+                canonical_open_segment_source(
+                    "lower-segment",
+                    8,
+                    0,
+                    -20,
+                    0),
+                {
+                    upper_transition,
+                    upper_feature,
+                });
+    const NonparallelSegmentBisectorParameterization2
+        lower_branch =
+            nonparallel_segment_bisector_parameterization(
+                diagonal,
+                lower,
+                {
+                    lower_transition,
+                    lower_feature,
+                });
+    if (upper.first_segment_id != "diagonal-segment"
+        || upper.second_segment_id != "lower-segment"
+        || upper.branch_sign != 1
+        || upper.radicand != 2
+        || upper.x_rational
+            != std::vector<CORE::BigRat>{9, -1}
+        || upper.x_radical
+            != std::vector<CORE::BigRat>{0, 1}
+        || upper.y_rational
+            != std::vector<CORE::BigRat>{0, -1}
+        || upper.y_radical
+            != std::vector<CORE::BigRat>{0, 0}
+        || !nonparallel_charts_equal(
+            upper,
+            upper_reversed)
+        || lower_branch.branch_sign != -1
+        || lower_branch.radicand != 2
+        || lower_branch.x_rational
+            != std::vector<CORE::BigRat>{9, 1}
+        || lower_branch.x_radical
+            != std::vector<CORE::BigRat>{0, 1}
+        || lower_branch.y_rational
+            != std::vector<CORE::BigRat>{0, 1}
+        || lower_branch.y_radical
+            != std::vector<CORE::BigRat>{0, 0}) {
+        return false;
+    }
+
+    const MatExactOpenSegmentSource2 horizontal =
+        canonical_open_segment_source(
+            "horizontal",
+            -4,
+            0,
+            4,
+            0);
+    const MatExactOpenSegmentSource2 vertical =
+        canonical_open_segment_source(
+            "vertical",
+            5,
+            -4,
+            5,
+            4);
+    const NonparallelSegmentBisectorParameterization2
+        rational =
+            nonparallel_segment_bisector_parameterization(
+                horizontal,
+                vertical,
+                {
+                    {1, 4},
+                    {4, 1},
+                });
+    return rational.branch_sign == 1
+        && rational.radicand == 1
+        && rational.x_rational
+            == std::vector<CORE::BigRat>{5, 1}
+        && rational.x_radical
+            == std::vector<CORE::BigRat>{0, 0}
+        && rational.y_rational
+            == std::vector<CORE::BigRat>{0, -1}
+        && rational.y_radical
+            == std::vector<CORE::BigRat>{0, 0};
+}
+
+bool unsupported_nonparallel_charts_fail_loudly()
+{
+    const MatExactOpenSegmentSource2 horizontal =
+        canonical_open_segment_source(
+            "horizontal",
+            -4,
+            0,
+            4,
+            0);
+    const MatExactOpenSegmentSource2 parallel =
+        canonical_open_segment_source(
+            "parallel",
+            -4,
+            3,
+            4,
+            3);
+    const MatExactOpenSegmentSource2 diagonal =
+        canonical_open_segment_source(
+            "diagonal",
+            5,
+            -4,
+            20,
+            11);
+    bool parallel_rejected = false;
+    bool degenerate_primitive_rejected = false;
+    bool unbound_branch_rejected = false;
+    try {
+        static_cast<void>(
+            nonparallel_segment_bisector_parameterization(
+                horizontal,
+                parallel,
+                {
+                    {0, CORE::BigRat(3, 2)},
+                    {1, CORE::BigRat(3, 2)},
+                }));
+    } catch (const ParallelSegmentSupportsError&) {
+        parallel_rejected = true;
+    }
+    try {
+        static_cast<void>(
+            nonparallel_segment_bisector_parameterization(
+                horizontal,
+                diagonal,
+                {
+                    {9, 0},
+                    {9, 0},
+                }));
+    } catch (const DegenerateLiveSegmentPrimitiveError&) {
+        degenerate_primitive_rejected = true;
+    }
+    try {
+        static_cast<void>(
+            nonparallel_segment_bisector_parameterization(
+                horizontal,
+                diagonal,
+                {
+                    {0, 0},
+                    {1, 0},
+                }));
+    } catch (
+        const UnboundNonparallelSegmentBranchError&) {
+        unbound_branch_rejected = true;
+    }
+    return parallel_rejected
+        && degenerate_primitive_rejected
+        && unbound_branch_rejected;
+}
+
 bool has_provenance(
     const MatParameterEndpoint2& endpoint,
     const std::string& expected)
@@ -668,5 +1126,8 @@ bool segment_segment_producer_gate()
     if (!unsupported_parallel_inputs_fail_loudly()) {
         return false;
     }
-    return segment_segment_production_graph_gate();
+    return segment_segment_production_graph_gate()
+        && nonparallel_segment_segment_producer_contract()
+        && nonparallel_segment_charts_are_exact()
+        && unsupported_nonparallel_charts_fail_loudly();
 }

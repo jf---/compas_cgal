@@ -363,8 +363,92 @@ classifications:
 Complete graph records are identical after reversing both segment endpoint
 orders. Horizontal, vertical, and rational diagonal charts have independent
 native goldens. Nonparallel S–S supports remain outside this completed slice:
-they require a canonical quadratic-field angle-bisector chart and algebraic
-limiter/domain binding.
+their raw exact primitives now have a canonical quadratic-field
+angle-bisector chart, while algebraic feature and limiter binding and graph
+emission remain incomplete.
+
+### Nonparallel S–S branches have exact source-bound charts
+
+!!! note "Why this slice is unusually difficult"
+
+    A production nonparallel S–S edge must keep four contracts aligned:
+    the mathematical angle-bisector branch, the raw SDG primal, the
+    degeneracy-normalized Voronoi adjacency, and the stable certificate
+    identity. No one CGAL object owns all four. The raw primal owns one exact
+    curve primitive; the adaptor owns normalized connectivity and may traverse
+    rejected primitives; the caller owns stable generator provenance; and the
+    canonical chart owns algebraic parameter and branch identity.
+
+    These layers may agree geometrically while disagreeing structurally.
+    Rendered coordinates can therefore look correct even when branch IDs
+    collide, endpoint ownership is wrong, or a normalized halfedge spans more
+    geometry than its representative primal. The implementation proves each
+    correspondence separately rather than treating any one handle, coordinate,
+    or iteration order as universal truth.
+
+Let the canonical supporting lines, ordered by stable segment identity, be
+
+```text
+ℓ₁(x, y) = a₁x + b₁y + c₁
+ℓ₂(x, y) = a₂x + b₂y + c₂
+```
+
+and let `nᵢ = aᵢ² + bᵢ²`. Their two Euclidean angle bisectors are represented
+without division or floating-point normalization by
+
+```text
+n₂ ℓ₁(x, y) + s sqrt(n₁ n₂) ℓ₂(x, y) = 0,  s ∈ {-1, +1}.
+```
+
+`nonparallel_segment_bisector_parameterization` constructs both lines in the
+exact kernel and requires both endpoints of the live raw `SDG::primal()`
+segment to lie on exactly one branch. That exact incidence test binds `s`.
+Endpoint order never selects the branch. A zero-length primitive, parallel
+supports, or a primitive on neither branch raises a distinct named error.
+
+The chart origin is the rational intersection of `ℓ₁` and `ℓ₂`. Before
+orientation normalization, a tangent to branch `s` is
+
+```text
+(
+  n₂b₁ + s sqrt(n₁n₂)b₂,
+ -n₂a₁ - s sqrt(n₁n₂)a₂
+).
+```
+
+The exact sign of the first nonzero quadratic-field coordinate fixes its
+orientation. Stable source ordering fixes the branch equation; exact tangent
+sign fixes the parameter direction. These are deliberately separate
+invariants. Reversing either source segment, swapping factory arguments, or
+reversing the live primitive therefore produces byte-identical chart
+coefficients and the same branch identity.
+
+If `n₁n₂` is a rational square, the factory folds every radical coefficient
+into its rational coefficient and records canonical radicand `1`. A rational
+bisector cannot retain a cosmetically quadratic representation. The native
+goldens cover both branches in `Q(sqrt(2))` and a perpendicular rational
+fixture.
+
+!!! warning "A nonparallel generator pair has two branch identities"
+
+    The exact producer fixture pairs a horizontal support of squared normal
+    length `1` with a 45-degree support of squared normal length `2`. The
+    degeneracy-removal adaptor exposes two distinct bounded S–S halfedges for
+    the same ordered generator pair, one on each
+    `Q(sqrt(2))` angle-bisector branch; they meet at the feature transition
+    owned by `lower-right`. A generator-pair-only dual ID would collide, and
+    the parallel slice's unique-halfedge rule would reject valid topology.
+    The nonparallel implementation must bind a canonical branch identity to
+    every original dual before graph emission.
+
+    The same fixture also proves that `halfedge->dual()` is not invariably the
+    complete geometric payload after degeneracy removal. One normalized
+    halfedge reports adaptor endpoint `(8, 1 + sqrt(2))`, while its underlying
+    exact primal segment ends at `(8, 1 - sqrt(2))`; the other branch retains
+    adaptor/primal equality. Nonparallel emission must resolve the adaptor's
+    underlying edge-chain semantics or traverse raw SDG primitives and rebuild
+    normalized adjacency. Substituting adaptor endpoints into the representative
+    primal curve is forbidden.
 
 The following `Parabola_segment_2` APIs are visualization paths and are
 forbidden from proof decisions:
