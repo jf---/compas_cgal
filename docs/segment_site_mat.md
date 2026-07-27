@@ -470,7 +470,7 @@ Before accepting a MAT change, verify:
 9. Is node provenance unioned over all incident halfedges?
 10. Can sampling refinement change only proposal fields?
 11. Does every unsupported producer state fail with a named exception?
-12. Do the native gate, focused Python tests, legacy toolpath tests, and
+12. Do the native gate, focused Python tests, existing toolpath regression tests, and
     strict MkDocs build pass?
 
 ## Authoritative references

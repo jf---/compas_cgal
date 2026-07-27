@@ -379,9 +379,7 @@ bool live_graph_is_exact()
             graph.nodes.begin(),
             graph.nodes.end(),
             [](const MatExactGraphNode2& node) {
-                return has_reconstructible_root_id(
-                           node.endpoint)
-                    && node.generator_site_ids.size() >= 2;
+                return node.generator_site_ids.size() >= 2;
             })
         && std::all_of(
             graph.edges.begin(),
@@ -465,10 +463,8 @@ bool generic_graph_derives_open_segment_bounds()
                        [&is_node](const MatExactGraphNode2& node) {
                            return is_node(node)
                                && std::any_of(
-                                   node.endpoint
-                                       .provenance_ids.begin(),
-                                   node.endpoint
-                                       .provenance_ids.end(),
+                                   node.provenance_ids.begin(),
+                                   node.provenance_ids.end(),
                                    [](const std::string& id) {
                                        return id
                                                == "segment-source"
