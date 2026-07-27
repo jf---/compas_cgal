@@ -4,6 +4,7 @@
 #include "segment_site_provenance.h"
 
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -16,6 +17,11 @@ struct ClearanceRootBoundary2 {
     std::optional<CGAL::Sign> constant_sign;
     std::vector<ExactAlgebraicInteger1> primitive_coefficients;
     std::vector<ClearanceRootEvent2> roots;
+};
+
+class InvalidParabolaCellDomainError : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
 };
 
 ClearanceRootBoundary2 point_clearance_boundary(
@@ -49,7 +55,7 @@ clip_source_parabola_clearance_components(
     const std::string& original_dual_id,
     const MatExactPointSiteSource2& point_site,
     const MatExactOpenSegmentSource2& segment_site,
-    const std::optional<CORE::BigRat>& domain_lower,
-    const std::optional<CORE::BigRat>& domain_upper,
+    const MatParameterEndpoint2& domain_lower,
+    const MatParameterEndpoint2& domain_upper,
     const ClearanceRootBoundary2& boundary,
     const MatDomainPolygonWithHoles2& domain);

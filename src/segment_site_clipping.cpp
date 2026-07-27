@@ -215,8 +215,8 @@ void append_source_parabola_intersections(
     const MatDomainPolygon2& polygon,
     const std::string& ring_id,
     const SourceParabolaParameterization2& primitive,
-    const std::optional<CORE::BigRat>& domain_lower,
-    const std::optional<CORE::BigRat>& domain_upper,
+    const MatParameterEndpoint2& domain_lower,
+    const MatParameterEndpoint2& domain_upper,
     std::vector<AlgebraicDomainRoot2>& roots)
 {
     ExactAlgebraicKernel1 kernel1;
@@ -284,11 +284,15 @@ void append_source_parabola_intersections(
                     == CGAL::SMALLER
                 || compare(edge_parameter, CORE::BigRat(1))
                     == CGAL::LARGER
-                || (domain_lower.has_value()
-                    && compare(parameter, *domain_lower)
+                || (domain_lower.parameter.has_value()
+                    && compare(
+                           parameter,
+                           *domain_lower.parameter)
                         == CGAL::SMALLER)
-                || (domain_upper.has_value()
-                    && compare(parameter, *domain_upper)
+                || (domain_upper.parameter.has_value()
+                    && compare(
+                           parameter,
+                           *domain_upper.parameter)
                         == CGAL::LARGER)) {
                 continue;
             }
@@ -309,8 +313,8 @@ std::vector<AlgebraicDomainRoot2>
 source_parabola_domain_roots(
     const std::string& dual_id,
     const SourceParabolaParameterization2& primitive,
-    const std::optional<CORE::BigRat>& domain_lower,
-    const std::optional<CORE::BigRat>& domain_upper,
+    const MatParameterEndpoint2& domain_lower,
+    const MatParameterEndpoint2& domain_upper,
     const MatDomainPolygonWithHoles2& domain)
 {
     std::vector<AlgebraicDomainRoot2> roots;
@@ -639,7 +643,8 @@ maximal_clearance_components(
 std::vector<MatAdmissibleComponent2>
 clip_clearance_components_with_domain_roots(
     const std::string& original_dual_id,
-    const RationalPrimitiveParameterization2& primitive,
+    const MatParameterEndpoint2& domain_lower,
+    const MatParameterEndpoint2& domain_upper,
     const ClearanceRootBoundary2& boundary,
     const std::function<bool(const CORE::BigRat&)>&
         domain_cell_contains,
@@ -662,27 +667,40 @@ clip_clearance_components_with_domain_roots(
     };
     ExactAlgebraicKernel1 kernel;
     CombinedEndpoint2 lower{
-        domain_endpoint(
-            original_dual_id,
-            "lower",
-            primitive.domain_lower,
-            kernel),
+        domain_lower,
         false,
         false,
     };
     CombinedEndpoint2 upper{
-        domain_endpoint(
-            original_dual_id,
-            "upper",
-            primitive.domain_upper,
-            kernel),
+        domain_upper,
         false,
         false,
     };
+    const auto compare = kernel.compare_1_object();
+    const auto is_in_domain =
+        [&lower, &upper, &compare](
+            const ExactAlgebraicKernel1::Algebraic_real_1&
+                parameter) {
+            return
+                (!lower.endpoint.parameter.has_value()
+                 || compare(
+                        parameter,
+                        *lower.endpoint.parameter)
+                     != CGAL::SMALLER)
+                && (!upper.endpoint.parameter.has_value()
+                    || compare(
+                           parameter,
+                           *upper.endpoint.parameter)
+                        != CGAL::LARGER);
+        };
     std::vector<CombinedEndpoint2> candidates;
     for (std::size_t index = 0;
          index < boundary.roots.size();
          ++index) {
+        if (!is_in_domain(
+                boundary.roots[index].parameter)) {
+            continue;
+        }
         candidates.push_back(
             {
                 {
@@ -696,6 +714,9 @@ clip_clearance_components_with_domain_roots(
             });
     }
     for (const AlgebraicDomainRoot2& root : domain_roots) {
+        if (!is_in_domain(root.parameter)) {
+            continue;
+        }
         candidates.push_back(
             {
                 {
@@ -706,7 +727,6 @@ clip_clearance_components_with_domain_roots(
                 true,
             });
     }
-    const auto compare = kernel.compare_1_object();
     std::sort(
         candidates.begin(),
         candidates.end(),
@@ -903,7 +923,16 @@ clip_linear_clearance_components(
     }
     return clip_clearance_components_with_domain_roots(
         original_dual_id,
-        primitive,
+        domain_endpoint(
+            original_dual_id,
+            "lower",
+            primitive.domain_lower,
+            kernel),
+        domain_endpoint(
+            original_dual_id,
+            "upper",
+            primitive.domain_upper,
+            kernel),
         boundary,
         [&domain, &primitive](const CORE::BigRat& parameter) {
             return domain_contains(
@@ -925,9 +954,19 @@ clip_parabola_clearance_components(
     const ClearanceRootBoundary2& boundary,
     const MatDomainPolygonWithHoles2& domain)
 {
+    ExactAlgebraicKernel1 kernel;
     return clip_clearance_components_with_domain_roots(
         original_dual_id,
-        primitive,
+        domain_endpoint(
+            original_dual_id,
+            "lower",
+            primitive.domain_lower,
+            kernel),
+        domain_endpoint(
+            original_dual_id,
+            "upper",
+            primitive.domain_upper,
+            kernel),
         boundary,
         [&domain, &primitive](const CORE::BigRat& parameter) {
             return domain_contains(
@@ -950,25 +989,37 @@ clip_source_parabola_clearance_components(
     const std::string& original_dual_id,
     const MatExactPointSiteSource2& point_site,
     const MatExactOpenSegmentSource2& segment_site,
-    const std::optional<CORE::BigRat>& domain_lower,
-    const std::optional<CORE::BigRat>& domain_upper,
+    const MatParameterEndpoint2& domain_lower,
+    const MatParameterEndpoint2& domain_upper,
     const ClearanceRootBoundary2& boundary,
     const MatDomainPolygonWithHoles2& domain)
 {
+    if (!domain_lower.parameter.has_value()
+        || !domain_upper.parameter.has_value()) {
+        throw InvalidParabolaCellDomainError(
+            "source parabola cell requires two bounded endpoints");
+    }
+    ExactAlgebraicKernel1 kernel;
+    if (kernel.compare_1_object()(
+            *domain_lower.parameter,
+            *domain_upper.parameter)
+        != CGAL::SMALLER) {
+        throw InvalidParabolaCellDomainError(
+            "source parabola cell endpoints are not strictly ordered");
+    }
+    if (domain_lower.provenance_ids.empty()
+        || domain_upper.provenance_ids.empty()) {
+        throw InvalidParabolaCellDomainError(
+            "source parabola cell endpoint ownership is empty");
+    }
     const SourceParabolaParameterization2 source =
         source_parameterization(
             point_site,
             segment_site);
-    const RationalPrimitiveParameterization2
-        parameter_domain{
-            {CORE::BigRat(0)},
-            {CORE::BigRat(0)},
-            domain_lower,
-            domain_upper,
-        };
     return clip_clearance_components_with_domain_roots(
         original_dual_id,
-        parameter_domain,
+        domain_lower,
+        domain_upper,
         boundary,
         [&domain, &source](const CORE::BigRat& parameter) {
             return source_domain_contains(

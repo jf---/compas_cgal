@@ -5,6 +5,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <CGAL/Algebraic_structure_traits.h>
@@ -69,11 +70,45 @@ struct MatExactPointSiteSource2 {
     CORE::BigRat radicand;
 };
 
-struct MatExactOpenSegmentSource2 {
-    std::string stable_site_id;
-    CORE::BigRat line_a;
-    CORE::BigRat line_b;
-    CORE::BigRat line_c;
+class MatExactOpenSegmentSource2 {
+public:
+    const std::string stable_site_id;
+    const CORE::BigRat line_a;
+    const CORE::BigRat line_b;
+    const CORE::BigRat line_c;
+
+private:
+    MatExactOpenSegmentSource2(
+        std::string stable_site_id,
+        CORE::BigRat line_a,
+        CORE::BigRat line_b,
+        CORE::BigRat line_c)
+        : stable_site_id(std::move(stable_site_id)),
+          line_a(std::move(line_a)),
+          line_b(std::move(line_b)),
+          line_c(std::move(line_c))
+    {
+    }
+
+    friend MatExactOpenSegmentSource2
+    canonical_open_segment_source(
+        std::string stable_site_id,
+        const CORE::BigRat& source_x,
+        const CORE::BigRat& source_y,
+        const CORE::BigRat& target_x,
+        const CORE::BigRat& target_y);
+};
+
+class EmptyOpenSegmentSourceIdentityError
+    : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
+
+class DegenerateOpenSegmentSourceError
+    : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
 };
 
 class InvalidRationalPrimitiveError : public std::runtime_error {
@@ -85,6 +120,13 @@ class OverlappingDomainBoundaryError : public std::runtime_error {
 public:
     using std::runtime_error::runtime_error;
 };
+
+MatExactOpenSegmentSource2 canonical_open_segment_source(
+    std::string stable_site_id,
+    const CORE::BigRat& source_x,
+    const CORE::BigRat& source_y,
+    const CORE::BigRat& target_x,
+    const CORE::BigRat& target_y);
 
 using RationalPolynomial = std::vector<CORE::BigRat>;
 
