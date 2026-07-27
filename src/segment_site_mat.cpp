@@ -2457,6 +2457,86 @@ MatExactGraph2 segment_limited_parallel_segment_graph_spike_impl(
         segment_segment_spike_domain(-1, 5));
 }
 
+MatExactGraph2 rectangle_central_parallel_graph_spike_impl(
+    const bool reverse_segment_endpoints,
+    const CORE::BigRat& radius_squared)
+{
+    const std::vector<NormalizedPointSource2> points{
+        {"lower-left", -4, -2},
+        {"lower-right", 4, -2},
+        {"upper-right", 4, 2},
+        {"upper-left", -4, 2},
+    };
+    const std::vector<NormalizedOpenSegmentSource2> segments{
+        {
+            "bottom-segment",
+            reverse_segment_endpoints
+                ? "lower-right"
+                : "lower-left",
+            reverse_segment_endpoints
+                ? "lower-left"
+                : "lower-right",
+        },
+        {
+            "right-segment",
+            reverse_segment_endpoints
+                ? "upper-right"
+                : "lower-right",
+            reverse_segment_endpoints
+                ? "lower-right"
+                : "upper-right",
+        },
+        {
+            "top-segment",
+            reverse_segment_endpoints
+                ? "upper-left"
+                : "upper-right",
+            reverse_segment_endpoints
+                ? "upper-right"
+                : "upper-left",
+        },
+        {
+            "left-segment",
+            reverse_segment_endpoints
+                ? "lower-left"
+                : "upper-left",
+            reverse_segment_endpoints
+                ? "upper-left"
+                : "lower-left",
+        },
+    };
+    MatDomainPolygon2 outer;
+    outer.push_back({-4, -2});
+    outer.push_back({4, -2});
+    outer.push_back({4, 2});
+    outer.push_back({-4, 2});
+    MatExactGraph2 graph{{}, {}, 0, 0};
+    std::map<std::string, std::size_t> node_indices;
+    append_parallel_segment_segment_graph(
+        points,
+        segments,
+        "bottom-segment",
+        "top-segment",
+        MatDomainPolygonWithHoles2(outer),
+        radius_squared,
+        {},
+        {
+            exact_segment_source(
+                normalized_segment_source(
+                    segments,
+                    "left-segment"),
+                points),
+            exact_segment_source(
+                normalized_segment_source(
+                    segments,
+                    "right-segment"),
+                points),
+        },
+        graph,
+        node_indices);
+    return graph;
+}
+
 MatExactGraph2 nonparallel_segment_graph_spike_impl(
     const bool reverse_segment_endpoints,
     const CORE::BigRat& radius_squared)
@@ -2588,6 +2668,29 @@ segment_site_reversed_segment_limited_parallel_segment_graph_spike()
     return segment_limited_parallel_segment_graph_spike_impl(
         true,
         CORE::BigRat(9, 4));
+}
+
+MatExactGraph2
+segment_site_rectangle_central_parallel_graph_spike()
+{
+    return segment_site_rectangle_central_parallel_graph_spike(4);
+}
+
+MatExactGraph2
+segment_site_rectangle_central_parallel_graph_spike(
+    const CORE::BigRat& radius_squared)
+{
+    return rectangle_central_parallel_graph_spike_impl(
+        false,
+        radius_squared);
+}
+
+MatExactGraph2
+segment_site_reversed_rectangle_central_parallel_graph_spike()
+{
+    return rectangle_central_parallel_graph_spike_impl(
+        true,
+        4);
 }
 
 MatExactGraph2
