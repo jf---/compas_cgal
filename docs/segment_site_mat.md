@@ -33,11 +33,15 @@ needed by every downstream traversal and engagement decision.
     primitive and parent ownership, and survives exact radius clipping.
     Canonical graph nodes now project once into deterministic `int64`
     node-site CSR; the six-node rectangle golden locks offsets and flattened
-    stable feature order.
+    stable feature order. A canonical MAT site catalog now consumes Task 3's
+    already-normalized rings, emits exact point/open-segment sites with typed
+    `(kind, ring, feature)` provenance, retains segment endpoint ownership,
+    and maps catalog-bound stable node-site identities to numeric CSR without
+    parsing those identities.
     General arbitrary-pocket traversal, externally limited and composite
-    segment/segment cells, endpoint-feature CSR, numeric site-provenance
-    indexing, neck evidence, proposal sampling, and the Python binding are not
-    complete.
+    segment/segment cells, production-graph adoption of the canonical site
+    catalog, endpoint-feature CSR, public numeric-table integration, neck
+    evidence, proposal sampling, and the Python binding are not complete.
 
     Do not treat the current native spike APIs as the final public MAT API.
     The maturity table below is the claim boundary.
@@ -72,7 +76,7 @@ construction.
 | Dimension | Comparative status | Held–Pfeiffer 2025 | Exact-certified Phase 1 |
 | --- | --- | --- | --- |
 | Pocket geometry | incomplete | Segments and circular arcs; simply connected; machinability assumed after an `r + ε` transformation | Raw MAT primitives now clip exactly against polygonal domains with holes and exact radius clearance; the rectangle `C_r` graph is unified, but general arbitrary-pocket traversal is incomplete; circular boundaries are not supported |
-| MAT backend | stronger exact contract on a bounded fixture; incomplete end-to-end | Vroni/ArcVroni used end-to-end | Exact CGAL point graph plus bounded P–S and parallel/nonparallel S–S cells; one four-segment rectangle build now yields a reversal-invariant five-edge/six-node graph with exact radius clipping, feature-triple node identity, and explicit rejection of eight incident P–S rays; arbitrary-pocket traversal remains incomplete |
+| MAT backend | stronger exact contract on a bounded fixture; incomplete end-to-end | Vroni/ArcVroni used end-to-end | Exact CGAL point graph plus bounded P–S and parallel/nonparallel S–S cells; one four-segment rectangle build now yields a reversal-invariant five-edge/six-node graph with exact radius clipping, feature-triple node identity, and explicit rejection of eight incident P–S rays; a Task 3-derived typed site catalog prevents a second normalization pass, but arbitrary-pocket traversal and catalog-to-production-graph integration remain incomplete |
 | Engagement limit | stronger contract; incomplete integration | Analytic circle construction followed by bisection until `θmax − 0.001 <= θ <= θmax` radians | Exact rational chord surrogate and event-exact segment/full-circle certification; integration incomplete |
 | Candidate spacing | incomplete | Bisection along the middle curve | Finite candidate lattice; no monotonic-feasibility assumption |
 | Machined state | stronger contract | Ordered contour of prior machining disks; transition sweeps omitted from that contour model | Exact stock mutation and exact full-sweep coverage, ordered certify-before-deplete |
@@ -164,7 +168,10 @@ certificate from Hausdorff closeness.
 The target Task 9 dataflow is:
 
 ```text
-normalized ring vertices + open segments + exact radius²
+Task 3 canonical rings + exact radius²
+                         │
+                         ▼
+typed point/open-segment site catalog
                          │
                          ▼
 segment-Delaunay graph with stable caller provenance
@@ -1131,9 +1138,59 @@ graph has the valid CSR sentinel `[0]`. Offsets are `int64`; overflow raises
     create a second topology algorithm and could make certificate bytes
     disagree with the edge graph they encode.
 
-This slice preserves stable string identities. The future public binding must
-map them exactly once through the canonical numeric `site_provenance` table;
-it may not derive integer IDs from iteration order.
+### Canonical site catalog and numeric identity
+
+`canonical_mat_site_catalog` consumes `CanonicalReachInput2`; it does not
+orient, rotate, sort, or otherwise normalize rings again. Task 3 remains the
+sole owner of:
+
+- exact binary64 injection;
+- outer/hole orientation;
+- minimal ring rotation;
+- identity sorting of holes;
+- canonical feature ordinals.
+
+The catalog enumerates one exact point site and one exact open-segment site per
+canonical ring feature. `ReachKernelPoint` and the segment-Delaunay
+`MatTraits::Point_2` are compile-time-proven identical exact types, so this
+handoff has no coordinate conversion or reporting seam. Every open-segment
+record also stores the two canonical point-site identities that own its
+endpoints.
+
+The public `site_provenance[S,3]` convention is:
+
+| Column | Encoding |
+| --- | --- |
+| kind | `0` point site; `1` open-segment site |
+| ring | `0` outer ring; `1 + canonical_hole_ordinal` for holes |
+| feature | canonical vertex ordinal for a point; canonical directed-edge start ordinal for an open segment |
+
+Catalog rows and versioned stable identities share lexicographic
+`(kind, ring, feature)` order. The stable identity is an opaque exact record;
+consumers must not parse it. `numeric_node_site_csr` first projects canonical
+node incidence through `node_site_csr`, then resolves each stable identity by
+catalog lookup. An identity outside the input's catalog raises
+`UnknownMatSiteIdentityError`.
+
+!!! warning "One normalization owner, one numeric translation"
+
+    Rebuilding ring orientation or hole order inside Task 9 would make MAT
+    site IDs diverge from the `C_r` digest even if the coordinates happened to
+    match. Conversely, assigning integers during CGAL traversal would make
+    IDs depend on adaptor iteration. Canonical input owns geometry identity;
+    the site catalog owns the single stable-to-numeric translation.
+
+Radius is deliberately absent from site provenance because changing tool
+radius does not change the pocket's generator features. The Task 3
+center-domain digest and final MAT certificate bind the exact radius
+independently.
+
+The catalog and numeric mapper are native-gated on rectangle symmetry, exact
+site geometry, canonical hole reordering, hand-derived table rows, empty CSR,
+and unknown-site rejection. The current unified rectangle graph still uses
+its bounded-fixture source names; replacing that construction with direct
+catalog consumption is a later additive production path, not part of this
+slice.
 
 ## Failure anatomy: four cocircular point sites
 
@@ -1214,6 +1271,7 @@ Refinement may change the number and position of samples. It must not change:
 
 | File | Responsibility |
 | --- | --- |
+| `segment_site_catalog.*` | Task 3-derived exact sites, typed numeric provenance, and stable catalog lookup |
 | `segment_site_parameterization.*` | exact primitive domains and coordinate functions |
 | `segment_site_clipping.*` | exact domain and clearance roots; maximal admissible cells |
 | `segment_site_provenance.*` | stable site/root provenance and endpoint evidence |
@@ -1251,7 +1309,9 @@ consumers, or evolution differ from graph orchestration.
 | General segment/segment cells | pending | unbounded, arbitrary externally limited, multi-transition, and arbitrary-length composite chains have no production graph claim |
 | General degeneracy-removal traversal | pending | the rectangle fixture is production-gated; arbitrary pockets and all primitive combinations have no production claim |
 | Degeneracy-normalized node-site CSR | implemented and native-gated | deterministic `int64` offsets and stable feature IDs projected from canonical nodes; six-node rectangle golden and malformed-order failures |
-| Endpoint-feature CSR and numeric site table | pending | no public binding or complete certificate claim |
+| Canonical typed site catalog | implemented and native-gated | exact point/open-segment sites derived from Task 3 canonical rings; global ring encoding, endpoint ownership, symmetry, and hole-order invariance |
+| Numeric node-site catalog mapping | implemented and native-gated | catalog-bound graph identities map once to `int64` rows; unknown identities fail loud; unified rectangle adoption pending |
+| Endpoint-feature CSR and public numeric table | pending | no public binding or complete certificate claim |
 | Exact neck evidence | pending | no production claim |
 | Proposal-only sampling | pending | no production claim |
 | Python fixed-tuple binding | pending | no public API claim |
@@ -1311,12 +1371,16 @@ parallel S–S, raw nonparallel S–S algebra, one externally
 open-segment-limited nonparallel rectangle cell, the bounded two-branch
 normalized fixture, and one unified rectangle graph. They do not establish
 general arbitrary-pocket traversal, externally limited composite S–S cells,
-endpoint-feature CSR, or the numeric site-provenance table. A separate
+endpoint-feature CSR, or public numeric-table integration. A separate
 graph-emission contract retains an increasing algebraic interval, omits an
 equal-bound singleton, and raises `InvalidSegmentSiteGraphComponentError` for
 unbounded or reversed components. The node-site CSR gate separately locks the
 empty sentinel, `int64` offsets, hand-derived rectangle feature order, and
-distinct named failures for malformed node or feature ordering.
+distinct named failures for malformed node or feature ordering. The canonical
+site-catalog gate independently locks Task 3 input reuse, point/open-segment
+kind codes, global outer/hole ring rows, exact endpoint ownership, rectangle
+rotation/reversal invariance, canonical hole reordering, numeric CSR lookup,
+the empty sentinel, and named unknown-site rejection.
 
 The final Task 9 boundary must add the still-absent Python MAT binding test and
 then requires:

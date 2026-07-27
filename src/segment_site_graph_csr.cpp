@@ -1,5 +1,7 @@
 #include "segment_site_graph_csr.h"
 
+#include "segment_site_catalog.h"
+
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -79,4 +81,25 @@ node_site_csr(const MatExactGraph2& graph)
                 csr.node_site_ids.size()));
     }
     return csr;
+}
+
+MatNumericNodeSiteCsr2
+numeric_node_site_csr(
+    const MatExactGraph2& graph,
+    const CanonicalMatSiteCatalog2& catalog)
+{
+    MatNodeSiteCsr2 stable =
+        node_site_csr(graph);
+    MatNumericNodeSiteCsr2 numeric{
+        std::move(stable.node_site_offsets),
+        {},
+    };
+    numeric.node_site_ids.reserve(
+        stable.node_site_ids.size());
+    for (const std::string& stable_id :
+         stable.node_site_ids) {
+        numeric.node_site_ids.push_back(
+            catalog.index_of(stable_id));
+    }
+    return numeric;
 }

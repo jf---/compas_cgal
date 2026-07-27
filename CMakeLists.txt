@@ -229,7 +229,9 @@ add_executable(task9_mat_compile_gate EXCLUDE_FROM_ALL
     tests/native/task9_segment_limiter_gate.cpp
     tests/native/task9_segment_segment_gate.cpp
     tests/native/task9_graph_csr_gate.cpp
+    tests/native/task9_site_catalog_gate.cpp
     src/segment_site_mat.cpp
+    src/segment_site_catalog.cpp
     src/segment_site_graph_emission.cpp
     src/segment_site_graph_csr.cpp
     src/segment_site_mat_spikes.cpp
@@ -238,6 +240,8 @@ add_executable(task9_mat_compile_gate EXCLUDE_FROM_ALL
     src/segment_site_endpoint_binding.cpp
     src/segment_site_provenance.cpp
     src/exact_algebraic_1.cpp
+    src/exact_region_2.cpp
+    src/reachable_input_2.cpp
     src/continuous_tea_2/exact_polynomial_sign_2.cpp
 )
 add_dependencies(task9_mat_compile_gate external_downloads)
