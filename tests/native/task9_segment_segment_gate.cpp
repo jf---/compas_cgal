@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -2426,6 +2427,88 @@ bool point_limited_parallel_segment_segment_production_graph_gate()
             == CGAL::EQUAL;
 }
 
+bool segment_limited_parallel_segment_segment_production_graph_gate()
+{
+    bool negative_radius_rejected = false;
+    try {
+        static_cast<void>(
+            segment_site_segment_limited_parallel_segment_graph_spike(-1));
+    } catch (
+        const NegativeClearanceRadiusSquaredError&) {
+        negative_radius_rejected = true;
+    }
+    const MatExactGraph2 graph =
+        segment_site_segment_limited_parallel_segment_graph_spike();
+    const MatExactGraph2 repeated =
+        segment_site_segment_limited_parallel_segment_graph_spike();
+    const MatExactGraph2 reversed =
+        segment_site_reversed_segment_limited_parallel_segment_graph_spike();
+    const MatExactGraph2 positive =
+        segment_site_segment_limited_parallel_segment_graph_spike(2);
+    const MatExactGraph2 negative =
+        segment_site_segment_limited_parallel_segment_graph_spike(
+            CORE::BigRat(5, 2));
+    if (graph.edges.size() != 1
+        || graph.nodes.size() != 2
+        || graph.rejected_incident_transitions != 0
+        || graph.matched_generator_sites != 9
+        || !negative_radius_rejected
+        || !graphs_equal(graph, repeated)
+        || !graphs_equal(graph, reversed)
+        || !graphs_equal(graph, positive)
+        || !negative.edges.empty()
+        || !negative.nodes.empty()
+        || negative.matched_generator_sites != 9) {
+        return false;
+    }
+
+    const std::vector<std::string> parent_sites{
+        "lower-segment",
+        "upper-segment",
+    };
+    const std::string dual_id =
+        stable_dual_identity_v1(
+            "segment-segment",
+            parent_sites);
+    const std::string limiter_root_id =
+        algebraic_root_id_v1(
+            {-7, 2},
+            0);
+    const MatExactGraphEdge2& edge =
+        graph.edges.front();
+    if (edge.primitive_kind != "LINE"
+        || edge.original_dual_id != dual_id
+        || edge.generator_site_ids != parent_sites
+        || edge.parent_site_ids != parent_sites
+        || !edge.source_endpoint.parameter.has_value()
+        || !edge.target_endpoint.parameter.has_value()
+        || !has_provenance(
+            edge.source_endpoint,
+            "upper-left")
+        || !has_provenance(
+            edge.target_endpoint,
+            "external-segment-limiter")
+        || !has_provenance(
+            edge.target_endpoint,
+            limiter_root_id)
+        || !has_provenance(
+            edge.target_endpoint,
+            "parallel-segment-limiter/"
+            "equation-factor-multiplicity/1")) {
+        return false;
+    }
+    ExactAlgebraicKernel1 kernel;
+    return kernel.compare_1_object()(
+               *edge.source_endpoint.parameter,
+               kernel.construct_algebraic_real_1_object()(0))
+            == CGAL::EQUAL
+        && kernel.compare_1_object()(
+               *edge.target_endpoint.parameter,
+               kernel.construct_algebraic_real_1_object()(
+                   CORE::BigRat(7, 2)))
+            == CGAL::EQUAL;
+}
+
 bool nonparallel_segment_segment_production_graph_gate()
 {
     bool negative_radius_rejected = false;
@@ -2823,6 +2906,331 @@ bool point_limited_parallel_failures_are_named()
         && chart_rejected;
 }
 
+bool segment_limited_parallel_failures_are_named()
+{
+    using Point = MatTraits::Point_2;
+    using Site = MatTraits::Site_2;
+    const Point lower_left(-2, 0);
+    const Point lower_right(6, 0);
+    const Point upper_left(0, 3);
+    const Point upper_right(4, 3);
+    const Point limiter_lower(5, 1);
+    const Point limiter_upper(5, 2);
+    const std::vector<GeneratorSite2> generators{
+        {"lower-left", Site::construct_site_2(lower_left)},
+        {"lower-right", Site::construct_site_2(lower_right)},
+        {"upper-left", Site::construct_site_2(upper_left)},
+        {"upper-right", Site::construct_site_2(upper_right)},
+        {"external-limiter-lower", Site::construct_site_2(limiter_lower)},
+        {"external-limiter-upper", Site::construct_site_2(limiter_upper)},
+        {
+            "lower-segment",
+            Site::construct_site_2(lower_left, lower_right),
+        },
+        {
+            "upper-segment",
+            Site::construct_site_2(upper_left, upper_right),
+        },
+        {
+            "external-segment-limiter",
+            Site::construct_site_2(limiter_lower, limiter_upper),
+        },
+    };
+    SegmentSiteDelaunay2 delaunay;
+    delaunay.insert(lower_left, lower_right);
+    delaunay.insert(upper_left, upper_right);
+    delaunay.insert(limiter_lower, limiter_upper);
+    require_generator_site_bijection(
+        delaunay,
+        generators);
+    SegmentSiteVoronoi2 voronoi(delaunay);
+    const std::vector<std::string> generator_ids{
+        "lower-segment",
+        "upper-segment",
+    };
+    std::vector<SegmentSiteVoronoi2::Halfedge_handle>
+        matching;
+    for (auto halfedge = voronoi.halfedges_begin();
+         halfedge != voronoi.halfedges_end();
+         ++halfedge) {
+        const MatTraits::Site_2 up =
+            halfedge->up()->site();
+        const MatTraits::Site_2 down =
+            halfedge->down()->site();
+        if (up.is_segment()
+            && down.is_segment()
+            && ordered_generator_site_ids(
+                   stable_generator_site_id(
+                       up,
+                       generators),
+                   stable_generator_site_id(
+                       down,
+                       generators))
+                == generator_ids
+            && stable_generator_site_id(
+                   up,
+                   generators)
+                == generator_ids.front()) {
+            matching.push_back(halfedge);
+        }
+    }
+    if (matching.size() != 1) {
+        return false;
+    }
+
+    const MatExactOpenSegmentSource2 lower_segment =
+        canonical_open_segment_source(
+            "lower-segment",
+            -2,
+            0,
+            6,
+            0);
+    const MatExactOpenSegmentSource2 upper_segment =
+        canonical_open_segment_source(
+            "upper-segment",
+            0,
+            3,
+            4,
+            3);
+    const MatExactOpenSegmentSource2 limiter =
+        canonical_open_segment_source(
+            "external-segment-limiter",
+            5,
+            1,
+            5,
+            2);
+    RationalPrimitiveParameterization2 primitive =
+        parallel_segment_bisector_parameterization(
+            lower_segment,
+            upper_segment);
+    primitive.domain_lower = 0;
+    primitive.domain_upper = 4;
+    const RationalDomainRoot2 lower{
+        0,
+        {"upper-left"},
+    };
+    const RationalDomainRoot2 upper{
+        4,
+        {"upper-right"},
+    };
+
+    bool missing_rejected = false;
+    bool duplicate_rejected = false;
+    bool mismatch_rejected = false;
+    try {
+        static_cast<void>(
+            bind_parallel_segment_segment_cell_endpoints(
+                primitive,
+                lower,
+                upper,
+                lower_segment,
+                upper_segment,
+                {},
+                {},
+                generator_ids,
+                generators,
+                voronoi,
+                matching.front()));
+    } catch (
+        const UnsupportedSegmentSegmentLimiterError&) {
+        missing_rejected = true;
+    }
+    try {
+        static_cast<void>(
+            bind_parallel_segment_segment_cell_endpoints(
+                primitive,
+                lower,
+                upper,
+                lower_segment,
+                upper_segment,
+                {},
+                {limiter, limiter},
+                generator_ids,
+                generators,
+                voronoi,
+                matching.front()));
+    } catch (
+        const AmbiguousParallelSegmentOpenLimiterError&) {
+        duplicate_rejected = true;
+    }
+    try {
+        static_cast<void>(
+            bind_parallel_segment_segment_cell_endpoints(
+                primitive,
+                lower,
+                upper,
+                lower_segment,
+                upper_segment,
+                {},
+                {
+                    canonical_open_segment_source(
+                        "external-segment-limiter",
+                        4,
+                        1,
+                        4,
+                        2),
+                },
+                generator_ids,
+                generators,
+                voronoi,
+                matching.front()));
+    } catch (
+        const MismatchedLiveSegmentSegmentBridgeError&) {
+        mismatch_rejected = true;
+    }
+    return missing_rejected
+        && duplicate_rejected
+        && mismatch_rejected;
+}
+
+bool rectangle_adaptor_characterization_gate()
+{
+    using Point = MatTraits::Point_2;
+    using Site = MatTraits::Site_2;
+    const Point lower_left(-4, -2);
+    const Point lower_right(4, -2);
+    const Point upper_right(4, 2);
+    const Point upper_left(-4, 2);
+    const std::vector<GeneratorSite2> generators{
+        {"lower-left", Site::construct_site_2(lower_left)},
+        {"lower-right", Site::construct_site_2(lower_right)},
+        {"upper-right", Site::construct_site_2(upper_right)},
+        {"upper-left", Site::construct_site_2(upper_left)},
+        {
+            "bottom-segment",
+            Site::construct_site_2(
+                lower_left,
+                lower_right),
+        },
+        {
+            "right-segment",
+            Site::construct_site_2(
+                lower_right,
+                upper_right),
+        },
+        {
+            "top-segment",
+            Site::construct_site_2(
+                upper_right,
+                upper_left),
+        },
+        {
+            "left-segment",
+            Site::construct_site_2(
+                upper_left,
+                lower_left),
+        },
+    };
+    SegmentSiteDelaunay2 delaunay;
+    delaunay.insert(lower_left, lower_right);
+    delaunay.insert(lower_right, upper_right);
+    delaunay.insert(upper_right, upper_left);
+    delaunay.insert(upper_left, lower_left);
+    require_generator_site_bijection(
+        delaunay,
+        generators);
+    SegmentSiteVoronoi2 voronoi(delaunay);
+    const std::set<std::vector<std::string>>
+        expected_incident_point_segment_pairs{
+            {"bottom-segment", "lower-left"},
+            {"bottom-segment", "lower-right"},
+            {"left-segment", "lower-left"},
+            {"left-segment", "upper-left"},
+            {"lower-right", "right-segment"},
+            {"right-segment", "upper-right"},
+            {"top-segment", "upper-left"},
+            {"top-segment", "upper-right"},
+        };
+    const std::map<
+        std::vector<std::string>,
+        std::vector<std::string>>
+        expected_segment_segment_owners{
+            {
+                {"bottom-segment", "left-segment"},
+                {"top-segment", "lower-left"},
+            },
+            {
+                {"bottom-segment", "right-segment"},
+                {"lower-right", "top-segment"},
+            },
+            {
+                {"bottom-segment", "top-segment"},
+                {"right-segment", "left-segment"},
+            },
+            {
+                {"left-segment", "top-segment"},
+                {"bottom-segment", "upper-left"},
+            },
+            {
+                {"right-segment", "top-segment"},
+                {"upper-right", "bottom-segment"},
+            },
+        };
+    std::set<std::vector<std::string>>
+        incident_point_segment_pairs;
+    std::map<
+        std::vector<std::string>,
+        std::vector<std::string>>
+        segment_segment_owners;
+    for (auto halfedge = voronoi.halfedges_begin();
+         halfedge != voronoi.halfedges_end();
+         ++halfedge) {
+        const MatTraits::Site_2 up =
+            halfedge->up()->site();
+        const MatTraits::Site_2 down =
+            halfedge->down()->site();
+        const std::string up_id =
+            stable_generator_site_id(
+                up,
+                generators);
+        const std::string down_id =
+            stable_generator_site_id(
+                down,
+                generators);
+        const std::vector<std::string> pair =
+            ordered_generator_site_ids(
+                up_id,
+                down_id);
+        if (up_id != pair.front()) {
+            continue;
+        }
+        const CGAL::Object primal =
+            voronoi.dual().primal(
+                halfedge->dual());
+        MatTraits::Ray_2 ray;
+        MatTraits::Segment_2 segment;
+        if (up.is_segment() && down.is_segment()) {
+            if (!halfedge->has_source()
+                || !halfedge->has_target()
+                || !CGAL::assign(segment, primal)) {
+                return false;
+            }
+            segment_segment_owners.emplace(
+                pair,
+                std::vector<std::string>{
+                    stable_generator_site_id(
+                        halfedge->left()->site(),
+                        generators),
+                    stable_generator_site_id(
+                        halfedge->right()->site(),
+                        generators),
+                });
+            continue;
+        }
+        if (up.is_point() == down.is_point()
+            || halfedge->has_source()
+                == halfedge->has_target()
+            || !CGAL::assign(ray, primal)) {
+            return false;
+        }
+        incident_point_segment_pairs.insert(pair);
+    }
+    return incident_point_segment_pairs
+            == expected_incident_point_segment_pairs
+        && segment_segment_owners
+            == expected_segment_segment_owners;
+}
+
 } // namespace
 
 bool segment_segment_producer_gate()
@@ -2978,8 +3386,11 @@ bool segment_segment_producer_gate()
         return false;
     }
     return segment_segment_production_graph_gate()
+        && rectangle_adaptor_characterization_gate()
         && point_limited_parallel_segment_segment_production_graph_gate()
+        && segment_limited_parallel_segment_segment_production_graph_gate()
         && point_limited_parallel_failures_are_named()
+        && segment_limited_parallel_failures_are_named()
         && nonparallel_segment_segment_production_graph_gate()
         && nonparallel_segment_segment_producer_contract()
         && nonparallel_segment_charts_are_exact()

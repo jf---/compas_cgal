@@ -14,16 +14,17 @@ needed by every downstream traversal and engagement decision.
     point and segment limiters, and clips rational point/segment parabolas at
     exact true-radius roots. A bounded parallel segment/segment production
     slice now derives its exact feature-overlap interval, binds feature-owned
-    live endpoints, binds a rational external point limiter through its exact
-    algebraic event, and classifies constant clearance. Raw nonparallel
-    segment/segment branches now have exact source-bound charts, strict feature
-    intervals, rational quadratic clearance, and polygon-with-holes clipping.
+    live endpoints, binds rational external point and open-segment limiters
+    through exact algebraic events, proves open-segment interior ownership, and
+    classifies constant clearance. Raw nonparallel segment/segment branches now
+    have exact source-bound charts, strict feature intervals, rational
+    quadratic clearance, and polygon-with-holes clipping.
     A bounded normalized nonparallel slice now reconstructs a two-branch
     adaptor cell from its exact raw S–S and P–S chain, preserves separate
     primitive and parent ownership, and survives exact radius clipping.
-    External segment limiters, general composite segment/segment cells, the
-    unified segment-site traversal, neck evidence, proposal sampling, and the
-    Python binding are not complete.
+    General externally limited and composite segment/segment cells, the unified
+    segment-site traversal, neck evidence, proposal sampling, and the Python
+    binding are not complete.
 
     Do not treat the current native spike APIs as the final public MAT API.
     The maturity table below is the claim boundary.
@@ -55,16 +56,16 @@ published paths and runtime measurements. Phase 1 is not yet a competing
 end-to-end result; it is a stricter certification architecture under
 construction.
 
-| Dimension | Held–Pfeiffer 2025 | Exact-certified Phase 1 |
-| --- | --- | --- |
-| Pocket geometry | Segments and circular arcs; simply connected; machinability assumed after an `r + ε` transformation | Raw MAT primitives now clip exactly against polygonal domains with holes and exact radius clearance; unified `C_r` graph is incomplete; circular boundaries are not supported |
-| MAT backend | Vroni/ArcVroni used end-to-end | Exact CGAL point graph plus bounded P–S, feature- and point-limited parallel S–S, and normalized two-branch nonparallel S–S production slices with distinct raw-generator, parent-site, and branch provenance; unified graph incomplete |
-| Engagement limit | Analytic circle construction followed by bisection until `θmax − 0.001 <= θ <= θmax` radians | Exact rational chord surrogate and event-exact segment/full-circle certification; integration incomplete |
-| Candidate spacing | Bisection along the middle curve | Finite candidate lattice; no monotonic-feasibility assumption |
-| Machined state | Ordered contour of prior machining disks; transition sweeps omitted from that contour model | Exact stock mutation and exact full-sweep coverage, ordered certify-before-deplete |
-| Bottlenecks | Graph search, width, and heuristic cap reduction on first passage | Exact neck evidence, separating cut, typed passage state, and bound cap decision; planned |
-| Validation | Dense engagement sampling for result plots; complete path and runtime experiments | Fresh replay, mutation gates, artifact identity, and exact residual proof; planned |
-| End-to-end evidence | Complete paths, figures, path-length gains, and 3–100 ms path-generation timings excluding Voronoi construction | Tasks 10–16 remain frozen; no complete path, Fig. 5 reproduction, or performance result yet |
+| Dimension | Comparative status | Held–Pfeiffer 2025 | Exact-certified Phase 1 |
+| --- | --- | --- | --- |
+| Pocket geometry | incomplete | Segments and circular arcs; simply connected; machinability assumed after an `r + ε` transformation | Raw MAT primitives now clip exactly against polygonal domains with holes and exact radius clearance; unified `C_r` graph is incomplete; circular boundaries are not supported |
+| MAT backend | incomplete | Vroni/ArcVroni used end-to-end | Exact CGAL point graph plus bounded P–S, feature-, point-, and open-segment-limited parallel S–S, and normalized two-branch nonparallel S–S production slices with distinct raw-generator, parent-site, and branch provenance; unified graph incomplete |
+| Engagement limit | stronger contract; incomplete integration | Analytic circle construction followed by bisection until `θmax − 0.001 <= θ <= θmax` radians | Exact rational chord surrogate and event-exact segment/full-circle certification; integration incomplete |
+| Candidate spacing | incomplete | Bisection along the middle curve | Finite candidate lattice; no monotonic-feasibility assumption |
+| Machined state | stronger contract | Ordered contour of prior machining disks; transition sweeps omitted from that contour model | Exact stock mutation and exact full-sweep coverage, ordered certify-before-deplete |
+| Bottlenecks | incomplete | Graph search, width, and heuristic cap reduction on first passage | Exact neck evidence, separating cut, typed passage state, and bound cap decision; planned |
+| Validation | incomplete | Dense engagement sampling for result plots; complete path and runtime experiments | Fresh replay, mutation gates, artifact identity, and exact residual proof; planned |
+| End-to-end evidence | weaker | Complete paths, figures, path-length gains, and 3–100 ms path-generation timings excluding Voronoi construction | Tasks 10–16 remain frozen; no complete path, Fig. 5 reproduction, or performance result yet |
 
 ### Performance claim boundary
 
@@ -383,9 +384,9 @@ The live producer contract is stronger than reconstructing that interval:
 
 The feature-only binder remains deliberately strict: a third site without an
 exact source record raises `UnsupportedSegmentSegmentLimiterError`. The
-production overload now supports a rational external point limiter. External
-segment limiters remain a separate pending equation and are not treated as
-points or feature bounds.
+production overload now dispatches a live external owner to either its exact
+point-source record or its exact open-segment record. Neither owner kind is
+treated as a feature bound, and no coordinate-only reconstruction is accepted.
 
 Owner classification precedes feature-bound equality. The adversarial native
 fixture places an unrelated point at `q = (5, 3/2)`. Along
@@ -415,6 +416,50 @@ The native failure matrix separately requires:
 - a rational record at the wrong coordinate or a non-canonical chart to raise
   `MismatchedLiveSegmentSegmentBridgeError`.
 
+An external open-segment limiter uses a different ownership proof. For the
+vertical open segment
+
+```text
+q(u) = (5, 1) + u(0, 1),  0 < u < 1
+```
+
+the squared distance from `p(t)` to its support is `(t - 5)²`, so equality with
+the S–S clearance produces the same exact factorization:
+
+```text
+(t - 5)² - 9/4 = (2t - 7)(2t - 13)/4 = 0
+```
+
+Support equality alone is insufficient: it also describes the infinite line
+through the limiter. For every candidate root, the binder proves the
+perpendicular foot is strictly inside the live open segment with
+
+```text
+0 < ⟨p(t) - q₀, q₁ - q₀⟩ < ‖q₁ - q₀‖².
+```
+
+The feature interval again rejects `13/2`, while `t = 7/2` has foot
+`(5, 3/2)` and passes both strict inequalities. The endpoint carries the
+`AlgebraicRootIdV1` for `2t - 7`, `external-segment-limiter`, and
+`parallel-segment-limiter/equation-factor-multiplicity/1`. Reversing all three
+source segments leaves the complete graph record unchanged.
+
+The open-segment failure matrix requires a missing source record to raise
+`UnsupportedSegmentSegmentLimiterError`, a duplicate stable identity to raise
+`AmbiguousParallelSegmentOpenLimiterError`, and a record on a different
+support to raise `MismatchedLiveSegmentSegmentBridgeError`.
+
+!!! note "Adaptor topology and endpoint proof are separate contracts"
+
+    The exact rectangle characterization inserts four open boundary segments
+    through the single degeneracy-removal adaptor. It yields five bounded S–S
+    segments for the interior MAT and eight incident unbounded P–S rays for
+    exterior transitions. The adaptor therefore already owns the correct
+    interior adjacency; production code must bind and certify its endpoints,
+    not rebuild a skeleton by coordinate matching. External point or segment
+    records narrow an existing live cell only after exact owner identity,
+    equation roots, and open-feature membership all agree.
+
 For the native production fixture, the lower segment is
 `[-2, 6] × {0}` and the upper segment is `[0, 4] × {3}`. The canonical chart
 and feature cell are:
@@ -442,8 +487,8 @@ classifications:
 | `9/4` | zero | complete closed boundary plateau retained |
 | `5/2` | negative | no S–S component emitted |
 
-The external-point fixture proves the same three classifications over its
-complete live interval `[0,7/2]`.
+The external-point and external-open-segment fixtures prove the same three
+classifications over their complete live interval `[0,7/2]`.
 
 Complete graph records are identical after reversing both segment endpoint
 orders. Horizontal, vertical, and rational diagonal charts have independent
@@ -1015,9 +1060,10 @@ consumers, or evolution differ from graph orchestration.
 | True-radius point/segment clearance | implemented and native-gated | exact for rational point-site sources; public binding pending |
 | Parallel segment/segment feature domains | implemented and native-gated | exact for positive-length overlap with feature-owned live endpoints |
 | External point-limited parallel S–S cell | implemented and native-gated | exact rational quadratic limiter equation, algebraic live endpoint, complete event provenance, and constant-clearance clipping |
+| External open-segment-limited parallel S–S cell | implemented and native-gated | exact rational quadratic support equation, strict open-feature ownership, algebraic live endpoint, complete event provenance, and constant-clearance clipping |
 | Nonparallel segment/segment raw cells | implemented and native-gated | exact source-bound branches, feature intervals, algebraic endpoints, true-radius clipping, and polygon-with-holes clipping |
 | Normalized nonparallel S–S composite fixture | implemented and native-gated | exact two-branch reconstruction; distinct raw-generator, parent-site, and normalized-dual identity; exact transition aliasing and radius clipping |
-| General segment/segment cells | pending | unbounded, external segment-limited, multi-transition, and arbitrary-length composite chains have no production graph claim |
+| General segment/segment cells | pending | unbounded, nonparallel externally limited, multi-transition, and arbitrary-length composite chains have no production graph claim |
 | Unified degeneracy-removal traversal | pending | no production claim |
 | Degeneracy-normalized feature CSR | pending | no production claim |
 | Exact neck evidence | pending | no production claim |
@@ -1047,10 +1093,15 @@ mutations, exact positive/zero/negative clearance, and complete-record
 reversal invariance. The external point-limiter gate additionally checks its
 quadratic equality, feature-domain root filtering, live-cell provenance,
 constant positive/zero/negative clearance, repeatability, reversal, and every
-named malformed-record failure. The nonparallel raw-cell gate checks both
-`Q(sqrt(2))` branches, rational-field collapse, exact endpoint projection,
-strict feature-domain intersection, algebraic root identity, rational
-quadratic clearance, maximal feature/clearance components, and exact
+named malformed-record failure. The external open-segment-limiter gate checks
+its support-distance equation, strict interior projection, live-cell
+provenance, constant positive/zero/negative clearance, repeatability,
+reversal, and named missing, duplicate, and mismatched-support failures. The
+rectangle characterization independently locks five bounded interior S–S
+segments and eight incident exterior P–S rays. The nonparallel raw-cell gate
+checks both `Q(sqrt(2))` branches, rational-field collapse, exact endpoint
+projection, strict feature-domain intersection, algebraic root identity,
+rational quadratic clearance, maximal feature/clearance components, and exact
 polygon-with-holes clipping. The same executable locks the full
 quadratic-field winding determinant and sign-preserving conjugate selection
 with analytic P–S and S–S endpoint goldens. The normalized composite gate
@@ -1058,10 +1109,10 @@ additionally proves parent-owned rejection classification, one retained raw
 P–S bridge, exact S–S/P–S node aliasing, stable signed-branch identity,
 positive-radius clipping, repeatability, and source-endpoint reversal
 invariance. These gates establish bounded P–S, feature-owned parallel S–S,
-point-limited parallel S–S, raw nonparallel S–S algebra, and the bounded
-two-branch normalized fixture. They do not establish general, external
-segment-limited, or nonparallel externally limited composite S–S cells,
-degeneracy-normalized feature CSR, or the final unified traversal.
+point- and open-segment-limited parallel S–S, raw nonparallel S–S algebra, and
+the bounded two-branch normalized fixture. They do not establish general or
+nonparallel externally limited composite S–S cells, degeneracy-normalized
+feature CSR, or the final unified traversal.
 
 The final Task 9 boundary must add the still-absent Python MAT binding test and
 then requires:

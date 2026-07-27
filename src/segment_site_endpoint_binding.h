@@ -84,6 +84,13 @@ public:
     using std::runtime_error::runtime_error;
 };
 
+class AmbiguousParallelSegmentOpenLimiterError
+    : public std::runtime_error
+{
+public:
+    using std::runtime_error::runtime_error;
+};
+
 bool exact_open_segment_feature_contains(
     const SourceParabolaParameterization2& parabola,
     const MatExactPointSiteSource2& segment_source,
@@ -129,6 +136,20 @@ bind_parallel_segment_segment_cell_endpoints(
     const RationalPrimitiveParameterization2& primitive,
     const RationalDomainRoot2& lower,
     const RationalDomainRoot2& upper,
+    const std::vector<std::string>& generator_ids,
+    const std::vector<GeneratorSite2>& generators,
+    const SegmentSiteVoronoi2& voronoi,
+    const SegmentSiteVoronoi2::Halfedge_handle& halfedge);
+
+std::pair<MatParameterEndpoint2, MatParameterEndpoint2>
+bind_parallel_segment_segment_cell_endpoints(
+    const RationalPrimitiveParameterization2& primitive,
+    const RationalDomainRoot2& lower,
+    const RationalDomainRoot2& upper,
+    const MatExactOpenSegmentSource2& first_segment,
+    const MatExactOpenSegmentSource2& second_segment,
+    const std::vector<MatExactPointSiteSource2>& point_limiters,
+    const std::vector<MatExactOpenSegmentSource2>& segment_limiters,
     const std::vector<std::string>& generator_ids,
     const std::vector<GeneratorSite2>& generators,
     const SegmentSiteVoronoi2& voronoi,

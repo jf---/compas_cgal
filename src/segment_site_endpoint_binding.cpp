@@ -1109,7 +1109,7 @@ void require_canonical_parallel_segment_chart(
     }
 }
 
-RationalPolynomial parallel_support_clearance(
+RationalPolynomial parallel_squared_support_distance(
     const RationalPrimitiveParameterization2& primitive,
     const MatExactOpenSegmentSource2& segment)
 {
@@ -1138,14 +1138,26 @@ RationalPolynomial parallel_support_clearance(
             segment.line_b));
     line_value.front() += segment.line_c;
     normalize(line_value);
-    if (line_value.size() != 1)
+    return scaled(
+        multiply(line_value, line_value),
+        CORE::BigRat(1) / line_norm);
+}
+
+RationalPolynomial parallel_support_clearance(
+    const RationalPrimitiveParameterization2& primitive,
+    const MatExactOpenSegmentSource2& segment)
+{
+    RationalPolynomial clearance =
+        parallel_squared_support_distance(
+            primitive,
+            segment);
+    normalize(clearance);
+    if (clearance.size() != 1)
     {
         throw MismatchedLiveSegmentSegmentBridgeError(
             "parallel S-S chart is not parallel to its source supports");
     }
-    return scaled(
-        multiply(line_value, line_value),
-        CORE::BigRat(1) / line_norm);
+    return clearance;
 }
 
 void require_rational_parallel_point_limiter(
@@ -1201,37 +1213,58 @@ RationalPolynomial parallel_point_limiter_equation(
     return equation;
 }
 
-MatParameterEndpoint2 bind_parallel_point_limiter_endpoint(
+RationalPolynomial parallel_segment_limiter_equation(
+    const RationalPrimitiveParameterization2& primitive,
+    const MatExactOpenSegmentSource2& first_segment,
+    const MatExactOpenSegmentSource2& second_segment,
+    const MatExactOpenSegmentSource2& limiter)
+{
+    RationalPolynomial first_clearance =
+        parallel_support_clearance(
+            primitive,
+            first_segment);
+    RationalPolynomial second_clearance =
+        parallel_support_clearance(
+            primitive,
+            second_segment);
+    normalize(first_clearance);
+    normalize(second_clearance);
+    if (first_clearance != second_clearance)
+    {
+        throw MismatchedLiveSegmentSegmentBridgeError(
+            "parallel S-S segment limiter sources have unequal clearance");
+    }
+    RationalPolynomial equation =
+        parallel_squared_support_distance(
+            primitive,
+            limiter);
+    add_in_place(
+        equation,
+        scaled(first_clearance, -1));
+    normalize(equation);
+    if (polynomial_degree(equation) > 2)
+    {
+        throw InvalidRationalPrimitiveError(
+            "parallel S-S segment limiter equation exceeds quadratic degree");
+    }
+    return equation;
+}
+
+template <typename CandidatePredicate>
+MatParameterEndpoint2 bind_parallel_limiter_equation_endpoint(
     const RationalPrimitiveParameterization2& primitive,
     const RationalDomainRoot2& lower,
     const RationalDomainRoot2& upper,
-    const MatExactOpenSegmentSource2& first_segment,
-    const MatExactOpenSegmentSource2& second_segment,
-    const MatExactPointSiteSource2& limiter,
-    const MatTraits::Site_2& live_owner,
-    const MatTraits::Point_2& live_point)
+    const RationalPolynomial& equation,
+    const std::string& limiter_id,
+    const std::string& provenance_kind,
+    const MatTraits::Point_2& live_point,
+    CandidatePredicate&& candidate_is_owned)
 {
-    require_rational_parallel_point_limiter(
-        limiter);
-    if (!live_owner.is_point()
-        || live_owner.point()
-            != exact_live_point(
-                limiter,
-                limiter.radicand))
-    {
-        throw MismatchedLiveSegmentSegmentBridgeError(
-            "parallel S-S point limiter record differs from live owner");
-    }
-    const RationalPolynomial equation =
-        parallel_point_limiter_equation(
-            primitive,
-            first_segment,
-            second_segment,
-            limiter);
     if (is_zero(equation))
     {
         throw UnboundLiveSegmentSegmentEndpointError(
-            "parallel S-S point limiter equality is not zero-dimensional");
+            "parallel S-S limiter equality is not zero-dimensional");
     }
     ExactAlgebraicKernel1 kernel;
     const Polynomial polynomial =
@@ -1272,7 +1305,8 @@ MatParameterEndpoint2 bind_parallel_point_limiter_endpoint(
         const MatTraits::Point_2 candidate(
             core_evaluate(x, 1, parameter),
             core_evaluate(y, 1, parameter));
-        if (candidate != live_point)
+        if (candidate != live_point
+            || !candidate_is_owned(candidate))
         {
             continue;
         }
@@ -1280,9 +1314,9 @@ MatParameterEndpoint2 bind_parallel_point_limiter_endpoint(
             witness.root,
             {
                 witness.root_id,
-                limiter.stable_site_id,
-                "parallel-point-limiter/"
-                "equation-factor-multiplicity/"
+                limiter_id,
+                provenance_kind
+                    + "/equation-factor-multiplicity/"
                     + std::to_string(
                         witness.source_factor_multiplicity),
             },
@@ -1308,10 +1342,126 @@ MatParameterEndpoint2 bind_parallel_point_limiter_endpoint(
         throw UnboundLiveSegmentSegmentEndpointError(
             "parallel S-S live point binds "
             + std::to_string(matches.size())
-            + " point-limiter roots");
+            + " limiter roots");
     }
     return exact_graph_endpoint_binding(
         matches.front());
+}
+
+MatParameterEndpoint2 bind_parallel_point_limiter_endpoint(
+    const RationalPrimitiveParameterization2& primitive,
+    const RationalDomainRoot2& lower,
+    const RationalDomainRoot2& upper,
+    const MatExactOpenSegmentSource2& first_segment,
+    const MatExactOpenSegmentSource2& second_segment,
+    const MatExactPointSiteSource2& limiter,
+    const MatTraits::Site_2& live_owner,
+    const MatTraits::Point_2& live_point)
+{
+    require_rational_parallel_point_limiter(
+        limiter);
+    if (!live_owner.is_point()
+        || live_owner.point()
+            != exact_live_point(
+                limiter,
+                limiter.radicand))
+    {
+        throw MismatchedLiveSegmentSegmentBridgeError(
+            "parallel S-S point limiter record differs from live owner");
+    }
+    const RationalPolynomial equation =
+        parallel_point_limiter_equation(
+            primitive,
+            first_segment,
+            second_segment,
+            limiter);
+    return bind_parallel_limiter_equation_endpoint(
+        primitive,
+        lower,
+        upper,
+        equation,
+        limiter.stable_site_id,
+        "parallel-point-limiter",
+        live_point,
+        [](const MatTraits::Point_2&) {
+            return true;
+        });
+}
+
+MatParameterEndpoint2 bind_parallel_segment_limiter_endpoint(
+    const RationalPrimitiveParameterization2& primitive,
+    const RationalDomainRoot2& lower,
+    const RationalDomainRoot2& upper,
+    const MatExactOpenSegmentSource2& first_segment,
+    const MatExactOpenSegmentSource2& second_segment,
+    const MatExactOpenSegmentSource2& limiter,
+    const MatTraits::Site_2& live_owner,
+    const MatTraits::Point_2& live_point)
+{
+    if (!live_owner.is_segment())
+    {
+        throw MismatchedLiveSegmentSegmentBridgeError(
+            "parallel S-S segment limiter record differs from live owner");
+    }
+    const MatTraits::Point_2 limiter_source =
+        live_owner.source();
+    const MatTraits::Point_2 limiter_target =
+        live_owner.target();
+    if (limiter_source == limiter_target)
+    {
+        throw UnboundLiveSegmentSegmentEndpointError(
+            "parallel S-S segment limiter has coincident endpoints");
+    }
+    const auto line_sign =
+        [&limiter](const MatTraits::Point_2& point) {
+            return CGAL::sign(
+                CORE::Expr(limiter.line_a) * point.x()
+                + CORE::Expr(limiter.line_b) * point.y()
+                + CORE::Expr(limiter.line_c));
+        };
+    if (line_sign(limiter_source) != CGAL::ZERO
+        || line_sign(limiter_target) != CGAL::ZERO)
+    {
+        throw MismatchedLiveSegmentSegmentBridgeError(
+            "parallel S-S segment limiter support differs from live owner");
+    }
+    const RationalPolynomial equation =
+        parallel_segment_limiter_equation(
+            primitive,
+            first_segment,
+            second_segment,
+            limiter);
+    const CORE::Expr direction_x =
+        limiter_target.x() - limiter_source.x();
+    const CORE::Expr direction_y =
+        limiter_target.y() - limiter_source.y();
+    const CORE::Expr direction_norm =
+        direction_x * direction_x
+        + direction_y * direction_y;
+    return bind_parallel_limiter_equation_endpoint(
+        primitive,
+        lower,
+        upper,
+        equation,
+        limiter.stable_site_id,
+        "parallel-segment-limiter",
+        live_point,
+        [&limiter_source,
+         &direction_x,
+         &direction_y,
+         &direction_norm](
+            const MatTraits::Point_2& candidate) {
+            const CORE::Expr projection =
+                (candidate.x() - limiter_source.x())
+                    * direction_x
+                + (candidate.y() - limiter_source.y())
+                    * direction_y;
+            return CGAL::sign(projection)
+                    == CGAL::POSITIVE
+                && CGAL::sign(
+                       direction_norm - projection)
+                    == CGAL::POSITIVE;
+        });
 }
 
 std::pair<MatParameterEndpoint2, MatParameterEndpoint2>
@@ -1322,6 +1472,7 @@ bind_parallel_segment_segment_cell_endpoints_impl(
     const MatExactOpenSegmentSource2* first_segment,
     const MatExactOpenSegmentSource2* second_segment,
     const std::vector<MatExactPointSiteSource2>& point_limiters,
+    const std::vector<MatExactOpenSegmentSource2>& segment_limiters,
     const std::vector<std::string>& generator_ids,
     const std::vector<GeneratorSite2>& generators,
     const SegmentSiteVoronoi2& voronoi,
@@ -1472,6 +1623,7 @@ bind_parallel_segment_segment_cell_endpoints_impl(
          first_segment,
          second_segment,
          &point_limiters,
+         &segment_limiters,
          &feature_owner,
          &bind_feature](
             const MatTraits::Point_2& live_point,
@@ -1484,15 +1636,50 @@ bind_parallel_segment_segment_cell_endpoints_impl(
                     owner_id);
             }
             if (first_segment == nullptr
-                || second_segment == nullptr
-                || !live_owner.is_point())
+                || second_segment == nullptr)
             {
                 throw UnsupportedSegmentSegmentLimiterError(
-                    "parallel S-S endpoint has no exact point-limiter binder");
+                    "parallel S-S endpoint has no exact external limiter binder");
             }
-            std::vector<const MatExactPointSiteSource2*> matches;
-            for (const MatExactPointSiteSource2& limiter :
-                 point_limiters)
+            if (live_owner.is_point())
+            {
+                std::vector<const MatExactPointSiteSource2*> matches;
+                for (const MatExactPointSiteSource2& limiter :
+                     point_limiters)
+                {
+                    if (limiter.stable_site_id == owner_id)
+                    {
+                        matches.push_back(&limiter);
+                    }
+                }
+                if (matches.empty())
+                {
+                    throw UnsupportedSegmentSegmentLimiterError(
+                        "parallel S-S point limiter has no source record");
+                }
+                if (matches.size() != 1)
+                {
+                    throw AmbiguousParallelSegmentPointLimiterError(
+                        "parallel S-S point limiter identity is duplicated");
+                }
+                return bind_parallel_point_limiter_endpoint(
+                    primitive,
+                    lower,
+                    upper,
+                    *first_segment,
+                    *second_segment,
+                    *matches.front(),
+                    live_owner,
+                    live_point);
+            }
+            if (!live_owner.is_segment())
+            {
+                throw UnsupportedSegmentSegmentLimiterError(
+                    "parallel S-S external limiter has no supported site kind");
+            }
+            std::vector<const MatExactOpenSegmentSource2*> matches;
+            for (const MatExactOpenSegmentSource2& limiter :
+                 segment_limiters)
             {
                 if (limiter.stable_site_id == owner_id)
                 {
@@ -1502,14 +1689,14 @@ bind_parallel_segment_segment_cell_endpoints_impl(
             if (matches.empty())
             {
                 throw UnsupportedSegmentSegmentLimiterError(
-                    "parallel S-S point limiter has no source record");
+                    "parallel S-S segment limiter has no source record");
             }
             if (matches.size() != 1)
             {
-                throw AmbiguousParallelSegmentPointLimiterError(
-                    "parallel S-S point limiter identity is duplicated");
+                throw AmbiguousParallelSegmentOpenLimiterError(
+                    "parallel S-S segment limiter identity is duplicated");
             }
-            return bind_parallel_point_limiter_endpoint(
+            return bind_parallel_segment_limiter_endpoint(
                 primitive,
                 lower,
                 upper,
@@ -1571,6 +1758,7 @@ bind_parallel_segment_segment_cell_endpoints(
         nullptr,
         nullptr,
         {},
+        {},
         generator_ids,
         generators,
         voronoi,
@@ -1602,6 +1790,40 @@ bind_parallel_segment_segment_cell_endpoints(
         &first_segment,
         &second_segment,
         point_limiters,
+        {},
+        generator_ids,
+        generators,
+        voronoi,
+        halfedge);
+}
+
+std::pair<MatParameterEndpoint2, MatParameterEndpoint2>
+bind_parallel_segment_segment_cell_endpoints(
+    const RationalPrimitiveParameterization2& primitive,
+    const RationalDomainRoot2& lower,
+    const RationalDomainRoot2& upper,
+    const MatExactOpenSegmentSource2& first_segment,
+    const MatExactOpenSegmentSource2& second_segment,
+    const std::vector<MatExactPointSiteSource2>& point_limiters,
+    const std::vector<MatExactOpenSegmentSource2>& segment_limiters,
+    const std::vector<std::string>& generator_ids,
+    const std::vector<GeneratorSite2>& generators,
+    const SegmentSiteVoronoi2& voronoi,
+    const SegmentSiteVoronoi2::Halfedge_handle& halfedge)
+{
+    require_canonical_parallel_segment_chart(
+        primitive,
+        first_segment,
+        second_segment,
+        generator_ids);
+    return bind_parallel_segment_segment_cell_endpoints_impl(
+        primitive,
+        lower,
+        upper,
+        &first_segment,
+        &second_segment,
+        point_limiters,
+        segment_limiters,
         generator_ids,
         generators,
         voronoi,
