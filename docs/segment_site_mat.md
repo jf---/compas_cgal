@@ -260,6 +260,28 @@ Root identity is:
 An isolating interval is validation evidence, not identity. Refining it must
 not change certificate bytes.
 
+### Coordinate roots and event roots are different evidence
+
+An endpoint can carry more than one valid algebraic-root identity.
+
+- The **coordinate-root identity** answers where the endpoint lies on its
+  primitive. Exact graph binding always adds this identity.
+- An **event-root identity** answers which exact equation created the split.
+  Domain clipping and clearance clipping preserve these identities.
+
+For example, the rational endpoints `t = ±1/4` of a clearance split have
+linear coordinate factors, but the event that creates both endpoints is:
+
+```text
+16t² - 1 = 0
+```
+
+The clearance event therefore retains the quadratic factor plus root ordinal
+in addition to each endpoint's coordinate-root identity. These identities
+must not be collapsed merely because they reconstruct the same exact
+parameter. Native goldens compare the complete canonical provenance vector,
+so an omitted or spurious event identity fails the gate.
+
 ## Exact clipping to the admissible-center domain
 
 Let `D` be the pocket polygon with holes and `r` the tool radius. The MAT
