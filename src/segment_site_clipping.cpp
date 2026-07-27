@@ -409,36 +409,10 @@ canonical_polynomial_coefficients(
     return coefficients;
 }
 
-} // namespace
-
-ClearanceRootBoundary2 point_clearance_boundary(
-    const RationalPrimitiveParameterization2& primitive,
-    const CORE::BigRat& site_x,
-    const CORE::BigRat& site_y,
-    const CORE::BigRat& radius_squared)
+ClearanceRootBoundary2 clearance_boundary_from_polynomial(
+    RationalPolynomial clearance,
+    const RationalPrimitiveParameterization2* rational_domain)
 {
-    if (primitive.x_coefficients.empty()
-        || primitive.y_coefficients.empty()) {
-        throw InvalidRationalPrimitiveError(
-            "primitive coordinate polynomial is empty");
-    }
-    if (primitive.domain_lower.has_value()
-        && primitive.domain_upper.has_value()
-        && *primitive.domain_lower > *primitive.domain_upper) {
-        throw InvalidRationalPrimitiveError(
-            "primitive parameter domain is reversed");
-    }
-
-    RationalPolynomial dx = primitive.x_coefficients;
-    RationalPolynomial dy = primitive.y_coefficients;
-    dx.front() -= site_x;
-    dy.front() -= site_y;
-    trim(dx);
-    trim(dy);
-
-    RationalPolynomial clearance = multiply(dx, dx);
-    add_in_place(clearance, multiply(dy, dy));
-    clearance.front() -= radius_squared;
     trim(clearance);
     if (clearance.size() == 1) {
         return {
@@ -477,9 +451,10 @@ ClearanceRootBoundary2 point_clearance_boundary(
     for (std::size_t ordinal = 0;
          ordinal < isolated_roots.size();
          ++ordinal) {
-        if (!root_is_in_domain(
+        if (rational_domain != nullptr
+            && !root_is_in_domain(
                 isolated_roots[ordinal],
-                primitive,
+                *rational_domain,
                 kernel)) {
             continue;
         }
@@ -496,6 +471,41 @@ ClearanceRootBoundary2 point_clearance_boundary(
         coefficients,
         roots,
     };
+}
+
+} // namespace
+
+ClearanceRootBoundary2 point_clearance_boundary(
+    const RationalPrimitiveParameterization2& primitive,
+    const CORE::BigRat& site_x,
+    const CORE::BigRat& site_y,
+    const CORE::BigRat& radius_squared)
+{
+    if (primitive.x_coefficients.empty()
+        || primitive.y_coefficients.empty()) {
+        throw InvalidRationalPrimitiveError(
+            "primitive coordinate polynomial is empty");
+    }
+    if (primitive.domain_lower.has_value()
+        && primitive.domain_upper.has_value()
+        && *primitive.domain_lower > *primitive.domain_upper) {
+        throw InvalidRationalPrimitiveError(
+            "primitive parameter domain is reversed");
+    }
+
+    RationalPolynomial dx = primitive.x_coefficients;
+    RationalPolynomial dy = primitive.y_coefficients;
+    dx.front() -= site_x;
+    dy.front() -= site_y;
+    trim(dx);
+    trim(dy);
+
+    RationalPolynomial clearance = multiply(dx, dx);
+    add_in_place(clearance, multiply(dy, dy));
+    clearance.front() -= radius_squared;
+    return clearance_boundary_from_polynomial(
+        std::move(clearance),
+        &primitive);
 }
 
 ClearanceRootBoundary2
@@ -610,6 +620,165 @@ parallel_segment_clearance_boundary(
         {},
         {},
     };
+}
+
+ClearanceRootBoundary2
+nonparallel_segment_clearance_boundary(
+    const NonparallelSegmentBisectorParameterization2& primitive,
+    const MatExactOpenSegmentSource2& first_segment,
+    const MatExactOpenSegmentSource2& second_segment,
+    const CORE::BigRat& radius_squared)
+{
+    if (radius_squared < 0) {
+        throw NegativeClearanceRadiusSquaredError(
+            "nonparallel S-S squared clearance radius is negative");
+    }
+    if (primitive.x_rational.size() != 2
+        || primitive.x_radical.size() != 2
+        || primitive.y_rational.size() != 2
+        || primitive.y_radical.size() != 2) {
+        throw InvalidRationalPrimitiveError(
+            "nonparallel S-S clearance requires an affine field chart");
+    }
+    if (primitive.radicand <= 0) {
+        throw InvalidQuadraticFieldRadicandError(
+            "nonparallel S-S clearance radicand is not positive");
+    }
+
+    const MatExactOpenSegmentSource2* ordered_first =
+        &first_segment;
+    const MatExactOpenSegmentSource2* ordered_second =
+        &second_segment;
+    if (ordered_second->stable_site_id
+        < ordered_first->stable_site_id) {
+        std::swap(ordered_first, ordered_second);
+    }
+    if (ordered_first->stable_site_id
+            != primitive.first_segment_id
+        || ordered_second->stable_site_id
+            != primitive.second_segment_id) {
+        throw MismatchedNonparallelSegmentClearanceError(
+            "nonparallel S-S clearance sources do not match the chart");
+    }
+
+    const auto squared_distance_polynomials =
+        [&primitive](
+            const MatExactOpenSegmentSource2& segment) {
+            const CORE::BigRat normal_squared =
+                segment.line_a * segment.line_a
+                + segment.line_b * segment.line_b;
+            if (normal_squared == 0) {
+                throw DegenerateNonparallelSegmentClearanceError(
+                    "nonparallel S-S support has zero normal");
+            }
+            const CORE::BigRat constant_rational =
+                segment.line_a * primitive.x_rational[0]
+                + segment.line_b * primitive.y_rational[0]
+                + segment.line_c;
+            const CORE::BigRat constant_radical =
+                segment.line_a * primitive.x_radical[0]
+                + segment.line_b * primitive.y_radical[0];
+            const CORE::BigRat direction_rational =
+                segment.line_a * primitive.x_rational[1]
+                + segment.line_b * primitive.y_rational[1];
+            const CORE::BigRat direction_radical =
+                segment.line_a * primitive.x_radical[1]
+                + segment.line_b * primitive.y_radical[1];
+            RationalPolynomial rational{
+                (
+                    constant_rational * constant_rational
+                    + primitive.radicand
+                        * constant_radical
+                        * constant_radical)
+                    / normal_squared,
+                CORE::BigRat(2)
+                    * (
+                        constant_rational
+                            * direction_rational
+                        + primitive.radicand
+                            * constant_radical
+                            * direction_radical)
+                    / normal_squared,
+                (
+                    direction_rational * direction_rational
+                    + primitive.radicand
+                        * direction_radical
+                        * direction_radical)
+                    / normal_squared,
+            };
+            RationalPolynomial radical{
+                CORE::BigRat(2)
+                    * constant_rational
+                    * constant_radical
+                    / normal_squared,
+                CORE::BigRat(2)
+                    * (
+                        constant_rational
+                            * direction_radical
+                        + constant_radical
+                            * direction_rational)
+                    / normal_squared,
+                CORE::BigRat(2)
+                    * direction_rational
+                    * direction_radical
+                    / normal_squared,
+            };
+            trim(rational);
+            trim(radical);
+            return std::pair<
+                RationalPolynomial,
+                RationalPolynomial>{
+                std::move(rational),
+                std::move(radical),
+            };
+        };
+    auto [first_rational, first_radical] =
+        squared_distance_polynomials(*ordered_first);
+    auto [second_rational, second_radical] =
+        squared_distance_polynomials(*ordered_second);
+    const auto has_nonzero =
+        [](const RationalPolynomial& polynomial) {
+            return std::any_of(
+                polynomial.begin(),
+                polynomial.end(),
+                [](const CORE::BigRat& coefficient) {
+                    return coefficient != 0;
+                });
+        };
+    if (has_nonzero(first_radical)
+        || has_nonzero(second_radical)) {
+        throw NonrationalNonparallelSegmentClearanceError(
+            "nonparallel S-S squared clearance retained a radical");
+    }
+    if (first_rational != second_rational
+        || first_rational.size() != 3
+        || first_rational[0] != 0
+        || first_rational[1] != 0) {
+        throw MismatchedNonparallelSegmentClearanceError(
+            "nonparallel S-S chart is not equidistant from both sources");
+    }
+    if (first_rational[2] <= 0) {
+        throw DegenerateNonparallelSegmentClearanceError(
+            "nonparallel S-S squared-clearance coefficient is not positive");
+    }
+
+    const CORE::BigRat determinant =
+        ordered_first->line_a * ordered_second->line_b
+        - ordered_second->line_a * ordered_first->line_b;
+    const CORE::BigRat second_norm =
+        ordered_second->line_a * ordered_second->line_a
+        + ordered_second->line_b * ordered_second->line_b;
+    const CORE::BigRat expected_quadratic =
+        second_norm * determinant * determinant;
+    if (first_rational[2] != expected_quadratic) {
+        throw MismatchedNonparallelSegmentClearanceError(
+            "nonparallel S-S clearance scale is not canonical");
+    }
+
+    first_rational[0] -= radius_squared;
+    return clearance_boundary_from_polynomial(
+        std::move(first_rational),
+        nullptr);
 }
 
 std::vector<MatAdmissibleComponent2>

@@ -472,6 +472,42 @@ an isolating interval is not. For example, `-22 - 11sqrt(2)` is root `0` of
 `x² + 44x + 242`, while `-8 + 4sqrt(2)` is root `1` of
 `x² + 16x + 32`. Rational fields collapse before embedding.
 
+#### Quadratic-field coordinates have rational quadratic clearance
+
+The global primitive contract permits a clearance polynomial of degree at
+most four. The canonical nonparallel S–S chart has stronger structure. Let
+`Δ = a₁b₂ - a₂b₁`. Substituting the unnormalized chart tangent `u` into the
+second ordered support gives
+
+```text
+ℓ₂(u) = -n₂Δ.
+```
+
+The radical terms cancel exactly. Reversing `u` changes only this value's
+sign, so both defining-site squared distances are
+
+```text
+distance(p(t), ℓ₁)²
+  = distance(p(t), ℓ₂)²
+  = n₂Δ²t².
+```
+
+The true-radius boundary is therefore the rational quadratic
+
+```text
+n₂Δ²t² - r² = 0.
+```
+
+`nonparallel_segment_clearance_boundary` does not assume the closed form
+blindly. It substitutes the stored field chart into both normalized support
+distance equations, requires both radical polynomials to vanish, requires
+the two rational polynomials to be identical, and checks their quadratic
+coefficient against `n₂Δ²` before isolating roots. A malformed source/chart
+pair fails before it can emit clearance evidence. The native scaled fixture
+proves that this is not an accidental unit-coefficient result:
+`n₂Δ² = 125` reduces `125t² - 5` to primitive polynomial
+`25t² - 1`.
+
 !!! warning "A nonparallel generator pair has two branch identities"
 
     The exact producer fixture pairs a horizontal support of squared normal
