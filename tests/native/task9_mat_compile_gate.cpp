@@ -88,7 +88,9 @@ bool exact_endpoint_records_equal(
                    *lhs.parameter)
                 == algebraic_root_identity_v1(
                     *rhs.parameter))
-        && lhs.provenance_ids == rhs.provenance_ids;
+        && lhs.provenance_ids == rhs.provenance_ids
+        && lhs.exact_evidence
+            == rhs.exact_evidence;
 }
 
 bool exact_graph_records_equal(
@@ -140,6 +142,10 @@ bool exact_graph_records_equal(
                 != rhs_edge.generator_site_ids
             || lhs_edge.parent_site_ids
                 != rhs_edge.parent_site_ids
+            || lhs_edge.clip_component_index
+                != rhs_edge.clip_component_index
+            || lhs_edge.admissible_center_component
+                != rhs_edge.admissible_center_component
             || !exact_endpoint_records_equal(
                 lhs_edge.source_endpoint,
                 rhs_edge.source_endpoint)

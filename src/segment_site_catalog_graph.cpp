@@ -889,6 +889,17 @@ bool is_segment_endpoint(
         || segment.target_point_id == point_id;
 }
 
+void mark_original_voronoi_endpoints(
+    std::pair<
+        MatParameterEndpoint2,
+        MatParameterEndpoint2>& endpoints)
+{
+    endpoints.first.exact_evidence
+        .original_voronoi_vertex = true;
+    endpoints.second.exact_evidence
+        .original_voronoi_vertex = true;
+}
+
 } // namespace
 
 MatExactGraph2 canonical_rectangle_mat_graph(
@@ -1021,6 +1032,8 @@ MatExactGraph2 canonical_rectangle_mat_graph(
                         source.site_index(),
                         source.voronoi(),
                         halfedge);
+                mark_original_voronoi_endpoints(
+                    endpoints);
                 components =
                     clip_bounded_linear_clearance_components(
                         dual_id,
@@ -1060,6 +1073,8 @@ MatExactGraph2 canonical_rectangle_mat_graph(
                         source.site_index(),
                         source.voronoi(),
                         halfedge);
+                mark_original_voronoi_endpoints(
+                    endpoints);
                 ExactAlgebraicKernel1 kernel;
                 const CORE::BigRat witness =
                     kernel.bound_between_1_object()(
@@ -1368,6 +1383,8 @@ MatExactGraph2 canonical_l_shape_mat_graph(
                         source.site_index(),
                         source.voronoi(),
                         halfedge);
+                mark_original_voronoi_endpoints(
+                    endpoints);
                 components =
                     clip_bounded_linear_clearance_components(
                         dual_id,
@@ -1408,6 +1425,8 @@ MatExactGraph2 canonical_l_shape_mat_graph(
                         source.site_index(),
                         source.voronoi(),
                         halfedge);
+                mark_original_voronoi_endpoints(
+                    endpoints);
                 components =
                     clip_bounded_nonparallel_segment_clearance_components(
                         dual_id,
@@ -1498,7 +1517,7 @@ MatExactGraph2 canonical_l_shape_mat_graph(
             throw IncompleteCanonicalMatLShapeGraphError(
                 "canonical L-shape has duplicate nonincident P-S cells");
         }
-        const auto endpoints =
+        auto endpoints =
             bind_point_segment_cell_endpoints(
                 sources,
                 point_id,
@@ -1506,6 +1525,8 @@ MatExactGraph2 canonical_l_shape_mat_graph(
                 source.site_index(),
                 source.voronoi(),
                 halfedge);
+        mark_original_voronoi_endpoints(
+            endpoints);
         const auto& focus =
             point_source(
                 sources,

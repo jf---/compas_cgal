@@ -2956,11 +2956,13 @@ bool graph_dimension_projection_gate()
         "interval",
         {construct(0), {"lower"}},
         {construct(1), {"upper"}},
+        7,
     };
     const MatAdmissibleComponent2 singleton{
         "singleton",
         {construct(2), {"point"}},
         {construct(2), {"point"}},
+        3,
     };
     const std::vector<MatAdmissibleComponent2>
         retained =
@@ -3000,6 +3002,7 @@ bool graph_dimension_projection_gate()
     return retained.size() == 1
         && retained.front().component_id
             == interval.component_id
+        && retained.front().component_index == 7
         && unbounded_rejected
         && reversed_rejected;
 }

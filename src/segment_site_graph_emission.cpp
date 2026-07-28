@@ -102,8 +102,13 @@ void append_exact_graph_components(
             return node_id;
         };
 
-    for (const MatAdmissibleComponent2& component : components)
+    for (const MatAdmissibleComponent2& component :
+         components)
     {
+        if (component.component_index < 0) {
+            throw InvalidSegmentSiteGraphComponentError(
+                "MAT graph component has no exact clip index");
+        }
         const MatParameterEndpoint2 source_endpoint =
             exact_graph_endpoint_binding(component.lower);
         const MatParameterEndpoint2 target_endpoint =
@@ -123,6 +128,8 @@ void append_exact_graph_components(
                 target_endpoint,
                 generator_ids,
                 parent_site_ids,
+                component.component_index,
+                true,
             });
     }
 }

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <iterator>
+#include <limits>
 #include <set>
 #include <utility>
 
@@ -177,6 +178,67 @@ void union_stable_ids(
         target.end());
 }
 
+MatEndpointBoundaryFeature2 design_line_endpoint_feature(
+    const std::size_t ring,
+    const std::size_t feature)
+{
+    const auto max_index =
+        static_cast<std::uintmax_t>(
+            std::numeric_limits<std::int64_t>::max());
+    if (static_cast<std::uintmax_t>(ring)
+            > max_index
+        || static_cast<std::uintmax_t>(feature)
+            > max_index) {
+        throw MatEndpointFeatureOverflowError(
+            "MAT endpoint boundary feature exceeds int64 range");
+    }
+    return {
+        MatEndpointDomainKind2::Design,
+        0,
+        MatExactCurveKind2::Line,
+        static_cast<std::int64_t>(ring),
+        static_cast<std::int64_t>(feature),
+    };
+}
+
+void union_endpoint_boundary_features(
+    std::vector<MatEndpointBoundaryFeature2>& target,
+    const std::vector<MatEndpointBoundaryFeature2>& source)
+{
+    target.insert(
+        target.end(),
+        source.begin(),
+        source.end());
+    std::sort(target.begin(), target.end());
+    target.erase(
+        std::unique(target.begin(), target.end()),
+        target.end());
+}
+
+void union_endpoint_evidence(
+    MatParameterEndpoint2& target,
+    const MatParameterEndpoint2& source)
+{
+    union_stable_ids(
+        target.provenance_ids,
+        source.provenance_ids);
+    target.exact_evidence.original_voronoi_vertex =
+        target.exact_evidence.original_voronoi_vertex
+        || source.exact_evidence
+               .original_voronoi_vertex;
+    target.exact_evidence.domain_boundary =
+        target.exact_evidence.domain_boundary
+        || source.exact_evidence.domain_boundary;
+    target.exact_evidence.clearance_root =
+        target.exact_evidence.clearance_root
+        || source.exact_evidence.clearance_root;
+    auto& features =
+        target.exact_evidence.boundary_features;
+    union_endpoint_boundary_features(
+        features,
+        source.exact_evidence.boundary_features);
+}
+
 std::string stable_dual_identity_v1(
     const std::string& dual_kind,
     const std::vector<std::string>& ordered_generator_ids)
@@ -334,6 +396,8 @@ void append_root_endpoint(
         endpoints.front().clearance_root = true;
         endpoints.front().endpoint.provenance_ids.push_back(
             root_id);
+        endpoints.front().endpoint.exact_evidence
+            .clearance_root = true;
         return;
     }
     if (upper.endpoint.parameter.has_value()
@@ -341,11 +405,22 @@ void append_root_endpoint(
             == CGAL::EQUAL) {
         upper.clearance_root = true;
         upper.endpoint.provenance_ids.push_back(root_id);
+        upper.endpoint.exact_evidence.clearance_root =
+            true;
         return;
     }
     endpoints.push_back(
         {
-            {root, {root_id}},
+            {
+                root,
+                {root_id},
+                {
+                    false,
+                    false,
+                    true,
+                    {},
+                },
+            },
             true,
         });
 }

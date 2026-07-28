@@ -64,6 +64,15 @@ needed by every downstream traversal and engagement decision.
     proves both the P–P ray and the S2–S3 diagonal have no one-dimensional
     interior component. Repeat and canonical input reversal preserve complete
     records at `r² = 0` and `1`.
+    Exact endpoint event evidence now travels with the algebraic endpoint
+    through every clipping merge instead of being reconstructed during export.
+    The native numeric-table projection emits the fixed edge, node-site,
+    site-provenance, endpoint-flag, endpoint-feature CSR, and exact-verdict
+    fields required by tuple positions 2–9. It retains exact node and
+    original-dual dictionaries for later MAT-certificate construction. The
+    rectangle gate locks coincident three-way event flags and a 20-row feature
+    CSR at `r² = 0`, plus clearance-only replacement of its four leaves at
+    `r² = 1`; the complete L table is input-reversal invariant.
     A catalog-fed rectangle orchestration carries the same owner architecture
     through its complete bounded graph:
     one adaptor traversal emits five S–S edges and six canonical nodes,
@@ -73,8 +82,9 @@ needed by every downstream traversal and engagement decision.
     Repeated construction and canonical input reversal are record-identical
     inside the catalog namespace.
     General arbitrary-pocket traversal, arbitrary composite segment/segment
-    cells, endpoint-feature CSR, public numeric-table integration, neck
-    evidence, proposal sampling, and the Python binding are not complete.
+    cells, center-domain digest integration, exact neck evidence, proposal
+    sampling, and the Python binding are not complete. The numeric table is a
+    native contract and is not yet a public Python API.
 
     Do not treat the current native spike APIs as the final public MAT API.
     The maturity table below is the claim boundary.
@@ -109,7 +119,8 @@ construction.
 | Dimension | Comparative status | Held–Pfeiffer 2025 | Exact-certified Phase 1 |
 | --- | --- | --- | --- |
 | Pocket geometry | incomplete | Segments and circular arcs; simply connected; machinability assumed after an `r + ε` transformation | Raw MAT primitives now clip exactly against polygonal domains with holes and exact radius clearance; the rectangle `C_r` graph is unified, but general arbitrary-pocket traversal is incomplete; circular boundaries are not supported |
-| MAT backend | stronger exact contract on bounded fixtures; incomplete end-to-end | Vroni/ArcVroni used end-to-end | Exact CGAL point graph plus catalog-fed rectangle and concave L-pocket graphs. The rectangle carries Task 3 identities through one indexed SDG build, swap-owned adaptor traversal, indexed endpoint binding, exact radius clipping, five edges, six feature-triple nodes, and explicit rejection of eight incident P–S rays. The L path authenticates all 23 raw duals, binds external point/open-segment endpoint events, rejects 12 incident feature transitions, proves its P–P ray and S2–S3 diagonal are outside the interior MAT, and emits a connected 10-node/9-edge tree with seven S–S lines and two P–S parabolas. Normalized-node inventory includes the exact four-feature `{P2, P4, S2, S3}` event without coordinate merging. Complete records survive repeat and canonical input symmetry, but arbitrary-pocket traversal remains incomplete |
+| MAT backend | stronger exact contract on bounded fixtures; incomplete end-to-end | Vroni/ArcVroni used end-to-end | Exact CGAL point graph plus catalog-fed rectangle and concave L-pocket graphs. The rectangle carries Task 3 identities through one indexed SDG build, swap-owned adaptor traversal, indexed endpoint binding, exact radius clipping, five edges, six feature-triple nodes, and explicit rejection of eight incident P–S rays. The L path authenticates all 23 raw duals, binds external point/open-segment endpoint events, rejects 12 incident feature transitions, proves its P–P ray and S2–S3 diagonal are outside the interior MAT, and emits a connected 10-node/9-edge tree with seven S–S lines and two P–S parabolas. Normalized-node inventory includes the exact four-feature `{P2, P4, S2, S3}` event without coordinate merging. Both graphs now project into one validated numeric topology/evidence table, but arbitrary-pocket traversal remains incomplete |
+| Replay identity | stronger contract; public binding incomplete | The published algorithm consumes its MAT and updates one ordered machined contour; no exact topology/provenance replay certificate is reported | Stable site, node, dual, algebraic-root, component, and coincident endpoint-event identities project once into deterministic integer rows. Exact identity dictionaries remain bound for the future MAT certificate; the Python API and certificate bytes are pending |
 | Engagement limit | stronger contract; incomplete integration | Analytic circle construction followed by bisection until `θmax − 0.001 <= θ <= θmax` radians | Exact rational chord surrogate and event-exact segment/full-circle certification; integration incomplete |
 | Candidate spacing | incomplete | Bisection along the middle curve | Finite candidate lattice; no monotonic-feasibility assumption |
 | Machined state | stronger contract | Ordered contour of prior machining disks; transition sweeps omitted from that contour model | Exact stock mutation and exact full-sweep coverage, ordered certify-before-deplete |
@@ -162,8 +173,9 @@ safeguards, not a new planner benchmark or evidence for arbitrary-pocket
 complexity.
 
 Two other clocks must remain separate. Five warm local Release executions of
-the current native Task 9 algebraic fixture suite took 2.37–2.38 s (2.37 s
-median), but that is a contract gate rather than one pocket generation. The
+the current native Task 9 algebraic fixture suite took 2.57–2.61 s (2.59 s
+median), including exact public-table root/provenance revalidation, but that is
+a contract gate rather than one pocket generation. The
 existing exact stock replay
 measured 87 s for the kite after a 7x end-to-end speedup; that run certifies and
 depletes every operation and is not comparable to Held and Pfeiffer's planner
@@ -1238,8 +1250,93 @@ The catalog and numeric mapper are native-gated on rectangle symmetry, exact
 site geometry, canonical hole reordering, hand-derived table rows, empty CSR,
 and unknown-site rejection. The catalog-fed rectangle graph now consumes
 these site records directly. Its node records therefore carry catalog
-identities suitable for the numeric mapper; the direct graph-to-public-table
-boundary remains part of the pending endpoint-feature CSR slice.
+identities suitable for the numeric mapper. `numeric_graph_table` now owns the
+single direct graph-to-numeric-table boundary described below.
+
+### Public numeric topology is a checked projection
+
+`numeric_graph_table` consumes one already-canonical `MatExactGraph2` and the
+same `CanonicalMatSiteCatalog2` that built it. It does not traverse CGAL,
+reconstruct incidence, match coordinates, or parse stable identities. Before
+emitting an all-ones exact verdict, it requires:
+
+1. strictly ordered, nonempty edge and node identities;
+2. two strictly ordered catalog generators per edge;
+3. known, distinct source and target nodes;
+4. a non-negative exact clip-component index assigned by clipping and
+   preserved through one-dimensional graph emission;
+5. bounded algebraic endpoints whose canonical root identity occurs in the
+   endpoint provenance;
+6. endpoint provenance contained in the canonical node's complete provenance;
+7. at least one exact endpoint event and a canonical, internally consistent
+   boundary-feature set.
+
+The native table is the exact discrete subset of the future 20-field binding:
+
+| Field | Native contract |
+| --- | --- |
+| `edges[E,8]` | source node, target node, curve kind, two catalog site rows, dual kind, dense original-dual row, clip-component index |
+| `node_site_offsets`, `node_site_ids` | complete normalized generator incidence |
+| `site_provenance[S,3]` | catalog `(kind, ring, feature)` rows |
+| `edge_endpoint_provenance_flags[E,2]` | independent bitset: `1` original Voronoi vertex, `2` design-boundary clip, `4` clearance root |
+| `endpoint_feature_offsets`, `endpoint_features[J,5]` | canonical source/target endpoint CSR |
+| `edge_exact_flags[E,3]` | admissible component, source provenance verified, target provenance verified; all must equal one |
+
+Curve codes are `0=LINE`, `1=PARABOLA`, and `2=CIRCLE`. Original-dual codes
+are `0=P–P`, `1=P–S`, and `2=S–S`. Exact node and original-dual identity
+dictionaries remain in the native table so the future MAT certificate can
+authenticate every dense integer; the fixed Python tuple will carry their
+certificate commitment rather than exposing opaque strings as ad hoc output.
+The clip-component number likewise travels beside its stable component
+identity from the clipping stage. Dimensional filtering may remove an isolated
+point component, but it never renumbers a surviving one or recovers the number
+by parsing a `/component-N` suffix.
+
+Each endpoint-feature row is:
+
+```text
+(domain kind, component, curve kind, source site/ring, derived feature)
+```
+
+For the design domain, `domain kind=0`, `component=0`, `curve kind=LINE`,
+`source site/ring` is the canonical ring row (`0` outer, then holes), and the
+derived feature is the canonical directed-edge ordinal. For a clearance
+contact, `domain kind=1`, `component` is the edge's exact clip-component row,
+the curve is `LINE` for an open-segment site or `CIRCLE` for a point site, the
+source is its numeric catalog row, and the current polygonal-site grammar has
+one canonical contact curve per source (`derived feature=0`).
+
+At a clearance root coincident with an original Voronoi vertex, contact rows
+come from the node's complete normalized generator union, not merely the
+current edge's two defining sites. This is what preserves degree-three and
+higher contact degeneracies. At a clearance-created terminal, the edge's two
+generators are the complete contact set.
+
+!!! warning "Carry typed evidence; never recover it from identity text"
+
+    Stable IDs are certificate atoms, not a serialization format for business
+    logic. Parsing `D-outer`, limiter names, or site substrings during export
+    would create a second undocumented identity grammar and make a harmless
+    version change alter topology. Domain roots therefore acquire typed
+    boundary rows when the exact intersection is created; clipping unions
+    those rows and the three event bits by exact parameter equality. The
+    exporter only validates and translates this typed evidence.
+
+The rectangle at `r²=0` is the coincidence golden. All ten edge endpoints are
+original Voronoi vertices; its four leaves are also design-boundary and
+clearance events. Their endpoint CSR contains eight incident design edges,
+eight segment-contact lines, and four point-contact circles: 20 rows total.
+At `r²=1`, the same five-edge topology has six original central endpoint
+incidences and four clearance-created leaves, with eight segment-contact rows
+and no design-boundary rows. The L fixture independently locks nine numeric
+edges (`7 LINE + 2 PARABOLA`), ten nodes, the `7 S–S + 2 P–S` dual split, and
+complete table identity after canonical input reversal.
+
+Malformed edge order, unknown node references, incomplete endpoint evidence,
+invalid component rows, unknown catalog sites, and integer overflow fail
+through named exceptions. The table does not yet include reported node/sample
+coordinates, neck evidence, the Task 3 center-domain digest, or final
+certificate bytes.
 
 ### Exact rational graph sources
 
@@ -1750,7 +1847,7 @@ Refinement may change the number and position of samples. It must not change:
 | `segment_site_provenance.*` | stable site/root provenance, normalized feature-union node identity, and endpoint evidence |
 | `segment_site_endpoint_binding.*` | live P–P ray, parabola, and bounded parallel/nonparallel S–S endpoint ownership, including exact external point/open-segment limiter events |
 | `segment_site_graph_emission.*` | exact one-dimensional component projection and graph record emission |
-| `segment_site_graph_csr.*` | validated deterministic projection of canonical node-site provenance |
+| `segment_site_graph_csr.*` | validated deterministic projection of canonical nodes, edges, site incidence, endpoint events, endpoint-feature CSR, and exact verdicts into the native numeric table |
 | `segment_site_catalog_graph.*` | catalog-fed rectangle and exact concave L-fixture orchestration, adaptor traversal, and canonical node assembly |
 | `segment_site_mat.*` | canonical graph records, general graph primitives, and independently validated bounded comparators |
 | `segment_site_neck.*` | exact local minima and separating cuts |
@@ -1795,8 +1892,8 @@ consumers, or evolution differ from graph orchestration.
 | Normalized arbitrary-degree node identity | implemented and native-gated | L-pocket adaptor has eleven exact three-feature vertices and one exact four-feature `{P2, P4, S2, S3}` vertex; three-feature bytes remain compatible, higher-degree IDs are length-framed, repeat/reversal identity is exact, and the L traversal consumes the normalized alias contract |
 | Catalog-fed unified rectangle graph | implemented and native-gated | one indexed SDG build and swap-owned adaptor; five S–S edges, six canonical nodes, eight authenticated rejected incident P–S rays; repeat/input-symmetry identity and complete-record equivalence at exact `r² = 0`, `1`, `4`, and `5` under a validated certificate-namespace projection |
 | Catalog-fed unified L graph | implemented and native-gated | exact six-edge fixture only; 23 raw duals classified in one traversal, nine retained edges and ten canonical nodes, exact tree topology, complete record repeat/reversal identity at `r² = 0`, and `r² = 1` reversal identity |
-| Numeric node-site catalog mapping | implemented and native-gated | catalog-bound graph identities map once to `int64` rows; unknown identities fail loud; direct adopted-graph-to-public-table gate pending |
-| Endpoint-feature CSR and public numeric table | pending | no public binding or complete certificate claim |
+| Numeric node-site catalog mapping | implemented and native-gated | catalog-bound graph identities map once to `int64` rows; unknown identities fail loud; both adopted fixture graphs consume the projection |
+| Endpoint-feature CSR and public numeric table | native table implemented and gated; Python binding pending | fixed tuple fields 2–9 project from exact graph/catalog records; independent three-bit endpoint events, five-column feature CSR, reverse identity dictionaries, exact rectangle coincidence/positive-radius goldens, and complete L reversal identity; no final MAT certificate or public API claim |
 | Exact neck evidence | pending | no production claim |
 | Proposal-only sampling | pending | no production claim |
 | Python fixed-tuple binding | pending | no public API claim |
@@ -1856,7 +1953,8 @@ parallel S–S, raw nonparallel S–S algebra, exact external point- and
 open-segment-limited nonparallel endpoints, the bounded two-branch normalized
 fixture, and unified rectangle and exact L-fixture graphs. They do not
 establish general arbitrary-pocket traversal, arbitrary composite S–S cells,
-endpoint-feature CSR, or public numeric-table integration. A separate
+center-domain digest equality, exact neck evidence, proposal sampling, or the
+public Python binding. A separate
 graph-emission contract retains an increasing algebraic interval, omits an
 equal-bound singleton, and raises `InvalidSegmentSiteGraphComponentError` for
 unbounded or reversed components. The node-site CSR gate separately locks the
@@ -1866,6 +1964,15 @@ site-catalog gate independently locks Task 3 input reuse, point/open-segment
 kind codes, global outer/hole ring rows, exact endpoint ownership, rectangle
 rotation/reversal invariance, canonical hole reordering, numeric CSR lookup,
 the empty sentinel, and named unknown-site rejection. The catalog-fed
+numeric-table gate composes both adopted graphs through those same catalog
+rows. Its rectangle goldens lock all three coincident event bits, exact
+`r²=0` feature counts `8 design LINE + 8 clearance LINE + 4 clearance CIRCLE`,
+clearance-only terminal replacement at `r²=1`, and all-one native exact
+verdicts. Its L golden locks the complete `7 LINE + 2 PARABOLA` and
+`7 S–S + 2 P–S` table under canonical input reversal. Mutated edge order,
+node references, endpoint evidence, and component rows fail through distinct
+named errors.
+The catalog-fed
 segment-Delaunay gate separately locks one-pass segment insertion, exact
 catalog/live-generator cardinality and identity, indexed lookup across two
 holes, input-symmetry invariance, unknown exact geometry, duplicate exact
