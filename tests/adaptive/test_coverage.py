@@ -17,6 +17,7 @@ from compas_cgal.adaptive.errors import InvalidCoverageSweepError
 from compas_cgal.adaptive.motion import ExactCircleMotion
 from compas_cgal.adaptive.motion import ExactSegmentMotion
 from compas_cgal.adaptive.reachable_domain import ReachableDomain
+from compas_cgal.adaptive.units import EntryRadius
 from compas_cgal.adaptive.units import Point2
 from compas_cgal.adaptive.units import ToolRadius
 from compas_cgal.adaptive.units import Vector2
@@ -64,6 +65,28 @@ def _native_coverage(
 
 LARGE_SQUARE = ((-40.0, -40.0), (40.0, -40.0), (40.0, 40.0), (-40.0, 40.0))
 COMPLETE_RECTANGLE = ((0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0))
+
+
+def test_coverage_preclear_requires_qualified_entry_radius_type() -> None:
+    domain = _domain(COMPLETE_RECTANGLE, 1.0)
+    entry_radius = EntryRadius.build(1.5)
+
+    ledger = CoverageLedger.build(
+        reachable_domain=domain,
+        precleared_center=Point2[WorldXY].build(2.0, 2.0),
+        precleared_radius=entry_radius,
+    )
+
+    assert ledger.certificate.precleared_radius is entry_radius
+    with pytest.raises(
+        InvalidCoverageCertificateError,
+        match="entry radius",
+    ):
+        CoverageLedger.build(
+            reachable_domain=domain,
+            precleared_center=Point2[WorldXY].build(2.0, 2.0),
+            precleared_radius=ToolRadius.build(1.5),  # type: ignore[arg-type]
+        )
 
 
 def test_native_binding_publishes_task5_surface_and_named_errors() -> None:
@@ -194,7 +217,7 @@ def _complete_ledger() -> tuple[CoverageLedger, ExactCircleMotion]:
     ledger = CoverageLedger.build(
         reachable_domain=domain,
         precleared_center=Point2[WorldXY].build(2.0, 2.0),
-        precleared_radius=ToolRadius.build(1.0),
+        precleared_radius=EntryRadius.build(1.0),
     )
     circle = ExactCircleMotion.build(
         center=Point2[WorldXY].build(2.0, 2.0),
@@ -251,7 +274,7 @@ def _ledger(domain: ReachableDomain) -> CoverageLedger:
     return CoverageLedger.build(
         reachable_domain=domain,
         precleared_center=Point2[WorldXY].build(30.0, 30.0),
-        precleared_radius=ToolRadius.build(1.0),
+        precleared_radius=EntryRadius.build(1.0),
     )
 
 
