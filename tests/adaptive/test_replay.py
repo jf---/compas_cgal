@@ -8,6 +8,7 @@ from compas_cgal.adaptive.canonical import CanonicalRingV1
 from compas_cgal.adaptive.candidates import MiddleCurveCandidate
 from compas_cgal.adaptive.candidates import MiddleCurveSpan
 from compas_cgal.adaptive.candidates import enumerate_middle_curve_candidates
+from compas_cgal.adaptive.coverage import CoverageLedger
 from compas_cgal.adaptive.entry import BoreProcessIdentity
 from compas_cgal.adaptive.entry import PreclearedEntry
 from compas_cgal.adaptive.entry import QualifiedBore
@@ -20,6 +21,7 @@ from compas_cgal.adaptive.identity import InputIdentity
 from compas_cgal.adaptive.medial_axis import MedialAxis
 from compas_cgal.adaptive.motion import EngagementCap
 from compas_cgal.adaptive.motion import ExactCircleMotion
+from compas_cgal.adaptive.motion_certificate import MotionCertifier
 from compas_cgal.adaptive.operation import AdvanceTraversalDecision
 from compas_cgal.adaptive.operation import CutFullCircleOperation
 from compas_cgal.adaptive.operation import CursorIdentity
@@ -37,6 +39,7 @@ from compas_cgal.adaptive.policy import NeckPolicy
 from compas_cgal.adaptive.policy import TraversalPolicy
 from compas_cgal.adaptive.reachable_domain import ReachableDomain
 from compas_cgal.adaptive.replay import replay_certificate
+from compas_cgal.adaptive.stock_area import Stock2Area
 from compas_cgal.adaptive.units import ChordBound
 from compas_cgal.adaptive.units import ClearanceZ
 from compas_cgal.adaptive.units import CutPlane
@@ -331,7 +334,7 @@ def test_replay_reconstructs_unique_candidate_before_stock_replay() -> None:
 
     with pytest.raises(
         ReplayTraversalError,
-        match="stock and coverage replay",
+        match="fresh MAT traversal remains nonterminal",
     ):
         _replay(
             identity,
@@ -341,3 +344,68 @@ def test_replay_reconstructs_unique_candidate_before_stock_replay() -> None:
                 _circle_operation(identity, clockwise=False),
             ),
         )
+
+
+def test_replay_certifies_before_motion_depletion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Lock the proof-before-mutation chronology of fresh replay.
+
+    Entry depletion establishes the declared initial void.  Every lateral
+    motion must then be certified against its frozen pre-cut stock, depleted
+    only after certification, and recorded in coverage last.  Reordering these
+    calls can make a cutter appear safe by testing it against material it has
+    already removed.
+    """
+    identity = _input_identity()
+    events: list[str] = []
+    deplete = Stock2Area.deplete
+    certify = MotionCertifier.certify
+    add_sweep = CoverageLedger.add_sweep
+
+    def tracked_deplete(
+        stock: Stock2Area,
+        depletion: object,
+        *args: object,
+    ) -> object:
+        events.append("entry-deplete" if type(depletion) is PreclearedEntry else "motion-deplete")
+        return deplete(stock, depletion, *args)  # type: ignore[misc]
+
+    def tracked_certify(
+        certifier: MotionCertifier,
+        **kwargs: object,
+    ) -> object:
+        events.append("certify")
+        return certify(certifier, **kwargs)  # type: ignore[arg-type]
+
+    def tracked_add_sweep(
+        ledger: CoverageLedger,
+        motion: object,
+        tool_radius: object,
+    ) -> object:
+        events.append("coverage-sweep")
+        return add_sweep(ledger, motion, tool_radius)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(Stock2Area, "deplete", tracked_deplete)
+    monkeypatch.setattr(MotionCertifier, "certify", tracked_certify)
+    monkeypatch.setattr(CoverageLedger, "add_sweep", tracked_add_sweep)
+
+    with pytest.raises(
+        ReplayTraversalError,
+        match="fresh MAT traversal remains nonterminal",
+    ):
+        _replay(
+            identity,
+            (
+                identity.entry.approach,
+                identity.entry.plunge,
+                _circle_operation(identity, clockwise=False),
+            ),
+        )
+
+    assert events == [
+        "entry-deplete",
+        "certify",
+        "motion-deplete",
+        "coverage-sweep",
+    ]

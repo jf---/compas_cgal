@@ -585,7 +585,7 @@ audit_full_circle_tea_event_exact(
                     }),
                 verdict,
                 *uniform,
-                "full-circle-uniform-event-exact-v1",
+                "full-circle-uniform-event-exact-v2",
                 std::move(events));
         return {
             *uniform == "clear"

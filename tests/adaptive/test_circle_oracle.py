@@ -55,6 +55,35 @@ def test_empty_exact_stock_certifies_every_full_circle() -> None:
     assert trace.whole_rim_disposition == "clear"
 
 
+def test_nonempty_stock_certifies_full_circle_inside_exact_cleared_disk() -> None:
+    """Distinguish local zero engagement from globally empty stock.
+
+    The dyadic 3-4-5 phase has guide radius 5/32.  Its complete cutter sweep
+    lies inside the entry disk centred at the phase point because
+    2 * (5/32) + 1/2 == 13/16.  Material remains elsewhere in the square, so
+    this guards the exact oracle against treating ``records.empty()`` as the
+    only proof of a clear full-circle sweep.
+    """
+    stock = _stock_2.Stock2(SQUARE, [])
+    stock.subtract_disk(5.09375, 5.125, 0.8125)
+    assert not stock.is_empty()
+
+    verdict, trace = _continuous_tea_2.audit_full_circle_tea_event_exact(
+        stock,
+        5.0,
+        5.0,
+        0.09375,
+        0.125,
+        False,
+        0.5,
+        4.0,
+    )
+
+    assert verdict == "certified"
+    assert trace.exact_verdict == "certified"
+    assert trace.whole_rim_disposition == "clear"
+
+
 def test_virgin_slotting_proves_cap_exceeded_without_sampling() -> None:
     verdict, trace = _audit(_stock_2.Stock2(SQUARE, []))
 

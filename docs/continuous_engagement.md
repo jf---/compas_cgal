@@ -12,9 +12,12 @@ cells.
     `MotionCertifier` consumer are implemented for the bounded Phase-1
     contracts. Both motion families return digest-bound event traces, and the
     Python boundary distinguishes certified, cap-exceeded, and unresolved
-    outcomes. Candidate selection, certify-before-deplete orchestration,
-    fresh artifact replay, arbitrary-pocket evidence, and matched
-    Held–Pfeiffer performance remain later tasks.
+    outcomes. Task 11A now independently reconstructs one no-neck L-pocket
+    circle, applies the qualified entry to fresh stock, certifies against that
+    frozen pre-cut state, and only then depletes stock and records coverage.
+    Link/circle pairing, neck-state replay, complete traversal/coverage,
+    artifact certification, arbitrary-pocket evidence, and matched
+    Held–Pfeiffer performance remain incomplete.
 
 ## Authority hierarchy
 
@@ -54,7 +57,7 @@ deciding record.
 
 The planning `InputIdentity` separately binds
 `motion-certificate-schema-v1` and the native
-`event-exact-motion-oracle-v1` component. Changing the witness schema or
+`event-exact-motion-oracle-v2` component. Changing the witness schema or
 oracle implementation family therefore changes the planning root before
 replay begins.
 
@@ -104,6 +107,62 @@ Uniform empty/material cases still produce replayable four-seam partitions.
 Nonuniform cases reconstruct the complete line/circle pullback event set,
 including tangent, overlap, endpoint-order, cap, and seam fibres. Unsupported
 or unreconstructed degeneracy is unresolved, never sampled into acceptance.
+
+### Exact clear sweeps in nonempty stock
+
+The first Task 11A replay circle exposed a proof case that global stock
+emptiness cannot represent. Its complete cutter sweep lies inside the
+qualified entry void, while material correctly remains elsewhere in the
+pocket. The boundary pullback partition reconstructed successfully, but the
+old uniform classifier recognized `clear` only when the stock had no boundary
+records. It therefore returned `unresolved` for a physically and exactly
+zero-engagement motion.
+
+The repaired `event-exact-motion-oracle-v2` derives a sqrt-capable exact-region
+view of the current stock. Every linear/circular support and every one-root
+endpoint is lifted without a double conversion:
+
+```text
+x = a0 + a1 sqrt(root)
+```
+
+It then constructs the same exact full-circle sweep used by containment and
+tests the regularized intersection
+
+```text
+full_circle_sweep(c, phase, r) intersect current_stock = empty.
+```
+
+An empty result certifies a uniformly clear rim even when remote material
+remains. A nonempty result proves nothing about the cap and continues through
+the event-partition path; it is not relabelled as material or exceeded. The
+uniform-circle strategy is versioned
+`full-circle-uniform-event-exact-v2`.
+
+!!! warning "A verified event partition is not an engagement verdict"
+
+    Reconstructing every root, cell, fibre, and seam proves that the parameter
+    decomposition is complete. It does not classify those strata as clear,
+    below-cap, or above-cap. Keep partition verification and disposition
+    proof separate; otherwise a structurally valid partition can be mistaken
+    for a motion certificate.
+
+The regression uses only dyadic geometry. A phase vector `(3/32, 4/32)` has
+guide radius `5/32`; with tool radius `1/2`, its complete sweep fits exactly
+inside an entry disk of radius
+`2(5/32) + 1/2 = 13/16` centred at the phase point. The square stock remains
+nonempty, so the fixture kills any return to an empty-stock shortcut while
+also gating exact boundary tangency.
+
+!!! danger "Exact-number backend definitions are an ABI contract"
+
+    `_continuous_tea_2` compiles with its target-local CORE/Boost backend
+    definitions. Linking a sweep object compiled under a different exact
+    backend can give the same `ReachKernel` spelling different effective
+    number types across a C++ boundary. The oracle therefore compiles the
+    authoritative `exact_sweep_2.cpp` source inside its own target. Reuse the
+    deciding source, but never share compiled exact-kernel objects until every
+    consumer inherits one verified interface definition set.
 
 ## Exact reach pruning before pair resultants
 
