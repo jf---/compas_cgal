@@ -73,6 +73,14 @@ needed by every downstream traversal and engagement decision.
     rectangle gate locks coincident three-way event flags and a 20-row feature
     CSR at `r² = 0`, plus clearance-only replacement of its four leaves at
     `r² = 1`; the complete L table is input-reversal invariant.
+    A reusable canonical topology index now proves strict-edge, shared-vertex,
+    and connected induced-plateau separating cuts without rebuilding graph
+    incidence per candidate. Its L-pocket gate classifies all nine edges as
+    bridges, rejects all five leaves as nonseparating vertex candidates, and
+    returns exactly the graph degree for each of the five non-leaf vertex
+    cuts. This is the separating-cut substrate only: exact clearance minima,
+    squared neck width, deterministic evidence ownership, and final
+    `NeckEvidenceV1` records remain pending.
     A catalog-fed rectangle orchestration carries the same owner architecture
     through its complete bounded graph:
     one adaptor traversal emits five S–S edges and six canonical nodes,
@@ -124,7 +132,7 @@ construction.
 | Engagement limit | stronger contract; incomplete integration | Analytic circle construction followed by bisection until `θmax − 0.001 <= θ <= θmax` radians | Exact rational chord surrogate and event-exact segment/full-circle certification; integration incomplete |
 | Candidate spacing | incomplete | Bisection along the middle curve | Finite candidate lattice; no monotonic-feasibility assumption |
 | Machined state | stronger contract | Ordered contour of prior machining disks; transition sweeps omitted from that contour model | Exact stock mutation and exact full-sweep coverage, ordered certify-before-deplete |
-| Bottlenecks | incomplete | Graph search, width, and heuristic cap reduction on first passage | Exact neck evidence, separating cut, typed passage state, and bound cap decision; planned |
+| Bottlenecks | stronger separating-cut record; incomplete feature | Graph search, width, and heuristic cap reduction on first passage | Canonical strict-edge, shared-vertex, and induced-plateau cuts now emit deterministic traversal-side partitions and reject nonseparating candidates on synthetic and adopted L graphs. Exact clearance minima, squared width, evidence ownership, typed passage state, and bound cap decision remain pending |
 | Validation | incomplete | Dense engagement sampling for result plots; complete path and runtime experiments | Fresh replay, mutation gates, artifact identity, and exact residual proof; planned |
 | End-to-end evidence | weaker | Complete paths, figures, path-length gains, and 3–100 ms path-generation timings excluding Voronoi construction | Tasks 10–16 remain frozen; no complete path, Fig. 5 reproduction, or performance result yet |
 
@@ -172,8 +180,18 @@ not reconstruct a linear generator table. These are architectural performance
 safeguards, not a new planner benchmark or evidence for arbitrary-pocket
 complexity.
 
+The neck-cut substrate likewise validates and indexes canonical incidence once
+in `O(V + E)` graph operations. Each candidate cut then performs one
+candidate-component traversal and one canonical edge-assignment pass, rather
+than rebuilding incidence or rescanning every edge once per resulting side.
+An extractor evaluating `k` local-minimum candidates still performs `k` cut
+traversals; replacing that simple end-to-end path with a bridge/articulation
+index is measurement-gated future work. This preserves Held and Pfeiffer's
+complete graph-linear bottleneck implementation as a real current performance
+advantage.
+
 Two other clocks must remain separate. Five warm local Release executions of
-the current native Task 9 algebraic fixture suite took 2.57–2.61 s (2.59 s
+the current native Task 9 algebraic fixture suite took 2.65–3.06 s (2.66 s
 median), including exact public-table root/provenance revalidation, but that is
 a contract gate rather than one pocket generation. The
 existing exact stock replay
@@ -1798,7 +1816,7 @@ malformed topology.
 
 ## Neck evidence is a graph certificate
 
-Necks are not simply low-clearance samples. The completed graph will carry
+Necks are not simply low-clearance samples. The final extractor will carry
 four exact `NeckEvidenceV1` variants:
 
 | Variant | Exact event |
@@ -1812,6 +1830,40 @@ Every record binds its defining sites, exact squared width, deterministic
 owner, and separating-cut partition. Evidence is retained only when removing
 the point, vertex, or contracted plateau separates at least two nonempty
 traversal sides.
+
+The implemented substrate establishes the topology half of that contract.
+`MatNeckCutIndex2::build` validates strictly ordered, nonempty node and edge
+identities, rejects self-edges and unknown endpoints, and constructs the
+node/edge incidence table once. The borrowed index cannot be built from an
+rvalue graph. It then supports:
+
+- a strict-edge cut, which removes one candidate edge;
+- a shared-vertex cut, which removes one candidate node;
+- a plateau cut, which requires a canonical, connected, induced node/edge
+  subgraph before contracting it away.
+
+Each result is a sorted vector of sorted edge-identity partitions. Fewer than
+two nonempty traversal sides raises
+`NonSeparatingMatNeckCandidateError`; malformed topology, unknown targets, and
+invalid plateau descriptions have distinct named errors. The adopted
+10-node/9-edge L graph is gated through one reused index: every edge gives two
+sides, its five leaves fail as vertex cuts, and the remaining degree sequence
+`2,2,3,3,3` gives exactly that many sides per vertex.
+
+!!! warning "A separator is local to its original graph component"
+
+    Partition only the connected component that contained the candidate
+    before removal. Counting unrelated disconnected components fabricates a
+    neck where none exists. Preserve the removed edge, or the incident edges
+    of a removed vertex/plateau, as side anchors: otherwise a valid open side
+    containing no surviving internal edge disappears from the certificate.
+    The partitions intentionally retain equal anchor rows when one removed
+    edge opens into two otherwise empty sides.
+
+This stage does **not** yet locate exact clearance minima, prove one-sided
+endpoint minima, merge equal incident minima, compute squared width, or emit a
+public neck evidence row. A topologically separating edge is only a possible
+neck until those independent clearance predicates are proved.
 
 This is why neck extraction belongs after exact graph normalization and before
 proposal sampling.
@@ -1850,7 +1902,7 @@ Refinement may change the number and position of samples. It must not change:
 | `segment_site_graph_csr.*` | validated deterministic projection of canonical nodes, edges, site incidence, endpoint events, endpoint-feature CSR, and exact verdicts into the native numeric table |
 | `segment_site_catalog_graph.*` | catalog-fed rectangle and exact concave L-fixture orchestration, adaptor traversal, and canonical node assembly |
 | `segment_site_mat.*` | canonical graph records, general graph primitives, and independently validated bounded comparators |
-| `segment_site_neck.*` | exact local minima and separating cuts |
+| `segment_site_neck.*` | canonical separating-cut index and partitions; exact local-minimum evidence next |
 | `segment_site_mat_sampling.*` | proposal-only samples |
 | `medial_axis_2.cpp` | nanobind adapter only |
 
@@ -1894,6 +1946,7 @@ consumers, or evolution differ from graph orchestration.
 | Catalog-fed unified L graph | implemented and native-gated | exact six-edge fixture only; 23 raw duals classified in one traversal, nine retained edges and ten canonical nodes, exact tree topology, complete record repeat/reversal identity at `r² = 0`, and `r² = 1` reversal identity |
 | Numeric node-site catalog mapping | implemented and native-gated | catalog-bound graph identities map once to `int64` rows; unknown identities fail loud; both adopted fixture graphs consume the projection |
 | Endpoint-feature CSR and public numeric table | native table implemented and gated; Python binding pending | fixed tuple fields 2–9 project from exact graph/catalog records; independent three-bit endpoint events, five-column feature CSR, reverse identity dictionaries, exact rectangle coincidence/positive-radius goldens, and complete L reversal identity; no final MAT certificate or public API claim |
+| Neck separating-cut substrate | implemented and native-gated | one canonical reusable topology index; deterministic strict-edge, shared-vertex, and connected induced-plateau partitions; candidate-component scoping; named malformed/nonseparating failures; complete adopted L-tree cut classification |
 | Exact neck evidence | pending | no production claim |
 | Proposal-only sampling | pending | no production claim |
 | Python fixed-tuple binding | pending | no public API claim |
@@ -1972,6 +2025,16 @@ verdicts. Its L golden locks the complete `7 LINE + 2 PARABOLA` and
 `7 S–S + 2 P–S` table under canonical input reversal. Mutated edge order,
 node references, endpoint evidence, and component rows fail through distinct
 named errors.
+The neck-cut gate independently checks exact partition rows for a chain,
+duplicate open-half anchors for a single edge, a three-way branch, and a
+two-node plateau; rejects leaf and cyclic edge/vertex candidates; proves that
+an unrelated connected component cannot counterfeit a separator; and rejects
+malformed graph order, unknown targets, non-induced or escaping plateau edges,
+and malformed or disconnected plateau descriptions. It then reuses one
+validated topology index across the complete adopted L graph, requiring nine
+bridge cuts, five nonseparating leaves, and vertex partitions matching the
+exact `1,1,1,1,1,2,2,3,3,3` degree sequence. These are topology contracts,
+not clearance-minimum or neck-width evidence.
 The catalog-fed
 segment-Delaunay gate separately locks one-pass segment insertion, exact
 catalog/live-generator cardinality and identity, indexed lookup across two
