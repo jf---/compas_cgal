@@ -262,6 +262,25 @@ build:
 3. exact certification plus stock replay;
 4. total wall-clock, path length, and emitted operation count.
 
+Phase 1 carries a hard engineering target of one tenth of Held and Pfeiffer's
+published planner wall clocks under their matched scope: at most `10 ms` for
+`theta_max = 20 degrees`, `3 ms` at `40 degrees`, `0.9 ms` at `80 degrees`,
+and `0.3–0.6 ms` for larger limits. The target applies to a warm in-process
+planner clock excluding I/O and MAT construction, exactly as their reported
+clock does. MAT construction, exact certification/replay, and total wall-clock
+remain separately mandatory results; they may not be folded out of the
+end-to-end report.
+
+!!! warning "A 10x budget is not yet a 10x comparative claim"
+
+    Held and Pfeiffer do not identify their desktop CPU or publish a reference
+    executable. Meeting one tenth of their published milliseconds on a
+    declared machine establishes the Phase-1 engineering budget. Calling the
+    implementation “10x faster than Held” additionally requires their
+    implementation, or an independently accepted faithful reference, on the
+    same machine and build protocol. Exactness, replay, or fixture provenance
+    may never be weakened to reach either threshold.
+
 Until then the accurate status is: **generation mechanics on par in magnitude;
 certified end-to-end performance incomplete and currently much slower where it
 has been measured.**
@@ -2155,6 +2174,12 @@ curve, and proposal data separate invariant owners:
 - lines emit canonical edge-bound exact barycentric fractions;
 - parabola endpoints retain their algebraic-root identities, while recursive
   interior stations retain canonical rational parameter identities;
+- every emitted station carries its canonical edge owner, and
+  `MatProposalSamplingRun2::build(...)` rejects cross-edge or nonmonotone
+  station sequences;
+- `MatProposalSamplingGraph2` binds exactly one run to every profile edge in
+  canonical order and flattens the runs into deterministic `int64` CSR
+  offsets;
 - reporting chord length and the maximum quadratic midpoint chord deviation
   decide only whether to refine the proposal representation;
 - exhausting the refinement depth raises `ConicSamplingLimitError`;
@@ -2177,6 +2202,25 @@ certificate evidence.
     `Bound_between_1` separator as though it were the midpoint does not measure
     the quadratic maximum when algebraic endpoints are present.
 
+The canonical L adapter now adopts this substrate for all nine production
+edges. It reconstructs each coordinate chart from exact catalog sources after
+the single MAT build, authenticates nonparallel S–S branch selection against
+`original_dual_id`, and then binds the chart to the retained edge and
+clearance-profile endpoints. The result contains seven line runs and two
+parabola runs. Repeat execution and canonical ring reversal produce identical
+offsets, exact parameter identities, and world-XY reporting coordinates.
+
+!!! warning "Rational L charts still require exact branch rebinding"
+
+    The general nonparallel S–S chart lives in a quadratic field. Axis-aligned
+    L-pocket supports make its norm-product radicand a rational square, so the
+    parameterization constructor folds the radical direction into an affine
+    rational map. That does not make branch recovery optional: rebuilding a
+    line from endpoint doubles, or selecting either angle bisector by reported
+    orientation, would detach samples from the exact dual identity. Recover
+    the signed branch from `original_dual_id` first, then require the canonical
+    constructor to prove that the radical coefficients vanish.
+
 Refinement may change the number and position of samples. It must not change:
 
 - node or edge identity;
@@ -2189,9 +2233,9 @@ The native gate covers rational line and parabola charts, algebraic
 `[-sqrt(2), sqrt(2)]` parabola endpoints, independent spacing and sagitta
 refinement, edge-bound parameter identity, repeat determinism, malformed
 factories, line cardinality, and the conic depth cap. This remains a substrate
-claim:
-production L-edge adoption, exact equidistant/no-site-closer sample verdicts,
-fixed-tuple offsets, certificate bytes, and the Python binding are pending.
+claim. The production L adoption and native tuple offsets are gated; exact
+equidistant/no-site-closer sample verdicts, certificate bytes, and the Python
+binding remain pending.
 
 ## File ownership
 
@@ -2212,6 +2256,8 @@ fixed-tuple offsets, certificate bytes, and the Python binding are pending.
 | `segment_site_neck.h/.cpp` | canonical separating-cut index and partitions |
 | `segment_site_neck_clearance.*` | exact bounded clearance-profile validation, strict derivative minima, and algebraic squared-width evaluation |
 | `segment_site_neck_evidence.*` | graph-level four-variant ownership, exact node-width consistency, and cut attachment |
+| `segment_site_mat_sampling.*` | typed world-XY proposal policy, exact station identities, rational curve refinement, and edge-owned sampling runs |
+| `segment_site_catalog_sampling.*` | canonical L chart recovery, exact branch rebinding, production run adoption, and flattened sample offsets |
 | `canonical_encoding.*` | frozen native CCAN byte, integer, rational, boolean, sequence, component-map, and tagged-union encoding plus canonical rational decoding |
 | `segment_site_neck_evidence_bytes.*` | canonical four-variant `NeckEvidenceV1` bytes, SHA-256 digests, and exact replay verification |
 | `segment_site_neck_classification.*` | canonical rational-boundary validation, exact algebraic width classes, and comparison-certificate bytes |
@@ -2264,7 +2310,7 @@ consumers, or evolution differ from graph orchestration.
 | Catalog-fed L clearance profiles | implemented and native-gated | one unchanged canonical graph build; one profile per retained edge; exact `2 constant + 5 quadratic + 2 quartic` decomposition; complete reversal identity; positive-radius clip endpoints re-evaluate to exact `width² = 4` |
 | Exact neck classification | native typed records and canonical V1 bytes implemented and gated; Python binding pending | strict, clearance-endpoint, shared-vertex, and maximal plateau ownership; exact node-width consistency; independent cut attachment; canonical CCAN records and SHA-256 digests; deletion/mutation/order rejection by exact replay; adopted L emits exactly two byte-identical reversal-invariant plateau records at `width² = 4` |
 | Exact neck width classes | native implemented and gated; Python binding pending | cross-language `ExactRationalV1` decoding; nonnegative strictly increasing boundaries; exact algebraic comparisons; right-closed restrictive equality; evidence-digest-bound comparison certificates; both production L plateaus classify as `0` at boundary `4` with reversal-identical certificates |
-| Proposal-only sampling | native rational-coordinate substrate implemented and gated; production L/public binding pending | exact parameter identities with reporting-only spacing/sagitta refinement; no exact sample-verdict or public API claim |
+| Proposal-only sampling | native substrate and production L adoption implemented and gated; public binding pending | all nine canonical L edges emit edge-owned deterministic runs and `int64` offsets under repeat/reversal; refinement remains reporting-only; no exact sample-verdict or public API claim |
 | Python fixed-tuple binding | pending | no public API claim |
 
 ## Verification gates
@@ -2398,8 +2444,12 @@ station-spacing and quadratic midpoint-deviation refinement, deterministic
 repeat output, the exact recursion-depth failure, and distinct malformed
 policy, curve, emitted-sample, and line-cardinality boundaries. Its
 irrational-endpoint fixture prevents `Bound_between_1` from being mistaken for
-the reporting midpoint. This does not yet establish production-edge adoption,
-exact sample verdicts, tuple offsets, or the public Python binding.
+the reporting midpoint. The catalog-sampling gate then adopts all nine
+production L edges, requires seven line and two parabola runs, canonical
+`int64` offsets, explicit sample/edge ownership, strictly increasing
+parameters, repeat and reversal identity, policy-only refinement, and named
+missing/reordered/cross-edge failures. This does not yet establish exact
+sample verdicts, certificate bytes, or the public Python binding.
 The catalog-fed
 segment-Delaunay gate separately locks one-pass segment insertion, exact
 catalog/live-generator cardinality and identity, indexed lookup across two

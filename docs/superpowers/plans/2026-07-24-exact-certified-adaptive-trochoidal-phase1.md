@@ -1186,6 +1186,8 @@ Commit: `feat(adaptive): add event-exact certifier`
 - Create: `src/segment_site_mat.cpp`
 - Create: `src/segment_site_mat_sampling.h`
 - Create: `src/segment_site_mat_sampling.cpp`
+- Create: `src/segment_site_catalog_sampling.h`
+- Create: `src/segment_site_catalog_sampling.cpp`
 - Create: `src/segment_site_neck.h`
 - Create: `src/segment_site_neck.cpp`
 - Create: `src/medial_axis_2.cpp`
@@ -1370,6 +1372,16 @@ text and doubles are forbidden.
 
 Lines use exact barycentric samples. Parabolas use exact parameter bisection;
 reported chord/sagitta select refinement. At the depth cap, fail loud.
+
+Native checkpoint: all nine canonical L edges now adopt the sampler after one
+MAT build. Seven line runs and two parabola runs bind explicit edge owners,
+strict parameter order, and deterministic `int64` edge offsets. The
+axis-aligned fixture's quadratic-field S–S charts canonicalize to rational
+affine maps, but the adapter first authenticates the signed branch against
+`original_dual_id`; reported endpoint doubles never recover geometry.
+Repeat/input-reversal identity and missing, reordered, and cross-edge failures
+are native-gated. Exact per-sample verdicts and the public fixed tuple remain
+pending.
 
 Bind:
 
@@ -1957,6 +1969,18 @@ Commit the vectorized Fig-5 input with extraction/source notes and all
 parameters. Run it only if Phase-1 resource bounds allow exact completion.
 Otherwise the benchmark report records the measured blocker and leaves the
 Held parity label unset. It may not substitute a hand-drawn lookalike.
+
+The Phase-1 performance target is one tenth of Held and Pfeiffer's published
+planner wall clocks under their matched scope: warm in-process path generation
+excluding I/O and MAT construction must take at most `10 ms` at
+`theta_max = 20 degrees`, `3 ms` at `40 degrees`, `0.9 ms` at `80 degrees`,
+and `0.3–0.6 ms` for larger limits. Report MAT construction, traversal,
+certification/replay, and total wall-clock separately. These are
+paper-relative engineering budgets because Held and Pfeiffer do not identify
+their CPU or publish an executable. A claim of “10x faster than Held” remains
+unset without an independently accepted reference implementation measured on
+the same machine. Performance work may not weaken any exact predicate,
+certificate, replay, or fixture-provenance gate.
 
 ### Step 4: GREEN
 

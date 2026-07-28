@@ -282,7 +282,16 @@ bool malformed_proposal_sample_fails_loudly() {
   } catch (const InvalidMatProposalSampleError &) {
     nonfinite_coordinate_rejected = true;
   }
-  return empty_identity_rejected && nonfinite_coordinate_rejected;
+
+  bool empty_edge_rejected = false;
+  try {
+    static_cast<void>(
+        MatWorldXYProposalSample2::build("", "exact-parameter", 0.0, 0.0, 0.0));
+  } catch (const InvalidMatProposalSampleError &) {
+    empty_edge_rejected = true;
+  }
+  return empty_identity_rejected && nonfinite_coordinate_rejected &&
+         empty_edge_rejected;
 }
 
 bool malformed_sampling_contracts_fail_loudly() {

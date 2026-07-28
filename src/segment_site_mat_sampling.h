@@ -22,6 +22,11 @@ public:
   using std::runtime_error::runtime_error;
 };
 
+class InvalidMatProposalSamplingRunError : public std::runtime_error {
+public:
+  using std::runtime_error::runtime_error;
+};
+
 class MatSamplingCardinalityError : public std::runtime_error {
 public:
   using std::runtime_error::runtime_error;
@@ -88,7 +93,12 @@ public:
   static MatWorldXYProposalSample2 build(std::string exact_parameter_id,
                                          double parameter, double x_mm,
                                          double y_mm);
+  static MatWorldXYProposalSample2 build(std::string edge_id,
+                                         std::string exact_parameter_id,
+                                         double parameter, double x_mm,
+                                         double y_mm);
 
+  const std::string &edge_id() const noexcept;
   const std::string &exact_parameter_id() const noexcept;
   double parameter() const noexcept;
   double x_mm() const noexcept;
@@ -97,13 +107,30 @@ public:
   bool operator==(const MatWorldXYProposalSample2 &) const = default;
 
 private:
-  MatWorldXYProposalSample2(std::string exact_parameter_id, double parameter,
-                            double x_mm, double y_mm);
+  MatWorldXYProposalSample2(std::string edge_id, std::string exact_parameter_id,
+                            double parameter, double x_mm, double y_mm);
 
+  std::string edge_id_;
   std::string exact_parameter_id_;
   double parameter_;
   double x_mm_;
   double y_mm_;
+};
+
+class MatProposalSamplingRun2 {
+public:
+  static MatProposalSamplingRun2
+  build(std::string edge_id, std::vector<MatWorldXYProposalSample2> samples);
+
+  const std::string &edge_id() const noexcept;
+  const std::vector<MatWorldXYProposalSample2> &samples() const noexcept;
+
+private:
+  MatProposalSamplingRun2(std::string edge_id,
+                          std::vector<MatWorldXYProposalSample2> samples);
+
+  std::string edge_id_;
+  std::vector<MatWorldXYProposalSample2> samples_;
 };
 
 std::vector<MatWorldXYProposalSample2>
@@ -111,3 +138,9 @@ proposal_samples(const MatRationalSamplingCurve2 &curve,
                  const MatStationSpacingMm2 &station_spacing,
                  const MatSagittaBoundMm2 &max_sagitta,
                  std::size_t max_refinement_depth);
+
+MatProposalSamplingRun2
+proposal_sampling_run(const MatRationalSamplingCurve2 &curve,
+                      const MatStationSpacingMm2 &station_spacing,
+                      const MatSagittaBoundMm2 &max_sagitta,
+                      std::size_t max_refinement_depth);
