@@ -46,6 +46,10 @@ class InvalidCandidatePolicyError(ValueError):
     """A candidate lattice is not finite and deterministic."""
 
 
+class InvalidMatSamplingPolicyError(ValueError):
+    """MAT proposal sampling omits or corrupts a cursor-affecting bound."""
+
+
 class InvalidMiddleCurveSpanError(ValueError):
     """A candidate span does not advance between two owned MAT cursors."""
 

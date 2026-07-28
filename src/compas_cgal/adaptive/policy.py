@@ -13,6 +13,7 @@ from compas_cgal import _stock_2
 from compas_cgal.adaptive.errors import InvalidCandidatePolicyError
 from compas_cgal.adaptive.errors import InvalidCutDirectionPolicyError
 from compas_cgal.adaptive.errors import InvalidDepletionPolicyError
+from compas_cgal.adaptive.errors import InvalidMatSamplingPolicyError
 from compas_cgal.adaptive.errors import InvalidNeckPolicyError
 from compas_cgal.adaptive.errors import InvalidTraversalPolicyError
 from compas_cgal.adaptive.motion import EngagementCap
@@ -177,6 +178,47 @@ class CandidatePolicy:
             )
         )
         return tuple(candidate for _, candidate in decorated)
+
+
+@dataclass(frozen=True)
+class MatSamplingPolicy:
+    """Finite proposal-sampling bounds that determine MAT cursor identity."""
+
+    station_spacing: Spacing
+    max_sagitta: ChordBound
+    max_refinement_depth: int
+
+    def __post_init__(self) -> None:
+        if type(self.station_spacing) is not Spacing:
+            raise InvalidMatSamplingPolicyError("MAT station spacing must be exact typed spacing.")
+        if type(self.max_sagitta) is not ChordBound:
+            raise InvalidMatSamplingPolicyError("MAT maximum sagitta must be one exact typed chord bound.")
+        if type(self.max_refinement_depth) is not int or self.max_refinement_depth <= 0:
+            raise InvalidMatSamplingPolicyError("MAT maximum refinement depth must be one positive integer.")
+
+    @classmethod
+    def build(
+        cls,
+        *,
+        station_spacing: Spacing,
+        max_sagitta: ChordBound,
+        max_refinement_depth: int,
+    ) -> Self:
+        """Build the complete MAT proposal-sampling policy.
+
+        Args:
+            station_spacing: Maximum reporting distance between stations.
+            max_sagitta: Maximum reporting chord deviation on conics.
+            max_refinement_depth: Fail-loud finite conic refinement cap.
+
+        Returns:
+            Immutable policy owning every cursor-affecting sampling bound.
+        """
+        return cls(
+            station_spacing,
+            max_sagitta,
+            max_refinement_depth,
+        )
 
 
 @dataclass(frozen=True)

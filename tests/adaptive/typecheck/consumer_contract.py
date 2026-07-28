@@ -35,6 +35,7 @@ from compas_cgal.adaptive.policy import CandidatePolicy
 from compas_cgal.adaptive.policy import CircleOrientation
 from compas_cgal.adaptive.policy import CutDirectionPolicy
 from compas_cgal.adaptive.policy import DepletionPolicy
+from compas_cgal.adaptive.policy import MatSamplingPolicy
 from compas_cgal.adaptive.policy import NeckPolicy
 from compas_cgal.adaptive.policy import TraversalPolicy
 from compas_cgal.adaptive.reachable_domain import ReachableDomain
@@ -228,6 +229,11 @@ input_identity = InputIdentity.build(
     reachable_domain=reachable_domain,
     entry=precleared_entry,
     user_cap=candidate_cap,
+    mat_sampling_policy=MatSamplingPolicy.build(
+        station_spacing=Spacing.build(0.75),
+        max_sagitta=ChordBound.build(0.02),
+        max_refinement_depth=32,
+    ),
     candidate_policy=candidate_policy,
     neck_policy=NeckPolicy.__new__(NeckPolicy),
     depletion_policy=depletion_policy,

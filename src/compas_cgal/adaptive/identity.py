@@ -37,13 +37,14 @@ if TYPE_CHECKING:
     from compas_cgal.adaptive.policy import CandidatePolicy
     from compas_cgal.adaptive.policy import CutDirectionPolicy
     from compas_cgal.adaptive.policy import DepletionPolicy
+    from compas_cgal.adaptive.policy import MatSamplingPolicy
     from compas_cgal.adaptive.policy import NeckPolicy
     from compas_cgal.adaptive.policy import TraversalPolicy
     from compas_cgal.adaptive.reachable_domain import ReachableDomain
     from compas_cgal.adaptive.units import CutPlane
     from compas_cgal.adaptive.units import ToolRadius
 
-INPUT_SCHEMA_VERSION: Final[bytes] = b"adaptive-input-schema-v1"
+INPUT_SCHEMA_VERSION: Final[bytes] = b"adaptive-input-schema-v2"
 OPERATION_SCHEMA_VERSION: Final[bytes] = b"adaptive-operation-schema-v1"
 COMPONENT_IDENTITY_VERSION: Final[bytes] = b"component-identity-v1"
 BOUNDARY_VERTEX_ID_VERSION: Final[bytes] = b"boundary-vertex-id-v1"
@@ -239,6 +240,7 @@ class InputIdentity:
     reachable_domain_digest: bytes
     entry: PreclearedEntry
     user_cap: EngagementCap
+    mat_sampling_policy: MatSamplingPolicy
     candidate_policy: CandidatePolicy
     neck_policy: NeckPolicy
     depletion_policy: DepletionPolicy
@@ -252,6 +254,7 @@ class InputIdentity:
         from compas_cgal.adaptive.policy import CandidatePolicy
         from compas_cgal.adaptive.policy import CutDirectionPolicy
         from compas_cgal.adaptive.policy import DepletionPolicy
+        from compas_cgal.adaptive.policy import MatSamplingPolicy
         from compas_cgal.adaptive.policy import NeckPolicy
         from compas_cgal.adaptive.policy import TraversalPolicy
         from compas_cgal.adaptive.reachable_domain import ReachableDomain
@@ -289,6 +292,11 @@ class InputIdentity:
         if type(self.user_cap) is not EngagementCap:
             raise InvalidInputIdentityError("input identity requires one exact engagement cap.")
         for value, expected, name in (
+            (
+                self.mat_sampling_policy,
+                MatSamplingPolicy,
+                "MAT-sampling",
+            ),
             (self.candidate_policy, CandidatePolicy, "candidate"),
             (self.neck_policy, NeckPolicy, "neck"),
             (self.depletion_policy, DepletionPolicy, "depletion"),
@@ -327,6 +335,7 @@ class InputIdentity:
         reachable_domain: ReachableDomain,
         entry: PreclearedEntry,
         user_cap: EngagementCap,
+        mat_sampling_policy: MatSamplingPolicy,
         candidate_policy: CandidatePolicy,
         neck_policy: NeckPolicy,
         depletion_policy: DepletionPolicy,
@@ -343,6 +352,7 @@ class InputIdentity:
             reachable_domain: Exact design/center-domain proof owner.
             entry: Validated precleared entry owned by that domain.
             user_cap: Maximum lateral engagement cap.
+            mat_sampling_policy: Complete cursor-affecting MAT sampling policy.
             candidate_policy: Complete finite proposal-lattice policy.
             neck_policy: Exact neck classification and effective-cap policy.
             depletion_policy: Exact motion-depletion construction policy.
@@ -385,6 +395,7 @@ class InputIdentity:
             reachable_domain.certificate.digest,
             entry,
             user_cap,
+            mat_sampling_policy,
             candidate_policy,
             neck_policy,
             depletion_policy,
@@ -412,6 +423,7 @@ class InputIdentity:
                     ),
                     b"entry": self.entry.canonical_bytes,
                     b"frame": encode_bytes(bytes(self.frame_identity)),
+                    b"mat-sampling-policy": canonical_task1_bytes(self.mat_sampling_policy),
                     b"neck-policy": canonical_task1_bytes(self.neck_policy),
                     b"operation-schema-version": encode_bytes(OPERATION_SCHEMA_VERSION),
                     b"reachable-domain-digest": encode_bytes(self.reachable_domain_digest),
