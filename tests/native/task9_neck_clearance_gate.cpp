@@ -163,6 +163,115 @@ bool nonminima_are_not_emitted()
                .empty();
 }
 
+bool endpoint_behavior_uses_open_interval_signs()
+{
+    const MatClearanceEdgeProfile2 rising =
+        profile({0, 0, 0, 0, 1}, 0, 2);
+    const MatClearanceEndpointBehavior2
+        rising_lower =
+            lower_endpoint_clearance_behavior(
+                rising);
+    const MatClearanceEndpointBehavior2
+        rising_upper =
+            upper_endpoint_clearance_behavior(
+                rising);
+    const MatClearanceEdgeProfile2 falling =
+        profile({0, 0, 1}, -2, 0);
+    const MatClearanceEndpointBehavior2
+        falling_lower =
+            lower_endpoint_clearance_behavior(
+                falling);
+    const MatClearanceEndpointBehavior2
+        falling_upper =
+            upper_endpoint_clearance_behavior(
+                falling);
+    const MatClearanceEdgeProfile2
+        affine_rising =
+            profile({1, 1}, 0, 1);
+    const MatClearanceEndpointBehavior2
+        affine_rising_lower =
+            lower_endpoint_clearance_behavior(
+                affine_rising);
+    const MatClearanceEndpointBehavior2
+        affine_rising_upper =
+            upper_endpoint_clearance_behavior(
+                affine_rising);
+    const MatClearanceEdgeProfile2
+        affine_falling =
+            profile(
+                {
+                    1,
+                    CORE::BigRat(-1, 2),
+                },
+                0,
+                1);
+    const MatClearanceEndpointBehavior2
+        affine_falling_lower =
+            lower_endpoint_clearance_behavior(
+                affine_falling);
+    const MatClearanceEndpointBehavior2
+        affine_falling_upper =
+            upper_endpoint_clearance_behavior(
+                affine_falling);
+    const MatClearanceEdgeProfile2 flat =
+        profile({1}, -1, 1);
+    const MatClearanceEndpointBehavior2
+        flat_lower =
+            lower_endpoint_clearance_behavior(
+                flat);
+    const MatClearanceEndpointBehavior2
+        flat_upper =
+            upper_endpoint_clearance_behavior(
+                flat);
+    ExactAlgebraicKernel1 kernel;
+    return rising_lower.inward_clearance_sign()
+            == CGAL::POSITIVE
+        && rising_upper.inward_clearance_sign()
+            == CGAL::NEGATIVE
+        && falling_lower.inward_clearance_sign()
+            == CGAL::NEGATIVE
+        && falling_upper.inward_clearance_sign()
+            == CGAL::POSITIVE
+        && affine_rising_lower
+               .inward_clearance_sign()
+            == CGAL::POSITIVE
+        && affine_rising_upper
+               .inward_clearance_sign()
+            == CGAL::NEGATIVE
+        && affine_falling_lower
+               .inward_clearance_sign()
+            == CGAL::NEGATIVE
+        && affine_falling_upper
+               .inward_clearance_sign()
+            == CGAL::POSITIVE
+        && flat_lower.inward_clearance_sign()
+            == CGAL::ZERO
+        && flat_upper.inward_clearance_sign()
+            == CGAL::ZERO
+        && kernel.compare_1_object()(
+               rising_lower.squared_width().value(),
+               CORE::BigRat(0))
+            == CGAL::EQUAL
+        && kernel.compare_1_object()(
+               rising_upper.squared_width().value(),
+               CORE::BigRat(64))
+            == CGAL::EQUAL
+        && kernel.compare_1_object()(
+               falling_lower.squared_width().value(),
+               CORE::BigRat(16))
+            == CGAL::EQUAL
+        && kernel.compare_1_object()(
+               falling_upper.squared_width().value(),
+               CORE::BigRat(0))
+            == CGAL::EQUAL
+        && kernel.compare_1_object()(
+               flat_lower.squared_width().value(),
+               CORE::BigRat(4))
+            == CGAL::EQUAL
+        && flat_upper.squared_width().root_id()
+            == flat_lower.squared_width().root_id();
+}
+
 bool malformed_profiles_are_rejected()
 {
     bool empty_function_rejected = false;
@@ -283,5 +392,6 @@ bool neck_clearance_gate()
     return quadratic_minimum_is_exact()
         && quartic_has_two_algebraic_minima()
         && nonminima_are_not_emitted()
+        && endpoint_behavior_uses_open_interval_signs()
         && malformed_profiles_are_rejected();
 }

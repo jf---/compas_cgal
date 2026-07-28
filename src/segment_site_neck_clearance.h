@@ -113,6 +113,39 @@ private:
     std::string root_id_;
 };
 
+class MatClearanceEndpointBehavior2 {
+public:
+    CGAL::Sign inward_clearance_sign()
+        const noexcept;
+    const MatExactSquaredWidth2&
+    squared_width() const noexcept;
+
+private:
+    MatClearanceEndpointBehavior2(
+        CGAL::Sign inward_clearance_sign,
+        MatExactSquaredWidth2 squared_width);
+
+    CGAL::Sign inward_clearance_sign_;
+    MatExactSquaredWidth2 squared_width_;
+
+    friend MatClearanceEndpointBehavior2
+    lower_endpoint_clearance_behavior(
+        const MatClearanceEdgeProfile2&
+            profile);
+    friend MatClearanceEndpointBehavior2
+    upper_endpoint_clearance_behavior(
+        const MatClearanceEdgeProfile2&
+            profile);
+};
+
+MatClearanceEndpointBehavior2
+lower_endpoint_clearance_behavior(
+    const MatClearanceEdgeProfile2& profile);
+
+MatClearanceEndpointBehavior2
+upper_endpoint_clearance_behavior(
+    const MatClearanceEdgeProfile2& profile);
+
 class MatStrictEdgeClearanceMinimum2 {
 public:
     const std::string& edge_id() const noexcept;

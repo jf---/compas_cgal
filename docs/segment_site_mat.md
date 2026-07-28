@@ -78,9 +78,9 @@ needed by every downstream traversal and engagement decision.
     incidence per candidate. Its L-pocket gate classifies all nine edges as
     bridges, rejects all five leaves as nonseparating vertex candidates, and
     returns exactly the graph degree for each of the five non-leaf vertex
-    cuts. This is the separating-cut substrate only: exact clearance minima,
-    squared neck width, deterministic evidence ownership, and final
-    `NeckEvidenceV1` records remain pending.
+    cuts. Exact clearance minima, squared neck width, and evidence ownership
+    are supplied independently below; final canonical `NeckEvidenceV1` bytes
+    remain pending.
     A separate exact-clearance sidecar now consumes a canonical graph edge,
     validates its exact endpoint evidence and nonnegative rational
     `clearance²(t)` polynomial through degree four, isolates all
@@ -93,8 +93,14 @@ needed by every downstream traversal and engagement decision.
     profile decomposition is two constants, five quadratics, and two quartics
     at `r² = 0`; input reversal preserves every coefficient and endpoint, and
     positive-radius clearance endpoints re-evaluate to `width² = 4`.
-    Rectangle adoption, endpoint/shared-vertex/plateau classification,
-    ownership, cut attachment, and final evidence assembly remain pending.
+    A graph-level typed classifier now combines those profiles with one reused
+    cut index. Synthetic goldens cover strict interior, single clearance-root
+    endpoint, merged shared-vertex, and maximal connected plateau ownership.
+    On the production L graph it emits exactly two disjoint single-edge
+    plateau records at exact `width² = 4`; complete location, owner, sites,
+    algebraic width identity, and cut partitions survive input reversal.
+    Rectangle profile adoption and canonical public `NeckEvidenceV1`
+    serialization remain pending.
     A catalog-fed rectangle orchestration carries the same owner architecture
     through its complete bounded graph:
     one adaptor traversal emits five S–S edges and six canonical nodes,
@@ -146,7 +152,7 @@ construction.
 | Engagement limit | stronger contract; incomplete integration | Analytic circle construction followed by bisection until `θmax − 0.001 <= θ <= θmax` radians | Exact rational chord surrogate and event-exact segment/full-circle certification; integration incomplete |
 | Candidate spacing | incomplete | Bisection along the middle curve | Finite candidate lattice; no monotonic-feasibility assumption |
 | Machined state | stronger contract | Ordered contour of prior machining disks; transition sweeps omitted from that contour model | Exact stock mutation and exact full-sweep coverage, ordered certify-before-deplete |
-| Bottlenecks | stronger proof substrate; incomplete feature | Graph search, width, and heuristic cap reduction on first passage | Canonical strict-edge, shared-vertex, and induced-plateau cuts emit deterministic traversal-side partitions and reject nonseparating candidates. The adopted L graph now carries exact base-clearance profiles and algebraic squared-width evaluation; its two arm restrictions are constant plateaus rather than strict interior roots. Rectangle profiles, endpoint/shared/plateau evidence ownership, typed passage state, and bound cap decision remain pending |
+| Bottlenecks | stronger exact contract on the adopted L fixture; incomplete feature | Graph search, width, and heuristic cap reduction on first passage | A typed four-variant classifier composes exact profile minima with canonical separating cuts and deterministic ownership. The adopted L graph emits exactly two reversal-invariant single-edge plateau restrictions at exact `width² = 4`, not fabricated strict roots. Rectangle profiles, canonical public evidence bytes, typed passage state, and bound cap decision remain pending |
 | Validation | incomplete | Dense engagement sampling for result plots; complete path and runtime experiments | Fresh replay, mutation gates, artifact identity, and exact residual proof; planned |
 | End-to-end evidence | weaker | Complete paths, figures, path-length gains, and 3–100 ms path-generation timings excluding Voronoi construction | Tasks 10–16 remain frozen; no complete path, Fig. 5 reproduction, or performance result yet |
 
@@ -205,9 +211,10 @@ complete graph-linear bottleneck implementation as a real current performance
 advantage.
 
 Two other clocks must remain separate. Five warm local Release executions of
-the current native Task 9 algebraic fixture suite took 3.35–3.39 s (3.36 s
-median), including exact public-table root/provenance revalidation, but that is
-a contract gate rather than one pocket generation. The
+the current native Task 9 algebraic fixture suite took 3.57–3.62 s (3.60 s
+median), including exact public-table root/provenance revalidation and two
+complete production-L neck classifications. That is a contract gate rather
+than one pocket generation. The
 existing exact stock replay
 measured 87 s for the kite after a 7x end-to-end speedup; that run certifies and
 depletes every operation and is not comparable to Held and Pfeiffer's planner
@@ -1830,7 +1837,7 @@ malformed topology.
 
 ## Neck evidence is a graph certificate
 
-Necks are not simply low-clearance samples. The final extractor will carry
+Necks are not simply low-clearance samples. The public certificate will carry
 four exact `NeckEvidenceV1` variants:
 
 | Variant | Exact event |
@@ -1971,12 +1978,55 @@ through its base profile to exact `width² = 4`.
     the fixture intended to exercise a narrow passage. Plateau and
     shared-vertex evidence are required semantics, not degenerate cleanup.
 
-The rectangle producer does not yet emit profiles. One-sided clearance
-endpoints, equal incident minima at a shared node, maximal connected
-constant-clearance plateaus, deterministic owner selection, cut attachment,
-and final public evidence rows are also pending. A topologically separating
-edge remains only a possible neck until its production profile passes the
-applicable minimum proof.
+### Exact graph-level neck classification
+
+`exact_neck_evidence` consumes the already-bound graph/profile bundle and
+builds the topology index once. It computes exact inward clearance behavior
+for both ends of every edge, validates that all incident profiles agree on the
+exact algebraic width at each node, and then applies the ownership order:
+
+1. relative-interior negative-to-positive roots remain strict-edge owners;
+2. equal one-sided endpoint minima at one node merge into one shared-vertex
+   owner carrying every minimizing halfedge;
+3. connected constant-clearance edges merge into one maximal plateau and
+   reserve their nodes against duplicate endpoint evidence;
+4. one remaining one-sided minimum is retained only when its endpoint carries
+   exact clearance-root evidence.
+
+Lower and upper endpoints are normalized to one inward sign convention:
+`POSITIVE` always means clearance rises when entering the edge. The sign is
+evaluated at a rational witness in the first exact derivative-root-free open
+cell, so a function such as `t⁴` is correctly increasing away from `t = 0`
+even though its derivative equals zero at the endpoint.
+
+The internal `MatExactNeckEvidence2` is a closed `std::variant`, so a payload
+cannot disagree with its type tag. Every record binds the deterministic owner,
+sorted defining-site union, exact algebraic squared width, and independently
+proved separating cut. A nonseparating candidate is omitted only through the
+named `NonSeparatingMatNeckCandidateError`; malformed graph, profile, width,
+or plateau contracts still fail loudly.
+
+!!! note "Constant-cell ownership is not an exit-slope test"
+
+    Every relative-interior point of a constant profile is a non-strict local
+    minimum on that MAT cell. Maximal connected constant cells therefore merge
+    regardless of whether an adjacent terminal branch rises or falls. The
+    independent contracted-plateau cut rejects topologically irrelevant flat
+    cells. Requiring every exit to rise would incorrectly erase a
+    constant-width passage that connects toward a narrowing terminal branch.
+
+On the adopted L graph, the two constant profiles become exactly two
+disjoint, single-edge `PLATEAU` records. Each has exact `width² = 4`, two
+plateau node IDs, one plateau edge ID, a canonical owner, the two defining
+sites, and at least two traversal-side partitions. Canonical input reversal
+preserves every field. No strict, clearance-endpoint, or shared-vertex record
+is fabricated on this fixture.
+
+The rectangle producer does not yet emit profiles. Canonical
+`NeckEvidenceV1` bytes, public evidence rows, and the Python validation
+boundary are also pending. A topologically separating edge remains only a
+possible neck until its production profile passes the applicable minimum
+proof.
 
 This is why neck extraction belongs after exact graph normalization and before
 proposal sampling.
@@ -2017,6 +2067,7 @@ Refinement may change the number and position of samples. It must not change:
 | `segment_site_mat.*` | canonical graph records, general graph primitives, and independently validated bounded comparators |
 | `segment_site_neck.h/.cpp` | canonical separating-cut index and partitions |
 | `segment_site_neck_clearance.*` | exact bounded clearance-profile validation, strict derivative minima, and algebraic squared-width evaluation |
+| `segment_site_neck_evidence.*` | graph-level four-variant ownership, exact node-width consistency, and cut attachment |
 | `segment_site_catalog_neck.*` | adopted catalog-graph clearance-profile reconstruction and graph/profile binding |
 | `segment_site_mat_sampling.*` | proposal-only samples |
 | `medial_axis_2.cpp` | nanobind adapter only |
@@ -2064,7 +2115,7 @@ consumers, or evolution differ from graph orchestration.
 | Neck separating-cut substrate | implemented and native-gated | one canonical reusable topology index; deterministic strict-edge, shared-vertex, and connected induced-plateau partitions; candidate-component scoping; named malformed/nonseparating failures; complete adopted L-tree cut classification |
 | Strict-edge clearance-minimum calculus | implemented and native-gated | exact bounded degree-four rational profiles; interval nonnegativity; relative-interior derivative roots and sign changes; algebraic `width² = 4 clearance²`; synthetic quadratic/quartic goldens; adopted L profiles contain no strict interior minimum |
 | Catalog-fed L clearance profiles | implemented and native-gated | one unchanged canonical graph build; one profile per retained edge; exact `2 constant + 5 quadratic + 2 quartic` decomposition; complete reversal identity; positive-radius clip endpoints re-evaluate to exact `width² = 4` |
-| Exact neck evidence | pending | no production claim |
+| Exact neck classification | native typed records implemented and gated; public V1 bytes pending | strict, clearance-endpoint, shared-vertex, and maximal plateau ownership; exact node-width consistency; independent cut attachment; adopted L emits exactly two reversal-invariant plateau records at `width² = 4` |
 | Proposal-only sampling | pending | no production claim |
 | Python fixed-tuple binding | pending | no public API claim |
 
@@ -2167,8 +2218,17 @@ and the exact `2 constant + 5 quadratic + 2 quartic` decomposition, and proves
 that no profile has a relative-interior strict minimum. Complete profile
 records survive canonical input reversal. The `r² = 1` gate re-evaluates every
 clearance-root endpoint to exact `width² = 4`; missing, reordered, or
-noncanonical graph/profile rows fail loudly. This does not yet establish
-rectangle profiles or any endpoint/shared/plateau evidence record.
+noncanonical graph/profile rows fail loudly. The neck-evidence gate separately
+locks all four typed variants, exact open-interval endpoint signs for affine,
+constant, quadratic, and zero-derivative `t⁴` behavior, exact node-width
+agreement, maximal multi-edge plateau merging, ownership precedence, and
+independent cut attachment. Malformed endpoint-root provenance,
+variant-specific site cardinality, envelope ownership, and isolated nodes fail
+through named boundaries; strict minima on a cycle are filtered as
+nonseparating. Its production L golden requires exactly two disjoint
+single-edge plateau records at exact `width² = 4` and complete reversal
+identity. This does not yet establish rectangle profiles or canonical public
+`NeckEvidenceV1` bytes.
 The catalog-fed
 segment-Delaunay gate separately locks one-pass segment insertion, exact
 catalog/live-generator cardinality and identity, indexed lookup across two
