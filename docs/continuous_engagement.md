@@ -265,9 +265,47 @@ real first-passage circle reaches the certifier at `90 degrees`, not the
     The next radius-`1/8`, phase-index-`3` circle advances the same neck passage
     legally, but exceeds its reconstructed `80 degrees` cap against post-link
     stock. That negative is an integration gate. An equal-cap fixture separately
-    proves the two state transitions; Task 12 must search for a feasible winner
-    instead of weakening the oracle or conflating passage legality with motion
-    acceptance.
+    proves the two state transitions. Task 12 now rejects that complete joint
+    trial; Task 13 must continue the feasible-candidate search instead of
+    weakening the oracle or conflating passage legality with motion acceptance.
+
+### Task 12 atomic consumer
+
+The event-exact oracle now has a production candidate-level consumer.
+`CandidateEvaluator` evaluates the direct phase link and its proposed full
+circle on private `Stock2Area` and `CoverageLedger` forks. For both motions it
+preserves the only valid causal order:
+
+```text
+containment -> MotionCertifier.certify -> deplete -> add_sweep
+```
+
+The second certification therefore observes the link-depleted trial stock,
+while the parent `GenerationState` remains unchanged. A named containment,
+cap-exceeded, unresolved-event, depletion, or coverage failure destroys the
+trial by ordinary scope exit; no partial link can escape.
+
+Successful evaluation returns immutable `CandidateTransaction` evidence, not
+mutable stock. Commit rejects a stale parent digest, independently repeats the
+winning evaluation, and requires identical canonical bytes before returning
+the new state. The state factory separately replays every oriented passage
+transition from `UNVISITED`, pairs every historical link and circle by
+scope/cap/cursor, and requires all lateral `CutZ` values to equal the qualified
+entry plane. The evaluator binds candidate, depletion, cap, and cut-direction
+policy before extending that state. This closes planar-consumer gaps that TEA
+alone cannot observe: unearned neck state, mixed policies, or a geometrically
+valid motion emitted at a foreign depth.
+
+The focused L-pocket gate proves both positive and negative composition. One
+real no-neck candidate commits its link and circle together. A real oriented
+second-passage link certifies at the reconstructed `80 degrees` cap, but its
+circle exceeds that cap and the complete joint trial is discarded. A separate
+larger lattice circle passes its direct link and fails exact containment.
+
+Task 13 remains the sole authority for assigning causal neck scope, choosing
+the active global MAT branch, and deciding which candidate failures constitute
+normal search exhaustion. Task 12 validates a supplied finite candidate and
+state transition; it does not infer global traversal facts.
 
 !!! danger "Exact-number backend definitions are an ABI contract"
 
