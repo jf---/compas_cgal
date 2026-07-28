@@ -20,6 +20,7 @@ bool catalog_delaunay_gate();
 bool catalog_voronoi_gate();
 bool rational_sources_gate();
 bool indexed_endpoint_binding_gate();
+bool catalog_graph_gate();
 
 namespace {
 
@@ -1798,6 +1799,7 @@ int main()
             && catalog_voronoi_gate()
             && rational_sources_gate()
             && indexed_endpoint_binding_gate()
+            && catalog_graph_gate()
         ? EXIT_SUCCESS
         : EXIT_FAILURE;
 }
