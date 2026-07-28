@@ -9,6 +9,7 @@ import compas_cgal.adaptive.policy as policy_module
 from compas_cgal.adaptive.errors import InvalidCandidatePolicyError
 from compas_cgal.adaptive.errors import InvalidCutDirectionPolicyError
 from compas_cgal.adaptive.errors import InvalidDepletionPolicyError
+from compas_cgal.adaptive.errors import InvalidMatSamplingPolicyError
 from compas_cgal.adaptive.errors import InvalidNeckPolicyError
 from compas_cgal.adaptive.errors import InvalidTraversalPolicyError
 from compas_cgal.adaptive.motion import EngagementCap
@@ -21,6 +22,7 @@ from compas_cgal.adaptive.policy import CutDirectionPolicy
 from compas_cgal.adaptive.policy import CutIntent
 from compas_cgal.adaptive.policy import DepletionPolicy
 from compas_cgal.adaptive.policy import MaterialSide
+from compas_cgal.adaptive.policy import MatSamplingPolicy
 from compas_cgal.adaptive.policy import NeckPolicy
 from compas_cgal.adaptive.policy import PassageState
 from compas_cgal.adaptive.policy import TraversalPolicy
@@ -41,6 +43,38 @@ def _candidate_policy() -> CandidatePolicy:
         minimum_guide_radius=GuideRadius.build(0.0625),
         minimum_progress=Spacing.build(0.05),
     )
+
+
+def test_mat_sampling_policy_owns_every_cursor_affecting_bound() -> None:
+    sampling = MatSamplingPolicy.build(
+        station_spacing=Spacing.build(0.75),
+        max_sagitta=ChordBound.build(0.02),
+        max_refinement_depth=32,
+    )
+
+    assert sampling.station_spacing == Spacing.build(0.75)
+    assert sampling.max_sagitta == ChordBound.build(0.02)
+    assert sampling.max_refinement_depth == 32
+
+    with pytest.raises(
+        InvalidMatSamplingPolicyError,
+        match="station spacing",
+    ):
+        MatSamplingPolicy(object(), ChordBound.build(0.02), 32)  # type: ignore[arg-type]
+    with pytest.raises(
+        InvalidMatSamplingPolicyError,
+        match="sagitta",
+    ):
+        MatSamplingPolicy(Spacing.build(0.75), object(), 32)  # type: ignore[arg-type]
+    with pytest.raises(
+        InvalidMatSamplingPolicyError,
+        match="refinement depth",
+    ):
+        MatSamplingPolicy(
+            Spacing.build(0.75),
+            ChordBound.build(0.02),
+            0,
+        )
 
 
 def test_candidate_policy_owns_finite_lattice_and_canonical_tie_break() -> None:

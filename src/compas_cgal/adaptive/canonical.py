@@ -18,6 +18,7 @@ from compas_cgal.adaptive.policy import CutDirectionPolicy
 from compas_cgal.adaptive.policy import CutIntent
 from compas_cgal.adaptive.policy import DepletionPolicy
 from compas_cgal.adaptive.policy import MaterialSide
+from compas_cgal.adaptive.policy import MatSamplingPolicy
 from compas_cgal.adaptive.policy import NeckEffectiveCap
 from compas_cgal.adaptive.policy import NeckPolicy
 from compas_cgal.adaptive.policy import PassageState
@@ -531,6 +532,35 @@ def canonical_task1_bytes(value: object) -> bytes:
         return _engagement_cap_bytes(value)
     if type(value) is CandidatePolicy:
         return _candidate_policy_bytes(value)
+    if type(value) is MatSamplingPolicy:
+        _require_exact(
+            value.station_spacing,
+            Spacing,
+            "MAT station spacing",
+        )
+        _require_exact(
+            value.max_sagitta,
+            ChordBound,
+            "MAT maximum sagitta",
+        )
+        if type(value.max_refinement_depth) is not int:
+            raise CanonicalEncodingError("MAT maximum refinement depth must be exact int.")
+        return encode_tagged_union(
+            b"mat-sampling-policy-v1",
+            encode_component_map(
+                {
+                    b"max-refinement-depth": encode_integer(value.max_refinement_depth),
+                    b"max-sagitta": _scalar_bytes(
+                        b"chord-bound-mm-v1",
+                        value.max_sagitta.value,
+                    ),
+                    b"station-spacing": _scalar_bytes(
+                        b"spacing-mm-v1",
+                        value.station_spacing.value,
+                    ),
+                }
+            ),
+        )
     if type(value) is NeckPolicy:
         return _neck_policy_bytes(value)
     if type(value) is DepletionPolicy:

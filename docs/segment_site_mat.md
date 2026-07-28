@@ -476,17 +476,29 @@ state. Its canonical record binds:
 - cut plane, tool radius, user cap, and cut-direction policy;
 - the exact reachable-domain certificate digest;
 - the complete qualified entry and containment record;
-- candidate, neck, depletion, and traversal policies; and
+- MAT sampling, candidate, neck, depletion, and traversal policies; and
 - the canonical grammar, input/operation schemas, reachable-domain,
   containment, entry, entry-depletion, motion-depletion,
   motion-certificate, and native event-oracle versions.
 
 The digest is derived from that record and is not embedded in it. Rebuilding
-with different bore evidence, candidate spacing, or cut intent changes the
-digest. Cross-wiring an entry from another reachable-domain owner, cut plane,
-or tool fails at construction. Binding component versions matters as much as
-binding numeric inputs: the same policy bytes interpreted by a different
-proof strategy are intentionally a different input identity.
+with different bore evidence, MAT station spacing, candidate spacing, or cut
+intent changes the digest. `adaptive-input-schema-v2` adds the typed
+`MatSamplingPolicy`: station spacing, conic sagitta bound, and fail-loud
+refinement depth affect traversal cursor identity even though the exact MAT
+certificate excludes reporting samples and remains refinement-invariant.
+Cross-wiring an entry from another reachable-domain owner, cut plane, or tool
+fails at construction. Binding component versions matters as much as binding
+numeric inputs: the same policy bytes interpreted by a different proof
+strategy are intentionally a different input identity.
+
+!!! warning "Exact MAT identity and traversal identity have different inputs"
+
+    Resampling cannot change exact topology, neck evidence, or the MAT
+    certificate. It can change which exact sample owns a traversal cursor and
+    which span derives an intermediate cursor. Fresh replay must therefore
+    rebuild with the input-bound `MatSamplingPolicy`; choosing convenient
+    sampling values at replay time would accept a stale cursor lineage.
 
 ## Relation to Held and Pfeiffer (2025)
 

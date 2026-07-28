@@ -10,6 +10,7 @@ import pytest
 from compas_cgal import _continuous_tea_2
 from compas_cgal.adaptive.canonical import CanonicalRingV1
 from compas_cgal.adaptive.canonical import ExactRationalV1
+from compas_cgal.adaptive.canonical import canonical_task1_bytes
 from compas_cgal.adaptive.canonical import encode_bytes
 from compas_cgal.adaptive.canonical import encode_tagged_union
 from compas_cgal.adaptive.entry import BoreProcessIdentity
@@ -45,6 +46,7 @@ from compas_cgal.adaptive.policy import CandidatePolicy
 from compas_cgal.adaptive.policy import CutDirectionPolicy
 from compas_cgal.adaptive.policy import CutIntent
 from compas_cgal.adaptive.policy import DepletionPolicy
+from compas_cgal.adaptive.policy import MatSamplingPolicy
 from compas_cgal.adaptive.policy import NeckPolicy
 from compas_cgal.adaptive.policy import TraversalPolicy
 from compas_cgal.adaptive.reachable_domain import ReachableDomain
@@ -488,6 +490,7 @@ def _input_identity(
     *,
     bore_evidence: bytes = b"qualified-bore-metrology-v1",
     spatial_resolution: float = 0.5,
+    mat_station_spacing: float = 0.75,
     cut_intent: CutIntent = CutIntent.CLIMB,
 ) -> InputIdentity:
     design_boundary = _outer_ring()
@@ -533,6 +536,11 @@ def _input_identity(
         reachable_domain=reachable_domain,
         entry=entry,
         user_cap=user_cap,
+        mat_sampling_policy=MatSamplingPolicy.build(
+            station_spacing=Spacing.build(mat_station_spacing),
+            max_sagitta=ChordBound.build(0.02),
+            max_refinement_depth=32,
+        ),
         candidate_policy=CandidatePolicy.build(
             spatial_resolution=Spacing.build(spatial_resolution),
             spatial_refinement_levels=2,
@@ -562,6 +570,7 @@ def test_input_identity_binds_entry_domain_policies_schemas_and_components() -> 
     assert OPERATION_SCHEMA_VERSION in canonical
     assert identity.entry.canonical_bytes in canonical
     assert identity.reachable_domain_digest in canonical
+    assert canonical_task1_bytes(identity.mat_sampling_policy) in canonical
     assert identity.component_versions
     assert all(binding.version in canonical for binding in identity.component_versions)
     component_versions = {binding.component: binding.version for binding in identity.component_versions}
@@ -574,6 +583,7 @@ def test_input_identity_binds_entry_domain_policies_schemas_and_components() -> 
     variants = (
         _input_identity(bore_evidence=b"qualified-bore-metrology-v2"),
         _input_identity(spatial_resolution=0.25),
+        _input_identity(mat_station_spacing=0.5),
         _input_identity(cut_intent=CutIntent.CONVENTIONAL),
     )
     assert all(variant.digest != identity.digest for variant in variants)
@@ -584,6 +594,8 @@ def test_input_identity_accepts_only_its_validated_precleared_entry() -> None:
 
     with pytest.raises(InvalidInputIdentityError, match="PreclearedEntry"):
         replace(identity, entry=object())
+    with pytest.raises(InvalidInputIdentityError, match="MAT-sampling"):
+        replace(identity, mat_sampling_policy=object())
 
     equivalent_but_distinct = _input_identity()
     with pytest.raises(InvalidInputIdentityError, match="PreclearedEntry"):

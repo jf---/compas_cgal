@@ -1622,7 +1622,7 @@ Require:
 - arbitrary lateral motion cannot be relabelled as entry;
 - `InputIdentity.build(...)` accepts only the validated entry and binds
   canonical `D`, frame, cut plane, tool, reachable-domain digest, user cap,
-  cut direction, all candidate/neck/depletion/traversal policies,
+  cut direction, all MAT-sampling/candidate/neck/depletion/traversal policies,
   `INPUT_SCHEMA_VERSION`, `OPERATION_SCHEMA_VERSION`, and every current
   component version.
 
@@ -1677,9 +1677,24 @@ Commit: `feat(adaptive): certify entry and input`
 
 **Dependencies:** Tasks 3, 8, 10, and 11.
 
+**Prerequisite repair (2026-07-28):** the replay audit found that exact MAT
+certificate identity is refinement-invariant while traversal cursor identity
+is not. `adaptive-input-schema-v2` therefore adds a required typed
+`MatSamplingPolicy` containing station spacing, conic sagitta bound, and
+finite refinement depth. Replay must rebuild `MedialAxis` from this
+input-bound policy; it may not infer sampling from candidate/depletion policy
+or accept replay-only sampling values outside `InputIdentity`.
+
 **Files**
 
+- Modify: `src/compas_cgal/adaptive/errors.py`
+- Modify: `src/compas_cgal/adaptive/policy.py`
+- Modify: `src/compas_cgal/adaptive/canonical.py`
+- Modify: `src/compas_cgal/adaptive/identity.py`
 - Create: `src/compas_cgal/adaptive/replay.py`
+- Modify: `tests/adaptive/test_policy.py`
+- Modify: `tests/adaptive/test_identity.py`
+- Modify: `tests/adaptive/typecheck/consumer_contract.py`
 - Test: `tests/adaptive/test_replay.py`
 
 ### Step 1: write RED replay contracts
@@ -1710,6 +1725,9 @@ Tests require:
 - replay recomputes and matches `InputIdentity`, `C_r`/`M_r`, MAT certificate,
   exact neck evidence/classes, and cut-direction orientation from canonical
   inputs;
+- replay rebuilds MAT proposal sampling from the input-bound
+  `MatSamplingPolicy`, so every native and intermediate cursor belongs to the
+  same finite span grammar as generation;
 - pristine stock and coverage are constructed, then `PreclearedEntry` is
   applied before the first lateral operation;
 - approach/plunge exactly match clearance/cut Z and the qualified bore, and
