@@ -1,5 +1,6 @@
 #include "segment_site_endpoint_binding.h"
 #include "segment_site_delaunay.h"
+#include "segment_site_rational_sources.h"
 
 #include <algorithm>
 #include <iterator>
@@ -1117,6 +1118,411 @@ MatParameterEndpoint2 bind_segment_limiter_parabola_endpoint(
         limiter_source,
         limiter_target,
         {live_point, live_parabola});
+}
+
+namespace
+{
+
+const CanonicalMatRationalPointSource2&
+canonical_parabola_point_source(
+    const CanonicalMatRationalSources2& sources,
+    const std::string& stable_id)
+{
+    const auto found = std::lower_bound(
+        sources.points().begin(),
+        sources.points().end(),
+        stable_id,
+        [](const CanonicalMatRationalPointSource2& point,
+           const std::string& identity)
+        {
+            return point.stable_site_id < identity;
+        });
+    if (found == sources.points().end()
+        || found->stable_site_id != stable_id)
+    {
+        throw UnknownCanonicalMatParabolaSourceError(
+            "canonical P-S point has no rational source");
+    }
+    return *found;
+}
+
+const CanonicalMatRationalOpenSegmentSource2&
+canonical_parabola_segment_source(
+    const CanonicalMatRationalSources2& sources,
+    const std::string& stable_id)
+{
+    const auto found = std::lower_bound(
+        sources.segments().begin(),
+        sources.segments().end(),
+        stable_id,
+        [](const CanonicalMatRationalOpenSegmentSource2& segment,
+           const std::string& identity)
+        {
+            return segment.stable_site_id < identity;
+        });
+    if (found == sources.segments().end()
+        || found->stable_site_id != stable_id)
+    {
+        throw UnknownCanonicalMatParabolaSourceError(
+            "canonical P-S segment has no rational source");
+    }
+    return *found;
+}
+
+MatExactPointSiteSource2 exact_canonical_parabola_point(
+    const CanonicalMatRationalPointSource2& point)
+{
+    return {
+        point.stable_site_id,
+        {point.x, 0},
+        {point.y, 0},
+        1,
+    };
+}
+
+std::pair<RationalDomainRoot2, RationalDomainRoot2>
+canonical_parabola_feature_bounds(
+    const MatExactPointSiteSource2& focus,
+    const CanonicalMatRationalOpenSegmentSource2& segment,
+    const CanonicalMatRationalSources2& sources)
+{
+    if (focus.x.radical != 0
+        || focus.y.radical != 0)
+    {
+        throw InvalidCanonicalMatParabolaFeatureDomainError(
+            "canonical P-S focus is not rational");
+    }
+    const CORE::BigRat line_norm =
+        segment.support.line_a * segment.support.line_a
+        + segment.support.line_b * segment.support.line_b;
+    if (line_norm == 0)
+    {
+        throw InvalidCanonicalMatParabolaFeatureDomainError(
+            "canonical P-S source segment has zero line normal");
+    }
+    const CORE::BigRat signed_distance =
+        segment.support.line_a * focus.x.rational
+        + segment.support.line_b * focus.y.rational
+        + segment.support.line_c;
+    if (signed_distance == 0)
+    {
+        throw InvalidCanonicalMatParabolaFeatureDomainError(
+            "canonical P-S focus lies on its directrix");
+    }
+    const CORE::BigRat projection_x =
+        focus.x.rational
+        - signed_distance * segment.support.line_a
+            / line_norm;
+    const CORE::BigRat projection_y =
+        focus.y.rational
+        - signed_distance * segment.support.line_b
+            / line_norm;
+    const auto endpoint =
+        [&segment,
+         &sources,
+         &projection_x,
+         &projection_y,
+         &line_norm](
+            const std::string& point_id)
+        {
+            const auto& point =
+                canonical_parabola_point_source(
+                    sources,
+                    point_id);
+            return RationalDomainRoot2{
+                (
+                    (point.x - projection_x)
+                        * -segment.support.line_b
+                    + (point.y - projection_y)
+                        * segment.support.line_a)
+                    / line_norm,
+                {point.stable_site_id},
+            };
+        };
+    RationalDomainRoot2 source =
+        endpoint(segment.source_point_id);
+    RationalDomainRoot2 target =
+        endpoint(segment.target_point_id);
+    if (source.parameter == target.parameter)
+    {
+        throw InvalidCanonicalMatParabolaFeatureDomainError(
+            "canonical P-S feature interval is empty");
+    }
+    if (target.parameter < source.parameter)
+    {
+        std::swap(source, target);
+    }
+    return {
+        std::move(source),
+        std::move(target),
+    };
+}
+
+MatTraits::Point_2 canonical_parabola_chart_point(
+    const SourceParabolaParameterization2& primitive,
+    const CORE::BigRat& parameter)
+{
+    return {
+        core_evaluate(
+            {
+                primitive.x_rational,
+                primitive.x_radical,
+            },
+            primitive.radicand,
+            CORE::Expr(parameter)),
+        core_evaluate(
+            {
+                primitive.y_rational,
+                primitive.y_radical,
+            },
+            primitive.radicand,
+            CORE::Expr(parameter)),
+    };
+}
+
+MatParameterEndpoint2 bind_canonical_parabola_feature_endpoint(
+    const SourceParabolaParameterization2& primitive,
+    const RationalDomainRoot2& bound,
+    const std::string& owner_id,
+    const MatTraits::Point_2& live_point)
+{
+    if (std::find(
+            bound.provenance_ids.begin(),
+            bound.provenance_ids.end(),
+            owner_id)
+            == bound.provenance_ids.end()
+        || canonical_parabola_chart_point(
+               primitive,
+               bound.parameter)
+            != live_point)
+    {
+        throw MismatchedLiveParabolaBridgeError(
+            "canonical P-S feature owner differs from live endpoint");
+    }
+    ExactAlgebraicKernel1 kernel;
+    return exact_graph_endpoint_binding(
+        {
+            kernel.construct_algebraic_real_1_object()(
+                bound.parameter),
+            bound.provenance_ids,
+        });
+}
+
+MatParameterEndpoint2 bind_canonical_parabola_owner(
+    const MatTraits::Site_2& owner,
+    const MatTraits::Point_2& live_point,
+    const SourceParabolaParameterization2& primitive,
+    const RationalDomainRoot2& lower,
+    const RationalDomainRoot2& upper,
+    const MatExactPointSiteSource2& focus,
+    const CanonicalMatRationalOpenSegmentSource2& segment,
+    const MatExactPointSiteSource2& segment_source,
+    const MatExactPointSiteSource2& segment_target,
+    const CanonicalMatRationalSources2& sources,
+    const CanonicalMatSiteGeometryIndex2& site_index,
+    const SegmentSiteVoronoi2& voronoi,
+    const SegmentSiteVoronoi2::Halfedge_handle& halfedge)
+{
+    const std::string owner_id =
+        site_index.stable_id(owner);
+    if (std::find(
+            lower.provenance_ids.begin(),
+            lower.provenance_ids.end(),
+            owner_id)
+        != lower.provenance_ids.end())
+    {
+        return bind_canonical_parabola_feature_endpoint(
+            primitive,
+            lower,
+            owner_id,
+            live_point);
+    }
+    if (std::find(
+            upper.provenance_ids.begin(),
+            upper.provenance_ids.end(),
+            owner_id)
+        != upper.provenance_ids.end())
+    {
+        return bind_canonical_parabola_feature_endpoint(
+            primitive,
+            upper,
+            owner_id,
+            live_point);
+    }
+    if (owner.is_point())
+    {
+        return bind_point_limiter_parabola_endpoint(
+            focus,
+            segment.support,
+            segment_source,
+            segment_target,
+            exact_canonical_parabola_point(
+                canonical_parabola_point_source(
+                    sources,
+                    owner_id)),
+            voronoi,
+            halfedge);
+    }
+    const auto& limiter =
+        canonical_parabola_segment_source(
+            sources,
+            owner_id);
+    return bind_segment_limiter_parabola_endpoint(
+        focus,
+        segment.support,
+        segment_source,
+        segment_target,
+        limiter.support,
+        exact_canonical_parabola_point(
+            canonical_parabola_point_source(
+                sources,
+                limiter.source_point_id)),
+        exact_canonical_parabola_point(
+            canonical_parabola_point_source(
+                sources,
+                limiter.target_point_id)),
+        voronoi,
+        halfedge);
+}
+
+} // namespace
+
+std::pair<MatParameterEndpoint2, MatParameterEndpoint2>
+bind_point_segment_cell_endpoints(
+    const CanonicalMatRationalSources2& sources,
+    const std::string& focus_id,
+    const std::string& segment_id,
+    const CanonicalMatSiteGeometryIndex2& site_index,
+    const SegmentSiteVoronoi2& voronoi,
+    const SegmentSiteVoronoi2::Halfedge_handle& halfedge)
+{
+    const auto& focus_record =
+        canonical_parabola_point_source(
+            sources,
+            focus_id);
+    const auto& segment =
+        canonical_parabola_segment_source(
+            sources,
+            segment_id);
+    if (focus_id == segment.source_point_id
+        || focus_id == segment.target_point_id)
+    {
+        throw IncidentCanonicalMatParabolaSourceError(
+            "canonical P-S focus is a source-segment endpoint");
+    }
+    const MatExactPointSiteSource2 focus =
+        exact_canonical_parabola_point(
+            focus_record);
+    const MatExactPointSiteSource2 segment_source =
+        exact_canonical_parabola_point(
+            canonical_parabola_point_source(
+                sources,
+                segment.source_point_id));
+    const MatExactPointSiteSource2 segment_target =
+        exact_canonical_parabola_point(
+            canonical_parabola_point_source(
+                sources,
+                segment.target_point_id));
+    const std::vector<std::string> generators =
+        ordered_generator_site_ids(
+            focus_id,
+            segment_id);
+    if (ordered_generator_site_ids(
+            site_index.stable_id(
+                halfedge->up()->site()),
+            site_index.stable_id(
+                halfedge->down()->site()))
+            != generators)
+    {
+        throw MismatchedLiveParabolaBridgeError(
+            "canonical P-S sources differ from live generators");
+    }
+    if (!halfedge->has_source()
+        || !halfedge->has_target())
+    {
+        throw UnboundLiveParabolaEndpointError(
+            "canonical P-S halfedge is not bounded");
+    }
+    SegmentSiteParabola2 live;
+    if (!CGAL::assign(
+            live,
+            voronoi.dual().primal(
+                halfedge->dual())))
+    {
+        throw MismatchedLiveParabolaBridgeError(
+            "canonical P-S dual is not a parabola");
+    }
+    require_distinct_live_parabola_endpoints(
+        live);
+    const MatTraits::Point_2 live_source =
+        halfedge->source()->point();
+    const MatTraits::Point_2 live_target =
+        halfedge->target()->point();
+    if ((live_source != live.p1
+            && live_source != live.p2)
+        || (live_target != live.p1
+            && live_target != live.p2))
+    {
+        throw MismatchedLiveParabolaBridgeError(
+            "canonical P-S adaptor endpoints differ from the live parabola");
+    }
+    const SourceParabolaParameterization2 primitive =
+        source_parameterization(
+            focus,
+            segment.support);
+    const auto bounds =
+        canonical_parabola_feature_bounds(
+            focus,
+            segment,
+            sources);
+    MatParameterEndpoint2 source =
+        bind_canonical_parabola_owner(
+            halfedge->left()->site(),
+            live_source,
+            primitive,
+            bounds.first,
+            bounds.second,
+            focus,
+            segment,
+            segment_source,
+            segment_target,
+            sources,
+            site_index,
+            voronoi,
+            halfedge);
+    MatParameterEndpoint2 target =
+        bind_canonical_parabola_owner(
+            halfedge->right()->site(),
+            live_target,
+            primitive,
+            bounds.first,
+            bounds.second,
+            focus,
+            segment,
+            segment_source,
+            segment_target,
+            sources,
+            site_index,
+            voronoi,
+            halfedge);
+    ExactAlgebraicKernel1 kernel;
+    const CGAL::Comparison_result order =
+        kernel.compare_1_object()(
+            *source.parameter,
+            *target.parameter);
+    if (order == CGAL::LARGER)
+    {
+        std::swap(source, target);
+    }
+    else if (order != CGAL::SMALLER)
+    {
+        throw AmbiguousLiveParabolaEndpointError(
+            "canonical P-S endpoints are not strictly ordered");
+    }
+    return {
+        std::move(source),
+        std::move(target),
+    };
 }
 
 namespace

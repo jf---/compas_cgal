@@ -8,6 +8,7 @@
 #include <vector>
 
 class CanonicalMatSiteGeometryIndex2;
+class CanonicalMatRationalSources2;
 
 class UnboundLiveParabolaEndpointError : public std::runtime_error
 {
@@ -128,6 +129,27 @@ public:
     using std::runtime_error::runtime_error;
 };
 
+class UnknownCanonicalMatParabolaSourceError
+    : public std::runtime_error
+{
+public:
+    using std::runtime_error::runtime_error;
+};
+
+class IncidentCanonicalMatParabolaSourceError
+    : public std::runtime_error
+{
+public:
+    using std::runtime_error::runtime_error;
+};
+
+class InvalidCanonicalMatParabolaFeatureDomainError
+    : public std::runtime_error
+{
+public:
+    using std::runtime_error::runtime_error;
+};
+
 bool exact_open_segment_feature_contains(
     const SourceParabolaParameterization2& parabola,
     const MatExactPointSiteSource2& segment_source,
@@ -167,6 +189,15 @@ MatParameterEndpoint2 bind_segment_limiter_parabola_endpoint(
     const MatExactPointSiteSource2& limiter_target,
     const SegmentSiteParabola2& live_parabola,
     const MatTraits::Point_2& live_point);
+
+std::pair<MatParameterEndpoint2, MatParameterEndpoint2>
+bind_point_segment_cell_endpoints(
+    const CanonicalMatRationalSources2& sources,
+    const std::string& focus_id,
+    const std::string& segment_id,
+    const CanonicalMatSiteGeometryIndex2& site_index,
+    const SegmentSiteVoronoi2& voronoi,
+    const SegmentSiteVoronoi2::Halfedge_handle& halfedge);
 
 std::pair<MatParameterEndpoint2, MatParameterEndpoint2>
 bind_parallel_segment_segment_cell_endpoints(
