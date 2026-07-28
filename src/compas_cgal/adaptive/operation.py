@@ -16,6 +16,7 @@ from compas_cgal.adaptive.canonical import encode_boolean
 from compas_cgal.adaptive.canonical import encode_bytes
 from compas_cgal.adaptive.canonical import encode_component_map
 from compas_cgal.adaptive.canonical import encode_integer
+from compas_cgal.adaptive.canonical import encode_material_side
 from compas_cgal.adaptive.canonical import encode_passage_state
 from compas_cgal.adaptive.canonical import encode_tagged_union
 from compas_cgal.adaptive.errors import ArtifactIdentityError
@@ -29,6 +30,7 @@ from compas_cgal.adaptive.motion import ExactCircleMotion
 from compas_cgal.adaptive.motion import ExactSegmentMotion
 from compas_cgal.adaptive.policy import BranchId
 from compas_cgal.adaptive.policy import ComponentId
+from compas_cgal.adaptive.policy import MaterialSide
 from compas_cgal.adaptive.policy import PassageState
 from compas_cgal.adaptive.units import ClearanceZ
 from compas_cgal.adaptive.units import CutZ
@@ -547,6 +549,7 @@ class LinkSegmentOperation:
 class CutFullCircleOperation:
     motion: ExactCircleMotion
     cut_z: CutZ
+    material_side: MaterialSide
     neck_scope: NeckScope
     effective_cap_decision: EffectiveCapDecision
     traversal_decision: AdvanceTraversalDecision
@@ -556,6 +559,8 @@ class CutFullCircleOperation:
             raise InvalidOperationIdentityError("cut full circle requires exact ExactCircleMotion and CutZ.")
         if type(self.motion.center) is not Point2 or type(self.motion.phase_vector) is not Vector2:
             raise InvalidOperationIdentityError("cut full circle motion requires exact Point2[WorldXY] center and exact Vector2[WorldXY] phase.")
+        if type(self.material_side) is not MaterialSide:
+            raise InvalidOperationIdentityError("cut full circle requires the exact radial material side that caused its orientation.")
         if type(self.neck_scope) not in (NoNeckScope, OrientedNeckScope):
             raise InvalidOperationIdentityError("cut full circle requires an exact closed neck scope.")
         if type(self.effective_cap_decision) not in (FullCapDecision, NeckCapDecision):
@@ -570,6 +575,7 @@ class CutFullCircleOperation:
         *,
         motion: ExactCircleMotion,
         cut_z: CutZ,
+        material_side: MaterialSide,
         neck_scope: NeckScope,
         effective_cap_decision: EffectiveCapDecision,
         traversal_decision: AdvanceTraversalDecision,
@@ -577,6 +583,7 @@ class CutFullCircleOperation:
         return cls(
             motion,
             cut_z,
+            material_side,
             neck_scope,
             effective_cap_decision,
             traversal_decision,
@@ -591,6 +598,7 @@ class CutFullCircleOperation:
             {
                 b"cut-z": canonical_cut_z_bytes(self.cut_z),
                 b"effective-cap-decision": self.effective_cap_decision.canonical_bytes,
+                b"material-side": encode_material_side(self.material_side),
                 b"motion": canonical_task1_bytes(self.motion),
                 b"neck-scope": self.neck_scope.canonical_bytes,
                 b"traversal-decision": self.traversal_decision.canonical_bytes,

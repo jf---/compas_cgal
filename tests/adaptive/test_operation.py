@@ -31,6 +31,7 @@ from compas_cgal.adaptive.operation import TraversalDecision
 from compas_cgal.adaptive.operation import WidthClassId
 from compas_cgal.adaptive.policy import BranchId
 from compas_cgal.adaptive.policy import ComponentId
+from compas_cgal.adaptive.policy import MaterialSide
 from compas_cgal.adaptive.policy import PassageState
 from compas_cgal.adaptive.units import ClearanceZ
 from compas_cgal.adaptive.units import CutZ
@@ -312,6 +313,7 @@ def test_cut_full_circle_binds_phase_orientation_scope_cap_and_advance() -> None
     baseline = CutFullCircleOperation.build(
         motion=ExactCircleMotion.build(center, Vector2[WorldXY].build(1.0, 0.0), False),
         cut_z=CutZ.build(-2.0),
+        material_side=MaterialSide.OUTSIDE,
         neck_scope=NoNeckScope.build(),
         effective_cap_decision=_full_cap(),
         traversal_decision=_advance(),
@@ -319,6 +321,7 @@ def test_cut_full_circle_binds_phase_orientation_scope_cap_and_advance() -> None
     reversed_orientation = CutFullCircleOperation.build(
         motion=ExactCircleMotion.build(center, Vector2[WorldXY].build(1.0, 0.0), True),
         cut_z=baseline.cut_z,
+        material_side=baseline.material_side,
         neck_scope=baseline.neck_scope,
         effective_cap_decision=baseline.effective_cap_decision,
         traversal_decision=baseline.traversal_decision,
@@ -366,6 +369,7 @@ def test_link_and_circle_cannot_duplicate_or_exchange_the_cursor_advance() -> No
         CutFullCircleOperation(  # type: ignore[arg-type]
             circle,
             CutZ.build(-2.0),
+            MaterialSide.OUTSIDE,
             NoNeckScope.build(),
             _full_cap(),
             _hold(),
@@ -410,6 +414,7 @@ def test_operation_and_nested_decision_subclasses_cannot_drop_semantics() -> Non
             False,
         ),
         CutZ.build(-2.0),
+        MaterialSide.OUTSIDE,
         NoNeckScope.build(),
         cap,
         _advance(),
@@ -493,6 +498,7 @@ def test_lateral_raw_constructor_rejects_motion_with_subclassed_geometry() -> No
         CutFullCircleOperation.build(
             motion=circle,
             cut_z=CutZ.build(-2.0),
+            material_side=MaterialSide.OUTSIDE,
             neck_scope=NoNeckScope.build(),
             effective_cap_decision=_full_cap(),
             traversal_decision=_advance(),
@@ -555,6 +561,33 @@ def test_cap_decision_mutation_matrix_binds_every_field() -> None:
 
     assert len({decision.canonical_bytes for decision in full_variants}) == len(full_variants)
     assert len({decision.canonical_bytes for decision in neck_variants}) == len(neck_variants)
+
+
+def test_full_circle_binds_the_material_side_that_caused_its_orientation() -> None:
+    motion = ExactCircleMotion.build(
+        Point2[WorldXY].build(1.0, 0.0),
+        Vector2[WorldXY].build(1.0, 0.0),
+        False,
+    )
+    outside = CutFullCircleOperation.build(
+        motion=motion,
+        cut_z=CutZ.build(-2.0),
+        material_side=MaterialSide.OUTSIDE,
+        neck_scope=NoNeckScope.build(),
+        effective_cap_decision=_full_cap(),
+        traversal_decision=_advance(),
+    )
+    inside = CutFullCircleOperation.build(
+        motion=motion,
+        cut_z=CutZ.build(-2.0),
+        material_side=MaterialSide.INSIDE,
+        neck_scope=NoNeckScope.build(),
+        effective_cap_decision=_full_cap(),
+        traversal_decision=_advance(),
+    )
+
+    assert outside.material_side is MaterialSide.OUTSIDE
+    assert outside.canonical_bytes != inside.canonical_bytes
 
 
 def test_traversal_decision_mutation_matrix_binds_every_field() -> None:
@@ -737,6 +770,7 @@ def test_operation_mutation_matrix_binds_every_field() -> None:
     circle = CutFullCircleOperation.build(
         motion=circle_motion,
         cut_z=CutZ.build(-2.0),
+        material_side=MaterialSide.OUTSIDE,
         neck_scope=NoNeckScope.build(),
         effective_cap_decision=_full_cap(),
         traversal_decision=_advance(),
@@ -747,6 +781,7 @@ def test_operation_mutation_matrix_binds_every_field() -> None:
         CutFullCircleOperation.build(
             motion=ExactCircleMotion.build(circle.motion.center, circle.motion.phase_vector, True),
             cut_z=circle.cut_z,
+            material_side=circle.material_side,
             neck_scope=circle.neck_scope,
             effective_cap_decision=circle.effective_cap_decision,
             traversal_decision=circle.traversal_decision,
@@ -754,6 +789,7 @@ def test_operation_mutation_matrix_binds_every_field() -> None:
         CutFullCircleOperation.build(
             motion=circle.motion,
             cut_z=CutZ.build(-3.0),
+            material_side=circle.material_side,
             neck_scope=circle.neck_scope,
             effective_cap_decision=circle.effective_cap_decision,
             traversal_decision=circle.traversal_decision,
@@ -761,6 +797,7 @@ def test_operation_mutation_matrix_binds_every_field() -> None:
         CutFullCircleOperation.build(
             motion=circle.motion,
             cut_z=circle.cut_z,
+            material_side=circle.material_side,
             neck_scope=OrientedNeckScope.build(
                 neck_owner_id=NeckOwnerId(b"neck-a"),
                 orientation=NeckTraversalOrientation.FORWARD,
@@ -771,6 +808,7 @@ def test_operation_mutation_matrix_binds_every_field() -> None:
         CutFullCircleOperation.build(
             motion=circle.motion,
             cut_z=circle.cut_z,
+            material_side=circle.material_side,
             neck_scope=circle.neck_scope,
             effective_cap_decision=FullCapDecision.build(
                 user_cap=changed_cap_value,
@@ -781,6 +819,7 @@ def test_operation_mutation_matrix_binds_every_field() -> None:
         CutFullCircleOperation.build(
             motion=circle.motion,
             cut_z=circle.cut_z,
+            material_side=circle.material_side,
             neck_scope=circle.neck_scope,
             effective_cap_decision=circle.effective_cap_decision,
             traversal_decision=_advance(terminal=True),

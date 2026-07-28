@@ -458,7 +458,9 @@ Tests require:
   segment, and exact full-circle operations; approach binds target XY plus
   clearance Z, plunge binds the same XY plus clearance and cut Z, while each
   lateral operation binds geometry, semantic kind, cut Z, stable neck
-  owner/orientation, `EffectiveCapDecision`, and `TraversalDecision`;
+  owner/orientation, `EffectiveCapDecision`, and `TraversalDecision`; every
+  full circle additionally binds the typed radial `MaterialSide` that caused
+  its cut-direction orientation;
 - a closed `EffectiveCapDecision` union: full-cap decisions bind equal
   user/effective bytes, while neck-cap decisions bind neck-evidence digest,
   exact width-class ID, passage before/after state, and user/effective bytes;
@@ -1684,6 +1686,13 @@ is not. `adaptive-input-schema-v2` therefore adds a required typed
 finite refinement depth. Replay must rebuild `MedialAxis` from this
 input-bound policy; it may not infer sampling from candidate/depletion policy
 or accept replay-only sampling values outside `InputIdentity`.
+
+The same audit found that operation schema v1 retained only the resulting
+CW/CCW bit, not the radial `MaterialSide` consumed by `CutDirectionPolicy`.
+`adaptive-operation-schema-v2` binds that typed cause on every full circle.
+Replay must derive the expected orientation from the recorded side and the
+input-bound policy; it may not infer the side by inverting the submitted
+orientation.
 
 **Files**
 
