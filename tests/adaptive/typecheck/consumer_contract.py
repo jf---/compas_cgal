@@ -5,6 +5,7 @@ import numpy as np
 
 from compas_cgal import _medial_axis_2
 from compas_cgal._medial_axis_2 import MedialAxisResult
+from compas_cgal.adaptive.candidates import DerivedCandidateCursor
 from compas_cgal.adaptive.candidates import MiddleCurveCandidate
 from compas_cgal.adaptive.candidates import MiddleCurveSpan
 from compas_cgal.adaptive.candidates import enumerate_middle_curve_candidates
@@ -155,6 +156,18 @@ typed_candidates = enumerate_middle_curve_candidates(
     makes_cursor_terminal_at_limit=False,
 )
 assert_type(typed_candidates, tuple[MiddleCurveCandidate, ...])
+intermediate_candidate = next(candidate for candidate in typed_candidates if candidate.spatial_progress < candidate_span.reported_length)
+derived_cursor = DerivedCandidateCursor.build(
+    span=candidate_span,
+    candidate=intermediate_candidate,
+)
+assert_type(derived_cursor, DerivedCandidateCursor)
+continued_span = MiddleCurveSpan.build(
+    axis=typed_axis,
+    cursor_before=derived_cursor,
+    cursor_limit=typed_axis.samples[1],
+)
+assert_type(continued_span, MiddleCurveSpan)
 
 approach_operation = ApproachOperation.build(
     position=world_point_scalar,
