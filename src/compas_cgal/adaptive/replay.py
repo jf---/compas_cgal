@@ -28,6 +28,7 @@ from compas_cgal.adaptive.errors import ReplayGrammarError
 from compas_cgal.adaptive.errors import ReplayInputMismatchError
 from compas_cgal.adaptive.errors import ReplayPairingError
 from compas_cgal.adaptive.errors import ReplayTraversalError
+from compas_cgal.adaptive.errors import TerminalNeckPassageError
 from compas_cgal.adaptive.identity import IdentityDigest
 from compas_cgal.adaptive.identity import InputIdentity
 from compas_cgal.adaptive.medial_axis import MatEdgeId
@@ -35,13 +36,19 @@ from compas_cgal.adaptive.medial_axis import MatSample
 from compas_cgal.adaptive.medial_axis import MedialAxis
 from compas_cgal.adaptive.motion import EngagementCap
 from compas_cgal.adaptive.motion_certificate import MotionCertifier
+from compas_cgal.adaptive.neck import NeckInventory
+from compas_cgal.adaptive.neck import NeckPassage
 from compas_cgal.adaptive.operation import ApproachOperation
 from compas_cgal.adaptive.operation import CanonicalOperation
 from compas_cgal.adaptive.operation import CutFullCircleOperation
+from compas_cgal.adaptive.operation import EffectiveCapDecision
 from compas_cgal.adaptive.operation import FullCapDecision
 from compas_cgal.adaptive.operation import HoldTraversalDecision
 from compas_cgal.adaptive.operation import LinkSegmentOperation
+from compas_cgal.adaptive.operation import NeckCapDecision
+from compas_cgal.adaptive.operation import NeckScope
 from compas_cgal.adaptive.operation import NoNeckScope
+from compas_cgal.adaptive.operation import OrientedNeckScope
 from compas_cgal.adaptive.operation import PlungeOperation
 from compas_cgal.adaptive.policy import CandidatePolicy
 from compas_cgal.adaptive.policy import CutDirectionPolicy
@@ -358,18 +365,76 @@ def _initial_cursor(
     return matches[0]
 
 
-def _require_full_cap(
+def _fresh_neck_passages(
+    inventory: NeckInventory,
+) -> dict[OrientedNeckScope, NeckPassage]:
+    passages: dict[OrientedNeckScope, NeckPassage] = {}
+    for neck in inventory.necks:
+        for passage in (neck.forward, neck.reverse):
+            passages[passage.scope] = passage
+    return passages
+
+
+def _reconstruct_cap_decision(
+    *,
     operation: CutFullCircleOperation,
     user_cap: EngagementCap,
-) -> tuple[NoNeckScope, FullCapDecision]:
-    expected_scope = NoNeckScope.build()
-    expected_cap = FullCapDecision.build(
-        user_cap=user_cap,
-        effective_cap=user_cap,
+    neck_policy: NeckPolicy,
+    passages: dict[OrientedNeckScope, NeckPassage],
+) -> tuple[
+    NeckScope,
+    EffectiveCapDecision,
+    EngagementCap,
+    NeckPassage | None,
+]:
+    if type(operation.neck_scope) is NoNeckScope:
+        expected_scope = NoNeckScope.build()
+        expected_full_cap = FullCapDecision.build(
+            user_cap=user_cap,
+            effective_cap=user_cap,
+        )
+        if operation.effective_cap_decision != expected_full_cap:
+            raise ReplayEffectiveCapError("recorded no-neck cap decision differs from the fresh full-cap policy result.")
+        return expected_scope, expected_full_cap, user_cap, None
+
+    if type(operation.neck_scope) is not OrientedNeckScope:
+        raise ReplayEffectiveCapError("recorded neck scope is outside the closed replay grammar.")
+    passage = passages.get(operation.neck_scope)
+    if passage is None:
+        raise ReplayEffectiveCapError("recorded oriented-neck scope has no owner in the fresh exact inventory.")
+    try:
+        expected_neck_cap = passage.propose_cap_decision(neck_policy)
+    except TerminalNeckPassageError:
+        raise ReplayEffectiveCapError("recorded oriented-neck passage is already terminal.") from None
+    if operation.effective_cap_decision != expected_neck_cap:
+        raise ReplayEffectiveCapError("recorded cap decision differs from the fresh oriented-neck passage.")
+    effective_cap = neck_policy.effective_cap(
+        passage.neck.width_class_id.value,
+        passage.state,
     )
-    if operation.neck_scope != expected_scope or operation.effective_cap_decision != expected_cap:
-        raise ReplayEffectiveCapError("recorded no-neck cap decision differs from the fresh full-cap policy result.")
-    return expected_scope, expected_cap
+    return (
+        passage.scope,
+        expected_neck_cap,
+        effective_cap,
+        passage.advance(expected_neck_cap),
+    )
+
+
+def _candidate_effective_cap(
+    *,
+    candidate: MiddleCurveCandidate,
+    user_cap: EngagementCap,
+    neck_policy: NeckPolicy,
+) -> EngagementCap:
+    decision = candidate.effective_cap_decision
+    if type(decision) is FullCapDecision:
+        return user_cap
+    if type(decision) is NeckCapDecision:
+        return neck_policy.effective_cap(
+            decision.width_class_id.value,
+            decision.passage_before,
+        )
+    raise ReplayEffectiveCapError("reconstructed candidate cap is outside the closed replay grammar.")
 
 
 def _candidate_matches_operation(
@@ -390,8 +455,10 @@ def _match_circle_candidate(
     operation: CutFullCircleOperation,
     user_cap: EngagementCap,
     candidate_policy: CandidatePolicy,
+    neck_policy: NeckPolicy,
     traversal_policy: TraversalPolicy,
     cut_direction_policy: CutDirectionPolicy,
+    passages: dict[OrientedNeckScope, NeckPassage],
     current_by_edge: dict[
         MatEdgeId,
         MatSample | DerivedCandidateCursor | None,
@@ -414,9 +481,11 @@ def _match_circle_candidate(
             operation=operation,
         )
 
-    expected_scope, expected_cap = _require_full_cap(
-        operation,
-        user_cap,
+    expected_scope, expected_cap, _, next_passage = _reconstruct_cap_decision(
+        operation=operation,
+        user_cap=user_cap,
+        neck_policy=neck_policy,
+        passages=passages,
     )
     orientation = cut_direction_policy.circle_orientation(operation.material_side)
     if type(cursor_before) is MatSample:
@@ -466,6 +535,8 @@ def _match_circle_candidate(
             span=span,
             candidate=selected,
         )
+    if next_passage is not None:
+        passages[next_passage.scope] = next_passage
     return selected
 
 
@@ -475,6 +546,7 @@ def _replay_candidate_stream(
     operations: tuple[CanonicalOperation, ...],
     user_cap: EngagementCap,
     candidate_policy: CandidatePolicy,
+    neck_policy: NeckPolicy,
     traversal_policy: TraversalPolicy,
     cut_direction_policy: CutDirectionPolicy,
 ) -> tuple[
@@ -485,6 +557,12 @@ def _replay_candidate_stream(
         MatEdgeId,
         MatSample | DerivedCandidateCursor | None,
     ] = {}
+    passages = _fresh_neck_passages(
+        NeckInventory.build(
+            axis=axis,
+            policy=neck_policy,
+        )
+    )
     candidates: list[MiddleCurveCandidate] = []
     for operation in operations[2:]:
         if type(operation) is CutFullCircleOperation:
@@ -494,8 +572,10 @@ def _replay_candidate_stream(
                     operation=operation,
                     user_cap=user_cap,
                     candidate_policy=candidate_policy,
+                    neck_policy=neck_policy,
                     traversal_policy=traversal_policy,
                     cut_direction_policy=cut_direction_policy,
+                    passages=passages,
                     current_by_edge=current_by_edge,
                 )
             )
@@ -560,6 +640,7 @@ def _replay_fresh_state(
     entry: PreclearedEntry,
     tool_radius: ToolRadius,
     user_cap: EngagementCap,
+    neck_policy: NeckPolicy,
     depletion_policy: DepletionPolicy,
     operations: tuple[CanonicalOperation, ...],
     paired_candidates: dict[int, MiddleCurveCandidate],
@@ -587,6 +668,11 @@ def _replay_fresh_state(
         if type(operation) is LinkSegmentOperation:
             if operation_index not in paired_candidates:
                 raise ReplayPairingError("fresh link has no validated circle pairing.")
+            effective_cap = _candidate_effective_cap(
+                candidate=paired_candidates[operation_index],
+                user_cap=user_cap,
+                neck_policy=neck_policy,
+            )
             containment.certify_segment(
                 operation.motion,
                 tool_radius,
@@ -599,7 +685,7 @@ def _replay_fresh_state(
                 operation_kind=OperationType.LINK,
                 motion=operation.motion,
                 user_cap=user_cap,
-                effective_cap=user_cap,
+                effective_cap=effective_cap,
             )
             stock.deplete(
                 operation.motion,
@@ -615,6 +701,11 @@ def _replay_fresh_state(
             continue
         if operation_index not in paired_candidates:
             raise ReplayCandidateError("fresh circle has no reconstructed candidate.")
+        effective_cap = _candidate_effective_cap(
+            candidate=paired_candidates[operation_index],
+            user_cap=user_cap,
+            neck_policy=neck_policy,
+        )
         if first_circle:
             entry.certify_first_circle(operation.motion)
             first_circle = False
@@ -630,7 +721,7 @@ def _replay_fresh_state(
             operation_kind=OperationType.CUT,
             motion=operation.motion,
             user_cap=user_cap,
-            effective_cap=user_cap,
+            effective_cap=effective_cap,
         )
         stock.deplete(
             operation.motion,
@@ -731,6 +822,7 @@ def replay_certificate(
         operations=operations,
         user_cap=user_cap,
         candidate_policy=candidate_policy,
+        neck_policy=neck_policy,
         traversal_policy=traversal_policy,
         cut_direction_policy=cut_direction_policy,
     )
@@ -745,6 +837,7 @@ def replay_certificate(
         entry=fresh_entry,
         tool_radius=tool_radius,
         user_cap=user_cap,
+        neck_policy=neck_policy,
         depletion_policy=depletion_policy,
         operations=operations,
         paired_candidates=paired_candidates,

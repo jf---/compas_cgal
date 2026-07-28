@@ -18,9 +18,11 @@ cells.
     link, and following nonuniform circle against their frozen pre-cut states
     before each depletion and coverage mutation. Replay next fails at the
     explicit nonterminal-traversal boundary because other MAT edges remain
-    untouched. Neck-state replay, complete traversal/coverage, artifact
-    certification, arbitrary-pocket evidence, and matched Held–Pfeiffer
-    performance remain incomplete.
+    untouched. Fresh exact neck inventory, oriented passage, and effective-cap
+    replay are also gated, including the production `80 degrees` second-passage
+    rejection. Complete traversal/coverage, artifact certification,
+    arbitrary-pocket evidence, and matched Held–Pfeiffer performance remain
+    incomplete.
 
 ## Authority hierarchy
 
@@ -233,7 +235,23 @@ stock and adds its exact coverage sweep. The chronology regression requires
 all three actions. Replay subsequently raises `ReplayTraversalError` because
 other MAT edges remain nonterminal; it still emits no partial certificate.
 The result closes the first post-link circle disposition without claiming
-neck-owned traversal, empty residual, or complete-path certification.
+empty residual or complete-path certification.
+
+Fresh oriented-neck replay is now a separate consumer of the same exact oracle.
+It rebuilds the neck inventory, seeds independent forward/reverse passage
+state, resolves the recorded owner, reconstructs the policy cap from the
+current state, and advances only after one unique circle candidate matches. A
+real first-passage circle reaches the certifier at `90 degrees`, not the
+`120 degrees` user cap.
+
+!!! warning "A legal passage does not certify its circle"
+
+    The next radius-`1/8`, phase-index-`3` circle advances the same neck passage
+    legally, but exceeds its reconstructed `80 degrees` cap against post-link
+    stock. That negative is an integration gate. An equal-cap fixture separately
+    proves the two state transitions; Task 12 must search for a feasible winner
+    instead of weakening the oracle or conflating passage legality with motion
+    acceptance.
 
 !!! danger "Exact-number backend definitions are an ABI contract"
 

@@ -1717,9 +1717,10 @@ Commit: `feat(adaptive): certify entry and input`
 
 **Dependencies:** Tasks 3, 8, 10, and 11.
 
-**Status (2026-07-28): in progress. Input/grammar/orientation, fresh no-neck
-candidate reconstruction, derived-cursor link/circle pairing, entry-first
-stock/coverage initialization, containment, and first-circle/link/second-circle
+**Status (2026-07-28): in progress. Input/grammar/orientation, fresh no-neck and
+oriented-neck candidate reconstruction, exact inventory/passage/cap replay,
+derived-cursor link/circle pairing, entry-first stock/coverage initialization,
+containment, and first-circle/link/second-circle
 certification-before-depletion/coverage are gated. Replay now reaches the
 explicit nonterminal-traversal boundary because other MAT edges remain
 untouched; it emits no partial certificate.**
@@ -1800,6 +1801,16 @@ once, moving the verified partition into the trace, and hoisting boundary
 extraction reduced bounded warm Release medians from 252 ms to 128 ms for a
 10-cell certificate and from 572 ms to 301 ms for a 43-cell cross-support
 audit on the Apple M1 Max. These are oracle-stage timings, not Held parity.
+
+Fresh neck replay now rebuilds `NeckInventory`, seeds both immutable
+orientations, resolves each recorded owner, and reconstructs the cap decision
+from exact class plus current passage state. The next passage value is installed
+only after one unique finite-lattice circle matches; its paired link carries the
+same decision without advancing it. The real first passage reaches
+`MotionCertifier` at `90 degrees`, while the legal second transition's selected
+circle is correctly rejected at its `80 degrees` cap. An equal-cap two-passage
+fixture isolates state chronology from candidate feasibility. Task 12 must
+select another motion; replay does not weaken the cap.
 
 **Files**
 
@@ -1908,7 +1919,10 @@ Implemented foundation:
   digest authentication;
 - exact grammar, phase, cut-Z, and material-side-derived orientation checks;
 - exhaustive forward-window candidate reconstruction with independently
-  recomputed no-neck full cap;
+  recomputed no-neck full cap or exact oriented-neck passage cap;
+- fresh exact neck inventory reconstruction, independent forward/reverse
+  passage state, foreign-owner plus evidence/class/cap mutation rejection, and
+  state commit only after a unique circle match;
 - unique motion/scope/cap/traversal matching, including proof-carrying derived
   cursor continuation;
 - fresh `Stock2Area`/`CoverageLedger` construction and authenticated entry
@@ -1924,12 +1938,23 @@ Implemented foundation:
   each frozen stock snapshot before each depletion/coverage mutation;
 - distinct generic-partition and cell-decision authority digests for the
   post-link nonuniform circle, followed by fail-closed nonterminal traversal;
-  and
-- fail-closed candidate and nonterminal-traversal mutation coverage.
+- exact effective-cap delivery to the real link/circle motion certifier, with
+  a preserved physical second-passage cap-exceeded result; and
+- fail-closed candidate, reused-passage, foreign-neck, and
+  nonterminal-traversal mutation coverage.
 
-Pending before this task is GREEN: neck-owner/passage reconstruction,
-complete ordered witness capture, terminal traversal, exact empty residual,
-and the complete immutable `ReplayCertificate`.
+Pending before this task is GREEN: complete ordered witness capture, terminal
+traversal, exact empty residual, and the complete immutable
+`ReplayCertificate`.
+
+Current neck-replay stage evidence:
+
+- 17 focused replay tests pass;
+- final `pixi run affected`: 17 dependency-selected tests pass;
+- all 437 adaptive tests pass;
+- repository Ruff and strict adaptive mypy gates pass; and
+- strict MkDocs build passes with the Held comparison and maturity boundary
+  updated in the same stage.
 
 ```bash
 pixi run format-adaptive
