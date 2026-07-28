@@ -6,6 +6,7 @@
 #include <array>
 #include <cstddef>
 #include <string>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -355,10 +356,438 @@ bool nonparallel_binding_uses_same_exact_records()
     return matches == 1;
 }
 
+compas::RowMatrixXd l_shape(
+    const bool transformed)
+{
+    const std::array<std::array<double, 2>, 6>
+        canonical{{
+            {0.0, 0.0},
+            {6.0, 0.0},
+            {6.0, 2.0},
+            {2.0, 2.0},
+            {2.0, 6.0},
+            {0.0, 6.0},
+        }};
+    const std::array<std::array<double, 2>, 6>
+        reversed{{
+            {0.0, 6.0},
+            {2.0, 6.0},
+            {2.0, 2.0},
+            {6.0, 2.0},
+            {6.0, 0.0},
+            {0.0, 0.0},
+        }};
+    const auto& points =
+        transformed ? reversed : canonical;
+    compas::RowMatrixXd result(
+        static_cast<Eigen::Index>(points.size()),
+        2);
+    for (std::size_t index = 0;
+         index < points.size();
+         ++index) {
+        result(
+            static_cast<Eigen::Index>(index),
+            0) = points[index][0];
+        result(
+            static_cast<Eigen::Index>(index),
+            1) = points[index][1];
+    }
+    return result;
+}
+
+MatExactPointSiteSource2 exact_point_source(
+    const CanonicalMatRationalPointSource2&
+        point)
+{
+    return {
+        point.stable_site_id,
+        {point.x, 0},
+        {point.y, 0},
+        1,
+    };
+}
+
+const CanonicalMatRationalPointSource2&
+rational_point(
+    const CanonicalMatRationalSources2& sources,
+    const std::string& stable_id)
+{
+    const auto found = std::find_if(
+        sources.points().begin(),
+        sources.points().end(),
+        [&stable_id](const auto& point) {
+            return point.stable_site_id
+                == stable_id;
+        });
+    if (found == sources.points().end()) {
+        throw UnknownCanonicalMatParabolaSourceError(
+            "P-S gate point is outside the rational sources");
+    }
+    return *found;
+}
+
+const CanonicalMatRationalOpenSegmentSource2&
+rational_segment(
+    const CanonicalMatRationalSources2& sources,
+    const std::string& stable_id)
+{
+    const auto found = std::find_if(
+        sources.segments().begin(),
+        sources.segments().end(),
+        [&stable_id](const auto& segment) {
+            return segment.stable_site_id
+                == stable_id;
+        });
+    if (found == sources.segments().end()) {
+        throw UnknownCanonicalMatParabolaSourceError(
+            "P-S gate segment is outside the rational sources");
+    }
+    return *found;
+}
+
+std::pair<
+    MatParameterEndpoint2,
+    MatParameterEndpoint2>
+ordered_endpoints(
+    MatParameterEndpoint2 first,
+    MatParameterEndpoint2 second)
+{
+    if (!first.parameter.has_value()
+        || !second.parameter.has_value()) {
+        return {
+            std::move(first),
+            std::move(second),
+        };
+    }
+    ExactAlgebraicKernel1 kernel;
+    if (kernel.compare_1_object()(
+            *second.parameter,
+            *first.parameter)
+        == CGAL::SMALLER) {
+        std::swap(first, second);
+    }
+    return {
+        std::move(first),
+        std::move(second),
+    };
+}
+
+using EndpointSignature = std::tuple<
+    std::string,
+    std::vector<std::string>>;
+
+using ParabolaBindingSignature = std::tuple<
+    std::vector<std::string>,
+    EndpointSignature,
+    EndpointSignature>;
+
+EndpointSignature endpoint_signature(
+    const MatParameterEndpoint2& endpoint)
+{
+    if (!endpoint.parameter.has_value()) {
+        return {};
+    }
+    return {
+        algebraic_root_identity_v1(
+            *endpoint.parameter),
+        endpoint.provenance_ids,
+    };
+}
+
+std::vector<ParabolaBindingSignature>
+l_shape_parabola_bindings(
+    const bool transformed)
+{
+    const CanonicalMatSiteCatalog2 catalog =
+        canonical_mat_site_catalog(
+            canonical_reach_input(
+                l_shape(transformed),
+                {},
+                1.0));
+    const CanonicalMatRationalSources2 sources =
+        CanonicalMatRationalSources2::build(
+            catalog);
+    CanonicalMatDelaunaySource2 delaunay =
+        CanonicalMatDelaunaySource2::build(
+            catalog);
+    const CanonicalMatVoronoiSource2 source =
+        CanonicalMatVoronoiSource2::build(
+            std::move(delaunay));
+    const auto& focus_record =
+        sources.points()[3];
+    const MatExactPointSiteSource2 focus =
+        exact_point_source(focus_record);
+    std::vector<ParabolaBindingSignature>
+        signatures;
+
+    for (auto halfedge =
+             source.voronoi().halfedges_begin();
+         halfedge
+         != source.voronoi().halfedges_end();
+         ++halfedge) {
+        const MatTraits::Site_2 up =
+            halfedge->up()->site();
+        const MatTraits::Site_2 down =
+            halfedge->down()->site();
+        if (up.is_point() == down.is_point()) {
+            continue;
+        }
+        const std::string up_id =
+            source.site_index().stable_id(up);
+        const std::string down_id =
+            source.site_index().stable_id(down);
+        const std::vector<std::string>
+            generator_ids =
+                ordered_generator_site_ids(
+                    up_id,
+                    down_id);
+        if (up_id != generator_ids.front()) {
+            continue;
+        }
+        const std::string point_id =
+            up.is_point() ? up_id : down_id;
+        const std::string segment_id =
+            up.is_segment() ? up_id : down_id;
+        if (point_id
+                != focus_record.stable_site_id
+            || (segment_id
+                    != sources.segments()[0]
+                           .stable_site_id
+                && segment_id
+                    != sources.segments()[5]
+                           .stable_site_id)) {
+            continue;
+        }
+        if (!halfedge->has_source()
+            || !halfedge->has_target()) {
+            return {};
+        }
+        SegmentSiteParabola2 live;
+        if (!CGAL::assign(
+                live,
+                source.voronoi()
+                    .dual()
+                    .primal(
+                        halfedge->dual()))) {
+            return {};
+        }
+        require_distinct_live_parabola_endpoints(
+            live);
+
+        const auto indexed =
+            bind_point_segment_cell_endpoints(
+                sources,
+                point_id,
+                segment_id,
+                source.site_index(),
+                source.voronoi(),
+                halfedge);
+        const auto& source_segment =
+            rational_segment(
+                sources,
+                segment_id);
+        const MatExactPointSiteSource2
+            segment_source =
+                exact_point_source(
+                    rational_point(
+                        sources,
+                        source_segment
+                            .source_point_id));
+        const MatExactPointSiteSource2
+            segment_target =
+                exact_point_source(
+                    rational_point(
+                        sources,
+                        source_segment
+                            .target_point_id));
+        const auto bind_owner =
+            [&sources,
+             &focus,
+             &source_segment,
+             &segment_source,
+             &segment_target,
+             &source,
+             &halfedge](
+                const MatTraits::Site_2& owner) {
+                const auto& limiter =
+                    rational_segment(
+                        sources,
+                        source.site_index()
+                            .stable_id(owner));
+                return bind_segment_limiter_parabola_endpoint(
+                    focus,
+                    source_segment.support,
+                    segment_source,
+                    segment_target,
+                    limiter.support,
+                    exact_point_source(
+                        rational_point(
+                            sources,
+                            limiter
+                                .source_point_id)),
+                    exact_point_source(
+                        rational_point(
+                            sources,
+                            limiter
+                                .target_point_id)),
+                    source.voronoi(),
+                    halfedge);
+            };
+        const auto direct =
+            ordered_endpoints(
+                bind_owner(
+                    halfedge->left()
+                        ->site()),
+                bind_owner(
+                    halfedge->right()
+                        ->site()));
+        if (!endpoints_equal(
+                indexed,
+                direct)) {
+            return {};
+        }
+        signatures.emplace_back(
+            generator_ids,
+            endpoint_signature(
+                indexed.first),
+            endpoint_signature(
+                indexed.second));
+    }
+    std::sort(
+        signatures.begin(),
+        signatures.end());
+    return signatures;
+}
+
+bool point_segment_binding_uses_catalog_index()
+{
+    const auto canonical =
+        l_shape_parabola_bindings(false);
+    return canonical.size() == 2
+        && canonical
+            == l_shape_parabola_bindings(false)
+        && canonical
+            == l_shape_parabola_bindings(true);
+}
+
+bool point_segment_binding_rejects_invalid_sources()
+{
+    const CanonicalMatSiteCatalog2 catalog =
+        canonical_mat_site_catalog(
+            canonical_reach_input(
+                l_shape(false),
+                {},
+                1.0));
+    const CanonicalMatRationalSources2 sources =
+        CanonicalMatRationalSources2::build(
+            catalog);
+    CanonicalMatDelaunaySource2 delaunay =
+        CanonicalMatDelaunaySource2::build(
+            catalog);
+    const CanonicalMatVoronoiSource2 source =
+        CanonicalMatVoronoiSource2::build(
+            std::move(delaunay));
+    const std::string focus_id =
+        sources.points()[3].stable_site_id;
+    const std::string segment_id =
+        sources.segments()[0].stable_site_id;
+
+    for (auto halfedge =
+             source.voronoi().halfedges_begin();
+         halfedge
+         != source.voronoi().halfedges_end();
+         ++halfedge) {
+        const std::string up_id =
+            source.site_index().stable_id(
+                halfedge->up()->site());
+        const std::string down_id =
+            source.site_index().stable_id(
+                halfedge->down()->site());
+        if (up_id
+                != ordered_generator_site_ids(
+                       up_id,
+                       down_id)
+                       .front()
+            || ordered_generator_site_ids(
+                   up_id,
+                   down_id)
+                != ordered_generator_site_ids(
+                    focus_id,
+                    segment_id)) {
+            continue;
+        }
+        bool unknown_point = false;
+        try {
+            static_cast<void>(
+                bind_point_segment_cell_endpoints(
+                    sources,
+                    "unknown-point",
+                    segment_id,
+                    source.site_index(),
+                    source.voronoi(),
+                    halfedge));
+        } catch (
+            const UnknownCanonicalMatParabolaSourceError&) {
+            unknown_point = true;
+        }
+        bool unknown_segment = false;
+        try {
+            static_cast<void>(
+                bind_point_segment_cell_endpoints(
+                    sources,
+                    focus_id,
+                    "unknown-segment",
+                    source.site_index(),
+                    source.voronoi(),
+                    halfedge));
+        } catch (
+            const UnknownCanonicalMatParabolaSourceError&) {
+            unknown_segment = true;
+        }
+        bool incident = false;
+        try {
+            static_cast<void>(
+                bind_point_segment_cell_endpoints(
+                    sources,
+                    sources.points()[0]
+                        .stable_site_id,
+                    segment_id,
+                    source.site_index(),
+                    source.voronoi(),
+                    halfedge));
+        } catch (
+            const IncidentCanonicalMatParabolaSourceError&) {
+            incident = true;
+        }
+        bool mismatched = false;
+        try {
+            static_cast<void>(
+                bind_point_segment_cell_endpoints(
+                    sources,
+                    sources.points()[4]
+                        .stable_site_id,
+                    segment_id,
+                    source.site_index(),
+                    source.voronoi(),
+                    halfedge));
+        } catch (
+            const MismatchedLiveParabolaBridgeError&) {
+            mismatched = true;
+        }
+        return unknown_point
+            && unknown_segment
+            && incident
+            && mismatched;
+    }
+    return false;
+}
+
 } // namespace
 
 bool indexed_endpoint_binding_gate()
 {
     return parallel_binding_uses_same_exact_records()
-        && nonparallel_binding_uses_same_exact_records();
+        && nonparallel_binding_uses_same_exact_records()
+        && point_segment_binding_uses_catalog_index()
+        && point_segment_binding_rejects_invalid_sources();
 }
