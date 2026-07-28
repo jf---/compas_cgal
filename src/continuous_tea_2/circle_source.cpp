@@ -1,5 +1,7 @@
 #include "circle_source.h"
 
+#include "../exact_stock_region_2.h"
+#include "../exact_sweep_2.h"
 #include "circle_projection.h"
 #include "event_certificate.h"
 #include "event_partition.h"
@@ -90,6 +92,20 @@ std::optional<std::string> full_circle_uniform_disposition(
     double tool_radius)
 {
     if (records.empty()) {
+        return "clear";
+    }
+    ReachSet overlap =
+        reach_full_circle_sweep(
+            ReachKernelPoint(
+                ReachFT(center_x),
+                ReachFT(center_y)),
+            ReachKernelVector(
+                ReachFT(phase_dx),
+                ReachFT(phase_dy)),
+            ReachFT(tool_radius));
+    overlap.intersection(
+        lift_exact_stock_region(stock));
+    if (overlap.is_empty()) {
         return "clear";
     }
     const Epeck::FT phase_x(phase_dx);

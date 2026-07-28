@@ -15,6 +15,8 @@ from compas_cgal.adaptive.canonical import encode_component_map
 from compas_cgal.adaptive.canonical import encode_integer
 from compas_cgal.adaptive.canonical import encode_sequence
 from compas_cgal.adaptive.canonical import encode_tagged_union
+from compas_cgal.adaptive.containment import GougeContainment
+from compas_cgal.adaptive.coverage import CoverageLedger
 from compas_cgal.adaptive.entry import PreclearedEntry
 from compas_cgal.adaptive.entry import QualifiedBore
 from compas_cgal.adaptive.errors import InvalidReplayCertificateError
@@ -31,6 +33,7 @@ from compas_cgal.adaptive.medial_axis import MatEdgeId
 from compas_cgal.adaptive.medial_axis import MatSample
 from compas_cgal.adaptive.medial_axis import MedialAxis
 from compas_cgal.adaptive.motion import EngagementCap
+from compas_cgal.adaptive.motion_certificate import MotionCertifier
 from compas_cgal.adaptive.operation import ApproachOperation
 from compas_cgal.adaptive.operation import CanonicalOperation
 from compas_cgal.adaptive.operation import CutFullCircleOperation
@@ -44,10 +47,13 @@ from compas_cgal.adaptive.policy import DepletionPolicy
 from compas_cgal.adaptive.policy import NeckPolicy
 from compas_cgal.adaptive.policy import TraversalPolicy
 from compas_cgal.adaptive.reachable_domain import ReachableDomain
+from compas_cgal.adaptive.stock_area import Stock2Area
 from compas_cgal.adaptive.units import CutPlane
 from compas_cgal.adaptive.units import Point2
 from compas_cgal.adaptive.units import ToolRadius
 from compas_cgal.adaptive.units import WorldXY
+from compas_cgal.stock import Stock
+from compas_cgal.toolpath import OperationType
 
 
 def _canonical_ring(
@@ -71,7 +77,11 @@ def _canonical_ring(
 def _canonical_design(
     pocket: Polygon,
     holes: Sequence[Polygon],
-) -> tuple[CanonicalRingV1, tuple[CanonicalRingV1, ...]]:
+) -> tuple[
+    CanonicalRingV1,
+    tuple[CanonicalRingV1, ...],
+    tuple[Polygon, ...],
+]:
     if isinstance(holes, (str, bytes)):
         raise ReplayInputMismatchError("replay holes must be a finite polygon sequence.")
     try:
@@ -87,7 +97,7 @@ def _canonical_design(
     )
     if len(canonical_holes) != len({hole.canonical_bytes for hole in canonical_holes}):
         raise ReplayInputMismatchError("replay holes contain a canonical duplicate.")
-    return design_boundary, canonical_holes
+    return design_boundary, canonical_holes, hole_polygons
 
 
 def _require_bound_inputs(
@@ -465,7 +475,10 @@ def _replay_candidate_stream(
     candidate_policy: CandidatePolicy,
     traversal_policy: TraversalPolicy,
     cut_direction_policy: CutDirectionPolicy,
-) -> tuple[MiddleCurveCandidate, ...]:
+) -> tuple[
+    tuple[MiddleCurveCandidate, ...],
+    dict[MatEdgeId, MatSample | DerivedCandidateCursor | None],
+]:
     current_by_edge: dict[
         MatEdgeId,
         MatSample | DerivedCandidateCursor | None,
@@ -484,7 +497,83 @@ def _replay_candidate_stream(
                     current_by_edge=current_by_edge,
                 )
             )
-    return tuple(candidates)
+    return tuple(candidates), current_by_edge
+
+
+def _replay_fresh_state(
+    *,
+    pocket: Polygon,
+    holes: tuple[Polygon, ...],
+    reachable_domain: ReachableDomain,
+    entry: PreclearedEntry,
+    tool_radius: ToolRadius,
+    user_cap: EngagementCap,
+    depletion_policy: DepletionPolicy,
+    operations: tuple[CanonicalOperation, ...],
+    candidates: tuple[MiddleCurveCandidate, ...],
+    axis: MedialAxis,
+    current_by_edge: dict[
+        MatEdgeId,
+        MatSample | DerivedCandidateCursor | None,
+    ],
+) -> None:
+    stock = Stock2Area.build(
+        Stock(
+            pocket,
+            list(holes),
+        )
+    )
+    stock.deplete(entry)
+    coverage = CoverageLedger.build(
+        reachable_domain=reachable_domain,
+        precleared_center=entry.center,
+        precleared_radius=entry.radius,
+    )
+    containment = GougeContainment.build(reachable_domain)
+    candidate_index = 0
+    first_circle = True
+    for operation_index, operation in enumerate(operations):
+        if type(operation) is LinkSegmentOperation:
+            raise ReplayTraversalError("fresh link/circle pairing is required before replaying a link.")
+        if type(operation) is not CutFullCircleOperation:
+            continue
+        if candidate_index >= len(candidates):
+            raise ReplayCandidateError("fresh candidate lineage is shorter than the recorded circle stream.")
+        candidate = candidates[candidate_index]
+        candidate_index += 1
+        if first_circle:
+            entry.certify_first_circle(operation.motion)
+            first_circle = False
+        containment.certify_full_circle(
+            operation.motion,
+            tool_radius,
+        )
+        MotionCertifier.build(
+            stock=stock,
+            tool_radius=tool_radius,
+        ).certify(
+            operation_index=operation_index,
+            operation_kind=OperationType.CUT,
+            motion=operation.motion,
+            user_cap=user_cap,
+            effective_cap=user_cap,
+        )
+        stock.deplete(
+            operation.motion,
+            tool_radius,
+            depletion_policy,
+        )
+        coverage.add_sweep(
+            operation.motion,
+            tool_radius,
+        )
+        if candidate.motion != operation.motion or candidate.traversal_decision != operation.traversal_decision:
+            raise ReplayCandidateError("fresh candidate lineage diverged during state replay.")
+    if candidate_index != len(candidates):
+        raise ReplayCandidateError("fresh candidate lineage is longer than the recorded circle stream.")
+    if set(current_by_edge) != set(axis.edge_by_id) or any(cursor is not None for cursor in current_by_edge.values()):
+        raise ReplayTraversalError("fresh MAT traversal remains nonterminal.")
+    coverage.require_complete()
 
 
 @dataclass(frozen=True)
@@ -522,7 +611,10 @@ def replay_certificate(
     traversal_policy: TraversalPolicy,
     cut_direction_policy: CutDirectionPolicy,
 ) -> ReplayCertificate:
-    design_boundary, canonical_holes = _canonical_design(pocket, holes)
+    design_boundary, canonical_holes, hole_polygons = _canonical_design(
+        pocket,
+        holes,
+    )
     _require_bound_inputs(
         input_identity=input_identity,
         design_boundary=design_boundary,
@@ -564,7 +656,7 @@ def replay_certificate(
         tool_radius=tool_radius,
         reachable_domain=reachable_domain,
     )
-    _replay_candidate_stream(
+    candidates, current_by_edge = _replay_candidate_stream(
         axis=axis,
         operations=operations,
         user_cap=user_cap,
@@ -572,4 +664,17 @@ def replay_certificate(
         traversal_policy=traversal_policy,
         cut_direction_policy=cut_direction_policy,
     )
-    raise ReplayTraversalError("fresh stock and coverage replay is required before certification.")
+    _replay_fresh_state(
+        pocket=pocket,
+        holes=hole_polygons,
+        reachable_domain=reachable_domain,
+        entry=fresh_entry,
+        tool_radius=tool_radius,
+        user_cap=user_cap,
+        depletion_policy=depletion_policy,
+        operations=operations,
+        candidates=candidates,
+        axis=axis,
+        current_by_edge=current_by_edge,
+    )
+    raise InvalidReplayCertificateError("complete fresh replay must bind the immutable certificate before return.")

@@ -1711,9 +1711,11 @@ Commit: `feat(adaptive): certify entry and input`
 
 **Dependencies:** Tasks 3, 8, 10, and 11.
 
-**Status (2026-07-28): in progress. Input/grammar/orientation and fresh
-no-neck candidate reconstruction are gated; replay still fails closed before
-stock/coverage and emits no certificate.**
+**Status (2026-07-28): in progress. Input/grammar/orientation, fresh no-neck
+candidate reconstruction, entry-first stock/coverage initialization,
+containment, first-circle certification-before-depletion, and coverage
+mutation are gated; replay still fails closed at nonterminal traversal and
+emits no certificate.**
 
 **Prerequisite repair (2026-07-28):** the replay audit found that exact MAT
 certificate identity is refinement-invariant while traversal cursor identity
@@ -1752,6 +1754,16 @@ cursor identities were generated, but `MiddleCurveSpan` accepted only native
 `DerivedCandidateCursor` bound to the exact parent span and candidate. Replay
 must reconstruct this cursor from the unique finite-lattice match; it may not
 recover continuation by matching coordinates.
+
+Fresh state reconstruction exposed an exact-oracle classification gap. The
+first L-pocket circle is contained in the qualified entry disk, but remote
+stock remains. The old full-circle uniform path recognized clear engagement
+only when the complete stock was empty, so a valid reconstructed event
+partition still returned unresolved. `event-exact-motion-oracle-v2` now lifts
+the current Epeck stock boundary and one-root endpoints into the sqrt-capable
+exact-region kernel and certifies clear only when the canonical full-circle
+sweep has empty regularized intersection with stock. Replay does not bypass
+the certifier with entry metadata.
 
 **Files**
 
@@ -1849,13 +1861,18 @@ Implemented foundation:
 - exhaustive forward-window candidate reconstruction with independently
   recomputed no-neck full cap;
 - unique motion/scope/cap/traversal matching, including proof-carrying derived
-  cursor continuation; and
-- fail-closed one-field traversal mutation coverage.
+  cursor continuation;
+- fresh `Stock2Area`/`CoverageLedger` construction and authenticated entry
+  depletion before lateral motion;
+- first-circle entry/design containment, exact motion certification against
+  frozen pre-depletion stock, then depletion and coverage mutation;
+- a real-owner chronology gate for
+  `entry-deplete -> certify -> motion-deplete -> coverage-sweep`; and
+- fail-closed candidate and nonterminal-traversal mutation coverage.
 
 Pending before this task is GREEN: neck-owner/passage reconstruction,
-link/circle pairing, containment, fresh entry-first stock and coverage,
-certify-before-deplete traces, terminal traversal, exact empty residual, and
-the complete immutable `ReplayCertificate`.
+link/circle pairing, complete ordered witness capture, terminal traversal,
+exact empty residual, and the complete immutable `ReplayCertificate`.
 
 ```bash
 pixi run format-adaptive

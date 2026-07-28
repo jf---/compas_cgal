@@ -102,7 +102,7 @@ void validate_decision_authority(
 const std::string& event_oracle_component_version()
 {
     static const std::string version =
-        "event-exact-motion-oracle-v1";
+        "event-exact-motion-oracle-v2";
     return version;
 }
 
