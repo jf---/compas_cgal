@@ -21,9 +21,10 @@ cells.
     cross-validated per-operation bundle; two independent rebuilds produce the
     same trace bytes. Replay next fails at the explicit
     nonterminal-traversal boundary because other MAT edges remain untouched.
-    Fresh exact neck inventory, oriented passage, and effective-cap replay are
-    also gated, including the production `80 degrees` second-passage rejection.
-    Complete traversal/coverage, replay/artifact certification,
+    Fresh exact neck inventory plus submitted oriented-owner/state/cap replay
+    are also gated, including the production `80 degrees` second-passage
+    rejection. Global traversal has not yet derived that neck scope
+    independently. Complete traversal/coverage, replay/artifact certification,
     arbitrary-pocket evidence, and matched Held–Pfeiffer performance remain
     incomplete.
 
@@ -249,6 +250,15 @@ state, resolves the recorded owner, reconstructs the policy cap from the
 current state, and advances only after one unique circle candidate matches. A
 real first-passage circle reaches the certifier at `90 degrees`, not the
 `120 degrees` user cap.
+
+!!! warning "Validated scope is not yet derived scope"
+
+    The candidate lattice currently accepts scope as an identity input. The
+    same exact motion/traversal can be rebuilt with no-neck/full-cap identity
+    or with oriented-neck/restricted-cap identity. Replay validates the latter
+    internally but cannot infer which separator was crossed from motion
+    geometry or one edge cursor. Task 13 must carry global certified-side
+    history and assign the causal scope before final replay certification.
 
 !!! warning "A legal passage does not certify its circle"
 
