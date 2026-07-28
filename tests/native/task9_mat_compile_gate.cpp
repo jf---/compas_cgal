@@ -21,6 +21,7 @@ bool neck_evidence_gate();
 bool neck_classification_gate();
 bool mat_sampling_gate();
 bool catalog_neck_gate();
+bool catalog_sampling_gate();
 bool site_catalog_gate();
 bool catalog_delaunay_gate();
 bool catalog_voronoi_gate();
@@ -1812,6 +1813,7 @@ int main()
             && neck_classification_gate()
             && mat_sampling_gate()
             && catalog_neck_gate()
+            && catalog_sampling_gate()
             && site_catalog_gate()
             && catalog_delaunay_gate()
             && catalog_voronoi_gate()

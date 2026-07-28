@@ -48,6 +48,7 @@ algebraic_sample(const MatRationalSamplingCurve2 &curve,
       evaluate_reported(curve.y_coefficients(), reported_parameter);
   require_finite_sample(reported_parameter, x_mm, y_mm);
   return MatWorldXYProposalSample2::build(
+      curve.edge_id(),
       canonical_encode_tagged_union(
           "mat-parabola-algebraic-parameter-v1",
           canonical_encode_component_map({
@@ -73,6 +74,7 @@ rational_parabola_sample(const MatRationalSamplingCurve2 &curve,
       evaluate_rational_polynomial(curve.y_coefficients(), parameter));
   require_finite_sample(reported_parameter, x_mm, y_mm);
   return MatWorldXYProposalSample2::build(
+      curve.edge_id(),
       canonical_encode_tagged_union(
           "mat-parabola-rational-parameter-v1",
           canonical_encode_component_map({
@@ -99,6 +101,7 @@ MatWorldXYProposalSample2 line_sample(const MatRationalSamplingCurve2 &curve,
   const double y_mm = lower.y_mm() + (upper.y_mm() - lower.y_mm()) * fraction;
   require_finite_sample(parameter, x_mm, y_mm);
   return MatWorldXYProposalSample2::build(
+      curve.edge_id(),
       canonical_encode_tagged_union(
           "mat-line-barycentric-parameter-v1",
           canonical_encode_component_map({
@@ -344,9 +347,10 @@ MatRationalSamplingCurve2::y_coefficients() const noexcept {
 }
 
 MatWorldXYProposalSample2::MatWorldXYProposalSample2(
-    std::string exact_parameter_id, const double parameter, const double x_mm,
-    const double y_mm)
-    : exact_parameter_id_(std::move(exact_parameter_id)), parameter_(parameter),
+    std::string edge_id, std::string exact_parameter_id, const double parameter,
+    const double x_mm, const double y_mm)
+    : edge_id_(std::move(edge_id)),
+      exact_parameter_id_(std::move(exact_parameter_id)), parameter_(parameter),
       x_mm_(x_mm), y_mm_(y_mm) {}
 
 MatWorldXYProposalSample2
@@ -358,8 +362,28 @@ MatWorldXYProposalSample2::build(std::string exact_parameter_id,
         "MAT proposal sample has no exact parameter identity");
   }
   require_finite_sample(parameter, x_mm, y_mm);
-  return MatWorldXYProposalSample2(std::move(exact_parameter_id), parameter,
+  return MatWorldXYProposalSample2("", std::move(exact_parameter_id), parameter,
                                    x_mm, y_mm);
+}
+
+MatWorldXYProposalSample2 MatWorldXYProposalSample2::build(
+    std::string edge_id, std::string exact_parameter_id, const double parameter,
+    const double x_mm, const double y_mm) {
+  if (edge_id.empty()) {
+    throw InvalidMatProposalSampleError(
+        "MAT proposal sample has no exact edge owner");
+  }
+  if (exact_parameter_id.empty()) {
+    throw InvalidMatProposalSampleError(
+        "MAT proposal sample has no exact parameter identity");
+  }
+  require_finite_sample(parameter, x_mm, y_mm);
+  return MatWorldXYProposalSample2(
+      std::move(edge_id), std::move(exact_parameter_id), parameter, x_mm, y_mm);
+}
+
+const std::string &MatWorldXYProposalSample2::edge_id() const noexcept {
+  return edge_id_;
 }
 
 const std::string &
@@ -375,6 +399,37 @@ double MatWorldXYProposalSample2::x_mm() const noexcept { return x_mm_; }
 
 double MatWorldXYProposalSample2::y_mm() const noexcept { return y_mm_; }
 
+MatProposalSamplingRun2::MatProposalSamplingRun2(
+    std::string edge_id, std::vector<MatWorldXYProposalSample2> samples)
+    : edge_id_(std::move(edge_id)), samples_(std::move(samples)) {}
+
+MatProposalSamplingRun2
+MatProposalSamplingRun2::build(std::string edge_id,
+                               std::vector<MatWorldXYProposalSample2> samples) {
+  if (edge_id.empty() || samples.size() < 2) {
+    throw InvalidMatProposalSamplingRunError(
+        "MAT proposal sampling run requires an edge and both endpoints");
+  }
+  for (std::size_t index = 0; index < samples.size(); ++index) {
+    if (samples[index].edge_id() != edge_id ||
+        (index > 0 &&
+         samples[index - 1].parameter() >= samples[index].parameter())) {
+      throw InvalidMatProposalSamplingRunError(
+          "MAT proposal sampling run is not bound and parameter ordered");
+    }
+  }
+  return MatProposalSamplingRun2(std::move(edge_id), std::move(samples));
+}
+
+const std::string &MatProposalSamplingRun2::edge_id() const noexcept {
+  return edge_id_;
+}
+
+const std::vector<MatWorldXYProposalSample2> &
+MatProposalSamplingRun2::samples() const noexcept {
+  return samples_;
+}
+
 std::vector<MatWorldXYProposalSample2>
 proposal_samples(const MatRationalSamplingCurve2 &curve,
                  const MatStationSpacingMm2 &station_spacing,
@@ -385,4 +440,14 @@ proposal_samples(const MatRationalSamplingCurve2 &curve,
   }
   return parabola_samples(curve, station_spacing, max_sagitta,
                           max_refinement_depth);
+}
+
+MatProposalSamplingRun2
+proposal_sampling_run(const MatRationalSamplingCurve2 &curve,
+                      const MatStationSpacingMm2 &station_spacing,
+                      const MatSagittaBoundMm2 &max_sagitta,
+                      const std::size_t max_refinement_depth) {
+  return MatProposalSamplingRun2::build(
+      curve.edge_id(), proposal_samples(curve, station_spacing, max_sagitta,
+                                        max_refinement_depth));
 }
