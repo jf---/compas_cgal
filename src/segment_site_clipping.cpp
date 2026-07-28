@@ -1,8 +1,10 @@
 #include "segment_site_clipping.h"
 
 #include <algorithm>
+#include <cstdint>
 #include <functional>
 #include <iterator>
+#include <limits>
 #include <string>
 #include <utility>
 #include <vector>
@@ -13,6 +15,18 @@ namespace {
 
 using AlgebraicParameter =
     ExactAlgebraicKernel1::Algebraic_real_1;
+
+std::int64_t checked_component_index(
+    const std::size_t index)
+{
+    if (static_cast<std::uintmax_t>(index)
+        > static_cast<std::uintmax_t>(
+            std::numeric_limits<std::int64_t>::max())) {
+        throw MatGraphComponentIndexOverflowError(
+            "MAT clip component index exceeds int64 range");
+    }
+    return static_cast<std::int64_t>(index);
+}
 
 CGAL::Sign clearance_sign_at(
     const std::vector<ExactAlgebraicInteger1>& coefficients,
@@ -81,6 +95,7 @@ CORE::BigRat open_cell_witness(
 void append_polygon_intersections(
     const MatDomainPolygon2& polygon,
     const std::string& ring_id,
+    const std::size_t ring_index,
     const RationalPrimitiveParameterization2& primitive,
     std::vector<RationalDomainRoot2>& roots)
 {
@@ -141,6 +156,11 @@ void append_polygon_intersections(
                     ring_id + "/edge-"
                     + std::to_string(edge_index),
                 },
+                {
+                    design_line_endpoint_feature(
+                        ring_index,
+                        edge_index),
+                },
             });
     }
 }
@@ -176,6 +196,7 @@ std::vector<RationalDomainRoot2> linear_domain_roots(
     append_polygon_intersections(
         domain.outer_boundary(),
         dual_id + "/D-outer",
+        0,
         primitive,
         roots);
     std::size_t hole_index = 0;
@@ -186,6 +207,7 @@ std::vector<RationalDomainRoot2> linear_domain_roots(
             *hole,
             dual_id + "/D-hole-"
                 + std::to_string(hole_index),
+            hole_index + 1,
             primitive,
             roots);
     }
@@ -204,6 +226,9 @@ std::vector<RationalDomainRoot2> linear_domain_roots(
                 unique.back().provenance_ids.end(),
                 root.provenance_ids.begin(),
                 root.provenance_ids.end());
+            union_endpoint_boundary_features(
+                unique.back().boundary_features,
+                root.boundary_features);
         } else {
             unique.push_back(std::move(root));
         }
@@ -235,6 +260,7 @@ algebraic_linear_domain_roots(
             {
                 parameter,
                 std::move(provenance),
+                root.boundary_features,
             });
     }
     return roots;
@@ -243,6 +269,7 @@ algebraic_linear_domain_roots(
 void append_source_parabola_intersections(
     const MatDomainPolygon2& polygon,
     const std::string& ring_id,
+    const std::size_t ring_index,
     const SourceParabolaParameterization2& primitive,
     const MatParameterEndpoint2& domain_lower,
     const MatParameterEndpoint2& domain_upper,
@@ -331,6 +358,11 @@ void append_source_parabola_intersections(
                         + std::to_string(edge_index),
                         algebraic_root_identity_v1(parameter),
                     },
+                    {
+                        design_line_endpoint_feature(
+                            ring_index,
+                            edge_index),
+                    },
                 });
         }
     }
@@ -348,6 +380,7 @@ source_parabola_domain_roots(
     append_source_parabola_intersections(
         domain.outer_boundary(),
         dual_id + "/D-outer",
+        0,
         primitive,
         domain_lower,
         domain_upper,
@@ -360,6 +393,7 @@ source_parabola_domain_roots(
             *hole,
             dual_id + "/D-hole-"
                 + std::to_string(hole_index),
+            hole_index + 1,
             primitive,
             domain_lower,
             domain_upper,
@@ -386,6 +420,9 @@ source_parabola_domain_roots(
                 unique.back().provenance_ids.end(),
                 root.provenance_ids.begin(),
                 root.provenance_ids.end());
+            union_endpoint_boundary_features(
+                unique.back().boundary_features,
+                root.boundary_features);
         } else {
             unique.push_back(std::move(root));
         }
@@ -817,6 +854,7 @@ maximal_clearance_components(
                 original_dual_id + "/component-0",
                 lower.endpoint,
                 upper.endpoint,
+                0,
             },
         };
     }
@@ -842,10 +880,9 @@ maximal_clearance_components(
                *endpoints.front().endpoint.parameter,
                *upper.endpoint.parameter)
             == CGAL::EQUAL) {
-        endpoints.front().endpoint.provenance_ids.insert(
-            endpoints.front().endpoint.provenance_ids.end(),
-            upper.endpoint.provenance_ids.begin(),
-            upper.endpoint.provenance_ids.end());
+        union_endpoint_evidence(
+            endpoints.front().endpoint,
+            upper.endpoint);
     } else {
         endpoints.push_back(upper);
     }
@@ -863,6 +900,7 @@ maximal_clearance_components(
                 original_dual_id + "/component-0",
                 endpoints.front().endpoint,
                 endpoints.front().endpoint,
+                0,
             },
         };
     }
@@ -945,6 +983,7 @@ maximal_clearance_components(
                     + std::to_string(index),
                 ordered[index].lower,
                 ordered[index].upper,
+                checked_component_index(index),
             });
     }
     return components;
@@ -1018,6 +1057,12 @@ clip_clearance_components_with_domain_roots(
                     {
                         boundary.roots[index].event_id,
                     },
+                    {
+                        false,
+                        false,
+                        true,
+                        {},
+                    },
                 },
                 true,
                 false,
@@ -1032,6 +1077,12 @@ clip_clearance_components_with_domain_roots(
                 {
                     root.parameter,
                     root.provenance_ids,
+                    {
+                        false,
+                        true,
+                        false,
+                        root.boundary_features,
+                    },
                 },
                 false,
                 true,
@@ -1074,10 +1125,9 @@ clip_clearance_components_with_domain_roots(
         equal_endpoint->domain_boundary =
             equal_endpoint->domain_boundary
             || candidate.domain_boundary;
-        equal_endpoint->endpoint.provenance_ids.insert(
-            equal_endpoint->endpoint.provenance_ids.end(),
-            candidate.endpoint.provenance_ids.begin(),
-            candidate.endpoint.provenance_ids.end());
+        union_endpoint_evidence(
+            equal_endpoint->endpoint,
+            candidate.endpoint);
     }
     if (endpoints.front().endpoint.parameter.has_value()
         && upper.endpoint.parameter.has_value()
@@ -1085,10 +1135,9 @@ clip_clearance_components_with_domain_roots(
                *endpoints.front().endpoint.parameter,
                *upper.endpoint.parameter)
             == CGAL::EQUAL) {
-        endpoints.front().endpoint.provenance_ids.insert(
-            endpoints.front().endpoint.provenance_ids.end(),
-            upper.endpoint.provenance_ids.begin(),
-            upper.endpoint.provenance_ids.end());
+        union_endpoint_evidence(
+            endpoints.front().endpoint,
+            upper.endpoint);
     } else {
         endpoints.push_back(upper);
     }
@@ -1199,6 +1248,7 @@ clip_clearance_components_with_domain_roots(
                     + std::to_string(index),
                 ordered[index].lower,
                 ordered[index].upper,
+                checked_component_index(index),
             });
     }
     return components;

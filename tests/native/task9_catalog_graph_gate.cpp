@@ -163,7 +163,9 @@ bool endpoints_equal(
     if (!left.parameter.has_value()
         || !right.parameter.has_value()
         || left.provenance_ids
-            != right.provenance_ids) {
+            != right.provenance_ids
+        || left.exact_evidence
+            != right.exact_evidence) {
         return false;
     }
     ExactAlgebraicKernel1 kernel;
@@ -222,6 +224,10 @@ bool graphs_equal(
                 != second.generator_site_ids
             || first.parent_site_ids
                 != second.parent_site_ids
+            || first.clip_component_index
+                != second.clip_component_index
+            || first.admissible_center_component
+                != second.admissible_center_component
             || !endpoints_equal(
                 first.source_endpoint,
                 second.source_endpoint)

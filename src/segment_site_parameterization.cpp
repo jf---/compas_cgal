@@ -667,6 +667,7 @@ parabola_edge_equation(
 void append_parabola_polygon_intersections(
     const MatDomainPolygon2& polygon,
     const std::string& ring_id,
+    const std::size_t ring_index,
     const RationalPrimitiveParameterization2& primitive,
     std::vector<AlgebraicDomainRoot2>& algebraic_roots)
 {
@@ -737,6 +738,11 @@ void append_parabola_polygon_intersections(
                         + std::to_string(edge_index),
                         algebraic_root_identity_v1(parameter),
                     },
+                    {
+                        design_line_endpoint_feature(
+                            ring_index,
+                            edge_index),
+                    },
                 });
         }
     }
@@ -763,6 +769,7 @@ std::vector<AlgebraicDomainRoot2> parabola_domain_roots(
     append_parabola_polygon_intersections(
         domain.outer_boundary(),
         dual_id + "/D-outer",
+        0,
         primitive,
         roots);
     std::size_t hole_index = 0;
@@ -773,6 +780,7 @@ std::vector<AlgebraicDomainRoot2> parabola_domain_roots(
             *hole,
             dual_id + "/D-hole-"
                 + std::to_string(hole_index),
+            hole_index + 1,
             primitive,
             roots);
     }
@@ -797,6 +805,9 @@ std::vector<AlgebraicDomainRoot2> parabola_domain_roots(
                 unique.back().provenance_ids.end(),
                 root.provenance_ids.begin(),
                 root.provenance_ids.end());
+            union_endpoint_boundary_features(
+                unique.back().boundary_features,
+                root.boundary_features);
         } else {
             unique.push_back(std::move(root));
         }
@@ -1295,6 +1306,7 @@ MatQuadraticFieldValue2 quadratic_field_cross(
 void append_nonparallel_segment_polygon_intersections(
     const MatDomainPolygon2& polygon,
     const std::string& ring_id,
+    const std::size_t ring_index,
     const NonparallelSegmentBisectorParameterization2& primitive,
     const NonparallelSegmentFeatureDomain2& feature_domain,
     std::vector<AlgebraicDomainRoot2>& roots)
@@ -1457,6 +1469,11 @@ void append_nonparallel_segment_polygon_intersections(
                                 algebraic_root_identity_v1(
                                     algebraic_parameter),
                             },
+                            {
+                                design_line_endpoint_feature(
+                                    ring_index,
+                                    edge_index),
+                            },
                         });
                 }
             }
@@ -1513,6 +1530,11 @@ void append_nonparallel_segment_polygon_intersections(
                     algebraic_root_identity_v1(
                         algebraic_parameter),
                 },
+                {
+                    design_line_endpoint_feature(
+                        ring_index,
+                        edge_index),
+                },
             });
     }
 }
@@ -1550,6 +1572,7 @@ nonparallel_segment_domain_roots(
     append_nonparallel_segment_polygon_intersections(
         domain.outer_boundary(),
         dual_id + "/D-outer",
+        0,
         primitive,
         feature_domain,
         roots);
@@ -1561,6 +1584,7 @@ nonparallel_segment_domain_roots(
             *hole,
             dual_id + "/D-hole-"
                 + std::to_string(hole_index),
+            hole_index + 1,
             primitive,
             feature_domain,
             roots);
@@ -1586,6 +1610,9 @@ nonparallel_segment_domain_roots(
             union_stable_ids(
                 unique.back().provenance_ids,
                 root.provenance_ids);
+            union_endpoint_boundary_features(
+                unique.back().boundary_features,
+                root.boundary_features);
         } else {
             union_stable_ids(
                 root.provenance_ids,

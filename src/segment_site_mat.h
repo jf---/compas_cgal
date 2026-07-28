@@ -4,6 +4,7 @@
 #include "segment_site_endpoint_binding.h"
 
 #include <cstddef>
+#include <cstdint>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -99,6 +100,8 @@ struct MatExactGraphEdge2 {
     MatParameterEndpoint2 target_endpoint;
     std::vector<std::string> generator_site_ids;
     std::vector<std::string> parent_site_ids;
+    std::int64_t clip_component_index = -1;
+    bool admissible_center_component = false;
 };
 
 struct MatExactGraph2 {
