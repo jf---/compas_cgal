@@ -1576,20 +1576,30 @@ Commit: `feat(adaptive): add finite MAT candidates`
 
 ## Task 11 — Add precleared entry and exact gouge containment
 
+**Status (2026-07-28): complete and locally gated.**
+
 **Files**
 
 - Create: `src/containment_2.h`
 - Create: `src/containment_2.cpp`
 - Create: `src/containment_2_bindings.cpp`
 - Modify: `CMakeLists.txt`
+- Modify: `pyproject.toml`
+- Modify: `src/stock_2.cpp`
+- Modify: `src/compas_cgal/_stock_2.pyi`
 - Create: `src/compas_cgal/_containment_2.pyi`
+- Modify: `src/compas_cgal/adaptive/canonical.py`
+- Modify: `src/compas_cgal/adaptive/errors.py`
 - Create: `src/compas_cgal/adaptive/entry.py`
 - Create: `src/compas_cgal/adaptive/containment.py`
+- Modify: `src/compas_cgal/adaptive/reachable_domain.py`
 - Modify: `src/compas_cgal/adaptive/stock_area.py`
 - Modify: `src/compas_cgal/adaptive/identity.py`
 - Test: `tests/adaptive/test_entry.py`
 - Test: `tests/adaptive/test_containment.py`
 - Modify: `tests/adaptive/test_identity.py`
+- Modify: `tests/adaptive/typecheck/consumer_contract.py`
+- Modify: `docs/segment_site_mat.md`
 
 ### Step 1: write RED entry tests
 
@@ -1649,6 +1659,15 @@ pixi run pytest tests/adaptive/test_entry.py \
   tests/adaptive/test_containment.py tests/adaptive/test_identity.py \
   -n auto --testmon -q
 ```
+
+Implemented evidence before publication:
+
+- 36 focused containment/entry/identity tests pass;
+- 66 focused tests pass with the existing exact-depletion regression suite;
+- final `pixi run affected`: 39 dependency-selected tests passed;
+- repository Ruff and strict adaptive mypy gates pass; and
+- native containment and stock modules rebuild through the editable Pixi
+  boundary.
 
 Commit: `feat(adaptive): certify entry and input`
 

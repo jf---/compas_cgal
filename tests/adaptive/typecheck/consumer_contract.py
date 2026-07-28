@@ -9,6 +9,13 @@ from compas_cgal.adaptive.candidates import MiddleCurveCandidate
 from compas_cgal.adaptive.candidates import MiddleCurveSpan
 from compas_cgal.adaptive.candidates import enumerate_middle_curve_candidates
 from compas_cgal.adaptive.canonical import CanonicalRingV1
+from compas_cgal.adaptive.containment import CircleContainmentCertificate
+from compas_cgal.adaptive.containment import GougeContainment
+from compas_cgal.adaptive.containment import SegmentContainmentCertificate
+from compas_cgal.adaptive.entry import BoreProcessIdentity
+from compas_cgal.adaptive.entry import PreclearedEntry
+from compas_cgal.adaptive.entry import QualifiedBore
+from compas_cgal.adaptive.identity import InputIdentity
 from compas_cgal.adaptive.medial_axis import MedialAxis
 from compas_cgal.adaptive.motion import EngagementCap
 from compas_cgal.adaptive.operation import AdvanceTraversalDecision
@@ -26,12 +33,18 @@ from compas_cgal.adaptive.motion import ExactCircleMotion
 from compas_cgal.adaptive.motion import ExactSegmentMotion
 from compas_cgal.adaptive.policy import CandidatePolicy
 from compas_cgal.adaptive.policy import CircleOrientation
+from compas_cgal.adaptive.policy import CutDirectionPolicy
 from compas_cgal.adaptive.policy import DepletionPolicy
+from compas_cgal.adaptive.policy import NeckPolicy
+from compas_cgal.adaptive.policy import TraversalPolicy
+from compas_cgal.adaptive.reachable_domain import ReachableDomain
 from compas_cgal.adaptive.stock_area import DepletionWitness
 from compas_cgal.adaptive.stock_area import Stock2Area
 from compas_cgal.adaptive.units import ChordBound
 from compas_cgal.adaptive.units import ClearanceZ
+from compas_cgal.adaptive.units import CutPlane
 from compas_cgal.adaptive.units import CutZ
+from compas_cgal.adaptive.units import EntryRadius
 from compas_cgal.adaptive.units import GuideRadius
 from compas_cgal.adaptive.units import Point2
 from compas_cgal.adaptive.units import Spacing
@@ -172,6 +185,56 @@ segment_witness = stock_area.deplete(segment_motion, ToolRadius.build(0.5), depl
 circle_witness = stock_area.deplete(circle_motion, ToolRadius.build(0.5), depletion_policy)
 assert_type(segment_witness, DepletionWitness)
 assert_type(circle_witness, DepletionWitness)
+
+reachable_domain = ReachableDomain.__new__(ReachableDomain)
+containment = GougeContainment.build(reachable_domain)
+segment_containment = containment.certify_segment(
+    segment_motion,
+    ToolRadius.build(0.5),
+)
+circle_containment = containment.certify_full_circle(
+    circle_motion,
+    ToolRadius.build(0.5),
+)
+assert_type(segment_containment, SegmentContainmentCertificate)
+assert_type(circle_containment, CircleContainmentCertificate)
+
+cut_plane = CutPlane.build(
+    CutZ.build(-2.0),
+    ClearanceZ.build(5.0),
+)
+qualified_bore = QualifiedBore.build(
+    cut_plane=cut_plane,
+    process_identity=BoreProcessIdentity(b"process"),
+    evidence_bytes=b"evidence",
+)
+precleared_entry = PreclearedEntry.build(
+    reachable_domain=reachable_domain,
+    center=world_point_scalar,
+    radius=EntryRadius.build(1.0),
+    tool_radius=ToolRadius.build(0.5),
+    cut_plane=cut_plane,
+    qualified_bore=qualified_bore,
+)
+entry_witness = stock_area.deplete(precleared_entry)
+assert_type(precleared_entry, PreclearedEntry)
+assert_type(entry_witness, DepletionWitness)
+
+input_identity = InputIdentity.build(
+    design_boundary=typed_boundary,
+    holes=(),
+    cut_plane=cut_plane,
+    tool_radius=ToolRadius.build(0.5),
+    reachable_domain=reachable_domain,
+    entry=precleared_entry,
+    user_cap=candidate_cap,
+    candidate_policy=candidate_policy,
+    neck_policy=NeckPolicy.__new__(NeckPolicy),
+    depletion_policy=depletion_policy,
+    traversal_policy=TraversalPolicy.__new__(TraversalPolicy),
+    cut_direction_policy=CutDirectionPolicy.__new__(CutDirectionPolicy),
+)
+assert_type(input_identity, InputIdentity)
 
 
 def accepts_world_point(point: Point2[WorldXY]) -> None:

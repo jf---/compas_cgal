@@ -1,3 +1,4 @@
+from compas_cgal import _containment_2
 from compas_cgal import _coverage_2
 from compas_cgal import _stock_2
 
@@ -10,6 +11,7 @@ PocketNotMachinableError = _coverage_2.PocketNotMachinableError
 ReachableMaterialContainmentError = _coverage_2.ReachableMaterialContainmentError
 InvalidCoverageGeometryError = _coverage_2.InvalidCoverageGeometryError
 CoverageTransitionError = _coverage_2.CoverageTransitionError
+ContainmentConstructionError = _containment_2.ContainmentConstructionError
 
 
 class InvalidUnitValueError(ValueError):
@@ -42,6 +44,18 @@ class InvalidMathsmProposalError(ValueError):
 
 class InvalidCandidateLatticeError(ValueError):
     """A finite candidate cell omits or contradicts bound decision state."""
+
+
+class InvalidContainmentCertificateError(ValueError):
+    """A native exact-containment record contradicts its typed motion."""
+
+
+class GougeContainmentError(RuntimeError):
+    """An exact cutter sweep is not contained in the design pocket."""
+
+
+class InvalidPreclearedEntryError(ValueError):
+    """A declared precleared bore cannot launch the certified programme."""
 
 
 class InvalidNeckPolicyError(ValueError):
@@ -98,6 +112,10 @@ class ArtifactIdentityError(ValueError):
 
 class InvalidComponentIdentityError(ArtifactIdentityError):
     """A component identity omits or corrupts a required build input."""
+
+
+class InvalidInputIdentityError(ArtifactIdentityError):
+    """A Phase-1 input identity omits or cross-wires a validated input."""
 
 
 class InvalidBoundaryVertexIdentityError(ArtifactIdentityError):

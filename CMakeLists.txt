@@ -324,6 +324,12 @@ target_compile_definitions(
 add_nanobind_module(_coverage_2 src/coverage_bindings_2.cpp)
 target_link_libraries(_coverage_2 PRIVATE coverage_exact_core)
 target_compile_definitions(_coverage_2 PRIVATE CGAL_USE_CORE=1)
+add_nanobind_module(
+    _containment_2
+    "src/containment_2_bindings.cpp;src/containment_2.cpp"
+)
+target_link_libraries(_containment_2 PRIVATE coverage_exact_core)
+target_compile_definitions(_containment_2 PRIVATE CGAL_USE_CORE=1)
 
 set(MEDIAL_AXIS_2_SOURCES
     src/medial_axis_2.cpp

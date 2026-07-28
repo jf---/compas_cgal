@@ -6,6 +6,9 @@ from typing import overload
 from compas_cgal import _stock_2
 from compas_cgal.adaptive.canonical import ExactCenterParameterV1
 from compas_cgal.adaptive.canonical import canonical_depletion_witness_bytes
+from compas_cgal.adaptive.canonical import canonical_precleared_depletion_witness_bytes
+from compas_cgal.adaptive.entry import ENTRY_DEPLETION_STRATEGY_VERSION
+from compas_cgal.adaptive.entry import PreclearedEntry
 from compas_cgal.adaptive.errors import InvalidDepletionTraceError
 from compas_cgal.adaptive.errors import InvalidDepletionWitnessError
 from compas_cgal.adaptive.errors import InvalidStockAreaError
@@ -69,39 +72,44 @@ class DepletionWitness:
     """Immutable identity evidence for one exact-on-guide depletion.
 
     Attributes:
-        motion: Exact segment or full-circle center motion.
-        policy: Complete density and center-count policy.
+        motion: Exact segment/full-circle motion or the initial precleared entry.
+        policy: Complete motion-depletion policy, or `None` for the entry disk.
         tool_radius: Typed tool radius used by native depletion.
         center_parameters: Ordered native structural center parameters.
         native_strategy_version: Native exact-construction strategy identifier.
         parent_lineage: Ordered digests of all preceding depletion witnesses.
     """
 
-    motion: ExactSegmentMotion | ExactCircleMotion
-    policy: DepletionPolicy
+    motion: ExactSegmentMotion | ExactCircleMotion | PreclearedEntry
+    policy: DepletionPolicy | None
     tool_radius: ToolRadius
     center_parameters: tuple[ExactCenterParameterV1, ...]
     native_strategy_version: bytes
     parent_lineage: tuple[IdentityDigest, ...]
 
     def __post_init__(self) -> None:
-        if type(self.motion) not in (ExactSegmentMotion, ExactCircleMotion):
-            raise InvalidDepletionWitnessError("depletion witness requires one exact motion type.")
-        if type(self.policy) is not DepletionPolicy:
-            raise InvalidDepletionWitnessError("depletion witness requires an exact depletion policy.")
         if type(self.tool_radius) is not ToolRadius:
             raise InvalidDepletionWitnessError("depletion witness requires an exact typed tool radius.")
+        if type(self.native_strategy_version) is not bytes or not self.native_strategy_version:
+            raise InvalidDepletionWitnessError("depletion witness requires a nonempty native strategy version.")
+        if type(self.parent_lineage) is not tuple or any(type(digest) is not bytes or len(digest) != 32 for digest in self.parent_lineage):
+            raise InvalidDepletionWitnessError("depletion witness parent lineage must contain exact SHA-256 digests.")
+
+        if type(self.motion) is PreclearedEntry:
+            self._validate_precleared_entry()
+            return
+        if type(self.motion) not in (ExactSegmentMotion, ExactCircleMotion):
+            raise InvalidDepletionWitnessError("depletion witness requires one supported exact depletion input.")
+        if type(self.policy) is not DepletionPolicy:
+            raise InvalidDepletionWitnessError("motion depletion witness requires an exact depletion policy.")
+        policy = self.policy
         if type(self.center_parameters) is not tuple or not self.center_parameters:
             raise InvalidDepletionWitnessError("depletion witness requires nonempty structural center parameters.")
         if any(type(parameter) is not ExactCenterParameterV1 for parameter in self.center_parameters):
             raise InvalidDepletionWitnessError("depletion witness center parameters must use exact closed values.")
-        if type(self.native_strategy_version) is not bytes or not self.native_strategy_version:
-            raise InvalidDepletionWitnessError("depletion witness requires a nonempty native strategy version.")
         if self.native_strategy_version != _stock_2.exact_depletion_strategy_version():
             raise InvalidDepletionWitnessError("depletion witness uses an unsupported native strategy version.")
-        if type(self.parent_lineage) is not tuple or any(type(digest) is not bytes or len(digest) != 32 for digest in self.parent_lineage):
-            raise InvalidDepletionWitnessError("depletion witness parent lineage must contain exact SHA-256 digests.")
-        if len(self.center_parameters) > self.policy.center_count_limit:
+        if len(self.center_parameters) > policy.center_count_limit:
             raise InvalidDepletionWitnessError("depletion witness exceeds the policy center-count limit.")
         if type(self.motion) is ExactSegmentMotion:
             _validate_segment_parameters(self.center_parameters)
@@ -110,7 +118,7 @@ class DepletionWitness:
                 self.motion.start.y,
                 self.motion.end.x,
                 self.motion.end.y,
-                self.policy.chord_bound.value,
+                policy.chord_bound.value,
                 tuple((parameter.chart, parameter.numerator, parameter.denominator) for parameter in self.center_parameters),
             )
         else:
@@ -122,11 +130,28 @@ class DepletionWitness:
                 circle.phase_vector.x,
                 circle.phase_vector.y,
                 circle.clockwise,
-                self.policy.chord_bound.value,
+                policy.chord_bound.value,
                 tuple((parameter.chart, parameter.numerator, parameter.denominator) for parameter in self.center_parameters),
             )
         if not density_holds:
             raise InvalidDepletionWitnessError("depletion witness structural density does not satisfy its owned motion and chord bound.")
+        try:
+            self.canonical_bytes
+        except ValueError as error:
+            raise InvalidDepletionWitnessError(str(error)) from None
+
+    def _validate_precleared_entry(self) -> None:
+        entry = cast(PreclearedEntry, self.motion)
+        if self.policy is not None:
+            raise InvalidDepletionWitnessError("precleared-entry witness cannot carry a motion depletion policy.")
+        if type(self.center_parameters) is not tuple or self.center_parameters:
+            raise InvalidDepletionWitnessError("precleared-entry witness must have no sampled center parameters.")
+        if self.tool_radius != entry.tool_radius:
+            raise InvalidDepletionWitnessError("precleared-entry witness tool radius contradicts its entry.")
+        if self.native_strategy_version != ENTRY_DEPLETION_STRATEGY_VERSION:
+            raise InvalidDepletionWitnessError("precleared-entry witness uses an unsupported strategy version.")
+        if self.parent_lineage:
+            raise InvalidDepletionWitnessError("precleared-entry witness must be the first and only entry event.")
         try:
             self.canonical_bytes
         except ValueError as error:
@@ -139,9 +164,19 @@ class DepletionWitness:
         Returns:
             Canonical versioned witness bytes.
         """
+        if type(self.motion) is PreclearedEntry:
+            return canonical_precleared_depletion_witness_bytes(
+                entry_bytes=self.motion.canonical_bytes,
+                tool_radius=self.tool_radius,
+                native_strategy_version=self.native_strategy_version,
+                parent_lineage=tuple(bytes(digest) for digest in self.parent_lineage),
+            )
         return canonical_depletion_witness_bytes(
-            motion=self.motion,
-            policy=self.policy,
+            motion=cast(
+                ExactSegmentMotion | ExactCircleMotion,
+                self.motion,
+            ),
+            policy=cast(DepletionPolicy, self.policy),
             tool_radius=self.tool_radius,
             center_parameters=self.center_parameters,
             native_strategy_version=self.native_strategy_version,
@@ -228,7 +263,13 @@ class Stock2Area:
     @overload
     def deplete(
         self,
-        motion: ExactSegmentMotion,
+        depletion: PreclearedEntry,
+    ) -> DepletionWitness: ...
+
+    @overload
+    def deplete(
+        self,
+        depletion: ExactSegmentMotion,
         tool_radius: ToolRadius,
         policy: DepletionPolicy,
     ) -> DepletionWitness: ...
@@ -236,23 +277,23 @@ class Stock2Area:
     @overload
     def deplete(
         self,
-        motion: ExactCircleMotion,
+        depletion: ExactCircleMotion,
         tool_radius: ToolRadius,
         policy: DepletionPolicy,
     ) -> DepletionWitness: ...
 
     def deplete(
         self,
-        motion: ExactSegmentMotion | ExactCircleMotion,
-        tool_radius: ToolRadius,
-        policy: DepletionPolicy,
+        depletion: (ExactSegmentMotion | ExactCircleMotion | PreclearedEntry | object),
+        tool_radius: ToolRadius | None = None,
+        policy: DepletionPolicy | None = None,
     ) -> DepletionWitness:
-        """Apply one exact-on-guide depletion transaction.
+        """Apply one exact precleared-entry or on-guide depletion transaction.
 
         Args:
-            motion: Exact segment or full-circle motion.
-            tool_radius: Typed positive removal radius.
-            policy: Exact chord and center-count policy.
+            depletion: Initial precleared entry, exact segment, or full circle.
+            tool_radius: Typed removal radius for a motion depletion.
+            policy: Chord and center-count policy for a motion depletion.
 
         Returns:
             Immutable witness appended to accepted lineage.
@@ -263,6 +304,53 @@ class Stock2Area:
                 the owned inputs.
             InvalidDepletionWitnessError: If canonical witness closure fails.
         """
+        if type(depletion) is PreclearedEntry:
+            if tool_radius is not None or policy is not None:
+                raise InvalidStockAreaError("precleared-entry depletion requires exactly one entry input.")
+            return self._deplete_entry(depletion)
+        if type(depletion) in (ExactSegmentMotion, ExactCircleMotion):
+            if tool_radius is None or policy is None:
+                raise InvalidStockAreaError("exact motion requires three depletion inputs.")
+            return self._deplete_motion(
+                cast(
+                    ExactSegmentMotion | ExactCircleMotion,
+                    depletion,
+                ),
+                tool_radius,
+                policy,
+            )
+        raise InvalidStockAreaError("stock depletion requires one supported exact depletion input.")
+
+    def _deplete_entry(
+        self,
+        entry: PreclearedEntry,
+    ) -> DepletionWitness:
+        if self._lineage:
+            raise InvalidStockAreaError("precleared entry must be depleted first and exactly once.")
+        trial = self._raw.clone()
+        trial.subtract_disk(
+            entry.center.x,
+            entry.center.y,
+            entry.radius.value,
+        )
+        witness = DepletionWitness(
+            entry,
+            None,
+            entry.tool_radius,
+            (),
+            ENTRY_DEPLETION_STRATEGY_VERSION,
+            (),
+        )
+        self._raw = trial
+        self._lineage = (witness,)
+        return witness
+
+    def _deplete_motion(
+        self,
+        motion: ExactSegmentMotion | ExactCircleMotion,
+        tool_radius: ToolRadius,
+        policy: DepletionPolicy,
+    ) -> DepletionWitness:
         if type(tool_radius) is not ToolRadius:
             raise InvalidStockAreaError("stock depletion requires an exact typed tool radius.")
         if type(policy) is not DepletionPolicy:

@@ -605,6 +605,11 @@ class ReachableDomain:
         return self._certificate
 
     @property
+    def design_region(self) -> _coverage_2.ExactRegion2:
+        """Return an immutable shared-storage view of exact design pocket `D`."""
+        return self._native.design_region()
+
+    @property
     def center_domain(self) -> _coverage_2.ExactRegion2:
         return self._native.center_domain()
 
