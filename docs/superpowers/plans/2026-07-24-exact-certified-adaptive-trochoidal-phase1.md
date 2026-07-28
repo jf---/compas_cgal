@@ -138,6 +138,7 @@ src/compas_cgal/adaptive/
   coverage.py
   motion_certificate.py
   replay.py
+  replay_trace.py
   medial_axis.py
   neck.py
   entry.py
@@ -1721,9 +1722,10 @@ Commit: `feat(adaptive): certify entry and input`
 oriented-neck candidate reconstruction, exact inventory/passage/cap replay,
 derived-cursor link/circle pairing, entry-first stock/coverage initialization,
 containment, and first-circle/link/second-circle
-certification-before-depletion/coverage are gated. Replay now reaches the
-explicit nonterminal-traversal boundary because other MAT edges remain
-untouched; it emits no partial certificate.**
+certification-before-depletion/coverage are gated. Every returned proof is now
+retained in one deterministic, cross-validated `FreshReplayTrace`. Replay
+reaches the explicit nonterminal-traversal boundary because other MAT edges
+remain untouched; it emits no partial certificate.**
 
 **Prerequisite repair (2026-07-28):** the replay audit found that exact MAT
 certificate identity is refinement-invariant while traversal cursor identity
@@ -1812,13 +1814,28 @@ circle is correctly rejected at its `80 degrees` cap. An equal-cap two-passage
 fixture isolates state chronology from candidate feasibility. Task 12 must
 select another motion; replay does not weaken the cap.
 
+Ordered-evidence capture exposed a serialization boundary: `MotionWitness` was
+immutable but had no canonical record of its own, so replay or artifact
+assembly would have needed a second serializer. It now owns versioned
+`motion-witness-v1` bytes and a SHA-256 identity over every witness field.
+`ReplayLateralWitness` cross-binds one operation and recomputed cap to its
+pre-cut stock boundary, containment, motion, depletion, and coverage proofs.
+`FreshReplayTrace` anchors the entry and initial/terminal snapshots, recomputes
+both parent lineages, and rejects valid evidence borrowed from another
+operation or position. Two independent real circle-link-circle rebuilds
+produce byte-identical trace records. The trace remains deliberately distinct
+from `ReplayCertificate`: nonterminal or nonempty state can retain diagnostic
+evidence without acquiring a completion verdict.
+
 **Files**
 
 - Modify: `src/compas_cgal/adaptive/errors.py`
 - Modify: `src/compas_cgal/adaptive/policy.py`
 - Modify: `src/compas_cgal/adaptive/canonical.py`
 - Modify: `src/compas_cgal/adaptive/identity.py`
+- Modify: `src/compas_cgal/adaptive/motion_certificate.py`
 - Create: `src/compas_cgal/adaptive/replay.py`
+- Create: `src/compas_cgal/adaptive/replay_trace.py`
 - Create: `src/continuous_tea_2/station_source.h`
 - Create: `src/continuous_tea_2/station_source.cpp`
 - Create: `src/continuous_tea_2/station_classifier.h`
@@ -1939,19 +1956,26 @@ Implemented foundation:
 - distinct generic-partition and cell-decision authority digests for the
   post-link nonuniform circle, followed by fail-closed nonterminal traversal;
 - exact effective-cap delivery to the real link/circle motion certifier, with
-  a preserved physical second-passage cap-exceeded result; and
+  a preserved physical second-passage cap-exceeded result;
+- canonical `MotionWitness` serialization and content identity;
+- deterministic `FreshReplayTrace` capture whose per-operation bundles
+  cross-validate operation index/kind, recomputed cap, frozen stock boundary,
+  containment, motion, depletion, and coverage evidence;
+- entry-first plus stock/coverage parent-lineage reconstruction, initial and
+  terminal snapshot binding, and adversarial proof cross-wire/reorder
+  rejection; and
 - fail-closed candidate, reused-passage, foreign-neck, and
   nonterminal-traversal mutation coverage.
 
-Pending before this task is GREEN: complete ordered witness capture, terminal
-traversal, exact empty residual, and the complete immutable
-`ReplayCertificate`.
+Pending before this task is GREEN: terminal traversal, exact empty residual,
+and the complete immutable `ReplayCertificate`.
 
-Current neck-replay stage evidence:
+Current ordered-evidence stage:
 
-- 17 focused replay tests pass;
-- final `pixi run affected`: 17 dependency-selected tests pass;
-- all 437 adaptive tests pass;
+- all 18 collected replay cases and all 10 motion-certificate cases pass;
+- `pixi run affected` exits clean after selecting no additional tests because
+  the immediately preceding full focused run refreshed testmon state;
+- all 439 adaptive tests pass in 228.69 seconds;
 - repository Ruff and strict adaptive mypy gates pass; and
 - strict MkDocs build passes with the Held comparison and maturity boundary
   updated in the same stage.

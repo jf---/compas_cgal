@@ -7,11 +7,16 @@ from typing import cast
 
 from compas_cgal import _continuous_tea_2
 from compas_cgal import _stock_2
+from compas_cgal.adaptive.canonical import canonical_task1_bytes
+from compas_cgal.adaptive.canonical import encode_bytes
+from compas_cgal.adaptive.canonical import encode_component_map
+from compas_cgal.adaptive.canonical import encode_integer
 from compas_cgal.adaptive.canonical import encode_sequence
 from compas_cgal.adaptive.canonical import encode_tagged_union
 from compas_cgal.adaptive.errors import EngagementCapExceededError
 from compas_cgal.adaptive.errors import InvalidMotionCertificateError
 from compas_cgal.adaptive.errors import UnresolvedMotionEventError
+from compas_cgal.adaptive.identity import IdentityDigest
 from compas_cgal.adaptive.motion import EngagementCap
 from compas_cgal.adaptive.motion import ExactCircleMotion
 from compas_cgal.adaptive.motion import ExactSegmentMotion
@@ -94,6 +99,8 @@ class MotionWitness:
     unresolved_count: int
 
     def __post_init__(self) -> None:
+        if type(self) is not MotionWitness:
+            raise InvalidMotionCertificateError("motion witness must use the exact owned type.")
         if type(self.operation_index) is not int or self.operation_index < 0:
             raise InvalidMotionCertificateError("motion witness operation index must be nonnegative.")
         if type(self.operation_kind) is not OperationType:
@@ -127,6 +134,50 @@ class MotionWitness:
             raise InvalidMotionCertificateError("motion witness may represent only resolved certification.")
         if type(self.event_cell_count) is not int or self.event_cell_count < 0:
             raise InvalidMotionCertificateError("motion witness event-cell count must be nonnegative.")
+
+    @property
+    def canonical_bytes(self) -> bytes:
+        """Return the complete versioned proof record.
+
+        Returns:
+            Canonical CCAN bytes binding every witness field.
+        """
+        if self.operation_kind is OperationType.CUT:
+            operation_tag = b"operation-cut-v1"
+        elif self.operation_kind is OperationType.LINK:
+            operation_tag = b"operation-link-v1"
+        else:
+            raise InvalidMotionCertificateError("motion witness operation kind has no canonical lateral tag.")
+        return encode_tagged_union(
+            b"motion-witness-v1",
+            encode_component_map(
+                {
+                    b"effective-cap": encode_bytes(self.effective_cap_bytes),
+                    b"event-cell-count": encode_integer(self.event_cell_count),
+                    b"event-trace-digest": encode_bytes(self.event_trace_digest),
+                    b"motion": canonical_task1_bytes(self.motion),
+                    b"operation-index": encode_integer(self.operation_index),
+                    b"operation-kind": encode_tagged_union(operation_tag, b""),
+                    b"stock-lineage-digest": encode_bytes(self.stock_lineage_digest),
+                    b"strategy-identity": encode_bytes(self.strategy_identity),
+                    b"unresolved-count": encode_integer(self.unresolved_count),
+                    b"user-cap": encode_bytes(self.user_cap_bytes),
+                    b"verdict": encode_tagged_union(
+                        b"motion-verdict-certified-v1",
+                        b"",
+                    ),
+                }
+            ),
+        )
+
+    @property
+    def digest(self) -> IdentityDigest:
+        """Return the SHA-256 identity of `canonical_bytes`.
+
+        Returns:
+            Immutable witness identity digest.
+        """
+        return IdentityDigest(hashlib.sha256(self.canonical_bytes).digest())
 
 
 @dataclass(frozen=True)

@@ -170,6 +170,10 @@ class ReplayTraversalError(ValueError):
     """A recorded cursor transition contradicts the fresh MAT graph."""
 
 
+class InvalidReplayTraceError(ValueError):
+    """Fresh replay evidence is incomplete, cross-wired, or out of order."""
+
+
 class InvalidReplayCertificateError(ValueError):
     """A replay certificate omits or contradicts recomputed proof state."""
 

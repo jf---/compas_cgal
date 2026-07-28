@@ -15,11 +15,15 @@ from compas_cgal.adaptive.canonical import encode_component_map
 from compas_cgal.adaptive.canonical import encode_integer
 from compas_cgal.adaptive.canonical import encode_sequence
 from compas_cgal.adaptive.canonical import encode_tagged_union
+from compas_cgal.adaptive.containment import CircleContainmentCertificate
+from compas_cgal.adaptive.containment import CircleInEntryCertificate
 from compas_cgal.adaptive.containment import GougeContainment
+from compas_cgal.adaptive.containment import SegmentContainmentCertificate
 from compas_cgal.adaptive.coverage import CoverageLedger
 from compas_cgal.adaptive.entry import PreclearedEntry
 from compas_cgal.adaptive.entry import QualifiedBore
 from compas_cgal.adaptive.errors import InvalidReplayCertificateError
+from compas_cgal.adaptive.errors import InvalidReplayTraceError
 from compas_cgal.adaptive.errors import ReplayCandidateError
 from compas_cgal.adaptive.errors import ReplayContinuityError
 from compas_cgal.adaptive.errors import ReplayCutDirectionError
@@ -56,6 +60,8 @@ from compas_cgal.adaptive.policy import DepletionPolicy
 from compas_cgal.adaptive.policy import NeckPolicy
 from compas_cgal.adaptive.policy import TraversalPolicy
 from compas_cgal.adaptive.reachable_domain import ReachableDomain
+from compas_cgal.adaptive.replay_trace import FreshReplayTrace
+from compas_cgal.adaptive.replay_trace import ReplayLateralWitness
 from compas_cgal.adaptive.stock_area import Stock2Area
 from compas_cgal.adaptive.units import CutPlane
 from compas_cgal.adaptive.units import Point2
@@ -649,92 +655,170 @@ def _replay_fresh_state(
         MatEdgeId,
         MatSample | DerivedCandidateCursor | None,
     ],
-) -> None:
+) -> FreshReplayTrace:
     stock = Stock2Area.build(
         Stock(
             pocket,
             list(holes),
         )
     )
-    stock.deplete(entry)
+    pristine_state = MotionCertifier.build(
+        stock=stock,
+        tool_radius=tool_radius,
+    )
+    entry_depletion_witness = stock.deplete(entry)
+    current_stock_state = MotionCertifier.build(
+        stock=stock,
+        tool_radius=tool_radius,
+    )
+    post_entry_stock_boundary_digest = current_stock_state.canonical_boundary_digest
+    post_entry_stock_lineage_digest = current_stock_state.stock_lineage_digest
     coverage = CoverageLedger.build(
         reachable_domain=reachable_domain,
         precleared_center=entry.center,
         precleared_radius=entry.radius,
     )
+    initial_coverage_certificate = coverage.certificate
     containment = GougeContainment.build(reachable_domain)
+    lateral_witnesses: list[ReplayLateralWitness] = []
+    first_circle_entry_certificate: CircleInEntryCertificate | None = None
     first_circle = True
+    containment_certificate: SegmentContainmentCertificate | CircleContainmentCertificate
     for operation_index, operation in enumerate(operations):
         if type(operation) is LinkSegmentOperation:
             if operation_index not in paired_candidates:
                 raise ReplayPairingError("fresh link has no validated circle pairing.")
+            candidate = paired_candidates[operation_index]
             effective_cap = _candidate_effective_cap(
-                candidate=paired_candidates[operation_index],
+                candidate=candidate,
                 user_cap=user_cap,
                 neck_policy=neck_policy,
             )
-            containment.certify_segment(
+            containment_certificate = containment.certify_segment(
                 operation.motion,
                 tool_radius,
             )
-            MotionCertifier.build(
-                stock=stock,
-                tool_radius=tool_radius,
-            ).certify(
+            motion_witness = current_stock_state.certify(
                 operation_index=operation_index,
                 operation_kind=OperationType.LINK,
                 motion=operation.motion,
                 user_cap=user_cap,
                 effective_cap=effective_cap,
             )
-            stock.deplete(
+            depletion_witness = stock.deplete(
                 operation.motion,
                 tool_radius,
                 depletion_policy,
             )
-            coverage.add_sweep(
+            sweep_witness = coverage.add_sweep(
                 operation.motion,
                 tool_radius,
+            )
+            lateral_witnesses.append(
+                ReplayLateralWitness(
+                    operation_index=operation_index,
+                    operation=operation,
+                    effective_cap_decision=candidate.effective_cap_decision,
+                    stock_boundary_digest=current_stock_state.canonical_boundary_digest,
+                    containment_certificate=containment_certificate,
+                    motion_witness=motion_witness,
+                    depletion_witness=depletion_witness,
+                    sweep_witness=sweep_witness,
+                )
+            )
+            current_stock_state = MotionCertifier.build(
+                stock=stock,
+                tool_radius=tool_radius,
             )
             continue
         if type(operation) is not CutFullCircleOperation:
             continue
         if operation_index not in paired_candidates:
             raise ReplayCandidateError("fresh circle has no reconstructed candidate.")
+        candidate = paired_candidates[operation_index]
         effective_cap = _candidate_effective_cap(
-            candidate=paired_candidates[operation_index],
+            candidate=candidate,
             user_cap=user_cap,
             neck_policy=neck_policy,
         )
         if first_circle:
-            entry.certify_first_circle(operation.motion)
+            first_circle_entry_certificate = entry.certify_first_circle(operation.motion)
             first_circle = False
-        containment.certify_full_circle(
+        containment_certificate = containment.certify_full_circle(
             operation.motion,
             tool_radius,
         )
-        MotionCertifier.build(
-            stock=stock,
-            tool_radius=tool_radius,
-        ).certify(
+        motion_witness = current_stock_state.certify(
             operation_index=operation_index,
             operation_kind=OperationType.CUT,
             motion=operation.motion,
             user_cap=user_cap,
             effective_cap=effective_cap,
         )
-        stock.deplete(
+        depletion_witness = stock.deplete(
             operation.motion,
             tool_radius,
             depletion_policy,
         )
-        coverage.add_sweep(
+        sweep_witness = coverage.add_sweep(
             operation.motion,
             tool_radius,
         )
+        lateral_witnesses.append(
+            ReplayLateralWitness(
+                operation_index=operation_index,
+                operation=operation,
+                effective_cap_decision=candidate.effective_cap_decision,
+                stock_boundary_digest=current_stock_state.canonical_boundary_digest,
+                containment_certificate=containment_certificate,
+                motion_witness=motion_witness,
+                depletion_witness=depletion_witness,
+                sweep_witness=sweep_witness,
+            )
+        )
+        current_stock_state = MotionCertifier.build(
+            stock=stock,
+            tool_radius=tool_radius,
+        )
+    if first_circle_entry_certificate is None:
+        raise InvalidReplayTraceError("fresh replay did not retain its required first-circle entry proof.")
+    trace = FreshReplayTrace(
+        pristine_stock_boundary_digest=pristine_state.canonical_boundary_digest,
+        post_entry_stock_boundary_digest=post_entry_stock_boundary_digest,
+        post_entry_stock_lineage_digest=post_entry_stock_lineage_digest,
+        entry_depletion_witness=entry_depletion_witness,
+        first_circle_entry_certificate=first_circle_entry_certificate,
+        initial_coverage_certificate=initial_coverage_certificate,
+        lateral_witnesses=tuple(lateral_witnesses),
+        terminal_stock_boundary_digest=current_stock_state.canonical_boundary_digest,
+        terminal_stock_lineage_digest=current_stock_state.stock_lineage_digest,
+        terminal_coverage_certificate=coverage.certificate,
+    )
+    _require_terminal_replay(
+        axis=axis,
+        current_by_edge=current_by_edge,
+        coverage=coverage,
+        trace=trace,
+    )
+    return trace
+
+
+def _require_terminal_replay(
+    *,
+    axis: MedialAxis,
+    current_by_edge: dict[
+        MatEdgeId,
+        MatSample | DerivedCandidateCursor | None,
+    ],
+    coverage: CoverageLedger,
+    trace: FreshReplayTrace,
+) -> None:
+    FreshReplayTrace.validate(trace)
     if set(current_by_edge) != set(axis.edge_by_id) or any(cursor is not None for cursor in current_by_edge.values()):
         raise ReplayTraversalError("fresh MAT traversal remains nonterminal.")
     coverage.require_complete()
+    if coverage.certificate.canonical_bytes != trace.terminal_coverage_certificate.canonical_bytes:
+        raise InvalidReplayTraceError("terminal replay trace does not match the live fresh coverage owner.")
 
 
 @dataclass(frozen=True)
