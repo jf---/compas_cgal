@@ -11,6 +11,7 @@ from typing import NewType
 from typing import Self
 from typing import TypeAlias
 
+from compas_cgal import _continuous_tea_2
 from compas_cgal import _stock_2
 from compas_cgal.adaptive.canonical import CANONICAL_ENCODING_VERSION
 from compas_cgal.adaptive.canonical import CanonicalRingV1
@@ -178,6 +179,7 @@ def _current_component_versions(
 ) -> tuple[ComponentVersionBinding, ...]:
     from compas_cgal.adaptive.entry import ENTRY_DEPLETION_STRATEGY_VERSION
     from compas_cgal.adaptive.entry import ENTRY_SCHEMA_VERSION
+    from compas_cgal.adaptive.motion_certificate import MOTION_CERTIFICATE_SCHEMA_VERSION
 
     bindings = (
         ComponentVersionBinding.build(
@@ -211,6 +213,14 @@ def _current_component_versions(
         ComponentVersionBinding.build(
             component=b"motion-depletion",
             version=_stock_2.exact_depletion_strategy_version(),
+        ),
+        ComponentVersionBinding.build(
+            component=b"motion-certificate-schema",
+            version=MOTION_CERTIFICATE_SCHEMA_VERSION,
+        ),
+        ComponentVersionBinding.build(
+            component=b"event-exact-motion-oracle",
+            version=_continuous_tea_2.event_oracle_component_version(),
         ),
     )
     return tuple(sorted(bindings, key=lambda binding: binding.component))

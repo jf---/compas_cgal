@@ -7,6 +7,7 @@ from fractions import Fraction
 
 import pytest
 
+from compas_cgal import _continuous_tea_2
 from compas_cgal.adaptive.canonical import CanonicalRingV1
 from compas_cgal.adaptive.canonical import ExactRationalV1
 from compas_cgal.adaptive.canonical import encode_bytes
@@ -38,6 +39,7 @@ from compas_cgal.adaptive.identity import StrategyVersion
 from compas_cgal.adaptive.identity import SupportKind
 from compas_cgal.adaptive.identity import TrimIncidenceOrientation
 from compas_cgal.adaptive.motion import EngagementCap
+from compas_cgal.adaptive.motion_certificate import MOTION_CERTIFICATE_SCHEMA_VERSION
 from compas_cgal.adaptive.policy import ACTIVE_PASSAGE_STATES
 from compas_cgal.adaptive.policy import CandidatePolicy
 from compas_cgal.adaptive.policy import CutDirectionPolicy
@@ -119,6 +121,8 @@ def test_schema_and_component_versions_are_frozen_nonempty_bytes() -> None:
         OPERATION_SCHEMA_VERSION,
         COMPONENT_IDENTITY_VERSION,
         BOUNDARY_VERTEX_ID_VERSION,
+        MOTION_CERTIFICATE_SCHEMA_VERSION,
+        _continuous_tea_2.event_oracle_component_version(),
     )
 
     assert all(type(version) is bytes and version for version in versions)
@@ -560,6 +564,9 @@ def test_input_identity_binds_entry_domain_policies_schemas_and_components() -> 
     assert identity.reachable_domain_digest in canonical
     assert identity.component_versions
     assert all(binding.version in canonical for binding in identity.component_versions)
+    component_versions = {binding.component: binding.version for binding in identity.component_versions}
+    assert component_versions[b"motion-certificate-schema"] == MOTION_CERTIFICATE_SCHEMA_VERSION
+    assert component_versions[b"event-exact-motion-oracle"] == _continuous_tea_2.event_oracle_component_version()
     assert "digest" not in {field.name for field in fields(identity)}
     assert identity.digest == hashlib.sha256(canonical).digest()
     assert identity.digest not in canonical
