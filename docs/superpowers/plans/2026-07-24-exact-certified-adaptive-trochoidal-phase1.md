@@ -1393,8 +1393,12 @@ fail loudly. A one-build compositor now adds deterministic node reporting and
 canonical neck/cut-union CSR for fields 1 and 16–18. At tool radius `0.5`, the
 L golden retains ten nodes, nine edges, and two eight-edge cut rows; at the
 exact half-passage-width radius `1`, `C_r` clipping yields six nodes, five
-edges, and no separating neck. Center-domain identity, the MAT certificate,
-and the public fixed tuple remain pending.
+edges, and no separating neck. Field 19 now builds Task 3's exact domain from
+the same canonical input and reproduces Python's 48,947-byte certificate,
+certificate digest, and center-domain digest exactly; canonical input reversal
+is identity-invariant. The encoder accepts the proof-owning domain rather than
+a caller-supplied certificate aggregate. The MAT certificate and public fixed
+tuple remain pending.
 
 Bind:
 

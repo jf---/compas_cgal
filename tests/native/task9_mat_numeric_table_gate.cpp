@@ -43,7 +43,7 @@ CanonicalReachInput2 l_shape_input(const bool reversed,
                                {}, tool_radius);
 }
 
-bool native_table_fills_fields_one_through_eighteen() {
+bool native_table_fills_fields_one_through_nineteen() {
   const CanonicalReachInput2 input = l_shape_input(false);
   const MatNumericMatTable2 table = canonical_l_shape_mat_numeric_table(
       input, MatStationSpacingMm2::build(0.75), MatSagittaBoundMm2::build(0.02),
@@ -52,7 +52,8 @@ bool native_table_fills_fields_one_through_eighteen() {
       table.nodes.size() != 10 || table.proposal.graph.edges.size() != 9 ||
       table.neck_evidence.size() != 2 ||
       table.neck_cut_offsets != std::vector<std::int64_t>{0, 8, 16} ||
-      table.neck_cut_edge_ids.size() != 16) {
+      table.neck_cut_edge_ids.size() != 16 ||
+      table.center_domain_digest.size() != 32) {
     return false;
   }
   for (const auto &node : table.nodes) {
@@ -123,7 +124,7 @@ bool mismatched_neck_graph_fails_loudly() {
 } // namespace
 
 bool mat_numeric_table_gate() {
-  return native_table_fills_fields_one_through_eighteen() &&
+  return native_table_fills_fields_one_through_nineteen() &&
          threshold_tool_radius_has_no_separating_neck() &&
          native_table_composes_existing_proposal_projection() &&
          native_table_is_reversal_invariant() &&

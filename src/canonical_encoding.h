@@ -16,6 +16,7 @@ public:
 
 std::string canonical_encode_bytes(const std::string &value);
 std::string canonical_encode_integer(const ExactAlgebraicInteger1 &value);
+std::string canonical_encode_binary64(double value);
 std::string canonical_encode_rational(const CORE::BigRat &value);
 CORE::BigRat canonical_decode_rational(const std::string &value);
 std::string canonical_encode_boolean(bool value);

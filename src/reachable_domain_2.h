@@ -2,11 +2,15 @@
 
 #include "exact_region_2.h"
 #include "reachable_certificate_2.h"
+#include "reachable_input_2.h"
 
 #include <vector>
 
 class ReachableDomain2 {
 public:
+    static ReachableDomain2 build(
+        CanonicalReachInput2 input);
+
     ReachableDomain2(
         Eigen::Ref<const compas::RowMatrixXd> design_boundary,
         const std::vector<compas::RowMatrixXd>& holes,
@@ -35,6 +39,8 @@ private:
         Eigen::Ref<const compas::RowMatrixXd> design_boundary,
         const std::vector<compas::RowMatrixXd>& holes,
         double tool_radius);
+    static State build_state(
+        CanonicalReachInput2 input);
 
     State state_;
 };

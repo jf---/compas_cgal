@@ -238,6 +238,7 @@ add_executable(task9_mat_compile_gate EXCLUDE_FROM_ALL
     tests/native/task9_catalog_sampling_gate.cpp
     tests/native/task9_mat_proposal_table_gate.cpp
     tests/native/task9_mat_numeric_table_gate.cpp
+    tests/native/task9_domain_identity_gate.cpp
     tests/native/task9_site_catalog_gate.cpp
     tests/native/task9_catalog_delaunay_gate.cpp
     tests/native/task9_catalog_voronoi_gate.cpp
@@ -262,6 +263,7 @@ add_executable(task9_mat_compile_gate EXCLUDE_FROM_ALL
     src/segment_site_catalog_sampling.cpp
     src/segment_site_mat_proposal_table.cpp
     src/segment_site_mat_numeric_table.cpp
+    src/reachable_certificate_encoding_2.cpp
     src/segment_site_mat_spikes.cpp
     src/segment_site_parameterization.cpp
     src/segment_site_clipping.cpp
@@ -270,7 +272,11 @@ add_executable(task9_mat_compile_gate EXCLUDE_FROM_ALL
     src/canonical_encoding.cpp
     src/exact_algebraic_1.cpp
     src/exact_region_2.cpp
+    src/exact_sweep_2.cpp
     src/reachable_input_2.cpp
+    src/reachable_arrangement_2.cpp
+    src/reachable_certificate_2.cpp
+    src/reachable_domain_2.cpp
     src/continuous_tea_2/exact_polynomial_sign_2.cpp
     src/continuous_tea_2/sha256.cpp
 )
