@@ -5,10 +5,12 @@ import numpy as np
 import pytest
 
 from compas_cgal.adaptive.canonical import CanonicalRingV1
+from compas_cgal.adaptive.candidates import DerivedCandidateCursor
 from compas_cgal.adaptive.candidates import MathsmCircleProposal
 from compas_cgal.adaptive.candidates import MiddleCurveSpan
 from compas_cgal.adaptive.candidates import enumerate_middle_curve_candidates
 from compas_cgal.adaptive.errors import InvalidMathsmProposalError
+from compas_cgal.adaptive.errors import InvalidMiddleCurveCursorError
 from compas_cgal.adaptive.medial_axis import MatEdge
 from compas_cgal.adaptive.medial_axis import MatSample
 from compas_cgal.adaptive.medial_axis import MedialAxis
@@ -192,6 +194,91 @@ def test_complete_candidate_lattice_matches_exhaustive_oracle_and_mathsm() -> No
     )
     assert candidates[0].spatial_progress == Fraction(3, 4)
     assert candidates[0].guide_radius == Fraction(1, 4)
+
+
+def test_derived_candidate_cursor_continues_the_same_exact_span_grammar() -> None:
+    span, _, cursor_limit = _constant_clearance_span()
+    candidates = enumerate_middle_curve_candidates(
+        span=span,
+        policy=_policy(),
+        circle_orientation=CircleOrientation.COUNTERCLOCKWISE,
+        neck_scope=NoNeckScope.build(),
+        effective_cap_decision=_full_cap(),
+        makes_cursor_terminal_at_limit=False,
+    )
+    selected = next(candidate for candidate in candidates if candidate.spatial_progress == Fraction(1, 4))
+
+    cursor = DerivedCandidateCursor.build(
+        span=span,
+        candidate=selected,
+    )
+    continuation = MiddleCurveSpan.build(
+        axis=span.axis,
+        cursor_before=cursor,
+        cursor_limit=cursor_limit,
+    )
+    continued_candidates = enumerate_middle_curve_candidates(
+        span=continuation,
+        policy=_policy(),
+        circle_orientation=CircleOrientation.COUNTERCLOCKWISE,
+        neck_scope=NoNeckScope.build(),
+        effective_cap_decision=_full_cap(),
+        makes_cursor_terminal_at_limit=False,
+    )
+
+    assert cursor.cursor_identity == selected.traversal_decision.cursor_after
+    assert cursor.point == selected.middle_point
+    assert continuation.cursor_before is cursor
+    assert all(candidate.traversal_decision.cursor_before == selected.traversal_decision.cursor_after for candidate in continued_candidates)
+    cross_wired = next(candidate for candidate in continued_candidates if candidate.spatial_progress < continuation.reported_length)
+    with pytest.raises(
+        InvalidMiddleCurveCursorError,
+        match="claimed exact span",
+    ):
+        DerivedCandidateCursor.build(
+            span=span,
+            candidate=cross_wired,
+        )
+
+
+def test_derived_candidate_cursor_rejects_native_or_terminal_endpoint() -> None:
+    span, _, _ = _constant_clearance_span()
+    nonterminal_candidates = enumerate_middle_curve_candidates(
+        span=span,
+        policy=_policy(),
+        circle_orientation=CircleOrientation.COUNTERCLOCKWISE,
+        neck_scope=NoNeckScope.build(),
+        effective_cap_decision=_full_cap(),
+        makes_cursor_terminal_at_limit=False,
+    )
+    native_endpoint = next(candidate for candidate in nonterminal_candidates if candidate.spatial_progress == span.reported_length)
+    with pytest.raises(
+        InvalidMiddleCurveCursorError,
+        match="native span endpoint",
+    ):
+        DerivedCandidateCursor.build(
+            span=span,
+            candidate=native_endpoint,
+        )
+
+    terminal_candidates = enumerate_middle_curve_candidates(
+        span=span,
+        policy=_policy(),
+        circle_orientation=CircleOrientation.COUNTERCLOCKWISE,
+        neck_scope=NoNeckScope.build(),
+        effective_cap_decision=_full_cap(),
+        makes_cursor_terminal_at_limit=True,
+    )
+    terminal = next(candidate for candidate in terminal_candidates if candidate.traversal_decision.makes_cursor_terminal)
+
+    with pytest.raises(
+        InvalidMiddleCurveCursorError,
+        match="terminal candidate",
+    ):
+        DerivedCandidateCursor.build(
+            span=span,
+            candidate=terminal,
+        )
 
 
 def test_candidate_identity_binds_neck_evidence_and_passage_cap_transition() -> None:

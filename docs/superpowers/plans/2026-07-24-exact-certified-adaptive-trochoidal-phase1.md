@@ -1540,6 +1540,9 @@ Tests require:
 - accepted neck operations record one legal before/after state transition;
 - each candidate carries one deterministic proposed `TraversalDecision` from
   its current exact cursor to its candidate endpoint;
+- an accepted intermediate endpoint carries its exact parent span and
+  candidate in `DerivedCandidateCursor`; native endpoints retain `MatSample`,
+  terminal candidates cannot continue, and cross-wired span lineage fails;
 - one-sided MATHSM proposal from `(m,p,r)` yields `q`, midpoint `c`, and phase
   `q-c`;
 - the complete lattice contains all declared spatial/radius/phase refinement
@@ -1571,6 +1574,15 @@ identity binds exact neck evidence, before/after passage state, and effective
 cap bytes plus the proposed traversal transition. This task semantically
 validates the Task 1A operation decision records; it does not change the frozen
 operation encoding.
+
+Adaptive fallback may accept a candidate before its native lookahead station.
+That endpoint is not recoverable by coordinate matching and cannot be passed
+back through the old native-`MatSample`-only span factory.
+`DerivedCandidateCursor` therefore retains the exact parent span and selected
+candidate, revalidates their complete traversal/geometry lineage, and can open
+the next span against the same or a later native limit. Exact native endpoints
+keep their original sample identity; terminal candidates expose no
+continuation.
 
 The adopted L replay exposes three clearance-created leaves whose exact
 endpoint has zero guide radius. The implementation does not fabricate a
@@ -1729,6 +1741,13 @@ strictly larger for launch. The coverage boundary now requires `EntryRadius`,
 retains `ToolRadius` only for lateral sweeps, and bumps its certificate grammar
 to `coverage-certificate-v2`. Replay must pass the authenticated entry object
 without scalar coercion.
+
+Candidate reconstruction also exposed a continuation defect: intermediate
+cursor identities were generated, but `MiddleCurveSpan` accepted only native
+`MatSample` starts. Task 10 now supplies a proof-carrying
+`DerivedCandidateCursor` bound to the exact parent span and candidate. Replay
+must reconstruct this cursor from the unique finite-lattice match; it may not
+recover continuation by matching coordinates.
 
 **Files**
 

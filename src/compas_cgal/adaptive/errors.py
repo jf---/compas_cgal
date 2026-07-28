@@ -54,6 +54,10 @@ class InvalidMiddleCurveSpanError(ValueError):
     """A candidate span does not advance between two owned MAT cursors."""
 
 
+class InvalidMiddleCurveCursorError(ValueError):
+    """A derived cursor cannot prove one exact candidate-span lineage."""
+
+
 class InvalidMathsmProposalError(ValueError):
     """A one-sided MATHSM proposal contradicts its MAT/site inputs."""
 

@@ -281,12 +281,23 @@ passages fail with `TerminalNeckPassageError`.
 
 ### Complete finite candidate lattice
 
-`MiddleCurveSpan.build(...)` accepts two owned samples on one exact MAT edge
-in increasing canonical sample order. The exact edge, component, branch,
-cursor-before, and cursor-limit identities stay attached to every candidate.
+`MiddleCurveSpan.build(...)` accepts one owned native or derived cursor and a
+later native sample limit on one exact MAT edge. The exact edge, component,
+branch, cursor-before, and cursor-limit identities stay attached to every
+candidate.
 Intermediate cursor identities are content-addressed from those identities
 and their exact progress value; reaching the span limit reuses the native
 limit cursor literally.
+
+When an accepted candidate stops before that native limit,
+`DerivedCandidateCursor` retains the exact parent `MiddleCurveSpan` and
+`MiddleCurveCandidate`. Construction replays component, edge, branch,
+cursor-before, cursor-limit, generator-site, middle-point, and cursor-after
+identity. The derived point can then open a new span whose native limit is the
+same bound station or a later station. A native endpoint keeps its original
+`MatSample`; a terminal candidate cannot mint a continuation cursor. Replay
+therefore continues adaptive fallback without coordinate matching or a second
+MAT authority.
 
 The reporting chord length supplies the finite progress coordinate. A line
 span uses linear evaluation. A point/segment parabola instead interpolates the
@@ -3000,7 +3011,7 @@ consumers, or evolution differ from graph orchestration.
 | Python fixed-tuple binding | implemented and strictly typed for the production L fixture | one six-argument function projection plus one proof-owner factory; one radius; literal 20-position tuple; exact ranks/dtypes/CSR, immutable proof bytes, reversal and repeat identity, refinement-invariant certificate, named input/sampling failures |
 | Typed MAT planner view | implemented and Python-gated for the production L fixture | direct native site/node/edge/dual/parameter identities; detached reporting arrays; typed components, branches, clipped endpoint state, tool-fit runs, proposal cursors, and retained native proof owner; no coordinate matching |
 | Oriented neck passage state | implemented and Python-gated for the production L fixture | exact owner/sites/cut/class/certificate binding; independent forward/reverse state; only three canonical advances to terminal; candidate cap identity mutation killed |
-| Finite candidate lattice | implemented and Python-gated for adopted line/P–S L-edge goldens | complete merged dyadic spatial/radius lanes, both generator sites, all finite phases, MATHSM maximum-radius formula, focus/directrix parabola evaluation with chord-midpoint rejection, exact cursor advance, non-aligned minimum guard, exhaustive 72-cell oracle, deterministic furthest/radius/identity order; three exact-clearance L leaves terminalize at their last feasible positive-radius lattice station only after exhaustion, while coverage remains an independent pending gate; exact containment certifier exists, but engagement and transactional acceptance remain pending |
+| Finite candidate lattice | implemented and Python-gated for adopted line/P–S L-edge goldens | complete merged dyadic spatial/radius lanes, both generator sites, all finite phases, MATHSM maximum-radius formula, focus/directrix parabola evaluation with chord-midpoint rejection, exact native and proof-carrying derived cursor advance, cross-wired lineage rejection, non-aligned minimum guard, exhaustive 72-cell oracle, deterministic furthest/radius/identity order; three exact-clearance L leaves terminalize at their last feasible positive-radius lattice station only after exhaustion, while coverage remains an independent pending gate; exact containment certifier exists, but engagement and transactional acceptance remain pending |
 | Exact gouge containment | implemented and native/Python-gated for polygonal segment/full-circle fixtures | exact segment capsule and circle annulus/disk subset of `D`; owned `C_r` anchor checks; immutable native structural replay; outer disk diagnostic only; equality, reflex, island, disk-sweep, exact tangency, and next-binary64-gouge mutations |
 | Qualified precleared entry | implemented and Python-gated | process/evidence digest binds the complete clearance-to-cut interval; center in `C_r`; separate exact entry-disk containment; radius greater than tool radius; canonical approach/plunge; first-and-once exact disk depletion; coverage residual seeded by the same typed `EntryRadius`, never a relabelled `ToolRadius`; first full circle contained in the declared void |
 | Planning `InputIdentity` | implemented and strictly typed | canonical `D`, world-XY millimetre frame, cut plane, tool, reachable-domain digest, entry/process evidence, cap, cut direction, all adaptive policies, schemas, and active exact strategy versions under one SHA-256 root; independent fresh-state replay pending |

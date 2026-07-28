@@ -1,9 +1,12 @@
+from __future__ import annotations
+
 import hashlib
 import math
 from dataclasses import dataclass
 from fractions import Fraction
 from typing import NewType
 from typing import Self
+from typing import cast
 
 from compas_cgal.adaptive.canonical import ExactRationalV1
 from compas_cgal.adaptive.canonical import canonical_point2_bytes
@@ -16,8 +19,10 @@ from compas_cgal.adaptive.canonical import encode_sequence
 from compas_cgal.adaptive.canonical import encode_tagged_union
 from compas_cgal.adaptive.errors import InvalidCandidateLatticeError
 from compas_cgal.adaptive.errors import InvalidMathsmProposalError
+from compas_cgal.adaptive.errors import InvalidMiddleCurveCursorError
 from compas_cgal.adaptive.errors import InvalidMiddleCurveSpanError
 from compas_cgal.adaptive.medial_axis import MatEdge
+from compas_cgal.adaptive.medial_axis import MatEdgeId
 from compas_cgal.adaptive.medial_axis import MatSample
 from compas_cgal.adaptive.medial_axis import MatSite
 from compas_cgal.adaptive.medial_axis import MatSiteId
@@ -162,7 +167,7 @@ def _phase_vector(
 class MiddleCurveSpan:
     axis: MedialAxis
     edge: MatEdge
-    cursor_before: MatSample
+    cursor_before: MatSample | DerivedCandidateCursor
     cursor_limit: MatSample
 
     def __post_init__(self) -> None:
@@ -170,16 +175,25 @@ class MiddleCurveSpan:
             raise InvalidMiddleCurveSpanError("middle-curve span requires one exact typed MAT.")
         if type(self.edge) is not MatEdge:
             raise InvalidMiddleCurveSpanError("middle-curve span requires one exact MAT edge.")
-        if type(self.cursor_before) is not MatSample or type(self.cursor_limit) is not MatSample:
-            raise InvalidMiddleCurveSpanError("middle-curve span requires two exact MAT samples.")
+        if type(self.cursor_before) not in (MatSample, DerivedCandidateCursor) or type(self.cursor_limit) is not MatSample:
+            raise InvalidMiddleCurveSpanError("middle-curve span requires one owned native/derived cursor and one native limit.")
         owned_edge = self.axis.edge_by_id.get(self.edge.identity)
         if owned_edge != self.edge:
             raise InvalidMiddleCurveSpanError("middle-curve span edge is not owned by its MAT.")
-        if self.cursor_before not in self.axis.samples or self.cursor_limit not in self.axis.samples:
-            raise InvalidMiddleCurveSpanError("middle-curve span cursors are not owned by their MAT.")
+        if self.cursor_limit not in self.axis.samples:
+            raise InvalidMiddleCurveSpanError("middle-curve span limit is not owned by its MAT.")
         if self.cursor_before.edge_id != self.edge.identity or self.cursor_limit.edge_id != self.edge.identity:
             raise InvalidMiddleCurveSpanError("middle-curve span cursors must lie on one exact MAT edge.")
-        if self.cursor_before.ordinal_on_edge >= self.cursor_limit.ordinal_on_edge:
+        if type(self.cursor_before) is MatSample:
+            if self.cursor_before not in self.axis.samples:
+                raise InvalidMiddleCurveSpanError("middle-curve native cursor is not owned by its MAT.")
+            minimum_limit_ordinal = self.cursor_before.ordinal_on_edge + 1
+        else:
+            derived_cursor = cast(DerivedCandidateCursor, self.cursor_before)
+            if derived_cursor.axis is not self.axis:
+                raise InvalidMiddleCurveSpanError("middle-curve derived cursor belongs to another MAT owner.")
+            minimum_limit_ordinal = derived_cursor.minimum_limit_ordinal
+        if self.cursor_limit.ordinal_on_edge < minimum_limit_ordinal:
             raise InvalidMiddleCurveSpanError("middle-curve span must advance in canonical sample order.")
         if self.cursor_before.point == self.cursor_limit.point:
             raise InvalidMiddleCurveSpanError("middle-curve span requires nonzero reporting progress.")
@@ -189,10 +203,10 @@ class MiddleCurveSpan:
         cls,
         *,
         axis: MedialAxis,
-        cursor_before: MatSample,
+        cursor_before: MatSample | DerivedCandidateCursor,
         cursor_limit: MatSample,
     ) -> Self:
-        if type(axis) is not MedialAxis or type(cursor_before) is not MatSample:
+        if type(axis) is not MedialAxis or type(cursor_before) not in (MatSample, DerivedCandidateCursor):
             raise InvalidMiddleCurveSpanError("middle-curve span factory requires typed MAT inputs.")
         edge = axis.edge_by_id.get(cursor_before.edge_id)
         if edge is None:
@@ -540,6 +554,70 @@ class MiddleCurveCandidate:
     @property
     def motion(self) -> ExactCircleMotion:
         return self.proposal.motion
+
+
+@dataclass(frozen=True)
+class DerivedCandidateCursor:
+    """Proof-carrying continuation point produced by one lattice candidate."""
+
+    span: MiddleCurveSpan
+    candidate: MiddleCurveCandidate
+
+    def __post_init__(self) -> None:
+        if type(self.span) is not MiddleCurveSpan or type(self.candidate) is not MiddleCurveCandidate:
+            raise InvalidMiddleCurveCursorError("derived cursor requires one exact span and candidate.")
+        traversal = self.candidate.traversal_decision
+        if traversal.makes_cursor_terminal:
+            raise InvalidMiddleCurveCursorError("terminal candidate cannot produce a continuation cursor.")
+        if self.candidate.spatial_progress >= self.span.reported_length:
+            raise InvalidMiddleCurveCursorError("native span endpoint must retain its owned MAT sample cursor.")
+        if (
+            traversal.component_id != self.span.axis.component_by_edge_id[self.span.edge.identity]
+            or traversal.edge_id != EdgeId(bytes(self.span.edge.identity))
+            or traversal.branch_id != self.span.edge.branch_id
+            or traversal.cursor_before != self.span.cursor_before.cursor_identity
+            or self.candidate.cursor_limit_identity != self.span.cursor_limit.cursor_identity
+        ):
+            raise InvalidMiddleCurveCursorError("candidate traversal does not belong to its claimed exact span.")
+        if self.candidate.generator_site_id not in self.span.edge.generator_site_ids:
+            raise InvalidMiddleCurveCursorError("candidate generator does not belong to its claimed MAT edge.")
+        if self.candidate.middle_point != _middle_point(
+            self.span,
+            self.candidate.spatial_progress,
+        ) or traversal.cursor_after != _cursor_after(
+            self.span,
+            self.candidate.spatial_progress,
+        ):
+            raise InvalidMiddleCurveCursorError("candidate geometry or cursor identity contradicts its exact span.")
+
+    @classmethod
+    def build(
+        cls,
+        *,
+        span: MiddleCurveSpan,
+        candidate: MiddleCurveCandidate,
+    ) -> Self:
+        return cls(span, candidate)
+
+    @property
+    def axis(self) -> MedialAxis:
+        return self.span.axis
+
+    @property
+    def edge_id(self) -> MatEdgeId:
+        return self.span.edge.identity
+
+    @property
+    def cursor_identity(self) -> CursorIdentity:
+        return self.candidate.traversal_decision.cursor_after
+
+    @property
+    def point(self) -> Point2[WorldXY]:
+        return self.candidate.middle_point
+
+    @property
+    def minimum_limit_ordinal(self) -> int:
+        return self.span.cursor_limit.ordinal_on_edge
 
 
 def _refined_spatial_values(
