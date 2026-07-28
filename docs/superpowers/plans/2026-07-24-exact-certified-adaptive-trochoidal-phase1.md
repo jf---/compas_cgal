@@ -1401,7 +1401,10 @@ a caller-supplied certificate aggregate. Field 20 now seals the exact graph,
 clearance profiles, dense integer projection, neck evidence/cuts, and field 19
 in a 124,796-byte CCAN certificate. Mutation, truncation, domain-digest
 mismatch, canonical input reversal, and sampling-refinement invariance are
-native-gated. The public fixed tuple remains pending.
+native-gated. The low-level Python module now projects the same table as a
+strictly typed 20-position tuple; runtime tests lock ranks, dtypes, CSR
+cardinalities, exact flags, canonical reversal, refinement invariance,
+radius-threshold topology, certificate digests, and named failures.
 
 Bind:
 

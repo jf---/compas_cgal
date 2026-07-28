@@ -324,5 +324,46 @@ add_nanobind_module(_coverage_2 src/coverage_bindings_2.cpp)
 target_link_libraries(_coverage_2 PRIVATE coverage_exact_core)
 target_compile_definitions(_coverage_2 PRIVATE CGAL_USE_CORE=1)
 
+set(MEDIAL_AXIS_2_SOURCES
+    src/medial_axis_2.cpp
+    src/segment_site_mat.cpp
+    src/segment_site_catalog.cpp
+    src/segment_site_delaunay.cpp
+    src/segment_site_voronoi.cpp
+    src/segment_site_rational_sources.cpp
+    src/segment_site_catalog_graph.cpp
+    src/segment_site_graph_emission.cpp
+    src/segment_site_graph_csr.cpp
+    src/segment_site_neck.cpp
+    src/segment_site_neck_clearance.cpp
+    src/segment_site_neck_evidence.cpp
+    src/segment_site_neck_evidence_bytes.cpp
+    src/segment_site_neck_classification.cpp
+    src/segment_site_mat_sampling.cpp
+    src/segment_site_catalog_neck.cpp
+    src/segment_site_catalog_sampling.cpp
+    src/segment_site_mat_proposal_table.cpp
+    src/segment_site_mat_numeric_table.cpp
+    src/segment_site_mat_certificate.cpp
+    src/reachable_certificate_encoding_2.cpp
+    src/segment_site_mat_spikes.cpp
+    src/segment_site_parameterization.cpp
+    src/segment_site_clipping.cpp
+    src/segment_site_endpoint_binding.cpp
+    src/segment_site_provenance.cpp
+    src/canonical_encoding.cpp
+    src/exact_algebraic_1.cpp
+    src/continuous_tea_2/exact_polynomial_sign_2.cpp
+    src/continuous_tea_2/sha256.cpp
+)
+add_nanobind_module(_medial_axis_2 "${MEDIAL_AXIS_2_SOURCES}")
+target_link_libraries(_medial_axis_2 PRIVATE coverage_exact_core)
+target_compile_definitions(
+    _medial_axis_2
+    PRIVATE
+        CGAL_USE_CORE=1
+        CGAL_CORE_USE_BOOST_BACKEND=1
+)
+
 add_nanobind_module(_geodesics src/geodesics.cpp)
 add_nanobind_module(_isolines src/isolines.cpp)
