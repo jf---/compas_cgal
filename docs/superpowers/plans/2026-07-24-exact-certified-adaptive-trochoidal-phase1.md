@@ -1712,10 +1712,11 @@ Commit: `feat(adaptive): certify entry and input`
 **Dependencies:** Tasks 3, 8, 10, and 11.
 
 **Status (2026-07-28): in progress. Input/grammar/orientation, fresh no-neck
-candidate reconstruction, entry-first stock/coverage initialization,
-containment, first-circle certification-before-depletion, and coverage
-mutation are gated; replay still fails closed at nonterminal traversal and
-emits no certificate.**
+candidate reconstruction, derived-cursor link/circle pairing, entry-first
+stock/coverage initialization, containment, and first-circle/link
+certification-before-depletion/coverage are gated. The next nonuniform circle
+fails closed at an unresolved exact event partition; replay emits no
+certificate.**
 
 **Prerequisite repair (2026-07-28):** the replay audit found that exact MAT
 certificate identity is refinement-invariant while traversal cursor identity
@@ -1764,6 +1765,14 @@ the current Epeck stock boundary and one-root endpoints into the sqrt-capable
 exact-region kernel and certifies clear only when the canonical full-circle
 sweep has empty regularized intersection with stock. Replay does not bypass
 the certifier with entry metadata.
+
+Derived-cursor continuation exposed a relational operation contract. A link
+is not a second MAT candidate: it transports the previous phase to the
+immediately following circle, holds that circle's cursor-before, and carries
+the same scope/cap while the circle alone owns the advance. Task 11A now
+preflights the complete link/circle relation before fresh stock mutation. The
+first real link certifies and mutates in proof order; its following nonuniform
+circle currently remains unresolved and is not depleted.
 
 **Files**
 
@@ -1866,13 +1875,19 @@ Implemented foundation:
   depletion before lateral motion;
 - first-circle entry/design containment, exact motion certification against
   frozen pre-depletion stock, then depletion and coverage mutation;
+- complete pre-mutation link/circle pairing by exact phase, scope, cap, and
+  hold/advance cursor relation;
+- exact containment and certification of a real derived-cursor link against
+  frozen post-circle stock, then link depletion and coverage mutation;
 - a real-owner chronology gate for
-  `entry-deplete -> certify -> motion-deplete -> coverage-sweep`; and
+  `entry -> circle -> link -> next-circle-certify`, with no mutation after the
+  next circle's unresolved verdict; and
 - fail-closed candidate and nonterminal-traversal mutation coverage.
 
 Pending before this task is GREEN: neck-owner/passage reconstruction,
-link/circle pairing, complete ordered witness capture, terminal traversal,
-exact empty residual, and the complete immutable `ReplayCertificate`.
+the first post-link nonuniform circle disposition, complete ordered witness
+capture, terminal traversal, exact empty residual, and the complete immutable
+`ReplayCertificate`.
 
 ```bash
 pixi run format-adaptive

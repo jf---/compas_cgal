@@ -26,6 +26,7 @@ from compas_cgal.adaptive.errors import ReplayCutDirectionError
 from compas_cgal.adaptive.errors import ReplayEffectiveCapError
 from compas_cgal.adaptive.errors import ReplayGrammarError
 from compas_cgal.adaptive.errors import ReplayInputMismatchError
+from compas_cgal.adaptive.errors import ReplayPairingError
 from compas_cgal.adaptive.errors import ReplayTraversalError
 from compas_cgal.adaptive.identity import IdentityDigest
 from compas_cgal.adaptive.identity import InputIdentity
@@ -38,6 +39,7 @@ from compas_cgal.adaptive.operation import ApproachOperation
 from compas_cgal.adaptive.operation import CanonicalOperation
 from compas_cgal.adaptive.operation import CutFullCircleOperation
 from compas_cgal.adaptive.operation import FullCapDecision
+from compas_cgal.adaptive.operation import HoldTraversalDecision
 from compas_cgal.adaptive.operation import LinkSegmentOperation
 from compas_cgal.adaptive.operation import NoNeckScope
 from compas_cgal.adaptive.operation import PlungeOperation
@@ -500,6 +502,56 @@ def _replay_candidate_stream(
     return tuple(candidates), current_by_edge
 
 
+def _pair_lateral_operations(
+    *,
+    operations: tuple[CanonicalOperation, ...],
+    candidates: tuple[MiddleCurveCandidate, ...],
+) -> dict[int, MiddleCurveCandidate]:
+    paired: dict[int, MiddleCurveCandidate] = {}
+    candidate_index = 0
+    pending_link: tuple[int, LinkSegmentOperation] | None = None
+    for operation_index, operation in enumerate(operations[2:], start=2):
+        if type(operation) is LinkSegmentOperation:
+            if pending_link is not None:
+                raise ReplayPairingError("consecutive links do not have one immediately following circle.")
+            pending_link = operation_index, operation
+            continue
+        if type(operation) is not CutFullCircleOperation:
+            raise ReplayGrammarError("operation grammar contains an unknown lateral type.")
+        if candidate_index >= len(candidates):
+            raise ReplayCandidateError("fresh candidate lineage is shorter than the recorded circle stream.")
+        candidate = candidates[candidate_index]
+        candidate_index += 1
+        if not _candidate_matches_operation(candidate, operation):
+            raise ReplayCandidateError("fresh candidate lineage diverged before state replay.")
+        paired[operation_index] = candidate
+        if pending_link is None:
+            continue
+
+        link_index, link = pending_link
+        traversal = candidate.traversal_decision
+        expected_hold = HoldTraversalDecision.build(
+            component_id=traversal.component_id,
+            edge_id=traversal.edge_id,
+            branch_id=traversal.branch_id,
+            cursor=traversal.cursor_before,
+        )
+        if link.traversal_decision != expected_hold:
+            raise ReplayPairingError("link hold traversal does not belong to its immediately following circle.")
+        if link.neck_scope != candidate.neck_scope or link.effective_cap_decision != candidate.effective_cap_decision:
+            raise ReplayPairingError("link scope and effective cap do not belong to their immediately following circle.")
+        if link.motion.end != _phase_point(operation):
+            raise ReplayPairingError("link endpoint does not equal its immediately following circle phase.")
+        paired[link_index] = candidate
+        pending_link = None
+
+    if pending_link is not None:
+        raise ReplayPairingError("link has no immediately following circle.")
+    if candidate_index != len(candidates):
+        raise ReplayCandidateError("fresh candidate lineage is longer than the recorded circle stream.")
+    return paired
+
+
 def _replay_fresh_state(
     *,
     pocket: Polygon,
@@ -510,7 +562,7 @@ def _replay_fresh_state(
     user_cap: EngagementCap,
     depletion_policy: DepletionPolicy,
     operations: tuple[CanonicalOperation, ...],
-    candidates: tuple[MiddleCurveCandidate, ...],
+    paired_candidates: dict[int, MiddleCurveCandidate],
     axis: MedialAxis,
     current_by_edge: dict[
         MatEdgeId,
@@ -530,17 +582,39 @@ def _replay_fresh_state(
         precleared_radius=entry.radius,
     )
     containment = GougeContainment.build(reachable_domain)
-    candidate_index = 0
     first_circle = True
     for operation_index, operation in enumerate(operations):
         if type(operation) is LinkSegmentOperation:
-            raise ReplayTraversalError("fresh link/circle pairing is required before replaying a link.")
+            if operation_index not in paired_candidates:
+                raise ReplayPairingError("fresh link has no validated circle pairing.")
+            containment.certify_segment(
+                operation.motion,
+                tool_radius,
+            )
+            MotionCertifier.build(
+                stock=stock,
+                tool_radius=tool_radius,
+            ).certify(
+                operation_index=operation_index,
+                operation_kind=OperationType.LINK,
+                motion=operation.motion,
+                user_cap=user_cap,
+                effective_cap=user_cap,
+            )
+            stock.deplete(
+                operation.motion,
+                tool_radius,
+                depletion_policy,
+            )
+            coverage.add_sweep(
+                operation.motion,
+                tool_radius,
+            )
+            continue
         if type(operation) is not CutFullCircleOperation:
             continue
-        if candidate_index >= len(candidates):
-            raise ReplayCandidateError("fresh candidate lineage is shorter than the recorded circle stream.")
-        candidate = candidates[candidate_index]
-        candidate_index += 1
+        if operation_index not in paired_candidates:
+            raise ReplayCandidateError("fresh circle has no reconstructed candidate.")
         if first_circle:
             entry.certify_first_circle(operation.motion)
             first_circle = False
@@ -567,10 +641,6 @@ def _replay_fresh_state(
             operation.motion,
             tool_radius,
         )
-        if candidate.motion != operation.motion or candidate.traversal_decision != operation.traversal_decision:
-            raise ReplayCandidateError("fresh candidate lineage diverged during state replay.")
-    if candidate_index != len(candidates):
-        raise ReplayCandidateError("fresh candidate lineage is longer than the recorded circle stream.")
     if set(current_by_edge) != set(axis.edge_by_id) or any(cursor is not None for cursor in current_by_edge.values()):
         raise ReplayTraversalError("fresh MAT traversal remains nonterminal.")
     coverage.require_complete()
@@ -664,6 +734,10 @@ def replay_certificate(
         traversal_policy=traversal_policy,
         cut_direction_policy=cut_direction_policy,
     )
+    paired_candidates = _pair_lateral_operations(
+        operations=operations,
+        candidates=candidates,
+    )
     _replay_fresh_state(
         pocket=pocket,
         holes=hole_polygons,
@@ -673,7 +747,7 @@ def replay_certificate(
         user_cap=user_cap,
         depletion_policy=depletion_policy,
         operations=operations,
-        candidates=candidates,
+        paired_candidates=paired_candidates,
         axis=axis,
         current_by_edge=current_by_edge,
     )

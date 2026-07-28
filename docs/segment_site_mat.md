@@ -148,9 +148,10 @@ needed by every downstream traversal and engagement decision.
     complete planning input under one content-addressed `InputIdentity`.
     Exact segment/full-circle continuous engagement now reaches the typed
     `MotionWitness` boundary. Task 11A independently reconstructs a no-neck
-    candidate, applies the qualified entry to fresh stock/coverage, proves the
-    first circle's containment and exact zero engagement against the frozen
-    pre-cut stock, then depletes and records its sweep in that order.
+    two-circle prefix and its derived-cursor link, rejects invalid pairing
+    before stock mutation, and proves the first circle and link against their
+    respective frozen pre-cut stock before depletion and coverage. The second
+    circle currently reaches an explicit unresolved exact-event boundary.
     Candidate selection has not yet been connected to containment and
     engagement together. General
     arbitrary-pocket traversal, arbitrary composite segment/segment cells,
@@ -394,16 +395,48 @@ segment or full-circle motion, proves and applies the single qualified
 precleared entry, and closes every current planning input under
 `InputIdentity`. Tasks 6–8 now also certify an individually submitted segment
 or full circle against its exact effective engagement cap and return a typed,
-authority-bound `MotionWitness`. Task 11A now composes those contracts for one
-freshly reconstructed no-neck L-pocket circle: qualified entry depletion,
-containment, certification against pre-depletion stock, exact depletion, and
-coverage mutation execute in their proof order. This does **not** mean a
-Task 10 proposal is generally accepted: link/circle pairing, neck passage,
-terminal traversal, complete residual coverage, and the immutable replay
-certificate remain open. Task 12 owns proposal-level engagement evaluation,
-Task 13 owns the transactional select/certify/deplete loop, Task 14 owns
-artifact assembly, and Tasks 14A–16 own downstream validation, benchmarking,
-and release evidence.
+authority-bound `MotionWitness`. Task 11A now composes those contracts for a
+freshly reconstructed no-neck L-pocket prefix: qualified entry depletion,
+first-circle certification/depletion/coverage, relational link/circle
+preflight, and exact link certification/depletion/coverage execute in proof
+order. The following nonuniform circle remains unresolved and is not mutated.
+This does **not** mean a Task 10 proposal is generally accepted: neck passage,
+complete circle-event disposition, terminal traversal, complete residual
+coverage, and the immutable replay certificate remain open. Task 12 owns
+proposal-level engagement evaluation, Task 13 owns the transactional
+select/certify/deplete loop, Task 14 owns artifact assembly, and Tasks 14A–16
+own downstream validation, benchmarking, and release evidence.
+
+## How to assess the implementation's sophistication
+
+The implementation is best described as **research-lab-grade proof-carrying
+computational geometry for CAM**. That description is deliberately narrower
+than “production CAM system” and stronger than “geometry prototype.”
+Sophistication is uneven across dimensions:
+
+| Dimension | Current level | Evidence | Remaining boundary |
+| --- | --- | --- | --- |
+| Geometric substrate | very high | exact segment-site Voronoi/MAT topology, clipped algebraic branches, explicit degeneracy ownership, exact swept-set Booleans, and event-exact segment/full-circle oracles | arbitrary supported pockets and every composite cell family are not complete |
+| Proof architecture | very high | independent containment, engagement, depletion, coverage, topology, and identity authorities with canonical records and mutation rejection | no machine-checked theorem prover; the guarantee is implemented exact construction plus contract replay |
+| Stateful CAM semantics | high, incomplete | typed entry, material side, cap, neck, cursor, link/circle relation, and certify-before-mutate chronology | neck-owned full traversal, selection loop, and complete residual proof remain |
+| Reproducibility | high, incomplete | content-addressed input/component identities and fresh reconstruction rather than acceptance of producer snapshots | immutable final replay/artifact certificates remain |
+| Validation breadth | bounded | adversarial exact fixtures exercise equality, tangency, cocircularity, islands, derived cursors, and mutation order | complete generated paths, arbitrary-pocket campaigns, tri-dexel replay, and physical validation remain |
+| Performance maturity | early | structural pathologies are removed and bounded timings are recorded without weakening proof contracts | no matched certified Fig. 5 benchmark or end-to-end optimization campaign yet |
+
+The unusual difficulty is compositional. MAT topology, algebraic geometry,
+machining policy, mutable stock, engagement, coverage, and provenance each
+have a separate deciding authority. Correctness requires their records to
+agree in one order-sensitive execution without letting a sampled coordinate,
+producer snapshot, or already-mutated stock substitute for the fact being
+proved. Repository size is a poor proxy for that difficulty.
+
+!!! note "Exact and proof-carrying are not formally verified"
+
+    Exact kernels remove numerical ambiguity from the declared constructions
+    and replay checks make many cross-layer substitutions falsifiable. They do
+    not constitute a machine-checked proof of the complete programme. Claims
+    remain bounded by the implemented producers, closed failure modes, and
+    committed adversarial fixtures.
 
 ## Tasks 6–8 exact continuous engagement
 
@@ -590,6 +623,27 @@ exactly one candidate. An intermediate winner becomes a
 Changing only the recorded cursor-after digest fails with
 `ReplayCandidateError`.
 
+### Link/circle pairing is a relational proof
+
+A `LinkSegmentOperation` is not matched as a second geometric candidate. It
+transports the current exact phase to the immediately following candidate
+circle while preserving that circle's cursor-before. Replay first reconstructs
+the complete circle stream, then preflights every lateral operation before
+constructing fresh stock:
+
+- a link must be immediately followed by one reconstructed circle;
+- its endpoint must equal that circle's exact phase;
+- its neck scope and effective-cap decision must equal the circle candidate's;
+- its `HoldTraversalDecision` must name the same component, edge, branch, and
+  cursor-before; and
+- only the following circle's `AdvanceTraversalDecision` may change the cursor.
+
+Dangling links, consecutive links, and foreign hold cursors raise
+`ReplayPairingError` before entry depletion. A map from canonical operation
+ordinal to the freshly reconstructed circle candidate then authenticates both
+members without inventing a second candidate type or recovering ownership from
+coordinates.
+
 After the unique candidate is reconstructed, replay creates pristine
 `Stock2Area` and `CoverageLedger` owners from canonical input. It applies the
 authenticated `PreclearedEntry` first, proves the first circle is contained in
@@ -600,13 +654,26 @@ that void and in `D`, snapshots the post-entry/pre-circle stock for
 certify motion -> deplete motion -> add exact coverage sweep
 ```
 
-The adopted L fixture previously stopped at the certifier because remote stock
-remained and the native circle oracle only recognized a clear uniform rim when
-the complete stock was empty. Exact sweep/stock disjointness now certifies
-that first circle while preserving the material elsewhere. A chronology
-regression wraps the real stock, certifier, and coverage owners and requires
-the complete sequence
+The adopted L fixture previously stopped at the first-circle certifier because
+remote stock remained and the native circle oracle only recognized a clear
+uniform rim when the complete stock was empty. Exact sweep/stock disjointness
+now certifies that first circle while preserving the material elsewhere. A
+chronology regression wraps the real stock, certifier, and coverage owners and
+requires the complete sequence
 `entry-deplete, certify, motion-deplete, coverage-sweep`.
+
+The derived-cursor regression extends this chronology through a real direct
+link:
+
+```text
+entry depletion
+-> first-circle certify -> deplete -> coverage
+-> link certify -> deplete -> coverage
+-> second-circle certify -> unresolved
+```
+
+No second-circle depletion or coverage is permitted after the unresolved
+verdict.
 
 !!! danger "Certify-after-deplete can manufacture safety"
 
@@ -619,11 +686,12 @@ the complete sequence
 !!! warning "Candidate replay is not artifact certification"
 
     The current slice intentionally raises before returning a
-    `ReplayCertificate`. Fresh neck-passage reconstruction, link/circle
-    pairing, complete ordered witness capture, terminal traversal, exact empty
-    reachable residual, and immutable replay-certificate assembly remain
-    mandatory Task 11A work. The current one-circle fixture deliberately ends
-    with `ReplayTraversalError` because the other MAT cursors are nonterminal.
+    `ReplayCertificate`. Fresh neck-passage reconstruction, a complete
+    disposition for the first post-link nonuniform circle, complete ordered
+    witness capture, terminal traversal, exact empty reachable residual, and
+    immutable replay-certificate assembly remain mandatory Task 11A work. The
+    one-circle fixture deliberately ends with `ReplayTraversalError`; the
+    two-circle fixture stops earlier at `UnresolvedMotionEventError`.
 
 ## Relation to Held and Pfeiffer (2025)
 
@@ -636,16 +704,16 @@ construction.
 | Dimension | Comparative status | Held–Pfeiffer 2025 | Exact-certified Phase 1 |
 | --- | --- | --- | --- |
 | Pocket geometry | stronger exact polygonal contract on bounded fixtures; incomplete scope | Segments and circular arcs; simply connected; machinability assumed after an `r + ε` transformation | Raw MAT primitives clip exactly against polygonal domains with holes and exact radius clearance. Task 11 certifies submitted segment/full-circle sweeps directly in the polygon-with-holes design domain, including equality and islands. General arbitrary-pocket traversal remains incomplete and circular boundaries are not supported |
-| Gouge containment | stronger exact contract; generation integration incomplete | Gouge freedom follows from clearance-disk machining circles and offset-curve transition elements after the pocket is transformed to an assumed machinable `r + ε` geometry | One exact native kernel proves each segment capsule or circular annulus/disk is a subset of `D`, independently checks owned `C_r` anchor facts, and emits an input-replayable structural record. Exact tangency, reflex crossings, island contact, disk-sweep circles, and one-binary64-quantum gouges are gated. Task 11A now replays this proof for the first reconstructed L-pocket circle; Task 13 has not yet connected it to general candidate selection |
+| Gouge containment | stronger exact contract; generation integration incomplete | Gouge freedom follows from clearance-disk machining circles and offset-curve transition elements after the pocket is transformed to an assumed machinable `r + ε` geometry | One exact native kernel proves each segment capsule or circular annulus/disk is a subset of `D`, independently checks owned `C_r` anchor facts, and emits an input-replayable structural record. Exact tangency, reflex crossings, island contact, disk-sweep circles, and one-binary64-quantum gouges are gated. Task 11A now replays this proof for the first reconstructed L-pocket circle and its following direct link; Task 13 has not yet connected it to general candidate selection |
 | MAT backend | stronger exact contract on bounded fixtures; incomplete end-to-end | Vroni/ArcVroni used end-to-end | Exact CGAL point graph plus catalog-fed rectangle and concave L-pocket graphs. The rectangle carries Task 3 identities through one indexed SDG build, swap-owned adaptor traversal, indexed endpoint binding, exact radius clipping, five edges, six feature-triple nodes, and explicit rejection of eight incident P–S rays. The L path authenticates all 23 raw duals, binds external point/open-segment endpoint events, rejects 12 incident feature transitions, proves its P–P ray and S2–S3 diagonal are outside the interior MAT, and emits a connected 10-node/9-edge tree with seven S–S lines and two P–S parabolas. Normalized-node inventory includes the exact four-feature `{P2, P4, S2, S3}` event without coordinate merging. Both graphs now project into one validated numeric topology/evidence table, but arbitrary-pocket traversal remains incomplete |
-| Replay identity | stronger bounded-fixture contract; fresh state prefix gated, artifact certificate pending | The published algorithm consumes its MAT and updates one ordered machined contour; no exact topology/provenance replay certificate is reported | Stable site, node, dual, algebraic-root, component, and coincident endpoint-event identities project once into deterministic integer rows. Native MAT and neck records reject mutation, truncation, digest mismatch, input-order drift, detached-array mutation, and omitted-cap identity. `EventTrace2` v2 hashes the complete deciding authority; `MotionWitness` binds that trace and observed stock lineage. Task 11 adds the complete `InputIdentity`; Task 11A independently rebuilds reachable domain/MAT sampling, authenticates the center-domain digest, selects one unique fresh finite-lattice candidate with proof-carrying continuation, applies entry-first stock/coverage, and gates certify-before-deplete order for its first circle. Fresh neck/link replay, terminal traversal, empty residual, and the final certificate remain pending |
+| Replay identity | stronger bounded-fixture contract; fresh state prefix gated, artifact certificate pending | The published algorithm consumes its MAT and updates one ordered machined contour; no exact topology/provenance replay certificate is reported | Stable site, node, dual, algebraic-root, component, and coincident endpoint-event identities project once into deterministic integer rows. Native MAT and neck records reject mutation, truncation, digest mismatch, input-order drift, detached-array mutation, and omitted-cap identity. `EventTrace2` v2 hashes the complete deciding authority; `MotionWitness` binds that trace and observed stock lineage. Task 11 adds the complete `InputIdentity`; Task 11A independently rebuilds reachable domain/MAT sampling, authenticates the center-domain digest, reconstructs a proof-carrying derived cursor, and preflights the following link's phase/scope/cap/hold relation before mutation. Fresh neck replay, terminal traversal, empty residual, and the final certificate remain pending |
 | Engagement limit | stronger per-motion exact contract; candidate-loop integration incomplete | Analytic circle construction followed by bisection until `θmax − 0.001 <= θ <= θmax` radians | Exact rational chord surrogate and event-exact segment/full-circle partition. Segment verdicts bind ordered active branches and exact pair-cap dispositions; circle verdicts bind four-chart seam ownership. `event-exact-motion-oracle-v2` additionally proves an exact circular sweep is disjoint from nonempty remote stock, closing zero-engagement entry recuts without sampling. Certified, exceeded, and unresolved outcomes remain distinct through the typed consumer. Task 12/13 still must connect this authority to general proposal selection |
 | Candidate spacing | stronger bounded-fixture contract; acceptance integration incomplete | Bisection along the middle curve | All nine adopted L edges emit exact-identity line/parabola stations with independent reporting-only spacing and sagitta refinement, deterministic CSR offsets, and structural equidistant/no-site-closer verdicts. Task 10 enumerates every declared dyadic spatial/radius lane, both exact generator sites, and every finite phase; re-evaluates P–S refinement on the focus/directrix parabola rather than its sample chord; merges duplicate values without losing level provenance; performs no feasibility bisection; and matches an independent exhaustive 72-cell oracle with byte-identical repeat order. Task 11 can certify each resulting motion geometrically, but Task 12 engagement and Task 13 transactional selection are not integrated |
-| Machined state | stronger contract; end-to-end loop incomplete | Ordered contour of prior machining disks; transition sweeps omitted from that contour model | Exact stock mutation and exact full-sweep coverage use ordered certify-before-deplete lineage. Task 11 adds the physically qualified precleared disk as a distinct first-and-once depletion witness; `coverage-certificate-v2` seeds the residual with its authenticated `EntryRadius` while lateral sweeps retain `ToolRadius`. Task 11A now reconstructs fresh owners and gates `entry depletion -> first-circle certification -> circle depletion -> coverage sweep`; complete ordered lineage remains pending |
+| Machined state | stronger contract; end-to-end loop incomplete | Ordered contour of prior machining disks; transition sweeps omitted from that contour model | Exact stock mutation and exact full-sweep coverage use ordered certify-before-deplete lineage. Task 11 adds the physically qualified precleared disk as a distinct first-and-once depletion witness; `coverage-certificate-v2` seeds the residual with its authenticated `EntryRadius` while lateral sweeps retain `ToolRadius`. Task 11A reconstructs fresh owners and gates `entry depletion -> first-circle certify/deplete/coverage -> link certify/deplete/coverage`; the unresolved second circle performs no mutation and complete ordered lineage remains pending |
 | Bottlenecks | stronger exact contract on the adopted L fixture; arbitrary-pocket integration incomplete | Graph search, width, and heuristic cap reduction on first passage | A typed four-variant classifier composes exact profile minima with canonical separating cuts and deterministic ownership. Native classification compares algebraic widths to strictly ordered rational policy boundaries and certifies every comparison; equality stays in the narrower class. The adopted L graph emits exactly two reversal-invariant, replay-verified single-edge plateau restrictions at exact `width² = 4`, not fabricated strict roots. Task 10 binds each result to exact owner/sites/cut, creates independent forward/reverse passage state, permits only the three canonical advances to terminal, and seals every selected cap into candidate identity. Rectangle profiles and arbitrary-pocket passage traversal remain pending |
-| Validation | stronger exact local contracts; weaker end-to-end evidence | Dense engagement sampling for result plots; complete path and runtime experiments | Exact MAT/neck/engagement replay rejects mutation, truncation, domain mismatch, refinement drift, input-order drift, verdict/trace contradiction, and omitted deciding authority. Typed contracts lock exact-ID projection, finite candidate cardinality, MATHSM geometry, passage/cap/traversal identity, containment, entry semantics, motion witnesses, and input identity. The fresh replay prefix additionally gates nonempty-stock zero engagement and mutation chronology. Complete replay/path generation and exact residual proof remain planned |
+| Validation | stronger exact local contracts; weaker end-to-end evidence | Dense engagement sampling for result plots; complete path and runtime experiments | Exact MAT/neck/engagement replay rejects mutation, truncation, domain mismatch, refinement drift, input-order drift, verdict/trace contradiction, and omitted deciding authority. Typed contracts lock exact-ID projection, finite candidate cardinality, MATHSM geometry, passage/cap/traversal identity, containment, entry semantics, motion witnesses, and input identity. The fresh replay prefix additionally gates nonempty-stock zero engagement, link/circle relational ownership, preflight-before-mutation, and per-motion chronology. Complete replay/path generation and exact residual proof remain planned |
 | Independent removal and thermal-response replay | incomplete; planned stronger validation breadth | Volumetric stock replay and thermal-response rendering are not part of the paper's reported validation | Task 14A will replay the authenticated artifact through a separately versioned tri-dexel stock consumer, compare bounded removal evidence, and render uncalibrated modeled thermal response. No integration result exists yet, and this consumer will not replace an exact certificate |
-| End-to-end evidence | weaker | Complete paths, figures, path-length gains, and 3–100 ms path-generation timings excluding Voronoi construction | Tasks 6–8 and 10–11 provide exact local engagement, typed proposals, gouge certification, qualified entry, motion witnesses, and input identity. Task 11A now proves one fresh no-neck circle through stock/coverage mutation but deliberately rejects the nonterminal partial traversal. Tasks 11A–14 and 14A–16 remain; no complete certified path, tri-dexel replay, Fig. 5 reproduction, or matched performance result yet |
+| End-to-end evidence | weaker | Complete paths, figures, path-length gains, and 3–100 ms path-generation timings excluding Voronoi construction | Tasks 6–8 and 10–11 provide exact local engagement, typed proposals, gouge certification, qualified entry, motion witnesses, and input identity. Task 11A now proves one fresh no-neck circle and its derived-cursor link through stock/coverage mutation, then fails closed at the following circle's unresolved exact-event partition. Tasks 11A–14 and 14A–16 remain; no complete certified path, tri-dexel replay, Fig. 5 reproduction, or matched performance result yet |
 
 ### Performance claim boundary
 

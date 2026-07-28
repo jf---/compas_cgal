@@ -158,6 +158,10 @@ class ReplayCandidateError(ValueError):
     """A recorded circle is not one unique finite-lattice candidate."""
 
 
+class ReplayPairingError(ValueError):
+    """A link does not belong exactly to its following circle candidate."""
+
+
 class ReplayEffectiveCapError(ValueError):
     """A recorded cap decision contradicts fresh neck passage state."""
 
