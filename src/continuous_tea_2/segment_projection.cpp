@@ -26,6 +26,9 @@ using Rational = CORE::BigRat;
 using Polynomial = std::vector<Rational>;
 using RationalPolynomial = CGAL::Polynomial<Rational>;
 
+constexpr std::size_t
+    PAIR_RESULTANTS_PER_FEATURE_PAIR = 8;
+
 struct CoordinateParts {
     Rational base;
     Rational radical_coefficient;
@@ -473,6 +476,81 @@ CircleSupport circle_support(
     };
 }
 
+Rational minimum_segment_distance_squared(
+    const Rational& point_x,
+    const Rational& point_y,
+    const SegmentEventSource2& source)
+{
+    const Rational start_x =
+        parse_rational(source.x0().text(), "segment x0");
+    const Rational start_y =
+        parse_rational(source.y0().text(), "segment y0");
+    const Rational direction_x =
+        parse_rational(source.x1().text(), "segment x1")
+        - start_x;
+    const Rational direction_y =
+        parse_rational(source.y1().text(), "segment y1")
+        - start_y;
+    const Rational length_squared =
+        direction_x * direction_x
+        + direction_y * direction_y;
+    if (length_squared == 0) {
+        throw IncompleteSegmentPartitionError(
+            "support reachability requires nondegenerate segment motion");
+    }
+    const Rational offset_x = point_x - start_x;
+    const Rational offset_y = point_y - start_y;
+    const Rational projection =
+        offset_x * direction_x
+        + offset_y * direction_y;
+    if (projection <= 0) {
+        return offset_x * offset_x
+            + offset_y * offset_y;
+    }
+    if (projection >= length_squared) {
+        const Rational end_offset_x =
+            point_x - start_x - direction_x;
+        const Rational end_offset_y =
+            point_y - start_y - direction_y;
+        return end_offset_x * end_offset_x
+            + end_offset_y * end_offset_y;
+    }
+    return offset_x * offset_x
+        + offset_y * offset_y
+        - projection * projection / length_squared;
+}
+
+bool support_can_reach_tool(
+    const BoundaryFeatureRecord2& record,
+    const SegmentEventSource2& source)
+{
+    if (record.support_kind != "circle") {
+        return true;
+    }
+    const CircleSupport circle =
+        circle_support(record);
+    const Rational tool_radius =
+        parse_rational(
+            source.tool_radius().text(),
+            "tool radius");
+    const Rational distance_squared =
+        minimum_segment_distance_squared(
+            circle.center_x,
+            circle.center_y,
+            source);
+    const Rational comparison =
+        distance_squared
+        - circle.radius_squared
+        - tool_radius * tool_radius;
+    if (comparison <= 0) {
+        return true;
+    }
+    return comparison * comparison
+        <= Rational(4)
+            * circle.radius_squared
+            * tool_radius * tool_radius;
+}
+
 Polynomial circle_tangency(
     const BoundaryFeatureRecord2& record,
     const Polynomial& center_x,
@@ -659,6 +737,36 @@ SegmentProjectionBundle2 derive_segment_projections(
     const SegmentEventSource2& source)
 {
     SegmentProjectionBundle2 result;
+    std::vector<BoundaryFeatureRecord2> event_records;
+    event_records.reserve(records.size());
+    std::copy_if(
+        records.begin(),
+        records.end(),
+        std::back_inserter(event_records),
+        [&source](const BoundaryFeatureRecord2& record) {
+            return support_can_reach_tool(
+                record,
+                source);
+        });
+    if (event_records.empty()) {
+        throw IncompleteSegmentPartitionError(
+            "segment projection reachability removed every boundary support");
+    }
+    const std::size_t unfiltered_pair_resultants =
+        PAIR_RESULTANTS_PER_FEATURE_PAIR
+        * records.size() * (records.size() - 1)
+        / 2;
+    const std::size_t scheduled_pair_resultants =
+        PAIR_RESULTANTS_PER_FEATURE_PAIR
+        * event_records.size()
+        * (event_records.size() - 1)
+        / 2;
+    if (event_records.size() < records.size()
+        && scheduled_pair_resultants
+            >= unfiltered_pair_resultants) {
+        throw IncompleteSegmentPartitionError(
+            "exact support filtering did not reduce pair-resultant work");
+    }
     const Polynomial center_x =
         coordinate_motion(source.x0(), source.x1());
     const Polynomial center_y =
@@ -670,7 +778,8 @@ SegmentProjectionBundle2 derive_segment_projections(
     const Rational radius_squared = radius * radius;
 
     std::map<std::string, VertexInput> vertices;
-    for (const BoundaryFeatureRecord2& record : records) {
+    for (const BoundaryFeatureRecord2& record :
+         event_records) {
         const std::vector<std::string> support =
             pullback_support(record);
         for (const std::string& rim_chart :
@@ -912,7 +1021,7 @@ SegmentProjectionBundle2 derive_segment_projections(
 
     SegmentPairProjectionBundle2 pair_projections =
         derive_segment_pair_projections(
-            records,
+            event_records,
             source,
             result.pullbacks);
     result.event_projections.insert(

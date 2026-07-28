@@ -41,6 +41,18 @@ IDENTITY_ORDER_SQUARE = np.array(
     dtype=np.float64,
 )
 
+CONCAVE_WINDOW = np.array(
+    [
+        [0.0, 0.0, 0.0],
+        [10.0, 0.0, 0.0],
+        [10.0, 10.0, 0.0],
+        [5.0, 10.0, 0.0],
+        [5.0, 5.0, 0.0],
+        [0.0, 5.0, 0.0],
+    ],
+    dtype=np.float64,
+)
+
 
 def test_segment_source_exact_lifts_each_binary64_once() -> None:
     source = _continuous_tea_2.SegmentEventSource2.from_binary64(
@@ -110,23 +122,11 @@ def test_segment_partition_derives_line_pullbacks_and_complete_strata() -> None:
     assert partition.strata
     assert all(stratum.active_branch_ids for stratum in partition.strata)
     assert all(
-        {
-            (pair.first_branch_id, pair.second_branch_id)
-            for pair in stratum.pair_dispositions
-        }
-        == {
-            (first, second)
-            for first in stratum.active_branch_ids
-            for second in stratum.active_branch_ids
-            if first != second
-        }
+        {(pair.first_branch_id, pair.second_branch_id) for pair in stratum.pair_dispositions}
+        == {(first, second) for first in stratum.active_branch_ids for second in stratum.active_branch_ids if first != second}
         for stratum in partition.strata
     )
-    assert all(
-        len({pair.pair_sheet_id for pair in stratum.pair_dispositions})
-        == len(stratum.pair_dispositions)
-        for stratum in partition.strata
-    )
+    assert all(len({pair.pair_sheet_id for pair in stratum.pair_dispositions}) == len(stratum.pair_dispositions) for stratum in partition.strata)
     assert {
         (
             pair.orientation_disposition,
@@ -151,9 +151,7 @@ def test_segment_partition_derives_circle_pullbacks_from_stock_records() -> None
         4.0,
     )
 
-    assert {
-        projection.degree_bound_id for projection in partition.projections
-    } == {
+    assert {projection.degree_bound_id for projection in partition.projections} == {
         "segment-line-(1,2)-v1",
         "segment-circle-(2,4)-v1",
     }
@@ -171,18 +169,9 @@ def test_segment_partition_coalesces_simultaneous_vertex_events() -> None:
         4.0,
     )
 
-    vertex_fibres = [
-        stratum
-        for stratum in partition.strata
-        if stratum.kind == "fibre"
-        and sum(event.kind == "endpoint-order" for event in stratum.events) >= 2
-    ]
+    vertex_fibres = [stratum for stratum in partition.strata if stratum.kind == "fibre" and sum(event.kind == "endpoint-order" for event in stratum.events) >= 2]
     assert len(vertex_fibres) == 1
-    endpoint_events = tuple(
-        event
-        for event in vertex_fibres[0].events
-        if event.kind == "endpoint-order"
-    )
+    endpoint_events = tuple(event for event in vertex_fibres[0].events if event.kind == "endpoint-order")
     assert len({event.vertex_id for event in endpoint_events}) == 1
 
 
@@ -249,16 +238,8 @@ def test_audit_red_cell_order_is_exact_ccw_not_feature_identity_order() -> None:
         ("rim-half-1-v1", ("1", "2"), 0),
     ]
     assert geometric_order != tuple(sorted(geometric_order))
-    ordered_pairs = {
-        (pair.first_branch_id, pair.second_branch_id)
-        for pair in cell.stratum.pair_dispositions
-    }
-    assert ordered_pairs == {
-        (first, second)
-        for first in geometric_order
-        for second in geometric_order
-        if first != second
-    }
+    ordered_pairs = {(pair.first_branch_id, pair.second_branch_id) for pair in cell.stratum.pair_dispositions}
+    assert ordered_pairs == {(first, second) for first in geometric_order for second in geometric_order if first != second}
 
 
 def test_audit_red_cell_pair_classifies_major_complement_exactly() -> None:
@@ -338,10 +319,7 @@ def test_segment_cell_branch_identity_is_station_independent() -> None:
     first_by_sheet = by_sheet(first)
     second_by_sheet = by_sheet(second)
     assert first_by_sheet.keys() == second_by_sheet.keys()
-    assert all(
-        first_by_sheet[sheet].branch_id == second_by_sheet[sheet].branch_id
-        for sheet in first_by_sheet
-    )
+    assert all(first_by_sheet[sheet].branch_id == second_by_sheet[sheet].branch_id for sheet in first_by_sheet)
     assert any(
         (
             first_by_sheet[sheet].rim_factor_coefficients,
@@ -375,11 +353,7 @@ def test_audit_red_fibre_preserves_pair_disposition_change() -> None:
         2.0,
     )
     changing_fibres = [
-        stratum
-        for stratum in partition.strata
-        if stratum.kind == "fibre"
-        and tuple(stratum.root_factor_coefficients) == ("1", "-4", "2")
-        and stratum.root_ordinal == 0
+        stratum for stratum in partition.strata if stratum.kind == "fibre" and tuple(stratum.root_factor_coefficients) == ("1", "-4", "2") and stratum.root_ordinal == 0
     ]
 
     assert len(changing_fibres) == 1
@@ -407,57 +381,55 @@ def test_audit_red_equal_cardinality_reversal_is_merge_split_event() -> None:
         "incidence_permutation_rechecked",
     )
 
-    stock = _stock_2.Stock2(SQUARE, [])
-    stock.subtract_capsule(5.0, 4.3, 5.0, 4.53, 0.05)
+    stock = _stock_2.Stock2(CONCAVE_WINDOW, [])
     forward = _continuous_tea_2.construct_segment_event_partition(
         stock,
-        4.7,
-        5.0,
-        4.725,
-        5.0,
-        0.5,
+        4.0,
+        4.0,
+        6.0,
+        6.0,
+        1.0,
         4.0,
     )
     reverse = _continuous_tea_2.construct_segment_event_partition(
         stock,
-        4.725,
-        5.0,
-        4.7,
-        5.0,
-        0.5,
+        6.0,
+        6.0,
+        4.0,
+        4.0,
+        1.0,
         4.0,
     )
 
-    def equal_cardinality_endpoint_events(
+    def equal_cardinality_endpoint_fibres(
         partition: _continuous_tea_2.SegmentEventPartition2,
-    ) -> dict[bytes, _continuous_tea_2.PartitionEvent2]:
-        return {
-            event.vertex_id: event
+    ) -> list[tuple[_continuous_tea_2.PartitionEvent2, ...]]:
+        return [
+            tuple(event for event in stratum.events if event.kind == "endpoint-order" and event.left_active_count == event.right_active_count)
             for stratum in partition.strata
-            if stratum.kind == "fibre"
-            for event in stratum.events
-            if event.kind == "endpoint-order"
-            and event.left_active_count == event.right_active_count
-        }
+            if stratum.kind == "fibre" and any(event.kind == "endpoint-order" and event.left_active_count == event.right_active_count for event in stratum.events)
+        ]
 
-    forward_events = equal_cardinality_endpoint_events(forward)
-    reverse_events = equal_cardinality_endpoint_events(reverse)
-    common_vertices = forward_events.keys() & reverse_events.keys()
+    forward_fibres = equal_cardinality_endpoint_fibres(forward)
+    reverse_fibres = equal_cardinality_endpoint_fibres(reverse)
 
-    assert common_vertices
+    assert len(forward_fibres) == len(reverse_fibres) == 2
     assert all(
-        {
-            forward_events[vertex_id].disposition,
-            reverse_events[vertex_id].disposition,
-        }
-        == {"merge", "split"}
-        for vertex_id in common_vertices
+        len({event.disposition for event in events}) == 1
+        and len({event.vertex_id for event in events}) == 1
+        and all(event.left_active_count == event.right_active_count == 2 for event in events)
+        for events in (*forward_fibres, *reverse_fibres)
     )
     assert all(
-        forward_events[vertex_id].incidence_permutation_rechecked
-        and reverse_events[vertex_id].incidence_permutation_rechecked
-        for vertex_id in common_vertices
+        {forward_events[0].disposition, reverse_events[0].disposition} == {"merge", "split"}
+        and {event.vertex_id for event in forward_events} == {event.vertex_id for event in reverse_events}
+        for forward_events, reverse_events in zip(
+            forward_fibres,
+            reversed(reverse_fibres),
+            strict=True,
+        )
     )
+    assert all(event.incidence_permutation_rechecked for events in (*forward_fibres, *reverse_fibres) for event in events)
 
 
 def test_audit_red_fibre_is_evaluated_at_algebraic_root() -> None:
@@ -470,12 +442,7 @@ def test_audit_red_fibre_is_evaluated_at_algebraic_root() -> None:
         1.0,
         2.0,
     )
-    fibres = [
-        stratum
-        for stratum in partition.strata
-        if stratum.kind == "fibre"
-        and tuple(stratum.root_factor_coefficients) == ("1", "-4", "2")
-    ]
+    fibres = [stratum for stratum in partition.strata if stratum.kind == "fibre" and tuple(stratum.root_factor_coefficients) == ("1", "-4", "2")]
 
     assert {stratum.root_ordinal for stratum in fibres} == {0}
     assert all(stratum.algebraic_root_evaluated for stratum in fibres)
@@ -535,32 +502,19 @@ def test_audit_red_projection_completeness_rejects_missing_event_class() -> None
         factor: tuple[str, ...],
         ordinal: int,
     ) -> _continuous_tea_2.SegmentEventStratum2:
-        return next(
-            stratum
-            for stratum in partition.strata
-            if stratum.kind == "fibre"
-            and tuple(stratum.root_factor_coefficients) == factor
-            and stratum.root_ordinal == ordinal
-        )
+        return next(stratum for stratum in partition.strata if stratum.kind == "fibre" and tuple(stratum.root_factor_coefficients) == factor and stratum.root_ordinal == ordinal)
 
     tangency_fibre = exact_fibre(tangency, ("-1", "2"), 0)
     assert any(event.kind == "tangent" for event in tangency_fibre.events)
-    assert any(
-        pair.orientation_disposition == "ccw-zero"
-        for pair in tangency_fibre.pair_dispositions
-    )
+    assert any(pair.orientation_disposition == "ccw-zero" for pair in tangency_fibre.pair_dispositions)
     vertex_fibre = exact_fibre(vertex, ("-1", "2"), 0)
     assert any(event.kind == "endpoint-order" for event in vertex_fibre.events)
     cap_fibre = exact_fibre(cap, ("1", "-4", "2"), 0)
-    assert any(
-        pair.cap_disposition == "equal-cap"
-        for pair in cap_fibre.pair_dispositions
-    )
+    assert any(pair.cap_disposition == "equal-cap" for pair in cap_fibre.pair_dispositions)
     overlap_fibre = exact_fibre(overlap, ("0", "1"), 0)
     assert any(event.kind == "support-overlap" for event in overlap_fibre.events)
     assert all(
-        stratum.original_equations_rechecked
-        and stratum.trim_predicates_rechecked
+        stratum.original_equations_rechecked and stratum.trim_predicates_rechecked
         for stratum in (
             tangency_fibre,
             vertex_fibre,

@@ -1,3 +1,4 @@
+import hashlib
 from fractions import Fraction
 
 import numpy as np
@@ -17,6 +18,18 @@ HALF_PLANE_WINDOW = np.array(
         [10.0, 0.0, 0.0],
         [10.0, 10.0, 0.0],
         [0.0, 10.0, 0.0],
+    ],
+    dtype=np.float64,
+)
+
+CONCAVE_WINDOW = np.array(
+    [
+        [0.0, 0.0, 0.0],
+        [10.0, 0.0, 0.0],
+        [10.0, 10.0, 0.0],
+        [5.0, 10.0, 0.0],
+        [5.0, 5.0, 0.0],
+        [0.0, 5.0, 0.0],
     ],
     dtype=np.float64,
 )
@@ -65,36 +78,15 @@ def _root(
     return next(root for root in trace.partition.roots if tuple(root.factor_coefficients) == coefficients and root.root_ordinal == ordinal)
 
 
-def _certificate_bytes(
-    certificate: object,
-    **replacements: object,
-) -> bytes:
-    fields = {
-        "build_evidence": certificate.build_evidence,
-        "charts": certificate.charts,
-        "projections": certificate.projections,
-        "roots": certificate.roots,
-        "cells": certificate.cells,
-        "fibres": certificate.fibres,
-        "overlaps": certificate.overlaps,
-        "seams": certificate.seams,
-        "source_kind": certificate.source_kind,
-        "source_payload": certificate.source_payload,
-    }
-    fields.update(replacements)
-    return _continuous_tea_2.encode_event_partition_certificate(**fields)
-
-
 def _assert_trace_binds_verified_partition(
     verdict: str,
     trace,
 ) -> None:
     assert trace.exact_verdict == verdict
-    verified = _continuous_tea_2.verify_event_partition(
-        trace.partition.canonical_bytes,
-    )
-    assert verified.verdict.name == "CERTIFIED"
-    assert verified.partition.canonical_bytes == trace.partition.canonical_bytes
+    assert trace.decision_authority_bytes != trace.partition.canonical_bytes
+    assert trace.partition.canonical_bytes in trace.decision_authority_bytes
+    assert hashlib.sha256(trace.decision_authority_bytes).digest() == trace.decision_authority_digest
+    assert trace.decision_authority_digest in trace.canonical_bytes
     assert trace.canonical_digest
     assert trace.motion_chart_id
     assert trace.effective_cap_bytes
@@ -258,32 +250,27 @@ def test_cutter_rim_vertex_fibre_is_not_omitted() -> None:
     _assert_no_confirmed_dyadic_violation(stock, motion, 1.0, 4.0)
 
 
-@pytest.mark.parametrize(
-    ("reverse", "disposition"),
-    [
-        (False, "merge"),
-        (True, "split"),
-    ],
-)
-def test_slotted_run_merge_and_split_root_is_not_omitted(
-    reverse: bool,
-    disposition: str,
-) -> None:
-    stock = _stock_2.Stock2(HALF_PLANE_WINDOW, [])
-    stock.subtract_capsule(5.0, 4.3, 5.0, 4.53, 0.05)
-    endpoints = ((4.7, 5.0), (4.725, 5.0))
-    if reverse:
-        endpoints = tuple(reversed(endpoints))
-    motion = _motion(*endpoints[0], *endpoints[1])
+def test_concave_vertex_run_split_and_merge_roots_are_not_omitted() -> None:
+    stock = _stock_2.Stock2(CONCAVE_WINDOW, [])
+    motion = _motion(4.0, 4.0, 6.0, 6.0)
 
-    verdict, trace = _audit(stock, motion, 0.5, 4.0)
+    verdict, trace = _audit(stock, motion, 1.0, 4.0)
 
-    assert verdict == "certified"
     topology = _events(trace, "endpoint-order")
-    assert len(topology) == 1
-    assert topology[0].root_id
-    assert topology[0].disposition == disposition
-    _assert_no_confirmed_dyadic_violation(stock, motion, 0.5, 4.0)
+    assert verdict == "cap_exceeded"
+    assert [event.disposition for event in topology] == ["split", "merge"]
+    assert all(event.root_id and event.multiplicity == 2 and len(event.feature_ids) == 2 and len(event.branch_ids) == 2 for event in topology)
+    assert _continuous_tea_2.segment_station_cap_exceeded_exact(
+        stock,
+        motion.start.x,
+        motion.start.y,
+        motion.end.x,
+        motion.end.y,
+        1,
+        2,
+        1.0,
+        4.0,
+    )
 
 
 def test_coincident_tool_disk_boundary_is_never_empty_by_omission() -> None:
@@ -316,12 +303,27 @@ def test_cap_equality_at_algebraic_root_is_not_omitted() -> None:
     assert cap_events[0].root_id == cap_root.root_id
     assert cap_events[0].disposition == "equal"
     _assert_trace_binds_verified_partition(verdict, trace)
-    root_only_mutation = _certificate_bytes(
-        trace.partition,
-        roots=tuple(root for root in trace.partition.roots if root.root_id != cap_root.root_id),
+    partition = _continuous_tea_2.construct_segment_event_partition(
+        stock,
+        motion.start.x,
+        motion.start.y,
+        motion.end.x,
+        motion.end.y,
+        1.0,
+        2.0,
     )
-    with pytest.raises(_continuous_tea_2.EventPartitionVerificationError):
-        _continuous_tea_2.verify_event_partition(root_only_mutation)
+    mutated = _continuous_tea_2.mutate_segment_event_partition(
+        partition,
+        "delete-projection-cap-crossing",
+    )
+    assert (
+        _continuous_tea_2.verify_segment_event_partition(
+            stock,
+            partition.source,
+            mutated,
+        ).verdict.name
+        == "UNRESOLVED_DEGENERACY"
+    )
 
 
 def test_zero_length_motion_is_rejected_before_native_dispatch(

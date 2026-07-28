@@ -230,6 +230,10 @@ NB_MODULE(_continuous_tea_2, m)
         m,
         "IncompleteSegmentPartitionError",
         substrate_error.ptr());
+    nb::exception<IncompleteSegmentOracleError>(
+        m,
+        "IncompleteSegmentOracleError",
+        substrate_error.ptr());
 
     nb::enum_<ContinuousTeaVerdict>(
         m,
@@ -1113,6 +1117,18 @@ NB_MODULE(_continuous_tea_2, m)
         .def_ro(
             "partition_certificate",
             &EventTrace2::partition)
+        .def_prop_ro(
+            "decision_authority_bytes",
+            [](const EventTrace2& trace) {
+                return as_bytes(
+                    trace.decision_authority_bytes);
+            })
+        .def_prop_ro(
+            "decision_authority_digest",
+            [](const EventTrace2& trace) {
+                return as_bytes(
+                    trace.decision_authority_digest);
+            })
         .def_ro("events", &EventTrace2::events)
         .def_ro(
             "motion_chart_id",
@@ -1154,6 +1170,12 @@ NB_MODULE(_continuous_tea_2, m)
         "vertex",
         "overlap",
         "seam");
+    m.def(
+        "event_oracle_component_version",
+        []() {
+            return as_bytes(
+                event_oracle_component_version());
+        });
 
     nb::class_<BoundaryFeatureRecord2>(
         m,
@@ -1461,6 +1483,74 @@ NB_MODULE(_continuous_tea_2, m)
         "y0"_a,
         "x1"_a,
         "y1"_a,
+        "tool_radius"_a,
+        "cap_chord_ratio"_a);
+    m.def(
+        "audit_segment_tea_event_exact",
+        [](const Stock2& stock,
+           double x0,
+           double y0,
+           double x1,
+           double y1,
+           double tool_radius,
+           double cap_chord_ratio) {
+            SegmentTeaAudit2 audit =
+                audit_segment_tea_event_exact(
+                    stock,
+                    SegmentEventSource2::from_binary64(
+                        x0,
+                        y0,
+                        x1,
+                        y1,
+                        tool_radius,
+                        cap_chord_ratio));
+            return nb::make_tuple(
+                continuous_tea_verdict_text(
+                    audit.verdict),
+                std::move(audit.trace));
+        },
+        "stock"_a,
+        "x0"_a,
+        "y0"_a,
+        "x1"_a,
+        "y1"_a,
+        "tool_radius"_a,
+        "cap_chord_ratio"_a);
+    m.def(
+        "segment_station_cap_exceeded_exact",
+        [](const Stock2& stock,
+           double x0,
+           double y0,
+           double x1,
+           double y1,
+           std::size_t numerator,
+           std::size_t denominator,
+           double tool_radius,
+           double cap_chord_ratio) {
+            if (denominator == 0
+                || numerator > denominator) {
+                throw IncompleteSegmentOracleError(
+                    "segment station must lie in [0,1]");
+            }
+            return segment_station_cap_exceeded_exact(
+                stock,
+                SegmentEventSource2::from_binary64(
+                    x0,
+                    y0,
+                    x1,
+                    y1,
+                    tool_radius,
+                    cap_chord_ratio),
+                std::to_string(numerator),
+                std::to_string(denominator));
+        },
+        "stock"_a,
+        "x0"_a,
+        "y0"_a,
+        "x1"_a,
+        "y1"_a,
+        "numerator"_a,
+        "denominator"_a,
         "tool_radius"_a,
         "cap_chord_ratio"_a);
     m.def(

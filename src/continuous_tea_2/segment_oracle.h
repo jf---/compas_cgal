@@ -24,3 +24,8 @@ SegmentTeaAudit2 audit_segment_tea_event_exact(
     const Stock2& stock,
     const SegmentEventSource2& source);
 
+bool segment_station_cap_exceeded_exact(
+    const Stock2& stock,
+    const SegmentEventSource2& source,
+    const std::string& witness_numerator,
+    const std::string& witness_denominator);

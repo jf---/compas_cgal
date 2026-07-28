@@ -22,6 +22,8 @@ struct EventTraceEvent2 {
 struct EventTrace2 {
     ContinuousTeaVerdict verdict;
     EventPartitionCertificate2 partition;
+    std::string decision_authority_bytes;
+    std::string decision_authority_digest;
     std::vector<EventTraceEvent2> events;
     std::string motion_chart_id;
     std::string motion_identity;
@@ -38,6 +40,8 @@ class EventTraceVerificationError
 public:
     using EventSubstrateError::EventSubstrateError;
 };
+
+const std::string& event_oracle_component_version();
 
 EventTraceEvent2 make_event_trace_event(
     const std::string& root_id,

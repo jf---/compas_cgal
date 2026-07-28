@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+
 import numpy as np
 
 from compas_cgal import _continuous_tea_2
@@ -71,6 +73,10 @@ def test_uniform_circle_certificate_replays_and_rejects_mutation() -> None:
     )
 
     assert verified.verdict.name == "CERTIFIED"
+    assert trace.decision_authority_bytes == trace.partition.canonical_bytes
+    assert trace.decision_authority_digest == trace.partition.canonical_digest
+    assert hashlib.sha256(trace.decision_authority_bytes).digest() == trace.decision_authority_digest
+    assert trace.decision_authority_digest in trace.canonical_bytes
     assert _continuous_tea_2.verify_event_partition(mutated).verdict.name == "UNRESOLVED_DEGENERACY"
 
 
