@@ -12,12 +12,14 @@ cells.
     `MotionCertifier` consumer are implemented for the bounded Phase-1
     contracts. Both motion families return digest-bound event traces, and the
     Python boundary distinguishes certified, cap-exceeded, and unresolved
-    outcomes. Task 11A now independently reconstructs one no-neck L-pocket
-    circle, applies the qualified entry to fresh stock, certifies against that
-    frozen pre-cut state, and only then depletes stock and records coverage.
-    Link/circle pairing, neck-state replay, complete traversal/coverage,
-    artifact certification, arbitrary-pocket evidence, and matched
-    Held–Pfeiffer performance remain incomplete.
+    outcomes. Task 11A now independently reconstructs a two-circle no-neck
+    L-pocket prefix and its derived-cursor link. It validates the complete
+    link/circle relation before stock mutation, then certifies the first circle
+    and link against their frozen pre-cut states before depletion and coverage.
+    The second circle currently fails closed with an unresolved exact event
+    partition. Neck-state replay, complete traversal/coverage, artifact
+    certification, arbitrary-pocket evidence, and matched Held–Pfeiffer
+    performance remain incomplete.
 
 ## Authority hierarchy
 
@@ -153,6 +155,23 @@ inside an entry disk of radius
 `2(5/32) + 1/2 = 13/16` centred at the phase point. The square stock remains
 nonempty, so the fixture kills any return to an empty-stock shortcut while
 also gating exact boundary tangency.
+
+### First state-dependent continuation boundary
+
+Fresh replay now reaches beyond the uniformly clear entry recut. From the
+first accepted radius-`1/8` circle it reconstructs the exact intermediate
+`DerivedCandidateCursor`, enumerates a terminal radius-`1/8`,
+phase-index-`3` circle owned by the point generator at `(2, 2)`, and derives
+the direct link between their phase points. The link is exactly contained and
+event-certified against the post-first-circle stock, then depleted and added
+to coverage.
+
+The following circle currently returns `UnresolvedMotionEventError`. This is
+the first replay-driven nonuniform full-circle boundary after state-dependent
+segment depletion. The programme stops before circle depletion or coverage;
+the passing link must not be mistaken for a passing pair. The next oracle
+repair must explain and close the missing deciding disposition without
+sampling, tolerance, or replay-side metadata.
 
 !!! danger "Exact-number backend definitions are an ABI contract"
 
