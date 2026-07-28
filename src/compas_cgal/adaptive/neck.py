@@ -5,6 +5,11 @@ from typing import Self
 import numpy as np
 
 from compas_cgal.adaptive.canonical import ExactRationalV1
+from compas_cgal.adaptive.canonical import encode_bytes
+from compas_cgal.adaptive.canonical import encode_component_map
+from compas_cgal.adaptive.canonical import encode_passage_state
+from compas_cgal.adaptive.canonical import encode_sequence
+from compas_cgal.adaptive.canonical import encode_tagged_union
 from compas_cgal.adaptive.errors import InvalidNeckEvidenceError
 from compas_cgal.adaptive.errors import InvalidNeckPassageTransitionError
 from compas_cgal.adaptive.errors import TerminalNeckPassageError
@@ -63,6 +68,29 @@ class ClassifiedNeck:
             raise InvalidNeckEvidenceError("neck separating cut must contain canonical edge identities.")
 
     @property
+    def canonical_bytes(self) -> bytes:
+        """Return the complete classified-neck identity.
+
+        Returns:
+            Canonical CCAN bytes binding the exact native evidence, policy
+            class, and separating cut.
+        """
+        return encode_tagged_union(
+            b"classified-neck-v1",
+            encode_component_map(
+                {
+                    b"comparison-certificate": encode_bytes(self.comparison_certificate),
+                    b"defining-site-ids": encode_sequence(tuple(encode_bytes(bytes(site_id)) for site_id in self.defining_site_ids)),
+                    b"evidence": encode_bytes(self.evidence_bytes),
+                    b"evidence-digest": encode_bytes(bytes(self.evidence_digest)),
+                    b"owner-id": encode_bytes(bytes(self.owner_id)),
+                    b"separating-cut-edge-ids": encode_sequence(tuple(encode_bytes(bytes(edge_id)) for edge_id in self.separating_cut_edge_ids)),
+                    b"width-class": self.width_class_id.canonical_bytes,
+                }
+            ),
+        )
+
+    @property
     def forward(self) -> "NeckPassage":
         return NeckPassage.build(
             neck=self,
@@ -108,6 +136,27 @@ class NeckPassage:
         return OrientedNeckScope.build(
             neck_owner_id=self.neck.owner_id,
             orientation=self.orientation,
+        )
+
+    @property
+    def canonical_bytes(self) -> bytes:
+        """Return the classified owner, orientation, and current state.
+
+        Returns:
+            Canonical CCAN bytes for deterministic state snapshots.
+        """
+        return encode_tagged_union(
+            b"neck-passage-v1",
+            encode_component_map(
+                {
+                    b"neck": self.neck.canonical_bytes,
+                    b"orientation": encode_tagged_union(
+                        bytes(self.orientation.value),
+                        b"",
+                    ),
+                    b"state": encode_passage_state(self.state),
+                }
+            ),
         )
 
     def propose_cap_decision(self, policy: NeckPolicy) -> NeckCapDecision:

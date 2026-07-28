@@ -35,7 +35,7 @@
   `CanonicalOperation`, `NeckPassage`, and `AdvanceTraversalDecision`.
 - Produces: `TraversalCursorState`, `GenerationState`, and named Task 12 integrity failures.
 
-- [ ] **Step 1: Write RED state-isolation and digest tests**
+- [x] **Step 1: Write RED state-isolation and digest tests**
 
 ```python
 def test_generation_state_clones_native_owners_and_binds_every_lineage() -> None:
@@ -58,7 +58,7 @@ Add exact failures for a foreign tool radius, stock/coverage chronology
 divergence, duplicate passage scopes, phase/prefix mismatch, and traversal
 cursor mismatch.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run:
 
@@ -69,7 +69,7 @@ pixi run pytest tests/adaptive/test_transaction.py -n auto -q
 Expected: collection fails because `generation_state` and its errors do not
 exist.
 
-- [ ] **Step 3: Add named errors and canonical neck passage bytes**
+- [x] **Step 3: Add named errors and canonical neck passage bytes**
 
 Add:
 
@@ -97,7 +97,7 @@ class CandidateSelectionError(ValueError):
 Give `ClassifiedNeck` and `NeckPassage` canonical CCAN records that bind owner,
 evidence, class, cut, orientation, and passage state.
 
-- [ ] **Step 4: Implement immutable state**
+- [x] **Step 4: Implement immutable state**
 
 Create frozen `TraversalCursorState` with `component_id: ComponentId`,
 `edge_id: EdgeId`, `branch_id: BranchId`, `cursor: CursorIdentity`, and
@@ -127,7 +127,7 @@ Create frozen `GenerationState` with private `Stock2Area` and
 matches coverage and the operation prefix, validates the current phase and
 cursor, canonicalizes passage lookup, and derives the state digest.
 
-- [ ] **Step 5: Run focused state tests**
+- [x] **Step 5: Run focused state tests**
 
 Run:
 
