@@ -3,6 +3,7 @@
 #include "boundary_events.h"
 #include "../exact_algebraic_1.h"
 #include "segment_partition.h"
+#include "station_source.h"
 
 #include <vector>
 
@@ -29,6 +30,10 @@ SegmentCellStratum2 construct_segment_cell_stratum(
     const SegmentEventSource2& source,
     const std::string& witness_numerator,
     const std::string& witness_denominator);
+
+SegmentCellStratum2 construct_station_cell_stratum(
+    const std::vector<BoundaryFeatureRecord2>& records,
+    const StationEventSource2& source);
 
 std::vector<std::string>
 segment_pair_literal_signs();

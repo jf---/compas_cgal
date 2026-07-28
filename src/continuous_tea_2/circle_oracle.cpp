@@ -6,6 +6,7 @@
 #include "cap_partition.h"
 #include "circle_projection.h"
 #include "circle_source.h"
+#include "circle_strata.h"
 #include "event_certificate.h"
 #include "event_partition.h"
 #include "parameter_charts.h"
@@ -710,38 +711,79 @@ audit_full_circle_tea_event_exact(
             boundary_trace_events(
                 partition,
                 clockwise);
+        const std::string exact_motion_identity =
+            motion_identity(
+                center_x,
+                center_y,
+                phase_dx,
+                phase_dy,
+                clockwise);
+        const std::string exact_cap_identity =
+            encode_canonical_record(
+                "cap-chord-ratio-binary64-v1",
+                {
+                    binary64_identity(
+                        cap_chord_ratio),
+                });
+        if (cap_exceeded) {
+            EventTrace2 trace =
+                build_event_trace(
+                    std::move(partition),
+                    "full-circle-four-chart-v1",
+                    exact_motion_identity,
+                    exact_cap_identity,
+                    ContinuousTeaVerdict::
+                        CAP_EXCEEDED,
+                    "partial",
+                    "full-circle-line-vertex-witness-exact-v1",
+                    std::move(events));
+            return {
+                "cap_exceeded",
+                std::move(trace),
+            };
+        }
+
+        VerifiedEventPartition2 verified_partition =
+            verify_event_partition(partition);
+        if (verified_partition.verdict
+            != ContinuousTeaVerdict::CERTIFIED) {
+            throw IncompleteFullCircleOracleError(
+                "full-circle boundary partition failed exact reconstruction");
+        }
+        const FullCircleCellAuthority2 authority =
+            construct_full_circle_cell_authority(
+                stock,
+                verified_partition,
+                center_x,
+                center_y,
+                phase_dx,
+                phase_dy,
+                tool_radius,
+                cap_chord_ratio);
         EventTrace2 trace =
-            build_event_trace(
-                std::move(partition),
+            build_authority_event_trace(
+                std::move(verified_partition),
+                authority.canonical_bytes,
+                authority.canonical_digest,
                 "full-circle-four-chart-v1",
-                motion_identity(
-                    center_x,
-                    center_y,
-                    phase_dx,
-                    phase_dy,
-                    clockwise),
-                encode_canonical_record(
-                    "cap-chord-ratio-binary64-v1",
-                    {
-                        binary64_identity(
-                            cap_chord_ratio),
-                    }),
-                cap_exceeded
-                    ? ContinuousTeaVerdict::
-                          CAP_EXCEEDED
-                    : ContinuousTeaVerdict::
-                          UNRESOLVED_DEGENERACY,
-                cap_exceeded
-                    ? "partial"
-                    : "unresolved",
-                cap_exceeded
-                    ? "full-circle-line-vertex-witness-exact-v1"
-                    : "full-circle-line-pullbacks-exact-v1",
+                exact_motion_identity,
+                exact_cap_identity,
+                authority.verdict,
+                authority.whole_rim_disposition,
+                "full-circle-cell-strata-exact-v1",
                 std::move(events));
+        const std::string verdict =
+            authority.verdict
+                    == ContinuousTeaVerdict::CERTIFIED
+                ? "certified"
+                : (
+                      authority.verdict
+                              == ContinuousTeaVerdict::
+                                  CAP_EXCEEDED
+                          ? "cap_exceeded"
+                          : "unresolved");
         return {
-            cap_exceeded
-                ? "cap_exceeded"
-                : "unresolved",
+            verdict,
             std::move(trace),
         };
     }

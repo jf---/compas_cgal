@@ -62,3 +62,15 @@ EventTrace2 build_event_trace(
     const std::string& whole_rim_disposition,
     const std::string& oracle_strategy_version,
     std::vector<EventTraceEvent2> events);
+
+EventTrace2 build_authority_event_trace(
+    VerifiedEventPartition2 verified_partition,
+    const std::string& decision_authority_bytes,
+    const std::string& decision_authority_digest,
+    const std::string& motion_chart_id,
+    const std::string& motion_identity,
+    const std::string& effective_cap_bytes,
+    ContinuousTeaVerdict verdict,
+    const std::string& whole_rim_disposition,
+    const std::string& oracle_strategy_version,
+    std::vector<EventTraceEvent2> events);

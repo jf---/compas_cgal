@@ -93,6 +93,9 @@ VerifiedSegmentEventPartition2 verify_segment_event_partition(
     const SegmentEventSource2& source,
     const SegmentEventPartition2& candidate);
 
+std::string canonical_segment_cell_stratum(
+    const SegmentCellStratum2& cell);
+
 SegmentEventPartition2 mutate_segment_event_partition(
     const SegmentEventPartition2& partition,
     const std::string& mutation);
