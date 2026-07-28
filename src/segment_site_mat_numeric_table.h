@@ -40,6 +40,7 @@ struct MatNumericMatTable2 {
   std::vector<std::int64_t> neck_cut_offsets;
   std::vector<std::int64_t> neck_cut_edge_ids;
   std::string center_domain_digest;
+  std::string mat_certificate;
 
   bool operator==(const MatNumericMatTable2 &) const = default;
 };

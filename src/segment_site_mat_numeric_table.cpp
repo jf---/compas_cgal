@@ -3,6 +3,7 @@
 #include "reachable_certificate_encoding_2.h"
 #include "reachable_domain_2.h"
 #include "segment_site_catalog.h"
+#include "segment_site_mat_certificate.h"
 
 #include <algorithm>
 #include <array>
@@ -141,20 +142,20 @@ canonical_l_shape_mat_numeric_table(const CanonicalReachInput2 &input,
       canonical_l_shape_mat_proposal_graph(input, tool_radius.squared_exact(),
                                            station_spacing, max_sagitta,
                                            max_refinement_depth);
+  const CanonicalMatSiteCatalog2 catalog = canonical_mat_site_catalog(input);
+  MatCertifiedExactProjection2 exact = certified_mat_exact_projection_v1(
+      sampled.profile_graph(), catalog, domain_identity.center_domain_digest());
   MatNumericProposalTable2 proposal{
-      numeric_graph_table(sampled.profile_graph().graph(),
-                          canonical_mat_site_catalog(input)),
+      std::move(exact.graph),
       numeric_sample_table(sampled, tool_radius),
   };
-  const MatNumericNeckCutTable2 necks =
-      numeric_neck_cut_table(sampled.profile_graph().graph(),
-                             exact_neck_evidence_v1(sampled.profile_graph()));
   return {
       numeric_node_reporting_coordinates(sampled),
       std::move(proposal),
-      necks.neck_evidence,
-      necks.neck_cut_offsets,
-      necks.neck_cut_edge_ids,
+      std::move(exact.necks.neck_evidence),
+      std::move(exact.necks.neck_cut_offsets),
+      std::move(exact.necks.neck_cut_edge_ids),
       domain_identity.center_domain_digest(),
+      std::move(exact.certificate).release_canonical_bytes(),
   };
 }
