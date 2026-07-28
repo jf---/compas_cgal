@@ -5,6 +5,12 @@ import numpy as np
 
 from compas_cgal import _medial_axis_2
 from compas_cgal._medial_axis_2 import MedialAxisResult
+from compas_cgal.adaptive.candidates import MiddleCurveCandidate
+from compas_cgal.adaptive.candidates import MiddleCurveSpan
+from compas_cgal.adaptive.candidates import enumerate_middle_curve_candidates
+from compas_cgal.adaptive.canonical import CanonicalRingV1
+from compas_cgal.adaptive.medial_axis import MedialAxis
+from compas_cgal.adaptive.motion import EngagementCap
 from compas_cgal.adaptive.operation import AdvanceTraversalDecision
 from compas_cgal.adaptive.operation import ApproachOperation
 from compas_cgal.adaptive.operation import CanonicalOperation
@@ -13,17 +19,22 @@ from compas_cgal.adaptive.operation import FullCapDecision
 from compas_cgal.adaptive.operation import HoldTraversalDecision
 from compas_cgal.adaptive.operation import LinkSegmentOperation
 from compas_cgal.adaptive.operation import NeckCapDecision
+from compas_cgal.adaptive.operation import NoNeckScope
 from compas_cgal.adaptive.operation import PlungeOperation
 from compas_cgal.adaptive.operation import TraversalDecision
 from compas_cgal.adaptive.motion import ExactCircleMotion
 from compas_cgal.adaptive.motion import ExactSegmentMotion
+from compas_cgal.adaptive.policy import CandidatePolicy
+from compas_cgal.adaptive.policy import CircleOrientation
 from compas_cgal.adaptive.policy import DepletionPolicy
 from compas_cgal.adaptive.stock_area import DepletionWitness
 from compas_cgal.adaptive.stock_area import Stock2Area
 from compas_cgal.adaptive.units import ChordBound
-from compas_cgal.adaptive.units import Point2
 from compas_cgal.adaptive.units import ClearanceZ
 from compas_cgal.adaptive.units import CutZ
+from compas_cgal.adaptive.units import GuideRadius
+from compas_cgal.adaptive.units import Point2
+from compas_cgal.adaptive.units import Spacing
 from compas_cgal.adaptive.units import ToolRadius
 from compas_cgal.adaptive.units import Vector2
 from compas_cgal.adaptive.units import WorldXY
@@ -53,6 +64,25 @@ mat_result = _medial_axis_2.segment_site_medial_axis(
     32,
 )
 assert_type(mat_result, MedialAxisResult)
+mat_owner = _medial_axis_2.SegmentSiteMedialAxis.build(
+    np.asarray(
+        (
+            (0.0, 0.0, 0.0),
+            (6.0, 0.0, 0.0),
+            (6.0, 2.0, 0.0),
+            (2.0, 2.0, 0.0),
+            (2.0, 6.0, 0.0),
+            (0.0, 6.0, 0.0),
+        ),
+        dtype=np.float64,
+    ),
+    (),
+    0.5,
+    0.75,
+    0.02,
+    32,
+)
+assert_type(mat_owner, _medial_axis_2.SegmentSiteMedialAxis)
 
 world_point_scalar = Point2[WorldXY].build(1.0, 2.0)
 world_point_sequence = Point2[WorldXY].build([1.0, 2.0])
@@ -63,6 +93,54 @@ assert_type(world_point_scalar, Point2[WorldXY])
 assert_type(world_point_sequence, Point2[WorldXY])
 assert_type(world_vector_scalar, Vector2[WorldXY])
 assert_type(world_vector_sequence, Vector2[WorldXY])
+
+typed_boundary = CanonicalRingV1.build_outer(
+    (
+        Point2[WorldXY].build(0.0, 0.0),
+        Point2[WorldXY].build(6.0, 0.0),
+        Point2[WorldXY].build(6.0, 2.0),
+        Point2[WorldXY].build(2.0, 2.0),
+        Point2[WorldXY].build(2.0, 6.0),
+        Point2[WorldXY].build(0.0, 6.0),
+    )
+)
+typed_axis = MedialAxis.build(
+    design_boundary=typed_boundary,
+    holes=(),
+    tool_radius=ToolRadius.build(0.5),
+    station_spacing=Spacing.build(0.75),
+    max_sagitta=ChordBound.build(0.02),
+    max_refinement_depth=32,
+)
+assert_type(typed_axis, MedialAxis)
+candidate_span = MiddleCurveSpan.build(
+    axis=typed_axis,
+    cursor_before=typed_axis.samples[0],
+    cursor_limit=typed_axis.samples[1],
+)
+assert_type(candidate_span, MiddleCurveSpan)
+candidate_policy = CandidatePolicy.build(
+    spatial_resolution=Spacing.build(0.5),
+    spatial_refinement_levels=2,
+    radius_resolution=Spacing.build(0.125),
+    radius_refinement_levels=2,
+    phase_count=4,
+    minimum_guide_radius=GuideRadius.build(0.125),
+    minimum_progress=Spacing.build(0.25),
+)
+candidate_cap = EngagementCap.build(1.0)
+typed_candidates = enumerate_middle_curve_candidates(
+    span=candidate_span,
+    policy=candidate_policy,
+    circle_orientation=CircleOrientation.COUNTERCLOCKWISE,
+    neck_scope=NoNeckScope.build(),
+    effective_cap_decision=FullCapDecision.build(
+        user_cap=candidate_cap,
+        effective_cap=candidate_cap,
+    ),
+    makes_cursor_terminal_at_limit=False,
+)
+assert_type(typed_candidates, tuple[MiddleCurveCandidate, ...])
 
 approach_operation = ApproachOperation.build(
     position=world_point_scalar,

@@ -420,7 +420,7 @@ certified_mat_exact_projection_v1(const MatClearanceProfileGraph2 &exact,
         "MAT certificate center-domain digest must contain 32 bytes");
   }
   MatNumericGraphTable2 graph = numeric_graph_table(exact.graph(), catalog);
-  const std::vector<MatNeckEvidenceV1> evidence = exact_neck_evidence_v1(exact);
+  std::vector<MatNeckEvidenceV1> evidence = exact_neck_evidence_v1(exact);
   MatNumericNeckCutTable2 necks =
       numeric_neck_cut_table(exact.graph(), evidence);
   std::string bytes = canonical_certificate_bytes(exact, catalog, graph, necks,
@@ -430,6 +430,7 @@ certified_mat_exact_projection_v1(const MatClearanceProfileGraph2 &exact,
   return {
       std::move(graph),
       std::move(necks),
+      std::move(evidence),
       std::move(certificate),
   };
 }

@@ -264,6 +264,7 @@ add_executable(task9_mat_compile_gate EXCLUDE_FROM_ALL
     src/segment_site_catalog_sampling.cpp
     src/segment_site_mat_proposal_table.cpp
     src/segment_site_mat_numeric_table.cpp
+    src/segment_site_mat_bundle.cpp
     src/segment_site_mat_certificate.cpp
     src/reachable_certificate_encoding_2.cpp
     src/segment_site_mat_spikes.cpp
@@ -344,6 +345,7 @@ set(MEDIAL_AXIS_2_SOURCES
     src/segment_site_catalog_sampling.cpp
     src/segment_site_mat_proposal_table.cpp
     src/segment_site_mat_numeric_table.cpp
+    src/segment_site_mat_bundle.cpp
     src/segment_site_mat_certificate.cpp
     src/reachable_certificate_encoding_2.cpp
     src/segment_site_mat_spikes.cpp

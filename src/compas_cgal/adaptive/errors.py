@@ -32,8 +32,36 @@ class InvalidCandidatePolicyError(ValueError):
     """A candidate lattice is not finite and deterministic."""
 
 
+class InvalidMiddleCurveSpanError(ValueError):
+    """A candidate span does not advance between two owned MAT cursors."""
+
+
+class InvalidMathsmProposalError(ValueError):
+    """A one-sided MATHSM proposal contradicts its MAT/site inputs."""
+
+
+class InvalidCandidateLatticeError(ValueError):
+    """A finite candidate cell omits or contradicts bound decision state."""
+
+
 class InvalidNeckPolicyError(ValueError):
     """A neck classification or effective-cap mapping is incomplete or invalid."""
+
+
+class InvalidMedialAxisProjectionError(ValueError):
+    """A native MAT projection contradicts its exact topology owner."""
+
+
+class InvalidNeckEvidenceError(ValueError):
+    """Native neck evidence or exact classification is structurally inconsistent."""
+
+
+class InvalidNeckPassageTransitionError(ValueError):
+    """A neck passage decision does not advance its owned orientation once."""
+
+
+class TerminalNeckPassageError(RuntimeError):
+    """A terminal oriented neck passage cannot propose another cut."""
 
 
 class InvalidDepletionPolicyError(ValueError):

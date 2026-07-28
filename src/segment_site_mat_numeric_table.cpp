@@ -1,10 +1,5 @@
 #include "segment_site_mat_numeric_table.h"
 
-#include "reachable_certificate_encoding_2.h"
-#include "reachable_domain_2.h"
-#include "segment_site_catalog.h"
-#include "segment_site_mat_certificate.h"
-
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -126,36 +121,4 @@ numeric_neck_cut_table(const MatExactGraph2 &graph,
         static_cast<std::int64_t>(table.neck_cut_edge_ids.size()));
   }
   return table;
-}
-
-MatNumericMatTable2
-canonical_l_shape_mat_numeric_table(const CanonicalReachInput2 &input,
-                                    const MatStationSpacingMm2 &station_spacing,
-                                    const MatSagittaBoundMm2 &max_sagitta,
-                                    const std::size_t max_refinement_depth) {
-  const ReachableDomain2 reachable = ReachableDomain2::build(input);
-  const ReachableDomainCertificateIdentity2 domain_identity =
-      reachable_domain_certificate_identity(input, reachable);
-  const MatToolRadiusMm2 tool_radius =
-      MatToolRadiusMm2::build(input.binary64_radius);
-  const MatProposalSamplingGraph2 sampled =
-      canonical_l_shape_mat_proposal_graph(input, tool_radius.squared_exact(),
-                                           station_spacing, max_sagitta,
-                                           max_refinement_depth);
-  const CanonicalMatSiteCatalog2 catalog = canonical_mat_site_catalog(input);
-  MatCertifiedExactProjection2 exact = certified_mat_exact_projection_v1(
-      sampled.profile_graph(), catalog, domain_identity.center_domain_digest());
-  MatNumericProposalTable2 proposal{
-      std::move(exact.graph),
-      numeric_sample_table(sampled, tool_radius),
-  };
-  return {
-      numeric_node_reporting_coordinates(sampled),
-      std::move(proposal),
-      std::move(exact.necks.neck_evidence),
-      std::move(exact.necks.neck_cut_offsets),
-      std::move(exact.necks.neck_cut_edge_ids),
-      domain_identity.center_domain_digest(),
-      std::move(exact.certificate).release_canonical_bytes(),
-  };
 }
