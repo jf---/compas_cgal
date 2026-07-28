@@ -109,6 +109,17 @@ RationalPolynomial derivative(
     return result;
 }
 
+CGAL::Sign opposite_sign(const CGAL::Sign sign)
+{
+    if (sign == CGAL::POSITIVE) {
+        return CGAL::NEGATIVE;
+    }
+    if (sign == CGAL::NEGATIVE) {
+        return CGAL::POSITIVE;
+    }
+    return CGAL::ZERO;
+}
+
 std::vector<Algebraic> relative_interior_roots(
     const RationalPolynomial& coefficients,
     const Algebraic& lower,
@@ -216,6 +227,44 @@ void require_profile_endpoint(
         throw InvalidMatClearanceEdgeProfileError(
             "MAT clearance profile endpoint evidence is incomplete");
     }
+}
+
+CGAL::Sign endpoint_inward_clearance_sign(
+    const MatClearanceEdgeProfile2& profile,
+    const bool lower)
+{
+    const RationalPolynomial derivative_function =
+        derivative(
+            profile.squared_clearance()
+                .coefficients());
+    const Algebraic& lower_parameter =
+        *profile.lower().parameter;
+    const Algebraic& upper_parameter =
+        *profile.upper().parameter;
+    const std::vector<Algebraic> critical =
+        relative_interior_roots(
+            derivative_function,
+            lower_parameter,
+            upper_parameter);
+    ExactAlgebraicKernel1 kernel;
+    const CORE::BigRat witness = lower
+        ? kernel.bound_between_1_object()(
+              lower_parameter,
+              critical.empty()
+                  ? upper_parameter
+                  : critical.front())
+        : kernel.bound_between_1_object()(
+              critical.empty()
+                  ? lower_parameter
+                  : critical.back(),
+              upper_parameter);
+    const CGAL::Sign parameter_sign = CGAL::sign(
+        evaluate_rational_polynomial(
+            derivative_function,
+            witness));
+    return lower
+        ? parameter_sign
+        : opposite_sign(parameter_sign);
 }
 
 ScaledIntegerPolynomial2 scaled_integer_polynomial(
@@ -528,6 +577,56 @@ const std::string&
 MatExactSquaredWidth2::root_id() const noexcept
 {
     return root_id_;
+}
+
+MatClearanceEndpointBehavior2::
+    MatClearanceEndpointBehavior2(
+        const CGAL::Sign inward_clearance_sign,
+        MatExactSquaredWidth2 squared_width)
+    : inward_clearance_sign_(
+          inward_clearance_sign),
+      squared_width_(
+          std::move(squared_width))
+{
+}
+
+CGAL::Sign MatClearanceEndpointBehavior2::
+    inward_clearance_sign() const noexcept
+{
+    return inward_clearance_sign_;
+}
+
+const MatExactSquaredWidth2&
+MatClearanceEndpointBehavior2::
+    squared_width() const noexcept
+{
+    return squared_width_;
+}
+
+MatClearanceEndpointBehavior2
+lower_endpoint_clearance_behavior(
+    const MatClearanceEdgeProfile2& profile)
+{
+    return MatClearanceEndpointBehavior2(
+        endpoint_inward_clearance_sign(
+            profile,
+            true),
+        MatExactSquaredWidth2::from_clearance(
+            profile.squared_clearance(),
+            *profile.lower().parameter));
+}
+
+MatClearanceEndpointBehavior2
+upper_endpoint_clearance_behavior(
+    const MatClearanceEdgeProfile2& profile)
+{
+    return MatClearanceEndpointBehavior2(
+        endpoint_inward_clearance_sign(
+            profile,
+            false),
+        MatExactSquaredWidth2::from_clearance(
+            profile.squared_clearance(),
+            *profile.upper().parameter));
 }
 
 MatStrictEdgeClearanceMinimum2::
