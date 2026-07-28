@@ -673,6 +673,48 @@ def _cursor_after(
     return CursorIdentity(hashlib.sha256(canonical).digest())
 
 
+def _terminalize_last_feasible(
+    candidates: list[MiddleCurveCandidate],
+    *,
+    terminal_limit: bool,
+) -> list[MiddleCurveCandidate]:
+    """Close a terminal span when its exact endpoint admits no positive circle.
+
+    The complete finite lattice is already materialized. Therefore its greatest
+    feasible progress is an exhaustive traversal boundary, not a sampled guess.
+    """
+    if not terminal_limit or not candidates or any(candidate.traversal_decision.makes_cursor_terminal for candidate in candidates):
+        return candidates
+    maximum_progress = max(candidate.spatial_progress for candidate in candidates)
+    terminalized: list[MiddleCurveCandidate] = []
+    for candidate in candidates:
+        if candidate.spatial_progress != maximum_progress:
+            terminalized.append(candidate)
+            continue
+        traversal = candidate.traversal_decision
+        terminalized.append(
+            MiddleCurveCandidate.build(
+                proposal=candidate.proposal,
+                policy=candidate.policy,
+                spatial_progress=candidate.spatial_progress,
+                spatial_levels=candidate.spatial_levels,
+                radius_levels=candidate.radius_levels,
+                cursor_limit_identity=candidate.cursor_limit_identity,
+                neck_scope=candidate.neck_scope,
+                effective_cap_decision=candidate.effective_cap_decision,
+                traversal_decision=AdvanceTraversalDecision.build(
+                    component_id=traversal.component_id,
+                    edge_id=traversal.edge_id,
+                    branch_id=traversal.branch_id,
+                    cursor_before=traversal.cursor_before,
+                    cursor_after=traversal.cursor_after,
+                    makes_cursor_terminal=True,
+                ),
+            )
+        )
+    return terminalized
+
+
 def enumerate_middle_curve_candidates(
     *,
     span: MiddleCurveSpan,
@@ -739,6 +781,9 @@ def enumerate_middle_curve_candidates(
                         )
                     )
     return policy.order_candidates(
-        candidates,
+        _terminalize_last_feasible(
+            candidates,
+            terminal_limit=makes_cursor_terminal_at_limit,
+        ),
         key=lambda candidate: candidate.order_key,
     )
