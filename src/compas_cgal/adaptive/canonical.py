@@ -598,6 +598,63 @@ def canonical_depletion_witness_bytes(
     )
 
 
+def canonical_precleared_depletion_witness_bytes(
+    *,
+    entry_bytes: bytes,
+    tool_radius: ToolRadius,
+    native_strategy_version: bytes,
+    parent_lineage: tuple[bytes, ...],
+) -> bytes:
+    """Encode the unique first-and-once precleared-entry depletion event.
+
+    Args:
+        entry_bytes: Complete canonical `PreclearedEntry` record.
+        tool_radius: Tool radius bound to that entry.
+        native_strategy_version: Exact disk-subtraction strategy version.
+        parent_lineage: Empty lineage proving this is the first stock event.
+
+    Returns:
+        Complete canonical depletion-witness record.
+
+    Raises:
+        CanonicalEncodingError: If the entry or lineage is not closed.
+    """
+    try:
+        require_canonical_record(entry_bytes)
+    except CanonicalEncodingError:
+        raise CanonicalEncodingError("precleared depletion entry must contain one complete canonical record.") from None
+    if canonical_record_kind(entry_bytes) != b"T":
+        raise CanonicalEncodingError("precleared depletion entry must be one tagged domain record.")
+    _require_exact(
+        tool_radius,
+        ToolRadius,
+        "precleared depletion witness tool radius",
+    )
+    if type(native_strategy_version) is not bytes or not native_strategy_version:
+        raise CanonicalEncodingError("precleared depletion witness strategy version must be nonempty bytes.")
+    if type(parent_lineage) is not tuple or any(type(digest) is not bytes or len(digest) != 32 for digest in parent_lineage) or parent_lineage:
+        raise CanonicalEncodingError("precleared depletion witness must be the first and only entry event.")
+    return encode_tagged_union(
+        b"precleared-entry-depletion-witness-v1",
+        encode_component_map(
+            {
+                b"center-parameters": encode_sequence(()),
+                b"entry": entry_bytes,
+                b"native-strategy-version": encode_bytes(native_strategy_version),
+                b"parent-lineage": encode_sequence(()),
+                b"policy": encode_tagged_union(
+                    b"no-motion-depletion-policy-v1",
+                    b"",
+                ),
+                b"tool-radius": _scalar_bytes(
+                    b"tool-radius-mm-v1",
+                    tool_radius.value,
+                ),
+            }
+        ),
+    )
+
+
 def _exact_ring_area(points: tuple[Point2[WorldXY], ...]) -> Fraction:
     area_twice = Fraction(0, 1)
     for start, end in zip(points, points[1:] + points[:1], strict=True):

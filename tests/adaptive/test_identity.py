@@ -1,6 +1,8 @@
 import hashlib
+import math
 from dataclasses import dataclass
 from dataclasses import fields
+from dataclasses import replace
 from fractions import Fraction
 
 import pytest
@@ -9,8 +11,12 @@ from compas_cgal.adaptive.canonical import CanonicalRingV1
 from compas_cgal.adaptive.canonical import ExactRationalV1
 from compas_cgal.adaptive.canonical import encode_bytes
 from compas_cgal.adaptive.canonical import encode_tagged_union
+from compas_cgal.adaptive.entry import BoreProcessIdentity
+from compas_cgal.adaptive.entry import PreclearedEntry
+from compas_cgal.adaptive.entry import QualifiedBore
 from compas_cgal.adaptive.errors import InvalidBoundaryVertexIdentityError
 from compas_cgal.adaptive.errors import InvalidComponentIdentityError
+from compas_cgal.adaptive.errors import InvalidInputIdentityError
 from compas_cgal.adaptive.identity import BOUNDARY_VERTEX_ID_VERSION
 from compas_cgal.adaptive.identity import COMPONENT_IDENTITY_VERSION
 from compas_cgal.adaptive.identity import INPUT_SCHEMA_VERSION
@@ -18,8 +24,10 @@ from compas_cgal.adaptive.identity import OPERATION_SCHEMA_VERSION
 from compas_cgal.adaptive.identity import BoundaryVertexIdV1
 from compas_cgal.adaptive.identity import ComponentIdentity
 from compas_cgal.adaptive.identity import ComponentDomainTag
+from compas_cgal.adaptive.identity import FrameIdentity
 from compas_cgal.adaptive.identity import IncidentSupport
 from compas_cgal.adaptive.identity import IncidentSupportIdV1
+from compas_cgal.adaptive.identity import InputIdentity
 from compas_cgal.adaptive.identity import InputRingVertexIdV1
 from compas_cgal.adaptive.identity import IntersectionBoundaryVertexIdV1
 from compas_cgal.adaptive.identity import MultiIncidenceIntersectionBoundaryVertexIdV1
@@ -29,7 +37,25 @@ from compas_cgal.adaptive.identity import SourceRevision
 from compas_cgal.adaptive.identity import StrategyVersion
 from compas_cgal.adaptive.identity import SupportKind
 from compas_cgal.adaptive.identity import TrimIncidenceOrientation
+from compas_cgal.adaptive.motion import EngagementCap
+from compas_cgal.adaptive.policy import ACTIVE_PASSAGE_STATES
+from compas_cgal.adaptive.policy import CandidatePolicy
+from compas_cgal.adaptive.policy import CutDirectionPolicy
+from compas_cgal.adaptive.policy import CutIntent
+from compas_cgal.adaptive.policy import DepletionPolicy
+from compas_cgal.adaptive.policy import NeckPolicy
+from compas_cgal.adaptive.policy import TraversalPolicy
+from compas_cgal.adaptive.reachable_domain import ReachableDomain
+from compas_cgal.adaptive.units import ChordBound
+from compas_cgal.adaptive.units import ClearanceZ
+from compas_cgal.adaptive.units import CutPlane
+from compas_cgal.adaptive.units import CutZ
+from compas_cgal.adaptive.units import EntryRadius
+from compas_cgal.adaptive.units import GuideRadius
 from compas_cgal.adaptive.units import Point2
+from compas_cgal.adaptive.units import Spacing
+from compas_cgal.adaptive.units import SquaredMillimetre
+from compas_cgal.adaptive.units import ToolRadius
 from compas_cgal.adaptive.units import WorldXY
 
 
@@ -452,3 +478,132 @@ def test_boundary_identity_subclasses_fail_before_canonical_bytes() -> None:
         )
     with pytest.raises(InvalidBoundaryVertexIdentityError, match="exact InputRingVertexIdV1"):
         _ = semantic_vertex.canonical_bytes
+
+
+def _input_identity(
+    *,
+    bore_evidence: bytes = b"qualified-bore-metrology-v1",
+    spatial_resolution: float = 0.5,
+    cut_intent: CutIntent = CutIntent.CLIMB,
+) -> InputIdentity:
+    design_boundary = _outer_ring()
+    tool_radius = ToolRadius.build(0.5)
+    reachable_domain = ReachableDomain.build(
+        design_boundary=design_boundary,
+        holes=(),
+        tool_radius=tool_radius,
+    )
+    cut_plane = CutPlane.build(
+        CutZ.build(-2.0),
+        ClearanceZ.build(5.0),
+    )
+    entry = PreclearedEntry.build(
+        reachable_domain=reachable_domain,
+        center=Point2[WorldXY].build(2.0, 2.0),
+        radius=EntryRadius.build(1.0),
+        tool_radius=tool_radius,
+        cut_plane=cut_plane,
+        qualified_bore=QualifiedBore.build(
+            cut_plane=cut_plane,
+            process_identity=BoreProcessIdentity(b"predrill-cycle-revision-7"),
+            evidence_bytes=bore_evidence,
+        ),
+    )
+    user_cap = EngagementCap.build(math.radians(120.0))
+    neck_policy = NeckPolicy.build(
+        user_cap=user_cap,
+        squared_width_boundaries=(SquaredMillimetre(Fraction(4)),),
+        effective_caps={
+            (neck_class, passage_state): EngagementCap.build(
+                math.radians(90.0 - 10.0 * passage_state.rank),
+            )
+            for neck_class in range(2)
+            for passage_state in ACTIVE_PASSAGE_STATES
+        },
+    )
+    return InputIdentity.build(
+        design_boundary=design_boundary,
+        holes=(),
+        cut_plane=cut_plane,
+        tool_radius=tool_radius,
+        reachable_domain=reachable_domain,
+        entry=entry,
+        user_cap=user_cap,
+        candidate_policy=CandidatePolicy.build(
+            spatial_resolution=Spacing.build(spatial_resolution),
+            spatial_refinement_levels=2,
+            radius_resolution=Spacing.build(0.125),
+            radius_refinement_levels=2,
+            phase_count=4,
+            minimum_guide_radius=GuideRadius.build(0.125),
+            minimum_progress=Spacing.build(0.25),
+        ),
+        neck_policy=neck_policy,
+        depletion_policy=DepletionPolicy.build(
+            chord_bound=ChordBound.build(0.125),
+            center_count_limit=4096,
+        ),
+        traversal_policy=TraversalPolicy.build(forward_window=4),
+        cut_direction_policy=CutDirectionPolicy.build(cut_intent),
+    )
+
+
+def test_input_identity_binds_entry_domain_policies_schemas_and_components() -> None:
+    identity = _input_identity()
+    canonical = identity.canonical_bytes
+
+    assert identity.reachable_domain_digest == identity.reachable_domain.certificate.digest
+    assert identity.entry.reachable_domain is identity.reachable_domain
+    assert INPUT_SCHEMA_VERSION in canonical
+    assert OPERATION_SCHEMA_VERSION in canonical
+    assert identity.entry.canonical_bytes in canonical
+    assert identity.reachable_domain_digest in canonical
+    assert identity.component_versions
+    assert all(binding.version in canonical for binding in identity.component_versions)
+    assert "digest" not in {field.name for field in fields(identity)}
+    assert identity.digest == hashlib.sha256(canonical).digest()
+    assert identity.digest not in canonical
+
+    variants = (
+        _input_identity(bore_evidence=b"qualified-bore-metrology-v2"),
+        _input_identity(spatial_resolution=0.25),
+        _input_identity(cut_intent=CutIntent.CONVENTIONAL),
+    )
+    assert all(variant.digest != identity.digest for variant in variants)
+
+
+def test_input_identity_accepts_only_its_validated_precleared_entry() -> None:
+    identity = _input_identity()
+
+    with pytest.raises(InvalidInputIdentityError, match="PreclearedEntry"):
+        replace(identity, entry=object())
+
+    equivalent_but_distinct = _input_identity()
+    with pytest.raises(InvalidInputIdentityError, match="PreclearedEntry"):
+        replace(
+            identity,
+            reachable_domain=equivalent_but_distinct.reachable_domain,
+            reachable_domain_digest=(equivalent_but_distinct.reachable_domain_digest),
+        )
+
+
+def test_input_identity_rejects_frame_and_component_version_relabelling() -> None:
+    identity = _input_identity()
+    changed_binding = replace(
+        identity.component_versions[0],
+        version=b"unowned-component-version-v0",
+    )
+
+    with pytest.raises(InvalidInputIdentityError, match="world-XY"):
+        replace(
+            identity,
+            frame_identity=FrameIdentity(b"machine-xy-millimetre-frame-v1"),
+        )
+    with pytest.raises(InvalidInputIdentityError, match="component versions"):
+        replace(
+            identity,
+            component_versions=(
+                changed_binding,
+                *identity.component_versions[1:],
+            ),
+        )

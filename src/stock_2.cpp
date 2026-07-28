@@ -764,6 +764,10 @@ NB_MODULE(_stock_2, m)
         const std::string& version = exact_depletion_strategy_version();
         return nb::bytes(version.data(), version.size());
     });
+    m.def("exact_entry_depletion_strategy_version", []() {
+        static const std::string version = "exact-precleared-entry-disk-v1";
+        return nb::bytes(version.data(), version.size());
+    });
 
     register_engagement(m);
 }
