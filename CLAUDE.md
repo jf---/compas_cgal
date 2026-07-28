@@ -158,6 +158,23 @@ worktree.
   advantages, and never promote a stronger certificate contract into an
   unsupported claim of stronger completed software.
 
+## Single-Path Novel Architecture — MANDATORY
+
+This is a novel codebase. Do not frame any component as inherited baggage or
+let an older experiment constrain a stronger architecture.
+
+- Every production or exact-proof contract has one authoritative call graph.
+  Do not add shims, alternate calling conventions, fallback routing, duplicate
+  deciding logic, or a second acceptance path.
+- Guarded, sampled, reporting, benchmark, and separate generator algorithms
+  remain isolated peers. They may not enter the exact-certified pipeline as a
+  prefilter, fallback, or substitute proof.
+- Preserving a working separate algorithm during add-and-validate development
+  is transition safety, not permission to compromise the new path. Any later
+  removal remains an explicit user decision after independent validation.
+- Derived visualization or serialization views must project from canonical
+  state. They never own parallel state or an alternate parser.
+
 ## Build & Test
 
 ```bash

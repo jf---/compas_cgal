@@ -182,7 +182,8 @@ construction.
 | Machined state | stronger contract | Ordered contour of prior machining disks; transition sweeps omitted from that contour model | Exact stock mutation and exact full-sweep coverage, ordered certify-before-deplete |
 | Bottlenecks | stronger exact contract on the adopted L fixture; incomplete feature | Graph search, width, and heuristic cap reduction on first passage | A typed four-variant classifier composes exact profile minima with canonical separating cuts and deterministic ownership. Native classification compares algebraic widths to strictly ordered rational policy boundaries and certifies every comparison; equality stays in the narrower class. The adopted L graph emits exactly two reversal-invariant, replay-verified single-edge plateau restrictions at exact `width² = 4`, not fabricated strict roots. Rectangle profiles, typed passage state, and the bound cap decision remain pending |
 | Validation | incomplete end-to-end | Dense engagement sampling for result plots; complete path and runtime experiments | Exact neck replay and complete native MAT-certificate replay reject mutation, truncation, domain mismatch, refinement drift, and input-order drift. The low-level Python contract additionally locks ranks, dtypes, CSR cardinalities, exact flags, threshold topology, certificate digests, refinement invariance, and named failures. Fresh end-to-end replay, complete artifact identity, and exact residual proof remain planned |
-| End-to-end evidence | weaker | Complete paths, figures, path-length gains, and 3–100 ms path-generation timings excluding Voronoi construction | Tasks 10–16 remain frozen; no complete path, Fig. 5 reproduction, or performance result yet |
+| Independent removal and thermal-response replay | incomplete; planned stronger validation breadth | Volumetric stock replay and thermal-response rendering are not part of the paper's reported validation | Task 14A will replay the authenticated artifact through a separately versioned tri-dexel stock consumer, compare bounded removal evidence, and render uncalibrated modeled thermal response. No integration result exists yet, and this consumer will not replace an exact certificate |
+| End-to-end evidence | weaker | Complete paths, figures, path-length gains, and 3–100 ms path-generation timings excluding Voronoi construction | Tasks 10–14, 14A–16 remain frozen; no complete path, tri-dexel replay, Fig. 5 reproduction, or performance result yet |
 
 ### Performance claim boundary
 
@@ -267,8 +268,9 @@ recorded in the
 [engagement-audit performance analysis](superpowers/state/sp1-gate-c-analysis.md).
 
 The first defensible performance comparison therefore comes after Tasks 13–15
-on the provenance-locked Fig. 5 fixture. It must report, on one machine and
-build:
+on the provenance-locked Fig. 5 fixture. Task 14A's tri-dexel validation is
+reported on its own downstream clock and is excluded from the matched planner
+scope. The planner report must state, on one machine and build:
 
 1. segment-site MAT construction;
 2. candidate selection and traversal;
@@ -322,6 +324,74 @@ approximating a certified circular/linear path by smoother higher-order
 primitives does not automatically preserve its engagement bound. Phase 1
 therefore certifies its declared primitive grammar and does not infer a C²
 certificate from Hausdorff closeness.
+
+## Planned tri-dexel validation plane
+
+Task 14A adds a second representation after the exact artifact exists. The
+consumer starts from fresh tri-dexel stock, authenticates the canonical
+operation stream, applies the declared precleared entry, and replays every
+lateral operation in source-clock order. The exact planner does not import the
+GPU/Qt stack, and tri-dexel output never feeds back into engagement, candidate,
+containment, depletion, coverage, or traversal decisions.
+
+```text
+CertifiedToolpath + ArtifactIdentity
+        |
+        +--> exact fresh replay -----------------> proof acceptance
+        |
+        +--> authenticated tri-dexel import
+               |
+               +--> inner / nominal / outer removal lanes
+               |        |
+               |        +--> bounded residual and gouge cross-check
+               |
+               +--> accepted nominal source chronology
+                        |
+                        +--> modeled thermal-response state
+                                   |
+                                   +--> inspected PNG evidence
+```
+
+Canonical operation ID is the join key across these layers. Each entry in the
+planned evidence index binds its exact motion/effective-cap witness, accepted
+tri-dexel removal interval, source cut clock, modeled-response generation, and
+rendered prefix. No layer recovers correspondence by matching approximate
+coordinates. This creates a per-cut CAM validation spine without claiming that
+the uncalibrated response is a physical temperature or a planning authority.
+
+The tri-dexel engine's native flat-end-cylinder path is a constant-Z linear
+sweep, whereas the exact artifact also contains full circles. The consumer
+therefore makes approximation explicit. For a chord chain with centerline
+Hausdorff bound `delta`, it replays radii `r - delta`, `r`, and
+`r + delta`. When `0 < delta < r`, the inner and outer continuous swept sets
+bracket the exact circular sweep:
+
+```text
+chord_chain ⊕ B_(r - delta)
+    ⊆ exact_circle_centerline ⊕ B_r
+    ⊆ chord_chain ⊕ B_(r + delta)
+```
+
+The consumer report binds the arc policy, tri-dexel lattice enclosure, source
+operation IDs, accepted cut clocks, stock/tool/entry identities, producer and
+consumer revisions, final state, and every rendered PNG. Removal, outside-
+pocket removal, and residual are interval observations from an independent
+discrete stock model; they are never relabelled as exact continuous-solid
+facts.
+
+!!! warning "Modeled thermal response is not temperature"
+
+    The planned visualization consumes authored cutting-feed chronology and
+    accepted removal evidence. Until a separately calibrated and validated
+    physical model exists, its output is uncalibrated modeled response—not
+    degrees Celsius, heat in joules, cutter temperature, wear, tool life, or a
+    feed/speed recommendation. Thermal state is observational in Phase 1.
+
+The integration binds only to a disclosure-approved, versioned consumer
+contract. Private model internals and graphics encodings do not belong in this
+public page. A missing approved consumer version blocks Task 14A; it does not
+authorize a fallback renderer, approximate proof, or hand-edited benchmark
+report.
 
 ## Proof-boundary dataflow
 
@@ -2503,6 +2573,7 @@ consumers, or evolution differ from graph orchestration.
 | Proposal-only sampling | production L adoption and fields 10–15 native/Python-gated | all nine canonical L edges emit edge-owned deterministic runs, structural `{equidistant, no-site-closer}` verdicts, reporting clearance/guide radius, and `int64` offsets under repeat/reversal; arbitrary-pocket adoption remains pending |
 | Native fixed tuple fields 1–20 | production L implemented and native/Python-gated | one MAT build composes deterministic node reporting, fields 2–15, canonical two-record neck evidence, and per-record cut-union CSR; one Task 3 build adds field 19; field 20 seals the refinement-invariant exact branch and replays exactly. Radius `0.5` retains the ten-node/nine-edge/two-neck state; radius `1` yields the certified five-edge/no-neck transition |
 | Python fixed-tuple binding | implemented and strictly typed for the production L fixture | one six-argument call; one radius; literal 20-position tuple; exact ranks/dtypes/CSR, immutable proof bytes, reversal and repeat identity, refinement-invariant certificate, named input/sampling failures; Task 10 high-level wrapper pending |
+| Tri-dexel removal and thermal-response consumer | planned Task 14A | no integration evidence yet; the future consumer is an independent, content-addressed falsification/visualization lane with bounded circle replay and an explicitly uncalibrated thermal-response claim |
 
 ## Verification gates
 
@@ -2737,6 +2808,9 @@ Before accepting a MAT change, verify:
 11. Does every unsupported producer state fail with a named exception?
 12. Do the native gate, focused Python tests, existing toolpath regression tests, and
     strict MkDocs build pass?
+13. Does any tri-dexel result remain downstream evidence rather than proof
+    authority, with operation/prefix identity, circle-replay enclosure, stock
+    lattice, thermal maturity, and render provenance explicit?
 
 ## Authoritative references
 
