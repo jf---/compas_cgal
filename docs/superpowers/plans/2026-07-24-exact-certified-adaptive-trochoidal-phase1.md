@@ -1397,8 +1397,11 @@ edges, and no separating neck. Field 19 now builds Task 3's exact domain from
 the same canonical input and reproduces Python's 48,947-byte certificate,
 certificate digest, and center-domain digest exactly; canonical input reversal
 is identity-invariant. The encoder accepts the proof-owning domain rather than
-a caller-supplied certificate aggregate. The MAT certificate and public fixed
-tuple remain pending.
+a caller-supplied certificate aggregate. Field 20 now seals the exact graph,
+clearance profiles, dense integer projection, neck evidence/cuts, and field 19
+in a 124,796-byte CCAN certificate. Mutation, truncation, domain-digest
+mismatch, canonical input reversal, and sampling-refinement invariance are
+native-gated. The public fixed tuple remains pending.
 
 Bind:
 

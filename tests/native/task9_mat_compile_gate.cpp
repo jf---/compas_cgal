@@ -25,6 +25,7 @@ bool catalog_sampling_gate();
 bool mat_proposal_table_gate();
 bool mat_numeric_table_gate();
 bool domain_identity_gate();
+bool mat_certificate_gate();
 bool site_catalog_gate();
 bool catalog_delaunay_gate();
 bool catalog_voronoi_gate();
@@ -1820,6 +1821,7 @@ int main()
             && mat_proposal_table_gate()
             && mat_numeric_table_gate()
             && domain_identity_gate()
+            && mat_certificate_gate()
             && site_catalog_gate()
             && catalog_delaunay_gate()
             && catalog_voronoi_gate()
