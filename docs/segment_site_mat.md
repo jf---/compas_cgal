@@ -79,8 +79,10 @@ needed by every downstream traversal and engagement decision.
     bridges, rejects all five leaves as nonseparating vertex candidates, and
     returns exactly the graph degree for each of the five non-leaf vertex
     cuts. Exact clearance minima, squared neck width, and evidence ownership
-    are supplied independently below; final canonical `NeckEvidenceV1` bytes
-    remain pending.
+    are supplied independently below. Native canonical `NeckEvidenceV1`
+    records now bind all four exact location variants, their algebraic
+    identities, and their separating cuts into CCAN bytes with SHA-256
+    digests; exact replay rejects deletion, mutation, and reordering.
     A separate exact-clearance sidecar now consumes a canonical graph edge,
     validates its exact endpoint evidence and nonnegative rational
     `clearance²(t)` polynomial through degree four, isolates all
@@ -99,8 +101,9 @@ needed by every downstream traversal and engagement decision.
     On the production L graph it emits exactly two disjoint single-edge
     plateau records at exact `width² = 4`; complete location, owner, sites,
     algebraic width identity, and cut partitions survive input reversal.
-    Rectangle profile adoption and canonical public `NeckEvidenceV1`
-    serialization remain pending.
+    Canonical native record bytes and digests also survive reversal and replay
+    against either L input orientation. Rectangle profile adoption, public
+    evidence rows, and the Python validation boundary remain pending.
     A catalog-fed rectangle orchestration carries the same owner architecture
     through its complete bounded graph:
     one adaptor traversal emits five S–S edges and six canonical nodes,
@@ -110,9 +113,10 @@ needed by every downstream traversal and engagement decision.
     Repeated construction and canonical input reversal are record-identical
     inside the catalog namespace.
     General arbitrary-pocket traversal, arbitrary composite segment/segment
-    cells, center-domain digest integration, exact neck evidence, proposal
-    sampling, and the Python binding are not complete. The numeric table is a
-    native contract and is not yet a public Python API.
+    cells, center-domain digest integration, rectangle neck evidence,
+    proposal sampling, and the Python binding are not complete. The numeric
+    table and neck-record bytes are native contracts and are not yet public
+    Python APIs.
 
     Do not treat the current native spike APIs as the final public MAT API.
     The maturity table below is the claim boundary.
@@ -148,12 +152,12 @@ construction.
 | --- | --- | --- | --- |
 | Pocket geometry | incomplete | Segments and circular arcs; simply connected; machinability assumed after an `r + ε` transformation | Raw MAT primitives now clip exactly against polygonal domains with holes and exact radius clearance; the rectangle `C_r` graph is unified, but general arbitrary-pocket traversal is incomplete; circular boundaries are not supported |
 | MAT backend | stronger exact contract on bounded fixtures; incomplete end-to-end | Vroni/ArcVroni used end-to-end | Exact CGAL point graph plus catalog-fed rectangle and concave L-pocket graphs. The rectangle carries Task 3 identities through one indexed SDG build, swap-owned adaptor traversal, indexed endpoint binding, exact radius clipping, five edges, six feature-triple nodes, and explicit rejection of eight incident P–S rays. The L path authenticates all 23 raw duals, binds external point/open-segment endpoint events, rejects 12 incident feature transitions, proves its P–P ray and S2–S3 diagonal are outside the interior MAT, and emits a connected 10-node/9-edge tree with seven S–S lines and two P–S parabolas. Normalized-node inventory includes the exact four-feature `{P2, P4, S2, S3}` event without coordinate merging. Both graphs now project into one validated numeric topology/evidence table, but arbitrary-pocket traversal remains incomplete |
-| Replay identity | stronger contract; public binding incomplete | The published algorithm consumes its MAT and updates one ordered machined contour; no exact topology/provenance replay certificate is reported | Stable site, node, dual, algebraic-root, component, and coincident endpoint-event identities project once into deterministic integer rows. Exact identity dictionaries remain bound for the future MAT certificate; the Python API and certificate bytes are pending |
+| Replay identity | stronger contract; public binding incomplete | The published algorithm consumes its MAT and updates one ordered machined contour; no exact topology/provenance replay certificate is reported | Stable site, node, dual, algebraic-root, component, and coincident endpoint-event identities project once into deterministic integer rows. Four native `NeckEvidenceV1` variants now encode exact algebraic identities and separating cuts as canonical CCAN bytes with SHA-256 digests; exact replay rejects deletion, mutation, and ordering drift, and the production L records are input-reversal invariant. The complete MAT certificate and Python API remain pending |
 | Engagement limit | stronger contract; incomplete integration | Analytic circle construction followed by bisection until `θmax − 0.001 <= θ <= θmax` radians | Exact rational chord surrogate and event-exact segment/full-circle certification; integration incomplete |
 | Candidate spacing | incomplete | Bisection along the middle curve | Finite candidate lattice; no monotonic-feasibility assumption |
 | Machined state | stronger contract | Ordered contour of prior machining disks; transition sweeps omitted from that contour model | Exact stock mutation and exact full-sweep coverage, ordered certify-before-deplete |
-| Bottlenecks | stronger exact contract on the adopted L fixture; incomplete feature | Graph search, width, and heuristic cap reduction on first passage | A typed four-variant classifier composes exact profile minima with canonical separating cuts and deterministic ownership. The adopted L graph emits exactly two reversal-invariant single-edge plateau restrictions at exact `width² = 4`, not fabricated strict roots. Rectangle profiles, canonical public evidence bytes, typed passage state, and bound cap decision remain pending |
-| Validation | incomplete | Dense engagement sampling for result plots; complete path and runtime experiments | Fresh replay, mutation gates, artifact identity, and exact residual proof; planned |
+| Bottlenecks | stronger exact contract on the adopted L fixture; incomplete feature | Graph search, width, and heuristic cap reduction on first passage | A typed four-variant classifier composes exact profile minima with canonical separating cuts and deterministic ownership. The adopted L graph emits exactly two reversal-invariant, replay-verified single-edge plateau restrictions at exact `width² = 4`, not fabricated strict roots. Rectangle profiles, typed passage state, and the bound cap decision remain pending |
+| Validation | incomplete | Dense engagement sampling for result plots; complete path and runtime experiments | Exact neck-record replay and mutation gates are implemented; fresh end-to-end replay, complete artifact identity, and exact residual proof remain planned |
 | End-to-end evidence | weaker | Complete paths, figures, path-length gains, and 3–100 ms path-generation timings excluding Voronoi construction | Tasks 10–16 remain frozen; no complete path, Fig. 5 reproduction, or performance result yet |
 
 ### Performance claim boundary
@@ -211,10 +215,10 @@ complete graph-linear bottleneck implementation as a real current performance
 advantage.
 
 Two other clocks must remain separate. Five warm local Release executions of
-the current native Task 9 algebraic fixture suite took 3.57–3.62 s (3.60 s
-median), including exact public-table root/provenance revalidation and two
-complete production-L neck classifications. That is a contract gate rather
-than one pocket generation. The
+the current native Task 9 algebraic fixture suite took 3.61–3.66 s (3.62 s
+median), including exact public-table root/provenance revalidation, four
+complete production-L neck classifications/replays, and canonical evidence
+serialization. That is a contract gate rather than one pocket generation. The
 existing exact stock replay
 measured 87 s for the kite after a 7x end-to-end speedup; that run certifies and
 depletes every operation and is not comparable to Held and Pfeiffer's planner
@@ -2022,11 +2026,51 @@ sites, and at least two traversal-side partitions. Canonical input reversal
 preserves every field. No strict, clearance-endpoint, or shared-vertex record
 is fabricated on this fixture.
 
-The rectangle producer does not yet emit profiles. Canonical
-`NeckEvidenceV1` bytes, public evidence rows, and the Python validation
-boundary are also pending. A topologically separating edge remains only a
-possible neck until its production profile passes the applicable minimum
-proof.
+### Canonical `NeckEvidenceV1` records
+
+`exact_neck_evidence_v1` closes the native evidence boundary atomically. Its
+factory retains the validated typed `MatExactNeckEvidence2`, serializes one
+CCAN record, and computes the 32-byte SHA-256 digest over exactly those bytes.
+The digest is transport metadata and is not recursively embedded in the
+record it identifies.
+
+Each location is a distinct versioned tagged union:
+
+| Location | Canonical tag | Variant fields |
+| --- | --- | --- |
+| strict edge | `mat-neck-strict-edge-v1` | edge ID and exact parameter-root ID |
+| clearance endpoint | `mat-neck-clearance-endpoint-v1` | edge ID, node ID, exact parameter, provenance, event flags, and boundary features |
+| shared vertex | `mat-neck-shared-vertex-v1` | node ID and sorted minimizing-edge IDs |
+| plateau | `mat-neck-plateau-v1` | sorted node and edge IDs |
+
+Every variant also carries the deterministic owner, sorted defining-site IDs,
+exact squared-width root ID, and a versioned separating cut whose sorted
+partitions contain sorted edge IDs. The endpoint boundary-feature rows retain
+their domain kind, component, curve kind, source site or ring, and derived
+feature index as exact integers. No algebraic identity is parsed or converted
+to text during serialization.
+
+`verify_neck_evidence_v1` does not trust a supplied digest or decode a claimed
+record. It recomputes the typed exact evidence from the graph/profile bundle,
+serializes the canonical ordered records again, and requires byte-for-byte
+equality of count, order, and content. A deleted record, bit mutation, and
+swapped record order fail through `InvalidMatNeckEvidenceBytesError`. All four
+synthetic variants are gated, and the production L records replay against both
+canonical input orientations with identical bytes and digests.
+
+!!! warning "CCAN child records remain opaque byte payloads"
+
+    CCAN sequences, component maps, and tagged unions wrap each canonical
+    child record in a `B` node. Directly concatenating or structurally nesting
+    a child node produces different bytes even when every decoded value looks
+    equal. The native encoder is therefore compatibility-gated against the
+    existing cross-language `AlgebraicRootIdV1`; neck serialization embeds
+    those root bytes unchanged rather than parsing or rebuilding them.
+
+The rectangle producer does not yet emit profiles. Public evidence rows and
+the Python validation boundary are also pending. A topologically separating
+edge remains only a possible neck until its production profile passes the
+applicable minimum proof.
 
 This is why neck extraction belongs after exact graph normalization and before
 proposal sampling.
@@ -2068,6 +2112,8 @@ Refinement may change the number and position of samples. It must not change:
 | `segment_site_neck.h/.cpp` | canonical separating-cut index and partitions |
 | `segment_site_neck_clearance.*` | exact bounded clearance-profile validation, strict derivative minima, and algebraic squared-width evaluation |
 | `segment_site_neck_evidence.*` | graph-level four-variant ownership, exact node-width consistency, and cut attachment |
+| `canonical_encoding.*` | frozen native CCAN byte, integer, boolean, sequence, component-map, and tagged-union encoding |
+| `segment_site_neck_evidence_bytes.*` | canonical four-variant `NeckEvidenceV1` bytes, SHA-256 digests, and exact replay verification |
 | `segment_site_catalog_neck.*` | adopted catalog-graph clearance-profile reconstruction and graph/profile binding |
 | `segment_site_mat_sampling.*` | proposal-only samples |
 | `medial_axis_2.cpp` | nanobind adapter only |
@@ -2115,7 +2161,7 @@ consumers, or evolution differ from graph orchestration.
 | Neck separating-cut substrate | implemented and native-gated | one canonical reusable topology index; deterministic strict-edge, shared-vertex, and connected induced-plateau partitions; candidate-component scoping; named malformed/nonseparating failures; complete adopted L-tree cut classification |
 | Strict-edge clearance-minimum calculus | implemented and native-gated | exact bounded degree-four rational profiles; interval nonnegativity; relative-interior derivative roots and sign changes; algebraic `width² = 4 clearance²`; synthetic quadratic/quartic goldens; adopted L profiles contain no strict interior minimum |
 | Catalog-fed L clearance profiles | implemented and native-gated | one unchanged canonical graph build; one profile per retained edge; exact `2 constant + 5 quadratic + 2 quartic` decomposition; complete reversal identity; positive-radius clip endpoints re-evaluate to exact `width² = 4` |
-| Exact neck classification | native typed records implemented and gated; public V1 bytes pending | strict, clearance-endpoint, shared-vertex, and maximal plateau ownership; exact node-width consistency; independent cut attachment; adopted L emits exactly two reversal-invariant plateau records at `width² = 4` |
+| Exact neck classification | native typed records and canonical V1 bytes implemented and gated; Python binding pending | strict, clearance-endpoint, shared-vertex, and maximal plateau ownership; exact node-width consistency; independent cut attachment; canonical CCAN records and SHA-256 digests; deletion/mutation/order rejection by exact replay; adopted L emits exactly two byte-identical reversal-invariant plateau records at `width² = 4` |
 | Proposal-only sampling | pending | no production claim |
 | Python fixed-tuple binding | pending | no public API claim |
 
@@ -2174,8 +2220,8 @@ parallel S–S, raw nonparallel S–S algebra, exact external point- and
 open-segment-limited nonparallel endpoints, the bounded two-branch normalized
 fixture, and unified rectangle and exact L-fixture graphs. They do not
 establish general arbitrary-pocket traversal, arbitrary composite S–S cells,
-center-domain digest equality, exact neck evidence, proposal sampling, or the
-public Python binding. A separate
+center-domain digest equality, rectangle or arbitrary-pocket neck evidence,
+proposal sampling, or the public Python binding. A separate
 graph-emission contract retains an increasing algebraic interval, omits an
 equal-bound singleton, and raises `InvalidSegmentSiteGraphComponentError` for
 unbounded or reversed components. The node-site CSR gate separately locks the
@@ -2226,9 +2272,13 @@ independent cut attachment. Malformed endpoint-root provenance,
 variant-specific site cardinality, envelope ownership, and isolated nodes fail
 through named boundaries; strict minima on a cycle are filtered as
 nonseparating. Its production L golden requires exactly two disjoint
-single-edge plateau records at exact `width² = 4` and complete reversal
-identity. This does not yet establish rectangle profiles or canonical public
-`NeckEvidenceV1` bytes.
+single-edge plateau records at exact `width² = 4`. The canonical-byte gate
+cross-checks the native CCAN encoder against `AlgebraicRootIdV1`, covers all
+four versioned neck tags, verifies every digest, and rejects record deletion,
+a bit mutation, and record-order drift through exact replay. The production L
+records have byte-identical digests under canonical input reversal and replay
+against either orientation. This does not yet establish rectangle profiles,
+public evidence rows, or the Python validation boundary.
 The catalog-fed
 segment-Delaunay gate separately locks one-pass segment insertion, exact
 catalog/live-generator cardinality and identity, indexed lookup across two

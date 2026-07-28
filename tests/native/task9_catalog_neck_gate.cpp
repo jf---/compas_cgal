@@ -4,6 +4,7 @@
 #include "segment_site_catalog_graph.h"
 #include "segment_site_graph_csr.h"
 #include "segment_site_neck_evidence.h"
+#include "segment_site_neck_evidence_bytes.h"
 
 #include <algorithm>
 #include <array>
@@ -152,39 +153,49 @@ bool l_shape_profiles_are_reversal_invariant() {
 }
 
 bool l_shape_necks_are_two_exact_plateaus() {
-  const auto first = exact_neck_evidence(
+  const MatClearanceProfileGraph2 first_bundle =
       canonical_l_shape_mat_clearance_graph(l_shape_input(false),
-                                            CORE::BigRat(0)));
-  const auto reversed = exact_neck_evidence(
+                                            CORE::BigRat(0));
+  const MatClearanceProfileGraph2 reversed_bundle =
       canonical_l_shape_mat_clearance_graph(l_shape_input(true),
-                                            CORE::BigRat(0)));
+                                            CORE::BigRat(0));
+  const auto first = exact_neck_evidence_v1(first_bundle);
+  const auto reversed = exact_neck_evidence_v1(reversed_bundle);
   if (first.size() != 2 || reversed.size() != first.size()) {
     return false;
   }
   ExactAlgebraicKernel1 kernel;
+  std::vector<std::string> records;
   for (std::size_t index = 0; index < first.size(); ++index) {
+    const MatExactNeckEvidence2 &first_evidence = first[index].evidence();
+    const MatExactNeckEvidence2 &reversed_evidence = reversed[index].evidence();
     const auto *location =
-        std::get_if<MatPlateauNeckLocation2>(&first[index].location());
+        std::get_if<MatPlateauNeckLocation2>(&first_evidence.location());
     const auto *reversed_location =
-        std::get_if<MatPlateauNeckLocation2>(&reversed[index].location());
+        std::get_if<MatPlateauNeckLocation2>(&reversed_evidence.location());
     if (location == nullptr || reversed_location == nullptr ||
-        location->edge_ids().size() != 1 ||
-        location->node_ids().size() != 2 ||
-        first[index].owner_id() != reversed[index].owner_id() ||
-        first[index].defining_site_ids() !=
-            reversed[index].defining_site_ids() ||
-        first[index].squared_width().root_id() !=
-            reversed[index].squared_width().root_id() ||
-        kernel.compare_1_object()(first[index].squared_width().value(),
+        location->edge_ids().size() != 1 || location->node_ids().size() != 2 ||
+        first_evidence.owner_id() != reversed_evidence.owner_id() ||
+        first_evidence.defining_site_ids() !=
+            reversed_evidence.defining_site_ids() ||
+        first_evidence.squared_width().root_id() !=
+            reversed_evidence.squared_width().root_id() ||
+        kernel.compare_1_object()(first_evidence.squared_width().value(),
                                   CORE::BigRat(4)) != CGAL::EQUAL ||
-        first[index].separating_cut() != reversed[index].separating_cut() ||
+        first_evidence.separating_cut() != reversed_evidence.separating_cut() ||
         location->edge_ids() != reversed_location->edge_ids() ||
         location->node_ids() != reversed_location->node_ids() ||
-        first[index].separating_cut().edge_partitions().size() < 2) {
+        first_evidence.separating_cut().edge_partitions().size() < 2 ||
+        first[index].canonical_bytes() != reversed[index].canonical_bytes() ||
+        first[index].canonical_digest() != reversed[index].canonical_digest()) {
       return false;
     }
+    records.push_back(first[index].canonical_bytes());
   }
-  return true;
+  return verify_neck_evidence_v1(first_bundle, records).size() ==
+             first.size() &&
+         verify_neck_evidence_v1(reversed_bundle, records).size() ==
+             reversed.size();
 }
 
 bool malformed_profile_graph_is_rejected() {
