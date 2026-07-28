@@ -88,6 +88,8 @@ std::string stable_dual_identity_v1(
     const std::vector<std::string>& ordered_generator_ids);
 std::string stable_voronoi_node_identity_v1(
     const std::vector<std::string>& ordered_generator_ids);
+std::string stable_normalized_voronoi_node_identity_v1(
+    const std::vector<std::string>& ordered_generator_ids);
 std::string algebraic_root_identity_v1(
     const ExactAlgebraicKernel1::Algebraic_real_1& root);
 MatParameterEndpoint2 exact_graph_endpoint_binding(

@@ -233,6 +233,41 @@ std::string stable_voronoi_node_identity_v1(
     return identity;
 }
 
+std::string stable_normalized_voronoi_node_identity_v1(
+    const std::vector<std::string>& ordered_generator_ids)
+{
+    if (ordered_generator_ids.size() < 3) {
+        throw InvalidDualIdentityError(
+            "normalized Voronoi node identity requires at least three generators");
+    }
+    if (ordered_generator_ids.size() == 3) {
+        return stable_voronoi_node_identity_v1(
+            ordered_generator_ids);
+    }
+
+    std::string identity =
+        "normalized-voronoi-node/v1";
+    for (std::size_t index = 0;
+         index < ordered_generator_ids.size();
+         ++index) {
+        const std::string& generator_id =
+            ordered_generator_ids[index];
+        if (generator_id.empty()) {
+            throw InvalidDualIdentityError(
+                "normalized Voronoi node generator identity is empty");
+        }
+        if (index > 0
+            && generator_id
+                <= ordered_generator_ids[index - 1]) {
+            throw InvalidDualIdentityError(
+                "normalized Voronoi node generators are not strictly ordered");
+        }
+        identity += "/"
+            + length_framed(generator_id);
+    }
+    return identity;
+}
+
 MatParameterEndpoint2 exact_graph_endpoint_binding(
     const MatParameterEndpoint2& endpoint)
 {
