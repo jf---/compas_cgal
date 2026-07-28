@@ -1,5 +1,7 @@
 #include "segment_site_mat_numeric_table.h"
 
+#include "reachable_certificate_encoding_2.h"
+#include "reachable_domain_2.h"
 #include "segment_site_catalog.h"
 
 #include <algorithm>
@@ -130,6 +132,9 @@ canonical_l_shape_mat_numeric_table(const CanonicalReachInput2 &input,
                                     const MatStationSpacingMm2 &station_spacing,
                                     const MatSagittaBoundMm2 &max_sagitta,
                                     const std::size_t max_refinement_depth) {
+  const ReachableDomain2 reachable = ReachableDomain2::build(input);
+  const ReachableDomainCertificateIdentity2 domain_identity =
+      reachable_domain_certificate_identity(input, reachable);
   const MatToolRadiusMm2 tool_radius =
       MatToolRadiusMm2::build(input.binary64_radius);
   const MatProposalSamplingGraph2 sampled =
@@ -150,5 +155,6 @@ canonical_l_shape_mat_numeric_table(const CanonicalReachInput2 &input,
       necks.neck_evidence,
       necks.neck_cut_offsets,
       necks.neck_cut_edge_ids,
+      domain_identity.center_domain_digest(),
   };
 }

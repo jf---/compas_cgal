@@ -88,6 +88,13 @@ ReachableDomain2::ReachableDomain2(State state)
 {
 }
 
+ReachableDomain2 ReachableDomain2::build(
+    CanonicalReachInput2 input)
+{
+    return ReachableDomain2(
+        build_state(std::move(input)));
+}
+
 ReachableDomain2::State ReachableDomain2::build_state(
     Eigen::Ref<const compas::RowMatrixXd> design_boundary,
     const std::vector<compas::RowMatrixXd>& holes,
@@ -98,6 +105,13 @@ ReachableDomain2::State ReachableDomain2::build_state(
             design_boundary,
             holes,
             tool_radius);
+    return build_state(
+        std::move(input));
+}
+
+ReachableDomain2::State ReachableDomain2::build_state(
+    CanonicalReachInput2 input)
+{
     ReachableArrangement2 selected =
         build_reachable_arrangement(std::move(input));
     ++selected.audit.geometry_passes;

@@ -1,6 +1,8 @@
 #include "canonical_encoding.h"
 
 #include <algorithm>
+#include <bit>
+#include <cmath>
 #include <cstdint>
 #include <iterator>
 #include <limits>
@@ -61,6 +63,23 @@ std::string canonical_encode_integer(const ExactAlgebraicInteger1 &value) {
     payload.push_back(static_cast<char>(byte));
   }
   return canonical_node('I', payload);
+}
+
+std::string canonical_encode_binary64(double value) {
+  if (!std::isfinite(value)) {
+    throw InvalidCanonicalEncodingError(
+        "canonical binary64 value must be finite");
+  }
+  if (value == 0.0) {
+    value = 0.0;
+  }
+  const std::uint64_t bits = std::bit_cast<std::uint64_t>(value);
+  std::string payload;
+  payload.reserve(sizeof(bits));
+  for (int shift = 56; shift >= 0; shift -= 8) {
+    payload.push_back(static_cast<char>((bits >> shift) & 0xffU));
+  }
+  return canonical_node('D', payload);
 }
 
 namespace {

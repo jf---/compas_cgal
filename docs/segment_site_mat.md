@@ -98,7 +98,9 @@ needed by every downstream traversal and engagement decision.
     verdicts, exact tool-radius binding, reporting clearance, and MATHSM guide
     radius. A one-build numeric compositor now adds deterministic node
     reporting coordinates, canonical neck bytes, and neck cut-edge CSR for
-    native fields 1 and 16–18.
+    native fields 1 and 16–18. Field 19 now rebuilds Task 3's exact reachable
+    domain from the same canonical input and reproduces the Python
+    `ReachableDomainCertificate` CCAN bytes and center-domain digest exactly.
     A separate exact-clearance sidecar now consumes a canonical graph edge,
     validates its exact endpoint evidence and nonnegative rational
     `clearance²(t)` polynomial through degree four, isolates all
@@ -168,7 +170,7 @@ construction.
 | --- | --- | --- | --- |
 | Pocket geometry | incomplete | Segments and circular arcs; simply connected; machinability assumed after an `r + ε` transformation | Raw MAT primitives now clip exactly against polygonal domains with holes and exact radius clearance; the rectangle `C_r` graph is unified, but general arbitrary-pocket traversal is incomplete; circular boundaries are not supported |
 | MAT backend | stronger exact contract on bounded fixtures; incomplete end-to-end | Vroni/ArcVroni used end-to-end | Exact CGAL point graph plus catalog-fed rectangle and concave L-pocket graphs. The rectangle carries Task 3 identities through one indexed SDG build, swap-owned adaptor traversal, indexed endpoint binding, exact radius clipping, five edges, six feature-triple nodes, and explicit rejection of eight incident P–S rays. The L path authenticates all 23 raw duals, binds external point/open-segment endpoint events, rejects 12 incident feature transitions, proves its P–P ray and S2–S3 diagonal are outside the interior MAT, and emits a connected 10-node/9-edge tree with seven S–S lines and two P–S parabolas. Normalized-node inventory includes the exact four-feature `{P2, P4, S2, S3}` event without coordinate merging. Both graphs now project into one validated numeric topology/evidence table, but arbitrary-pocket traversal remains incomplete |
-| Replay identity | stronger contract; public binding incomplete | The published algorithm consumes its MAT and updates one ordered machined contour; no exact topology/provenance replay certificate is reported | Stable site, node, dual, algebraic-root, component, and coincident endpoint-event identities project once into deterministic integer rows. Four native `NeckEvidenceV1` variants now encode exact algebraic identities and separating cuts as canonical CCAN bytes with SHA-256 digests; exact replay rejects deletion, mutation, and ordering drift, and the production L records are input-reversal invariant. The complete MAT certificate and Python API remain pending |
+| Replay identity | stronger contract; public binding incomplete | The published algorithm consumes its MAT and updates one ordered machined contour; no exact topology/provenance replay certificate is reported | Stable site, node, dual, algebraic-root, component, and coincident endpoint-event identities project once into deterministic integer rows. Four native `NeckEvidenceV1` variants encode exact algebraic identities and separating cuts as canonical CCAN bytes with SHA-256 digests; exact replay rejects deletion, mutation, and ordering drift. Field 19 now reproduces Task 3's Python certificate bytes and center-domain digest exactly, so the MAT and `C_r` share one radius-bound domain identity. The complete MAT certificate and Python API remain pending |
 | Engagement limit | stronger contract; incomplete integration | Analytic circle construction followed by bisection until `θmax − 0.001 <= θ <= θmax` radians | Exact rational chord surrogate and event-exact segment/full-circle certification; integration incomplete |
 | Candidate spacing | stronger bounded-fixture contract; incomplete integration | Bisection along the middle curve | All nine adopted L edges now emit exact-identity line/parabola stations with independent reporting-only spacing and sagitta refinement, deterministic CSR offsets, structural equidistant/no-site-closer verdicts, reporting clearance, and MATHSM guide radius. Arbitrary-pocket adoption and the finite engagement-candidate lattice remain pending |
 | Machined state | stronger contract | Ordered contour of prior machining disks; transition sweeps omitted from that contour model | Exact stock mutation and exact full-sweep coverage, ordered certify-before-deplete |
@@ -2270,6 +2272,36 @@ record's certified traversal-side edge partitions, mapped to canonical numeric
 edge rows. The bytes retain the exact partition boundaries; the numeric union
 is a fast membership projection and does not replace the certificate.
 
+### Field 19 reuses Task 3 identity
+
+`ReachableDomain2::build(CanonicalReachInput2)` is an additive factory for
+consumers that already own canonical rings and radius. It preserves the raw
+matrix constructor while avoiding a second input-normalization pass. The MAT
+compositor builds the exact Task 3 domain once, then
+`reachable_domain_certificate_identity(...)` encodes the proof-owning domain
+with the same frozen CCAN grammar as Python:
+
+- big-endian finite binary64 with signed zero normalized;
+- canonical world-XY points, outer ring, sorted hole rings, and polygon;
+- exact source, arrangement-vertex, selected-cell, and component records;
+- all three Task 3 proof verdicts and its strategy version;
+- SHA-256 certificate and `exact-region-center-domain-v1` identities.
+
+The radius-`0.5` L golden is cross-language locked to 48,947 certificate bytes,
+certificate digest
+`77b7b15003f2d5de9fbee7a495d4d49004d958a58d10a9c73a9265e3a98d5874`,
+and center-domain digest
+`98aaa87a6fdc0589ef364e7ae3edad561208ff8d4245b340d616c63878be12de`.
+Canonical input reversal preserves all three.
+
+!!! warning "Proof ownership precedes identity encoding"
+
+    The identity encoder accepts `ReachableDomain2`, not a public
+    `ReachableDomainCertificate2` aggregate. Sorted, nonempty record vectors
+    establish a valid shape but cannot prove that no exact record was deleted.
+    Only Task 3's exact domain builder owns that authority; replay must rebuild
+    it and compare the resulting digest.
+
 !!! warning "Tool radius can change topology at the neck threshold"
 
     The L fixture's narrow passage has exact width `2`. With tool radius
@@ -2318,8 +2350,9 @@ also gated. Certificate bytes and the Python binding remain pending.
 | `segment_site_mat_sampling.*` | typed world-XY proposal policy, exact station identities, rational curve refinement, and edge-owned sampling runs |
 | `segment_site_catalog_sampling.*` | canonical L chart recovery, exact branch rebinding, production run adoption, and flattened sample offsets |
 | `segment_site_mat_proposal_table.*` | sealed sample verdict projection, exact tool-radius binding, and numeric fixed-tuple fields 10–15 |
-| `segment_site_mat_numeric_table.*` | one-build node reporting, proposal-table composition, canonical neck bytes, and cut-union CSR for fields 1–18 |
-| `canonical_encoding.*` | frozen native CCAN byte, integer, rational, boolean, sequence, component-map, and tagged-union encoding plus canonical rational decoding |
+| `segment_site_mat_numeric_table.*` | one MAT build plus one Task 3 domain build, node reporting, proposal-table composition, canonical neck bytes, cut-union CSR, and fields 1–19 |
+| `reachable_certificate_encoding_2.*` | proof-owned cross-language Task 3 certificate bytes, certificate digest, and center-domain digest |
+| `canonical_encoding.*` | frozen native CCAN byte, integer, binary64, rational, boolean, sequence, component-map, and tagged-union encoding plus canonical rational decoding |
 | `segment_site_neck_evidence_bytes.*` | canonical four-variant `NeckEvidenceV1` bytes, SHA-256 digests, and exact replay verification |
 | `segment_site_neck_classification.*` | canonical rational-boundary validation, exact algebraic width classes, and comparison-certificate bytes |
 | `segment_site_catalog_neck.*` | adopted catalog-graph clearance-profile reconstruction and graph/profile binding |
@@ -2371,7 +2404,7 @@ consumers, or evolution differ from graph orchestration.
 | Exact neck classification | native typed records and canonical V1 bytes implemented and gated; Python binding pending | strict, clearance-endpoint, shared-vertex, and maximal plateau ownership; exact node-width consistency; independent cut attachment; canonical CCAN records and SHA-256 digests; deletion/mutation/order rejection by exact replay; adopted L emits exactly two byte-identical reversal-invariant plateau records at `width² = 4` |
 | Exact neck width classes | native implemented and gated; Python binding pending | cross-language `ExactRationalV1` decoding; nonnegative strictly increasing boundaries; exact algebraic comparisons; right-closed restrictive equality; evidence-digest-bound comparison certificates; both production L plateaus classify as `0` at boundary `4` with reversal-identical certificates |
 | Proposal-only sampling | native substrate, production L adoption, and fields 10–15 implemented and gated; public binding pending | all nine canonical L edges emit edge-owned deterministic runs, structural `{equidistant, no-site-closer}` verdicts, reporting clearance/guide radius, and `int64` offsets under repeat/reversal; no arbitrary-pocket or public API claim |
-| Native fixed tuple fields 1–18 | production L implemented and gated; fields 19–20/public binding pending | one MAT build composes deterministic node reporting, fields 2–15, canonical two-record neck evidence, and per-record cut-union CSR at radius `0.5`; radius `1` exact-threshold golden yields the certified five-edge/no-neck transition |
+| Native fixed tuple fields 1–19 | production L implemented and gated; field 20/public binding pending | one MAT build composes deterministic node reporting, fields 2–15, canonical two-record neck evidence, and per-record cut-union CSR; one Task 3 build adds the cross-language center-domain digest. Radius `0.5` retains the ten-node/nine-edge/two-neck state; radius `1` yields the certified five-edge/no-neck transition |
 | Python fixed-tuple binding | pending | no public API claim |
 
 ## Verification gates
