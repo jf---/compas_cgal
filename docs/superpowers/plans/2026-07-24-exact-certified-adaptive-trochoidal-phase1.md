@@ -2081,8 +2081,30 @@ Commit: `feat(adaptive): add atomic candidate commit`
 assignment from global separating-cut traversal and produces the terminal
 state consumed by Task 11A-S.
 
+**Design:** [`2026-07-28-causal-mat-traversal-design.md`](../specs/2026-07-28-causal-mat-traversal-design.md)
+binds the additive exact neck-topology projection, directed global cursor
+state, three-or-more-side causality, entry bootstrap, branch-switch
+transactions, finite search, terminal coverage, replay, and structural
+performance contract.
+
+**Implementation plan:** [`2026-07-28-causal-mat-traversal.md`](2026-07-28-causal-mat-traversal.md)
+divides the stage into exact topology projection, global traversal,
+bidirectional spans, launch, continuation, terminal replay, and publication
+gates.
+
+**Status (2026-07-28): interface audit and written design complete; RED
+implementation pending.** Native evidence retains every exact cut partition,
+but the current 20-field projection exposes only their union. The two
+production L-pocket plateau necks each have three certified sides.
+`GenerationState` must remain the physical accepted boundary while a separate
+global traversal value owns all edge cursors and side history. The first circle
+also requires a distinct precleared-entry transaction; later candidates retain
+Task 12's joint link/circle transaction.
+
 **Files**
 
+- Modify: native MAT bundle/binding and typed neck projection
+- Create: `src/compas_cgal/adaptive/bootstrap.py`
 - Create: `src/compas_cgal/adaptive/traversal.py`
 - Create: `src/compas_cgal/adaptive/generator.py`
 - Test: `tests/adaptive/test_traversal.py`
