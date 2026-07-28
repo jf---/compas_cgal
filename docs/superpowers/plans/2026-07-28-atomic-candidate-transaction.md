@@ -152,7 +152,7 @@ Expected: state tests pass; evaluator tests remain RED.
 - Produces: `CandidateTransaction`, `CandidateEvaluator.evaluate()`,
   `CandidateEvaluator.commit()`, and `select_candidate_transaction()`.
 
-- [ ] **Step 1: Add real L-pocket fixture**
+- [x] **Step 1: Add real L-pocket fixture**
 
 Build the exact L-pocket reachable domain, qualified entry, candidate lattice,
 first accepted circle, stock/coverage lineage, traversal cursor, and neck
@@ -160,7 +160,7 @@ passages. Return a frozen test fixture whose first and second candidates are
 fixed by exact progress, guide radius, phase, generator site, and cursor
 identity.
 
-- [ ] **Step 2: Add RED atomicity tests**
+- [x] **Step 2: Add RED atomicity tests**
 
 Add:
 
@@ -180,7 +180,7 @@ Also add link-cap failure, unresolved-circle propagation, real gouge failure,
 deterministic accepted evidence, and proof that evaluation changes neither
 stock nor coverage lineage.
 
-- [ ] **Step 3: Add RED chronology-mutation tests**
+- [x] **Step 3: Add RED chronology-mutation tests**
 
 Construct a valid transaction, then use `dataclasses.replace` to:
 
@@ -192,14 +192,14 @@ Construct a valid transaction, then use `dataclasses.replace` to:
 
 Each mutation must raise its exact Task 12 integrity error.
 
-- [ ] **Step 4: Add RED commit and selection tests**
+- [x] **Step 4: Add RED commit and selection tests**
 
 Prove a successful commit returns a new state while preserving the parent,
 changes stock and coverage together, appends link then circle, advances phase
 and cursor, advances an oriented passage only at commit, rejects stale parent
 state, and selects the same winner for every permutation.
 
-- [ ] **Step 5: Run RED**
+- [x] **Step 5: Run RED**
 
 Run:
 
@@ -228,13 +228,15 @@ stay GREEN.
   result_state_digest: IdentityDigest) -> CandidateTransaction`
 - `CandidateEvaluator.build(*, reachable_domain: ReachableDomain,
   tool_radius: ToolRadius, user_cap: EngagementCap,
-  neck_policy: NeckPolicy, depletion_policy: DepletionPolicy, cut_z: CutZ,
+  candidate_policy: CandidatePolicy, neck_policy: NeckPolicy,
+  depletion_policy: DepletionPolicy,
+  cut_direction_policy: CutDirectionPolicy, cut_z: CutZ,
   material_side: MaterialSide) -> CandidateEvaluator`
 - `CandidateEvaluator.evaluate(state, candidate) -> CandidateTransaction`
 - `CandidateEvaluator.commit(state, transaction) -> GenerationState`
 - `select_candidate_transaction(transactions) -> CandidateTransaction`
 
-- [ ] **Step 1: Implement immutable transaction evidence**
+- [x] **Step 1: Implement immutable transaction evidence**
 
 Create frozen `CandidateTransaction` with
 `parent_state_digest: IdentityDigest`, `candidate: MiddleCurveCandidate`,
@@ -251,7 +253,7 @@ candidate scope/cap/traversal, direct phase continuity, depletion parent
 lineage, coverage parent lineage, certify-before-deplete lineage, and result
 state identity.
 
-- [ ] **Step 2: Implement one isolated trial**
+- [x] **Step 2: Implement one isolated trial**
 
 Private
 `_evaluate_trial(state: GenerationState, candidate: MiddleCurveCandidate)`
@@ -271,20 +273,20 @@ containment -> event certification -> depletion -> coverage
 
 It then builds the next state and transaction from the complete witnesses.
 
-- [ ] **Step 3: Implement public evaluation and commit**
+- [x] **Step 3: Implement public evaluation and commit**
 
 `evaluate()` returns the first element of `_evaluate_trial()` and discards the
 isolated next-state owner. `commit()` rejects a parent-digest mismatch before
 native work, reruns `_evaluate_trial()`, requires byte-identical transaction
 evidence, and returns the recomputed next state. It never mutates its input.
 
-- [ ] **Step 4: Implement pure winner selection**
+- [x] **Step 4: Implement pure winner selection**
 
 Require a nonempty tuple, one parent digest, one candidate policy, and unique
 transaction digests. Call `CandidatePolicy.order_candidates()` with each
 transaction's `candidate.order_key` and return the first result.
 
-- [ ] **Step 5: Run GREEN**
+- [x] **Step 5: Run GREEN**
 
 Run:
 
@@ -312,19 +314,19 @@ Expected: all Task 12 contracts pass.
 - Produces: contemporaneous developer explanation, Held–Pfeiffer comparison
   update, task status, insight log, and published commit.
 
-- [ ] **Step 1: Document verified contracts**
+- [x] **Step 1: Document verified contracts**
 
 Explain joint link/circle atomicity, isolated losing candidates, independent
 winner replay, stale-parent rejection, exact chronology, and the remaining
 Task 13 causal-scope/traversal boundary. Update comparison-table maturity
 without claiming a complete generator or matched performance result.
 
-- [ ] **Step 2: Mark this plan accurately**
+- [x] **Step 2: Mark this plan accurately**
 
 Change only completed checklist boxes to `[x]`; leave any incomplete
 acceptance gate open.
 
-- [ ] **Step 3: Run complete bounded verification**
+- [x] **Step 3: Run complete bounded verification**
 
 Run:
 

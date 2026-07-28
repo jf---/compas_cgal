@@ -35,12 +35,14 @@ another.
 ## Evaluation
 
 `CandidateEvaluator` is short-lived and owns only invariant evaluation inputs:
-reachable-domain containment authority, tool radius, user cap, neck policy,
-depletion policy, cut depth, and material side.
+reachable-domain containment authority, tool radius, user cap, candidate
+policy, neck policy, depletion policy, cut-direction policy, cut depth, and
+material side.
 
 For each candidate it:
 
-1. validates that the candidate advances the state's exact active cursor;
+1. validates candidate-policy identity, material-side/cut-direction
+   orientation, parent depletion/cap policy, and exact active cursor;
 2. independently reconstructs the full or oriented-neck effective cap;
 3. constructs the direct segment from the current phase point to the candidate
    circle phase;
@@ -55,6 +57,10 @@ For each candidate it:
 
 The certify-before-deplete order is structural. Each motion witness must bind
 the exact stock lineage visible immediately before its own depletion.
+`GenerationState` separately proves every historical link is paired with its
+following circle by scope, cap decision, and held/advanced cursor identity.
+The evaluator then proves that history is compatible with the invariant
+policies before extending it.
 
 ## Commit
 

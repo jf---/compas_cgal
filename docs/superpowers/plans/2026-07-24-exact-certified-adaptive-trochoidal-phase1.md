@@ -1812,8 +1812,9 @@ only after one unique finite-lattice circle matches; its paired link carries the
 same decision without advancing it. The real first passage reaches
 `MotionCertifier` at `90 degrees`, while the legal second transition's selected
 circle is correctly rejected at its `80 degrees` cap. An equal-cap two-passage
-fixture isolates state chronology from candidate feasibility. Task 12 must
-select another motion; replay does not weaken the cap.
+fixture isolates state chronology from candidate feasibility. Task 12 now
+rejects that joint trial without mutation; Task 13 must select another motion.
+Replay does not weaken the cap.
 
 Ordered-evidence capture exposed a serialization boundary: `MotionWitness` was
 immutable but had no canonical record of its own, so replay or artifact
@@ -2014,6 +2015,13 @@ chronology contracts.
 **Design:** [`2026-07-28-atomic-candidate-transaction-design.md`](../specs/2026-07-28-atomic-candidate-transaction-design.md)
 binds state ownership, exact evaluation chronology, immutable evidence,
 winner replay at commit, named failures, and deterministic selection.
+
+**Status (2026-07-28): implemented and focused-gated.** `GenerationState`,
+`CandidateEvaluator`, `CandidateTransaction`, and pure winner selection pass
+29 L-pocket contracts; the complete adaptive suite passes all 468 tests.
+State construction replays complete passage history, link/circle pairing, and
+qualified cut-depth continuity; evaluation binds candidate, depletion, cap,
+and cut-direction policies. Task 13 is now the critical path.
 
 **Files**
 
