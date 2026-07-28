@@ -94,7 +94,7 @@ plugins:
             docstring_options:
               ignore_init_summary: true
               trim_doctest_flags: true
-            docstring_style: numpy
+            docstring_style: google
             docstring_section_style: table
             filters: public
             group_by_category: true
@@ -165,10 +165,12 @@ nav:
   - Design Notes:
       - Exact-Kernel Discipline: exactness.md
       - Exact Segment-Site MAT: segment_site_mat.md
+      - Exact Continuous Engagement: continuous_engagement.md
       - Trochoid Chain Stitching: toolpath_trochoid_chain_design.md
       - Tangent Continuity: toolpath_tangent_continuity.md
       - CGAL Primitives Critique: critique_toolpath_cgal_primitives.md
   - API Reference:
+      - compas_cgal.adaptive.motion_certificate: api/compas_cgal.adaptive.motion_certificate.md
       - compas_cgal.booleans: api/compas_cgal.booleans.md
       - compas_cgal.geodesics: api/compas_cgal.geodesics.md
       - compas_cgal.intersections: api/compas_cgal.intersections.md
