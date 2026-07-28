@@ -208,3 +208,23 @@ class InvalidCoverageSweepError(ValueError):
 
 class IncompletePocketCoverageError(RuntimeError):
     """Exact reachable material remains after the owned sweep lineage."""
+
+
+class InvalidGenerationStateError(ValueError):
+    """An authoritative generation snapshot violates cross-owner chronology."""
+
+
+class CandidateStateMismatchError(ValueError):
+    """A candidate transition does not begin at the authoritative state."""
+
+
+class InvalidCandidateTransactionError(ValueError):
+    """Accepted candidate evidence is malformed, cross-wired, or reordered."""
+
+
+class StaleCandidateTransactionError(RuntimeError):
+    """A transaction parent digest no longer names authoritative state."""
+
+
+class CandidateSelectionError(ValueError):
+    """Accepted transactions cannot form one deterministic winner set."""
