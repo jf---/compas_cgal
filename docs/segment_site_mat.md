@@ -88,9 +88,13 @@ needed by every downstream traversal and engagement decision.
     negative-to-positive sign changes. Exact squared width is evaluated as
     `4 clearance²` through a bivariate algebraic solve. Quadratic and quartic
     goldens include two irrational critical parameters with the same rational
-    width. This calculus is not yet populated by the adopted pocket producers,
-    and endpoint, shared-vertex, plateau, ownership, and final evidence
-    assembly remain pending.
+    width. A new catalog-fed L bundle now returns the unchanged canonical graph
+    plus one such profile per retained edge from one graph build. Its exact
+    profile decomposition is two constants, five quadratics, and two quartics
+    at `r² = 0`; input reversal preserves every coefficient and endpoint, and
+    positive-radius clearance endpoints re-evaluate to `width² = 4`.
+    Rectangle adoption, endpoint/shared-vertex/plateau classification,
+    ownership, cut attachment, and final evidence assembly remain pending.
     A catalog-fed rectangle orchestration carries the same owner architecture
     through its complete bounded graph:
     one adaptor traversal emits five S–S edges and six canonical nodes,
@@ -142,7 +146,7 @@ construction.
 | Engagement limit | stronger contract; incomplete integration | Analytic circle construction followed by bisection until `θmax − 0.001 <= θ <= θmax` radians | Exact rational chord surrogate and event-exact segment/full-circle certification; integration incomplete |
 | Candidate spacing | incomplete | Bisection along the middle curve | Finite candidate lattice; no monotonic-feasibility assumption |
 | Machined state | stronger contract | Ordered contour of prior machining disks; transition sweeps omitted from that contour model | Exact stock mutation and exact full-sweep coverage, ordered certify-before-deplete |
-| Bottlenecks | stronger proof substrate; incomplete feature | Graph search, width, and heuristic cap reduction on first passage | Canonical strict-edge, shared-vertex, and induced-plateau cuts emit deterministic traversal-side partitions and reject nonseparating candidates on synthetic and adopted L graphs. A synthetic exact profile gate also proves interior derivative sign changes and algebraic squared width. Production edges do not yet carry those profiles; endpoint/shared/plateau minima, evidence ownership, typed passage state, and bound cap decision remain pending |
+| Bottlenecks | stronger proof substrate; incomplete feature | Graph search, width, and heuristic cap reduction on first passage | Canonical strict-edge, shared-vertex, and induced-plateau cuts emit deterministic traversal-side partitions and reject nonseparating candidates. The adopted L graph now carries exact base-clearance profiles and algebraic squared-width evaluation; its two arm restrictions are constant plateaus rather than strict interior roots. Rectangle profiles, endpoint/shared/plateau evidence ownership, typed passage state, and bound cap decision remain pending |
 | Validation | incomplete | Dense engagement sampling for result plots; complete path and runtime experiments | Fresh replay, mutation gates, artifact identity, and exact residual proof; planned |
 | End-to-end evidence | weaker | Complete paths, figures, path-length gains, and 3–100 ms path-generation timings excluding Voronoi construction | Tasks 10–16 remain frozen; no complete path, Fig. 5 reproduction, or performance result yet |
 
@@ -201,7 +205,7 @@ complete graph-linear bottleneck implementation as a real current performance
 advantage.
 
 Two other clocks must remain separate. Five warm local Release executions of
-the current native Task 9 algebraic fixture suite took 2.66–2.77 s (2.67 s
+the current native Task 9 algebraic fixture suite took 3.35–3.39 s (3.36 s
 median), including exact public-table root/provenance revalidation, but that is
 a contract gate rather than one pocket generation. The
 existing exact stock replay
@@ -1927,13 +1931,52 @@ and incomplete endpoint evidence fail through named errors.
     original coefficient sign for endpoint and cell-sign tests. Only the
     separate zero-set polynomial is canonicalized for root isolation.
 
-The adopted rectangle and L producers do **not** yet emit these profiles, so
-this stage does not claim a production strict-edge neck. One-sided clearance
-endpoints, equal incident minima at a shared node, maximal constant-clearance
-plateaus, deterministic owner selection, cut attachment, and final public
-evidence rows are also pending. A topologically separating edge remains only a
-possible neck until its production clearance profile passes this independent
-calculus.
+### The adopted L graph now carries exact profiles
+
+`canonical_l_shape_mat_clearance_graph` is an additive production path beside
+the established graph API. It invokes the proven L graph producer once, then
+resolves every final edge's two defining sites through the canonical sorted
+site table:
+
+- parallel S–S edges reconstruct their constant support distance and recheck
+  its zero/negative radius-boundary signs through the existing clip contract;
+- nonparallel S–S edges use the already-proved canonical
+  `n₂ det(n₁,n₂)² t²` clearance law;
+- P–S edges reconstruct the rational source-parabola coordinates, square the
+  distance to the focus, and require its primitive integer polynomial to equal
+  the existing clipping boundary at `r² = 0`.
+
+No opaque identity is parsed, and no second Delaunay/Voronoi graph is built.
+The resulting `MatClearanceProfileGraph2` requires exactly one profile per
+canonical edge, in the same strict order, with identical defining sites and
+complete endpoint records. The L golden at `r² = 0` is exactly:
+
+| Profile kind | Count | Exact base function |
+| --- | ---: | --- |
+| Parallel S–S | 2 | `clearance²(t) = 1` |
+| Nonparallel S–S | 5 | `clearance²(t) = t²` |
+| P–S | 2 | rational quartic |
+
+Complete graph-table bytes remain equal to the existing producer. Canonical
+input reversal preserves all nine profile functions and endpoint records. At
+`r² = 1`, every emitted clearance-root endpoint independently evaluates
+through its base profile to exact `width² = 4`.
+
+!!! note "The L restriction is not a strict-edge minimum"
+
+    None of the nine `r² = 0` L profiles has a negative-to-positive derivative
+    change in its relative interior. The two arm restrictions are
+    constant-clearance edges, and other candidate minima meet graph endpoints.
+    A strict-root-only extractor would therefore report no neck on precisely
+    the fixture intended to exercise a narrow passage. Plateau and
+    shared-vertex evidence are required semantics, not degenerate cleanup.
+
+The rectangle producer does not yet emit profiles. One-sided clearance
+endpoints, equal incident minima at a shared node, maximal connected
+constant-clearance plateaus, deterministic owner selection, cut attachment,
+and final public evidence rows are also pending. A topologically separating
+edge remains only a possible neck until its production profile passes the
+applicable minimum proof.
 
 This is why neck extraction belongs after exact graph normalization and before
 proposal sampling.
@@ -1974,6 +2017,7 @@ Refinement may change the number and position of samples. It must not change:
 | `segment_site_mat.*` | canonical graph records, general graph primitives, and independently validated bounded comparators |
 | `segment_site_neck.h/.cpp` | canonical separating-cut index and partitions |
 | `segment_site_neck_clearance.*` | exact bounded clearance-profile validation, strict derivative minima, and algebraic squared-width evaluation |
+| `segment_site_catalog_neck.*` | adopted catalog-graph clearance-profile reconstruction and graph/profile binding |
 | `segment_site_mat_sampling.*` | proposal-only samples |
 | `medial_axis_2.cpp` | nanobind adapter only |
 
@@ -2018,7 +2062,8 @@ consumers, or evolution differ from graph orchestration.
 | Numeric node-site catalog mapping | implemented and native-gated | catalog-bound graph identities map once to `int64` rows; unknown identities fail loud; both adopted fixture graphs consume the projection |
 | Endpoint-feature CSR and public numeric table | native table implemented and gated; Python binding pending | fixed tuple fields 2–9 project from exact graph/catalog records; independent three-bit endpoint events, five-column feature CSR, reverse identity dictionaries, exact rectangle coincidence/positive-radius goldens, and complete L reversal identity; no final MAT certificate or public API claim |
 | Neck separating-cut substrate | implemented and native-gated | one canonical reusable topology index; deterministic strict-edge, shared-vertex, and connected induced-plateau partitions; candidate-component scoping; named malformed/nonseparating failures; complete adopted L-tree cut classification |
-| Strict-edge clearance-minimum calculus | implemented and native-gated substrate | exact bounded degree-four rational profiles; interval nonnegativity; relative-interior derivative roots and sign changes; algebraic `width² = 4 clearance²`; synthetic quadratic/quartic goldens; pocket-producer adoption pending |
+| Strict-edge clearance-minimum calculus | implemented and native-gated | exact bounded degree-four rational profiles; interval nonnegativity; relative-interior derivative roots and sign changes; algebraic `width² = 4 clearance²`; synthetic quadratic/quartic goldens; adopted L profiles contain no strict interior minimum |
+| Catalog-fed L clearance profiles | implemented and native-gated | one unchanged canonical graph build; one profile per retained edge; exact `2 constant + 5 quadratic + 2 quartic` decomposition; complete reversal identity; positive-radius clip endpoints re-evaluate to exact `width² = 4` |
 | Exact neck evidence | pending | no production claim |
 | Proposal-only sampling | pending | no production claim |
 | Python fixed-tuple binding | pending | no public API claim |
@@ -2115,7 +2160,15 @@ stationary-maximum profiles emit no strict minima. Empty/degree-five/negative
 functions—including a negative-leading case that zero-set canonicalization
 would sign-flip—unbounded or reversed intervals, malformed edge/site identity,
 and missing endpoint evidence fail through distinct named boundaries. This
-gate does not prove that an adopted pocket producer emits the tested profile.
+gate independently defines the calculus consumed by production profiles.
+The catalog-neck gate then requires the adopted L bundle's graph table to
+remain identical to the existing producer, locks one ordered profile per edge
+and the exact `2 constant + 5 quadratic + 2 quartic` decomposition, and proves
+that no profile has a relative-interior strict minimum. Complete profile
+records survive canonical input reversal. The `r² = 1` gate re-evaluates every
+clearance-root endpoint to exact `width² = 4`; missing, reordered, or
+noncanonical graph/profile rows fail loudly. This does not yet establish
+rectangle profiles or any endpoint/shared/plateau evidence record.
 The catalog-fed
 segment-Delaunay gate separately locks one-pass segment insertion, exact
 catalog/live-generator cardinality and identity, indexed lookup across two
