@@ -1,5 +1,6 @@
 import hashlib
 import importlib
+import math
 
 import numpy as np
 import pytest
@@ -42,6 +43,24 @@ def _mat(
     max_refinement_depth: int = 32,
 ) -> tuple[object, ...]:
     return _native_module().segment_site_medial_axis(
+        vertices,
+        [],
+        tool_radius,
+        station_spacing,
+        max_sagitta,
+        max_refinement_depth,
+    )
+
+
+def _owned_mat(
+    vertices: np.ndarray = L_SHAPE,
+    *,
+    tool_radius: float = 0.5,
+    station_spacing: float = 0.75,
+    max_sagitta: float = 0.02,
+    max_refinement_depth: int = 32,
+):
+    return _native_module().SegmentSiteMedialAxis.build(
         vertices,
         [],
         tool_radius,
@@ -151,6 +170,101 @@ def test_segment_site_medial_axis_returns_fixed_proof_projection() -> None:
     assert isinstance(mat_certificate, bytes)
     assert len(mat_certificate) == 124_796
     assert hashlib.sha256(mat_certificate).digest() == MAT_CERTIFICATE_DIGEST
+
+
+def test_native_proof_owner_retains_exact_ids_behind_fixed_projection() -> None:
+    owner = _owned_mat()
+    projection = owner.projection
+
+    _assert_same_result(projection, _mat())
+    assert owner.node_ids == tuple(sorted(set(owner.node_ids)))
+    assert owner.edge_ids == tuple(sorted(set(owner.edge_ids)))
+    assert len(owner.node_ids) == projection[0].shape[0]
+    assert len(owner.edge_ids) == projection[1].shape[0]
+    assert len(owner.sample_parameter_ids) == projection[9].shape[0]
+    assert len(owner.neck_owner_ids) == len(projection[15])
+    assert all(type(identity) is bytes and identity for identity in owner.node_ids)
+    assert all(type(identity) is bytes and identity for identity in owner.edge_ids)
+    assert all(type(identity) is bytes and identity for identity in owner.sample_parameter_ids)
+    assert all(type(identity) is bytes and identity for identity in owner.neck_owner_ids)
+
+    projection[0][0, 0] = np.nextafter(projection[0][0, 0], math.inf)
+    _assert_same_result(owner.projection, _mat())
+
+
+def test_typed_medial_axis_projects_native_topology_without_coordinate_matching() -> None:
+    from compas_cgal.adaptive.canonical import CanonicalRingV1
+    from compas_cgal.adaptive.medial_axis import MedialAxis
+    from compas_cgal.adaptive.units import ChordBound
+    from compas_cgal.adaptive.units import Point2
+    from compas_cgal.adaptive.units import Spacing
+    from compas_cgal.adaptive.units import ToolRadius
+    from compas_cgal.adaptive.units import WorldXY
+
+    boundary = CanonicalRingV1.build_outer(
+        tuple(Point2[WorldXY].build(x, y) for x, y, _ in L_SHAPE),
+    )
+    axis = MedialAxis.build(
+        design_boundary=boundary,
+        holes=(),
+        tool_radius=ToolRadius.build(0.5),
+        station_spacing=Spacing.build(0.75),
+        max_sagitta=ChordBound.build(0.02),
+        max_refinement_depth=32,
+    )
+
+    assert tuple(node.identity for node in axis.nodes) == axis.native_owner.node_ids
+    assert tuple(edge.identity for edge in axis.edges) == axis.native_owner.edge_ids
+    assert len(axis.nodes) == 10
+    assert len(axis.edges) == 9
+    assert len(axis.samples) > len(axis.edges)
+    assert len(axis.tool_fit_runs) == len(axis.edges)
+    assert {run.parent_edge_id for run in axis.tool_fit_runs} == {edge.identity for edge in axis.edges}
+    assert all(edge.source.identity in axis.node_by_id for edge in axis.edges)
+    assert all(edge.target.identity in axis.node_by_id for edge in axis.edges)
+    assert all(edge.generator_site_ids == tuple(sorted(edge.generator_site_ids)) for edge in axis.edges)
+    assert all(sample.edge_id in axis.edge_by_id for sample in axis.samples)
+    assert all(sample.exact_parameter_id for sample in axis.samples)
+    assert axis.center_domain_digest == CENTER_DOMAIN_DIGEST
+    assert hashlib.sha256(axis.mat_certificate).digest() == MAT_CERTIFICATE_DIGEST
+
+
+def test_typed_topology_rejects_mutable_lookup_views() -> None:
+    from compas_cgal.adaptive.canonical import CanonicalRingV1
+    from compas_cgal.adaptive.errors import InvalidMedialAxisProjectionError
+    from compas_cgal.adaptive.medial_axis import MatTopology
+    from compas_cgal.adaptive.medial_axis import MedialAxis
+    from compas_cgal.adaptive.units import ChordBound
+    from compas_cgal.adaptive.units import Point2
+    from compas_cgal.adaptive.units import Spacing
+    from compas_cgal.adaptive.units import ToolRadius
+    from compas_cgal.adaptive.units import WorldXY
+
+    boundary = CanonicalRingV1.build_outer(
+        tuple(Point2[WorldXY].build(x, y) for x, y, _ in L_SHAPE),
+    )
+    axis = MedialAxis.build(
+        design_boundary=boundary,
+        holes=(),
+        tool_radius=ToolRadius.build(0.5),
+        station_spacing=Spacing.build(0.75),
+        max_sagitta=ChordBound.build(0.02),
+        max_refinement_depth=32,
+    )
+    topology = axis.topology
+
+    with pytest.raises(InvalidMedialAxisProjectionError, match="immutable"):
+        MatTopology(
+            topology.sites,
+            topology.nodes,
+            topology.edges,
+            topology.components,
+            topology.tool_fit_runs,
+            dict(topology.site_by_id),
+            topology.node_by_id,
+            topology.edge_by_id,
+            topology.component_by_edge_id,
+        )
 
 
 def test_segment_site_medial_axis_is_bitwise_canonical_under_ring_reversal() -> None:

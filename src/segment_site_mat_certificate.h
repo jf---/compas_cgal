@@ -6,6 +6,7 @@
 
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 class InvalidMatCenterDomainDigestError : public std::runtime_error {
 public:
@@ -46,6 +47,7 @@ private:
 struct MatCertifiedExactProjection2 {
   MatNumericGraphTable2 graph;
   MatNumericNeckCutTable2 necks;
+  std::vector<MatNeckEvidenceV1> neck_evidence;
   MatCertificateV1 certificate;
 };
 

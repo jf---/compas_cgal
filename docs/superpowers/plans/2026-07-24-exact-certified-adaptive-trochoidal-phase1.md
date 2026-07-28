@@ -1493,9 +1493,18 @@ Commit: `feat(mat): add exact segment Voronoi graph`
 
 **Files**
 
+- Create: `src/segment_site_mat_bundle.h`
+- Create: `src/segment_site_mat_bundle.cpp`
+- Modify: `src/segment_site_mat_certificate.h`
+- Modify: `src/segment_site_mat_certificate.cpp`
+- Modify: `src/segment_site_mat_numeric_table.cpp`
+- Modify: `src/medial_axis_2.cpp`
+- Modify: `src/compas_cgal/_medial_axis_2.pyi`
+- Modify: `src/compas_cgal/adaptive/errors.py`
 - Create: `src/compas_cgal/adaptive/medial_axis.py`
 - Create: `src/compas_cgal/adaptive/neck.py`
 - Create: `src/compas_cgal/adaptive/candidates.py`
+- Modify: `tests/adaptive/typecheck/consumer_contract.py`
 - Test: `tests/adaptive/test_medial_axis.py`
 - Test: `tests/adaptive/test_neck.py`
 - Test: `tests/adaptive/test_candidates.py`
@@ -1514,9 +1523,10 @@ Tests require:
 - `NeckPolicy` maps `(exact width class, passage state)` to a native-produced
   effective cap, proves it no larger than the user cap, and never reads
   `sample_clearance`;
-- `_medial_axis_2.validate_and_classify_necks` recomputes every class and
-  comparison certificate from the MAT certificate and policy's exact squared
-  boundaries;
+- `_medial_axis_2.SegmentSiteMedialAxis.validate_and_classify_necks`
+  authenticates the MAT certificate against its retained exact graph/catalog
+  owner, then recomputes every class and comparison certificate from the
+  supplied neck evidence and policy's exact squared boundaries;
 - `EffectiveCapDecision.build(...)` binds the verified neck-evidence digest,
   class, before/after state, and selected cap; full-cap decisions prove equal
   cap bytes, while neck decisions use `_stock_2.cap_chord_ratio_le`;
@@ -1541,8 +1551,11 @@ pixi run pytest tests/adaptive/test_medial_axis.py \
 
 ### Step 2: implement and GREEN
 
-Keep topology ownership in `medial_axis.py`, exact neck evidence/passage state
-in `neck.py`, and pure finite enumeration in `candidates.py`. The candidate
+Retain one exact native `SegmentSiteMatBundle2` owner behind both the frozen
+20-field projection and the typed planner view; do not rebuild the MAT, parse
+certificate bytes in Python, or match reporting coordinates. Keep typed
+topology ownership in `medial_axis.py`, exact neck evidence/passage state in
+`neck.py`, and pure finite enumeration in `candidates.py`. The candidate
 identity binds exact neck evidence, before/after passage state, and effective
 cap bytes plus the proposed traversal transition. This task semantically
 validates the Task 1A operation decision records; it does not change the frozen
