@@ -1,6 +1,10 @@
 from typing import assert_never
 from typing import assert_type
 
+import numpy as np
+
+from compas_cgal import _medial_axis_2
+from compas_cgal._medial_axis_2 import MedialAxisResult
 from compas_cgal.adaptive.operation import AdvanceTraversalDecision
 from compas_cgal.adaptive.operation import ApproachOperation
 from compas_cgal.adaptive.operation import CanonicalOperation
@@ -29,6 +33,26 @@ from compas_cgal.stock import Stock
 class MachineXY:
     """Distinct machine-coordinate frame used only by this compile contract."""
 
+
+mat_result = _medial_axis_2.segment_site_medial_axis(
+    np.asarray(
+        (
+            (0.0, 0.0, 0.0),
+            (6.0, 0.0, 0.0),
+            (6.0, 2.0, 0.0),
+            (2.0, 2.0, 0.0),
+            (2.0, 6.0, 0.0),
+            (0.0, 6.0, 0.0),
+        ),
+        dtype=np.float64,
+    ),
+    (),
+    0.5,
+    0.75,
+    0.02,
+    32,
+)
+assert_type(mat_result, MedialAxisResult)
 
 world_point_scalar = Point2[WorldXY].build(1.0, 2.0)
 world_point_sequence = Point2[WorldXY].build([1.0, 2.0])
