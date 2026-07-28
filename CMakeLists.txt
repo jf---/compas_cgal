@@ -236,6 +236,7 @@ add_executable(task9_mat_compile_gate EXCLUDE_FROM_ALL
     tests/native/task9_mat_sampling_gate.cpp
     tests/native/task9_catalog_neck_gate.cpp
     tests/native/task9_catalog_sampling_gate.cpp
+    tests/native/task9_mat_proposal_table_gate.cpp
     tests/native/task9_site_catalog_gate.cpp
     tests/native/task9_catalog_delaunay_gate.cpp
     tests/native/task9_catalog_voronoi_gate.cpp
@@ -258,6 +259,7 @@ add_executable(task9_mat_compile_gate EXCLUDE_FROM_ALL
     src/segment_site_mat_sampling.cpp
     src/segment_site_catalog_neck.cpp
     src/segment_site_catalog_sampling.cpp
+    src/segment_site_mat_proposal_table.cpp
     src/segment_site_mat_spikes.cpp
     src/segment_site_parameterization.cpp
     src/segment_site_clipping.cpp

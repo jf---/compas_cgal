@@ -1188,6 +1188,8 @@ Commit: `feat(adaptive): add event-exact certifier`
 - Create: `src/segment_site_mat_sampling.cpp`
 - Create: `src/segment_site_catalog_sampling.h`
 - Create: `src/segment_site_catalog_sampling.cpp`
+- Create: `src/segment_site_mat_proposal_table.h`
+- Create: `src/segment_site_mat_proposal_table.cpp`
 - Create: `src/segment_site_neck.h`
 - Create: `src/segment_site_neck.cpp`
 - Create: `src/medial_axis_2.cpp`
@@ -1380,8 +1382,12 @@ axis-aligned fixture's quadratic-field S–S charts canonicalize to rational
 affine maps, but the adapter first authenticates the signed branch against
 `original_dual_id`; reported endpoint doubles never recover geometry.
 Repeat/input-reversal identity and missing, reordered, and cross-edge failures
-are native-gated. Exact per-sample verdicts and the public fixed tuple remain
-pending.
+are native-gated. The sealed production bundle now carries its exact
+clearance-radius square and structural equidistant/no-site-closer verdicts.
+Native fields 10–15 compose these proofs with reporting center, parameter,
+clearance, MATHSM guide radius, and edge-sample CSR; input reversal is
+table-identical. Reconstructed unverified bundles and mismatched tool radii
+fail loudly. Certificate fields and the public fixed tuple remain pending.
 
 Bind:
 
