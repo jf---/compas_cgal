@@ -1084,12 +1084,130 @@ This is not a universal claim about private implementations.
     narrow the exact-safe set; it may never admit a motion rejected by exact
     containment or engagement.
 
+### Third GPU layer: integral configuration-space distance fields
+
+The third layer is specifically Li, Chi, Razmjoo, and Calinon's
+[Configuration Space Distance Field (CDF)][cdf-mp-2024], not a stock-space
+differentiable SDF. CDF measures angular distance directly in robot or machine
+configuration space and exposes derivatives there. Its purpose is to remove
+the conventional split in which a path is planned in task space and inverse
+kinematics attempts to recover an executable joint trajectory afterward.
+
+That formulation fits the GPU architecture. The exact kernel produces the
+canonical motion and its geometric evidence. The tri-dexel carries evolving
+material and thermal state. A batched CDF query evaluates machine-space margin
+and gradient along the candidate motion. Together they form three distinct
+layers:
+
+| Layer | Domain | Optimization contribution | Acceptance authority |
+| --- | --- | --- | --- |
+| Exact adaptive kernel | pocket, stock, cutter sweep, and engagement geometry | finite candidate construction and exact-safe motion set | exact containment, engagement, topology, coverage, and replay certificates |
+| Thermal tri-dexel | evolving material and process state | removal history and, after calibration, thermal-envelope ranking or veto | versioned physical-model validity and independent removal/thermal validation; never geometric acceptance |
+| Configuration-space distance field | machine joint/configuration space | smooth collision/accessibility margin and gradient for batched trajectory ranking or repair | proposal authority only; native continuous machine and controller qualification remains mandatory |
+
+“Integral kinematics” means that machine realizability participates in choosing
+the trajectory, rather than appearing as a post-processing rejection after
+CAM has committed it. The objective is evaluated over the motion history, not
+only at isolated cutter-location poses. At minimum it retains both the
+path-integrated kinematic cost and the worst margin. Rotary travel, axis
+velocity/acceleration/jerk, joint limits, singularity proximity, and collision
+clearance remain separate named terms; a collision CDF must not be presented
+as if it proves all of them automatically.
+
+```text
+exact finite candidate lattice
+        |
+        +--> exact geometric witness -----------------------+
+        |                                                   |
+        +--> GPU tri-dexel preview: removal / thermal state |
+        |                                                   v
+        +--> GPU CDF batch: machine margin / gradient --> rank or repair
+                                                            |
+                                                            v
+                                             changed motion gets new identity
+                                                            |
+                              +-----------------------------+----------------+
+                              |                                              |
+                              v                                              v
+                     exact re-certification                     native continuous
+                     of final tool motion                       machine/controller
+                                                               qualification
+                              |                                              |
+                              +-----------------------------+----------------+
+                                                            |
+                                                            v
+                                               transactional state commit
+```
+
+The GPU lane may rank candidates and propose a repaired joint trajectory. It
+may not silently prune the declared exact candidate set, declare a sampled
+trajectory collision-free, or preserve a certificate across changed motion.
+Any pose, timing, tool-axis, phase, or path modification creates a new motion
+identity and re-enters exact certification. The final machine gate must cover
+continuous interpolation, joint limits, collision, singularity policy, and
+controller semantics.
+
+Tesseract remains the single kinematic model and native collision authority.
+There is no second forward-kinematics implementation hidden in the GPU layer.
+The CDF consumes Tesseract-owned joint ordering, frames, limits, machine
+identity, and setup identity; its gradient supplies optimization direction.
+Native Tesseract collision/trajectory checks independently qualify the final
+continuous motion, while controller-byte qualification remains a separate
+downstream gate.
+
+The field is split by lifetime rather than collected into one mutable model:
+
+- immutable machine geometry and joint semantics bind a
+  content-addressed machine-field identity;
+- fixture, stock, workholding, and positioner placement bind a separate setup
+  field or scene-fusion identity;
+- the GPU query policy binds field representation, model/grid parameters,
+  sampling and quadrature policy, numerical error enclosure, and implementation
+  revision; and
+- each trajectory result binds the exact motion identity, machine/setup
+  identities, minimum margin, integrated objective terms, and every proposed
+  repair.
+
+The CDF paper demonstrates both nonparametric and neural representations, with
+the neural form trading accuracy, efficiency, and compression
+[CDF project page][cdf-mp-project]. The production representation is therefore
+measurement-gated. A neural CDF is attractive for GPU throughput, but its fit
+error cannot become an implicit safety tolerance. A grid or intrinsic
+low-dimensional field may be preferable for a two-rotary-axis machine if it
+provides stronger bounded-error and update contracts. Both must face the same
+real-device benchmark and independent native qualification.
+
+For the current constant-Z three-axis programme, the immediate kinematic value
+is feed realization, axis dynamics, phase/direction choice, and continuous
+machine verification. The full configuration-space advantage arrives with
+3+2 and simultaneous five-axis work, where tool orientation, rotary branch,
+holder clearance, reachability, and process state must be chosen together.
+This is particularly powerful for titanium: an orientation or traversal that
+is geometrically and thermally attractive is useful only if the machine can
+execute it without singularity, collision, rotary reversal, or feed collapse.
+
+This is a **post-Phase-1 GPU task**. Held–Pfeiffer remains the first target and
+Tasks 11A–16 retain their order and acceptance criteria. The dependency is:
+
+1. finish and benchmark the exact-certified Held path;
+2. authenticate its removal and thermal replay through Task 14A;
+3. add batched CDF scoring with explicit machine/setup identity;
+4. add trajectory repair that always invalidates and re-certifies changed
+   motion; and
+5. qualify the continuous controller programme independently.
+
+The resulting strategic hypothesis is stronger than “CAM plus simulation”:
+the same operation is constrained in **geometric space, evolving physical
+state, and machine configuration space** before commitment. Its competitive
+uniqueness still requires a separate public-evidence audit and working
+integration; it is not claimed from architecture alone.
+
 !!! note "Target positioning, not a current product claim"
 
     **Exact-certified adaptive roughing for high-consequence milling:
     generate the path, prove every accepted motion, and replay the same
-    authenticated operation through independent stock and process-response
-    evidence.**
+    authenticated operation through independent stock, process-response, and
+    machine-configuration evidence.**
 
     This is the intended commercial position. It becomes a product claim only
     after the completion and qualification gates below pass.
@@ -1122,14 +1240,17 @@ The following gates separate the strategy from a defensible high-end product:
    inspected render provenance;
 4. a versioned production-CAM boundary for geometry, tool, stock, process,
    operation, and result identity;
-5. post-processor and machine-kinematic qualification without weakening the
+5. batched GPU CDF scoring with explicit machine/setup/field identity,
+   measured approximation error, changed-motion invalidation, and independent
+   native trajectory comparison;
+6. post-processor and machine-kinematic qualification without weakening the
    certified primitive grammar;
-6. instrumented difficult-material trials reporting material-removal rate,
+7. instrumented difficult-material trials reporting material-removal rate,
    spindle load or cutting force, tool wear, dimensional error, surface
    outcome, and failures—not selected success images;
-7. calibrated thermal/process validation before any modeled response is called
+8. calibrated thermal/process validation before any modeled response is called
    temperature, heat, tool-life prediction, or feed/speed authority; and
-8. independent review of the exact certificate, replay, benchmark, and
+9. independent review of the exact certificate, replay, benchmark, and
    physical-test evidence.
 
 Until these close, the defensible statement is narrow: Phase 1 is building a
@@ -3400,6 +3521,7 @@ consumers, or evolution differ from graph orchestration.
 | Planning `InputIdentity` | implemented and strictly typed | canonical `D`, world-XY millimetre frame, cut plane, tool, reachable-domain digest, entry/process evidence, cap, cut direction, all adaptive policies, schemas, and active exact strategy versions under one SHA-256 root; independent fresh-state replay pending |
 | Independent fresh replay | input/grammar/candidate foundation implemented and Python-gated | canonical geometry/policy argument equality; exact approach/plunge/lateral grammar and phase continuity; material-side-derived orientation; fresh reachable-domain and input rebuild; input-bound MAT reconstruction and center-domain authentication; complete forward-window candidate enumeration; unique motion/scope/cap/traversal match; native/derived cursor continuation; one-field traversal mutation rejection; no certificate emitted until neck, link, stock, coverage, terminal, and residual gates close |
 | Tri-dexel removal and thermal-response consumer | planned Task 14A | no integration evidence yet; the future consumer is an independent, content-addressed falsification/visualization lane with bounded circle replay and an explicitly uncalibrated thermal-response claim |
+| GPU configuration-space distance field | planned post-Phase-1 layer | no integration evidence; future CDF-MP-based scoring binds machine/setup/field/motion identity, ranks or repairs trajectories on the GPU, invalidates changed motion, and remains subordinate to exact re-certification plus native continuous machine/controller qualification |
 
 ## Verification gates
 
@@ -3660,6 +3782,10 @@ Before accepting a MAT change, verify:
 13. Does any tri-dexel result remain downstream evidence rather than proof
     authority, with operation/prefix identity, circle-replay enclosure, stock
     lattice, thermal maturity, and render provenance explicit?
+14. Does any CDF result remain ranking/repair evidence rather than a
+    continuous-motion certificate, with Tesseract as the sole kinematics owner
+    and every changed motion re-identified, exactly re-certified, and natively
+    qualified?
 
 ## Authoritative references
 
@@ -3681,6 +3807,8 @@ streamed geometry are not substitutes for those APIs.
 [cimatron-nc-guide-2026]: https://help.cimatron.com/en/2026/welcome_to_nc.htm
 [cimatron-nc-programming]: https://www.cimatron.com/en/cimatron-nc-programming
 [cimatron-simulation-2026]: https://help.cimatron.com/en/2026/simulator_and_verifier/simulator_and_verifier.htm
+[cdf-mp-2024]: https://arxiv.org/abs/2406.01137
+[cdf-mp-project]: https://sites.google.com/view/cdfmp/home
 [dfg-thermal-cam]: https://gepris.dfg.de/gepris/projekt/537435336
 [mecsoft-tridexel-2026]: https://mecsoft.com/blog/whats-new-in-mecsoft-cam-2026/
 [moduleworks-gpu-dexel]: https://www.moduleworks.com/de/precision-meets-performance-with-gpu-accelerated-simulation/
