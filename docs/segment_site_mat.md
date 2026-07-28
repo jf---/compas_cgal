@@ -93,7 +93,10 @@ needed by every downstream traversal and engagement decision.
     sagitta policies refine reporting coordinates without changing exact graph
     records. Algebraic-ended parabola gates independently enforce chord length,
     quadratic midpoint deviation, deterministic identity, and the fail-loud
-    refinement cap.
+    refinement cap. The catalog-fed L adapter adopts all nine graph edges and
+    emits reversal-identical fields 10–15 with sealed structural sample
+    verdicts, exact tool-radius binding, reporting clearance, and MATHSM guide
+    radius.
     A separate exact-clearance sidecar now consumes a canonical graph edge,
     validates its exact endpoint evidence and nonnegative rational
     `clearance²(t)` polynomial through degree four, isolates all
@@ -125,9 +128,9 @@ needed by every downstream traversal and engagement decision.
     inside the catalog namespace.
     General arbitrary-pocket traversal, arbitrary composite segment/segment
     cells, center-domain digest integration, rectangle neck evidence,
-    production-graph sampling, exact per-sample verdicts, and the Python
-    binding are not complete. The numeric table, neck-record bytes, and native
-    rational-coordinate sampling substrate are not yet public Python APIs.
+    arbitrary-pocket sampling/verdicts, and the Python binding are not
+    complete. The numeric tables, neck-record bytes, and native production-L
+    sampling substrate are not yet public Python APIs.
 
     Do not treat the current native spike APIs as the final public MAT API.
     The maturity table below is the claim boundary.
@@ -165,7 +168,7 @@ construction.
 | MAT backend | stronger exact contract on bounded fixtures; incomplete end-to-end | Vroni/ArcVroni used end-to-end | Exact CGAL point graph plus catalog-fed rectangle and concave L-pocket graphs. The rectangle carries Task 3 identities through one indexed SDG build, swap-owned adaptor traversal, indexed endpoint binding, exact radius clipping, five edges, six feature-triple nodes, and explicit rejection of eight incident P–S rays. The L path authenticates all 23 raw duals, binds external point/open-segment endpoint events, rejects 12 incident feature transitions, proves its P–P ray and S2–S3 diagonal are outside the interior MAT, and emits a connected 10-node/9-edge tree with seven S–S lines and two P–S parabolas. Normalized-node inventory includes the exact four-feature `{P2, P4, S2, S3}` event without coordinate merging. Both graphs now project into one validated numeric topology/evidence table, but arbitrary-pocket traversal remains incomplete |
 | Replay identity | stronger contract; public binding incomplete | The published algorithm consumes its MAT and updates one ordered machined contour; no exact topology/provenance replay certificate is reported | Stable site, node, dual, algebraic-root, component, and coincident endpoint-event identities project once into deterministic integer rows. Four native `NeckEvidenceV1` variants now encode exact algebraic identities and separating cuts as canonical CCAN bytes with SHA-256 digests; exact replay rejects deletion, mutation, and ordering drift, and the production L records are input-reversal invariant. The complete MAT certificate and Python API remain pending |
 | Engagement limit | stronger contract; incomplete integration | Analytic circle construction followed by bisection until `θmax − 0.001 <= θ <= θmax` radians | Exact rational chord surrogate and event-exact segment/full-circle certification; integration incomplete |
-| Candidate spacing | incomplete | Bisection along the middle curve | Native line/parabola proposal substrate uses exact parameter identities plus independent reporting-only spacing and sagitta refinement; production graph adoption and the finite engagement-candidate lattice remain pending |
+| Candidate spacing | stronger bounded-fixture contract; incomplete integration | Bisection along the middle curve | All nine adopted L edges now emit exact-identity line/parabola stations with independent reporting-only spacing and sagitta refinement, deterministic CSR offsets, structural equidistant/no-site-closer verdicts, reporting clearance, and MATHSM guide radius. Arbitrary-pocket adoption and the finite engagement-candidate lattice remain pending |
 | Machined state | stronger contract | Ordered contour of prior machining disks; transition sweeps omitted from that contour model | Exact stock mutation and exact full-sweep coverage, ordered certify-before-deplete |
 | Bottlenecks | stronger exact contract on the adopted L fixture; incomplete feature | Graph search, width, and heuristic cap reduction on first passage | A typed four-variant classifier composes exact profile minima with canonical separating cuts and deterministic ownership. Native classification compares algebraic widths to strictly ordered rational policy boundaries and certifies every comparison; equality stays in the narrower class. The adopted L graph emits exactly two reversal-invariant, replay-verified single-edge plateau restrictions at exact `width² = 4`, not fabricated strict roots. Rectangle profiles, typed passage state, and the bound cap decision remain pending |
 | Validation | incomplete | Dense engagement sampling for result plots; complete path and runtime experiments | Exact neck-record replay and mutation gates are implemented; fresh end-to-end replay, complete artifact identity, and exact residual proof remain planned |
@@ -1370,6 +1373,10 @@ The native table is the exact discrete subset of the future 20-field binding:
 | `edge_endpoint_provenance_flags[E,2]` | independent bitset: `1` original Voronoi vertex, `2` design-boundary clip, `4` clearance root |
 | `endpoint_feature_offsets`, `endpoint_features[J,5]` | canonical source/target endpoint CSR |
 | `edge_exact_flags[E,3]` | admissible component, source provenance verified, target provenance verified; all must equal one |
+| `sample_centers[N,3]`, `sample_parameter[N]` | world-XY reporting coordinates and reporting parameter; never exact evidence |
+| `sample_clearance[N]`, `sample_guide_radius[N]` | reporting `d` and MATHSM `(d-r)/2`, evaluated only after exact bound authentication |
+| `sample_flags[N,2]` | structural exact-equidistant and no-site-closer producer verdicts; all must equal one |
+| `edge_sample_offsets[E+1]` | deterministic canonical-edge CSR over every sample row |
 
 Curve codes are `0=LINE`, `1=PARABOLA`, and `2=CIRCLE`. Original-dual codes
 are `0=P–P`, `1=P–S`, and `2=S–S`. Exact node and original-dual identity
@@ -2221,6 +2228,29 @@ offsets, exact parameter identities, and world-XY reporting coordinates.
     the signed branch from `original_dual_id` first, then require the canonical
     constructor to prove that the radical coefficients vanish.
 
+The production adapter also seals exact sample authority into the bundle. Its
+private verified path records the exact clearance-radius square and attaches
+the two structural verdicts to every station:
+
+1. the station is equidistant to its two generators because its exact
+   parameter identity lies on the source-derived, edge-authenticated bisector
+   chart;
+2. no catalog site is closer because the station remains inside the exact
+   retained interval of the source Voronoi halfedge.
+
+`numeric_sample_table(...)` requires both verdicts and an exact match between
+the bundle's rational clearance bound and the typed binary64 tool radius
+before it emits fields 10–15. It then evaluates reporting clearance from the
+edge profile and reports the one-sided MATHSM guide radius `(d-r)/2`.
+
+!!! warning "A valid record shape does not grant proof authority"
+
+    `MatProposalSamplingGraph2::build(...)` can reconstruct a structurally
+    well-formed bundle for testing, but it deliberately carries no clearance
+    bound and zero exact verdicts. Numeric export rejects it. Only the exact
+    catalog producer can create the verified state; otherwise an all-ones
+    flag would prove merely that a caller filled the schema correctly.
+
 Refinement may change the number and position of samples. It must not change:
 
 - node or edge identity;
@@ -2234,8 +2264,8 @@ The native gate covers rational line and parabola charts, algebraic
 refinement, edge-bound parameter identity, repeat determinism, malformed
 factories, line cardinality, and the conic depth cap. This remains a substrate
 claim. The production L adoption and native tuple offsets are gated; exact
-equidistant/no-site-closer sample verdicts, certificate bytes, and the Python
-binding remain pending.
+equidistant/no-site-closer structural verdicts and native fields 10–15 are
+also gated. Certificate bytes and the Python binding remain pending.
 
 ## File ownership
 
@@ -2258,11 +2288,11 @@ binding remain pending.
 | `segment_site_neck_evidence.*` | graph-level four-variant ownership, exact node-width consistency, and cut attachment |
 | `segment_site_mat_sampling.*` | typed world-XY proposal policy, exact station identities, rational curve refinement, and edge-owned sampling runs |
 | `segment_site_catalog_sampling.*` | canonical L chart recovery, exact branch rebinding, production run adoption, and flattened sample offsets |
+| `segment_site_mat_proposal_table.*` | sealed sample verdict projection, exact tool-radius binding, and numeric fixed-tuple fields 10–15 |
 | `canonical_encoding.*` | frozen native CCAN byte, integer, rational, boolean, sequence, component-map, and tagged-union encoding plus canonical rational decoding |
 | `segment_site_neck_evidence_bytes.*` | canonical four-variant `NeckEvidenceV1` bytes, SHA-256 digests, and exact replay verification |
 | `segment_site_neck_classification.*` | canonical rational-boundary validation, exact algebraic width classes, and comparison-certificate bytes |
 | `segment_site_catalog_neck.*` | adopted catalog-graph clearance-profile reconstruction and graph/profile binding |
-| `segment_site_mat_sampling.*` | typed proposal policies, exact line/parabola parameter identities, reporting-only refinement, and fail-loud sample construction |
 | `medial_axis_2.cpp` | nanobind adapter only |
 
 File length is not a quality gate. New neck, sampling, binding, or algebraic
@@ -2310,7 +2340,7 @@ consumers, or evolution differ from graph orchestration.
 | Catalog-fed L clearance profiles | implemented and native-gated | one unchanged canonical graph build; one profile per retained edge; exact `2 constant + 5 quadratic + 2 quartic` decomposition; complete reversal identity; positive-radius clip endpoints re-evaluate to exact `width² = 4` |
 | Exact neck classification | native typed records and canonical V1 bytes implemented and gated; Python binding pending | strict, clearance-endpoint, shared-vertex, and maximal plateau ownership; exact node-width consistency; independent cut attachment; canonical CCAN records and SHA-256 digests; deletion/mutation/order rejection by exact replay; adopted L emits exactly two byte-identical reversal-invariant plateau records at `width² = 4` |
 | Exact neck width classes | native implemented and gated; Python binding pending | cross-language `ExactRationalV1` decoding; nonnegative strictly increasing boundaries; exact algebraic comparisons; right-closed restrictive equality; evidence-digest-bound comparison certificates; both production L plateaus classify as `0` at boundary `4` with reversal-identical certificates |
-| Proposal-only sampling | native substrate and production L adoption implemented and gated; public binding pending | all nine canonical L edges emit edge-owned deterministic runs and `int64` offsets under repeat/reversal; refinement remains reporting-only; no exact sample-verdict or public API claim |
+| Proposal-only sampling | native substrate, production L adoption, and fields 10–15 implemented and gated; public binding pending | all nine canonical L edges emit edge-owned deterministic runs, structural `{equidistant, no-site-closer}` verdicts, reporting clearance/guide radius, and `int64` offsets under repeat/reversal; no arbitrary-pocket or public API claim |
 | Python fixed-tuple binding | pending | no public API claim |
 
 ## Verification gates
@@ -2369,8 +2399,8 @@ open-segment-limited nonparallel endpoints, the bounded two-branch normalized
 fixture, and unified rectangle and exact L-fixture graphs. They do not
 establish general arbitrary-pocket traversal, arbitrary composite S–S cells,
 center-domain digest equality, rectangle or arbitrary-pocket neck evidence,
-production-graph sampling and exact per-sample verdicts, or the public Python
-binding. A separate
+arbitrary-pocket production sampling/verdicts, or the public Python binding. A
+separate
 graph-emission contract retains an increasing algebraic interval, omits an
 equal-bound singleton, and raises `InvalidSegmentSiteGraphComponentError` for
 unbounded or reversed components. The node-site CSR gate separately locks the
@@ -2448,8 +2478,13 @@ the reporting midpoint. The catalog-sampling gate then adopts all nine
 production L edges, requires seven line and two parabola runs, canonical
 `int64` offsets, explicit sample/edge ownership, strictly increasing
 parameters, repeat and reversal identity, policy-only refinement, and named
-missing/reordered/cross-edge failures. This does not yet establish exact
-sample verdicts, certificate bytes, or the public Python binding.
+missing/reordered/cross-edge failures. The proposal-table gate then binds the
+positive exact tool radius, composes the existing topology table with numeric
+fields 10–15, requires all structural sample verdicts, checks reporting
+clearance and MATHSM guide radius, and preserves the complete table under
+input reversal. A syntactically reconstructed but unverified bundle and a
+mismatched tool radius both fail through named boundaries. This does not yet
+establish certificate bytes or the public Python binding.
 The catalog-fed
 segment-Delaunay gate separately locks one-pass segment insertion, exact
 catalog/live-generator cardinality and identity, indexed lookup across two

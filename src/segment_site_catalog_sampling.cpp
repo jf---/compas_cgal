@@ -181,14 +181,19 @@ sampling_curve(const MatExactGraphEdge2 &edge,
 MatProposalSamplingGraph2::MatProposalSamplingGraph2(
     MatClearanceProfileGraph2 profile_graph,
     std::vector<std::int64_t> sample_offsets,
-    std::vector<MatWorldXYProposalSample2> samples)
+    std::vector<MatWorldXYProposalSample2> samples,
+    std::optional<CORE::BigRat> clearance_radius_squared,
+    std::vector<std::array<std::int64_t, 2>> sample_exact_flags)
     : profile_graph_(std::move(profile_graph)),
-      sample_offsets_(std::move(sample_offsets)), samples_(std::move(samples)) {
-}
+      sample_offsets_(std::move(sample_offsets)), samples_(std::move(samples)),
+      clearance_radius_squared_(std::move(clearance_radius_squared)),
+      sample_exact_flags_(std::move(sample_exact_flags)) {}
 
-MatProposalSamplingGraph2
-MatProposalSamplingGraph2::build(MatClearanceProfileGraph2 profile_graph,
-                                 std::vector<MatProposalSamplingRun2> runs) {
+MatProposalSamplingGraph2 MatProposalSamplingGraph2::build_impl(
+    MatClearanceProfileGraph2 profile_graph,
+    std::vector<MatProposalSamplingRun2> runs,
+    std::optional<CORE::BigRat> clearance_radius_squared,
+    const bool exact_verdicts) {
   const auto &edges = profile_graph.graph().edges;
   if (runs.size() != edges.size()) {
     throw IncompleteMatProposalSamplingGraphError(
@@ -199,6 +204,7 @@ MatProposalSamplingGraph2::build(MatClearanceProfileGraph2 profile_graph,
       0,
   };
   std::vector<MatWorldXYProposalSample2> samples;
+  std::vector<std::array<std::int64_t, 2>> sample_exact_flags;
   for (std::size_t index = 0; index < runs.size(); ++index) {
     if (runs[index].edge_id() != edges[index].edge_id) {
       throw IncompleteMatProposalSamplingGraphError(
@@ -214,9 +220,33 @@ MatProposalSamplingGraph2::build(MatClearanceProfileGraph2 profile_graph,
                       static_cast<std::int64_t>(runs[index].samples().size()));
     samples.insert(samples.end(), runs[index].samples().begin(),
                    runs[index].samples().end());
+    sample_exact_flags.insert(
+        sample_exact_flags.end(), runs[index].samples().size(),
+        exact_verdicts ? std::array<std::int64_t, 2>{1, 1}
+                       : std::array<std::int64_t, 2>{0, 0});
   }
-  return MatProposalSamplingGraph2(std::move(profile_graph), std::move(offsets),
-                                   std::move(samples));
+  return MatProposalSamplingGraph2(
+      std::move(profile_graph), std::move(offsets), std::move(samples),
+      std::move(clearance_radius_squared), std::move(sample_exact_flags));
+}
+
+MatProposalSamplingGraph2
+MatProposalSamplingGraph2::build(MatClearanceProfileGraph2 profile_graph,
+                                 std::vector<MatProposalSamplingRun2> runs) {
+  return build_impl(std::move(profile_graph), std::move(runs), std::nullopt,
+                    false);
+}
+
+MatProposalSamplingGraph2 MatProposalSamplingGraph2::build_verified(
+    MatClearanceProfileGraph2 profile_graph,
+    std::vector<MatProposalSamplingRun2> runs,
+    CORE::BigRat clearance_radius_squared) {
+  if (clearance_radius_squared < 0) {
+    throw IncompleteMatProposalSamplingGraphError(
+        "verified MAT proposal graph has a negative clearance bound");
+  }
+  return build_impl(std::move(profile_graph), std::move(runs),
+                    std::move(clearance_radius_squared), true);
 }
 
 const MatClearanceProfileGraph2 &
@@ -232,6 +262,16 @@ MatProposalSamplingGraph2::sample_offsets() const noexcept {
 const std::vector<MatWorldXYProposalSample2> &
 MatProposalSamplingGraph2::samples() const noexcept {
   return samples_;
+}
+
+const std::optional<CORE::BigRat> &
+MatProposalSamplingGraph2::clearance_radius_squared() const noexcept {
+  return clearance_radius_squared_;
+}
+
+const std::vector<std::array<std::int64_t, 2>> &
+MatProposalSamplingGraph2::sample_exact_flags() const noexcept {
+  return sample_exact_flags_;
 }
 
 MatProposalSamplingGraph2 canonical_l_shape_mat_proposal_graph(
@@ -253,6 +293,6 @@ MatProposalSamplingGraph2 canonical_l_shape_mat_proposal_graph(
     runs.push_back(proposal_sampling_run(curve, station_spacing, max_sagitta,
                                          max_refinement_depth));
   }
-  return MatProposalSamplingGraph2::build(std::move(profile_graph),
-                                          std::move(runs));
+  return MatProposalSamplingGraph2::build_verified(
+      std::move(profile_graph), std::move(runs), radius_squared);
 }
