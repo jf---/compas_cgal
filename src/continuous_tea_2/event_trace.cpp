@@ -81,7 +81,30 @@ bool trace_event_less(
     return left.canonical_id < right.canonical_id;
 }
 
+void validate_decision_authority(
+    const std::string& authority_bytes,
+    const std::string& authority_digest)
+{
+    if (authority_bytes.empty()) {
+        throw EventTraceVerificationError(
+            "event trace requires canonical decision-authority bytes");
+    }
+    if (authority_digest.empty()
+        || sha256_bytes(authority_bytes)
+            != authority_digest) {
+        throw EventTraceVerificationError(
+            "event trace decision-authority digest does not match its bytes");
+    }
+}
+
 } // namespace
+
+const std::string& event_oracle_component_version()
+{
+    static const std::string version =
+        "event-exact-motion-oracle-v1";
+    return version;
+}
 
 EventTraceEvent2 make_event_trace_event(
     const std::string& root_id,
@@ -203,9 +226,14 @@ EventTrace2 build_event_trace(
         event_bytes.push_back(event.canonical_bytes);
     }
 
+    validate_decision_authority(
+        verified.partition.canonical_bytes,
+        verified.partition.canonical_digest);
     EventTrace2 trace{
         verdict,
         verified.partition,
+        verified.partition.canonical_bytes,
+        verified.partition.canonical_digest,
         std::move(events),
         motion_chart_id,
         motion_identity,
@@ -218,7 +246,7 @@ EventTrace2 build_event_trace(
     };
     trace.canonical_bytes =
         encode_canonical_record(
-            "event-trace-v1",
+            "event-trace-v2",
             {
                 trace.motion_chart_id,
                 trace.motion_identity,
@@ -227,6 +255,7 @@ EventTrace2 build_event_trace(
                 trace.whole_rim_disposition,
                 trace.oracle_strategy_version,
                 trace.partition.canonical_digest,
+                trace.decision_authority_digest,
                 encode_string_sequence(event_bytes),
             });
     trace.canonical_digest =

@@ -87,6 +87,9 @@ class UnsupportedAlgebraicVertexProjectionError(EventSubstrateError): ...
 class IncompleteSegmentPartitionError(EventSubstrateError): ...
 
 
+class IncompleteSegmentOracleError(EventSubstrateError): ...
+
+
 class ContinuousTeaVerdict:
     CERTIFIED: ContinuousTeaVerdict
     CAP_EXCEEDED: ContinuousTeaVerdict
@@ -484,6 +487,8 @@ class EventTrace2:
     exact_verdict: Literal["certified", "cap_exceeded", "unresolved"]
     partition: EventPartitionCertificate2
     partition_certificate: EventPartitionCertificate2
+    decision_authority_bytes: bytes
+    decision_authority_digest: bytes
     events: Sequence[EventTraceEvent2]
     motion_chart_id: str
     motion_identity: bytes
@@ -493,6 +498,9 @@ class EventTrace2:
     event_cell_count: int
     canonical_bytes: bytes
     canonical_digest: bytes
+
+
+def event_oracle_component_version() -> bytes: ...
 
 
 class SegmentCellStratum2:
@@ -641,6 +649,26 @@ def construct_segment_event_partition(
     tool_radius: float,
     cap_chord_ratio: float,
 ) -> SegmentEventPartition2: ...
+def audit_segment_tea_event_exact(
+    stock: Stock2,
+    x0: float,
+    y0: float,
+    x1: float,
+    y1: float,
+    tool_radius: float,
+    cap_chord_ratio: float,
+) -> tuple[Literal["certified", "cap_exceeded", "unresolved"], EventTrace2]: ...
+def segment_station_cap_exceeded_exact(
+    stock: Stock2,
+    x0: float,
+    y0: float,
+    x1: float,
+    y1: float,
+    numerator: int,
+    denominator: int,
+    tool_radius: float,
+    cap_chord_ratio: float,
+) -> bool: ...
 def verify_segment_event_partition(
     stock: Stock2,
     source: SegmentEventSource2,
