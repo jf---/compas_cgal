@@ -500,6 +500,19 @@ strategy are intentionally a different input identity.
     rebuild with the input-bound `MatSamplingPolicy`; choosing convenient
     sampling values at replay time would accept a stale cursor lineage.
 
+`adaptive-operation-schema-v2` also binds the typed radial `MaterialSide` on
+every full-circle operation. CW/CCW is only the result of applying
+`CutDirectionPolicy` to that side. Recording the result without its causal
+input would let replay derive the missing side from the recorded orientation
+and then approve its own assumption. Fresh replay instead recomputes the
+orientation from the operation-bound side and the input-bound policy.
+
+!!! warning "Orientation alone cannot prove climb or conventional intent"
+
+    A clockwise bit says how the guide was traversed, not which radial side
+    still held material. Both facts are required to prove the milling intent.
+    An operation from schema v1 is therefore not silently upgraded.
+
 ## Relation to Held and Pfeiffer (2025)
 
 [Held and Pfeiffer's 2025 MATHSM extension][held-pfeiffer-2025] is the direct

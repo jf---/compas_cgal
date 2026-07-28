@@ -45,7 +45,7 @@ if TYPE_CHECKING:
     from compas_cgal.adaptive.units import ToolRadius
 
 INPUT_SCHEMA_VERSION: Final[bytes] = b"adaptive-input-schema-v2"
-OPERATION_SCHEMA_VERSION: Final[bytes] = b"adaptive-operation-schema-v1"
+OPERATION_SCHEMA_VERSION: Final[bytes] = b"adaptive-operation-schema-v2"
 COMPONENT_IDENTITY_VERSION: Final[bytes] = b"component-identity-v1"
 BOUNDARY_VERTEX_ID_VERSION: Final[bytes] = b"boundary-vertex-id-v1"
 WORLD_XY_MILLIMETRE_FRAME_VERSION: Final[bytes] = b"world-xy-millimetre-frame-v1"
