@@ -13,25 +13,33 @@ from compas_cgal.adaptive.coverage import CoverageLedger
 from compas_cgal.adaptive.entry import BoreProcessIdentity
 from compas_cgal.adaptive.entry import PreclearedEntry
 from compas_cgal.adaptive.entry import QualifiedBore
+from compas_cgal.adaptive.errors import EngagementCapExceededError
 from compas_cgal.adaptive.errors import ReplayCandidateError
 from compas_cgal.adaptive.errors import ReplayCutDirectionError
+from compas_cgal.adaptive.errors import ReplayEffectiveCapError
 from compas_cgal.adaptive.errors import ReplayGrammarError
 from compas_cgal.adaptive.errors import ReplayInputMismatchError
 from compas_cgal.adaptive.errors import ReplayPairingError
 from compas_cgal.adaptive.errors import ReplayTraversalError
+from compas_cgal.adaptive.identity import IdentityDigest
 from compas_cgal.adaptive.identity import InputIdentity
 from compas_cgal.adaptive.medial_axis import MedialAxis
 from compas_cgal.adaptive.motion import EngagementCap
 from compas_cgal.adaptive.motion import ExactCircleMotion
 from compas_cgal.adaptive.motion import ExactSegmentMotion
 from compas_cgal.adaptive.motion_certificate import MotionCertifier
+from compas_cgal.adaptive.neck import NeckInventory
 from compas_cgal.adaptive.operation import AdvanceTraversalDecision
 from compas_cgal.adaptive.operation import CutFullCircleOperation
 from compas_cgal.adaptive.operation import CursorIdentity
 from compas_cgal.adaptive.operation import FullCapDecision
 from compas_cgal.adaptive.operation import HoldTraversalDecision
 from compas_cgal.adaptive.operation import LinkSegmentOperation
+from compas_cgal.adaptive.operation import NeckCapDecision
+from compas_cgal.adaptive.operation import NeckOwnerId
+from compas_cgal.adaptive.operation import OrientedNeckScope
 from compas_cgal.adaptive.operation import NoNeckScope
+from compas_cgal.adaptive.operation import WidthClassId
 from compas_cgal.adaptive.policy import ACTIVE_PASSAGE_STATES
 from compas_cgal.adaptive.policy import CandidatePolicy
 from compas_cgal.adaptive.policy import CircleOrientation
@@ -190,7 +198,77 @@ def _terminal_lattice_candidate(
     )
 
 
-def _input_identity() -> InputIdentity:
+def _neck_lattice_candidates(
+    *,
+    identity: InputIdentity,
+) -> tuple[MiddleCurveCandidate, MiddleCurveCandidate]:
+    axis = _axis()
+    edge = next(
+        edge
+        for edge in axis.edges
+        if edge.curve_kind == "parabola" and tuple(sample for sample in axis.samples if sample.edge_id == edge.identity)[-1].point == Point2[WorldXY].build(1.0, 2.0)
+    )
+    samples = tuple(sample for sample in axis.samples if sample.edge_id == edge.identity)
+    first_span = MiddleCurveSpan.build(
+        axis=axis,
+        cursor_before=samples[1],
+        cursor_limit=samples[2],
+    )
+    neck = NeckInventory.build(
+        axis=axis,
+        policy=identity.neck_policy,
+    ).necks[0]
+    first_passage = neck.forward
+    first_decision = first_passage.propose_cap_decision(identity.neck_policy)
+    first = next(
+        candidate
+        for candidate in enumerate_middle_curve_candidates(
+            span=first_span,
+            policy=identity.candidate_policy,
+            circle_orientation=CircleOrientation.COUNTERCLOCKWISE,
+            neck_scope=first_passage.scope,
+            effective_cap_decision=first_decision,
+            makes_cursor_terminal_at_limit=False,
+        )
+        if candidate.spatial_progress == Fraction(1, 4)
+        and candidate.guide_radius == Fraction(1, 8)
+        and candidate.phase_index == 2
+        and candidate.proposal.generator_site.kind == "point"
+        and candidate.proposal.generator_site.source == Point2[WorldXY].build(2.0, 2.0)
+    )
+    second_passage = first_passage.advance(first_decision)
+    second_decision = second_passage.propose_cap_decision(identity.neck_policy)
+    terminal_span = MiddleCurveSpan.build(
+        axis=axis,
+        cursor_before=DerivedCandidateCursor.build(
+            span=first_span,
+            candidate=first,
+        ),
+        cursor_limit=samples[2],
+    )
+    second = next(
+        candidate
+        for candidate in enumerate_middle_curve_candidates(
+            span=terminal_span,
+            policy=identity.candidate_policy,
+            circle_orientation=CircleOrientation.COUNTERCLOCKWISE,
+            neck_scope=second_passage.scope,
+            effective_cap_decision=second_decision,
+            makes_cursor_terminal_at_limit=True,
+        )
+        if candidate.spatial_progress == Fraction(1, 4)
+        and candidate.guide_radius == Fraction(1, 8)
+        and candidate.phase_index == 3
+        and candidate.proposal.generator_site.kind == "point"
+        and candidate.proposal.generator_site.source == Point2[WorldXY].build(2.0, 2.0)
+    )
+    return first, second
+
+
+def _input_identity(
+    *,
+    neck_cap_degrees: tuple[float, float, float] = (90.0, 80.0, 70.0),
+) -> InputIdentity:
     design_boundary = _ring()
     tool_radius = ToolRadius.build(0.5)
     candidate_policy = _candidate_policy()
@@ -229,7 +307,7 @@ def _input_identity() -> InputIdentity:
         squared_width_boundaries=(SquaredMillimetre(Fraction(4)),),
         effective_caps={
             (neck_class, passage_state): EngagementCap.build(
-                math.radians(90.0 - 10.0 * passage_state.rank),
+                math.radians(neck_cap_degrees[passage_state.rank]),
             )
             for neck_class in range(2)
             for passage_state in ACTIVE_PASSAGE_STATES
@@ -734,3 +812,262 @@ def test_replay_certifies_paired_link_and_circle_before_terminal_check(
         "circle-deplete",
         "circle-coverage",
     ]
+
+
+def test_replay_certifies_first_neck_circle_at_reconstructed_cap(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Pass the freshly reconstructed neck cap to the real motion certifier.
+
+    The first circle lies in the authenticated entry void, so it is physically
+    valid at the narrower 90-degree first-passage cap.  Wrapping the real
+    certifier makes the consumer boundary observable without replacing its
+    engagement proof.
+    """
+    identity = _input_identity()
+    first, _ = _neck_lattice_candidates(identity=identity)
+    observed_caps: list[EngagementCap] = []
+    certify = MotionCertifier.certify
+
+    def tracked_certify(
+        certifier: MotionCertifier,
+        **kwargs: object,
+    ) -> object:
+        effective_cap = kwargs["effective_cap"]
+        assert isinstance(effective_cap, EngagementCap)
+        observed_caps.append(effective_cap)
+        return certify(certifier, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(MotionCertifier, "certify", tracked_certify)
+
+    with pytest.raises(
+        ReplayTraversalError,
+        match="fresh MAT traversal remains nonterminal",
+    ):
+        _replay(
+            identity,
+            (
+                identity.entry.approach,
+                identity.entry.plunge,
+                _candidate_circle_operation(identity, first),
+            ),
+        )
+
+    assert observed_caps == [EngagementCap.build(math.radians(90.0))]
+
+
+def test_replay_reconstructs_two_oriented_neck_passages_before_motion() -> None:
+    """Replay two accepted circles against one freshly owned neck passage.
+
+    The first circle consumes the forward passage's unvisited transition.  Its
+    paired link carries the second transition without advancing it, and the
+    second circle alone advances first-pass-complete state.  Reaching the known
+    nonterminal MAT boundary proves both state-bearing cap decisions survived
+    fresh inventory, lattice, pairing, and motion replay.  Equal cap angles
+    isolate state ownership from the separate candidate-feasibility problem.
+    """
+    identity = _input_identity(
+        neck_cap_degrees=(120.0, 120.0, 120.0),
+    )
+    first, second = _neck_lattice_candidates(identity=identity)
+    link = _link_to_candidate(
+        identity,
+        start=_phase_point(first),
+        candidate=second,
+    )
+
+    with pytest.raises(
+        ReplayTraversalError,
+        match="fresh MAT traversal remains nonterminal",
+    ):
+        _replay(
+            identity,
+            (
+                identity.entry.approach,
+                identity.entry.plunge,
+                _candidate_circle_operation(identity, first),
+                link,
+                _candidate_circle_operation(identity, second),
+            ),
+        )
+
+
+def test_replay_preserves_real_second_passage_cap_violation() -> None:
+    """Keep passage replay distinct from geometric candidate feasibility.
+
+    The same genuine two-circle lineage is legal in neck state, but its second
+    circle exceeds the production policy's 80-degree cap against post-link
+    stock.  Replay must preserve that exact negative instead of treating a valid
+    state transition as motion acceptance or silently certifying at user cap.
+    """
+    identity = _input_identity()
+    first, second = _neck_lattice_candidates(identity=identity)
+    link = _link_to_candidate(
+        identity,
+        start=_phase_point(first),
+        candidate=second,
+    )
+
+    with pytest.raises(
+        EngagementCapExceededError,
+        match="operation 4",
+    ):
+        _replay(
+            identity,
+            (
+                identity.entry.approach,
+                identity.entry.plunge,
+                _candidate_circle_operation(identity, first),
+                link,
+                _candidate_circle_operation(identity, second),
+            ),
+        )
+
+
+def test_replay_rejects_reused_neck_transition_before_fresh_state_mutation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Reject replay that reuses an already consumed passage transition.
+
+    The second circle keeps its genuine geometry and traversal but repeats the
+    first circle's cap decision.  Accepting it would let a recorded operation
+    stream choose passage state instead of deriving state from prior accepted
+    circles.  The entire stream must fail before authenticated entry depletion.
+    """
+    identity = _input_identity(
+        neck_cap_degrees=(120.0, 120.0, 120.0),
+    )
+    first, second = _neck_lattice_candidates(identity=identity)
+    mutated_second = CutFullCircleOperation.build(
+        motion=second.motion,
+        cut_z=identity.cut_plane.cut_z,
+        material_side=MaterialSide.OUTSIDE,
+        neck_scope=second.neck_scope,
+        effective_cap_decision=first.effective_cap_decision,
+        traversal_decision=second.traversal_decision,
+    )
+    link = _link_to_candidate(
+        identity,
+        start=_phase_point(first),
+        candidate=second,
+    )
+
+    def unexpected_deplete(
+        stock: Stock2Area,
+        depletion: object,
+        *args: object,
+    ) -> object:
+        pytest.fail("neck replay mutated fresh stock")
+
+    monkeypatch.setattr(Stock2Area, "deplete", unexpected_deplete)
+
+    with pytest.raises(
+        ReplayEffectiveCapError,
+        match="fresh oriented-neck passage",
+    ):
+        _replay(
+            identity,
+            (
+                identity.entry.approach,
+                identity.entry.plunge,
+                _candidate_circle_operation(identity, first),
+                link,
+                mutated_second,
+            ),
+        )
+
+
+def test_replay_rejects_neck_owner_absent_from_fresh_inventory() -> None:
+    """Reject a structurally valid scope that names no rebuilt exact neck.
+
+    The cap decision, circle, and traversal all come from a genuine first
+    passage.  Replacing only the scope owner must fail before candidate matching;
+    otherwise arbitrary operation bytes could select policy state without an
+    authenticated MAT-neck owner.
+    """
+    identity = _input_identity()
+    first, _ = _neck_lattice_candidates(identity=identity)
+    scope = first.neck_scope
+    assert isinstance(scope, OrientedNeckScope)
+    foreign_scope = OrientedNeckScope.build(
+        neck_owner_id=NeckOwnerId(b"\xff" * 32),
+        orientation=scope.orientation,
+    )
+    mutated = CutFullCircleOperation.build(
+        motion=first.motion,
+        cut_z=identity.cut_plane.cut_z,
+        material_side=MaterialSide.OUTSIDE,
+        neck_scope=foreign_scope,
+        effective_cap_decision=first.effective_cap_decision,
+        traversal_decision=first.traversal_decision,
+    )
+
+    with pytest.raises(
+        ReplayEffectiveCapError,
+        match="no owner in the fresh exact inventory",
+    ):
+        _replay(
+            identity,
+            (
+                identity.entry.approach,
+                identity.entry.plunge,
+                mutated,
+            ),
+        )
+
+
+@pytest.mark.parametrize(
+    "mutated_field",
+    ("evidence", "width-class", "effective-cap"),
+)
+def test_replay_rejects_each_mutated_neck_cap_field(
+    mutated_field: str,
+) -> None:
+    """Bind every policy-bearing field of the fresh neck-cap decision.
+
+    Each operation retains genuine motion, scope, traversal, and passage state.
+    A replay implementation that compared only the state transition could still
+    accept foreign evidence, a broader width class, or altered cap bytes.
+    """
+    identity = _input_identity()
+    first, _ = _neck_lattice_candidates(identity=identity)
+    decision = first.effective_cap_decision
+    assert isinstance(decision, NeckCapDecision)
+    evidence_digest = decision.neck_evidence_digest
+    width_class_id = decision.width_class_id
+    effective_cap = EngagementCap.build(math.radians(90.0))
+    if mutated_field == "evidence":
+        evidence_digest = IdentityDigest(b"\xff" * 32)
+    elif mutated_field == "width-class":
+        width_class_id = WidthClassId.build(1)
+    else:
+        effective_cap = EngagementCap.build(math.radians(85.0))
+    mutated_decision = NeckCapDecision.build(
+        neck_evidence_digest=evidence_digest,
+        width_class_id=width_class_id,
+        passage_before=decision.passage_before,
+        passage_after=decision.passage_after,
+        user_cap=identity.user_cap,
+        effective_cap=effective_cap,
+    )
+    mutated = CutFullCircleOperation.build(
+        motion=first.motion,
+        cut_z=identity.cut_plane.cut_z,
+        material_side=MaterialSide.OUTSIDE,
+        neck_scope=first.neck_scope,
+        effective_cap_decision=mutated_decision,
+        traversal_decision=first.traversal_decision,
+    )
+
+    with pytest.raises(
+        ReplayEffectiveCapError,
+        match="fresh oriented-neck passage",
+    ):
+        _replay(
+            identity,
+            (
+                identity.entry.approach,
+                identity.entry.plunge,
+                mutated,
+            ),
+        )
