@@ -76,13 +76,14 @@ T0 Pixi + native-source lock
 T0 + T3 + T5 ─ T9 exactly clipped true MAT
                 └─ T10 typed MAT + neck/candidate lattice
 T2 + T3 + T8 + T10 ─ T11 entry + containment + InputIdentity
-                     ├─ T11A fresh independent replay
+                     ├─ T11A-R fresh replay foundation
                      └─ T12 transactional candidate evaluator
-T11A + T12 ─ T13 traversal + generator + coverage
-                             └─ T14 artifact assembly + schema
-                                 └─ T14A tri-dexel removal/thermal validation
-                                      └─ T15 acceptance + mutation campaign
-                                          └─ T16 full verification/review
+T11A-R + T12 ─ T13 traversal + scope + generator + coverage
+                └─ T11A-S terminal replay seal
+                    └─ T14 artifact assembly + schema
+                        └─ T14A tri-dexel removal/thermal validation
+                             └─ T15 acceptance + mutation campaign
+                                 └─ T16 full verification/review
 ```
 
 ## File morphology
@@ -1827,6 +1828,19 @@ produce byte-identical trace records. The trace remains deliberately distinct
 from `ReplayCertificate`: nonterminal or nonempty state can retain diagnostic
 evidence without acquiring a completion verdict.
 
+The terminal-seal audit exposed a hidden causal dependency. The same exact
+L-pocket motion and byte-identical traversal decision can be enumerated with
+either `NoNeckScope` at the `120 degrees` user cap or a submitted oriented
+scope at `90 degrees`. Fresh replay validates the submitted oriented
+owner/state/cap, but its independent per-edge cursor map cannot derive which
+certified separating cut was crossed or in which orientation. The reproduced
+candidate edge lies in both cut unions and is neither plateau complement, so
+edge membership cannot repair the missing proof. Task 13 must own global
+certified-side/branch history and assign neck scope. Task 11A is therefore
+split into replay foundation (`T11A-R`, now gated) and terminal seal
+(`T11A-S`, after Task 13); Task 12 proceeds next. No certificate is weakened:
+the current nonterminal gate still prevents any `ReplayCertificate`.
+
 **Files**
 
 - Modify: `src/compas_cgal/adaptive/errors.py`
@@ -1967,8 +1981,9 @@ Implemented foundation:
 - fail-closed candidate, reused-passage, foreign-neck, and
   nonterminal-traversal mutation coverage.
 
-Pending before this task is GREEN: terminal traversal, exact empty residual,
-and the complete immutable `ReplayCertificate`.
+Pending before the terminal seal is GREEN: Task 13 traversal-owned neck-scope
+assignment, terminal traversal, exact empty residual, and the complete
+immutable `ReplayCertificate`.
 
 Current ordered-evidence stage:
 
@@ -1992,6 +2007,9 @@ Commit: `feat(cert): add independent replay`
 ---
 
 ## Task 12 — Implement joint transactional candidate evaluation
+
+**Dependencies:** Tasks 2, 3, 8, 10, and 11 plus the Task 11A-R replay
+chronology contracts.
 
 **Files**
 
@@ -2046,6 +2064,10 @@ Commit: `feat(adaptive): add atomic candidate commit`
 ---
 
 ## Task 13 — Traverse all MAT components and generate a covered path
+
+**Dependencies:** Task 11A-R and Task 12. This task owns causal neck-scope
+assignment from global separating-cut traversal and produces the terminal
+state consumed by Task 11A-S.
 
 **Files**
 
