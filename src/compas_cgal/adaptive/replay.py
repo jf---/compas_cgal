@@ -1,0 +1,575 @@
+import hashlib
+from collections.abc import Sequence
+from dataclasses import dataclass
+from typing import cast
+
+from compas.geometry import Polygon  # type: ignore[import-untyped]
+
+from compas_cgal.adaptive.candidates import DerivedCandidateCursor
+from compas_cgal.adaptive.candidates import MiddleCurveCandidate
+from compas_cgal.adaptive.candidates import MiddleCurveSpan
+from compas_cgal.adaptive.candidates import enumerate_middle_curve_candidates
+from compas_cgal.adaptive.canonical import CanonicalRingV1
+from compas_cgal.adaptive.canonical import encode_bytes
+from compas_cgal.adaptive.canonical import encode_component_map
+from compas_cgal.adaptive.canonical import encode_integer
+from compas_cgal.adaptive.canonical import encode_sequence
+from compas_cgal.adaptive.canonical import encode_tagged_union
+from compas_cgal.adaptive.entry import PreclearedEntry
+from compas_cgal.adaptive.entry import QualifiedBore
+from compas_cgal.adaptive.errors import InvalidReplayCertificateError
+from compas_cgal.adaptive.errors import ReplayCandidateError
+from compas_cgal.adaptive.errors import ReplayContinuityError
+from compas_cgal.adaptive.errors import ReplayCutDirectionError
+from compas_cgal.adaptive.errors import ReplayEffectiveCapError
+from compas_cgal.adaptive.errors import ReplayGrammarError
+from compas_cgal.adaptive.errors import ReplayInputMismatchError
+from compas_cgal.adaptive.errors import ReplayTraversalError
+from compas_cgal.adaptive.identity import IdentityDigest
+from compas_cgal.adaptive.identity import InputIdentity
+from compas_cgal.adaptive.medial_axis import MatEdgeId
+from compas_cgal.adaptive.medial_axis import MatSample
+from compas_cgal.adaptive.medial_axis import MedialAxis
+from compas_cgal.adaptive.motion import EngagementCap
+from compas_cgal.adaptive.operation import ApproachOperation
+from compas_cgal.adaptive.operation import CanonicalOperation
+from compas_cgal.adaptive.operation import CutFullCircleOperation
+from compas_cgal.adaptive.operation import FullCapDecision
+from compas_cgal.adaptive.operation import LinkSegmentOperation
+from compas_cgal.adaptive.operation import NoNeckScope
+from compas_cgal.adaptive.operation import PlungeOperation
+from compas_cgal.adaptive.policy import CandidatePolicy
+from compas_cgal.adaptive.policy import CutDirectionPolicy
+from compas_cgal.adaptive.policy import DepletionPolicy
+from compas_cgal.adaptive.policy import NeckPolicy
+from compas_cgal.adaptive.policy import TraversalPolicy
+from compas_cgal.adaptive.reachable_domain import ReachableDomain
+from compas_cgal.adaptive.units import CutPlane
+from compas_cgal.adaptive.units import Point2
+from compas_cgal.adaptive.units import ToolRadius
+from compas_cgal.adaptive.units import WorldXY
+
+
+def _canonical_ring(
+    polygon: Polygon,
+    *,
+    outer: bool,
+) -> CanonicalRingV1:
+    if type(polygon) is not Polygon:
+        raise ReplayInputMismatchError("replay pocket geometry must use exact compas Polygon inputs.")
+    if any(point.z != 0.0 for point in polygon.points):
+        raise ReplayInputMismatchError("replay pocket geometry must lie exactly in world XY.")
+    points = tuple(Point2[WorldXY].build(point.x, point.y) for point in polygon.points)
+    try:
+        if outer:
+            return CanonicalRingV1.build_outer(points)
+        return CanonicalRingV1.build_hole(points)
+    except ValueError as error:
+        raise ReplayInputMismatchError(str(error)) from None
+
+
+def _canonical_design(
+    pocket: Polygon,
+    holes: Sequence[Polygon],
+) -> tuple[CanonicalRingV1, tuple[CanonicalRingV1, ...]]:
+    if isinstance(holes, (str, bytes)):
+        raise ReplayInputMismatchError("replay holes must be a finite polygon sequence.")
+    try:
+        hole_polygons = tuple(holes)
+    except TypeError:
+        raise ReplayInputMismatchError("replay holes must be a finite polygon sequence.") from None
+    design_boundary = _canonical_ring(pocket, outer=True)
+    canonical_holes = tuple(
+        sorted(
+            (_canonical_ring(hole, outer=False) for hole in hole_polygons),
+            key=lambda ring: ring.canonical_bytes,
+        )
+    )
+    if len(canonical_holes) != len({hole.canonical_bytes for hole in canonical_holes}):
+        raise ReplayInputMismatchError("replay holes contain a canonical duplicate.")
+    return design_boundary, canonical_holes
+
+
+def _require_bound_inputs(
+    *,
+    input_identity: InputIdentity,
+    design_boundary: CanonicalRingV1,
+    holes: tuple[CanonicalRingV1, ...],
+    cut_plane: CutPlane,
+    tool_radius: ToolRadius,
+    user_cap: EngagementCap,
+    entry: PreclearedEntry,
+    candidate_policy: CandidatePolicy,
+    neck_policy: NeckPolicy,
+    depletion_policy: DepletionPolicy,
+    traversal_policy: TraversalPolicy,
+    cut_direction_policy: CutDirectionPolicy,
+) -> None:
+    if type(input_identity) is not InputIdentity:
+        raise ReplayInputMismatchError("replay requires one exact InputIdentity.")
+    for submitted, expected, name in (
+        (design_boundary, input_identity.design_boundary, "design boundary"),
+        (holes, input_identity.holes, "hole set"),
+        (cut_plane, input_identity.cut_plane, "cut plane"),
+        (tool_radius, input_identity.tool_radius, "tool radius"),
+        (user_cap, input_identity.user_cap, "user cap"),
+        (
+            candidate_policy,
+            input_identity.candidate_policy,
+            "candidate policy",
+        ),
+        (neck_policy, input_identity.neck_policy, "neck policy"),
+        (
+            depletion_policy,
+            input_identity.depletion_policy,
+            "depletion policy",
+        ),
+        (
+            traversal_policy,
+            input_identity.traversal_policy,
+            "traversal policy",
+        ),
+        (
+            cut_direction_policy,
+            input_identity.cut_direction_policy,
+            "cut-direction policy",
+        ),
+    ):
+        if submitted != expected:
+            raise ReplayInputMismatchError(f"submitted {name} differs from the authenticated input root.")
+    if type(entry) is not PreclearedEntry:
+        raise ReplayInputMismatchError("replay entry must use exact PreclearedEntry.")
+    if entry.canonical_bytes != input_identity.entry.canonical_bytes:
+        raise ReplayInputMismatchError("submitted entry differs from the authenticated input root.")
+
+
+def _rebuild_input_identity(
+    *,
+    input_identity: InputIdentity,
+    design_boundary: CanonicalRingV1,
+    holes: tuple[CanonicalRingV1, ...],
+    cut_plane: CutPlane,
+    tool_radius: ToolRadius,
+    user_cap: EngagementCap,
+    entry: PreclearedEntry,
+    candidate_policy: CandidatePolicy,
+    neck_policy: NeckPolicy,
+    depletion_policy: DepletionPolicy,
+    traversal_policy: TraversalPolicy,
+    cut_direction_policy: CutDirectionPolicy,
+) -> tuple[InputIdentity, ReachableDomain, PreclearedEntry]:
+    reachable_domain = ReachableDomain.build(
+        design_boundary=design_boundary,
+        holes=holes,
+        tool_radius=tool_radius,
+    )
+    qualified_bore = QualifiedBore.build(
+        cut_plane=cut_plane,
+        process_identity=entry.qualified_bore.process_identity,
+        evidence_bytes=entry.qualified_bore.evidence_bytes,
+    )
+    fresh_entry = PreclearedEntry.build(
+        reachable_domain=reachable_domain,
+        center=entry.center,
+        radius=entry.radius,
+        tool_radius=tool_radius,
+        cut_plane=cut_plane,
+        qualified_bore=qualified_bore,
+    )
+    rebuilt = InputIdentity.build(
+        design_boundary=design_boundary,
+        holes=holes,
+        cut_plane=cut_plane,
+        tool_radius=tool_radius,
+        reachable_domain=reachable_domain,
+        entry=fresh_entry,
+        user_cap=user_cap,
+        mat_sampling_policy=input_identity.mat_sampling_policy,
+        candidate_policy=candidate_policy,
+        neck_policy=neck_policy,
+        depletion_policy=depletion_policy,
+        traversal_policy=traversal_policy,
+        cut_direction_policy=cut_direction_policy,
+    )
+    if rebuilt.canonical_bytes != input_identity.canonical_bytes or rebuilt.digest != input_identity.digest:
+        raise ReplayInputMismatchError("fresh exact-state rebuild does not reproduce InputIdentity.")
+    return rebuilt, reachable_domain, fresh_entry
+
+
+def _validate_grammar(
+    operations: tuple[CanonicalOperation, ...],
+    entry: PreclearedEntry,
+    cut_plane: CutPlane,
+) -> None:
+    if type(operations) is not tuple or len(operations) < 3:
+        raise ReplayGrammarError("operation grammar requires approach, plunge, and lateral motion.")
+    if type(operations[0]) is not ApproachOperation or type(operations[1]) is not PlungeOperation:
+        raise ReplayGrammarError("operation grammar requires approach, plunge, then lateral motion.")
+    if operations[0] != entry.approach or operations[1] != entry.plunge:
+        raise ReplayGrammarError("approach and plunge must exactly match the qualified entry.")
+    lateral = operations[2:]
+    has_circle = False
+    for operation in lateral:
+        if type(operation) is LinkSegmentOperation:
+            if operation.cut_z != cut_plane.cut_z:
+                raise ReplayContinuityError("every lateral operation must remain on the authenticated cut plane.")
+            continue
+        if type(operation) is CutFullCircleOperation:
+            has_circle = True
+            if operation.cut_z != cut_plane.cut_z:
+                raise ReplayContinuityError("every lateral operation must remain on the authenticated cut plane.")
+            continue
+        raise ReplayGrammarError("operation grammar permits only link segments and full circles after plunge.")
+    if not has_circle:
+        raise ReplayGrammarError("operation grammar requires at least one accepted full circle.")
+
+
+def _phase_point(
+    operation: CutFullCircleOperation,
+) -> Point2[WorldXY]:
+    return Point2[WorldXY].build(
+        operation.motion.center.x + operation.motion.phase_vector.x,
+        operation.motion.center.y + operation.motion.phase_vector.y,
+    )
+
+
+def _validate_continuity(
+    operations: tuple[CanonicalOperation, ...],
+    entry: PreclearedEntry,
+) -> None:
+    current = entry.center
+    for operation in operations[2:]:
+        if type(operation) is LinkSegmentOperation:
+            if operation.motion.start != current:
+                raise ReplayContinuityError("link start does not equal the preceding exact phase endpoint.")
+            current = operation.motion.end
+            continue
+        if type(operation) is CutFullCircleOperation:
+            phase = _phase_point(operation)
+            if phase != current:
+                raise ReplayContinuityError("circle phase does not equal the preceding exact endpoint.")
+            current = phase
+            continue
+        raise ReplayGrammarError("operation grammar contains an unknown lateral type.")
+
+
+def _validate_cut_direction(
+    operations: tuple[CanonicalOperation, ...],
+    policy: CutDirectionPolicy,
+) -> None:
+    for operation in operations[2:]:
+        if type(operation) is not CutFullCircleOperation:
+            continue
+        expected = policy.circle_orientation(operation.material_side)
+        if operation.motion.clockwise is not expected.clockwise:
+            raise ReplayCutDirectionError("circle orientation contradicts its bound material side and cut-direction policy.")
+
+
+def _operation_chain(
+    input_digest: IdentityDigest,
+    operations: tuple[CanonicalOperation, ...],
+) -> tuple[bytes, tuple[IdentityDigest, ...]]:
+    operation_records = tuple(operation.canonical_bytes for operation in operations)
+    ordered_digest = hashlib.sha256(
+        encode_tagged_union(
+            b"replay-ordered-operations-v1",
+            encode_sequence(operation_records),
+        )
+    ).digest()
+    parent = bytes(input_digest)
+    chain: list[IdentityDigest] = []
+    for index, record in enumerate(operation_records):
+        link = IdentityDigest(
+            hashlib.sha256(
+                encode_tagged_union(
+                    b"replay-operation-index-v1",
+                    encode_component_map(
+                        {
+                            b"index": encode_integer(index),
+                            b"operation": record,
+                            b"parent": encode_bytes(parent),
+                        }
+                    ),
+                )
+            ).digest()
+        )
+        chain.append(link)
+        parent = bytes(link)
+    return ordered_digest, tuple(chain)
+
+
+def _rebuild_medial_axis(
+    *,
+    input_identity: InputIdentity,
+    design_boundary: CanonicalRingV1,
+    holes: tuple[CanonicalRingV1, ...],
+    tool_radius: ToolRadius,
+    reachable_domain: ReachableDomain,
+) -> MedialAxis:
+    sampling = input_identity.mat_sampling_policy
+    axis = MedialAxis.build(
+        design_boundary=design_boundary,
+        holes=holes,
+        tool_radius=tool_radius,
+        station_spacing=sampling.station_spacing,
+        max_sagitta=sampling.max_sagitta,
+        max_refinement_depth=sampling.max_refinement_depth,
+    )
+    if axis.center_domain_digest != reachable_domain.certificate.center_domain_digest:
+        raise ReplayInputMismatchError("fresh MAT center-domain identity contradicts the authenticated reachable domain.")
+    return axis
+
+
+def _edge_samples(
+    axis: MedialAxis,
+    edge_id: MatEdgeId,
+) -> tuple[MatSample, ...]:
+    samples = tuple(
+        sorted(
+            (sample for sample in axis.samples if sample.edge_id == edge_id),
+            key=lambda sample: sample.ordinal_on_edge,
+        )
+    )
+    if not samples:
+        raise ReplayTraversalError("fresh MAT edge has no proposal cursor sequence.")
+    return samples
+
+
+def _initial_cursor(
+    *,
+    samples: tuple[MatSample, ...],
+    operation: CutFullCircleOperation,
+) -> MatSample:
+    matches = tuple(sample for sample in samples if sample.cursor_identity == operation.traversal_decision.cursor_before)
+    if len(matches) != 1:
+        raise ReplayTraversalError("recorded cursor-before is not one unique fresh MAT sample.")
+    return matches[0]
+
+
+def _require_full_cap(
+    operation: CutFullCircleOperation,
+    user_cap: EngagementCap,
+) -> tuple[NoNeckScope, FullCapDecision]:
+    expected_scope = NoNeckScope.build()
+    expected_cap = FullCapDecision.build(
+        user_cap=user_cap,
+        effective_cap=user_cap,
+    )
+    if operation.neck_scope != expected_scope or operation.effective_cap_decision != expected_cap:
+        raise ReplayEffectiveCapError("recorded no-neck cap decision differs from the fresh full-cap policy result.")
+    return expected_scope, expected_cap
+
+
+def _candidate_matches_operation(
+    candidate: MiddleCurveCandidate,
+    operation: CutFullCircleOperation,
+) -> bool:
+    return (
+        candidate.motion == operation.motion
+        and candidate.neck_scope == operation.neck_scope
+        and candidate.effective_cap_decision == operation.effective_cap_decision
+        and candidate.traversal_decision == operation.traversal_decision
+    )
+
+
+def _match_circle_candidate(
+    *,
+    axis: MedialAxis,
+    operation: CutFullCircleOperation,
+    user_cap: EngagementCap,
+    candidate_policy: CandidatePolicy,
+    traversal_policy: TraversalPolicy,
+    cut_direction_policy: CutDirectionPolicy,
+    current_by_edge: dict[
+        MatEdgeId,
+        MatSample | DerivedCandidateCursor | None,
+    ],
+) -> MiddleCurveCandidate:
+    edge_id = MatEdgeId(bytes(operation.traversal_decision.edge_id))
+    edge = axis.edge_by_id.get(edge_id)
+    if edge is None:
+        raise ReplayTraversalError("recorded traversal edge is absent from the fresh MAT graph.")
+    samples = _edge_samples(axis, edge_id)
+    if edge_id in current_by_edge:
+        cursor_before = current_by_edge[edge_id]
+        if cursor_before is None:
+            raise ReplayTraversalError("recorded traversal advances an already terminal MAT cursor.")
+        if cursor_before.cursor_identity != operation.traversal_decision.cursor_before:
+            raise ReplayTraversalError("recorded cursor-before does not continue the fresh edge state.")
+    else:
+        cursor_before = _initial_cursor(
+            samples=samples,
+            operation=operation,
+        )
+
+    expected_scope, expected_cap = _require_full_cap(
+        operation,
+        user_cap,
+    )
+    orientation = cut_direction_policy.circle_orientation(operation.material_side)
+    if type(cursor_before) is MatSample:
+        first_limit_ordinal = cursor_before.ordinal_on_edge + 1
+    else:
+        first_limit_ordinal = cast(
+            DerivedCandidateCursor,
+            cursor_before,
+        ).minimum_limit_ordinal
+    limits = tuple(sample for sample in samples if sample.ordinal_on_edge >= first_limit_ordinal)[: traversal_policy.forward_window]
+    if not limits:
+        raise ReplayTraversalError("recorded cursor has no fresh native limit inside the forward window.")
+
+    matches: dict[
+        bytes,
+        tuple[MiddleCurveSpan, MiddleCurveCandidate],
+    ] = {}
+    for limit in limits:
+        span = MiddleCurveSpan.build(
+            axis=axis,
+            cursor_before=cursor_before,
+            cursor_limit=limit,
+        )
+        terminal_limit = limit.ordinal_on_edge == samples[-1].ordinal_on_edge
+        for candidate in enumerate_middle_curve_candidates(
+            span=span,
+            policy=candidate_policy,
+            circle_orientation=orientation,
+            neck_scope=expected_scope,
+            effective_cap_decision=expected_cap,
+            makes_cursor_terminal_at_limit=terminal_limit,
+        ):
+            if _candidate_matches_operation(candidate, operation):
+                matches[bytes(candidate.identity)] = (
+                    span,
+                    candidate,
+                )
+    if len(matches) != 1:
+        raise ReplayCandidateError("recorded circle does not identify one unique finite-lattice candidate.")
+    span, selected = next(iter(matches.values()))
+    if selected.traversal_decision.makes_cursor_terminal:
+        current_by_edge[edge_id] = None
+    elif selected.spatial_progress == span.reported_length:
+        current_by_edge[edge_id] = span.cursor_limit
+    else:
+        current_by_edge[edge_id] = DerivedCandidateCursor.build(
+            span=span,
+            candidate=selected,
+        )
+    return selected
+
+
+def _replay_candidate_stream(
+    *,
+    axis: MedialAxis,
+    operations: tuple[CanonicalOperation, ...],
+    user_cap: EngagementCap,
+    candidate_policy: CandidatePolicy,
+    traversal_policy: TraversalPolicy,
+    cut_direction_policy: CutDirectionPolicy,
+) -> tuple[MiddleCurveCandidate, ...]:
+    current_by_edge: dict[
+        MatEdgeId,
+        MatSample | DerivedCandidateCursor | None,
+    ] = {}
+    candidates: list[MiddleCurveCandidate] = []
+    for operation in operations[2:]:
+        if type(operation) is CutFullCircleOperation:
+            candidates.append(
+                _match_circle_candidate(
+                    axis=axis,
+                    operation=operation,
+                    user_cap=user_cap,
+                    candidate_policy=candidate_policy,
+                    traversal_policy=traversal_policy,
+                    cut_direction_policy=cut_direction_policy,
+                    current_by_edge=current_by_edge,
+                )
+            )
+    return tuple(candidates)
+
+
+@dataclass(frozen=True)
+class ReplayCertificate:
+    input_digest: IdentityDigest
+    ordered_operation_digest: bytes
+    operation_index_chain: tuple[IdentityDigest, ...]
+
+    def __post_init__(self) -> None:
+        if type(self.input_digest) is not bytes or len(self.input_digest) != 32:
+            raise InvalidReplayCertificateError("replay certificate input identity must be one SHA-256 digest.")
+        if type(self.ordered_operation_digest) is not bytes or len(self.ordered_operation_digest) != 32:
+            raise InvalidReplayCertificateError("replay certificate operation digest must be one SHA-256 digest.")
+        if (
+            type(self.operation_index_chain) is not tuple
+            or not self.operation_index_chain
+            or any(type(digest) is not bytes or len(digest) != 32 for digest in self.operation_index_chain)
+        ):
+            raise InvalidReplayCertificateError("replay certificate operation chain must contain exact SHA-256 digests.")
+
+
+def replay_certificate(
+    *,
+    input_identity: InputIdentity,
+    pocket: Polygon,
+    holes: Sequence[Polygon],
+    cut_plane: CutPlane,
+    tool_radius: ToolRadius,
+    user_cap: EngagementCap,
+    entry: PreclearedEntry,
+    operations: tuple[CanonicalOperation, ...],
+    candidate_policy: CandidatePolicy,
+    neck_policy: NeckPolicy,
+    depletion_policy: DepletionPolicy,
+    traversal_policy: TraversalPolicy,
+    cut_direction_policy: CutDirectionPolicy,
+) -> ReplayCertificate:
+    design_boundary, canonical_holes = _canonical_design(pocket, holes)
+    _require_bound_inputs(
+        input_identity=input_identity,
+        design_boundary=design_boundary,
+        holes=canonical_holes,
+        cut_plane=cut_plane,
+        tool_radius=tool_radius,
+        user_cap=user_cap,
+        entry=entry,
+        candidate_policy=candidate_policy,
+        neck_policy=neck_policy,
+        depletion_policy=depletion_policy,
+        traversal_policy=traversal_policy,
+        cut_direction_policy=cut_direction_policy,
+    )
+    _validate_grammar(operations, entry, cut_plane)
+    _validate_continuity(operations, entry)
+    _validate_cut_direction(operations, cut_direction_policy)
+    rebuilt, reachable_domain, fresh_entry = _rebuild_input_identity(
+        input_identity=input_identity,
+        design_boundary=design_boundary,
+        holes=canonical_holes,
+        cut_plane=cut_plane,
+        tool_radius=tool_radius,
+        user_cap=user_cap,
+        entry=entry,
+        candidate_policy=candidate_policy,
+        neck_policy=neck_policy,
+        depletion_policy=depletion_policy,
+        traversal_policy=traversal_policy,
+        cut_direction_policy=cut_direction_policy,
+    )
+    if fresh_entry.canonical_bytes != entry.canonical_bytes:
+        raise ReplayInputMismatchError("fresh qualified entry does not reproduce the submitted entry.")
+    _operation_chain(rebuilt.digest, operations)
+    axis = _rebuild_medial_axis(
+        input_identity=rebuilt,
+        design_boundary=design_boundary,
+        holes=canonical_holes,
+        tool_radius=tool_radius,
+        reachable_domain=reachable_domain,
+    )
+    _replay_candidate_stream(
+        axis=axis,
+        operations=operations,
+        user_cap=user_cap,
+        candidate_policy=candidate_policy,
+        traversal_policy=traversal_policy,
+        cut_direction_policy=cut_direction_policy,
+    )
+    raise ReplayTraversalError("fresh stock and coverage replay is required before certification.")

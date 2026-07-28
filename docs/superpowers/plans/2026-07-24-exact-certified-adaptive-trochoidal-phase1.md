@@ -1711,6 +1711,10 @@ Commit: `feat(adaptive): certify entry and input`
 
 **Dependencies:** Tasks 3, 8, 10, and 11.
 
+**Status (2026-07-28): in progress. Input/grammar/orientation and fresh
+no-neck candidate reconstruction are gated; replay still fails closed before
+stock/coverage and emits no certificate.**
+
 **Prerequisite repair (2026-07-28):** the replay audit found that exact MAT
 certificate identity is refinement-invariant while traversal cursor identity
 is not. `adaptive-input-schema-v2` therefore adds a required typed
@@ -1834,6 +1838,24 @@ pixi run pytest tests/adaptive/test_replay.py -n auto -q
 
 Separate immutable `ReplayCertificate`, policy/effective-cap recomputation, and
 the short-lived replay state. Do not mix replay into `stock_area.py`.
+
+Implemented foundation:
+
+- fresh canonical geometry, reachable domain, qualified entry, and
+  `InputIdentity` rebuild;
+- fresh `MedialAxis` from the input-bound sampling policy plus center-domain
+  digest authentication;
+- exact grammar, phase, cut-Z, and material-side-derived orientation checks;
+- exhaustive forward-window candidate reconstruction with independently
+  recomputed no-neck full cap;
+- unique motion/scope/cap/traversal matching, including proof-carrying derived
+  cursor continuation; and
+- fail-closed one-field traversal mutation coverage.
+
+Pending before this task is GREEN: neck-owner/passage reconstruction,
+link/circle pairing, containment, fresh entry-first stock and coverage,
+certify-before-deplete traces, terminal traversal, exact empty residual, and
+the complete immutable `ReplayCertificate`.
 
 ```bash
 pixi run format-adaptive
