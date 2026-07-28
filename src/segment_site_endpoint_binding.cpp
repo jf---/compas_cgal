@@ -2128,6 +2128,89 @@ bool same_nonparallel_segment_chart(
         && lhs.radicand == rhs.radicand;
 }
 
+void require_rational_nonparallel_point_limiter(
+    const MatExactPointSiteSource2& limiter)
+{
+    if (limiter.radicand <= 0
+        || limiter.x.radical != 0
+        || limiter.y.radical != 0)
+    {
+        throw NonRationalNonparallelSegmentPointLimiterError(
+            "nonparallel S-S point limiter is not rational");
+    }
+}
+
+FieldPolynomial2 nonparallel_point_limiter_equation(
+    const NonparallelSegmentBisectorParameterization2& primitive,
+    const MatExactOpenSegmentSource2& first_segment,
+    const MatExactOpenSegmentSource2& second_segment,
+    const MatExactPointSiteSource2& limiter)
+{
+    require_nonzero_line_normal(
+        first_segment,
+        "first source");
+    require_nonzero_line_normal(
+        second_segment,
+        "second source");
+    require_rational_nonparallel_point_limiter(
+        limiter);
+    const FieldPolynomial2 x =
+        field_coordinate(
+            primitive.x_rational,
+            primitive.x_radical);
+    const FieldPolynomial2 y =
+        field_coordinate(
+            primitive.y_rational,
+            primitive.y_radical);
+    const CORE::BigRat first_norm =
+        first_segment.line_a * first_segment.line_a
+        + first_segment.line_b * first_segment.line_b;
+    const CORE::BigRat second_norm =
+        second_segment.line_a * second_segment.line_a
+        + second_segment.line_b * second_segment.line_b;
+    const FieldPolynomial2 first_squared =
+        field_square(
+            line_value(x, y, first_segment),
+            primitive.radicand);
+    const FieldPolynomial2 second_squared =
+        field_square(
+            line_value(x, y, second_segment),
+            primitive.radicand);
+    const FieldPolynomial2 first_equidistance =
+        field_scale(
+            first_squared,
+            second_norm);
+    const FieldPolynomial2 second_equidistance =
+        field_scale(
+            second_squared,
+            first_norm);
+    if (first_equidistance.rational
+            != second_equidistance.rational
+        || first_equidistance.radical
+            != second_equidistance.radical)
+    {
+        throw MismatchedLiveNonparallelSegmentBridgeError(
+            "nonparallel S-S chart is not equidistant from both sources");
+    }
+    const FieldPolynomial2 equation =
+        field_subtract(
+            field_scale(
+                squared_distance(
+                    x,
+                    y,
+                    limiter,
+                    primitive.radicand),
+                first_norm),
+            first_squared);
+    if (polynomial_degree(equation.rational) > 2
+        || polynomial_degree(equation.radical) > 2)
+    {
+        throw InvalidRationalPrimitiveError(
+            "nonparallel S-S point limiter equation exceeds quadratic degree");
+    }
+    return equation;
+}
+
 FieldPolynomial2 nonparallel_segment_limiter_equation(
     const NonparallelSegmentBisectorParameterization2& primitive,
     const MatExactOpenSegmentSource2& first_segment,
@@ -2275,6 +2358,124 @@ MatParameterEndpoint2 bind_nonparallel_feature_endpoint(
         {owner_id});
     return exact_graph_endpoint_binding(
         endpoint);
+}
+
+MatParameterEndpoint2 bind_nonparallel_point_limiter_endpoint(
+    const NonparallelSegmentBisectorParameterization2& primitive,
+    const NonparallelSegmentFeatureDomain2& feature_domain,
+    const MatExactOpenSegmentSource2& first_segment,
+    const MatExactOpenSegmentSource2& second_segment,
+    const MatExactPointSiteSource2& limiter,
+    const MatTraits::Site_2& live_owner,
+    const MatTraits::Point_2& live_point)
+{
+    require_rational_nonparallel_point_limiter(
+        limiter);
+    if (!live_owner.is_point()
+        || live_owner.point()
+            != exact_live_point(
+                limiter,
+                limiter.radicand))
+    {
+        throw MismatchedLiveNonparallelSegmentBridgeError(
+            "nonparallel S-S point limiter record differs from live owner");
+    }
+    const FieldPolynomial2 equation =
+        nonparallel_point_limiter_equation(
+            primitive,
+            first_segment,
+            second_segment,
+            limiter);
+    const FieldZeroSetPolynomial2 zero_set =
+        field_zero_set_polynomial(
+            equation,
+            primitive.radicand);
+    if (is_zero(zero_set.polynomial))
+    {
+        throw IdenticallyZeroNonparallelPointLimiterEquationError(
+            "nonparallel S-S point limiter equality is not zero-dimensional");
+    }
+    ExactAlgebraicKernel1 kernel;
+    const std::vector<ExactFactorRootWitness2>
+        witnesses =
+            factor_root_witnesses(
+                integer_polynomial(
+                    zero_set.polynomial),
+                kernel);
+    const Algebraic feature_lower =
+        quadratic_field_algebraic_real(
+            feature_domain.lower.parameter,
+            feature_domain.radicand);
+    const Algebraic feature_upper =
+        quadratic_field_algebraic_real(
+            feature_domain.upper.parameter,
+            feature_domain.radicand);
+    const auto compare =
+        kernel.compare_1_object();
+    std::vector<MatParameterEndpoint2> matches;
+    for (const ExactFactorRootWitness2& witness :
+         witnesses)
+    {
+        if (compare(witness.root, feature_lower)
+                == CGAL::SMALLER
+            || compare(witness.root, feature_upper)
+                == CGAL::LARGER
+            || field_sign_at(
+                   equation,
+                   primitive.radicand,
+                   witness.root,
+                   kernel)
+                != CGAL::ZERO)
+        {
+            continue;
+        }
+        const CORE::Expr parameter =
+            exact_core_root(witness);
+        const MatTraits::Point_2 candidate =
+            nonparallel_segment_chart_point(
+                primitive,
+                parameter);
+        if (candidate != live_point)
+        {
+            continue;
+        }
+        MatParameterEndpoint2 endpoint{
+            witness.root,
+            {
+                witness.root_id,
+                limiter.stable_site_id,
+                "nonparallel-point-limiter/"
+                    + zero_set.factor_kind
+                    + "/"
+                    + std::to_string(
+                        witness.source_factor_multiplicity),
+            },
+        };
+        if (compare(witness.root, feature_lower)
+            == CGAL::EQUAL)
+        {
+            union_stable_ids(
+                endpoint.provenance_ids,
+                feature_domain.lower.provenance_ids);
+        }
+        if (compare(witness.root, feature_upper)
+            == CGAL::EQUAL)
+        {
+            union_stable_ids(
+                endpoint.provenance_ids,
+                feature_domain.upper.provenance_ids);
+        }
+        matches.push_back(std::move(endpoint));
+    }
+    if (matches.size() != 1)
+    {
+        throw UnboundLiveNonparallelSegmentEndpointError(
+            "nonparallel S-S live point binds "
+            + std::to_string(matches.size())
+            + " point-limiter roots");
+    }
+    return exact_graph_endpoint_binding(
+        matches.front());
 }
 
 MatParameterEndpoint2 bind_nonparallel_segment_limiter_endpoint(
@@ -2739,6 +2940,7 @@ bind_nonparallel_segment_segment_cell_endpoints_impl(
     const NonparallelSegmentFeatureDomain2& feature_domain,
     const MatExactOpenSegmentSource2& first_segment,
     const MatExactOpenSegmentSource2& second_segment,
+    const std::vector<MatExactPointSiteSource2>& point_limiters,
     const std::vector<MatExactOpenSegmentSource2>& segment_limiters,
     const std::vector<std::string>& generator_ids,
     const StableSiteIdentity& stable_site_identity,
@@ -2839,6 +3041,7 @@ bind_nonparallel_segment_segment_cell_endpoints_impl(
          &feature_domain,
          &first_segment,
          &second_segment,
+         &point_limiters,
          &segment_limiters,
          &feature_owner](
             const MatTraits::Point_2& live_point,
@@ -2851,6 +3054,39 @@ bind_nonparallel_segment_segment_cell_endpoints_impl(
                     feature_domain,
                     live_point,
                     owner_id);
+            }
+            if (live_owner.is_point())
+            {
+                std::vector<
+                    const MatExactPointSiteSource2*>
+                    matches;
+                for (const MatExactPointSiteSource2&
+                         limiter : point_limiters)
+                {
+                    if (limiter.stable_site_id
+                        == owner_id)
+                    {
+                        matches.push_back(&limiter);
+                    }
+                }
+                if (matches.empty())
+                {
+                    throw UnsupportedNonparallelSegmentLimiterError(
+                        "nonparallel S-S point limiter has no source record");
+                }
+                if (matches.size() != 1)
+                {
+                    throw AmbiguousNonparallelSegmentPointLimiterError(
+                        "nonparallel S-S point limiter identity is duplicated");
+                }
+                return bind_nonparallel_point_limiter_endpoint(
+                    primitive,
+                    feature_domain,
+                    first_segment,
+                    second_segment,
+                    *matches.front(),
+                    live_owner,
+                    live_point);
             }
             if (!live_owner.is_segment())
             {
@@ -2926,6 +3162,7 @@ bind_nonparallel_segment_segment_cell_endpoints(
     const NonparallelSegmentFeatureDomain2& feature_domain,
     const MatExactOpenSegmentSource2& first_segment,
     const MatExactOpenSegmentSource2& second_segment,
+    const std::vector<MatExactPointSiteSource2>& point_limiters,
     const std::vector<MatExactOpenSegmentSource2>& segment_limiters,
     const std::vector<std::string>& generator_ids,
     const std::vector<GeneratorSite2>& generators,
@@ -2944,6 +3181,71 @@ bind_nonparallel_segment_segment_cell_endpoints(
         feature_domain,
         first_segment,
         second_segment,
+        point_limiters,
+        segment_limiters,
+        generator_ids,
+        stable_site_identity,
+        voronoi,
+        halfedge);
+}
+
+std::pair<MatParameterEndpoint2, MatParameterEndpoint2>
+bind_nonparallel_segment_segment_cell_endpoints(
+    const NonparallelSegmentBisectorParameterization2& primitive,
+    const NonparallelSegmentFeatureDomain2& feature_domain,
+    const MatExactOpenSegmentSource2& first_segment,
+    const MatExactOpenSegmentSource2& second_segment,
+    const std::vector<MatExactOpenSegmentSource2>& segment_limiters,
+    const std::vector<std::string>& generator_ids,
+    const std::vector<GeneratorSite2>& generators,
+    const SegmentSiteVoronoi2& voronoi,
+    const SegmentSiteVoronoi2::Halfedge_handle& halfedge)
+{
+    const auto stable_site_identity =
+        [&generators](
+            const MatTraits::Site_2& site) {
+            return stable_generator_site_id(
+                site,
+                generators);
+        };
+    return bind_nonparallel_segment_segment_cell_endpoints_impl(
+        primitive,
+        feature_domain,
+        first_segment,
+        second_segment,
+        {},
+        segment_limiters,
+        generator_ids,
+        stable_site_identity,
+        voronoi,
+        halfedge);
+}
+
+std::pair<MatParameterEndpoint2, MatParameterEndpoint2>
+bind_nonparallel_segment_segment_cell_endpoints(
+    const NonparallelSegmentBisectorParameterization2& primitive,
+    const NonparallelSegmentFeatureDomain2& feature_domain,
+    const MatExactOpenSegmentSource2& first_segment,
+    const MatExactOpenSegmentSource2& second_segment,
+    const std::vector<MatExactPointSiteSource2>& point_limiters,
+    const std::vector<MatExactOpenSegmentSource2>& segment_limiters,
+    const std::vector<std::string>& generator_ids,
+    const CanonicalMatSiteGeometryIndex2& site_index,
+    const SegmentSiteVoronoi2& voronoi,
+    const SegmentSiteVoronoi2::Halfedge_handle& halfedge)
+{
+    const auto stable_site_identity =
+        [&site_index](
+            const MatTraits::Site_2& site)
+            -> const std::string& {
+            return site_index.stable_id(site);
+        };
+    return bind_nonparallel_segment_segment_cell_endpoints_impl(
+        primitive,
+        feature_domain,
+        first_segment,
+        second_segment,
+        point_limiters,
         segment_limiters,
         generator_ids,
         stable_site_identity,
@@ -2974,6 +3276,7 @@ bind_nonparallel_segment_segment_cell_endpoints(
         feature_domain,
         first_segment,
         second_segment,
+        {},
         segment_limiters,
         generator_ids,
         stable_site_identity,

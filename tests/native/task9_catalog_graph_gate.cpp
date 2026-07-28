@@ -121,6 +121,15 @@ compas::RowMatrixXd l_shape(
     return result;
 }
 
+CanonicalReachInput2 l_shape_input(
+    const bool transformed)
+{
+    return canonical_reach_input(
+        l_shape(transformed),
+        {},
+        1.0);
+}
+
 template <std::size_t PointCount>
 CanonicalReachInput2 polygon_input(
     const std::array<
@@ -932,6 +941,359 @@ bool malformed_normalized_node_identities_are_rejected()
         && framed_inputs_are_distinct;
 }
 
+std::vector<std::string> feature_tokens(
+    const CanonicalMatSiteCatalog2& catalog,
+    const std::vector<std::string>& stable_ids)
+{
+    std::vector<std::string> tokens;
+    tokens.reserve(stable_ids.size());
+    for (const std::string& stable_id :
+         stable_ids) {
+        const std::string token =
+            feature_token(
+                catalog,
+                stable_id);
+        if (token.empty()) {
+            return {};
+        }
+        tokens.push_back(token);
+    }
+    std::sort(
+        tokens.begin(),
+        tokens.end());
+    return tokens;
+}
+
+bool l_shape_graph_records_are_exact(
+    const MatExactGraph2& graph,
+    const CanonicalMatSiteCatalog2& catalog)
+{
+    if (graph.nodes.empty()) {
+        return false;
+    }
+    const std::vector<std::vector<std::string>>
+        expected_edges{
+            {"P3", "S0"},
+            {"P3", "S5"},
+            {"S0", "S1"},
+            {"S0", "S2"},
+            {"S0", "S5"},
+            {"S1", "S2"},
+            {"S3", "S4"},
+            {"S3", "S5"},
+            {"S4", "S5"},
+        };
+    const std::vector<std::vector<std::string>>
+        expected_nodes{
+            {"P0", "S0", "S5"},
+            {"P1", "S0", "S1"},
+            {"P2", "S1", "S2"},
+            {"P3", "S0", "S2"},
+            {"P3", "S0", "S5"},
+            {"P3", "S3", "S5"},
+            {"P4", "S3", "S4"},
+            {"P5", "S4", "S5"},
+            {"S0", "S1", "S2"},
+            {"S3", "S4", "S5"},
+        };
+    std::vector<std::vector<std::string>>
+        edge_tokens;
+    std::vector<std::vector<std::string>>
+        node_tokens;
+    std::set<std::string> node_ids;
+    std::map<std::string, std::size_t> degree;
+    std::size_t nonparallel_point_limiter_events =
+        0;
+
+    for (const MatExactGraphNode2& node :
+         graph.nodes) {
+        if (node.generator_site_ids.size()
+                != 3
+            || node.node_id
+                != stable_normalized_voronoi_node_identity_v1(
+                    node.generator_site_ids)
+            || !node_ids.insert(
+                    node.node_id)
+                    .second) {
+            return false;
+        }
+        for (const std::string& parent_id :
+             node.parent_site_ids) {
+            const auto index =
+                catalog.index_of(parent_id);
+            if (catalog.sites().at(
+                    static_cast<std::size_t>(
+                        index))
+                    .provenance()
+                    .kind
+                != MatSiteKind2::OpenSegment) {
+                return false;
+            }
+        }
+        node_tokens.push_back(
+            feature_tokens(
+                catalog,
+                node.generator_site_ids));
+    }
+    for (const MatExactGraphEdge2& edge :
+         graph.edges) {
+        const auto tokens =
+            feature_tokens(
+                catalog,
+                edge.generator_site_ids);
+        const bool point_segment =
+            tokens.size() == 2
+            && tokens[0].front() == 'P'
+            && tokens[1].front() == 'S';
+        for (const std::string& parent_id :
+             edge.parent_site_ids) {
+            const auto index =
+                catalog.index_of(parent_id);
+            if (catalog.sites().at(
+                    static_cast<std::size_t>(
+                        index))
+                    .provenance()
+                    .kind
+                != MatSiteKind2::OpenSegment) {
+                return false;
+            }
+        }
+        if ((point_segment
+                 && edge.parent_site_ids.size()
+                     != 3)
+            || (!point_segment
+                && edge.parent_site_ids
+                    != edge.generator_site_ids)) {
+            return false;
+        }
+        bool dual_valid = false;
+        if (point_segment) {
+            dual_valid =
+                edge.original_dual_id
+                == stable_dual_identity_v1(
+                    "point-segment",
+                    edge.generator_site_ids);
+        } else {
+            const std::array<std::string, 3>
+                kinds{
+                    "segment-segment",
+                    "segment-segment/branch-negative",
+                    "segment-segment/branch-positive",
+                };
+            dual_valid = std::any_of(
+                kinds.begin(),
+                kinds.end(),
+                [&edge](const std::string& kind) {
+                    return edge.original_dual_id
+                        == stable_dual_identity_v1(
+                            kind,
+                            edge.generator_site_ids);
+                });
+        }
+        if (!dual_valid
+            || edge.edge_id
+                != edge.original_dual_id
+                    + "/component-0"
+            || edge.primitive_kind
+                != (point_segment
+                        ? "PARABOLA"
+                        : "LINE")
+            || !edge.source_endpoint
+                    .parameter
+                    .has_value()
+            || !edge.target_endpoint
+                    .parameter
+                    .has_value()
+            || node_ids.count(
+                   edge.source_node_id)
+                != 1
+            || node_ids.count(
+                   edge.target_node_id)
+                != 1) {
+            return false;
+        }
+        const std::string source_root =
+            algebraic_root_identity_v1(
+                *edge.source_endpoint.parameter);
+        const std::string target_root =
+            algebraic_root_identity_v1(
+                *edge.target_endpoint.parameter);
+        if (std::find(
+                edge.source_endpoint
+                    .provenance_ids.begin(),
+                edge.source_endpoint
+                    .provenance_ids.end(),
+                source_root)
+                == edge.source_endpoint
+                       .provenance_ids.end()
+            || std::find(
+                   edge.target_endpoint
+                       .provenance_ids.begin(),
+                   edge.target_endpoint
+                       .provenance_ids.end(),
+                   target_root)
+                == edge.target_endpoint
+                       .provenance_ids.end()) {
+            return false;
+        }
+        for (const MatParameterEndpoint2* endpoint :
+             {
+                 &edge.source_endpoint,
+                 &edge.target_endpoint,
+             }) {
+            for (const std::string& provenance_id :
+                 endpoint->provenance_ids) {
+                if (provenance_id.rfind(
+                        "nonparallel-point-limiter/",
+                        0)
+                    == 0) {
+                    ++nonparallel_point_limiter_events;
+                }
+            }
+        }
+        edge_tokens.push_back(tokens);
+        ++degree[edge.source_node_id];
+        ++degree[edge.target_node_id];
+    }
+    std::sort(
+        edge_tokens.begin(),
+        edge_tokens.end());
+    std::sort(
+        node_tokens.begin(),
+        node_tokens.end());
+    std::vector<std::size_t> degrees;
+    degrees.reserve(graph.nodes.size());
+    for (const MatExactGraphNode2& node :
+         graph.nodes) {
+        degrees.push_back(
+            degree[node.node_id]);
+    }
+    std::sort(
+        degrees.begin(),
+        degrees.end());
+
+    std::set<std::string> reached;
+    reached.insert(
+        graph.nodes.front().node_id);
+    bool changed = true;
+    while (changed) {
+        changed = false;
+        for (const MatExactGraphEdge2& edge :
+             graph.edges) {
+            const bool source_reached =
+                reached.count(
+                    edge.source_node_id)
+                == 1;
+            const bool target_reached =
+                reached.count(
+                    edge.target_node_id)
+                == 1;
+            if (source_reached == target_reached) {
+                continue;
+            }
+            reached.insert(
+                source_reached
+                    ? edge.target_node_id
+                    : edge.source_node_id);
+            changed = true;
+        }
+    }
+    return graph.matched_generator_sites == 12
+        && graph.rejected_incident_transitions
+            == 12
+        && graph.edges.size() == 9
+        && graph.nodes.size() == 10
+        && nonparallel_point_limiter_events
+            == 1
+        && edge_tokens == expected_edges
+        && node_tokens == expected_nodes
+        && degrees
+            == std::vector<std::size_t>{
+                1,
+                1,
+                1,
+                1,
+                1,
+                2,
+                2,
+                3,
+                3,
+                3,
+            }
+        && reached.size()
+            == graph.nodes.size()
+        && graph.edges.size() + 1
+            == graph.nodes.size();
+}
+
+bool l_shape_graph_is_exact_and_invariant()
+{
+    const CanonicalReachInput2 input =
+        l_shape_input(false);
+    const CanonicalReachInput2 reversed_input =
+        l_shape_input(true);
+    const CanonicalMatSiteCatalog2 catalog =
+        canonical_mat_site_catalog(input);
+    const MatExactGraph2 radius_zero =
+        canonical_l_shape_mat_graph(
+            input,
+            0);
+    const MatExactGraph2 repeated =
+        canonical_l_shape_mat_graph(
+            input,
+            0);
+    const MatExactGraph2 reversed =
+        canonical_l_shape_mat_graph(
+            reversed_input,
+            0);
+    const MatExactGraph2 radius_one =
+        canonical_l_shape_mat_graph(
+            input,
+            1);
+    const MatExactGraph2 reversed_one =
+        canonical_l_shape_mat_graph(
+            reversed_input,
+            1);
+    return l_shape_graph_records_are_exact(
+               radius_zero,
+               catalog)
+        && graphs_equal(
+            radius_zero,
+            repeated)
+        && graphs_equal(
+            radius_zero,
+            reversed)
+        && graphs_equal(
+            radius_one,
+            reversed_one);
+}
+
+bool unsupported_l_shape_inputs_are_rejected()
+{
+    bool rectangle_rejected = false;
+    try {
+        static_cast<void>(
+            canonical_l_shape_mat_graph(
+                rectangle_input(false),
+                0));
+    } catch (
+        const UnsupportedCanonicalMatLShapeGraphError&) {
+        rectangle_rejected = true;
+    }
+    bool negative_rejected = false;
+    try {
+        static_cast<void>(
+            canonical_l_shape_mat_graph(
+                l_shape_input(false),
+                -1));
+    } catch (
+        const NegativeClearanceRadiusSquaredError&) {
+        negative_rejected = true;
+    }
+    return rectangle_rejected
+        && negative_rejected;
+}
+
 bool unsupported_rectangle_inputs_are_rejected()
 {
     const CanonicalReachInput2 triangle =
@@ -980,10 +1342,16 @@ bool catalog_graph_gate()
         normalized_node_identity_is_exact_and_invariant();
     const bool malformed_nodes_rejected =
         malformed_normalized_node_identities_are_rejected();
+    const bool l_shape_exact =
+        l_shape_graph_is_exact_and_invariant();
+    const bool unsupported_l_shape_rejected =
+        unsupported_l_shape_inputs_are_rejected();
     const bool unsupported_rejected =
         unsupported_rectangle_inputs_are_rejected();
     return exact_and_invariant
         && normalized_nodes
         && malformed_nodes_rejected
+        && l_shape_exact
+        && unsupported_l_shape_rejected
         && unsupported_rejected;
 }

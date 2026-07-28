@@ -420,6 +420,21 @@ MatExactPointSiteSource2 exact_point_source(
     };
 }
 
+std::vector<MatExactPointSiteSource2>
+point_limiters(
+    const CanonicalMatRationalSources2& sources)
+{
+    std::vector<MatExactPointSiteSource2> result;
+    result.reserve(
+        sources.points().size());
+    for (const auto& point :
+         sources.points()) {
+        result.push_back(
+            exact_point_source(point));
+    }
+    return result;
+}
+
 const CanonicalMatRationalPointSource2&
 rational_point(
     const CanonicalMatRationalSources2& sources,
@@ -795,6 +810,235 @@ bool point_segment_binding_rejects_invalid_sources()
     return false;
 }
 
+bool nonparallel_point_limiter_binding_is_exact()
+{
+    const CanonicalMatSiteCatalog2 catalog =
+        canonical_mat_site_catalog(
+            canonical_reach_input(
+                l_shape(false),
+                {},
+                1.0));
+    const CanonicalMatRationalSources2 sources =
+        CanonicalMatRationalSources2::build(
+            catalog);
+    CanonicalMatDelaunaySource2 delaunay =
+        CanonicalMatDelaunaySource2::build(
+            catalog);
+    const CanonicalMatVoronoiSource2 source =
+        CanonicalMatVoronoiSource2::build(
+            std::move(delaunay));
+    const std::vector<GeneratorSite2> generators =
+        linear_generators(catalog);
+    const std::vector<MatExactOpenSegmentSource2>
+        segment_sources =
+            segment_limiters(sources);
+    const std::vector<MatExactPointSiteSource2>
+        points =
+            point_limiters(sources);
+    const auto& bottom =
+        sources.segments()[0];
+    const auto& left =
+        sources.segments()[5];
+    const std::vector<std::string> generator_ids =
+        ordered_generator_site_ids(
+            bottom.stable_site_id,
+            left.stable_site_id);
+
+    for (auto halfedge =
+             source.voronoi().halfedges_begin();
+         halfedge
+         != source.voronoi().halfedges_end();
+         ++halfedge) {
+        const MatTraits::Site_2 up =
+            halfedge->up()->site();
+        const MatTraits::Site_2 down =
+            halfedge->down()->site();
+        if (!up.is_segment()
+            || !down.is_segment()) {
+            continue;
+        }
+        const std::string up_id =
+            source.site_index().stable_id(up);
+        if (up_id != generator_ids.front()
+            || ordered_generator_site_ids(
+                   up_id,
+                   source.site_index()
+                       .stable_id(down))
+                != generator_ids) {
+            continue;
+        }
+        MatTraits::Segment_2 representative;
+        if (!CGAL::assign(
+                representative,
+                source.voronoi()
+                    .dual()
+                    .primal(
+                        halfedge->dual()))) {
+            return false;
+        }
+        const NonparallelSegmentBisectorParameterization2
+            primitive =
+                nonparallel_segment_bisector_parameterization(
+                    bottom.support,
+                    left.support,
+                    representative);
+        const NonparallelSegmentFeatureDomain2
+            feature_domain =
+                intersect_nonparallel_segment_feature_domains(
+                    nonparallel_boundary(
+                        primitive,
+                        bottom.support,
+                        sources.points()[0]),
+                    nonparallel_boundary(
+                        primitive,
+                        bottom.support,
+                        sources.points()[1]),
+                    nonparallel_boundary(
+                        primitive,
+                        left.support,
+                        sources.points()[5]),
+                    nonparallel_boundary(
+                        primitive,
+                        left.support,
+                        sources.points()[0]),
+                    primitive.radicand);
+        const auto table =
+            bind_nonparallel_segment_segment_cell_endpoints(
+                primitive,
+                feature_domain,
+                bottom.support,
+                left.support,
+                points,
+                segment_sources,
+                generator_ids,
+                generators,
+                source.voronoi(),
+                halfedge);
+        const auto indexed =
+            bind_nonparallel_segment_segment_cell_endpoints(
+                primitive,
+                feature_domain,
+                bottom.support,
+                left.support,
+                points,
+                segment_sources,
+                generator_ids,
+                source.site_index(),
+                source.voronoi(),
+                halfedge);
+        if (!endpoints_equal(
+                table,
+                indexed)) {
+            return false;
+        }
+        std::size_t point_events = 0;
+        for (const MatParameterEndpoint2* endpoint :
+             {
+                 &indexed.first,
+                 &indexed.second,
+             }) {
+            point_events +=
+                static_cast<std::size_t>(
+                    std::count_if(
+                        endpoint
+                            ->provenance_ids.begin(),
+                        endpoint
+                            ->provenance_ids.end(),
+                        [](const std::string& id) {
+                            return id.rfind(
+                                       "nonparallel-point-limiter/",
+                                       0)
+                                == 0;
+                        }));
+        }
+        bool missing = false;
+        try {
+            static_cast<void>(
+                bind_nonparallel_segment_segment_cell_endpoints(
+                    primitive,
+                    feature_domain,
+                    bottom.support,
+                    left.support,
+                    {},
+                    segment_sources,
+                    generator_ids,
+                    source.site_index(),
+                    source.voronoi(),
+                    halfedge));
+        } catch (
+            const UnsupportedNonparallelSegmentLimiterError&) {
+            missing = true;
+        }
+        std::vector<MatExactPointSiteSource2>
+            duplicate = points;
+        duplicate.push_back(
+            exact_point_source(
+                sources.points()[3]));
+        bool ambiguous = false;
+        try {
+            static_cast<void>(
+                bind_nonparallel_segment_segment_cell_endpoints(
+                    primitive,
+                    feature_domain,
+                    bottom.support,
+                    left.support,
+                    duplicate,
+                    segment_sources,
+                    generator_ids,
+                    source.site_index(),
+                    source.voronoi(),
+                    halfedge));
+        } catch (
+            const AmbiguousNonparallelSegmentPointLimiterError&) {
+            ambiguous = true;
+        }
+        std::vector<MatExactPointSiteSource2>
+            nonrational;
+        nonrational.reserve(points.size());
+        for (const auto& point :
+             sources.points()) {
+            if (point.stable_site_id
+                == sources.points()[3]
+                       .stable_site_id) {
+                nonrational.push_back(
+                    {
+                        point.stable_site_id,
+                        {point.x, 1},
+                        {point.y, 0},
+                        2,
+                    });
+            } else {
+                nonrational.push_back(
+                    exact_point_source(
+                        point));
+            }
+        }
+        bool irrational = false;
+        try {
+            static_cast<void>(
+                bind_nonparallel_segment_segment_cell_endpoints(
+                    primitive,
+                    feature_domain,
+                    bottom.support,
+                    left.support,
+                    nonrational,
+                    segment_sources,
+                    generator_ids,
+                    source.site_index(),
+                    source.voronoi(),
+                    halfedge));
+        } catch (
+            const NonRationalNonparallelSegmentPointLimiterError&) {
+            irrational = true;
+        }
+        return point_events == 1
+            && missing
+            && ambiguous
+            && irrational;
+    }
+    return false;
+}
+
 bool primitives_equal(
     const RationalPrimitiveParameterization2& left,
     const RationalPrimitiveParameterization2& right)
@@ -1034,6 +1278,7 @@ bool indexed_endpoint_binding_gate()
 {
     return parallel_binding_uses_same_exact_records()
         && nonparallel_binding_uses_same_exact_records()
+        && nonparallel_point_limiter_binding_is_exact()
         && point_segment_binding_uses_catalog_index()
         && point_segment_binding_rejects_invalid_sources()
         && point_point_ray_binding_is_exact_and_invariant()
