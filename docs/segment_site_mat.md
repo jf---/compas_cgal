@@ -903,6 +903,240 @@ primitives does not automatically preserve its engagement bound. Phase 1
 therefore certifies its declared primitive grammar and does not infer a C²
 certificate from Hausdorff closeness.
 
+## Commercial field scope: Held first, Cimatron second
+
+Held and Pfeiffer remain first: the direct published algorithmic reference,
+the matched runtime target, and the comparison that drives the current task
+sequence. Cimatron adds a second, commercial field boundary. It does not
+replace Held and Pfeiffer, redirect Phase 1, reorder the task list, or change
+the matched performance target.
+
+Cimatron asks a different downstream question: whether the resulting
+technology can earn a place inside a complete high-end
+production-machining system.
+
+That distinction is substantial. Cimatron's current public material describes
+an integrated 2.5-to-5-axis system with hybrid CAD preparation, high-speed
+roughing, continuously updated stock, constant-tool-load and trochoidal
+strategies, finishing, machine-kinematic and material-removal simulation,
+collision and gouge checking, post-processing, and shop-floor output
+[Cimatron NC programming][cimatron-nc-programming]
+[Cimatron NC guide][cimatron-nc-guide-2026]. Its declared application scope
+includes hard materials, exotic alloys, deep cavities, freeform surfaces,
+molds, dies, electrodes, and discrete parts
+[Cimatron complex materials][cimatron-hard-materials]. The product originated
+in Israel: Cimatron Ltd. reported incorporation under Israeli law in 1982
+[Cimatron 2011 filing][cimatron-israel-2011]. Cimatron is now part of Sandvik
+Group, connecting the software product to a much broader machining and
+cutting-tool organization [Cimatron company][cimatron-company-2025].
+
+The high-end classification therefore comes from production scope and
+consequence, not an unverifiable license-price superlative. Public licensing
+is package- and reseller-dependent. This engineering record does not call
+Cimatron the most expensive CAM system and does not use purchase price as a
+technical comparator.
+
+### Reference order and purpose
+
+| Order | Reference | Question it answers | Current comparative status |
+| --- | --- | --- | --- |
+| 1 | Held–Pfeiffer 2025 | Can this geometric strategy generate complete engagement-controlled paths efficiently under a published algorithm and timing scope? | Phase 1 has a stronger exact local certificate contract, but weaker end-to-end and performance evidence |
+| 2 | Cimatron | Can this capability participate in the complete workflow by which difficult geometry becomes safe machine motion? | Phase 1 is substantially weaker and incomplete as a production CAM system |
+| Programme under assessment | Exact-certified Phase 1 | Can every accepted roughing motion carry replayable geometric, stock, coverage, and traversal evidence? | Stronger public proof contract on the implemented bounded fixtures; incomplete path, integration, physical-validation, and product claims |
+
+The reviewed Cimatron material reports constant tool load, trochoidal motion,
+auto-updated stock, collision and gouge checking, and several simulation modes.
+It does not publicly specify an exact continuous-engagement proof object,
+content-addressed deciding authority, certify-before-deplete replay, or exact
+residual certificate. That is a statement about the reviewed public evidence,
+not a claim that no private or future Cimatron component can provide an
+equivalent contract.
+
+| Dimension | Status against Cimatron | Cimatron public advantage | Phase-1 position |
+| --- | --- | --- | --- |
+| CAD-to-NC workflow | weaker | Integrated model preparation, process planning, 2.5-to-5-axis operations, post-processors, reports, and support | Exact adaptive roughing is one bounded subsystem; it does not own the production setup or NC delivery chain |
+| High-speed roughing | incomplete | Production constant-load, trochoidal, rest-material, finishing, and continually updated stock workflows | Exact local MAT, containment, engagement, candidate, and replay contracts exist; a complete arbitrary-pocket certified path does not |
+| Geometric proof | stronger public contract on bounded fixtures; incomplete product scope | Publicly described verification is simulation, material-removal, collision, and gouge checking | Exact decisions, immutable witnesses, stock lineage, and fresh replay are first-class outputs, but only the implemented scope may be claimed |
+| Machine verification | weaker | G-code and machine-kinematic simulation, proven post-processors, fixtures, tools, holders, and remaining stock | No post-processed machine programme or machine-kinematic qualification exists |
+| Independent stock observation | weaker now; planned complementary evidence | Mature 3-axis and 5-axis material-removal simulation, including an integrated ModuleWorks simulator and interfaces to other verification products [Cimatron simulation][cimatron-simulation-2026] | Task 14A's tri-dexel consumer is planned, separately versioned, and subordinate to exact proof |
+| Thermal/process physics | incomplete | No equivalent thermal claim was found in the reviewed public material, but Cimatron has mature machining-domain integration | The planned heat-aware tri-dexel render is explicitly uncalibrated modeled response until physical validation closes |
+| Deployment evidence | weaker | Decades of production use, reseller and support infrastructure, machine/controller coverage, and toolmaking workflows | Repository tests and bounded fixtures are engineering evidence, not installed-base or production qualification |
+
+### Product wedge
+
+The first commercial objective is **not another complete Cimatron**. Rebuilding
+CAD repair, feature preparation, tool libraries, 5-axis programming, machine
+models, posts, simulation, reporting, deployment, and support would bury the
+novel proof contract beneath a feature-breadth programme in which established
+systems already have an overwhelming advantage.
+
+The product wedge is an **exact-certified adaptive roughing kernel for
+high-consequence milling**. A Cimatron-class production system continues to
+own part preparation, setup, machine and controller semantics, post-processing,
+and shop-floor delivery. The kernel owns one narrow but costly decision:
+generation and certification of the engagement-controlled roughing operation.
+
+```text
+Cimatron-class production CAM
+    CAD / setup / tools / machine / controller
+                         |
+                         v
+          canonical pocket-operation contract
+                         |
+                         v
+       exact-certified adaptive roughing kernel
+             |                         |
+             |                         +--> certified operation stream
+             |                                  |
+             v                                  +--> incumbent post /
+       exact fresh replay                            machine verification
+             |
+             +--> authenticated tri-dexel removal /
+                  modeled thermal-response observation
+```
+
+One canonical artifact and operation identity join every lane. Embedded
+generation, exact replay, and downstream visualization are consumers of the
+same deciding record; they are not alternate geometric implementations. This
+preserves the single-path architecture while allowing the kernel to be
+packaged for a CAM vendor, cutting-tool or machine-tool organization, or a
+high-value manufacturer.
+
+The initial economic case is strongest where one failed cut dominates software
+cost: titanium and nickel-alloy aerospace work, energy components, high-value
+medical parts, difficult mold and die blocks, long-reach tools, and unattended
+roughing. The value proposition is not merely shorter cycle time. It is the
+combination of material-removal rate, bounded engagement, exact gouge and
+coverage evidence, reproducible replay, and a separately falsifiable removal
+record.
+
+### Exact proof and real-time thermal validation reinforce each other
+
+The exact kernel and the heat-aware tri-dexel are not adjacent features. They
+close different failure classes around the same authenticated operation:
+
+| Authority | What it establishes | What it deliberately cannot establish |
+| --- | --- | --- |
+| Exact adaptive kernel | continuous containment and engagement, exact boundary/equality handling, accepted-motion identity, and certify-before-deplete chronology | temperature, heat partition, cumulative thermal memory, tool wear, or measured machine response |
+| Real-time thermal tri-dexel | operation-local removal, evolving exposed stock, cut-clock history, spatial heat accumulation, and a process-response state | exact continuous containment, exact engagement truth, or permission to accept geometrically unsafe motion |
+
+The coupling is stronger than either subsystem alone. The exact artifact gives
+the tri-dexel an unambiguous ordered source instead of asking a simulator to
+recover intent from approximate geometry. The tri-dexel then tests physical
+and temporal consequences that a geometric certificate must not pretend to
+prove. Canonical operation identity joins the exact witness, removal interval,
+thermal-state transition, and inspected render, so a discrepancy remains
+attributable to one cut.
+
+This is especially consequential for titanium and other difficult,
+low-conductivity alloys. Two motions can satisfy the same instantaneous
+engagement cap while producing different cumulative thermal states because
+their order, dwell, recently exposed stock, and spatial recurrence differ.
+Exact engagement bounds the immediate geometric load; the thermal tri-dexel
+retains the process memory needed to distinguish those otherwise legal
+motions. The combination therefore supports a higher-value question than
+either “is the path gouge-free?” or “does the simulated stock look correct?”:
+**is this exact-safe operation sequence also inside the qualified thermal
+process envelope?**
+
+The intended real-time lane does not run a finite-element solve per motion.
+Its runtime mechanism is an incremental tri-dexel state update driven by the
+authenticated cut clock. Finite-element analysis is not a production
+dependency or online acceptance gate. Higher-fidelity simulation may be used
+offline as one calibration or falsification source, but physical
+instrumentation remains the decisive route for identifying heat partition,
+conduction, chip/coolant removal, and boundary parameters. Once those
+parameters and their validity domain are versioned and validated, the
+tri-dexel itself is the real-time thermal validation engine.
+
+The reviewed commercial field contains important pieces of this architecture
+but no publicly evidenced equivalent of the complete combination:
+
+- Cimatron reports continuously updated stock, constant-load trochoidal
+  roughing, material-removal simulation, and machine verification, but the
+  reviewed material does not publish a thermal state coupled to an exact
+  per-motion proof.
+- ModuleWorks reports GPU-accelerated discrete-dexel removal simulation and
+  real-time controller integration [ModuleWorks GPU simulation][moduleworks-gpu-dexel].
+  A separate 2024–2026 research-transfer project targets thermal/mechanical
+  model integration into a CAM platform [DFG thermal CAM project][dfg-thermal-cam].
+- Third Wave Systems reports material-specific temperature, stress, and
+  in-process-state modeling inside Siemens NX
+  [Third Wave aerospace modeling][third-wave-aerospace].
+- MecSoft reports GPU tri-dexel material-removal simulation, but not the exact
+  certificate and real-time thermal coupling described here
+  [MecSoft tri-dexel simulation][mecsoft-tridexel-2026].
+
+The defensible uniqueness statement is therefore evidence-scoped: **no
+publicly evidenced system was found in the reviewed field that combines an
+exact continuous-engagement certificate, content-addressed per-motion replay,
+and real-time thermal tri-dexel validation under one operation identity.**
+This is not a universal claim about private implementations.
+
+!!! warning "Thermal observation and thermal authority are different stages"
+
+    In Phase 1, the tri-dexel remains downstream validation and visualization;
+    it cannot accept, reject, rank, or alter a planning candidate. A later
+    physics-in-the-loop planner may use a calibrated thermal state to veto or
+    rank motions inside the exact-safe candidate set. That requires a new
+    versioned process-policy input, declared latency and validity bounds,
+    transactional replay, and physical qualification. Thermal policy may
+    narrow the exact-safe set; it may never admit a motion rejected by exact
+    containment or engagement.
+
+!!! note "Target positioning, not a current product claim"
+
+    **Exact-certified adaptive roughing for high-consequence milling:
+    generate the path, prove every accepted motion, and replay the same
+    authenticated operation through independent stock and process-response
+    evidence.**
+
+    This is the intended commercial position. It becomes a product claim only
+    after the completion and qualification gates below pass.
+
+### Cimatron is competitor, benchmark, and possible integration channel
+
+Cimatron competes directly wherever its high-speed roughing, stock model,
+simulation, and machine-delivery workflow already solve the customer's
+problem. It is also a benchmark for the surrounding capabilities this kernel
+must interoperate with rather than duplicate. At platform level, a
+Cimatron/Sandvik-class organization can be an integration channel because it
+already owns tool data, process expertise, posts, machines, and distribution
+that the exact kernel deliberately does not recreate.
+
+The same logic applies to other high-end CAM, verification, cutting-tool, and
+machine-tool providers. Commercial packaging may differ, but no package may
+fork the deciding geometry, weaken the certificate, or substitute a simulator
+verdict for exact acceptance.
+
+### Evidence gates before commercial superiority
+
+The following gates separate the strategy from a defensible high-end product:
+
+1. complete exact-certified traversal and terminal residual proof for the
+   declared arbitrary-pocket scope;
+2. a provenance-locked Held–Pfeiffer reproduction and matched planner timing,
+   followed by representative black-box comparison with an identified
+   Cimatron release and operation configuration;
+3. authenticated tri-dexel replay with bounded arc and lattice error, plus
+   inspected render provenance;
+4. a versioned production-CAM boundary for geometry, tool, stock, process,
+   operation, and result identity;
+5. post-processor and machine-kinematic qualification without weakening the
+   certified primitive grammar;
+6. instrumented difficult-material trials reporting material-removal rate,
+   spindle load or cutting force, tool wear, dimensional error, surface
+   outcome, and failures—not selected success images;
+7. calibrated thermal/process validation before any modeled response is called
+   temperature, heat, tool-life prediction, or feed/speed authority; and
+8. independent review of the exact certificate, replay, benchmark, and
+   physical-test evidence.
+
+Until these close, the defensible statement is narrow: Phase 1 is building a
+proof and replay architecture that is unusual in the reviewed public
+high-speed-roughing material. It is not yet a stronger completed CAM product
+than Cimatron.
+
 ## Planned tri-dexel validation plane
 
 Task 14A adds a second representation after the exact artifact exists. The
@@ -3441,3 +3675,13 @@ The locked headers are normative for the backend contract. Draw helpers and
 streamed geometry are not substitutes for those APIs.
 
 [held-pfeiffer-2025]: https://doi.org/10.14733/cadaps.2025.731-747
+[cimatron-company-2025]: https://www.cimatron.com/en/news/cimatron-unveils-reframed-brand-identity-setting-the-stage-for-its-next-era-of-mold-and-die-innovation
+[cimatron-hard-materials]: https://www.cimatron.com/en/handling-complex-geometry-materials
+[cimatron-israel-2011]: https://www.sec.gov/Archives/edgar/data/1008595/000117891312001221/zk1211362.htm
+[cimatron-nc-guide-2026]: https://help.cimatron.com/en/2026/welcome_to_nc.htm
+[cimatron-nc-programming]: https://www.cimatron.com/en/cimatron-nc-programming
+[cimatron-simulation-2026]: https://help.cimatron.com/en/2026/simulator_and_verifier/simulator_and_verifier.htm
+[dfg-thermal-cam]: https://gepris.dfg.de/gepris/projekt/537435336
+[mecsoft-tridexel-2026]: https://mecsoft.com/blog/whats-new-in-mecsoft-cam-2026/
+[moduleworks-gpu-dexel]: https://www.moduleworks.com/de/precision-meets-performance-with-gpu-accelerated-simulation/
+[third-wave-aerospace]: https://thirdwavesys.com/aerospace-webinar/
