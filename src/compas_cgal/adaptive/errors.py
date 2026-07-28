@@ -138,6 +138,38 @@ class InvalidInputIdentityError(ArtifactIdentityError):
     """A Phase-1 input identity omits or cross-wires a validated input."""
 
 
+class ReplayInputMismatchError(ValueError):
+    """Submitted replay inputs differ from the authenticated input root."""
+
+
+class ReplayGrammarError(ValueError):
+    """An operation sequence violates the closed Phase-1 grammar."""
+
+
+class ReplayContinuityError(ValueError):
+    """A lateral operation breaks exact phase or cut-plane continuity."""
+
+
+class ReplayCutDirectionError(ValueError):
+    """A circle orientation contradicts its material side and cut policy."""
+
+
+class ReplayCandidateError(ValueError):
+    """A recorded circle is not one unique finite-lattice candidate."""
+
+
+class ReplayEffectiveCapError(ValueError):
+    """A recorded cap decision contradicts fresh neck passage state."""
+
+
+class ReplayTraversalError(ValueError):
+    """A recorded cursor transition contradicts the fresh MAT graph."""
+
+
+class InvalidReplayCertificateError(ValueError):
+    """A replay certificate omits or contradicts recomputed proof state."""
+
+
 class InvalidBoundaryVertexIdentityError(ArtifactIdentityError):
     """A structural boundary-vertex identity is invalid or ambiguous."""
 
