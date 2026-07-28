@@ -1,4 +1,5 @@
 #include "segment_site_endpoint_binding.h"
+#include "segment_site_clipping.h"
 #include "segment_site_rational_sources.h"
 #include "segment_site_voronoi.h"
 
@@ -395,6 +396,18 @@ compas::RowMatrixXd l_shape(
     return result;
 }
 
+MatDomainPolygonWithHoles2 l_shape_domain()
+{
+    MatDomainPolygon2 outer;
+    outer.push_back({0, 0});
+    outer.push_back({6, 0});
+    outer.push_back({6, 2});
+    outer.push_back({2, 2});
+    outer.push_back({2, 6});
+    outer.push_back({0, 6});
+    return MatDomainPolygonWithHoles2(outer);
+}
+
 MatExactPointSiteSource2 exact_point_source(
     const CanonicalMatRationalPointSource2&
         point)
@@ -782,6 +795,239 @@ bool point_segment_binding_rejects_invalid_sources()
     return false;
 }
 
+bool primitives_equal(
+    const RationalPrimitiveParameterization2& left,
+    const RationalPrimitiveParameterization2& right)
+{
+    return left.x_coefficients
+            == right.x_coefficients
+        && left.y_coefficients
+            == right.y_coefficients
+        && left.domain_lower
+            == right.domain_lower
+        && left.domain_upper
+            == right.domain_upper;
+}
+
+std::vector<RationalPrimitiveParameterization2>
+l_shape_point_point_ray_bindings(
+    const bool transformed)
+{
+    const CanonicalMatSiteCatalog2 catalog =
+        canonical_mat_site_catalog(
+            canonical_reach_input(
+                l_shape(transformed),
+                {},
+                1.0));
+    const CanonicalMatRationalSources2 sources =
+        CanonicalMatRationalSources2::build(
+            catalog);
+    CanonicalMatDelaunaySource2 delaunay =
+        CanonicalMatDelaunaySource2::build(
+            catalog);
+    const CanonicalMatVoronoiSource2 source =
+        CanonicalMatVoronoiSource2::build(
+            std::move(delaunay));
+    const auto& first = sources.points()[2];
+    const auto& second = sources.points()[4];
+    const std::vector<std::string> generator_ids =
+        ordered_generator_site_ids(
+            first.stable_site_id,
+            second.stable_site_id);
+    std::vector<RationalPrimitiveParameterization2>
+        bindings;
+
+    for (auto halfedge =
+             source.voronoi().halfedges_begin();
+         halfedge
+         != source.voronoi().halfedges_end();
+         ++halfedge) {
+        const MatTraits::Site_2 up =
+            halfedge->up()->site();
+        const MatTraits::Site_2 down =
+            halfedge->down()->site();
+        if (!up.is_point()
+            || !down.is_point()) {
+            continue;
+        }
+        const std::string up_id =
+            source.site_index().stable_id(up);
+        const std::string down_id =
+            source.site_index().stable_id(
+                down);
+        if (up_id != generator_ids.front()
+            || ordered_generator_site_ids(
+                   up_id,
+                   down_id)
+                != generator_ids) {
+            continue;
+        }
+        RationalPrimitiveParameterization2
+            primitive =
+                bind_point_point_ray_parameterization(
+                    sources,
+                    generator_ids,
+                    source.site_index(),
+                    source.voronoi(),
+                    halfedge);
+        const std::string dual_id =
+            stable_dual_identity_v1(
+                "point",
+                generator_ids);
+        if (!clip_linear_clearance_components(
+                 dual_id,
+                 primitive,
+                 point_clearance_boundary(
+                     primitive,
+                     first.x,
+                     first.y,
+                     0),
+                 l_shape_domain())
+                 .empty()) {
+            return {};
+        }
+        bindings.push_back(
+            std::move(primitive));
+    }
+    return bindings;
+}
+
+bool point_point_ray_binding_is_exact_and_invariant()
+{
+    const auto canonical =
+        l_shape_point_point_ray_bindings(
+            false);
+    const auto repeated =
+        l_shape_point_point_ray_bindings(
+            false);
+    const auto reversed =
+        l_shape_point_point_ray_bindings(
+            true);
+    if (canonical.size() != 1
+        || repeated.size() != 1
+        || reversed.size() != 1) {
+        return false;
+    }
+    const RationalPrimitiveParameterization2&
+        primitive = canonical.front();
+    return primitive.x_coefficients
+            == std::vector<CORE::BigRat>{
+                4,
+                -4,
+            }
+        && primitive.y_coefficients
+            == std::vector<CORE::BigRat>{
+                4,
+                -4,
+            }
+        && !primitive.domain_lower.has_value()
+        && primitive.domain_upper
+            == std::optional<CORE::BigRat>(
+                CORE::BigRat(-1, 2))
+        && primitives_equal(
+            primitive,
+            repeated.front())
+        && primitives_equal(
+            primitive,
+            reversed.front());
+}
+
+bool point_point_ray_binding_rejects_invalid_sources()
+{
+    const CanonicalMatSiteCatalog2 catalog =
+        canonical_mat_site_catalog(
+            canonical_reach_input(
+                l_shape(false),
+                {},
+                1.0));
+    const CanonicalMatRationalSources2 sources =
+        CanonicalMatRationalSources2::build(
+            catalog);
+    CanonicalMatDelaunaySource2 delaunay =
+        CanonicalMatDelaunaySource2::build(
+            catalog);
+    const CanonicalMatVoronoiSource2 source =
+        CanonicalMatVoronoiSource2::build(
+            std::move(delaunay));
+    const std::vector<std::string> generator_ids =
+        ordered_generator_site_ids(
+            sources.points()[2]
+                .stable_site_id,
+            sources.points()[4]
+                .stable_site_id);
+
+    for (auto halfedge =
+             source.voronoi().halfedges_begin();
+         halfedge
+         != source.voronoi().halfedges_end();
+         ++halfedge) {
+        const std::string up_id =
+            source.site_index().stable_id(
+                halfedge->up()->site());
+        const std::string down_id =
+            source.site_index().stable_id(
+                halfedge->down()->site());
+        if (up_id != generator_ids.front()
+            || ordered_generator_site_ids(
+                   up_id,
+                   down_id)
+                != generator_ids) {
+            continue;
+        }
+        bool unknown = false;
+        try {
+            static_cast<void>(
+                bind_point_point_ray_parameterization(
+                    sources,
+                    ordered_generator_site_ids(
+                        "unknown-point",
+                        generator_ids.back()),
+                    source.site_index(),
+                    source.voronoi(),
+                    halfedge));
+        } catch (
+            const UnknownCanonicalMatPointRaySourceError&) {
+            unknown = true;
+        }
+        bool mismatched = false;
+        try {
+            static_cast<void>(
+                bind_point_point_ray_parameterization(
+                    sources,
+                    ordered_generator_site_ids(
+                        sources.points()[0]
+                            .stable_site_id,
+                        generator_ids.back()),
+                    source.site_index(),
+                    source.voronoi(),
+                    halfedge));
+        } catch (
+            const MismatchedLivePointPointRayError&) {
+            mismatched = true;
+        }
+        bool duplicate = false;
+        try {
+            static_cast<void>(
+                bind_point_point_ray_parameterization(
+                    sources,
+                    {
+                        generator_ids.front(),
+                        generator_ids.front(),
+                    },
+                    source.site_index(),
+                    source.voronoi(),
+                    halfedge));
+        } catch (
+            const InvalidDualIdentityError&) {
+            duplicate = true;
+        }
+        return unknown
+            && mismatched
+            && duplicate;
+    }
+    return false;
+}
+
 } // namespace
 
 bool indexed_endpoint_binding_gate()
@@ -789,5 +1035,7 @@ bool indexed_endpoint_binding_gate()
     return parallel_binding_uses_same_exact_records()
         && nonparallel_binding_uses_same_exact_records()
         && point_segment_binding_uses_catalog_index()
-        && point_segment_binding_rejects_invalid_sources();
+        && point_segment_binding_rejects_invalid_sources()
+        && point_point_ray_binding_is_exact_and_invariant()
+        && point_point_ray_binding_rejects_invalid_sources();
 }

@@ -10,6 +10,7 @@
 
 #include <CGAL/CORE/poly/Poly.h>
 #include <CGAL/Fraction_traits.h>
+#include <CGAL/Kernel/global_functions_2.h>
 #include <CGAL/Object.h>
 #include <CGAL/Polynomial_traits_d.h>
 #include <CGAL/number_utils.h>
@@ -1522,6 +1523,200 @@ bind_point_segment_cell_endpoints(
     return {
         std::move(source),
         std::move(target),
+    };
+}
+
+RationalPrimitiveParameterization2
+bind_point_point_ray_parameterization(
+    const CanonicalMatRationalSources2& sources,
+    const std::vector<std::string>& generator_ids,
+    const CanonicalMatSiteGeometryIndex2& site_index,
+    const SegmentSiteVoronoi2& voronoi,
+    const SegmentSiteVoronoi2::Halfedge_handle& halfedge)
+{
+    static_cast<void>(
+        stable_dual_identity_v1(
+            "point",
+            generator_ids));
+    const auto point_source =
+        [&sources](
+            const std::string& stable_id)
+            -> const CanonicalMatRationalPointSource2&
+        {
+            const auto found = std::lower_bound(
+                sources.points().begin(),
+                sources.points().end(),
+                stable_id,
+                [](const CanonicalMatRationalPointSource2&
+                       point,
+                   const std::string& identity)
+                {
+                    return point.stable_site_id
+                        < identity;
+                });
+            if (found == sources.points().end()
+                || found->stable_site_id
+                    != stable_id)
+            {
+                throw UnknownCanonicalMatPointRaySourceError(
+                    "canonical P-P ray point has no rational source");
+            }
+            return *found;
+        };
+    const auto& first =
+        point_source(generator_ids[0]);
+    const auto& second =
+        point_source(generator_ids[1]);
+    const MatTraits::Site_2 up =
+        halfedge->up()->site();
+    const MatTraits::Site_2 down =
+        halfedge->down()->site();
+    if (!up.is_point()
+        || !down.is_point()
+        || ordered_generator_site_ids(
+               site_index.stable_id(up),
+               site_index.stable_id(down))
+            != generator_ids)
+    {
+        throw MismatchedLivePointPointRayError(
+            "canonical P-P ray sources differ from live generators");
+    }
+    if (halfedge->has_source()
+            == halfedge->has_target())
+    {
+        throw UnboundLivePointPointRayEndpointError(
+            "canonical P-P ray does not have exactly one finite endpoint");
+    }
+
+    MatTraits::Ray_2 live_ray;
+    if (!CGAL::assign(
+            live_ray,
+            voronoi.dual().primal(
+                halfedge->dual())))
+    {
+        throw MismatchedLivePointPointRayError(
+            "canonical P-P live dual is not a ray");
+    }
+    const MatTraits::Point_2 live_endpoint =
+        halfedge->has_source()
+        ? halfedge->source()->point()
+        : halfedge->target()->point();
+    if (live_endpoint != live_ray.source())
+    {
+        throw MismatchedLivePointPointRayError(
+            "canonical P-P adaptor endpoint differs from the live ray source");
+    }
+    const MatTraits::Point_2 first_point(
+        CORE::Expr(first.x),
+        CORE::Expr(first.y));
+    const MatTraits::Point_2 second_point(
+        CORE::Expr(second.x),
+        CORE::Expr(second.y));
+    if (CGAL::squared_distance(
+            live_endpoint,
+            first_point)
+        != CGAL::squared_distance(
+            live_endpoint,
+            second_point))
+    {
+        throw MismatchedLivePointPointRayError(
+            "canonical P-P ray source is not equidistant from its generators");
+    }
+
+    const auto rational_coordinate =
+        [](const MatTraits::FT& coordinate)
+        {
+            try
+            {
+                return exact_mat_input_rational(
+                    coordinate);
+            }
+            catch (
+                const NonRationalCanonicalMatCoordinateError&)
+            {
+                throw NonRationalLivePointPointRayEndpointError(
+                    "canonical P-P ray endpoint is not rational");
+            }
+        };
+    const CORE::BigRat endpoint_x =
+        rational_coordinate(
+            live_endpoint.x());
+    const CORE::BigRat endpoint_y =
+        rational_coordinate(
+            live_endpoint.y());
+    const CORE::BigRat direction_x =
+        first.y - second.y;
+    const CORE::BigRat direction_y =
+        second.x - first.x;
+    if (direction_x == 0
+        && direction_y == 0)
+    {
+        throw MismatchedLivePointPointRayError(
+            "canonical P-P ray generators coincide");
+    }
+    const CORE::BigRat origin_x =
+        (first.x + second.x) / 2;
+    const CORE::BigRat origin_y =
+        (first.y + second.y) / 2;
+    const CORE::BigRat endpoint_parameter =
+        direction_x != 0
+        ? (endpoint_x - origin_x)
+            / direction_x
+        : (endpoint_y - origin_y)
+            / direction_y;
+    if (origin_x
+                + direction_x
+                    * endpoint_parameter
+            != endpoint_x
+        || origin_y
+                + direction_y
+                    * endpoint_parameter
+            != endpoint_y)
+    {
+        throw MismatchedLivePointPointRayError(
+            "canonical P-P ray endpoint is outside its bisector chart");
+    }
+
+    const MatKernel::Vector_2 live_direction =
+        live_ray.to_vector();
+    const MatTraits::FT cross =
+        CORE::Expr(direction_x)
+            * live_direction.y()
+        - CORE::Expr(direction_y)
+            * live_direction.x();
+    const MatTraits::FT dot =
+        CORE::Expr(direction_x)
+            * live_direction.x()
+        + CORE::Expr(direction_y)
+            * live_direction.y();
+    if (CGAL::sign(cross) != CGAL::ZERO
+        || CGAL::sign(dot) == CGAL::ZERO)
+    {
+        throw MismatchedLivePointPointRayError(
+            "canonical P-P chart and live ray direction disagree");
+    }
+
+    std::optional<CORE::BigRat> lower;
+    std::optional<CORE::BigRat> upper;
+    if (CGAL::sign(dot) == CGAL::POSITIVE)
+    {
+        lower = endpoint_parameter;
+    }
+    else
+    {
+        upper = endpoint_parameter;
+    }
+    return {
+        {
+            origin_x,
+            direction_x,
+        },
+        {
+            origin_y,
+            direction_y,
+        },
+        std::move(lower),
+        std::move(upper),
     };
 }
 

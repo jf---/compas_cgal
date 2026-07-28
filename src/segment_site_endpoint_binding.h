@@ -150,6 +150,34 @@ public:
     using std::runtime_error::runtime_error;
 };
 
+class UnknownCanonicalMatPointRaySourceError
+    : public std::runtime_error
+{
+public:
+    using std::runtime_error::runtime_error;
+};
+
+class MismatchedLivePointPointRayError
+    : public std::runtime_error
+{
+public:
+    using std::runtime_error::runtime_error;
+};
+
+class UnboundLivePointPointRayEndpointError
+    : public std::runtime_error
+{
+public:
+    using std::runtime_error::runtime_error;
+};
+
+class NonRationalLivePointPointRayEndpointError
+    : public std::runtime_error
+{
+public:
+    using std::runtime_error::runtime_error;
+};
+
 bool exact_open_segment_feature_contains(
     const SourceParabolaParameterization2& parabola,
     const MatExactPointSiteSource2& segment_source,
@@ -195,6 +223,14 @@ bind_point_segment_cell_endpoints(
     const CanonicalMatRationalSources2& sources,
     const std::string& focus_id,
     const std::string& segment_id,
+    const CanonicalMatSiteGeometryIndex2& site_index,
+    const SegmentSiteVoronoi2& voronoi,
+    const SegmentSiteVoronoi2::Halfedge_handle& halfedge);
+
+RationalPrimitiveParameterization2
+bind_point_point_ray_parameterization(
+    const CanonicalMatRationalSources2& sources,
+    const std::vector<std::string>& generator_ids,
     const CanonicalMatSiteGeometryIndex2& site_index,
     const SegmentSiteVoronoi2& voronoi,
     const SegmentSiteVoronoi2::Halfedge_handle& halfedge);
