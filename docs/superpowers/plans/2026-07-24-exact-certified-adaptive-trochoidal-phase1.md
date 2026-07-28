@@ -702,7 +702,9 @@ under-cover chains and not the sharp-corner design pocket `D`.
 `ReachableDomain.build(...)` validates the native certificate and owns
 `C_r`, `M_r`, and `D \ M_r`. `CoverageLedger` binds ordered sweep witnesses to
 the same canonical motions used by depletion and binds the unreachable-residual
-digest separately.
+digest separately. Its initial disk is a typed `EntryRadius`; subsequent sweep
+radii are typed `ToolRadius` values. `coverage-certificate-v2` seals that
+semantic distinction even when the two binary64 values happen to be equal.
 
 ### Step 4: GREEN
 
@@ -1630,6 +1632,9 @@ Require:
 - process provenance and radius bind to input identity;
 - `Stock2Area.deplete(PreclearedEntry)` is an explicit overload, subtracts the
   exact entry disk once, and returns the required keyed `DepletionWitness`;
+- `CoverageLedger.build(...)` seeds `M_r` coverage with that same typed
+  `EntryRadius`, rejects a relabelled `ToolRadius`, and records the distinction
+  under `coverage-certificate-v2`;
 - canonical approach at clearance Z and vertical plunge to cut Z travel through
   the declared void and remove no material;
 - first full circle fits inside the entry disk and certifies against post-entry
@@ -1716,6 +1721,14 @@ radius. Task 10 now closes those branches through proof-carrying finite-lattice
 exhaustion at the last feasible positive-radius progress. Task 11A must replay
 that enumeration and still prove coverage independently; terminal traversal is
 not evidence of empty reachable residual.
+
+Fresh coverage construction exposed a separate type defect: its initial
+precleared disk was mislabeled `ToolRadius`, although the qualified
+`PreclearedEntry.radius` is an independently proved `EntryRadius` and must be
+strictly larger for launch. The coverage boundary now requires `EntryRadius`,
+retains `ToolRadius` only for lateral sweeps, and bumps its certificate grammar
+to `coverage-certificate-v2`. Replay must pass the authenticated entry object
+without scalar coercion.
 
 **Files**
 

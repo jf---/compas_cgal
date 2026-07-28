@@ -18,6 +18,7 @@ from compas_cgal.adaptive.errors import InvalidCoverageSweepError
 from compas_cgal.adaptive.motion import ExactCircleMotion
 from compas_cgal.adaptive.motion import ExactSegmentMotion
 from compas_cgal.adaptive.reachable_domain import ReachableDomain
+from compas_cgal.adaptive.units import EntryRadius
 from compas_cgal.adaptive.units import Point2
 from compas_cgal.adaptive.units import ToolRadius
 from compas_cgal.adaptive.units import WorldXY
@@ -92,7 +93,7 @@ class CoverageCertificate:
     reachable_material_digest: bytes
     unreachable_residual_digest: bytes
     precleared_center: Point2[WorldXY]
-    precleared_radius: ToolRadius
+    precleared_radius: EntryRadius
     native_strategy_version: bytes
     ordered_sweep_records: tuple[bytes, ...]
     residual_component_records: tuple[bytes, ...]
@@ -112,8 +113,8 @@ class CoverageCertificate:
                 raise InvalidCoverageCertificateError(f"{name} must be one exact SHA-256 digest.")
         if type(certificate.precleared_center) is not Point2:
             raise InvalidCoverageCertificateError("coverage certificate preclear center must be an exact world-XY point.")
-        if type(certificate.precleared_radius) is not ToolRadius:
-            raise InvalidCoverageCertificateError("coverage certificate preclear radius must be exact and typed.")
+        if type(certificate.precleared_radius) is not EntryRadius:
+            raise InvalidCoverageCertificateError("coverage certificate preclear radius must be one exact entry radius.")
         _exact_bytes(certificate.native_strategy_version, "coverage strategy")
         if type(certificate.ordered_sweep_records) is not tuple or any(type(record) is not bytes or not record for record in certificate.ordered_sweep_records):
             raise InvalidCoverageCertificateError("ordered sweep records must be an exact byte tuple.")
@@ -138,7 +139,7 @@ class CoverageCertificate:
     def canonical_bytes(self) -> bytes:
         type(self).validate(self)
         return encode_tagged_union(
-            b"coverage-certificate-v1",
+            b"coverage-certificate-v2",
             encode_component_map(
                 {
                     b"exact-residual-empty": encode_boolean(self.exact_residual_empty),
@@ -173,7 +174,7 @@ class CoverageLedger:
         reachable_material_digest: bytes,
         unreachable_residual_digest: bytes,
         precleared_center: Point2[WorldXY],
-        precleared_radius: ToolRadius,
+        precleared_radius: EntryRadius,
         lineage: tuple[SweepWitness, ...],
     ) -> None:
         self._native = native
@@ -189,14 +190,14 @@ class CoverageLedger:
         *,
         reachable_domain: ReachableDomain,
         precleared_center: Point2[WorldXY],
-        precleared_radius: ToolRadius,
+        precleared_radius: EntryRadius,
     ) -> Self:
         if type(reachable_domain) is not ReachableDomain:
             raise InvalidCoverageCertificateError("coverage ledger requires one exact reachable-domain owner.")
         if type(precleared_center) is not Point2:
             raise InvalidCoverageCertificateError("coverage ledger preclear center must be an exact world-XY point.")
-        if type(precleared_radius) is not ToolRadius:
-            raise InvalidCoverageCertificateError("coverage ledger preclear radius must be exact and typed.")
+        if type(precleared_radius) is not EntryRadius:
+            raise InvalidCoverageCertificateError("coverage ledger preclear radius must be one exact entry radius.")
         native = _coverage_2.Coverage2(
             reachable_domain.reachable_material,
             precleared_center.x,
