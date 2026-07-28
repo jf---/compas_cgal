@@ -1,5 +1,6 @@
 #include "segment_site_catalog_graph.h"
 #include "segment_site_catalog.h"
+#include "segment_site_voronoi.h"
 
 #include <algorithm>
 #include <array>
@@ -29,6 +30,11 @@ using NodeSignature = std::tuple<
     std::vector<std::string>,
     std::vector<std::string>,
     std::vector<std::string>,
+    std::size_t>;
+
+using NormalizedNodeSignature = std::tuple<
+    std::vector<std::string>,
+    std::string,
     std::size_t>;
 
 compas::RowMatrixXd rectangle(
@@ -73,6 +79,46 @@ CanonicalReachInput2 rectangle_input(
         rectangle(transformed),
         {},
         1.0);
+}
+
+compas::RowMatrixXd l_shape(
+    const bool transformed)
+{
+    const std::array<std::array<double, 2>, 6>
+        canonical{{
+            {0.0, 0.0},
+            {6.0, 0.0},
+            {6.0, 2.0},
+            {2.0, 2.0},
+            {2.0, 6.0},
+            {0.0, 6.0},
+        }};
+    const std::array<std::array<double, 2>, 6>
+        reversed{{
+            {0.0, 6.0},
+            {2.0, 6.0},
+            {2.0, 2.0},
+            {6.0, 2.0},
+            {6.0, 0.0},
+            {0.0, 0.0},
+        }};
+    const auto& points =
+        transformed ? reversed : canonical;
+    compas::RowMatrixXd result(
+        static_cast<Eigen::Index>(
+            points.size()),
+        2);
+    for (std::size_t index = 0;
+         index < points.size();
+         ++index) {
+        result(
+            static_cast<Eigen::Index>(index),
+            0) = points[index][0];
+        result(
+            static_cast<Eigen::Index>(index),
+            1) = points[index][1];
+    }
+    return result;
 }
 
 template <std::size_t PointCount>
@@ -704,6 +750,188 @@ bool catalog_graph_is_exact_and_invariant()
         && fixture_rejected;
 }
 
+std::string feature_token(
+    const CanonicalMatSiteCatalog2& catalog,
+    const std::string& stable_id)
+{
+    const auto index = catalog.index_of(
+        stable_id);
+    const MatSiteProvenance2& provenance =
+        catalog.sites().at(
+            static_cast<std::size_t>(index))
+            .provenance();
+    if (provenance.ring != 0) {
+        return {};
+    }
+    return std::string(
+               provenance.kind
+                       == MatSiteKind2::Point
+                   ? "P"
+                   : "S")
+        + std::to_string(provenance.feature);
+}
+
+std::vector<NormalizedNodeSignature>
+l_shape_normalized_node_signatures(
+    const bool transformed)
+{
+    const CanonicalMatSiteCatalog2 catalog =
+        canonical_mat_site_catalog(
+            canonical_reach_input(
+                l_shape(transformed),
+                {},
+                1.0));
+    CanonicalMatDelaunaySource2 delaunay =
+        CanonicalMatDelaunaySource2::build(
+            catalog);
+    const CanonicalMatVoronoiSource2 source =
+        CanonicalMatVoronoiSource2::build(
+            std::move(delaunay));
+    std::vector<NormalizedNodeSignature>
+        signatures;
+
+    for (auto vertex =
+             source.voronoi().vertices_begin();
+         vertex
+         != source.voronoi().vertices_end();
+         ++vertex) {
+        std::vector<std::string> feature_ids;
+        std::size_t degree = 0;
+        auto first =
+            vertex->incident_halfedges();
+        auto halfedge = first;
+        do {
+            union_stable_ids(
+                feature_ids,
+                {
+                    source.site_index()
+                        .stable_id(
+                            halfedge->up()
+                                ->site()),
+                    source.site_index()
+                        .stable_id(
+                            halfedge->down()
+                                ->site()),
+                });
+            ++degree;
+        } while (++halfedge != first);
+
+        const std::string node_id =
+            stable_normalized_voronoi_node_identity_v1(
+                feature_ids);
+        if (feature_ids.size() == 3
+            && node_id
+                != stable_voronoi_node_identity_v1(
+                    feature_ids)) {
+            return {};
+        }
+        std::vector<std::string> tokens;
+        tokens.reserve(feature_ids.size());
+        for (const std::string& feature_id :
+             feature_ids) {
+            const std::string token =
+                feature_token(
+                    catalog,
+                    feature_id);
+            if (token.empty()) {
+                return {};
+            }
+            tokens.push_back(token);
+        }
+        std::sort(
+            tokens.begin(),
+            tokens.end());
+        signatures.emplace_back(
+            std::move(tokens),
+            std::move(node_id),
+            degree);
+    }
+    std::sort(
+        signatures.begin(),
+        signatures.end());
+    return signatures;
+}
+
+bool normalized_node_identity_is_exact_and_invariant()
+{
+    const auto canonical =
+        l_shape_normalized_node_signatures(
+            false);
+    const auto repeated =
+        l_shape_normalized_node_signatures(
+            false);
+    const auto reversed =
+        l_shape_normalized_node_signatures(
+            true);
+    const std::vector<std::string>
+        expected_degree_four{
+            "P2",
+            "P4",
+            "S2",
+            "S3",
+        };
+    std::set<std::string> node_ids;
+    std::size_t degree_three_count = 0;
+    std::size_t degree_four_count = 0;
+    for (const auto& [
+             feature_tokens,
+             node_id,
+             degree] : canonical) {
+        if (!node_ids.insert(node_id).second) {
+            return false;
+        }
+        if (feature_tokens.size() == 3
+            && degree == 3) {
+            ++degree_three_count;
+            continue;
+        }
+        if (feature_tokens
+                == expected_degree_four
+            && degree == 4) {
+            ++degree_four_count;
+            continue;
+        }
+        return false;
+    }
+    return canonical.size() == 12
+        && degree_three_count == 11
+        && degree_four_count == 1
+        && canonical == repeated
+        && canonical == reversed;
+}
+
+bool malformed_normalized_node_identities_are_rejected()
+{
+    const auto is_rejected =
+        [](std::vector<std::string> ids) {
+            try {
+                static_cast<void>(
+                    stable_normalized_voronoi_node_identity_v1(
+                        ids));
+            } catch (
+                const InvalidDualIdentityError&) {
+                return true;
+            }
+            return false;
+        };
+    const bool three_feature_compatible =
+        stable_normalized_voronoi_node_identity_v1(
+            {"a", "b", "c"})
+        == stable_voronoi_node_identity_v1(
+            {"a", "b", "c"});
+    const bool framed_inputs_are_distinct =
+        stable_normalized_voronoi_node_identity_v1(
+            {"a", "b/c", "d", "e"})
+        != stable_normalized_voronoi_node_identity_v1(
+            {"a", "b", "c/d", "e"});
+    return is_rejected({"a", "b"})
+        && is_rejected({"b", "a", "c"})
+        && is_rejected({"a", "b", "b"})
+        && is_rejected({"", "b", "c"})
+        && three_feature_compatible
+        && framed_inputs_are_distinct;
+}
+
 bool unsupported_rectangle_inputs_are_rejected()
 {
     const CanonicalReachInput2 triangle =
@@ -748,8 +976,14 @@ bool catalog_graph_gate()
 {
     const bool exact_and_invariant =
         catalog_graph_is_exact_and_invariant();
+    const bool normalized_nodes =
+        normalized_node_identity_is_exact_and_invariant();
+    const bool malformed_nodes_rejected =
+        malformed_normalized_node_identities_are_rejected();
     const bool unsupported_rejected =
         unsupported_rectangle_inputs_are_rejected();
     return exact_and_invariant
+        && normalized_nodes
+        && malformed_nodes_rejected
         && unsupported_rejected;
 }
