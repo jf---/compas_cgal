@@ -6,6 +6,7 @@
 #include "segment_site_voronoi.h"
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <map>
 #include <set>
@@ -88,6 +89,31 @@ segment_supports(
     return supports;
 }
 
+MatExactPointSiteSource2 exact_point_source(
+    const CanonicalMatRationalPointSource2& point)
+{
+    return {
+        point.stable_site_id,
+        {point.x, 0},
+        {point.y, 0},
+        1,
+    };
+}
+
+std::vector<MatExactPointSiteSource2>
+point_sources(
+    const CanonicalMatRationalSources2& sources)
+{
+    std::vector<MatExactPointSiteSource2> points;
+    points.reserve(sources.points().size());
+    for (const auto& point :
+         sources.points()) {
+        points.push_back(
+            exact_point_source(point));
+    }
+    return points;
+}
+
 CORE::BigRat support_determinant(
     const MatExactOpenSegmentSource2& first,
     const MatExactOpenSegmentSource2& second)
@@ -127,6 +153,42 @@ void require_rectangle_input(
             != 0) {
         throw UnsupportedCanonicalMatRectangleGraphError(
             "canonical four-edge ring is not an exact rectangle");
+    }
+}
+
+void require_l_shape_input(
+    const CanonicalReachInput2& input,
+    const CanonicalMatSiteCatalog2& catalog,
+    const CanonicalMatRationalSources2& sources)
+{
+    if (!input.holes.empty()
+        || input.outer.points.size() != 6
+        || catalog.sites().size() != 12
+        || sources.points().size() != 6
+        || sources.segments().size() != 6) {
+        throw UnsupportedCanonicalMatLShapeGraphError(
+            "canonical L-shape MAT graph requires the six-edge fixture ring");
+    }
+    const std::array<
+        std::array<CORE::BigRat, 2>,
+        6> expected{{
+        {0, 0},
+        {6, 0},
+        {6, 2},
+        {2, 2},
+        {2, 6},
+        {0, 6},
+    }};
+    for (std::size_t index = 0;
+         index < expected.size();
+         ++index) {
+        if (sources.points()[index].x
+                != expected[index][0]
+            || sources.points()[index].y
+                != expected[index][1]) {
+            throw UnsupportedCanonicalMatLShapeGraphError(
+                "canonical six-edge ring is not the exact L-shape fixture");
+        }
     }
 }
 
@@ -461,6 +523,66 @@ CanonicalNodeAlias2 canonical_vertex_alias(
     };
 }
 
+std::vector<std::string> parent_sites_for_features(
+    const std::vector<std::string>& feature_ids,
+    const std::map<
+        std::string,
+        std::vector<std::string>>&
+        parent_ids)
+{
+    std::vector<std::string> parent_site_ids;
+    for (const std::string& feature_id :
+         feature_ids) {
+        const auto found =
+            parent_ids.find(feature_id);
+        if (found == parent_ids.end()) {
+            throw InvalidCanonicalMatLShapeNodeError(
+                "canonical L-shape feature has no parent record");
+        }
+        union_stable_ids(
+            parent_site_ids,
+            found->second);
+    }
+    return parent_site_ids;
+}
+
+CanonicalNodeAlias2 normalized_vertex_alias(
+    const SegmentSiteVoronoi2::Vertex_handle&
+        vertex,
+    const CanonicalMatSiteGeometryIndex2&
+        site_index,
+    const std::map<
+        std::string,
+        std::vector<std::string>>&
+        parent_ids)
+{
+    std::vector<std::string> feature_ids;
+    auto first = vertex->incident_halfedges();
+    auto halfedge = first;
+    do {
+        union_stable_ids(
+            feature_ids,
+            {
+                site_index.stable_id(
+                    halfedge->up()->site()),
+                site_index.stable_id(
+                    halfedge->down()->site()),
+            });
+    } while (++halfedge != first);
+    if (feature_ids.size() < 3) {
+        throw InvalidCanonicalMatLShapeNodeError(
+            "canonical L-shape vertex has fewer than three exact features");
+    }
+    return {
+        stable_normalized_voronoi_node_identity_v1(
+            feature_ids),
+        feature_ids,
+        parent_sites_for_features(
+            feature_ids,
+            parent_ids),
+    };
+}
+
 const MatParameterEndpoint2& endpoint_owned_by(
     const std::pair<
         MatParameterEndpoint2,
@@ -571,6 +693,124 @@ void register_halfedge_aliases(
     register_vertex_alias(
         dual_id,
         endpoint_owned_by(
+            endpoints,
+            target_owner_id),
+        target_alias,
+        target_owner_id,
+        aliases);
+}
+
+const MatParameterEndpoint2&
+normalized_endpoint_owned_by(
+    const std::pair<
+        MatParameterEndpoint2,
+        MatParameterEndpoint2>& endpoints,
+    const std::string& owner_id)
+{
+    const auto has_owner =
+        [&owner_id](
+            const MatParameterEndpoint2& endpoint) {
+            return std::find(
+                       endpoint.provenance_ids.begin(),
+                       endpoint.provenance_ids.end(),
+                       owner_id)
+                != endpoint.provenance_ids.end();
+        };
+    const bool first = has_owner(endpoints.first);
+    const bool second = has_owner(endpoints.second);
+    if (first == second) {
+        throw InvalidCanonicalMatLShapeNodeError(
+            "canonical L-shape endpoint does not have one exact owner");
+    }
+    return first
+        ? endpoints.first
+        : endpoints.second;
+}
+
+void register_normalized_vertex_alias(
+    const std::string& dual_id,
+    const MatParameterEndpoint2& endpoint,
+    const CanonicalNodeAlias2& alias,
+    const std::string& owner_id,
+    std::map<std::string, CanonicalNodeAlias2>&
+        aliases)
+{
+    if (std::find(
+            alias.generator_site_ids.begin(),
+            alias.generator_site_ids.end(),
+            owner_id)
+        == alias.generator_site_ids.end()) {
+        throw InvalidCanonicalMatLShapeNodeError(
+            "canonical L-shape endpoint owner is absent from its adaptor vertex");
+    }
+    const std::string endpoint_node_id =
+        stable_endpoint_node_identity_v1(
+            dual_id,
+            endpoint);
+    const auto [existing, inserted] =
+        aliases.emplace(
+            endpoint_node_id,
+            alias);
+    if (!inserted
+        && (existing->second.node_id
+                != alias.node_id
+            || existing->second.generator_site_ids
+                != alias.generator_site_ids
+            || existing->second.parent_site_ids
+                != alias.parent_site_ids)) {
+        throw InvalidCanonicalMatLShapeNodeError(
+            "canonical L-shape endpoint aliases disagree");
+    }
+}
+
+void register_normalized_halfedge_aliases(
+    const std::string& dual_id,
+    const std::pair<
+        MatParameterEndpoint2,
+        MatParameterEndpoint2>& endpoints,
+    const SegmentSiteVoronoi2::Halfedge_handle&
+        halfedge,
+    const CanonicalMatSiteGeometryIndex2&
+        site_index,
+    const std::map<
+        std::string,
+        std::vector<std::string>>&
+        parent_ids,
+    std::map<std::string, CanonicalNodeAlias2>&
+        aliases)
+{
+    const std::string source_owner_id =
+        site_index.stable_id(
+            halfedge->left()->site());
+    const std::string target_owner_id =
+        site_index.stable_id(
+            halfedge->right()->site());
+    const CanonicalNodeAlias2 source_alias =
+        normalized_vertex_alias(
+            halfedge->source(),
+            site_index,
+            parent_ids);
+    const CanonicalNodeAlias2 target_alias =
+        normalized_vertex_alias(
+            halfedge->target(),
+            site_index,
+            parent_ids);
+    if (source_alias.node_id
+        == target_alias.node_id) {
+        throw InvalidCanonicalMatLShapeNodeError(
+            "canonical L-shape halfedge endpoints share one feature union");
+    }
+    register_normalized_vertex_alias(
+        dual_id,
+        normalized_endpoint_owned_by(
+            endpoints,
+            source_owner_id),
+        source_alias,
+        source_owner_id,
+        aliases);
+    register_normalized_vertex_alias(
+        dual_id,
+        normalized_endpoint_owned_by(
             endpoints,
             target_owner_id),
         target_alias,
@@ -931,6 +1171,426 @@ MatExactGraph2 canonical_rectangle_mat_graph(
     if (collapsed != graph.edges.end()) {
         throw InvalidCanonicalMatRectangleNodeError(
             "canonical rectangle graph collapsed an exact dual");
+    }
+    std::sort(
+        graph.nodes.begin(),
+        graph.nodes.end(),
+        [](const MatExactGraphNode2& left,
+           const MatExactGraphNode2& right) {
+            return left.node_id < right.node_id;
+        });
+    std::sort(
+        graph.edges.begin(),
+        graph.edges.end(),
+        [](const MatExactGraphEdge2& left,
+           const MatExactGraphEdge2& right) {
+            return left.edge_id < right.edge_id;
+        });
+    return graph;
+}
+
+MatExactGraph2 canonical_l_shape_mat_graph(
+    const CanonicalReachInput2& input,
+    const CORE::BigRat& radius_squared)
+{
+    if (radius_squared < 0) {
+        throw NegativeClearanceRadiusSquaredError(
+            "canonical L-shape MAT squared clearance radius is negative");
+    }
+    const CanonicalMatSiteCatalog2 catalog =
+        canonical_mat_site_catalog(input);
+    const CanonicalMatRationalSources2 sources =
+        CanonicalMatRationalSources2::build(
+            catalog);
+    require_l_shape_input(
+        input,
+        catalog,
+        sources);
+    CanonicalMatDelaunaySource2 delaunay =
+        CanonicalMatDelaunaySource2::build(
+            catalog);
+    const CanonicalMatVoronoiSource2 source =
+        CanonicalMatVoronoiSource2::build(
+            std::move(delaunay));
+    const MatDomainPolygonWithHoles2 domain =
+        exact_domain(input);
+    const std::vector<MatExactOpenSegmentSource2>
+        limiters =
+            segment_supports(sources);
+    const std::vector<MatExactPointSiteSource2>
+        point_limiters =
+            point_sources(sources);
+    const auto parent_ids =
+        parent_ids_by_feature(catalog);
+
+    MatExactGraph2 graph{
+        {},
+        {},
+        0,
+        source.site_index().size(),
+    };
+    std::map<std::string, std::size_t>
+        node_indices;
+    std::map<std::string, CanonicalNodeAlias2>
+        aliases;
+    std::set<std::vector<std::string>>
+        point_pairs;
+    std::set<std::vector<std::string>>
+        segment_pairs;
+    std::set<std::vector<std::string>>
+        incident_pairs;
+    std::set<std::vector<std::string>>
+        nonincident_pairs;
+    std::size_t incident_rays = 0;
+    std::size_t incident_segments = 0;
+
+    for (auto halfedge =
+             source.voronoi().halfedges_begin();
+         halfedge
+         != source.voronoi().halfedges_end();
+         ++halfedge) {
+        const MatTraits::Site_2 up =
+            halfedge->up()->site();
+        const MatTraits::Site_2 down =
+            halfedge->down()->site();
+        const std::string up_id =
+            source.site_index().stable_id(up);
+        const std::string down_id =
+            source.site_index().stable_id(down);
+        const std::vector<std::string> pair =
+            ordered_generator_site_ids(
+                up_id,
+                down_id);
+        if (up_id != pair.front()) {
+            continue;
+        }
+
+        if (up.is_point()
+            && down.is_point()) {
+            if (!point_pairs.insert(pair).second) {
+                throw IncompleteCanonicalMatLShapeGraphError(
+                    "canonical L-shape has duplicate P-P cells");
+            }
+            const RationalPrimitiveParameterization2
+                primitive =
+                    bind_point_point_ray_parameterization(
+                        sources,
+                        pair,
+                        source.site_index(),
+                        source.voronoi(),
+                        halfedge);
+            const std::string dual_id =
+                stable_dual_identity_v1(
+                    "point",
+                    pair);
+            const auto& first =
+                point_source(
+                    sources,
+                    pair.front());
+            const auto components =
+                one_dimensional_graph_components(
+                    clip_linear_clearance_components(
+                        dual_id,
+                        primitive,
+                        point_clearance_boundary(
+                            primitive,
+                            first.x,
+                            first.y,
+                            radius_squared),
+                        domain));
+            if (!components.empty()) {
+                throw IncompleteCanonicalMatLShapeGraphError(
+                    "canonical L-shape P-P ray intersects the exact domain");
+            }
+            continue;
+        }
+
+        if (up.is_segment()
+            && down.is_segment()) {
+            if (!halfedge->has_source()
+                || !halfedge->has_target()) {
+                throw IncompleteCanonicalMatLShapeGraphError(
+                    "canonical L-shape S-S halfedge is unbounded");
+            }
+            MatTraits::Segment_2 representative;
+            if (!CGAL::assign(
+                    representative,
+                    source.voronoi()
+                        .dual()
+                        .primal(
+                            halfedge->dual()))) {
+                throw UnsupportedCanonicalMatLShapeGraphError(
+                    "canonical L-shape S-S dual is not a segment");
+            }
+            if (!segment_pairs.insert(pair).second) {
+                throw IncompleteCanonicalMatLShapeGraphError(
+                    "canonical L-shape has duplicate S-S cells");
+            }
+            const auto& first =
+                segment_source(
+                    sources,
+                    pair[0]);
+            const auto& second =
+                segment_source(
+                    sources,
+                    pair[1]);
+            const CORE::BigRat determinant =
+                support_determinant(
+                    first.support,
+                    second.support);
+
+            std::string dual_id;
+            std::pair<
+                MatParameterEndpoint2,
+                MatParameterEndpoint2> endpoints;
+            std::vector<MatAdmissibleComponent2>
+                components;
+            if (determinant == 0) {
+                const ParallelSegmentFeatureCell2
+                    feature =
+                        parallel_segment_feature_cell(
+                            first,
+                            second,
+                            sources);
+                dual_id = stable_dual_identity_v1(
+                    "segment-segment",
+                    pair);
+                endpoints =
+                    bind_parallel_segment_segment_cell_endpoints(
+                        feature.primitive,
+                        feature.lower,
+                        feature.upper,
+                        first.support,
+                        second.support,
+                        point_limiters,
+                        limiters,
+                        pair,
+                        source.site_index(),
+                        source.voronoi(),
+                        halfedge);
+                components =
+                    clip_bounded_linear_clearance_components(
+                        dual_id,
+                        feature.primitive,
+                        endpoints.first,
+                        endpoints.second,
+                        parallel_segment_clearance_boundary(
+                            feature.primitive,
+                            first.support,
+                            second.support,
+                            radius_squared),
+                        domain);
+            } else {
+                const NonparallelSegmentBisectorParameterization2
+                    primitive =
+                        nonparallel_segment_bisector_parameterization(
+                            first.support,
+                            second.support,
+                            representative);
+                const NonparallelSegmentFeatureDomain2
+                    feature_domain =
+                        nonparallel_segment_feature_domain(
+                            primitive,
+                            sources);
+                dual_id =
+                    nonparallel_dual_id(
+                        primitive,
+                        pair);
+                endpoints =
+                    bind_nonparallel_segment_segment_cell_endpoints(
+                        primitive,
+                        feature_domain,
+                        first.support,
+                        second.support,
+                        point_limiters,
+                        limiters,
+                        pair,
+                        source.site_index(),
+                        source.voronoi(),
+                        halfedge);
+                components =
+                    clip_bounded_nonparallel_segment_clearance_components(
+                        dual_id,
+                        primitive,
+                        feature_domain,
+                        endpoints.first,
+                        endpoints.second,
+                        nonparallel_segment_clearance_boundary(
+                            primitive,
+                            first.support,
+                            second.support,
+                            radius_squared),
+                        domain);
+            }
+            components =
+                one_dimensional_graph_components(
+                    components);
+            append_exact_graph_components(
+                dual_id,
+                "LINE",
+                pair,
+                components,
+                graph,
+                node_indices);
+            register_normalized_halfedge_aliases(
+                dual_id,
+                endpoints,
+                halfedge,
+                source.site_index(),
+                parent_ids,
+                aliases);
+            continue;
+        }
+
+        const std::string point_id =
+            up.is_point() ? up_id : down_id;
+        const std::string segment_id =
+            up.is_segment() ? up_id : down_id;
+        const auto& segment =
+            segment_source(
+                sources,
+                segment_id);
+        if (is_segment_endpoint(
+                segment,
+                point_id)) {
+            if (!incident_pairs.insert(
+                    pair)
+                     .second) {
+                throw IncompleteCanonicalMatLShapeGraphError(
+                    "canonical L-shape has duplicate incident P-S transitions");
+            }
+            if (halfedge->has_source()
+                && halfedge->has_target()) {
+                MatTraits::Segment_2 transition;
+                if (!CGAL::assign(
+                        transition,
+                        source.voronoi()
+                            .dual()
+                            .primal(
+                                halfedge->dual()))) {
+                    throw UnsupportedCanonicalMatLShapeGraphError(
+                        "bounded incident P-S transition is not a segment");
+                }
+                ++incident_segments;
+            } else if (
+                halfedge->has_source()
+                != halfedge->has_target()) {
+                MatTraits::Ray_2 transition;
+                if (!CGAL::assign(
+                        transition,
+                        source.voronoi()
+                            .dual()
+                            .primal(
+                                halfedge->dual()))) {
+                    throw UnsupportedCanonicalMatLShapeGraphError(
+                        "unbounded incident P-S transition is not a ray");
+                }
+                ++incident_rays;
+            } else {
+                throw UnsupportedCanonicalMatLShapeGraphError(
+                    "incident P-S transition has unsupported endpoint topology");
+            }
+            ++graph.rejected_incident_transitions;
+            continue;
+        }
+
+        if (!nonincident_pairs.insert(pair).second) {
+            throw IncompleteCanonicalMatLShapeGraphError(
+                "canonical L-shape has duplicate nonincident P-S cells");
+        }
+        const auto endpoints =
+            bind_point_segment_cell_endpoints(
+                sources,
+                point_id,
+                segment_id,
+                source.site_index(),
+                source.voronoi(),
+                halfedge);
+        const auto& focus =
+            point_source(
+                sources,
+                point_id);
+        const MatExactPointSiteSource2
+            exact_focus =
+                exact_point_source(focus);
+        const std::string dual_id =
+            stable_dual_identity_v1(
+                "point-segment",
+                pair);
+        std::vector<MatAdmissibleComponent2>
+            components =
+                clip_source_parabola_clearance_components(
+                    dual_id,
+                    exact_focus,
+                    segment.support,
+                    endpoints.first,
+                    endpoints.second,
+                    source_parabola_clearance_boundary(
+                        exact_focus,
+                        segment.support,
+                        radius_squared),
+                    domain);
+        components =
+            one_dimensional_graph_components(
+                components);
+        append_exact_graph_components(
+            dual_id,
+            dual_id,
+            "PARABOLA",
+            pair,
+            parent_sites_for_features(
+                pair,
+                parent_ids),
+            components,
+            graph,
+            node_indices);
+        register_normalized_halfedge_aliases(
+            dual_id,
+            endpoints,
+            halfedge,
+            source.site_index(),
+            parent_ids,
+            aliases);
+    }
+
+    if (point_pairs.size() != 1
+        || segment_pairs.size() != 8
+        || incident_pairs.size() != 12
+        || nonincident_pairs.size() != 2
+        || incident_rays != 8
+        || incident_segments != 4
+        || graph.rejected_incident_transitions
+            != incident_pairs.size()) {
+        throw IncompleteCanonicalMatLShapeGraphError(
+            "canonical L-shape adaptor traversal is incomplete: P-P="
+            + std::to_string(point_pairs.size())
+            + ", S-S="
+            + std::to_string(segment_pairs.size())
+            + ", incident-P-S="
+            + std::to_string(incident_pairs.size())
+            + ", nonincident-P-S="
+            + std::to_string(
+                nonincident_pairs.size())
+            + ", incident-rays="
+            + std::to_string(incident_rays)
+            + ", incident-segments="
+            + std::to_string(
+                incident_segments));
+    }
+    canonicalize_nodes(
+        graph,
+        aliases);
+    const auto collapsed =
+        std::find_if(
+            graph.edges.begin(),
+            graph.edges.end(),
+            [](const MatExactGraphEdge2& edge) {
+                return edge.source_node_id
+                    == edge.target_node_id;
+            });
+    if (collapsed != graph.edges.end()) {
+        throw InvalidCanonicalMatLShapeNodeError(
+            "canonical L-shape graph collapsed an exact dual");
     }
     std::sort(
         graph.nodes.begin(),

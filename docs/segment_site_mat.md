@@ -57,18 +57,24 @@ needed by every downstream traversal and engagement decision.
     length-framed identity. Its sole P–P primitive is also bound as the exact
     half-ray `x = y = 4 - 4t`, `t <= -1/2`, from the live `(6,6)` adaptor
     endpoint; exact domain clipping proves that ray contributes no L-pocket
-    component. A catalog-fed rectangle orchestration now carries that owner
-    through the complete bounded graph:
+    component. A catalog-fed L-pocket orchestration now composes the complete
+    concave fixture in one adaptor traversal: 23 authenticated raw duals reduce
+    to seven S–S lines and two P–S parabolas, forming a connected 10-node,
+    9-edge exact tree. It rejects 12 incident P–S feature transitions and
+    proves both the P–P ray and the S2–S3 diagonal have no one-dimensional
+    interior component. Repeat and canonical input reversal preserve complete
+    records at `r² = 0` and `1`.
+    A catalog-fed rectangle orchestration carries the same owner architecture
+    through its complete bounded graph:
     one adaptor traversal emits five S–S edges and six canonical nodes,
     rejects eight authenticated incident P–S rays, and reproduces the
     independently validated rectangle records at exact `r² = 0`, `1`, `4`,
     and `5` after a structurally validated certificate-namespace projection.
     Repeated construction and canonical input reversal are record-identical
     inside the catalog namespace.
-    General arbitrary-pocket traversal, externally limited and composite
-    segment/segment cells, endpoint-feature CSR, public numeric-table
-    integration, neck evidence, proposal sampling, and the Python binding are
-    not complete.
+    General arbitrary-pocket traversal, arbitrary composite segment/segment
+    cells, endpoint-feature CSR, public numeric-table integration, neck
+    evidence, proposal sampling, and the Python binding are not complete.
 
     Do not treat the current native spike APIs as the final public MAT API.
     The maturity table below is the claim boundary.
@@ -103,7 +109,7 @@ construction.
 | Dimension | Comparative status | Held–Pfeiffer 2025 | Exact-certified Phase 1 |
 | --- | --- | --- | --- |
 | Pocket geometry | incomplete | Segments and circular arcs; simply connected; machinability assumed after an `r + ε` transformation | Raw MAT primitives now clip exactly against polygonal domains with holes and exact radius clearance; the rectangle `C_r` graph is unified, but general arbitrary-pocket traversal is incomplete; circular boundaries are not supported |
-| MAT backend | stronger exact contract on bounded fixtures; incomplete end-to-end | Vroni/ArcVroni used end-to-end | Exact CGAL point graph plus bounded P–S and parallel/nonparallel S–S cells; the catalog-fed four-segment rectangle path now carries Task 3 identities through exact rational sources, one indexed SDG build, swap-owned adaptor traversal, indexed endpoint binding, exact radius clipping, five edges, six feature-triple nodes, and explicit rejection of eight incident P–S rays; the same indexed owner contract binds two retained concave L-pocket P–S parabolas and their four exact segment-limiter events, inventories eleven three-feature vertices and one four-feature `{P2, P4, S2, S3}` vertex without coordinate merging, and proves its sole P–P ray is an exactly oriented half-line with empty L-domain intersection; repeat and canonical input symmetry are record-invariant, but the complete L-pocket graph and arbitrary-pocket traversal remain incomplete |
+| MAT backend | stronger exact contract on bounded fixtures; incomplete end-to-end | Vroni/ArcVroni used end-to-end | Exact CGAL point graph plus catalog-fed rectangle and concave L-pocket graphs. The rectangle carries Task 3 identities through one indexed SDG build, swap-owned adaptor traversal, indexed endpoint binding, exact radius clipping, five edges, six feature-triple nodes, and explicit rejection of eight incident P–S rays. The L path authenticates all 23 raw duals, binds external point/open-segment endpoint events, rejects 12 incident feature transitions, proves its P–P ray and S2–S3 diagonal are outside the interior MAT, and emits a connected 10-node/9-edge tree with seven S–S lines and two P–S parabolas. Normalized-node inventory includes the exact four-feature `{P2, P4, S2, S3}` event without coordinate merging. Complete records survive repeat and canonical input symmetry, but arbitrary-pocket traversal remains incomplete |
 | Engagement limit | stronger contract; incomplete integration | Analytic circle construction followed by bisection until `θmax − 0.001 <= θ <= θmax` radians | Exact rational chord surrogate and event-exact segment/full-circle certification; integration incomplete |
 | Candidate spacing | incomplete | Bisection along the middle curve | Finite candidate lattice; no monotonic-feasibility assumption |
 | Machined state | stronger contract | Ordered contour of prior machining disks; transition sweeps omitted from that contour model | Exact stock mutation and exact full-sweep coverage, ordered certify-before-deplete |
@@ -156,7 +162,7 @@ safeguards, not a new planner benchmark or evidence for arbitrary-pocket
 complexity.
 
 Two other clocks must remain separate. Five warm local Release executions of
-the current native Task 9 algebraic fixture suite took 1.95–2.00 s (1.97 s
+the current native Task 9 algebraic fixture suite took 2.37–2.38 s (2.37 s
 median), but that is a contract gate rather than one pocket generation. The
 existing exact stock replay
 measured 87 s for the kite after a 7x end-to-end speedup; that run certifies and
@@ -1435,10 +1441,9 @@ raise `UnknownCanonicalMatParabolaSourceError`,
     exact CGAL parabola endpoint. Keep identity lookup and event certification
     separate, then require both.
 
-This closes the indexed P–S endpoint seam for two retained concave cells. It
-does not yet emit or canonicalize the complete L-shaped graph; that traversal
-must also handle its P–P ray, bounded S–S cells, incident P–S rejection, domain
-and radius clipping, and shared-node provenance.
+This closes the indexed P–S endpoint seam for two retained concave cells. The
+catalog-fed L traversal described below now adopts both cells with exact domain
+and radius clipping and normalized shared-node provenance.
 
 #### Normalized nodes use the complete feature union
 
@@ -1476,9 +1481,9 @@ from masquerading as the older three-feature encoding.
 The native gate requires exactly eleven degree-three and one degree-four node,
 unique IDs, repeat identity, canonical ring-reversal identity, byte
 compatibility for every three-feature node, strict malformed-input rejection,
-and collision-safe framing. This certifies the normalized node-provenance seam;
-it does not yet certify the L-pocket's complete edge set or radius-clipped
-graph.
+and collision-safe framing. The complete L traversal now consumes this
+node-provenance seam; the four-feature event belongs only to primitives that
+clip outside the interior graph at the gated radius states.
 
 #### A live P–P ray is not its supporting line
 
@@ -1517,9 +1522,96 @@ lower or upper parameter bound.
 The native gate locks the coefficients, exact `-1/2` bound, empty clipped
 component set, repeat identity, and canonical ring-reversal identity. Unknown
 point records, valid records that disagree with the live generators, and
-duplicate generator identities fail through named contracts. This closes the
-P–P ray seam needed by the concave traversal; it does not yet compose the
-remaining S–S and P–S cells into one L-pocket graph.
+duplicate generator identities fail through named contracts. The complete
+concave traversal now adopts this empty-ray proof.
+
+### Catalog-fed L traversal closes the concave fixture
+
+`canonical_l_shape_mat_graph` consumes the exact six-edge fixture ring, an
+exact squared radius, and no caller-assembled identity table. Like the
+rectangle path, it builds one catalog, one indexed SDG, and one swap-owned
+degeneracy-removal adaptor. It then visits each undirected dual once.
+
+The raw and retained inventories are deliberately separate:
+
+| Raw dual class | Raw count | Production disposition |
+| --- | ---: | --- |
+| P–P | 1 | exact P2–P4 ray; no one-dimensional domain component |
+| incident P–S | 12 | authenticated feature transitions; all rejected |
+| nonincident P–S | 2 | retained exact parabolas |
+| S–S | 8 | seven retained lines; S2–S3 clips outside the L interior |
+| **Total** | **23** | **9 retained graph edges** |
+
+The 12 incident P–S transitions comprise eight rays and four bounded segments.
+The bounded transitions are `P2–S2`, `P3–S2`, `P3–S3`, and `P4–S3`.
+Boundedness does not make them medial-axis edges: each point is the endpoint of
+its paired open segment, so these duals are feature-selection transitions with
+one boundary owner, not two distinct boundary contacts.
+
+!!! warning "Classify ownership before primitive shape"
+
+    `Ray_2` versus `Segment_2` authenticates the live CGAL primitive, but it
+    does not decide whether a P–S transition belongs to the MAT. First prove
+    whether the point is an endpoint of the open segment. An incident pair is
+    rejected even when its normalized transition is bounded; a nonincident
+    pair must pass the full parabola endpoint and clearance contracts.
+
+The retained `r² = 0` graph is:
+
+- seven exact S–S `LINE` edges;
+- two exact nonincident P–S `PARABOLA` edges;
+- ten canonical feature-union nodes;
+- five degree-one, two degree-two, and three degree-three nodes.
+
+The degree sum is 18, every node is reachable from every other node, and
+`|E| + 1 = |V|`; the graph is therefore independently locked as one tree.
+The expected generator pairs and feature unions are checked directly from
+typed catalog provenance, not from opaque ID text or rendered coordinates.
+
+#### External point-limited nonparallel S–S endpoints
+
+The L traversal exposed a boundary absent from the rectangle: some
+nonparallel S–S cells end at an external point owner. For a chart point
+`x(t)` and rational limiter point `p`, the endpoint equation is
+
+```text
+||x(t) - p||² = distance(x(t), source support)².
+```
+
+`bind_nonparallel_segment_segment_cell_endpoints` now has additive overloads
+that accept both exact point and open-segment limiter tables. The point path:
+
+1. proves the point record is rational and equals the live owner;
+2. constructs the equation in the source chart's exact quadratic field;
+3. eliminates the radical to a zero-set polynomial without treating the
+   elimination polynomial as sign-preserving;
+4. isolates factor-local roots and filters them through the original signed
+   field equation;
+5. restricts roots to the exact feature interval and requires exact equality
+   with the live adaptor endpoint;
+6. emits root, limiter, factor-kind, and multiplicity provenance.
+
+No cross-radical arithmetic, `to_double`, sampling, or epsilon participates in
+the decision. The L acceptance record contains exactly one
+`nonparallel-point-limiter/...` endpoint event. Existing nonparallel overloads
+remain available and delegate with an empty point-limiter table; the rectangle
+path remains unchanged. A focused boundary gate requires the table and
+catalog-index overloads to emit identical exact endpoints, then proves missing,
+duplicate, and non-rational point records raise three distinct named errors.
+
+After clipping, endpoint-local node IDs from every retained P–S and S–S cell
+alias through the complete incident feature union. Parent-site records map
+point features back to both incident boundary segments, so graph generators
+and physical boundary ownership remain distinct.
+
+The acceptance gate requires exact complete-record equality on repeat and
+canonical input reversal at `r² = 0`, and repeats the symmetry check at
+`r² = 1`. It independently checks every dual/component/root identity, exact
+endpoint provenance, the nine expected generator pairs, the ten expected node
+feature unions, segment-only parent ownership, degree distribution,
+connectivity, and the tree equation. The production contract is intentionally
+named for this exact fixture; arbitrary six-edge rings and general pockets are
+not implied.
 
 ### Catalog-fed traversal closes the bounded graph seam
 
@@ -1656,10 +1748,10 @@ Refinement may change the number and position of samples. It must not change:
 | `segment_site_parameterization.*` | exact primitive domains and coordinate functions |
 | `segment_site_clipping.*` | exact domain and clearance roots; maximal admissible cells |
 | `segment_site_provenance.*` | stable site/root provenance, normalized feature-union node identity, and endpoint evidence |
-| `segment_site_endpoint_binding.*` | live P–P ray, parabola, and bounded parallel/nonparallel S–S endpoint ownership with catalog-indexed exact bridges |
+| `segment_site_endpoint_binding.*` | live P–P ray, parabola, and bounded parallel/nonparallel S–S endpoint ownership, including exact external point/open-segment limiter events |
 | `segment_site_graph_emission.*` | exact one-dimensional component projection and graph record emission |
 | `segment_site_graph_csr.*` | validated deterministic projection of canonical node-site provenance |
-| `segment_site_catalog_graph.*` | catalog-fed bounded rectangle orchestration, exact adaptor traversal, and canonical node assembly |
+| `segment_site_catalog_graph.*` | catalog-fed rectangle and exact concave L-fixture orchestration, adaptor traversal, and canonical node assembly |
 | `segment_site_mat.*` | canonical graph records, general graph primitives, and independently validated bounded comparators |
 | `segment_site_neck.*` | exact local minima and separating cuts |
 | `segment_site_mat_sampling.*` | proposal-only samples |
@@ -1685,21 +1777,24 @@ consumers, or evolution differ from graph orchestration.
 | External point-limited parallel S–S cell | implemented and native-gated | exact rational quadratic limiter equation, algebraic live endpoint, complete event provenance, and constant-clearance clipping |
 | External open-segment-limited parallel S–S cell | implemented and native-gated | exact one- and two-sided rational quadratic support equations, strict open-feature ownership, algebraic live endpoints, complete event provenance, and constant-clearance clipping |
 | Nonparallel segment/segment raw cells | implemented and native-gated | exact source-bound branches, feature intervals, algebraic endpoints, true-radius clipping, and polygon-with-holes clipping |
+| External point-limited nonparallel S–S cell | implemented and native-gated | exact rational point equation in the quadratic-field chart, signed source-equation filtering, algebraic live endpoint, factor/multiplicity provenance, and L-graph adoption |
 | External open-segment-limited nonparallel S–S cell | implemented and native-gated | exact for the lower-left rectangle branch: mixed feature/segment ownership, field-equation filtering, live interval clipping, and event multiplicity |
 | Normalized nonparallel S–S composite fixture | implemented and native-gated | exact two-branch reconstruction; distinct raw-generator, parent-site, and normalized-dual identity; exact transition aliasing and radius clipping |
 | Unified rectangle segment-site graph | implemented and native-gated | one adaptor build; five S–S edges, six canonical nodes, eight authenticated rejected incident P–S rays; exact `r² = 0`, `1`, `4`, and `5` topology; complete-record reversal invariance |
+| Unified concave L-fixture graph | implemented and native-gated | one catalog/indexed SDG/swap-owned adaptor; all 23 raw duals classified; seven S–S lines plus two P–S parabolas form a connected 10-node tree; 12 incident transitions rejected and two outside primitives dimension-filtered; exact `r² = 0` records and `r² = 1` symmetry |
 | General segment/segment cells | pending | unbounded, arbitrary externally limited, multi-transition, and arbitrary-length composite chains have no production graph claim |
-| General degeneracy-removal traversal | pending | the rectangle fixture is production-gated; arbitrary pockets and all primitive combinations have no production claim |
+| General degeneracy-removal traversal | pending | rectangle and exact concave L fixtures are production-gated; arbitrary pockets and unconstrained primitive combinations have no production claim |
 | Degeneracy-normalized node-site CSR | implemented and native-gated | deterministic `int64` offsets and stable feature IDs projected from canonical nodes; six-node rectangle golden and malformed-order failures |
 | Canonical typed site catalog | implemented and native-gated | exact point/open-segment sites derived from Task 3 canonical rings; global ring encoding, endpoint ownership, symmetry, and hole-order invariance |
 | Catalog-derived rational sources | implemented and native-gated | exact `CORE::Expr` round-trip to `BigRat`, directed endpoint ownership, primitive support lines, non-dyadic goldens, and radical rejection |
 | Catalog-fed segment-Delaunay source | implemented and native-gated | exact indexed lookup, one segment insertion pass, complete generator bijection, duplicate-geometry rejection, and immobile graph ownership |
 | Catalog-fed Voronoi owner | implemented and native-gated | explicit `swap_dg=true` transfer, source-empty proof, post-transfer indexed bijection, raw rectangle-pair signature, and double-consume rejection |
-| Catalog-indexed S–S endpoint binding | implemented and native-gated | parallel and nonparallel catalog-owned rectangle cells match the earlier validated path in exact algebraic parameters and complete provenance; adopted by the bounded catalog traversal |
-| Catalog-indexed P–S endpoint binding | implemented and native-gated | both bounded nonincident parabolas of the concave L-shaped ring match direct exact segment-limiter bindings at all four endpoints; repeat and canonical input-reversal invariant; complete L-pocket graph adoption pending |
-| Catalog-indexed P–P ray binding | implemented and native-gated | exact L-pocket `P2–P4` chart, live `(6,6)` endpoint, decreasing-ray domain `t <= -1/2`, and empty exact L-domain clip; repeat/input-reversal invariant; complete L-pocket graph adoption pending |
-| Normalized arbitrary-degree node identity | implemented and native-gated | L-pocket adaptor has eleven exact three-feature vertices and one exact four-feature `{P2, P4, S2, S3}` vertex; three-feature bytes remain compatible, higher-degree IDs are length-framed, and repeat/input-reversal identity is exact; complete L-pocket graph adoption pending |
+| Catalog-indexed S–S endpoint binding | implemented and native-gated | parallel/nonparallel rectangle and L cells bind feature, external point, and external open-segment owners with exact algebraic parameters and complete provenance; adopted by both catalog traversals |
+| Catalog-indexed P–S endpoint binding | implemented and native-gated | both bounded nonincident parabolas of the concave L-shaped ring match direct exact segment-limiter bindings at all four endpoints, survive repeat/reversal, and are adopted by the complete L graph |
+| Catalog-indexed P–P ray binding | implemented and native-gated | exact L-pocket `P2–P4` chart, live `(6,6)` endpoint, decreasing-ray domain `t <= -1/2`, empty exact L-domain clip, repeat/reversal invariance, and complete L-graph adoption |
+| Normalized arbitrary-degree node identity | implemented and native-gated | L-pocket adaptor has eleven exact three-feature vertices and one exact four-feature `{P2, P4, S2, S3}` vertex; three-feature bytes remain compatible, higher-degree IDs are length-framed, repeat/reversal identity is exact, and the L traversal consumes the normalized alias contract |
 | Catalog-fed unified rectangle graph | implemented and native-gated | one indexed SDG build and swap-owned adaptor; five S–S edges, six canonical nodes, eight authenticated rejected incident P–S rays; repeat/input-symmetry identity and complete-record equivalence at exact `r² = 0`, `1`, `4`, and `5` under a validated certificate-namespace projection |
+| Catalog-fed unified L graph | implemented and native-gated | exact six-edge fixture only; 23 raw duals classified in one traversal, nine retained edges and ten canonical nodes, exact tree topology, complete record repeat/reversal identity at `r² = 0`, and `r² = 1` reversal identity |
 | Numeric node-site catalog mapping | implemented and native-gated | catalog-bound graph identities map once to `int64` rows; unknown identities fail loud; direct adopted-graph-to-public-table gate pending |
 | Endpoint-feature CSR and public numeric table | pending | no public binding or complete certificate claim |
 | Exact neck evidence | pending | no production claim |
@@ -1757,10 +1852,10 @@ rays, six feature-triple node identities, the two-degree-three/four-degree-one
 distribution, exact dimensional filtering at the `r² = 4` plateau, complete
 record repeatability, and reversal of all four segments. These gates establish
 bounded P–S, feature-owned parallel S–S, point- and open-segment-limited
-parallel S–S, raw nonparallel S–S algebra, one externally
-open-segment-limited nonparallel rectangle cell, the bounded two-branch
-normalized fixture, and one unified rectangle graph. They do not establish
-general arbitrary-pocket traversal, externally limited composite S–S cells,
+parallel S–S, raw nonparallel S–S algebra, exact external point- and
+open-segment-limited nonparallel endpoints, the bounded two-branch normalized
+fixture, and unified rectangle and exact L-fixture graphs. They do not
+establish general arbitrary-pocket traversal, arbitrary composite S–S cells,
 endpoint-feature CSR, or public numeric-table integration. A separate
 graph-emission contract retains an increasing algebraic interval, omits an
 equal-bound singleton, and raises `InvalidSegmentSiteGraphComponentError` for
@@ -1796,13 +1891,21 @@ L-pocket's sole P–P ray to its canonical rational chart, proves the exact
 clipping to return no component. Its repeat/input-reversal signature is
 identical; unknown, duplicate, and live-mismatched point records fail loudly.
 The catalog-graph gate separately circulates every finite L-pocket adaptor
-vertex and locks the complete
-normalized-node inventory: eleven degree-three feature unions and one
+vertex and locks the complete normalized-node inventory: eleven degree-three
+feature unions and one
 degree-four `{P2, P4, S2, S3}` union, all ID-unique and record-identical after
 repeat and canonical input reversal. It also proves old/new three-feature byte
 compatibility, length-framing collision resistance, and named rejection of
 short, empty, duplicate, or unsorted feature sequences. The same gate composes
-the catalog owner and indexed S–S binders through all five rectangle cells,
+all 23 L-pocket raw duals through one catalog owner and proves the exact
+disposition `1 P–P + 12 incident P–S + 2 nonincident P–S + 8 S–S`. It requires
+the retained seven-line/two-parabola graph to contain exactly ten declared
+feature unions with degree sequence `1,1,1,1,1,2,2,3,3,3`, proves connectivity
+and `|E| + 1 = |V|`, validates every dual/component/root identity and complete
+endpoint provenance, and requires full repeat/input-reversal record equality
+at `r² = 0` plus reversal equality at `r² = 1`. A rectangle and negative
+radius independently raise named L-graph errors. The gate also composes the
+catalog owner and indexed S–S binders through all five rectangle cells,
 authenticates all eight rejected incident P–S transitions, validates every
 node, dual, component, and root identity, requires complete repeat and
 input-symmetry identity, and proves full semantic record equivalence with the

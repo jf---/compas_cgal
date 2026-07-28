@@ -29,6 +29,28 @@ public:
     using std::runtime_error::runtime_error;
 };
 
+class UnsupportedCanonicalMatLShapeGraphError
+    : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
+
+class IncompleteCanonicalMatLShapeGraphError
+    : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
+
+class InvalidCanonicalMatLShapeNodeError
+    : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
+
 MatExactGraph2 canonical_rectangle_mat_graph(
+    const CanonicalReachInput2& input,
+    const CORE::BigRat& radius_squared);
+
+MatExactGraph2 canonical_l_shape_mat_graph(
     const CanonicalReachInput2& input,
     const CORE::BigRat& radius_squared);
