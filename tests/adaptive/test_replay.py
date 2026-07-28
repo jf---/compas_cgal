@@ -1,10 +1,14 @@
+import hashlib
 import math
+from dataclasses import replace
 from fractions import Fraction
 
 import pytest
 from compas.geometry import Polygon
 
+import compas_cgal.adaptive.replay as replay_module
 from compas_cgal.adaptive.canonical import CanonicalRingV1
+from compas_cgal.adaptive.canonical import require_canonical_record
 from compas_cgal.adaptive.candidates import DerivedCandidateCursor
 from compas_cgal.adaptive.candidates import MiddleCurveCandidate
 from compas_cgal.adaptive.candidates import MiddleCurveSpan
@@ -21,6 +25,7 @@ from compas_cgal.adaptive.errors import ReplayGrammarError
 from compas_cgal.adaptive.errors import ReplayInputMismatchError
 from compas_cgal.adaptive.errors import ReplayPairingError
 from compas_cgal.adaptive.errors import ReplayTraversalError
+from compas_cgal.adaptive.errors import InvalidReplayTraceError
 from compas_cgal.adaptive.identity import IdentityDigest
 from compas_cgal.adaptive.identity import InputIdentity
 from compas_cgal.adaptive.medial_axis import MedialAxis
@@ -52,6 +57,7 @@ from compas_cgal.adaptive.policy import NeckPolicy
 from compas_cgal.adaptive.policy import TraversalPolicy
 from compas_cgal.adaptive.reachable_domain import ReachableDomain
 from compas_cgal.adaptive.replay import replay_certificate
+from compas_cgal.adaptive.replay_trace import FreshReplayTrace
 from compas_cgal.adaptive.stock_area import Stock2Area
 from compas_cgal.adaptive.units import ChordBound
 from compas_cgal.adaptive.units import ClearanceZ
@@ -812,6 +818,98 @@ def test_replay_certifies_paired_link_and_circle_before_terminal_check(
         "circle-deplete",
         "circle-coverage",
     ]
+
+
+def test_replay_captures_one_ordered_fresh_proof_trace_before_terminal_rejection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Preserve every accepted proof in canonical operation chronology.
+
+    The real three-motion prefix reaches containment, event-exact engagement,
+    depletion, and coverage for a circle, its direct link, and the following
+    circle.  Only untouched MAT edges make it nonterminal.  Intercepting the
+    terminal gate exposes the already-computed trace without weakening that
+    rejection or constructing substitute witnesses in the test.
+    """
+    identity = _input_identity()
+    first = _lattice_candidate(
+        user_cap=identity.user_cap,
+        candidate_policy=identity.candidate_policy,
+    )
+    terminal = _terminal_lattice_candidate(identity=identity)
+    link = _link_to_candidate(
+        identity,
+        start=_phase_point(first),
+        candidate=terminal,
+    )
+    operations = (
+        identity.entry.approach,
+        identity.entry.plunge,
+        _candidate_circle_operation(identity, first),
+        link,
+        _candidate_circle_operation(identity, terminal),
+    )
+    traces: list[FreshReplayTrace] = []
+    require_terminal = replay_module._require_terminal_replay
+
+    def tracked_require_terminal_replay(**kwargs: object) -> None:
+        trace = kwargs["trace"]
+        assert type(trace) is FreshReplayTrace
+        traces.append(trace)
+        require_terminal(**kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(
+        replay_module,
+        "_require_terminal_replay",
+        tracked_require_terminal_replay,
+    )
+
+    for _ in range(2):
+        with pytest.raises(
+            ReplayTraversalError,
+            match="fresh MAT traversal remains nonterminal",
+        ):
+            _replay(identity, operations)
+
+    assert len(traces) == 2
+    trace = traces[0]
+    assert traces[1].canonical_bytes == trace.canonical_bytes
+    assert require_canonical_record(trace.canonical_bytes) == trace.canonical_bytes
+    assert trace.digest == hashlib.sha256(trace.canonical_bytes).digest()
+    assert trace.initial_coverage_certificate.ordered_sweep_records == ()
+    assert trace.entry_depletion_witness.motion.canonical_bytes == identity.entry.canonical_bytes
+    assert trace.entry_depletion_witness.parent_lineage == ()
+    assert [witness.operation_index for witness in trace.lateral_witnesses] == [
+        2,
+        3,
+        4,
+    ]
+    assert [witness.motion_witness.operation_kind for witness in trace.lateral_witnesses] == [
+        OperationType.CUT,
+        OperationType.LINK,
+        OperationType.CUT,
+    ]
+    assert trace.terminal_coverage_certificate.ordered_sweep_records == tuple(witness.sweep_witness.canonical_bytes for witness in trace.lateral_witnesses)
+    assert trace.first_circle_entry_certificate.motion == trace.lateral_witnesses[0].operation.motion
+    assert all(
+        witness.operation.motion == witness.containment_certificate.motion == witness.motion_witness.motion == witness.depletion_witness.motion == witness.sweep_witness.motion
+        for witness in trace.lateral_witnesses
+    )
+
+    with pytest.raises(InvalidReplayTraceError, match="cross-wired exact motions"):
+        replace(
+            trace.lateral_witnesses[1],
+            sweep_witness=trace.lateral_witnesses[0].sweep_witness,
+        )
+    with pytest.raises(InvalidReplayTraceError, match="operation chronology"):
+        replace(
+            trace,
+            lateral_witnesses=(
+                trace.lateral_witnesses[1],
+                trace.lateral_witnesses[0],
+                trace.lateral_witnesses[2],
+            ),
+        )
 
 
 def test_replay_certifies_first_neck_circle_at_reconstructed_cap(

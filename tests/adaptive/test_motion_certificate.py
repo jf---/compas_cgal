@@ -1,3 +1,4 @@
+import hashlib
 import math
 from dataclasses import replace
 
@@ -6,6 +7,7 @@ import pytest
 
 from compas_cgal import _continuous_tea_2
 from compas_cgal import _stock_2
+from compas_cgal.adaptive.canonical import require_canonical_record
 from compas_cgal.adaptive.errors import EngagementCapExceededError
 from compas_cgal.adaptive.errors import InvalidMotionCertificateError
 from compas_cgal.adaptive.errors import UnresolvedMotionEventError
@@ -285,3 +287,50 @@ def test_witness_rejects_cross_wired_kind_and_cap_bytes() -> None:
             witness,
             user_cap_bytes=EngagementCap.build(math.pi / 2.0).chord_ratio_bytes,
         )
+
+
+def test_motion_witness_is_one_canonical_content_addressed_record() -> None:
+    """Make the accepted safety proof reusable by replay and artifact identity.
+
+    Replay must order the exact witnesses returned by the real certifier.  A
+    frozen Python object without canonical bytes would force each downstream
+    consumer to invent its own serialization and could make the same proof hash
+    differently across the replay and artifact boundaries.
+    """
+    cap = EngagementCap.build(math.pi)
+    witness = _certifier().certify(
+        operation_index=7,
+        operation_kind=OperationType.LINK,
+        motion=_clear_segment(),
+        user_cap=cap,
+        effective_cap=cap,
+    )
+    repeated = _certifier().certify(
+        operation_index=7,
+        operation_kind=OperationType.LINK,
+        motion=_clear_segment(),
+        user_cap=cap,
+        effective_cap=cap,
+    )
+
+    assert require_canonical_record(witness.canonical_bytes) == witness.canonical_bytes
+    assert repeated.canonical_bytes == witness.canonical_bytes
+    assert repeated.digest == witness.digest
+    assert witness.digest == hashlib.sha256(witness.canonical_bytes).digest()
+
+    variants = (
+        replace(witness, operation_index=8),
+        replace(witness, effective_cap_bytes=EngagementCap.build(math.pi / 2.0).chord_ratio_bytes),
+        replace(witness, strategy_identity=b"alternate-exact-oracle-v1"),
+        replace(
+            witness,
+            stock_lineage_digest=hashlib.sha256(b"alternate-stock-lineage").digest(),
+        ),
+        replace(
+            witness,
+            event_trace_digest=hashlib.sha256(b"alternate-event-trace").digest(),
+        ),
+        replace(witness, event_cell_count=witness.event_cell_count + 1),
+    )
+    assert all(variant.canonical_bytes != witness.canonical_bytes for variant in variants)
+    assert len({variant.digest for variant in variants}) == len(variants)

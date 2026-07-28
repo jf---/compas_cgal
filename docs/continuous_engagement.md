@@ -16,11 +16,14 @@ cells.
     L-pocket prefix and its derived-cursor link. It validates the complete
     link/circle relation before stock mutation, then certifies the first circle,
     link, and following nonuniform circle against their frozen pre-cut states
-    before each depletion and coverage mutation. Replay next fails at the
-    explicit nonterminal-traversal boundary because other MAT edges remain
-    untouched. Fresh exact neck inventory, oriented passage, and effective-cap
-    replay are also gated, including the production `80 degrees` second-passage
-    rejection. Complete traversal/coverage, artifact certification,
+    before each depletion and coverage mutation. Every returned containment,
+    motion, depletion, and sweep proof is now retained in a canonical,
+    cross-validated per-operation bundle; two independent rebuilds produce the
+    same trace bytes. Replay next fails at the explicit
+    nonterminal-traversal boundary because other MAT edges remain untouched.
+    Fresh exact neck inventory, oriented passage, and effective-cap replay are
+    also gated, including the production `80 degrees` second-passage rejection.
+    Complete traversal/coverage, replay/artifact certification,
     arbitrary-pocket evidence, and matched Held–Pfeiffer performance remain
     incomplete.
 
@@ -33,7 +36,7 @@ The records have deliberately different jobs:
 | Reconstructed partition | `EventPartitionCertificate2` | `SegmentEventPartition2`, including its nested `EventPartitionCertificate2` | Proves that every declared projection, algebraic root, cell, fibre, overlap, and seam can be reconstructed |
 | Deciding data | Exact uniform-sweep disposition, dedicated violation witness, or `FullCircleCellAuthority2` with reconstructed stationary strata | Ordered segment strata, active branches, and pair orientation/cap dispositions | Authorizes the exact verdict |
 | Trace | `EventTrace2` v2 | `EventTrace2` v2 | Orders canonical events and binds the deciding record by SHA-256 |
-| Typed witness | `MotionWitness` | `MotionWitness` | Binds operation ordinal/kind, exact motion, caps, stock lineage, strategy, and trace digest |
+| Typed witness | `MotionWitness` | `MotionWitness` | Canonically binds operation ordinal/kind, exact motion, caps, stock lineage, strategy, and trace digest under one content identity |
 
 A generic event certificate is topology authority, not generally decision
 authority for either motion family. Segment cell classification consumes the
@@ -234,8 +237,11 @@ authority, certifies against the frozen post-link stock, and only then depletes
 stock and adds its exact coverage sweep. The chronology regression requires
 all three actions. Replay subsequently raises `ReplayTraversalError` because
 other MAT edges remain nonterminal; it still emits no partial certificate.
-The result closes the first post-link circle disposition without claiming
-empty residual or complete-path certification.
+Before that rejection, `FreshReplayTrace` retains the entry depletion,
+first-circle-in-entry proof, initial coverage state, and each circle/link proof
+bundle plus terminal snapshots. The result closes the first post-link circle
+disposition and its evidence handoff without claiming empty residual or
+complete-path certification.
 
 Fresh oriented-neck replay is now a separate consumer of the same exact oracle.
 It rebuilds the neck inventory, seeds independent forward/reverse passage
@@ -338,6 +344,40 @@ digest, authority inclusion, verdict agreement, and strategy identity.
 `MotionWitness.__post_init__` repeats the kind/motion and cap-order invariants,
 so direct construction or `dataclasses.replace` cannot bypass them.
 
+### Canonical motion and replay handoff
+
+`MotionWitness.canonical_bytes` is the single serialization authority for a
+returned engagement proof. Its `motion-witness-v1` record contains every
+witness field, using explicit versioned CUT/LINK and certified-verdict tags
+rather than Python enum representation. `MotionWitness.digest` is SHA-256 of
+that record. Changing only the operation index, effective cap, oracle strategy,
+stock lineage, event-trace digest, or event-cell count changes the content
+identity.
+
+Replay wraps that witness in `ReplayLateralWitness` only after the same
+operation has also produced exact containment, depletion, and coverage
+evidence. The wrapper requires:
+
+- the recorded operation and recomputed cap decision to agree;
+- operation ordinal and semantic kind to agree with `MotionWitness`;
+- all four proof records to own the same exact motion;
+- containment, depletion, and coverage to use the same typed tool radius; and
+- motion-witness user/effective cap bytes to equal the recomputed decision.
+
+`FreshReplayTrace` orders those wrappers behind the one entry-depletion
+witness. It independently recomputes stock and coverage parent lineages and
+binds pristine, post-entry, and terminal state identities. Repeating a real
+circle-link-circle replay twice emits byte-identical canonical traces;
+swapping the two valid lateral bundles or borrowing a valid circle sweep for
+the link raises `InvalidReplayTraceError`.
+
+!!! warning "Canonical trace does not imply completion"
+
+    The trace records authentic evidence available before the terminal gate.
+    It has no terminal verdict. Only `ReplayCertificate` may bind terminal MAT
+    traversal and exact empty reachable residual, and that certificate remains
+    pending.
+
 ## Verification
 
 The focused stage gates are:
@@ -352,6 +392,7 @@ pixi run pytest --testmon -n auto -q \
   tests/adaptive/test_segment_oracle.py \
   tests/adaptive/test_circle_oracle.py \
   tests/adaptive/test_motion_certificate.py \
+  tests/adaptive/test_replay.py \
   tests/adaptive/test_identity.py
 pixi run -e docs docs
 ```
