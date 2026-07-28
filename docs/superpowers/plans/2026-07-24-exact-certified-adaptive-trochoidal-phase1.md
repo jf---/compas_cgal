@@ -15,12 +15,24 @@ the proof boundaries: Epeck stock/station predicates, exact-on-guide
 conservative depletion, exact construction of `C_r = D ⊖ B_r` and
 `M_r = C_r ⊕ B_r`, an exact-with-sqrt full-sweep coverage ledger, and an
 event-exact continuous engagement oracle. Candidate evaluation is
-transactional. Existing straight-skeleton generators, rounded depletion APIs,
-and audit compatibility paths remain unchanged.
+transactional. Separate straight-skeleton and rounded-depletion algorithms stay
+outside this call graph; they are never fallback implementations for the
+exact-certified pipeline.
+
+The content-addressed artifact is also replayed by a separately versioned
+tri-dexel consumer. That downstream lane validates cutting removal against an
+independent stock representation and renders a modeled thermal-response
+overlay. It is a falsification and visualization consumer, not an exact-proof
+authority or a source of Phase-1 planning decisions.
 
 **Governing spec:**
 `docs/superpowers/specs/2026-07-24-exact-certified-adaptive-trochoidal-design.md`
 at exactly `6334e8d6446086e3dfbe688c4a3656dd6845c3b1`.
+
+**Approved amendment:** Task 14A's downstream tri-dexel
+removal/thermal-response validation was added by user direction on 2026-07-28.
+It strengthens independent validation without changing the exact proof
+authority or Phase-1 planning semantics.
 
 **Start point:** branch `codex/exact-certified-adaptive-phase1`, based on
 `1860167929e50f38fdae8d67ef77e9c967364f1c`.
@@ -36,8 +48,12 @@ at exactly `6334e8d6446086e3dfbe688c4a3656dd6845c3b1`.
   xfail it.
 - Run Ruff before every Python commit and `mypy --strict` for the adaptive
   package.
-- Add new paths alongside working paths. Do not redirect or remove legacy
+- Add new paths alongside working paths. Do not redirect or remove existing
   behavior in this phase.
+- The exact-certified pipeline has one authoritative call graph. Do not add
+  shims, alternate calling conventions, fallback routing, or duplicate
+  deciding logic. Separate algorithms remain isolated peers until any
+  user-approved removal after independent validation.
 - No reported angle, tolerance, or sampled maximum may decide a certificate.
 - A native algebraic gate that fails stops the dependent tasks. It does not
   authorize a fallback.
@@ -64,8 +80,9 @@ T2 + T3 + T8 + T10 ─ T11 entry + containment + InputIdentity
                      └─ T12 transactional candidate evaluator
 T11A + T12 ─ T13 traversal + generator + coverage
                              └─ T14 artifact assembly + schema
-                                 └─ T15 acceptance + mutation campaign
-                                     └─ T16 full verification/review
+                                 └─ T14A tri-dexel removal/thermal validation
+                                      └─ T15 acceptance + mutation campaign
+                                          └─ T16 full verification/review
 ```
 
 ## File morphology
@@ -159,6 +176,7 @@ tests/adaptive/
   test_traversal.py
   test_certificate.py
   test_schema.py
+  test_tridexel_interchange.py
   test_acceptance.py
   fixtures/
     held_fig5.json
@@ -167,6 +185,7 @@ tests/adaptive/
 
 schemas/
   certified_toolpath-v1.schema.json
+  adaptive-tridexel-validation-v1.schema.json
 
 cmake/
   NativeDependencies.cmake
@@ -179,8 +198,9 @@ scripts/
   run-adaptive-mutations.py
 ```
 
-No native implementation file may grow past 1,000 lines. Split earlier when a
-file acquires a second responsibility.
+File length is not a quality gate. Split a file when it acquires a second
+responsibility or serves consumers with different invariants or evolution
+rates.
 
 ---
 
@@ -533,7 +553,7 @@ pixi run pytest tests/adaptive/test_exact_depletion.py \
 
 ### Step 2: implement exact native construction
 
-Add alongside legacy methods:
+Add alongside the existing methods:
 
 ```cpp
 DepletionTrace subtract_exact_segment(
@@ -782,7 +802,7 @@ enum class ContinuousTeaVerdict {
 };
 ```
 
-No bool compatibility mapping is used in the new module.
+No boolean verdict coercion is used in the new module.
 
 ### Step 3: GREEN
 
@@ -1158,7 +1178,7 @@ pixi run pytest tests/adaptive/test_motion_certificate.py -n auto -q
 ### Step 2: implement and GREEN
 
 The certifier is read-only and dispatches only exact segment/full-circle
-motions. It never calls the legacy guarded certifiers. Fresh orchestration is
+motions. It never calls the station-guarded certifiers. Fresh orchestration is
 deferred until Task 11A, after validated entry and exact neck state exist.
 Cross-record ordinal/motion/cap/state mismatch belongs to replay and artifact
 assembly, where an expected canonical operation and keyed witness stream exist.
@@ -1905,7 +1925,7 @@ def exact_certified_adaptive_trochoidal_toolpath(
 ### Step 2: write RED consumer contract
 
 Serialize, call `json.loads`, validate with `jsonschema`, deserialize, recompute
-identity, derive the legacy `ToolpathResult`, and replay it. Reject unknown
+identity, derive the `ToolpathResult` consumer view, and replay it. Reject unknown
 schema versions and any canonical-motion/COMPAS-view mismatch.
 
 Run RED:
@@ -1931,6 +1951,216 @@ Commit: `feat(cert): bind exact toolpath artifact`
 
 ---
 
+## Task 14A — Replay through tri-dexel removal and thermal visualization
+
+This is a two-repository consumer gate. `compas_cgal` remains the producer of
+the exact, content-addressed `CertifiedToolpath`. The tri-dexel repository owns
+artifact import, stock mutation, removal comparison, modeled thermal-response
+generation, and rendering. Do not add the GPU/Qt tri-dexel stack as a
+`compas_cgal` runtime dependency.
+
+The consumer is independent in state representation and execution, not a
+replacement proof. A tri-dexel mismatch rejects or marks the integration
+unresolved; a passing raster replay cannot upgrade, repair, or substitute for
+the exact engagement, containment, coverage, or fresh-replay certificates.
+Only a disclosure-approved tri-dexel revision and public consumer contract may
+be named or pushed from this repository. Unreleased model internals and
+graphics encodings remain outside this public plan.
+
+The rendered quantity is **modeled cutting-feed thermal response**. Until a
+separately validated physical model and calibration exist, it is not
+temperature, heat in joules, tool temperature, wear, tool life, or a machining
+recommendation.
+
+**Producer-repository files**
+
+- Create: `tests/adaptive/test_tridexel_interchange.py`
+- Create: `schemas/adaptive-tridexel-validation-v1.schema.json`
+- Create: `docs/benchmarks/exact-certified-adaptive-tridexel.md`
+- Modify: `pyproject.toml`
+- Modify: `mkdocs.yml`
+
+**Consumer-repository files**
+
+- Create: `src/cam_swept_volume_demo/dexel/certified_adaptive_import.py`
+- Create: `src/cam_swept_volume_demo/dexel/certified_adaptive_replay.py`
+- Create: `src/cam_swept_volume_demo/dexel/certified_adaptive_chronology.py`
+- Create: `src/cam_swept_volume_demo/certified_adaptive_validation.py`
+- Create: `tests/test_certified_adaptive_import.py`
+- Create: `tests/test_certified_adaptive_replay.py`
+- Create: `tests/test_certified_adaptive_validation.py`
+- Create: `docs/certified-adaptive-validation.md`
+- Modify: `pyproject.toml`
+- Modify: `mkdocs.yml`
+
+### Step 1: write RED interchange and identity contracts
+
+Serialize the Task 14 artifact, parse it with `json.loads`, validate it against
+`certified_toolpath-v1.schema.json`, and import the canonical operation stream
+without coordinate rematching. Require:
+
+- exact schema version and original artifact-byte SHA-256;
+- `ArtifactIdentity`, input, tool, world frame, cut plane, operation order,
+  operation IDs, motion kinds, and policy identities remain bound;
+- a fresh tri-dexel stock identity binds stock bounds, grid pitch, tool
+  geometry, precleared entry, consumer component versions, source revision
+  plus dirty digest, `pixi.lock`, device/backend identity, and replay policy;
+- each canonical lateral operation owns one global source cut clock even when
+  it expands to multiple consumer sweeps;
+- unsupported motion, nonplanar input, mismatched tool/cut plane, missing
+  identity, reordered operation, or unknown schema raises
+  `UnsupportedCertifiedAdaptiveMotionError`,
+  `CertifiedAdaptiveIdentityMismatchError`, or
+  `InvalidCertifiedAdaptiveArtifactError` as applicable;
+- no consumer result exists when producer or consumer identity reconstruction
+  fails.
+
+The interchange contains no fallback `ToolpathResult` parsing path. The exact
+canonical operation stream is the only input authority.
+
+### Step 2: write RED bounded sweep-mapping contracts
+
+Map an exact constant-Z segment directly to one
+`FlatEndCylinderXYSweep` at radius `r` in every lane. Map a full circle to a
+deterministic closed chord chain governed by `ArcReplayPolicy.build`. Its
+`ArcReplaySagittaMM` field is a world-millimetre quantity, and the factory must
+prove `0 < delta < tool_radius`.
+
+For centerline Hausdorff bound `delta`, construct three fresh replay programmes:
+
+```text
+inner validation:   chord chain ⊕ B_(r - delta)
+nominal display:    chord chain ⊕ B_r
+outer validation:   chord chain ⊕ B_(r + delta)
+```
+
+The continuous swept sets then satisfy:
+
+```text
+inner validation ⊆ exact circular sweep ⊆ outer validation
+```
+
+Bind `delta`, chord count, chord ordering, lane, and source operation ID into
+the replay identity. Test the inclusion contract on rational cardinal,
+non-cardinal, CW, CCW, phase-shifted, repeated, and input-reversal fixtures.
+Reject a non-closing chain, broken source-operation partition, zero/negative
+radius lane, changed phase, or non-deterministic expansion. Approximate
+coordinates are consumer inputs only; they never feed back into the exact
+artifact or its certificate. These failures raise
+`InvalidCertifiedAdaptiveReplayPolicyError` or
+`CertifiedAdaptiveSweepMappingError`; they never select another mapping.
+
+Initialize each lane from identical fresh stock and apply the authenticated
+`PreclearedEntry` before lateral replay. Authored source time comes from an
+independent `ReplayChronology.build` policy whose feed field is
+`CutFeedMMPerSecond`. Source time is derived from reporting length and feed,
+bound into the replay identity, and never taken from GUI/playback wall time.
+
+### Step 3: validate cutting removal independently
+
+Replay inner, nominal, and outer programmes through fresh tri-dexel fields.
+Require:
+
+- accepted source clocks are contiguous and map bijectively to canonical
+  operation IDs;
+- final state and accepted-prefix identities are invariant to admissible GPU
+  batch partitioning and display on/off state;
+- the exact reachable-material and containment fixtures agree with the
+  inner/outer removal bracket after adding the declared tri-dexel lattice
+  enclosure;
+- removed-volume, outside-pocket removal, and reachable residual are reported
+  as lower/upper intervals, never as exact continuous-solid values;
+- a discrepancy, indeterminate enclosure, device failure, stale prefix,
+  dropped operation, or state-digest mismatch fails loudly and preserves the
+  rejected evidence through `CertifiedAdaptiveRemovalMismatchError` or
+  `CertifiedAdaptiveStateIdentityError`.
+
+The acceptance fixture must be non-vacuous: at least one segment and one full
+circle remove material, and a zero-engagement recut advances chronology without
+inventing removed volume.
+
+### Step 4: render material removal and modeled thermal response
+
+Drive the disclosure-approved thermal-response interface from the accepted
+nominal replay and its authored source chronology. Produce PNG evidence at
+declared start, intermediate, and terminal prefixes showing stock removal,
+toolpath, and the thermal-response overlay. Require:
+
+- stock, removal evidence, thermal generation, and render consume the same
+  accepted prefix;
+- canonical operation ID and source cut clock join each exact motion/effective-
+  cap witness to its accepted removal interval, modeled response generation,
+  and rendered prefix without coordinate rematching;
+- stale, ahead, mismatched, or failed response is hidden and fails the
+  validation run with `CertifiedAdaptiveThermalPrefixError`;
+- the viewport and report state `modeled thermal response — uncalibrated`, not
+  temperature;
+- render settings and every PNG SHA-256 belong to a separate presentation
+  identity;
+- visual inspection confirms path/stock/overlay alignment; framebuffer
+  cardinality and nonempty-pixel tests do not substitute for that inspection.
+
+Thermal state is observation only in Phase 1. Changing its model or
+presentation may not change toolpath identity, candidate choice, exact replay,
+or Held planner timing.
+
+### Step 5: seal the validation report and GREEN
+
+`adaptive-tridexel-validation-v1.schema.json` binds:
+
+- producer artifact and schema digests;
+- producer and consumer build identities;
+- stock, tool, entry, grid, mapping, lane, chronology, model, and presentation
+  identities;
+- accepted-prefix and final-state digests;
+- a per-operation evidence index joining exact witness identity, effective cap,
+  source cut clock, accepted removal record, response generation, and rendered
+  prefix;
+- removal/residual/gouge intervals and their enclosure policies;
+- thermal-response generation identity and maturity label;
+- PNG paths and SHA-256 digests;
+- every rejected or unresolved observation.
+
+One-bit mutation of every identity-bearing field, operation reorder, lane
+swap, missing PNG, stale thermal prefix, or hand-edited metric invalidates the
+report with `InvalidCertifiedAdaptiveValidationReportError`. The report hashes
+its inputs and outputs but never hashes its own digest.
+
+Expose the end-to-end consumer as a Pixi task, not a wrapper script. Run:
+
+```bash
+# compas_cgal producer worktree
+pixi run pytest tests/adaptive/test_tridexel_interchange.py \
+  -n auto --testmon -q
+pixi run schema
+pixi run -e docs docs
+pixi run adaptive-tridexel-fixture
+
+# tri-dexel consumer worktree
+pixi run -e dev-gpu pytest \
+  tests/test_certified_adaptive_import.py \
+  tests/test_certified_adaptive_replay.py \
+  tests/test_certified_adaptive_validation.py \
+  -n auto --dist loadgroup --testmon -q
+pixi run -e dev-gpu validate-certified-adaptive -- \
+  build/adaptive/tridexel/certified-toolpath.json \
+  build/adaptive/tridexel/validation
+pixi run -e dev-gpu docs
+
+# compas_cgal producer worktree
+pixi run adaptive-tridexel-report -- \
+  build/adaptive/tridexel/validation/report.json
+```
+
+Commit separately in each repository:
+
+```text
+feat(validation): replay certified adaptive path
+test(adaptive): bind tri-dexel validation
+```
+
+---
+
 ## Task 15 — Execute ablation, mutation, and Held provenance gates
 
 **Files**
@@ -1944,9 +2174,9 @@ Commit: `feat(cert): bind exact toolpath artifact`
 
 On the same tractable pocket, execute a committed fixed-policy comparator that
 uses the same Phase-1 exact-segment/full-circle operation grammar and replay
-every lateral operation through the event-exact oracle. Do not feed the legacy
-generator's unsupported partial repositioning/lead arcs to this oracle or label
-the comparator as a replay of that generator.
+every lateral operation through the event-exact oracle. Do not feed the
+straight-skeleton generator's unsupported partial repositioning/lead arcs to
+this oracle or label the comparator as a replay of that generator.
 Require:
 
 - fixed comparator has a nonzero proved cap-violation tail;
@@ -2004,6 +2234,11 @@ their CPU or publish an executable. A claim of “10x faster than Held” remain
 unset without an independently accepted reference implementation measured on
 the same machine. Performance work may not weaken any exact predicate,
 certificate, replay, or fixture-provenance gate.
+
+Tri-dexel import, GPU stock mutation, removal comparison, thermal-response
+generation, and rendering are separately timed downstream validation. They are
+excluded from the matched Held planner clock and may not be hidden inside
+planner setup or certification totals.
 
 ### Step 4: GREEN
 
@@ -2065,10 +2300,13 @@ Review the complete branch against the governing spec:
 - frame/unit typing and native stub closure;
 - file responsibilities and size;
 - named errors/no fallback;
-- legacy isolation;
+- one authoritative exact call graph with no shim, alternate path, fallback
+  routing, or duplicate deciding logic;
 - archive hashes and actual native source-tree digests;
 - exact clipping of every MAT dual primitive and neck-state transitions;
 - identity/replay independence;
+- tri-dexel consumer independence, accepted-prefix bijection, bracketed
+  circle replay, removal-enclosure provenance, and thermal-response maturity;
 - every mutation kill.
 
 Any finding reopens its owning task and reruns that task’s RED/GREEN and full
@@ -2090,9 +2328,12 @@ Phase 1 is complete only when:
 - the tractable path is non-vacuous, gouge-free, cap-certified, and exactly
   coverage-certified over `M_r`, with `D \ M_r` explicitly bound;
 - fresh replay agrees without trusting generator witnesses;
+- the exact artifact replays through the pinned tri-dexel consumer with
+  operation/source-clock bijection, bounded removal evidence, content-addressed
+  validation report, and inspected PNG removal/thermal-response views;
 - fixed-policy primitive-grammar ablation and all named mutations demonstrate
   mechanism;
 - strict typing, Ruff, schema, full pytest, and wheel consumer gates pass;
-- existing generators and compatibility APIs remain green and unchanged in
-  behavior;
+- separate generator APIs remain green, while the exact-certified pipeline
+  contains no alternate/fallback branch and shares no deciding state with them;
 - the worktree contains no unexplained changes.

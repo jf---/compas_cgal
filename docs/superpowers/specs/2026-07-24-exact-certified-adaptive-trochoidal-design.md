@@ -65,7 +65,7 @@ nonzero displacement from that seed engages more than `pi`.
 `CertifiedToolpath` contains:
 
 - a canonical typed operation stream;
-- a derived legacy `ToolpathResult` view for existing consumers;
+- a derived `ToolpathResult` view for existing consumers;
 - one `MotionWitness` for every lateral cutting operation;
 - one `DepletionWitness` for every state-changing operation;
 - a `CoverageCertificate`;
@@ -127,7 +127,7 @@ Its mathematical guide is:
 
 The squared guide radius is derived as `v dot v`; a separately trusted radius is
 not part of the deciding representation. The phase point is `c + v`. The
-legacy COMPAS `Circle.radius` is a reporting/view value derived from the same
+COMPAS `Circle.radius` is a reporting/view value derived from the same
 motion and is contract-tested against it.
 
 Partial circular transitions, splines, ramps, and 3D motion are outside Phase 1.
@@ -453,10 +453,11 @@ that certificate and verifying every factor/root/cell is the completeness
 check; a cell count alone has no evidentiary role. Isolating intervals are
 regenerated diagnostics and are excluded from canonical proof identity.
 
-The existing guarded segment/circular certifiers remain compatibility and
-performance experiments. They may become a fast prefilter only after the
-event-exact differential suite proves zero false positives on the committed
-corpus. They are never the sole Phase-1 acceptance authority.
+The guarded segment/circular certifiers remain separate shipping audit APIs and
+performance experiments. Their existing callers stay outside the
+exact-certified call graph; they may not enter it as a prefilter, fallback, or
+acceptance path. The event-exact certifier is the sole Phase-1 motion
+authority.
 
 ### Witness
 
@@ -754,7 +755,7 @@ mutation suites.
 - **Ablation:** execute a fixed-policy comparator that emits the same Phase-1
   segment/full-circle primitive grammar on the same committed fixture and
   require a nonzero certified-violation tail; the adaptive result has zero
-  violations. This is not presented as replay of the legacy generator's
+  violations. This is not presented as replay of the straight-skeleton generator's
   unsupported partial arcs.
 - **Mutation kills:** empty path, seed-only path, dropped final branch,
   relabelled cut, stale witness, certify-after-deplete, rounded depletion,
@@ -790,6 +791,7 @@ mutation suites.
   it does not cover circular-arc sites.
 - A precleared entry is required in Phase 1. A generated entry may not be
   smuggled in by exempting arbitrary lateral cutting motion.
-- Existing straight-skeleton generators, rounded stock-depletion APIs, and audit
-  compatibility surfaces stay intact until separately validated replacement is
-  explicitly approved.
+- Straight-skeleton generators and rounded stock-depletion algorithms remain
+  separate products while the exact-certified path is validated. They are not
+  branches or fallbacks inside this pipeline. Replacement or removal is a
+  separate, explicitly approved operation after independent validation.
