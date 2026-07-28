@@ -2011,6 +2011,10 @@ Commit: `feat(cert): add independent replay`
 **Dependencies:** Tasks 2, 3, 8, 10, and 11 plus the Task 11A-R replay
 chronology contracts.
 
+**Design:** [`2026-07-28-atomic-candidate-transaction-design.md`](../specs/2026-07-28-atomic-candidate-transaction-design.md)
+binds state ownership, exact evaluation chronology, immutable evidence,
+winner replay at commit, named failures, and deterministic selection.
+
 **Files**
 
 - Create: `src/compas_cgal/adaptive/transaction.py`
