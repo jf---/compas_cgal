@@ -1,5 +1,7 @@
 import hashlib
+import struct
 from dataclasses import dataclass
+from typing import Final
 from typing import Literal
 from typing import cast
 
@@ -18,6 +20,8 @@ from compas_cgal.adaptive.units import ToolRadius
 from compas_cgal.toolpath import OperationType
 
 _DIGEST_SIZE = hashlib.sha256().digest_size
+_BINARY64_SIZE = struct.calcsize(">d")
+MOTION_CERTIFICATE_SCHEMA_VERSION: Final[bytes] = b"motion-certificate-schema-v1"
 
 
 def _digest_sequence(domain: bytes, values: tuple[bytes, ...]) -> bytes:
@@ -36,8 +40,47 @@ def _lineage_digest(stock: Stock2Area) -> bytes:
     )
 
 
+def _validate_native_trace(
+    verdict: str,
+    trace: _continuous_tea_2.EventTrace2,
+) -> None:
+    if type(verdict) is not str or verdict not in {"certified", "cap_exceeded", "unresolved"}:
+        raise InvalidMotionCertificateError("native motion oracle returned an unknown verdict.")
+    if type(trace) is not _continuous_tea_2.EventTrace2:
+        raise InvalidMotionCertificateError("native motion oracle returned an invalid event trace.")
+    if trace.exact_verdict != verdict:
+        raise InvalidMotionCertificateError("native motion oracle verdict contradicts its event trace.")
+    if type(trace.canonical_bytes) is not bytes or type(trace.canonical_digest) is not bytes or hashlib.sha256(trace.canonical_bytes).digest() != trace.canonical_digest:
+        raise InvalidMotionCertificateError("native event-trace digest contradicts its canonical bytes.")
+    if (
+        type(trace.decision_authority_bytes) is not bytes
+        or type(trace.decision_authority_digest) is not bytes
+        or hashlib.sha256(trace.decision_authority_bytes).digest() != trace.decision_authority_digest
+        or trace.decision_authority_digest not in trace.canonical_bytes
+    ):
+        raise InvalidMotionCertificateError("native event trace does not bind its deciding authority.")
+    if type(trace.oracle_strategy_version) is not str or not trace.oracle_strategy_version:
+        raise InvalidMotionCertificateError("native event trace omits its strategy identity.")
+
+
 @dataclass(frozen=True)
 class MotionWitness:
+    """Immutable proof binding for one certified lateral motion.
+
+    Attributes:
+        operation_index: Canonical operation ordinal.
+        operation_kind: Semantic lateral operation kind.
+        motion: Exact segment or full-circle motion.
+        user_cap_bytes: Canonical binary64 user-cap surrogate.
+        effective_cap_bytes: Canonical binary64 effective-cap surrogate.
+        strategy_identity: Native event-oracle strategy identifier.
+        stock_lineage_digest: SHA-256 digest of the observed stock lineage.
+        event_trace_digest: SHA-256 digest of the verified native event trace.
+        verdict: Exact certified verdict.
+        event_cell_count: Number of sign-invariant event cells.
+        unresolved_count: Zero for every constructible witness.
+    """
+
     operation_index: int
     operation_kind: OperationType
     motion: ExactSegmentMotion | ExactCircleMotion
@@ -55,8 +98,27 @@ class MotionWitness:
             raise InvalidMotionCertificateError("motion witness operation index must be nonnegative.")
         if type(self.operation_kind) is not OperationType:
             raise InvalidMotionCertificateError("motion witness operation kind must be exact OperationType.")
+        if self.operation_kind not in (OperationType.CUT, OperationType.LINK):
+            raise InvalidMotionCertificateError("motion witness is restricted to lateral operations.")
         if type(self.motion) not in (ExactSegmentMotion, ExactCircleMotion):
             raise InvalidMotionCertificateError("motion witness requires one exact motion.")
+        if (self.operation_kind is OperationType.LINK and type(self.motion) is not ExactSegmentMotion) or (
+            self.operation_kind is OperationType.CUT and type(self.motion) is not ExactCircleMotion
+        ):
+            raise InvalidMotionCertificateError("motion witness operation kind and motion are incompatible.")
+        if any(type(value) is not bytes or len(value) != _BINARY64_SIZE for value in (self.user_cap_bytes, self.effective_cap_bytes)):
+            raise InvalidMotionCertificateError("motion witness cap surrogates must be exact binary64 bytes.")
+        user_cap = struct.unpack(">d", self.user_cap_bytes)[0]
+        effective_cap = struct.unpack(">d", self.effective_cap_bytes)[0]
+        try:
+            effective_within_user_cap = _stock_2.cap_chord_ratio_le(
+                effective_cap,
+                user_cap,
+            )
+        except ValueError:
+            raise InvalidMotionCertificateError("motion witness cap surrogates are outside the exact native domain.") from None
+        if not effective_within_user_cap:
+            raise InvalidMotionCertificateError("motion witness effective cap exceeds its user cap.")
         if any(type(value) is not bytes or len(value) != _DIGEST_SIZE for value in (self.stock_lineage_digest, self.event_trace_digest)):
             raise InvalidMotionCertificateError("motion witness digests must be exact SHA-256 bytes.")
         if type(self.strategy_identity) is not bytes or not self.strategy_identity:
@@ -69,6 +131,12 @@ class MotionWitness:
 
 @dataclass(frozen=True)
 class MotionCertifier:
+    """Read-only exact event certifier over one immutable stock snapshot.
+
+    The certifier owns a native stock copy plus digests for the observed
+    boundary and depletion lineage. Certification never mutates that state.
+    """
+
     _stock: _stock_2.Stock2
     tool_radius: ToolRadius
     stock_lineage_digest: bytes
@@ -87,6 +155,19 @@ class MotionCertifier:
         stock: Stock2Area,
         tool_radius: ToolRadius,
     ) -> "MotionCertifier":
+        """Build a certifier from a typed stock owner.
+
+        Args:
+            stock: Exact stock-area owner whose current state is snapshotted.
+            tool_radius: Typed cutter radius used by every motion audit.
+
+        Returns:
+            Read-only certifier with canonical boundary and lineage digests.
+
+        Raises:
+            InvalidMotionCertificateError: If either argument has the wrong
+                exact type.
+        """
         if type(stock) is not Stock2Area or type(tool_radius) is not ToolRadius:
             raise InvalidMotionCertificateError("motion certifier factory requires exact stock and tool radius.")
         snapshot = stock.raw
@@ -98,6 +179,15 @@ class MotionCertifier:
         )
 
     def contains(self, x: float, y: float) -> bool:
+        """Query the immutable native stock snapshot.
+
+        Args:
+            x: World-XY x coordinate in millimetres.
+            y: World-XY y coordinate in millimetres.
+
+        Returns:
+            Whether the exact stock contains the queried point.
+        """
         return self._stock.contains(x, y)
 
     def certify(
@@ -109,6 +199,27 @@ class MotionCertifier:
         user_cap: EngagementCap,
         effective_cap: EngagementCap,
     ) -> MotionWitness:
+        """Certify one exact lateral motion against its effective TEA cap.
+
+        Args:
+            operation_index: Canonical nonnegative operation ordinal.
+            operation_kind: `CUT` for circles or `LINK` for segments.
+            motion: Exact segment or full-circle motion.
+            user_cap: User engagement limit.
+            effective_cap: Exact policy-derived cap, no greater than
+                `user_cap`.
+
+        Returns:
+            Immutable witness binding the native event trace and stock
+            pre-state.
+
+        Raises:
+            InvalidMotionCertificateError: If local inputs or the native trace
+                violate their structural contract.
+            EngagementCapExceededError: If the exact oracle proves cap
+                exceedance.
+            UnresolvedMotionEventError: If the exact event proof is incomplete.
+        """
         if type(operation_index) is not int or operation_index < 0:
             raise InvalidMotionCertificateError("operation index must be a nonnegative exact integer.")
         if type(operation_kind) is not OperationType:
@@ -124,19 +235,28 @@ class MotionCertifier:
         if operation_kind is OperationType.CUT and type(motion) is not ExactCircleMotion:
             raise InvalidMotionCertificateError("operation kind and motion are incompatible.")
         if type(motion) is ExactSegmentMotion:
-            raise UnresolvedMotionEventError("event-exact segment oracle is absent from the current Task 6 substrate.")
-
-        circle = cast(ExactCircleMotion, motion)
-        verdict, trace = _continuous_tea_2.audit_full_circle_tea_event_exact(
-            self._stock,
-            circle.center.x,
-            circle.center.y,
-            circle.phase_vector.x,
-            circle.phase_vector.y,
-            circle.clockwise,
-            self.tool_radius.value,
-            effective_cap.chord_ratio,
-        )
+            verdict, trace = _continuous_tea_2.audit_segment_tea_event_exact(
+                self._stock,
+                motion.start.x,
+                motion.start.y,
+                motion.end.x,
+                motion.end.y,
+                self.tool_radius.value,
+                effective_cap.chord_ratio,
+            )
+        else:
+            circle = cast(ExactCircleMotion, motion)
+            verdict, trace = _continuous_tea_2.audit_full_circle_tea_event_exact(
+                self._stock,
+                circle.center.x,
+                circle.center.y,
+                circle.phase_vector.x,
+                circle.phase_vector.y,
+                circle.clockwise,
+                self.tool_radius.value,
+                effective_cap.chord_ratio,
+            )
+        _validate_native_trace(verdict, trace)
         if verdict == "cap_exceeded":
             raise EngagementCapExceededError(f"operation {operation_index} exceeds its exact effective cap.")
         if verdict != "certified":
