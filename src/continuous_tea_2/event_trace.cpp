@@ -102,7 +102,7 @@ void validate_decision_authority(
 const std::string& event_oracle_component_version()
 {
     static const std::string version =
-        "event-exact-motion-oracle-v2";
+        "event-exact-motion-oracle-v3";
     return version;
 }
 
@@ -170,8 +170,12 @@ EventTraceEvent2 make_event_trace_event(
     return event;
 }
 
-EventTrace2 build_event_trace(
-    const EventPartitionCertificate2& partition,
+namespace {
+
+EventTrace2 build_verified_event_trace(
+    VerifiedEventPartition2 verified,
+    const std::string& decision_authority_bytes,
+    const std::string& decision_authority_digest,
     const std::string& motion_chart_id,
     const std::string& motion_identity,
     const std::string& effective_cap_bytes,
@@ -180,13 +184,6 @@ EventTrace2 build_event_trace(
     const std::string& oracle_strategy_version,
     std::vector<EventTraceEvent2> events)
 {
-    const VerifiedEventPartition2 verified =
-        verify_event_partition(partition);
-    if (verified.verdict
-        != ContinuousTeaVerdict::CERTIFIED) {
-        throw EventTraceVerificationError(
-            "event trace requires a reconstruct-verified partition");
-    }
     if (motion_chart_id.empty()
         || motion_identity.empty()) {
         throw EventTraceVerificationError(
@@ -227,20 +224,22 @@ EventTrace2 build_event_trace(
     }
 
     validate_decision_authority(
-        verified.partition.canonical_bytes,
-        verified.partition.canonical_digest);
+        decision_authority_bytes,
+        decision_authority_digest);
+    const std::size_t event_cell_count =
+        verified.partition.cells.size();
     EventTrace2 trace{
         verdict,
-        verified.partition,
-        verified.partition.canonical_bytes,
-        verified.partition.canonical_digest,
+        std::move(verified.partition),
+        decision_authority_bytes,
+        decision_authority_digest,
         std::move(events),
         motion_chart_id,
         motion_identity,
         effective_cap_bytes,
         whole_rim_disposition,
         oracle_strategy_version,
-        verified.partition.cells.size(),
+        event_cell_count,
         {},
         {},
     };
@@ -261,4 +260,78 @@ EventTrace2 build_event_trace(
     trace.canonical_digest =
         sha256_bytes(trace.canonical_bytes);
     return trace;
+}
+
+VerifiedEventPartition2 require_verified_partition(
+    const EventPartitionCertificate2& partition)
+{
+    VerifiedEventPartition2 verified =
+        verify_event_partition(partition);
+    if (verified.verdict
+        != ContinuousTeaVerdict::CERTIFIED) {
+        throw EventTraceVerificationError(
+            "event trace requires a reconstruct-verified partition");
+    }
+    return verified;
+}
+
+} // namespace
+
+EventTrace2 build_event_trace(
+    const EventPartitionCertificate2& partition,
+    const std::string& motion_chart_id,
+    const std::string& motion_identity,
+    const std::string& effective_cap_bytes,
+    ContinuousTeaVerdict verdict,
+    const std::string& whole_rim_disposition,
+    const std::string& oracle_strategy_version,
+    std::vector<EventTraceEvent2> events)
+{
+    VerifiedEventPartition2 verified =
+        require_verified_partition(partition);
+    const std::string authority_bytes =
+        verified.partition.canonical_bytes;
+    const std::string authority_digest =
+        verified.partition.canonical_digest;
+    return build_verified_event_trace(
+        std::move(verified),
+        authority_bytes,
+        authority_digest,
+        motion_chart_id,
+        motion_identity,
+        effective_cap_bytes,
+        verdict,
+        whole_rim_disposition,
+        oracle_strategy_version,
+        std::move(events));
+}
+
+EventTrace2 build_authority_event_trace(
+    VerifiedEventPartition2 verified_partition,
+    const std::string& decision_authority_bytes,
+    const std::string& decision_authority_digest,
+    const std::string& motion_chart_id,
+    const std::string& motion_identity,
+    const std::string& effective_cap_bytes,
+    ContinuousTeaVerdict verdict,
+    const std::string& whole_rim_disposition,
+    const std::string& oracle_strategy_version,
+    std::vector<EventTraceEvent2> events)
+{
+    if (verified_partition.verdict
+        != ContinuousTeaVerdict::CERTIFIED) {
+        throw EventTraceVerificationError(
+            "authority event trace requires a reconstruct-verified partition");
+    }
+    return build_verified_event_trace(
+        std::move(verified_partition),
+        decision_authority_bytes,
+        decision_authority_digest,
+        motion_chart_id,
+        motion_identity,
+        effective_cap_bytes,
+        verdict,
+        whole_rim_disposition,
+        oracle_strategy_version,
+        std::move(events));
 }

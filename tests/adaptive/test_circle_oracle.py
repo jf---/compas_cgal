@@ -84,6 +84,42 @@ def test_nonempty_stock_certifies_full_circle_inside_exact_cleared_disk() -> Non
     assert trace.whole_rim_disposition == "clear"
 
 
+def test_concentric_cleared_disk_certifies_every_nonuniform_cell() -> None:
+    """Resolve a partial full circle from exact cell strata, not probes.
+
+    A radius-1 guide moves the radius-1/2 cutter around a concentric
+    radius-11/8 cleared disk.  At every phase the remaining material is one
+    circular-support run of about 100 degrees, strictly below the 120-degree
+    cap.  The rim is never uniformly clear or material, so certification must
+    bind the complete algebraic event partition and one exact disposition per
+    open cell.
+    """
+    stock = _stock_2.Stock2(SQUARE, [])
+    stock.subtract_disk(5.0, 5.0, 1.375)
+    cap_chord_ratio = _stock_2.cap_chord_ratio(2.0 * np.pi / 3.0)
+
+    verdict, trace = _continuous_tea_2.audit_full_circle_tea_event_exact(
+        stock,
+        5.0,
+        5.0,
+        1.0,
+        0.0,
+        False,
+        0.5,
+        cap_chord_ratio,
+    )
+
+    assert verdict == "certified"
+    assert trace.exact_verdict == "certified"
+    assert trace.whole_rim_disposition == "partial"
+    assert trace.oracle_strategy_version == "full-circle-cell-strata-exact-v1"
+    assert trace.event_cell_count > 0
+    assert trace.decision_authority_digest != trace.partition.canonical_digest
+    assert hashlib.sha256(trace.decision_authority_bytes).digest() == trace.decision_authority_digest
+    assert trace.decision_authority_digest in trace.canonical_bytes
+    assert _continuous_tea_2.verify_event_partition(trace.partition).verdict.name == "CERTIFIED"
+
+
 def test_virgin_slotting_proves_cap_exceeded_without_sampling() -> None:
     verdict, trace = _audit(_stock_2.Stock2(SQUARE, []))
 

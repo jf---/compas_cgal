@@ -14,10 +14,11 @@ cells.
     Python boundary distinguishes certified, cap-exceeded, and unresolved
     outcomes. Task 11A now independently reconstructs a two-circle no-neck
     L-pocket prefix and its derived-cursor link. It validates the complete
-    link/circle relation before stock mutation, then certifies the first circle
-    and link against their frozen pre-cut states before depletion and coverage.
-    The second circle currently fails closed with an unresolved exact event
-    partition. Neck-state replay, complete traversal/coverage, artifact
+    link/circle relation before stock mutation, then certifies the first circle,
+    link, and following nonuniform circle against their frozen pre-cut states
+    before each depletion and coverage mutation. Replay next fails at the
+    explicit nonterminal-traversal boundary because other MAT edges remain
+    untouched. Neck-state replay, complete traversal/coverage, artifact
     certification, arbitrary-pocket evidence, and matched Held–Pfeiffer
     performance remain incomplete.
 
@@ -28,14 +29,16 @@ The records have deliberately different jobs:
 | Layer | Circle authority | Segment authority | Consumer role |
 | --- | --- | --- | --- |
 | Reconstructed partition | `EventPartitionCertificate2` | `SegmentEventPartition2`, including its nested `EventPartitionCertificate2` | Proves that every declared projection, algebraic root, cell, fibre, overlap, and seam can be reconstructed |
-| Deciding data | Generic cells/fibres and uniform/full-circle dispositions | Ordered segment strata, active branches, and pair orientation/cap dispositions | Authorizes the exact verdict |
+| Deciding data | Exact uniform-sweep disposition, dedicated violation witness, or `FullCircleCellAuthority2` with reconstructed stationary strata | Ordered segment strata, active branches, and pair orientation/cap dispositions | Authorizes the exact verdict |
 | Trace | `EventTrace2` v2 | `EventTrace2` v2 | Orders canonical events and binds the deciding record by SHA-256 |
 | Typed witness | `MotionWitness` | `MotionWitness` | Binds operation ordinal/kind, exact motion, caps, stock lineage, strategy, and trace digest |
 
-A generic event certificate is sufficient authority for a circle trace. It is
-not sufficient for a segment verdict: segment cell classification consumes
-the larger `SegmentEventPartition2`, especially the ordered active-branch
-inventory and each material run's pair-cap disposition.
+A generic event certificate is topology authority, not generally decision
+authority for either motion family. Segment cell classification consumes the
+larger `SegmentEventPartition2`, especially the ordered active-branch inventory
+and each material run's pair-cap disposition. A nonuniform circle likewise
+reconstructs one stationary stratum per exact parameter cell and records those
+dispositions in a separate `FullCircleCellAuthority2`.
 
 `EventTrace2` v2 therefore carries two views:
 
@@ -43,23 +46,24 @@ inventory and each material run's pair-cap disposition.
 - `decision_authority_bytes` and `decision_authority_digest` identify the
   complete reconstructed record that authorized the verdict.
 
-For circles, the authority bytes equal `partition.canonical_bytes`. For
-segments, they equal the full segment partition bytes and deliberately differ
-from the nested generic certificate. The trace canonical record includes both
-the generic partition digest and the decision-authority digest. A
+For uniform circles and the dedicated line/vertex violation path, the
+authority bytes equal `partition.canonical_bytes`. For nonuniform cell
+classification and for segments, they deliberately differ from the nested
+generic certificate. The trace canonical record includes both the generic
+partition digest and the decision-authority digest. A
 `MotionWitness.event_trace_digest` is consequently transitive to the full
 deciding record.
 
 !!! danger "A digest beside a proof is not proof ownership"
 
-    Recording the full segment digest as metadata without including it in the
-    trace identity would allow the same trace digest to be relabelled onto a
-    different deciding partition. The authority digest must be inside the
-    canonical trace record.
+    Recording a full segment or circle-cell digest as metadata without
+    including it in the trace identity would allow the same trace digest to be
+    relabelled onto a different deciding partition. The authority digest must
+    be inside the canonical trace record.
 
 The planning `InputIdentity` separately binds
 `motion-certificate-schema-v1` and the native
-`event-exact-motion-oracle-v2` component. Changing the witness schema or
+`event-exact-motion-oracle-v3` component. Changing the witness schema or
 oracle implementation family therefore changes the planning root before
 replay begins.
 
@@ -110,6 +114,70 @@ Nonuniform cases reconstruct the complete line/circle pullback event set,
 including tangent, overlap, endpoint-order, cap, and seam fibres. Unsupported
 or unreconstructed degeneracy is unresolved, never sampled into acceptance.
 
+### Nonuniform full-circle cell authority
+
+The event partition proves where the engagement combinatorics may change. It
+does not prove the disposition of the open cells between those events.
+`event-exact-motion-oracle-v3` closes that second proof obligation for
+same-support material runs.
+
+Each global rational cell witness is assigned to its unique owned quarter
+chart. The rational Pythagorean parametrization
+
+```text
+u(t) = ((1 - t²) / (1 + t²), 2t / (1 + t²))
+```
+
+then turns the exact binary64 circle center and phase vector into an exact
+rational cutter station. The station uses the same branch construction,
+cyclic material-run pairing, orientation test, and pair-cap classifier as the
+segment oracle. This is one shared stationary theorem, not a second circle-only
+interpretation of engagement.
+
+For every partial material run, the authority additionally requires both
+boundary branches to lie on one line or circle support and requires the
+chart-specific cap projection that makes its sign invariant over the complete
+cell. An equal-cap run requires the corresponding identically-equal overlap
+record. Cross-support pairs and unsupported overlap families remain
+`unresolved`; an exact witness is never promoted beyond the theorem admitted
+by the authority.
+
+`FullCircleCellAuthority2` commits to:
+
+- the reconstructed generic partition;
+- the canonical stock-feature inventory;
+- exact center, phase, tool-radius, and cap inputs;
+- every rational station source and complete stationary cell stratum;
+- each reference-side and material-run disposition; and
+- the exact cap-projection identities used by each decided partial run.
+
+Its SHA-256 digest is therefore deliberately distinct from the generic
+partition digest and is included inside `EventTrace2`. The strategy is
+versioned `full-circle-cell-strata-exact-v1`.
+
+!!! warning "A verified event partition is not an engagement verdict"
+
+    Reconstructing every root, cell, fibre, and seam proves that the parameter
+    decomposition is complete. It does not classify those strata as clear,
+    below-cap, or above-cap. Partition verification and cell-disposition
+    authority must remain separate; otherwise a structurally valid partition
+    can be mistaken for a motion certificate.
+
+The whole-motion cell authority uses fail-closed verdict precedence:
+an unresolved cell dominates locally material or above-cap cells. A separate
+dedicated line/vertex witness may still prove existential cap exceedance
+without completing every cell; that is a different proof object with a
+different contract.
+
+The first implementation accidentally rebuilt the partition three times,
+reconstructed every stationary cell twice, and re-extracted the stock boundary
+once per cell. Hoisting verifiedness and boundary records across the cell loop
+reduced a warm Apple M1 Max Release median from 252 ms to 128 ms for the
+10-cell concentric certificate (10 measured repetitions), and from 572 ms to
+301 ms for a 43-cell cross-support audit (5 repetitions): 1.96x and 1.90x,
+respectively. These are bounded development timings for one oracle call, not a
+Held–Pfeiffer planner comparison.
+
 ### Exact clear sweeps in nonempty stock
 
 The first Task 11A replay circle exposed a proof case that global stock
@@ -120,7 +188,8 @@ old uniform classifier recognized `clear` only when the stock had no boundary
 records. It therefore returned `unresolved` for a physically and exactly
 zero-engagement motion.
 
-The repaired `event-exact-motion-oracle-v2` derives a sqrt-capable exact-region
+The retained uniform path in `event-exact-motion-oracle-v3` derives a
+sqrt-capable exact-region
 view of the current stock. Every linear/circular support and every one-root
 endpoint is lifted without a double conversion:
 
@@ -141,14 +210,6 @@ the event-partition path; it is not relabelled as material or exceeded. The
 uniform-circle strategy is versioned
 `full-circle-uniform-event-exact-v2`.
 
-!!! warning "A verified event partition is not an engagement verdict"
-
-    Reconstructing every root, cell, fibre, and seam proves that the parameter
-    decomposition is complete. It does not classify those strata as clear,
-    below-cap, or above-cap. Keep partition verification and disposition
-    proof separate; otherwise a structurally valid partition can be mistaken
-    for a motion certificate.
-
 The regression uses only dyadic geometry. A phase vector `(3/32, 4/32)` has
 guide radius `5/32`; with tool radius `1/2`, its complete sweep fits exactly
 inside an entry disk of radius
@@ -166,12 +227,13 @@ the direct link between their phase points. The link is exactly contained and
 event-certified against the post-first-circle stock, then depleted and added
 to coverage.
 
-The following circle currently returns `UnresolvedMotionEventError`. This is
-the first replay-driven nonuniform full-circle boundary after state-dependent
-segment depletion. The programme stops before circle depletion or coverage;
-the passing link must not be mistaken for a passing pair. The next oracle
-repair must explain and close the missing deciding disposition without
-sampling, tolerance, or replay-side metadata.
+The following nonuniform circle now receives a distinct cell-decision
+authority, certifies against the frozen post-link stock, and only then depletes
+stock and adds its exact coverage sweep. The chronology regression requires
+all three actions. Replay subsequently raises `ReplayTraversalError` because
+other MAT edges remain nonterminal; it still emits no partial certificate.
+The result closes the first post-link circle disposition without claiming
+neck-owned traversal, empty residual, or complete-path certification.
 
 !!! danger "Exact-number backend definitions are an ABI contract"
 

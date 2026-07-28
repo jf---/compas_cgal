@@ -374,6 +374,24 @@ std::optional<std::size_t> cell_with_lower_root(
 
 } // namespace
 
+std::string canonical_segment_cell_stratum(
+    const SegmentCellStratum2& cell)
+{
+    std::vector<std::string> branches;
+    branches.reserve(cell.branches.size());
+    for (const SegmentBoundaryBranch2& branch :
+         cell.branches) {
+        branches.push_back(
+            canonical_branch(branch));
+    }
+    return encode_string_sequence(
+        {
+            "segment-cell-stratum-v1",
+            encode_string_sequence(branches),
+            canonical_stratum(cell.stratum),
+        });
+}
+
 SegmentEventPartition2 construct_segment_event_partition(
     const Stock2& stock,
     const SegmentEventSource2& source)

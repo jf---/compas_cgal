@@ -108,6 +108,12 @@ src/
     event_partition.cpp
     segment_oracle.cpp
     circle_oracle.cpp
+    circle_strata.h
+    circle_strata.cpp
+    station_source.h
+    station_source.cpp
+    station_classifier.h
+    station_classifier.cpp
   continuous_tea_2.cpp              # nanobind adapter only
   segment_site_mat.h
   segment_site_mat.cpp
@@ -1713,10 +1719,10 @@ Commit: `feat(adaptive): certify entry and input`
 
 **Status (2026-07-28): in progress. Input/grammar/orientation, fresh no-neck
 candidate reconstruction, derived-cursor link/circle pairing, entry-first
-stock/coverage initialization, containment, and first-circle/link
-certification-before-depletion/coverage are gated. The next nonuniform circle
-fails closed at an unresolved exact event partition; replay emits no
-certificate.**
+stock/coverage initialization, containment, and first-circle/link/second-circle
+certification-before-depletion/coverage are gated. Replay now reaches the
+explicit nonterminal-traversal boundary because other MAT edges remain
+untouched; it emits no partial certificate.**
 
 **Prerequisite repair (2026-07-28):** the replay audit found that exact MAT
 certificate identity is refinement-invariant while traversal cursor identity
@@ -1760,19 +1766,40 @@ Fresh state reconstruction exposed an exact-oracle classification gap. The
 first L-pocket circle is contained in the qualified entry disk, but remote
 stock remains. The old full-circle uniform path recognized clear engagement
 only when the complete stock was empty, so a valid reconstructed event
-partition still returned unresolved. `event-exact-motion-oracle-v2` now lifts
-the current Epeck stock boundary and one-root endpoints into the sqrt-capable
-exact-region kernel and certifies clear only when the canonical full-circle
-sweep has empty regularized intersection with stock. Replay does not bypass
-the certifier with entry metadata.
+partition still returned unresolved. `event-exact-motion-oracle-v2` introduced
+the lift from the current Epeck stock boundary and one-root endpoints into the
+sqrt-capable exact-region kernel; v3 retains it and certifies clear only when
+the canonical full-circle sweep has empty regularized intersection with stock.
+Replay does not bypass the certifier with entry metadata.
 
 Derived-cursor continuation exposed a relational operation contract. A link
 is not a second MAT candidate: it transports the previous phase to the
 immediately following circle, holds that circle's cursor-before, and carries
 the same scope/cap while the circle alone owns the advance. Task 11A now
 preflights the complete link/circle relation before fresh stock mutation. The
-first real link certifies and mutates in proof order; its following nonuniform
-circle currently remains unresolved and is not depleted.
+first real link and its following nonuniform circle both certify and mutate in
+proof order.
+
+That nonuniform circle exposed a second exact-oracle classification gap. A
+reconstructed four-chart event partition proves every algebraic change
+location, but not the engagement disposition of the open cells between them.
+`event-exact-motion-oracle-v3` maps each global rational cell witness to one
+owned quarter chart, constructs the exact rational cutter station, reuses the
+segment stationary branch/pair classifier, and requires a chart-specific cap
+projection for every same-support partial material run. Its
+`FullCircleCellAuthority2` binds the generic partition, stock features,
+motion/cap inputs, complete stationary strata, dispositions, and projection
+identities under a distinct SHA-256 digest. Cross-support runs remain
+unresolved; the whole-motion cell authority never lets a local violation erase
+an unsupported cell.
+
+The first implementation repeated three full partition verifications, built
+every stationary cell twice, and extracted the stock boundary once per cell.
+Passing verifiedness as `VerifiedEventPartition2`, constructing the authority
+once, moving the verified partition into the trace, and hoisting boundary
+extraction reduced bounded warm Release medians from 252 ms to 128 ms for a
+10-cell certificate and from 572 ms to 301 ms for a 43-cell cross-support
+audit on the Apple M1 Max. These are oracle-stage timings, not Held parity.
 
 **Files**
 
@@ -1781,9 +1808,22 @@ circle currently remains unresolved and is not depleted.
 - Modify: `src/compas_cgal/adaptive/canonical.py`
 - Modify: `src/compas_cgal/adaptive/identity.py`
 - Create: `src/compas_cgal/adaptive/replay.py`
+- Create: `src/continuous_tea_2/station_source.h`
+- Create: `src/continuous_tea_2/station_source.cpp`
+- Create: `src/continuous_tea_2/station_classifier.h`
+- Create: `src/continuous_tea_2/station_classifier.cpp`
+- Create: `src/continuous_tea_2/circle_strata.h`
+- Create: `src/continuous_tea_2/circle_strata.cpp`
+- Modify: `src/continuous_tea_2/segment_strata.h`
+- Modify: `src/continuous_tea_2/segment_strata.cpp`
+- Modify: `src/continuous_tea_2/segment_oracle.cpp`
+- Modify: `src/continuous_tea_2/event_trace.h`
+- Modify: `src/continuous_tea_2/event_trace.cpp`
+- Modify: `src/continuous_tea_2/circle_oracle.cpp`
 - Modify: `tests/adaptive/test_policy.py`
 - Modify: `tests/adaptive/test_identity.py`
 - Modify: `tests/adaptive/typecheck/consumer_contract.py`
+- Test: `tests/adaptive/test_circle_oracle.py`
 - Test: `tests/adaptive/test_replay.py`
 
 ### Step 1: write RED replay contracts
@@ -1880,14 +1920,16 @@ Implemented foundation:
 - exact containment and certification of a real derived-cursor link against
   frozen post-circle stock, then link depletion and coverage mutation;
 - a real-owner chronology gate for
-  `entry -> circle -> link -> next-circle-certify`, with no mutation after the
-  next circle's unresolved verdict; and
+  `entry -> circle -> link -> next-circle`, with exact certification against
+  each frozen stock snapshot before each depletion/coverage mutation;
+- distinct generic-partition and cell-decision authority digests for the
+  post-link nonuniform circle, followed by fail-closed nonterminal traversal;
+  and
 - fail-closed candidate and nonterminal-traversal mutation coverage.
 
 Pending before this task is GREEN: neck-owner/passage reconstruction,
-the first post-link nonuniform circle disposition, complete ordered witness
-capture, terminal traversal, exact empty residual, and the complete immutable
-`ReplayCertificate`.
+complete ordered witness capture, terminal traversal, exact empty residual,
+and the complete immutable `ReplayCertificate`.
 
 ```bash
 pixi run format-adaptive

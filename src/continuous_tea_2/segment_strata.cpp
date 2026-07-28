@@ -523,31 +523,12 @@ std::string sign_text(CGAL::Sign sign)
     return "positive";
 }
 
-} // namespace
-
-std::vector<SegmentBranchState2> segment_branches_at(
+std::vector<SegmentBranchState2> branches_at_station(
     const std::vector<BoundaryFeatureRecord2>& records,
-    const SegmentEventSource2& source,
-    const std::string& witness_numerator,
-    const std::string& witness_denominator)
+    const Epeck::FT& center_x,
+    const Epeck::FT& center_y,
+    const Epeck::FT& radius)
 {
-    const Rational parameter{
-        Integer(witness_numerator),
-        Integer(witness_denominator)};
-    const Rational x0 =
-        parse_rational(source.x0().text());
-    const Rational y0 =
-        parse_rational(source.y0().text());
-    const Rational x1 =
-        parse_rational(source.x1().text());
-    const Rational y1 =
-        parse_rational(source.y1().text());
-    const Epeck::FT center_x = exact_ft(
-        x0 + parameter * (x1 - x0));
-    const Epeck::FT center_y = exact_ft(
-        y0 + parameter * (y1 - y0));
-    const Epeck::FT radius = exact_ft(
-        parse_rational(source.tool_radius().text()));
     const GpsPolygon cutter = cutter_polygon(
         EPoint(center_x, center_y),
         radius);
@@ -684,14 +665,11 @@ std::vector<SegmentBranchState2> segment_branches_at(
 }
 
 std::vector<BranchPairDisposition2>
-segment_branch_pair_dispositions(
+branch_pair_dispositions_at(
     const std::vector<SegmentBranchState2>& branches,
-    const SegmentEventSource2& source)
+    const Rational& cap_chord_ratio)
 {
     Kernel2 kernel;
-    const Rational cap_chord_ratio =
-        parse_rational(
-            source.cap_chord_ratio().text());
     std::vector<BranchPairDisposition2> result;
     for (std::size_t first_index = 0;
          first_index < branches.size();
@@ -768,6 +746,90 @@ segment_branch_pair_dispositions(
     return result;
 }
 
+SegmentCellStratum2 make_cell_stratum(
+    std::vector<SegmentBranchState2> states,
+    const std::string& chart_id,
+    const std::string& witness_numerator,
+    const std::string& witness_denominator,
+    const Rational& cap_chord_ratio)
+{
+    std::vector<SegmentBoundaryBranch2> branches;
+    std::vector<std::string> active_branch_ids;
+    branches.reserve(states.size());
+    active_branch_ids.reserve(states.size());
+    for (const SegmentBranchState2& state : states) {
+        branches.push_back(state.branch);
+        active_branch_ids.push_back(
+            state.branch.branch_id);
+    }
+    return {
+        std::move(branches),
+        {
+            "cell",
+            {},
+            {},
+            {},
+            chart_id,
+            witness_numerator,
+            witness_denominator,
+            {},
+            0,
+            std::move(active_branch_ids),
+            {},
+            {},
+            branch_pair_dispositions_at(
+                states,
+                cap_chord_ratio),
+            {},
+            false,
+            false,
+            false,
+            false,
+        },
+    };
+}
+
+} // namespace
+
+std::vector<SegmentBranchState2> segment_branches_at(
+    const std::vector<BoundaryFeatureRecord2>& records,
+    const SegmentEventSource2& source,
+    const std::string& witness_numerator,
+    const std::string& witness_denominator)
+{
+    const Rational parameter{
+        Integer(witness_numerator),
+        Integer(witness_denominator)};
+    const Rational x0 =
+        parse_rational(source.x0().text());
+    const Rational y0 =
+        parse_rational(source.y0().text());
+    const Rational x1 =
+        parse_rational(source.x1().text());
+    const Rational y1 =
+        parse_rational(source.y1().text());
+    return branches_at_station(
+        records,
+        exact_ft(
+            x0 + parameter * (x1 - x0)),
+        exact_ft(
+            y0 + parameter * (y1 - y0)),
+        exact_ft(
+            parse_rational(
+                source.tool_radius().text())));
+}
+
+std::vector<BranchPairDisposition2>
+segment_branch_pair_dispositions(
+    const std::vector<SegmentBranchState2>& branches,
+    const SegmentEventSource2& source)
+{
+    return branch_pair_dispositions_at(
+        branches,
+        parse_rational(
+            source.cap_chord_ratio().text()));
+}
+
 SegmentCellStratum2 construct_segment_cell_stratum(
     const Stock2& stock,
     const SegmentEventSource2& source,
@@ -786,40 +848,40 @@ SegmentCellStratum2 construct_segment_cell_stratum(
             source,
             witness_numerator,
             witness_denominator);
-    std::vector<SegmentBoundaryBranch2> branches;
-    std::vector<std::string> active_branch_ids;
-    branches.reserve(states.size());
-    active_branch_ids.reserve(states.size());
-    for (const SegmentBranchState2& state : states) {
-        branches.push_back(state.branch);
-        active_branch_ids.push_back(
-            state.branch.branch_id);
+    return make_cell_stratum(
+        states,
+        "segment-linear-v1",
+        witness_numerator,
+        witness_denominator,
+        parse_rational(
+            source.cap_chord_ratio().text()));
+}
+
+SegmentCellStratum2 construct_station_cell_stratum(
+    const std::vector<BoundaryFeatureRecord2>& records,
+    const StationEventSource2& source)
+{
+    if (records.empty()) {
+        throw IncompleteSegmentPartitionError(
+            "station cell requires a nonempty stock boundary");
     }
-    return {
-        std::move(branches),
-        {
-            "cell",
-            {},
-            {},
-            {},
-            "segment-linear-v1",
-            witness_numerator,
-            witness_denominator,
-            {},
-            0,
-            std::move(active_branch_ids),
-            {},
-            {},
-            segment_branch_pair_dispositions(
-                states,
-                source),
-            {},
-            false,
-            false,
-            false,
-            false,
-        },
-    };
+    return make_cell_stratum(
+        branches_at_station(
+            records,
+            exact_ft(
+                parse_rational(
+                    source.center_x().text())),
+            exact_ft(
+                parse_rational(
+                    source.center_y().text())),
+            exact_ft(
+                parse_rational(
+                    source.tool_radius().text()))),
+        "station-rational-v1",
+        "0",
+        "1",
+        parse_rational(
+            source.cap_chord_ratio().text()));
 }
 
 std::vector<std::string>

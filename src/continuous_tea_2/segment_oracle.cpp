@@ -6,10 +6,10 @@
 #include "segment_source.h"
 #include "segment_strata.h"
 #include "sha256.h"
+#include "station_classifier.h"
 
 #include <algorithm>
 #include <map>
-#include <type_traits>
 #include <string_view>
 #include <utility>
 
@@ -48,21 +48,6 @@ Rational parse_rational(
     }
 }
 
-Epeck::FT exact_ft(const Rational& value)
-{
-    static_assert(
-        std::is_same_v<Rational, CGAL::Epeck_ft>);
-    return Epeck::FT(value);
-}
-
-enum class CellDecision {
-    CLEAR,
-    MATERIAL,
-    SAFE_PARTIAL,
-    CAP_EXCEEDED,
-    UNRESOLVED,
-};
-
 bool overlap_requires_resolution(
     const OverlapInterval2& overlap)
 {
@@ -70,12 +55,10 @@ bool overlap_requires_resolution(
         != "identically-equal-cap-interval";
 }
 
-bool reference_is_material(
-    const Stock2& stock,
+StationEventSource2 station_source(
     const SegmentEventSource2& source,
     const std::string& numerator,
-    const std::string& denominator,
-    bool& resolved)
+    const std::string& denominator)
 {
     const Rational parameter{
         Integer(numerator),
@@ -92,104 +75,27 @@ bool reference_is_material(
         parse_rational(
             source.tool_radius().text(),
             "tool radius");
-    const GpsPoint reference(
-        exact_ft(x0 + parameter * (x1 - x0)),
-        exact_ft(y0 + parameter * (y1 - y0) - radius));
-    const CGAL::Oriented_side side =
-        stock.set().oriented_side(reference);
-    resolved = side != CGAL::ON_ORIENTED_BOUNDARY;
-    return side == CGAL::ON_POSITIVE_SIDE;
-}
-
-const BranchPairDisposition2* pair_for(
-    const SegmentEventStratum2& stratum,
-    const std::string& first,
-    const std::string& second)
-{
-    const auto found = std::find_if(
-        stratum.pair_dispositions.begin(),
-        stratum.pair_dispositions.end(),
-        [&first, &second](
-            const BranchPairDisposition2& pair) {
-            return pair.first_branch_id == first
-                && pair.second_branch_id == second;
-        });
-    return found == stratum.pair_dispositions.end()
-        ? nullptr
-        : &*found;
-}
-
-CellDecision classify_cell(
-    const Stock2& stock,
-    const SegmentEventSource2& source,
-    const SegmentEventStratum2& stratum)
-{
-    if (stratum.kind != "cell"
-        || stratum.witness_numerator.empty()
-        || stratum.witness_denominator.empty()) {
-        return CellDecision::UNRESOLVED;
-    }
-    bool reference_resolved = false;
-    const bool reference_material =
-        reference_is_material(
-            stock,
-            source,
-            stratum.witness_numerator,
-            stratum.witness_denominator,
-            reference_resolved);
-    if (!reference_resolved) {
-        return CellDecision::UNRESOLVED;
-    }
-    const std::size_t count =
-        stratum.active_branch_ids.size();
-    if (count == 0) {
-        return reference_material
-            ? CellDecision::MATERIAL
-            : CellDecision::CLEAR;
-    }
-    if (count % 2 != 0) {
-        return CellDecision::UNRESOLVED;
-    }
-
-    std::vector<std::pair<std::size_t, std::size_t>>
-        material_runs;
-    if (reference_material) {
-        material_runs.emplace_back(count - 1, 0);
-        for (std::size_t index = 1;
-             index + 1 < count;
-             index += 2) {
-            material_runs.emplace_back(
-                index,
-                index + 1);
-        }
-    } else {
-        for (std::size_t index = 0;
-             index + 1 < count;
-             index += 2) {
-            material_runs.emplace_back(
-                index,
-                index + 1);
-        }
-    }
-    for (const auto [first_index, second_index] :
-         material_runs) {
-        const BranchPairDisposition2* pair =
-            pair_for(
-                stratum,
-                stratum.active_branch_ids[first_index],
-                stratum.active_branch_ids[second_index]);
-        if (pair == nullptr) {
-            return CellDecision::UNRESOLVED;
-        }
-        if (pair->cap_disposition == "above-cap") {
-            return CellDecision::CAP_EXCEEDED;
-        }
-        if (pair->cap_disposition != "below-cap"
-            && pair->cap_disposition != "equal-cap") {
-            return CellDecision::UNRESOLVED;
-        }
-    }
-    return CellDecision::SAFE_PARTIAL;
+    const Rational cap =
+        parse_rational(
+            source.cap_chord_ratio().text(),
+            "cap chord ratio");
+    const auto text =
+        [](const Rational& value) {
+            const Integer numerator =
+                CORE::numerator(value);
+            const Integer denominator =
+                CORE::denominator(value);
+            return denominator == 1
+                ? numerator.convert_to<std::string>()
+                : numerator.convert_to<std::string>()
+                    + "/"
+                    + denominator.convert_to<std::string>();
+        };
+    return StationEventSource2::build(
+        text(x0 + parameter * (x1 - x0)),
+        text(y0 + parameter * (y1 - y0)),
+        text(radius),
+        text(cap));
 }
 
 const AlgebraicRootRecord2& root_for(
@@ -485,20 +391,31 @@ SegmentTeaAudit2 audit_segment_tea_event_exact(
                 || !stratum.trim_predicates_rechecked;
             continue;
         }
-        const CellDecision decision =
-            classify_cell(stock, source, stratum);
+        const StationCellDecision decision =
+            classify_station_cell(
+                stock,
+                station_source(
+                    source,
+                    stratum.witness_numerator,
+                    stratum.witness_denominator),
+                stratum)
+                .decision;
         any_clear = any_clear
-            || decision == CellDecision::CLEAR;
+            || decision == StationCellDecision::CLEAR;
         any_material = any_material
-            || decision == CellDecision::MATERIAL;
+            || decision == StationCellDecision::MATERIAL;
         any_partial = any_partial
-            || decision == CellDecision::SAFE_PARTIAL
-            || decision == CellDecision::CAP_EXCEEDED;
+            || decision
+                == StationCellDecision::SAFE_PARTIAL
+            || decision
+                == StationCellDecision::CAP_EXCEEDED;
         cap_exceeded = cap_exceeded
-            || decision == CellDecision::MATERIAL
-            || decision == CellDecision::CAP_EXCEEDED;
+            || decision == StationCellDecision::MATERIAL
+            || decision
+                == StationCellDecision::CAP_EXCEEDED;
         unresolved = unresolved
-            || decision == CellDecision::UNRESOLVED;
+            || decision
+                == StationCellDecision::UNRESOLVED;
     }
     const ContinuousTeaVerdict verdict =
         cap_exceeded
@@ -545,15 +462,21 @@ bool segment_station_cap_exceeded_exact(
             source,
             witness_numerator,
             witness_denominator);
-    const CellDecision decision =
-        classify_cell(
+    const StationCellDecision decision =
+        classify_station_cell(
             stock,
-            source,
-            cell.stratum);
-    if (decision == CellDecision::UNRESOLVED) {
+            station_source(
+                source,
+                witness_numerator,
+                witness_denominator),
+            cell.stratum)
+            .decision;
+    if (decision
+        == StationCellDecision::UNRESOLVED) {
         throw IncompleteSegmentOracleError(
             "exact station disposition is unresolved");
     }
-    return decision == CellDecision::MATERIAL
-        || decision == CellDecision::CAP_EXCEEDED;
+    return decision == StationCellDecision::MATERIAL
+        || decision
+            == StationCellDecision::CAP_EXCEEDED;
 }
