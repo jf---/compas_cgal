@@ -1,8 +1,10 @@
+#include "canonical_encoding.h"
 #include "segment_site_catalog_neck.h"
 
 #include "segment_site_catalog.h"
 #include "segment_site_catalog_graph.h"
 #include "segment_site_graph_csr.h"
+#include "segment_site_neck_classification.h"
 #include "segment_site_neck_evidence.h"
 #include "segment_site_neck_evidence_bytes.h"
 
@@ -192,10 +194,21 @@ bool l_shape_necks_are_two_exact_plateaus() {
     }
     records.push_back(first[index].canonical_bytes());
   }
-  return verify_neck_evidence_v1(first_bundle, records).size() ==
-             first.size() &&
-         verify_neck_evidence_v1(reversed_bundle, records).size() ==
-             reversed.size();
+  if (verify_neck_evidence_v1(first_bundle, records).size() != first.size() ||
+      verify_neck_evidence_v1(reversed_bundle, records).size() !=
+          reversed.size()) {
+    return false;
+  }
+  const std::vector<std::string> boundaries{
+      canonical_encode_rational(4),
+  };
+  const auto [first_classes, first_certificates] =
+      validate_and_classify_necks_v1(first_bundle, records, boundaries);
+  const auto [reversed_classes, reversed_certificates] =
+      validate_and_classify_necks_v1(reversed_bundle, records, boundaries);
+  return first_classes == std::vector<std::int64_t>{0, 0} &&
+         reversed_classes == first_classes &&
+         reversed_certificates == first_certificates;
 }
 
 bool malformed_profile_graph_is_rejected() {

@@ -18,6 +18,7 @@ bool graph_csr_gate();
 bool neck_cut_gate();
 bool neck_clearance_gate();
 bool neck_evidence_gate();
+bool neck_classification_gate();
 bool catalog_neck_gate();
 bool site_catalog_gate();
 bool catalog_delaunay_gate();
@@ -1807,6 +1808,7 @@ int main()
             && neck_cut_gate()
             && neck_clearance_gate()
             && neck_evidence_gate()
+            && neck_classification_gate()
             && catalog_neck_gate()
             && site_catalog_gate()
             && catalog_delaunay_gate()

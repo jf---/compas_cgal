@@ -3,12 +3,25 @@
 #include <algorithm>
 #include <cstdint>
 #include <iterator>
+#include <limits>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <boost/multiprecision/cpp_int/import_export.hpp>
 
 namespace {
+
+inline constexpr std::size_t CANONICAL_PREFIX_SIZE = 6;
+inline constexpr std::size_t CANONICAL_SIZE_SIZE = 8;
+inline constexpr std::size_t CANONICAL_HEADER_SIZE =
+    CANONICAL_PREFIX_SIZE + 1 + CANONICAL_SIZE_SIZE;
+
+struct ParsedCanonicalNode {
+  char kind;
+  std::string_view payload;
+  std::size_t end;
+};
 
 std::string unsigned_64_record(const std::size_t value) {
   static_assert(sizeof(std::size_t) <= sizeof(std::uint64_t));
@@ -48,6 +61,108 @@ std::string canonical_encode_integer(const ExactAlgebraicInteger1 &value) {
     payload.push_back(static_cast<char>(byte));
   }
   return canonical_node('I', payload);
+}
+
+namespace {
+
+std::uint64_t decode_unsigned_64(const std::string_view value,
+                                 const std::size_t offset) {
+  std::uint64_t result = 0;
+  for (std::size_t index = 0; index < CANONICAL_SIZE_SIZE; ++index) {
+    result = (result << 8U) | static_cast<unsigned char>(value[offset + index]);
+  }
+  return result;
+}
+
+ParsedCanonicalNode parse_canonical_node(const std::string_view value,
+                                         const std::size_t offset) {
+  if (offset > value.size() || value.size() - offset < CANONICAL_HEADER_SIZE ||
+      value.substr(offset, CANONICAL_PREFIX_SIZE) !=
+          std::string_view("CCAN\0\1", CANONICAL_PREFIX_SIZE)) {
+    throw InvalidCanonicalEncodingError(
+        "canonical bytes must contain one complete CCAN record");
+  }
+  const std::size_t kind_offset = offset + CANONICAL_PREFIX_SIZE;
+  const std::size_t size_offset = kind_offset + 1;
+  const std::uint64_t payload_size = decode_unsigned_64(value, size_offset);
+  if (payload_size > std::numeric_limits<std::size_t>::max()) {
+    throw InvalidCanonicalEncodingError(
+        "canonical node payload exceeds native address space");
+  }
+  const std::size_t payload_offset = size_offset + CANONICAL_SIZE_SIZE;
+  const std::size_t native_payload_size =
+      static_cast<std::size_t>(payload_size);
+  if (native_payload_size > value.size() - payload_offset) {
+    throw InvalidCanonicalEncodingError("canonical node payload is truncated");
+  }
+  return {
+      value[kind_offset],
+      value.substr(payload_offset, native_payload_size),
+      payload_offset + native_payload_size,
+  };
+}
+
+ExactAlgebraicInteger1
+decode_canonical_integer(const ParsedCanonicalNode &node) {
+  if (node.kind != 'I' || node.payload.empty()) {
+    throw InvalidCanonicalEncodingError(
+        "canonical rational requires two integer child nodes");
+  }
+  const unsigned char sign = static_cast<unsigned char>(node.payload.front());
+  if (sign > 1U) {
+    throw InvalidCanonicalEncodingError(
+        "canonical integer has an invalid sign byte");
+  }
+  const std::string_view magnitude_bytes = node.payload.substr(1);
+  if (!magnitude_bytes.empty() && magnitude_bytes.front() == '\0') {
+    throw InvalidCanonicalEncodingError(
+        "canonical integer magnitude is not minimal");
+  }
+  ExactAlgebraicInteger1 magnitude = 0;
+  for (const char byte : magnitude_bytes) {
+    magnitude <<= 8;
+    magnitude += static_cast<unsigned char>(byte);
+  }
+  if (sign == 1U && magnitude == 0) {
+    throw InvalidCanonicalEncodingError(
+        "canonical integer cannot encode negative zero");
+  }
+  return sign == 1U ? -magnitude : magnitude;
+}
+
+} // namespace
+
+std::string canonical_encode_rational(const CORE::BigRat &value) {
+  return canonical_node('R',
+                        canonical_encode_integer(CORE::numerator(value)) +
+                            canonical_encode_integer(CORE::denominator(value)));
+}
+
+CORE::BigRat canonical_decode_rational(const std::string &value) {
+  const ParsedCanonicalNode rational = parse_canonical_node(value, 0);
+  if (rational.kind != 'R' || rational.end != value.size()) {
+    throw InvalidCanonicalEncodingError(
+        "canonical rational must be one complete rational record");
+  }
+  const ParsedCanonicalNode numerator_node =
+      parse_canonical_node(rational.payload, 0);
+  const ParsedCanonicalNode denominator_node =
+      parse_canonical_node(rational.payload, numerator_node.end);
+  if (denominator_node.end != rational.payload.size()) {
+    throw InvalidCanonicalEncodingError(
+        "canonical rational contains trailing child bytes");
+  }
+  const ExactAlgebraicInteger1 numerator =
+      decode_canonical_integer(numerator_node);
+  const ExactAlgebraicInteger1 denominator =
+      decode_canonical_integer(denominator_node);
+  const ExactAlgebraicInteger1 magnitude =
+      numerator < 0 ? -numerator : numerator;
+  if (denominator <= 0 || CORE::gcd(magnitude, denominator) != 1) {
+    throw InvalidCanonicalEncodingError(
+        "canonical rational must be reduced with positive denominator");
+  }
+  return CORE::BigRat(numerator, denominator);
 }
 
 std::string canonical_encode_boolean(const bool value) {
