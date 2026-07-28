@@ -340,7 +340,7 @@ pixi run docs
 git diff --check
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 Stage only Task 12 code, tests, and documentation. Commit as Jelle Feringa:
 
@@ -348,8 +348,13 @@ Stage only Task 12 code, tests, and documentation. Commit as Jelle Feringa:
 git commit -m "feat(adaptive): add atomic candidate commit"
 ```
 
-- [ ] **Step 5: Cancel superseded CI, push, and verify**
+- [x] **Step 5: Cancel superseded CI, push, and verify**
 
 List branch runs with explicit repository, cancel every `in_progress` run,
 push `codex/exact-certified-adaptive-phase1-t9`, and require
 `git ls-remote` to equal local `HEAD`.
+
+Task 12 implementation was committed as
+`a9fef135f72b4f3aded20ccba60510e90b2ab464`; the branch had no in-progress CI
+run, push succeeded without force, and the remote branch resolved to that exact
+SHA before this publication note.
