@@ -16,6 +16,7 @@ bool point_graph_production_gate();
 bool segment_segment_producer_gate();
 bool graph_csr_gate();
 bool neck_cut_gate();
+bool neck_clearance_gate();
 bool site_catalog_gate();
 bool catalog_delaunay_gate();
 bool catalog_voronoi_gate();
@@ -1802,6 +1803,7 @@ int main()
             && segment_segment_producer_gate()
             && graph_csr_gate()
             && neck_cut_gate()
+            && neck_clearance_gate()
             && site_catalog_gate()
             && catalog_delaunay_gate()
             && catalog_voronoi_gate()
