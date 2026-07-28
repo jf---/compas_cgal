@@ -232,6 +232,7 @@ add_executable(task9_mat_compile_gate EXCLUDE_FROM_ALL
     tests/native/task9_neck_gate.cpp
     tests/native/task9_neck_clearance_gate.cpp
     tests/native/task9_neck_evidence_gate.cpp
+    tests/native/task9_neck_classification_gate.cpp
     tests/native/task9_catalog_neck_gate.cpp
     tests/native/task9_site_catalog_gate.cpp
     tests/native/task9_catalog_delaunay_gate.cpp
@@ -251,6 +252,7 @@ add_executable(task9_mat_compile_gate EXCLUDE_FROM_ALL
     src/segment_site_neck_clearance.cpp
     src/segment_site_neck_evidence.cpp
     src/segment_site_neck_evidence_bytes.cpp
+    src/segment_site_neck_classification.cpp
     src/segment_site_catalog_neck.cpp
     src/segment_site_mat_spikes.cpp
     src/segment_site_parameterization.cpp

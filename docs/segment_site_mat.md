@@ -83,6 +83,10 @@ needed by every downstream traversal and engagement decision.
     records now bind all four exact location variants, their algebraic
     identities, and their separating cuts into CCAN bytes with SHA-256
     digests; exact replay rejects deletion, mutation, and reordering.
+    A native width classifier now decodes Task 1A `ExactRationalV1`
+    boundaries, compares every algebraic `width²` exactly, and emits
+    replay-bound comparison-certificate bytes. Equality remains in the
+    narrower policy class.
     A separate exact-clearance sidecar now consumes a canonical graph edge,
     validates its exact endpoint evidence and nonnegative rational
     `clearance²(t)` polynomial through degree four, isolates all
@@ -156,7 +160,7 @@ construction.
 | Engagement limit | stronger contract; incomplete integration | Analytic circle construction followed by bisection until `θmax − 0.001 <= θ <= θmax` radians | Exact rational chord surrogate and event-exact segment/full-circle certification; integration incomplete |
 | Candidate spacing | incomplete | Bisection along the middle curve | Finite candidate lattice; no monotonic-feasibility assumption |
 | Machined state | stronger contract | Ordered contour of prior machining disks; transition sweeps omitted from that contour model | Exact stock mutation and exact full-sweep coverage, ordered certify-before-deplete |
-| Bottlenecks | stronger exact contract on the adopted L fixture; incomplete feature | Graph search, width, and heuristic cap reduction on first passage | A typed four-variant classifier composes exact profile minima with canonical separating cuts and deterministic ownership. The adopted L graph emits exactly two reversal-invariant, replay-verified single-edge plateau restrictions at exact `width² = 4`, not fabricated strict roots. Rectangle profiles, typed passage state, and the bound cap decision remain pending |
+| Bottlenecks | stronger exact contract on the adopted L fixture; incomplete feature | Graph search, width, and heuristic cap reduction on first passage | A typed four-variant classifier composes exact profile minima with canonical separating cuts and deterministic ownership. Native classification compares algebraic widths to strictly ordered rational policy boundaries and certifies every comparison; equality stays in the narrower class. The adopted L graph emits exactly two reversal-invariant, replay-verified single-edge plateau restrictions at exact `width² = 4`, not fabricated strict roots. Rectangle profiles, typed passage state, and the bound cap decision remain pending |
 | Validation | incomplete | Dense engagement sampling for result plots; complete path and runtime experiments | Exact neck-record replay and mutation gates are implemented; fresh end-to-end replay, complete artifact identity, and exact residual proof remain planned |
 | End-to-end evidence | weaker | Complete paths, figures, path-length gains, and 3–100 ms path-generation timings excluding Voronoi construction | Tasks 10–16 remain frozen; no complete path, Fig. 5 reproduction, or performance result yet |
 
@@ -214,11 +218,19 @@ index is measurement-gated future work. This preserves Held and Pfeiffer's
 complete graph-linear bottleneck implementation as a real current performance
 advantage.
 
+Exact width classification adds `Q × B` algebraic comparisons for `Q` neck
+records and `B` policy boundaries, plus canonical certificate serialization.
+`B` is policy-sized rather than graph-sized, and the implementation performs
+no repeated MAT construction, but this is still certification work absent
+from Held and Pfeiffer's reported planner clock. It has not been isolated as a
+standalone benchmark.
+
 Two other clocks must remain separate. Five warm local Release executions of
-the current native Task 9 algebraic fixture suite took 3.61–3.66 s (3.62 s
-median), including exact public-table root/provenance revalidation, four
-complete production-L neck classifications/replays, and canonical evidence
-serialization. That is a contract gate rather than one pocket generation. The
+the current native Task 9 algebraic fixture suite took 3.58–3.98 s (3.61 s
+median), including exact public-table root/provenance revalidation, six
+complete production-L neck classifications/replays, canonical evidence
+serialization, and exact policy-width classification. That is a contract gate
+rather than one pocket generation. The
 existing exact stock replay
 measured 87 s for the kite after a 7x end-to-end speedup; that run certifies and
 depletes every operation and is not comparable to Held and Pfeiffer's planner
@@ -2067,6 +2079,46 @@ canonical input orientations with identical bytes and digests.
     existing cross-language `AlgebraicRootIdV1`; neck serialization embeds
     those root bytes unchanged rather than parsing or rebuilding them.
 
+### Exact policy-width classification
+
+`validate_and_classify_necks_v1` first replays every supplied
+`NeckEvidenceV1` record against the exact graph/profile bundle. It then decodes
+each policy boundary from Task 1A's canonical `ExactRationalV1` bytes.
+Boundaries must be nonnegative and strictly increasing. The native decoder
+requires the complete frozen CCAN structure: two integer children, minimal
+big-endian magnitudes, no negative zero, a positive denominator, a reduced
+fraction, and no trailing bytes.
+
+For boundaries `b₀ < b₁ < ... < bₙ`, the class partition is
+
+```text
+[0, b₀], (b₀, b₁], ..., (bₙ, +infinity).
+```
+
+The exact algebraic kernel compares each recorded `width²` directly to every
+rational boundary. No root text, isolating interval, or double enters the
+decision. Each `mat-neck-width-comparison-v1` certificate binds:
+
+- the SHA-256 digest of the replayed neck record;
+- its exact squared-width root ID;
+- every canonical boundary plus exact comparison sign `-1`, `0`, or `1`;
+- the resulting integer class ID.
+
+The native gate pins rational bytes against a Python-produced
+`ExactRationalV1(-3/5)` golden, rejects malformed framing and alternate
+integer/fraction encodings, covers empty and malformed boundary sets, and
+locks repeated comparison bytes. On the production L graph, a single exact
+boundary `4` assigns both `width² = 4` plateau records to restrictive class
+`0`; canonical input reversal preserves the complete comparison-certificate
+vector byte for byte.
+
+!!! warning "Boundary equality stays in the narrower class"
+
+    Select the first boundary for which `width² <= bᵢ`. Using `<`, or assigning
+    equality to the next interval, silently grants the wider-passage policy at
+    the exact threshold. The comparison certificate retains the zero sign so
+    replay can distinguish equality from either open interval.
+
 The rectangle producer does not yet emit profiles. Public evidence rows and
 the Python validation boundary are also pending. A topologically separating
 edge remains only a possible neck until its production profile passes the
@@ -2112,8 +2164,9 @@ Refinement may change the number and position of samples. It must not change:
 | `segment_site_neck.h/.cpp` | canonical separating-cut index and partitions |
 | `segment_site_neck_clearance.*` | exact bounded clearance-profile validation, strict derivative minima, and algebraic squared-width evaluation |
 | `segment_site_neck_evidence.*` | graph-level four-variant ownership, exact node-width consistency, and cut attachment |
-| `canonical_encoding.*` | frozen native CCAN byte, integer, boolean, sequence, component-map, and tagged-union encoding |
+| `canonical_encoding.*` | frozen native CCAN byte, integer, rational, boolean, sequence, component-map, and tagged-union encoding plus canonical rational decoding |
 | `segment_site_neck_evidence_bytes.*` | canonical four-variant `NeckEvidenceV1` bytes, SHA-256 digests, and exact replay verification |
+| `segment_site_neck_classification.*` | canonical rational-boundary validation, exact algebraic width classes, and comparison-certificate bytes |
 | `segment_site_catalog_neck.*` | adopted catalog-graph clearance-profile reconstruction and graph/profile binding |
 | `segment_site_mat_sampling.*` | proposal-only samples |
 | `medial_axis_2.cpp` | nanobind adapter only |
@@ -2162,6 +2215,7 @@ consumers, or evolution differ from graph orchestration.
 | Strict-edge clearance-minimum calculus | implemented and native-gated | exact bounded degree-four rational profiles; interval nonnegativity; relative-interior derivative roots and sign changes; algebraic `width² = 4 clearance²`; synthetic quadratic/quartic goldens; adopted L profiles contain no strict interior minimum |
 | Catalog-fed L clearance profiles | implemented and native-gated | one unchanged canonical graph build; one profile per retained edge; exact `2 constant + 5 quadratic + 2 quartic` decomposition; complete reversal identity; positive-radius clip endpoints re-evaluate to exact `width² = 4` |
 | Exact neck classification | native typed records and canonical V1 bytes implemented and gated; Python binding pending | strict, clearance-endpoint, shared-vertex, and maximal plateau ownership; exact node-width consistency; independent cut attachment; canonical CCAN records and SHA-256 digests; deletion/mutation/order rejection by exact replay; adopted L emits exactly two byte-identical reversal-invariant plateau records at `width² = 4` |
+| Exact neck width classes | native implemented and gated; Python binding pending | cross-language `ExactRationalV1` decoding; nonnegative strictly increasing boundaries; exact algebraic comparisons; right-closed restrictive equality; evidence-digest-bound comparison certificates; both production L plateaus classify as `0` at boundary `4` with reversal-identical certificates |
 | Proposal-only sampling | pending | no production claim |
 | Python fixed-tuple binding | pending | no public API claim |
 
@@ -2279,6 +2333,16 @@ a bit mutation, and record-order drift through exact replay. The production L
 records have byte-identical digests under canonical input reversal and replay
 against either orientation. This does not yet establish rectangle profiles,
 public evidence rows, or the Python validation boundary.
+The neck-classification gate separately pins native rational decoding to a
+Python `ExactRationalV1` golden; rejects truncated, trailing, wrong-kind,
+invalid-sign, nonminimal, negative-denominator, and unreduced bytes; and
+rejects negative, duplicate, reversed, or non-rational boundary rows. Two
+exact strict minima at `width² = 4` and `8` lock equality to the first
+applicable right-closed class, above-last-boundary behavior, evidence-digest
+binding, and repeat-identical comparison certificates. Empty boundaries
+produce one total class. The production L gate independently classifies both
+exact plateau records as class `0` at boundary `4` and requires the complete
+certificate vector to survive canonical input reversal.
 The catalog-fed
 segment-Delaunay gate separately locks one-pass segment insertion, exact
 catalog/live-generator cardinality and identity, indexed lookup across two
