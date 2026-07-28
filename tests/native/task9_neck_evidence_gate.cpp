@@ -1,4 +1,7 @@
+#include "canonical_encoding.h"
+#include "continuous_tea_2/sha256.h"
 #include "segment_site_neck_evidence.h"
+#include "segment_site_neck_evidence_bytes.h"
 
 #include <string>
 #include <utility>
@@ -222,6 +225,29 @@ MatClearanceProfileGraph2 strict_cycle_bundle() {
       std::move(profiles));
 }
 
+MatClearanceProfileGraph2 two_strict_bridges_bundle() {
+  std::vector<MatExactGraphEdge2> edges{
+      edge("e0", "n0", "n1"),
+      edge("e1", "n1", "n2"),
+  };
+  std::vector<MatClearanceEdgeProfile2> profiles{
+      profile(edges[0], {CORE::BigRat(5, 4), -1, 1}),
+      profile(edges[1], {CORE::BigRat(5, 4), -1, 1}),
+  };
+  return MatClearanceProfileGraph2::build(
+      {
+          {
+              node("n0"),
+              node("n1"),
+              node("n2"),
+          },
+          std::move(edges),
+          0,
+          0,
+      },
+      std::move(profiles));
+}
+
 bool width_is(const MatExactNeckEvidence2 &evidence,
               const CORE::BigRat &expected) {
   ExactAlgebraicKernel1 kernel;
@@ -390,6 +416,187 @@ bool nonseparating_minima_are_filtered() {
   return exact_neck_evidence(strict_cycle_bundle()).empty();
 }
 
+bool canonical_encoder_matches_algebraic_root_id() {
+  return canonical_encode_tagged_union(
+             "algebraic-root-id-v1", canonical_encode_component_map({
+                                         {
+                                             "coefficients",
+                                             canonical_encode_sequence({
+                                                 canonical_encode_integer(-2),
+                                                 canonical_encode_integer(0),
+                                                 canonical_encode_integer(1),
+                                             }),
+                                         },
+                                         {
+                                             "root-ordinal",
+                                             canonical_encode_integer(0),
+                                         },
+                                     })) == algebraic_root_id_v1({-2, 0, 1}, 0);
+}
+
+bool malformed_canonical_encoding_fails_loudly() {
+  bool empty_tag_rejected = false;
+  try {
+    static_cast<void>(canonical_encode_tagged_union("", "payload"));
+  } catch (const InvalidCanonicalEncodingError &) {
+    empty_tag_rejected = true;
+  }
+
+  bool empty_key_rejected = false;
+  try {
+    static_cast<void>(canonical_encode_component_map({{"", "value"}}));
+  } catch (const InvalidCanonicalEncodingError &) {
+    empty_key_rejected = true;
+  }
+
+  bool duplicate_key_rejected = false;
+  try {
+    static_cast<void>(canonical_encode_component_map(
+        {{"field", "first"}, {"field", "second"}}));
+  } catch (const InvalidCanonicalEncodingError &) {
+    duplicate_key_rejected = true;
+  }
+  return empty_tag_rejected && empty_key_rejected && duplicate_key_rejected;
+}
+
+bool strict_record_matches_frozen_schema() {
+  const std::vector<MatNeckEvidenceV1> records =
+      exact_neck_evidence_v1(strict_bridge_bundle());
+  if (records.size() != 1) {
+    return false;
+  }
+  const std::string cut = canonical_encode_tagged_union(
+      "mat-neck-separating-cut-v1",
+      canonical_encode_component_map({
+          {
+              "edge-partitions",
+              canonical_encode_sequence({
+                  canonical_encode_sequence({"e0"}),
+                  canonical_encode_sequence({"e0"}),
+              }),
+          },
+      }));
+  const std::string expected = canonical_encode_tagged_union(
+      "mat-neck-strict-edge-v1", canonical_encode_component_map({
+                                     {
+                                         "owner-id",
+                                         "e0",
+                                     },
+                                     {
+                                         "defining-site-ids",
+                                         canonical_encode_sequence({
+                                             "e0-site-a",
+                                             "e0-site-b",
+                                         }),
+                                     },
+                                     {
+                                         "squared-width-root-id",
+                                         algebraic_root_id_v1({-4, 1}, 0),
+                                     },
+                                     {
+                                         "separating-cut",
+                                         cut,
+                                     },
+                                     {
+                                         "edge-id",
+                                         "e0",
+                                     },
+                                     {
+                                         "parameter-root-id",
+                                         algebraic_root_id_v1({-1, 2}, 0),
+                                     },
+                                 }));
+  return records[0].canonical_bytes() == expected;
+}
+
+bool all_neck_variants_have_canonical_bytes() {
+  const std::vector<MatNeckEvidenceV1> strict =
+      exact_neck_evidence_v1(strict_bridge_bundle());
+  const std::vector<MatNeckEvidenceV1> endpoint =
+      exact_neck_evidence_v1(shared_vertex_bundle(true));
+  const std::vector<MatNeckEvidenceV1> shared =
+      exact_neck_evidence_v1(shared_vertex_bundle(false));
+  const std::vector<MatNeckEvidenceV1> plateau =
+      exact_neck_evidence_v1(plateau_bundle(false));
+  if (strict.size() != 1 || endpoint.size() != 1 || shared.size() != 1 ||
+      plateau.size() != 1) {
+    return false;
+  }
+  const std::vector<const MatNeckEvidenceV1 *> records{
+      &strict[0],
+      &endpoint[0],
+      &shared[0],
+      &plateau[0],
+  };
+  const std::vector<std::string> tags{
+      "mat-neck-strict-edge-v1",
+      "mat-neck-clearance-endpoint-v1",
+      "mat-neck-shared-vertex-v1",
+      "mat-neck-plateau-v1",
+  };
+  for (std::size_t index = 0; index < records.size(); ++index) {
+    if (records[index]->canonical_bytes().find(tags[index]) ==
+            std::string::npos ||
+        records[index]->canonical_digest() !=
+            sha256_bytes(records[index]->canonical_bytes())) {
+      return false;
+    }
+  }
+  return strict[0].canonical_bytes() != endpoint[0].canonical_bytes() &&
+         endpoint[0].canonical_bytes() != shared[0].canonical_bytes() &&
+         shared[0].canonical_bytes() != plateau[0].canonical_bytes();
+}
+
+bool canonical_neck_bytes_replay_exactly() {
+  const MatClearanceProfileGraph2 bundle = two_strict_bridges_bundle();
+  const std::vector<MatNeckEvidenceV1> first = exact_neck_evidence_v1(bundle);
+  const std::vector<MatNeckEvidenceV1> repeated =
+      exact_neck_evidence_v1(bundle);
+  if (first.size() != 2 || repeated.size() != first.size()) {
+    return false;
+  }
+  std::vector<std::string> records;
+  for (std::size_t index = 0; index < first.size(); ++index) {
+    if (first[index].canonical_bytes() != repeated[index].canonical_bytes() ||
+        first[index].canonical_digest() != repeated[index].canonical_digest()) {
+      return false;
+    }
+    records.push_back(first[index].canonical_bytes());
+  }
+  const auto verified = verify_neck_evidence_v1(bundle, records);
+  if (verified.size() != first.size()) {
+    return false;
+  }
+
+  bool missing_rejected = false;
+  try {
+    std::vector<std::string> missing = records;
+    missing.pop_back();
+    static_cast<void>(verify_neck_evidence_v1(bundle, missing));
+  } catch (const InvalidMatNeckEvidenceBytesError &) {
+    missing_rejected = true;
+  }
+
+  bool mutation_rejected = false;
+  try {
+    std::vector<std::string> mutated = records;
+    mutated[0].back() ^= 1;
+    static_cast<void>(verify_neck_evidence_v1(bundle, mutated));
+  } catch (const InvalidMatNeckEvidenceBytesError &) {
+    mutation_rejected = true;
+  }
+
+  bool order_rejected = false;
+  try {
+    std::vector<std::string> reordered = records;
+    std::swap(reordered[0], reordered[1]);
+    static_cast<void>(verify_neck_evidence_v1(bundle, reordered));
+  } catch (const InvalidMatNeckEvidenceBytesError &) {
+    order_rejected = true;
+  }
+  return missing_rejected && mutation_rejected && order_rejected;
+}
+
 } // namespace
 
 bool neck_evidence_gate() {
@@ -399,5 +606,10 @@ bool neck_evidence_gate() {
          constant_cells_form_one_maximal_plateau() &&
          descending_exit_does_not_erase_plateau() &&
          malformed_evidence_inputs_fail_loudly() &&
-         nonseparating_minima_are_filtered();
+         nonseparating_minima_are_filtered() &&
+         canonical_encoder_matches_algebraic_root_id() &&
+         malformed_canonical_encoding_fails_loudly() &&
+         strict_record_matches_frozen_schema() &&
+         all_neck_variants_have_canonical_bytes() &&
+         canonical_neck_bytes_replay_exactly();
 }

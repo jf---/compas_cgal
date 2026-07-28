@@ -250,16 +250,19 @@ add_executable(task9_mat_compile_gate EXCLUDE_FROM_ALL
     src/segment_site_neck.cpp
     src/segment_site_neck_clearance.cpp
     src/segment_site_neck_evidence.cpp
+    src/segment_site_neck_evidence_bytes.cpp
     src/segment_site_catalog_neck.cpp
     src/segment_site_mat_spikes.cpp
     src/segment_site_parameterization.cpp
     src/segment_site_clipping.cpp
     src/segment_site_endpoint_binding.cpp
     src/segment_site_provenance.cpp
+    src/canonical_encoding.cpp
     src/exact_algebraic_1.cpp
     src/exact_region_2.cpp
     src/reachable_input_2.cpp
     src/continuous_tea_2/exact_polynomial_sign_2.cpp
+    src/continuous_tea_2/sha256.cpp
 )
 add_dependencies(task9_mat_compile_gate external_downloads)
 target_include_directories(task9_mat_compile_gate PRIVATE
