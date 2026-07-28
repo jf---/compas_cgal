@@ -54,8 +54,11 @@ needed by every downstream traversal and engagement decision.
     node boundary: eleven finite vertices have three exact incident features
     and one has the four-feature identity `{P2, P4, S2, S3}`. Three-feature
     node bytes remain unchanged; higher-degree nodes use a distinct,
-    length-framed identity. A catalog-fed rectangle orchestration now carries
-    that owner through the complete bounded graph:
+    length-framed identity. Its sole P–P primitive is also bound as the exact
+    half-ray `x = y = 4 - 4t`, `t <= -1/2`, from the live `(6,6)` adaptor
+    endpoint; exact domain clipping proves that ray contributes no L-pocket
+    component. A catalog-fed rectangle orchestration now carries that owner
+    through the complete bounded graph:
     one adaptor traversal emits five S–S edges and six canonical nodes,
     rejects eight authenticated incident P–S rays, and reproduces the
     independently validated rectangle records at exact `r² = 0`, `1`, `4`,
@@ -100,7 +103,7 @@ construction.
 | Dimension | Comparative status | Held–Pfeiffer 2025 | Exact-certified Phase 1 |
 | --- | --- | --- | --- |
 | Pocket geometry | incomplete | Segments and circular arcs; simply connected; machinability assumed after an `r + ε` transformation | Raw MAT primitives now clip exactly against polygonal domains with holes and exact radius clearance; the rectangle `C_r` graph is unified, but general arbitrary-pocket traversal is incomplete; circular boundaries are not supported |
-| MAT backend | stronger exact contract on bounded fixtures; incomplete end-to-end | Vroni/ArcVroni used end-to-end | Exact CGAL point graph plus bounded P–S and parallel/nonparallel S–S cells; the catalog-fed four-segment rectangle path now carries Task 3 identities through exact rational sources, one indexed SDG build, swap-owned adaptor traversal, indexed endpoint binding, exact radius clipping, five edges, six feature-triple nodes, and explicit rejection of eight incident P–S rays; the same indexed owner contract binds two retained concave L-pocket P–S parabolas and their four exact segment-limiter events, while a complete normalized-node inventory proves eleven three-feature vertices and one four-feature `{P2, P4, S2, S3}` vertex without coordinate merging; repeat and canonical input symmetry are record-invariant, but the complete L-pocket graph and arbitrary-pocket traversal remain incomplete |
+| MAT backend | stronger exact contract on bounded fixtures; incomplete end-to-end | Vroni/ArcVroni used end-to-end | Exact CGAL point graph plus bounded P–S and parallel/nonparallel S–S cells; the catalog-fed four-segment rectangle path now carries Task 3 identities through exact rational sources, one indexed SDG build, swap-owned adaptor traversal, indexed endpoint binding, exact radius clipping, five edges, six feature-triple nodes, and explicit rejection of eight incident P–S rays; the same indexed owner contract binds two retained concave L-pocket P–S parabolas and their four exact segment-limiter events, inventories eleven three-feature vertices and one four-feature `{P2, P4, S2, S3}` vertex without coordinate merging, and proves its sole P–P ray is an exactly oriented half-line with empty L-domain intersection; repeat and canonical input symmetry are record-invariant, but the complete L-pocket graph and arbitrary-pocket traversal remain incomplete |
 | Engagement limit | stronger contract; incomplete integration | Analytic circle construction followed by bisection until `θmax − 0.001 <= θ <= θmax` radians | Exact rational chord surrogate and event-exact segment/full-circle certification; integration incomplete |
 | Candidate spacing | incomplete | Bisection along the middle curve | Finite candidate lattice; no monotonic-feasibility assumption |
 | Machined state | stronger contract | Ordered contour of prior machining disks; transition sweeps omitted from that contour model | Exact stock mutation and exact full-sweep coverage, ordered certify-before-deplete |
@@ -153,7 +156,7 @@ safeguards, not a new planner benchmark or evidence for arbitrary-pocket
 complexity.
 
 Two other clocks must remain separate. Five warm local Release executions of
-the current native Task 9 algebraic fixture suite took 1.79–1.82 s (1.82 s
+the current native Task 9 algebraic fixture suite took 1.95–2.00 s (1.97 s
 median), but that is a contract gate rather than one pocket generation. The
 existing exact stock replay
 measured 87 s for the kite after a 7x end-to-end speedup; that run certifies and
@@ -1477,6 +1480,47 @@ and collision-safe framing. This certifies the normalized node-provenance seam;
 it does not yet certify the L-pocket's complete edge set or radius-clipped
 graph.
 
+#### A live P–P ray is not its supporting line
+
+The L-pocket contains one point/point dual, between `P2 = (6,2)` and
+`P4 = (2,6)`. Their rational perpendicular-bisector chart is
+
+```text
+x(t) = 4 - 4t
+y(t) = 4 - 4t.
+```
+
+The live adaptor primitive is not the complete line `x = y`. It is a ray with
+the finite source `(6,6)`, hence exact parameter `t = -1/2`, directed toward
+decreasing `t`:
+
+```text
+t <= -1/2.
+```
+
+`bind_point_point_ray_parameterization` resolves both defining points through
+the catalog index, requires an exact live point/point generator match, requires
+exactly one finite adaptor endpoint, and requires `SDG::primal()` to return a
+`Ray_2` whose source equals that endpoint. It then proves exact squared-distance
+equality to both generators, converts the finite endpoint to rational
+coordinates without approximation, and proves that the canonical direction is
+collinear with the live ray. The sign of their exact dot product chooses the
+lower or upper parameter bound.
+
+!!! warning "Never clip the supporting line in place of the live ray"
+
+    The full line `x = y` crosses the pocket and would manufacture a plausible
+    diagonal MAT branch. The authenticated half-ray begins at `(6,6)` and runs
+    outward; exact polygon clipping at `r² = 0` returns no component. Primitive
+    kind and orientation are therefore topology, not rendering metadata.
+
+The native gate locks the coefficients, exact `-1/2` bound, empty clipped
+component set, repeat identity, and canonical ring-reversal identity. Unknown
+point records, valid records that disagree with the live generators, and
+duplicate generator identities fail through named contracts. This closes the
+P–P ray seam needed by the concave traversal; it does not yet compose the
+remaining S–S and P–S cells into one L-pocket graph.
+
 ### Catalog-fed traversal closes the bounded graph seam
 
 `canonical_rectangle_mat_graph` is the additive orchestration path from one
@@ -1612,7 +1656,7 @@ Refinement may change the number and position of samples. It must not change:
 | `segment_site_parameterization.*` | exact primitive domains and coordinate functions |
 | `segment_site_clipping.*` | exact domain and clearance roots; maximal admissible cells |
 | `segment_site_provenance.*` | stable site/root provenance, normalized feature-union node identity, and endpoint evidence |
-| `segment_site_endpoint_binding.*` | live parabola and bounded parallel/nonparallel S–S endpoint ownership with linear-table and canonical-index overloads sharing one exact algorithm |
+| `segment_site_endpoint_binding.*` | live P–P ray, parabola, and bounded parallel/nonparallel S–S endpoint ownership with catalog-indexed exact bridges |
 | `segment_site_graph_emission.*` | exact one-dimensional component projection and graph record emission |
 | `segment_site_graph_csr.*` | validated deterministic projection of canonical node-site provenance |
 | `segment_site_catalog_graph.*` | catalog-fed bounded rectangle orchestration, exact adaptor traversal, and canonical node assembly |
@@ -1653,6 +1697,7 @@ consumers, or evolution differ from graph orchestration.
 | Catalog-fed Voronoi owner | implemented and native-gated | explicit `swap_dg=true` transfer, source-empty proof, post-transfer indexed bijection, raw rectangle-pair signature, and double-consume rejection |
 | Catalog-indexed S–S endpoint binding | implemented and native-gated | parallel and nonparallel catalog-owned rectangle cells match the earlier validated path in exact algebraic parameters and complete provenance; adopted by the bounded catalog traversal |
 | Catalog-indexed P–S endpoint binding | implemented and native-gated | both bounded nonincident parabolas of the concave L-shaped ring match direct exact segment-limiter bindings at all four endpoints; repeat and canonical input-reversal invariant; complete L-pocket graph adoption pending |
+| Catalog-indexed P–P ray binding | implemented and native-gated | exact L-pocket `P2–P4` chart, live `(6,6)` endpoint, decreasing-ray domain `t <= -1/2`, and empty exact L-domain clip; repeat/input-reversal invariant; complete L-pocket graph adoption pending |
 | Normalized arbitrary-degree node identity | implemented and native-gated | L-pocket adaptor has eleven exact three-feature vertices and one exact four-feature `{P2, P4, S2, S3}` vertex; three-feature bytes remain compatible, higher-degree IDs are length-framed, and repeat/input-reversal identity is exact; complete L-pocket graph adoption pending |
 | Catalog-fed unified rectangle graph | implemented and native-gated | one indexed SDG build and swap-owned adaptor; five S–S edges, six canonical nodes, eight authenticated rejected incident P–S rays; repeat/input-symmetry identity and complete-record equivalence at exact `r² = 0`, `1`, `4`, and `5` under a validated certificate-namespace projection |
 | Numeric node-site catalog mapping | implemented and native-gated | catalog-bound graph identities map once to `int64` rows; unknown identities fail loud; direct adopted-graph-to-public-table gate pending |
@@ -1745,8 +1790,13 @@ adaptor by canonical feature identity, binds its two retained P–S parabolas,
 and requires each of the four endpoints to equal a direct exact
 segment-limiter binding. The complete two-cell signature is repeat- and
 input-reversal-invariant; unknown, incident, and live-mismatched source records
-fail through distinct named errors. The catalog-graph gate separately
-circulates every finite L-pocket adaptor vertex and locks the complete
+fail through distinct named errors. The indexed endpoint gate also binds the
+L-pocket's sole P–P ray to its canonical rational chart, proves the exact
+`(6,6)` live source and `t <= -1/2` orientation, and requires exact domain
+clipping to return no component. Its repeat/input-reversal signature is
+identical; unknown, duplicate, and live-mismatched point records fail loudly.
+The catalog-graph gate separately circulates every finite L-pocket adaptor
+vertex and locks the complete
 normalized-node inventory: eleven degree-three feature unions and one
 degree-four `{P2, P4, S2, S3}` union, all ID-unique and record-identical after
 repeat and canonical input reversal. It also proves old/new three-feature byte
