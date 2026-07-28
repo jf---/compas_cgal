@@ -276,6 +276,50 @@ def test_spatial_lattice_never_backsteps_below_non_aligned_minimum() -> None:
     assert all(candidate.spatial_progress >= Fraction.from_float(policy.minimum_progress.value) for candidate in candidates)
 
 
+def test_terminal_clearance_leaf_ends_at_last_feasible_candidate_cell() -> None:
+    axis = _axis()
+    edge = next(
+        edge
+        for edge in axis.edges
+        if (
+            (samples := tuple(sample for sample in axis.samples if sample.edge_id == edge.identity))[-1].clearance.value == axis.tool_radius.value
+            and samples[0].clearance.value > axis.tool_radius.value
+        )
+    )
+    samples = tuple(sample for sample in axis.samples if sample.edge_id == edge.identity)
+    span = MiddleCurveSpan.build(
+        axis=axis,
+        cursor_before=samples[0],
+        cursor_limit=samples[-1],
+    )
+    candidates = enumerate_middle_curve_candidates(
+        span=span,
+        policy=_policy(),
+        circle_orientation=CircleOrientation.COUNTERCLOCKWISE,
+        neck_scope=NoNeckScope.build(),
+        effective_cap_decision=_full_cap(),
+        makes_cursor_terminal_at_limit=True,
+    )
+    terminal = tuple(candidate for candidate in candidates if candidate.traversal_decision.makes_cursor_terminal)
+    maximum_feasible_progress = max(candidate.spatial_progress for candidate in candidates)
+
+    assert terminal
+    assert {candidate.spatial_progress for candidate in terminal} == {maximum_feasible_progress}
+    assert maximum_feasible_progress < span.reported_length
+    assert all(candidate.traversal_decision.makes_cursor_terminal == (candidate.spatial_progress == maximum_feasible_progress) for candidate in candidates)
+
+    nonterminal_candidates = enumerate_middle_curve_candidates(
+        span=span,
+        policy=_policy(),
+        circle_orientation=CircleOrientation.COUNTERCLOCKWISE,
+        neck_scope=NoNeckScope.build(),
+        effective_cap_decision=_full_cap(),
+        makes_cursor_terminal_at_limit=False,
+    )
+
+    assert not any(candidate.traversal_decision.makes_cursor_terminal for candidate in nonterminal_candidates)
+
+
 def test_mathsm_factory_fails_named_before_reading_untyped_geometry() -> None:
     span, edge, _ = _constant_clearance_span()
     site = span.axis.site_by_id[edge.generator_site_ids[0]]

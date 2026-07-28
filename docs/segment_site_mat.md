@@ -343,6 +343,30 @@ cells. Repeated enumeration is byte-identical. A mutation that removes the cap
 decision makes first- and second-passage identities collide and is killed by
 the test.
 
+#### Terminality at a clearance-created leaf
+
+Three leaves of the adopted L-pocket MAT end where the exact clearance equals
+the tool radius. At that endpoint the MATHSM guide radius is exactly zero, so
+no valid positive-radius trochoidal circle exists there. Equating traversal
+terminality with `candidate progress == reported span length` would therefore
+make these finite branches impossible to finish.
+
+When the caller declares such a span limit terminal, candidate enumeration
+first materializes the complete policy-bounded Cartesian lattice. If no
+admissible candidate reaches the exact endpoint, every candidate at the
+greatest feasible progress receives the terminal traversal decision. This is
+an exhaustive finite-lattice statement: no later positive-radius proposal
+exists under the bound policy. It is not a claim that the selected circle
+reaches the geometric MAT endpoint.
+
+!!! warning "Traversal exhaustion is not coverage"
+
+    The implementation never emits a zero-radius circle, nudges the endpoint,
+    or treats a reporting sample as residual proof. The terminal candidate
+    must still pass exact motion certification, stock depletion, and the
+    independent empty-reachable-residual coverage gate. If the caller does not
+    own a terminal span, the same last feasible candidate stays nonterminal.
+
 ### Current proof and maturity boundary
 
 Task 10 proves that the adopted L-fixture MAT can be consumed without a second
@@ -2970,7 +2994,7 @@ consumers, or evolution differ from graph orchestration.
 | Python fixed-tuple binding | implemented and strictly typed for the production L fixture | one six-argument function projection plus one proof-owner factory; one radius; literal 20-position tuple; exact ranks/dtypes/CSR, immutable proof bytes, reversal and repeat identity, refinement-invariant certificate, named input/sampling failures |
 | Typed MAT planner view | implemented and Python-gated for the production L fixture | direct native site/node/edge/dual/parameter identities; detached reporting arrays; typed components, branches, clipped endpoint state, tool-fit runs, proposal cursors, and retained native proof owner; no coordinate matching |
 | Oriented neck passage state | implemented and Python-gated for the production L fixture | exact owner/sites/cut/class/certificate binding; independent forward/reverse state; only three canonical advances to terminal; candidate cap identity mutation killed |
-| Finite candidate lattice | implemented and Python-gated for adopted line/P–S L-edge goldens | complete merged dyadic spatial/radius lanes, both generator sites, all finite phases, MATHSM maximum-radius formula, focus/directrix parabola evaluation with chord-midpoint rejection, exact cursor advance, non-aligned minimum guard, exhaustive 72-cell oracle, deterministic furthest/radius/identity order; exact containment certifier exists, but engagement and transactional acceptance remain pending |
+| Finite candidate lattice | implemented and Python-gated for adopted line/P–S L-edge goldens | complete merged dyadic spatial/radius lanes, both generator sites, all finite phases, MATHSM maximum-radius formula, focus/directrix parabola evaluation with chord-midpoint rejection, exact cursor advance, non-aligned minimum guard, exhaustive 72-cell oracle, deterministic furthest/radius/identity order; three exact-clearance L leaves terminalize at their last feasible positive-radius lattice station only after exhaustion, while coverage remains an independent pending gate; exact containment certifier exists, but engagement and transactional acceptance remain pending |
 | Exact gouge containment | implemented and native/Python-gated for polygonal segment/full-circle fixtures | exact segment capsule and circle annulus/disk subset of `D`; owned `C_r` anchor checks; immutable native structural replay; outer disk diagnostic only; equality, reflex, island, disk-sweep, exact tangency, and next-binary64-gouge mutations |
 | Qualified precleared entry | implemented and Python-gated | process/evidence digest binds the complete clearance-to-cut interval; center in `C_r`; separate exact entry-disk containment; radius greater than tool radius; canonical approach/plunge; first-and-once exact disk depletion; first full circle contained in the declared void |
 | Planning `InputIdentity` | implemented and strictly typed | canonical `D`, world-XY millimetre frame, cut plane, tool, reachable-domain digest, entry/process evidence, cap, cut direction, all adaptive policies, schemas, and active exact strategy versions under one SHA-256 root; independent fresh-state replay pending |

@@ -1493,6 +1493,9 @@ Commit: `feat(mat): add exact segment Voronoi graph`
 
 ## Task 10 — Wrap MAT topology, neck state, and the finite candidate lattice
 
+**Status (2026-07-28): complete and gated, including exact-clearance leaf
+exhaustion discovered by Task 11A replay.**
+
 **Files**
 
 - Create: `src/segment_site_mat_bundle.h`
@@ -1542,6 +1545,10 @@ Tests require:
 - exhaustive small-lattice oracle equals production enumeration;
 - repeated enumeration order is identical;
 - tie-break is furthest progress, largest radius, then canonical identity;
+- when a declared terminal MAT leaf ends at clearance exactly equal to the tool
+  radius, the exhaustive lattice terminalizes only its greatest feasible
+  positive-radius progress; the same span stays nonterminal when its limit is
+  not declared terminal;
 - no bisection or monotonic-feasibility assumption occurs.
 
 Run RED:
@@ -1562,6 +1569,14 @@ identity binds exact neck evidence, before/after passage state, and effective
 cap bytes plus the proposed traversal transition. This task semantically
 validates the Task 1A operation decision records; it does not change the frozen
 operation encoding.
+
+The adopted L replay exposes three clearance-created leaves whose exact
+endpoint has zero guide radius. The implementation does not fabricate a
+zero-radius circle or silently move the endpoint. Complete finite enumeration
+proves that no later positive-radius policy cell exists, so only candidates at
+the greatest feasible progress may close a caller-declared terminal span.
+Traversal exhaustion remains separate from Task 11A's fresh stock/coverage
+proof.
 
 ```bash
 pixi run format-adaptive
@@ -1693,6 +1708,14 @@ CW/CCW bit, not the radial `MaterialSide` consumed by `CutDirectionPolicy`.
 Replay must derive the expected orientation from the recorded side and the
 input-bound policy; it may not infer the side by inverting the submitted
 orientation.
+
+Fresh traversal reconstruction also falsified the assumption that every
+terminal MAT coordinate can emit a circle. Three adopted L leaves end at
+clearance exactly equal to the tool radius and therefore have exact zero guide
+radius. Task 10 now closes those branches through proof-carrying finite-lattice
+exhaustion at the last feasible positive-radius progress. Task 11A must replay
+that enumeration and still prove coverage independently; terminal traversal is
+not evidence of empty reachable residual.
 
 **Files**
 
