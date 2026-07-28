@@ -1190,6 +1190,8 @@ Commit: `feat(adaptive): add event-exact certifier`
 - Create: `src/segment_site_catalog_sampling.cpp`
 - Create: `src/segment_site_mat_proposal_table.h`
 - Create: `src/segment_site_mat_proposal_table.cpp`
+- Create: `src/segment_site_mat_numeric_table.h`
+- Create: `src/segment_site_mat_numeric_table.cpp`
 - Create: `src/segment_site_neck.h`
 - Create: `src/segment_site_neck.cpp`
 - Create: `src/medial_axis_2.cpp`
@@ -1387,7 +1389,12 @@ clearance-radius square and structural equidistant/no-site-closer verdicts.
 Native fields 10–15 compose these proofs with reporting center, parameter,
 clearance, MATHSM guide radius, and edge-sample CSR; input reversal is
 table-identical. Reconstructed unverified bundles and mismatched tool radii
-fail loudly. Certificate fields and the public fixed tuple remain pending.
+fail loudly. A one-build compositor now adds deterministic node reporting and
+canonical neck/cut-union CSR for fields 1 and 16–18. At tool radius `0.5`, the
+L golden retains ten nodes, nine edges, and two eight-edge cut rows; at the
+exact half-passage-width radius `1`, `C_r` clipping yields six nodes, five
+edges, and no separating neck. Center-domain identity, the MAT certificate,
+and the public fixed tuple remain pending.
 
 Bind:
 

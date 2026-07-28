@@ -96,7 +96,9 @@ needed by every downstream traversal and engagement decision.
     refinement cap. The catalog-fed L adapter adopts all nine graph edges and
     emits reversal-identical fields 10–15 with sealed structural sample
     verdicts, exact tool-radius binding, reporting clearance, and MATHSM guide
-    radius.
+    radius. A one-build numeric compositor now adds deterministic node
+    reporting coordinates, canonical neck bytes, and neck cut-edge CSR for
+    native fields 1 and 16–18.
     A separate exact-clearance sidecar now consumes a canonical graph edge,
     validates its exact endpoint evidence and nonnegative rational
     `clearance²(t)` polynomial through degree four, isolates all
@@ -1377,6 +1379,8 @@ The native table is the exact discrete subset of the future 20-field binding:
 | `sample_clearance[N]`, `sample_guide_radius[N]` | reporting `d` and MATHSM `(d-r)/2`, evaluated only after exact bound authentication |
 | `sample_flags[N,2]` | structural exact-equidistant and no-site-closer producer verdicts; all must equal one |
 | `edge_sample_offsets[E+1]` | deterministic canonical-edge CSR over every sample row |
+| `nodes[V,3]` | reporting coordinates owned by the first canonical incident edge; exact node identity remains authoritative |
+| `neck_evidence`, `neck_cut_offsets`, `neck_cut_edge_ids` | canonical evidence bytes plus one sorted cut-union CSR row per evidence record |
 
 Curve codes are `0=LINE`, `1=PARABOLA`, and `2=CIRCLE`. Original-dual codes
 are `0=P–P`, `1=P–S`, and `2=S–S`. Exact node and original-dual identity
@@ -2251,6 +2255,31 @@ edge profile and reports the one-sided MATHSM guide radius `(d-r)/2`.
     catalog producer can create the verified state; otherwise an all-ones
     flag would prove merely that a caller filled the schema correctly.
 
+### Native fields 1–18
+
+`canonical_l_shape_mat_numeric_table(...)` composes fields 1–18 from one
+production sampling bundle. It does not rebuild the MAT. Node rows follow the
+canonical node dictionary. The first incident edge in canonical edge order
+owns each node's reporting endpoint coordinate; later conic charts are not
+matched in floating point because exact node identity already proves their
+coincidence.
+
+Each `neck_evidence` row is the existing canonical `NeckEvidenceV1` byte
+record. The corresponding cut CSR row is the sorted unique union of that
+record's certified traversal-side edge partitions, mapped to canonical numeric
+edge rows. The bytes retain the exact partition boundaries; the numeric union
+is a fast membership projection and does not replace the certificate.
+
+!!! warning "Tool radius can change topology at the neck threshold"
+
+    The L fixture's narrow passage has exact width `2`. With tool radius
+    `0.5`, its admissible-center MAT retains ten nodes, nine edges, and two
+    separating plateau records; each cut-union row contains the other eight
+    edges. At tool radius `1`, exact `C_r` clipping yields six nodes and five
+    edges, and no separating neck survives. Treating the latter as the same
+    graph with a zero reporting guide radius would preserve topology that no
+    longer belongs to the admissible-center domain.
+
 Refinement may change the number and position of samples. It must not change:
 
 - node or edge identity;
@@ -2289,6 +2318,7 @@ also gated. Certificate bytes and the Python binding remain pending.
 | `segment_site_mat_sampling.*` | typed world-XY proposal policy, exact station identities, rational curve refinement, and edge-owned sampling runs |
 | `segment_site_catalog_sampling.*` | canonical L chart recovery, exact branch rebinding, production run adoption, and flattened sample offsets |
 | `segment_site_mat_proposal_table.*` | sealed sample verdict projection, exact tool-radius binding, and numeric fixed-tuple fields 10–15 |
+| `segment_site_mat_numeric_table.*` | one-build node reporting, proposal-table composition, canonical neck bytes, and cut-union CSR for fields 1–18 |
 | `canonical_encoding.*` | frozen native CCAN byte, integer, rational, boolean, sequence, component-map, and tagged-union encoding plus canonical rational decoding |
 | `segment_site_neck_evidence_bytes.*` | canonical four-variant `NeckEvidenceV1` bytes, SHA-256 digests, and exact replay verification |
 | `segment_site_neck_classification.*` | canonical rational-boundary validation, exact algebraic width classes, and comparison-certificate bytes |
@@ -2341,6 +2371,7 @@ consumers, or evolution differ from graph orchestration.
 | Exact neck classification | native typed records and canonical V1 bytes implemented and gated; Python binding pending | strict, clearance-endpoint, shared-vertex, and maximal plateau ownership; exact node-width consistency; independent cut attachment; canonical CCAN records and SHA-256 digests; deletion/mutation/order rejection by exact replay; adopted L emits exactly two byte-identical reversal-invariant plateau records at `width² = 4` |
 | Exact neck width classes | native implemented and gated; Python binding pending | cross-language `ExactRationalV1` decoding; nonnegative strictly increasing boundaries; exact algebraic comparisons; right-closed restrictive equality; evidence-digest-bound comparison certificates; both production L plateaus classify as `0` at boundary `4` with reversal-identical certificates |
 | Proposal-only sampling | native substrate, production L adoption, and fields 10–15 implemented and gated; public binding pending | all nine canonical L edges emit edge-owned deterministic runs, structural `{equidistant, no-site-closer}` verdicts, reporting clearance/guide radius, and `int64` offsets under repeat/reversal; no arbitrary-pocket or public API claim |
+| Native fixed tuple fields 1–18 | production L implemented and gated; fields 19–20/public binding pending | one MAT build composes deterministic node reporting, fields 2–15, canonical two-record neck evidence, and per-record cut-union CSR at radius `0.5`; radius `1` exact-threshold golden yields the certified five-edge/no-neck transition |
 | Python fixed-tuple binding | pending | no public API claim |
 
 ## Verification gates
@@ -2485,6 +2516,13 @@ clearance and MATHSM guide radius, and preserves the complete table under
 input reversal. A syntactically reconstructed but unverified bundle and a
 mismatched tool radius both fail through named boundaries. This does not yet
 establish certificate bytes or the public Python binding.
+The numeric-MAT-table gate then composes fields 1–18 from one sampled graph.
+Its radius-`0.5` golden requires ten reporting nodes, nine edges, two canonical
+plateau records, and cut offsets `[0,8,16]`; complete output survives canonical
+input reversal and reproduces the independently projected fields 2–15. A
+radius-`1` threshold golden requires six nodes, five edges, and an empty neck
+CSR. Projecting nonempty evidence against a graph with no matching edge
+identities fails through `UnknownMatNumericNeckCutEdgeError`.
 The catalog-fed
 segment-Delaunay gate separately locks one-pass segment insertion, exact
 catalog/live-generator cardinality and identity, indexed lookup across two
