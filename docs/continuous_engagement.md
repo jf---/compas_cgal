@@ -29,10 +29,12 @@ cells.
     unique pending oriented neck scope from causal side history. Task 13C now
     consumes increasing and decreasing native spans, retains direction through
     derived cursors, and freshly reconstructs one reverse P–S candidate without
-    using cutter rotation as topology. Entry bootstrap, the complete candidate
-    loop, traversal/coverage closure, replay/artifact certification,
-    arbitrary-pocket evidence, and matched Held–Pfeiffer performance remain
-    incomplete.
+    using cutter rotation as topology. Task 13D now composes the qualified
+    entry, pristine exact stock, empty coverage, first full-circle oracle, and
+    global cursor into one independently replayed launch transaction. The
+    complete candidate loop, traversal/coverage closure, replay/artifact
+    certification, arbitrary-pocket evidence, and matched Held–Pfeiffer
+    performance remain incomplete.
 
 ## Authority hierarchy
 
@@ -317,6 +319,65 @@ native ordinal direction without changing positive MATHSM progress or cutter
 rotation. Later Task 13 stages decide which candidate failures constitute
 normal search exhaustion. Task 12 validates a supplied finite candidate and
 state transition; it does not infer global traversal facts.
+
+### Task 13D entry-circle bootstrap
+
+The first physical circle is not a degenerate instance of the Task 12
+link/circle transaction. Its exact phase already equals the qualified bore
+center, so a synthetic link would have zero progress and cannot enter the
+closed motion grammar. `InitialCandidateEvaluator` instead rebuilds pristine
+stock from `InputIdentity`, applies `PreclearedEntry` once, creates an empty
+`CoverageLedger`, and evaluates only the full circle.
+
+The launch preserves the same deciding proof order as every later circle:
+
+```text
+entry-sweep containment
+    -> design-domain containment
+    -> MotionCertifier.certify(post-entry stock)
+    -> exact circle depletion
+    -> exact coverage sweep
+    -> functional traversal child
+```
+
+The immutable `InitialCandidateTransaction` binds the complete input digest,
+global traversal parent and child, pristine-stock boundary, entry-depletion
+witness, empty initial coverage certificate, circle-in-entry certificate,
+per-operation replay witness, and resulting physical-state digest. Evaluation
+operates on private stock/coverage owners and returns evidence only. Commit
+reconstructs the complete launch and requires byte-identical transaction
+evidence before returning the separate `GenerationState` and
+`MatTraversalState` children.
+
+The adopted L fixture exercises a real reverse P–S route. Its explicit launch
+lattice admits a guide radius of `1/32 mm`; with the `1/2 mm` tool, the complete
+sweep fits exactly in a `9/16 mm` qualified entry disk centred at the phase:
+
+```text
+2(1/32 mm) + 1/2 mm = 9/16 mm
+```
+
+That equality is an exact containment case, not a tolerance. Shrinking the
+entry to `11/20 mm` leaves the same circle inside the design pocket but rejects
+it as a launch because the cutter sweep is no longer proved to lie in the
+qualified void.
+
+!!! note "A seeded entry establishes a neck side; it does not cross one"
+
+    `MatTraversalState.seed()` has no previously occupied side and therefore
+    no pending `CausalNeckTransit`. The entry circle must use `NoNeckScope`,
+    advance exactly one MAT cursor, and leave every oriented `NeckPassage`
+    `UNVISITED`. A causal passage first becomes possible after a terminal edge
+    activates a later route branch with distinct authenticated source and
+    target sides. Inventing a causal launch fixture would encode history that
+    never occurred.
+
+The focused mutation gate rejects a nearby but unequal phase, undersized
+entry, zero-length synthetic link, foreign MAT sampling, foreign tool,
+foreign bore evidence, foreign design-domain proof, foreign cut depth, stale
+global parent, certification after self-depletion, cross-wired circle witness,
+and a child with two advanced cursors. Two independent trials and the commit
+replay produce identical canonical bytes.
 
 !!! danger "Exact-number backend definitions are an ABI contract"
 

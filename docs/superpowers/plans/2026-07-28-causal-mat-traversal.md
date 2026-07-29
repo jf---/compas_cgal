@@ -224,6 +224,9 @@ Commit: `feat(adaptive): traverse mat both ways`
 
 ### Task 4: Entry-circle bootstrap
 
+**Status (2026-07-29): complete; publication commit pending.** Fifteen focused
+launch contracts and the complete 501-test adaptive suite pass.
+
 **Files**
 
 - Create: `src/compas_cgal/adaptive/bootstrap.py`
@@ -237,26 +240,28 @@ Commit: `feat(adaptive): traverse mat both ways`
 - `commit(traversal, transaction) -> tuple[GenerationState,
   MatTraversalState]`
 
-- [ ] **Step 1: Write RED launch tests**
+- [x] **Step 1: Write RED launch tests**
 
 Require exact phase equality with entry center, full sweep inside the qualified
 entry, design containment, motion certification against post-entry stock,
 certify-before-deplete chronology, coverage addition, one cursor advance,
-causal passage advance only on commit, and deterministic evidence.
+unchanged seeded passage inventory, and deterministic evidence. A causal
+passage begins only at a later branch transition and advances only on that
+continuation commit.
 
-- [ ] **Step 2: Write RED atomicity and mutation tests**
+- [x] **Step 2: Write RED atomicity and mutation tests**
 
 Reject a zero-length synthetic link, circle outside the entry disk, foreign
 entry/domain/tool/cut depth, stale traversal parent, deplete-before-certify,
 cross-wired circle witness, and a launch that advances two cursors.
 
-- [ ] **Step 3: Implement isolated launch and independent commit**
+- [x] **Step 3: Implement isolated launch and independent commit**
 
 Build pristine stock, apply entry depletion once, build empty coverage, then
 evaluate the candidate circle on forks. Commit repeats the complete launch and
 requires byte-identical transaction evidence.
 
-- [ ] **Step 4: GREEN and document**
+- [x] **Step 4: GREEN and document**
 
 ```bash
 pixi run pytest tests/adaptive/test_acceptance.py -n auto --testmon -q

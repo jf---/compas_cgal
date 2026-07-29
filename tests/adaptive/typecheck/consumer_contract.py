@@ -6,6 +6,8 @@ import numpy as np
 
 from compas_cgal import _medial_axis_2
 from compas_cgal._medial_axis_2 import MedialAxisResult
+from compas_cgal.adaptive.bootstrap import InitialCandidateEvaluator
+from compas_cgal.adaptive.bootstrap import InitialCandidateTransaction
 from compas_cgal.adaptive.candidates import DerivedCandidateCursor
 from compas_cgal.adaptive.candidates import MiddleCurveCandidate
 from compas_cgal.adaptive.candidates import MiddleCurveSpan
@@ -17,6 +19,7 @@ from compas_cgal.adaptive.containment import SegmentContainmentCertificate
 from compas_cgal.adaptive.entry import BoreProcessIdentity
 from compas_cgal.adaptive.entry import PreclearedEntry
 from compas_cgal.adaptive.entry import QualifiedBore
+from compas_cgal.adaptive.generation_state import GenerationState
 from compas_cgal.adaptive.identity import InputIdentity
 from compas_cgal.adaptive.medial_axis import MedialAxis
 from compas_cgal.adaptive.motion import EngagementCap
@@ -40,6 +43,7 @@ from compas_cgal.adaptive.policy import CircleOrientation
 from compas_cgal.adaptive.policy import CutDirectionPolicy
 from compas_cgal.adaptive.policy import DepletionPolicy
 from compas_cgal.adaptive.policy import MatSamplingPolicy
+from compas_cgal.adaptive.policy import MaterialSide
 from compas_cgal.adaptive.policy import NeckPolicy
 from compas_cgal.adaptive.policy import TraversalPolicy
 from compas_cgal.adaptive.reachable_domain import ReachableDomain
@@ -276,6 +280,22 @@ input_identity = InputIdentity.build(
     cut_direction_policy=CutDirectionPolicy.__new__(CutDirectionPolicy),
 )
 assert_type(input_identity, InputIdentity)
+initial_evaluator = InitialCandidateEvaluator.build(
+    input_identity=input_identity,
+    material_side=MaterialSide.OUTSIDE,
+)
+assert_type(initial_evaluator, InitialCandidateEvaluator)
+initial_transaction = initial_evaluator.evaluate(
+    typed_traversal,
+    intermediate_candidate,
+)
+assert_type(initial_transaction, InitialCandidateTransaction)
+initial_generation, initial_traversal = initial_evaluator.commit(
+    typed_traversal,
+    initial_transaction,
+)
+assert_type(initial_generation, GenerationState)
+assert_type(initial_traversal, MatTraversalState)
 
 
 def accepts_world_point(point: Point2[WorldXY]) -> None:

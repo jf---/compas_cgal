@@ -258,5 +258,25 @@ class StaleCandidateTransactionError(RuntimeError):
     """A transaction parent digest no longer names authoritative state."""
 
 
+class InvalidInitialCandidateEvaluatorError(ValueError):
+    """An entry-launch evaluator has foreign or incomplete root authority."""
+
+
+class InitialCandidateStateMismatchError(ValueError):
+    """An entry candidate does not begin at the seeded global MAT state."""
+
+
+class InitialCandidatePhaseError(ValueError):
+    """An entry candidate phase differs from the qualified bore center."""
+
+
+class InvalidInitialCandidateTransactionError(ValueError):
+    """Entry-launch evidence is malformed, cross-wired, or out of order."""
+
+
+class StaleInitialCandidateTransactionError(RuntimeError):
+    """An entry transaction no longer names the authoritative traversal parent."""
+
+
 class CandidateSelectionError(ValueError):
     """Accepted transactions cannot form one deterministic winner set."""
