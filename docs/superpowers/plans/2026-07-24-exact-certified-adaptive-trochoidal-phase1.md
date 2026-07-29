@@ -2092,25 +2092,26 @@ divides the stage into exact topology projection, global traversal,
 bidirectional spans, launch, continuation, terminal replay, and publication
 gates.
 
-**Status (2026-07-29): Task 13A exact topology projection complete; directed
-global traversal next.** The native owner now retains every exact neck record
-and additively projects all four locus variants plus every cut partition while
-the frozen 20-field tuple remains unchanged. The two production L-pocket
-plateau necks each expose three reversal-invariant sides `(6, 1, 1)`.
-Typed side identities bind evidence digest, partition ordinal, and edge IDs;
-same-union repartition and cross-wired-locus attacks fail against the retained
-owner. Batched typed construction is `O(Q + P)`, not per-neck whole-owner
-projection. This coherent stage is published at `d289f79`.
-`GenerationState` remains the physical accepted boundary while a separate
-global traversal value will own all edge cursors and side history. The first
-circle still requires a distinct precleared-entry transaction; later
-candidates retain Task 12's joint link/circle transaction.
+**Status (2026-07-29): Tasks 13A and 13B complete; bidirectional spans next.**
+Task 13A is published at `d289f79`: the native owner retains all four exact
+neck-locus variants and every cut partition, and each production L plateau
+exposes three reversal-invariant sides `(6, 1, 1)`. Task 13B now adds one
+content-addressed sample authority, deterministic directed graph route, cursor
+per edge, exact visited incidences, and causal neck-side frontier. Chain,
+branch, cycle, multi-component, relabelled-node, same-union ambiguity,
+overlapping-transit, stale/terminal cursor, refinement-identity, and
+single-build contracts pass. Graph/sample/frontier authority is built once;
+accepted-candidate cursor lookup no longer rescans the native sample table.
+Current `MiddleCurveSpan` remains forward-only, so Task 13C must consume the
+reverse route edges before bootstrap and generator integration. Task 13B
+publication is pending this worktree commit.
 
 **Files**
 
 - Modify: native MAT bundle/binding and typed neck projection
 - Create: `src/compas_cgal/adaptive/bootstrap.py`
 - Create: `src/compas_cgal/adaptive/traversal.py`
+- Create: `src/compas_cgal/adaptive/traversal_graph.py`
 - Create: `src/compas_cgal/adaptive/generator.py`
 - Test: `tests/adaptive/test_traversal.py`
 - Test: `tests/adaptive/test_acceptance.py`

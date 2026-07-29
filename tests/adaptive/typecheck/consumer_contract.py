@@ -19,6 +19,7 @@ from compas_cgal.adaptive.entry import QualifiedBore
 from compas_cgal.adaptive.identity import InputIdentity
 from compas_cgal.adaptive.medial_axis import MedialAxis
 from compas_cgal.adaptive.motion import EngagementCap
+from compas_cgal.adaptive.neck import NeckInventory
 from compas_cgal.adaptive.operation import AdvanceTraversalDecision
 from compas_cgal.adaptive.operation import ApproachOperation
 from compas_cgal.adaptive.operation import CanonicalOperation
@@ -27,6 +28,7 @@ from compas_cgal.adaptive.operation import FullCapDecision
 from compas_cgal.adaptive.operation import HoldTraversalDecision
 from compas_cgal.adaptive.operation import LinkSegmentOperation
 from compas_cgal.adaptive.operation import NeckCapDecision
+from compas_cgal.adaptive.operation import NeckScope
 from compas_cgal.adaptive.operation import NoNeckScope
 from compas_cgal.adaptive.operation import PlungeOperation
 from compas_cgal.adaptive.operation import TraversalDecision
@@ -42,6 +44,10 @@ from compas_cgal.adaptive.policy import TraversalPolicy
 from compas_cgal.adaptive.reachable_domain import ReachableDomain
 from compas_cgal.adaptive.stock_area import DepletionWitness
 from compas_cgal.adaptive.stock_area import Stock2Area
+from compas_cgal.adaptive.traversal import DirectedEdgeCursor
+from compas_cgal.adaptive.traversal import MatTraversalState
+from compas_cgal.adaptive.traversal_graph import DirectedRouteStep
+from compas_cgal.adaptive.traversal_graph import TraversalGraph
 from compas_cgal.adaptive.units import ChordBound
 from compas_cgal.adaptive.units import ClearanceZ
 from compas_cgal.adaptive.units import CutPlane
@@ -128,6 +134,18 @@ typed_axis = MedialAxis.build(
     max_refinement_depth=32,
 )
 assert_type(typed_axis, MedialAxis)
+typed_traversal = MatTraversalState.seed(
+    axis=typed_axis,
+    inventory=NeckInventory.__new__(NeckInventory),
+    policy=TraversalPolicy.build(forward_window=4),
+    entry_edge_id=typed_axis.edges[0].identity,
+    entry_node_id=typed_axis.edges[0].source.identity,
+)
+assert_type(typed_traversal, MatTraversalState)
+assert_type(typed_traversal.authority.graph, TraversalGraph)
+assert_type(typed_traversal.authority.route[0], DirectedRouteStep)
+assert_type(typed_traversal.active_cursor, DirectedEdgeCursor)
+assert_type(typed_traversal.neck_scope, NeckScope)
 candidate_span = MiddleCurveSpan.build(
     axis=typed_axis,
     cursor_before=typed_axis.samples[0],

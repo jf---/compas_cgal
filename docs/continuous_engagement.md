@@ -23,11 +23,14 @@ cells.
     nonterminal-traversal boundary because other MAT edges remain untouched.
     Fresh exact neck inventory plus submitted oriented-owner/state/cap replay
     are also gated, including the production `80 degrees` second-passage
-    rejection. Task 13A now retains the exact neck loci and all three certified
-    sides of each production plateau neck; global traversal has not yet used
-    that side history to derive scope independently. Complete
-    traversal/coverage, replay/artifact certification, arbitrary-pocket
-    evidence, and matched Held–Pfeiffer performance remain incomplete.
+    rejection. Task 13A retains the exact neck loci and all three certified
+    sides of each production plateau neck. Task 13B now carries those sides
+    through one content-addressed route over every MAT edge and derives a
+    unique pending oriented neck scope from causal side history. Bidirectional
+    span consumption, entry bootstrap, the complete candidate loop,
+    traversal/coverage closure, replay/artifact certification,
+    arbitrary-pocket evidence, and matched Held–Pfeiffer performance remain
+    incomplete.
 
 ## Authority hierarchy
 
@@ -252,14 +255,16 @@ current state, and advances only after one unique circle candidate matches. A
 real first-passage circle reaches the certifier at `90 degrees`, not the
 `120 degrees` user cap.
 
-!!! warning "Validated scope is not yet derived scope"
+!!! warning "Derived scope is not yet integrated scope"
 
     The candidate lattice currently accepts scope as an identity input. The
     same exact motion/traversal can be rebuilt with no-neck/full-cap identity
     or with oriented-neck/restricted-cap identity. Replay validates the latter
     internally but cannot infer which separator was crossed from motion
-    geometry or one edge cursor. Task 13 must carry global certified-side
-    history and assign the causal scope before final replay certification.
+    geometry or one edge cursor. Task 13B now carries complete certified-side
+    history and derives that causal scope from the global route. The later
+    generator/replay stages must consume `MatTraversalState.neck_scope`;
+    accepting a separately supplied scope would leave two authorities.
 
 !!! warning "A legal passage does not certify its circle"
 
@@ -267,8 +272,9 @@ real first-passage circle reaches the certifier at `90 degrees`, not the
     legally, but exceeds its reconstructed `80 degrees` cap against post-link
     stock. That negative is an integration gate. An equal-cap fixture separately
     proves the two state transitions. Task 12 now rejects that complete joint
-    trial; Task 13 must continue the feasible-candidate search instead of
-    weakening the oracle or conflating passage legality with motion acceptance.
+    trial; the later Task 13 candidate loop must continue the feasible search
+    instead of weakening the oracle or conflating passage legality with motion
+    acceptance.
 
 ### Task 12 atomic consumer
 
@@ -303,10 +309,11 @@ second-passage link certifies at the reconstructed `80 degrees` cap, but its
 circle exceeds that cap and the complete joint trial is discarded. A separate
 larger lattice circle passes its direct link and fails exact containment.
 
-Task 13 remains the sole authority for assigning causal neck scope, choosing
-the active global MAT branch, and deciding which candidate failures constitute
-normal search exhaustion. Task 12 validates a supplied finite candidate and
-state transition; it does not infer global traversal facts.
+Task 13B is now the sole authority for assigning causal neck scope and choosing
+the active global MAT branch. Later Task 13 stages decide which candidate
+failures constitute normal search exhaustion. Task 12 validates a supplied
+finite candidate and state transition; it does not infer global traversal
+facts.
 
 !!! danger "Exact-number backend definitions are an ABI contract"
 
