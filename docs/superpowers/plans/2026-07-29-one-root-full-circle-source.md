@@ -47,35 +47,37 @@ pytest-xdist, pytest-testmon, strict MkDocs.
 - Produces: an exact expected verdict for the diagonal post-capsule case and
   observable one-root projection evidence.
 
-- [ ] **Step 1: Reclassify the real positive control**
+- [x] **Step 1: Reclassify the real positive control**
 
 Change the post-capsule test from expecting
 `UnresolvedMotionEventError` to the exact proved outcome. Retain assertions
 that stock boundary identity, lineage, and point containment are unchanged.
 
-- [ ] **Step 2: Add the native partition contract**
+- [x] **Step 2: Add the native partition contract**
 
-Construct the same diagonal capsule directly, audit the circle, and require:
+Use two overlapping boundary disks with one physical shared-radical
+intersection and one clipped conjugate, then require:
 
 ```python
-assert verdict == "cap_exceeded"
+assert verdict == "certified"
 assert trace.partition.source_kind == "full-circle-boundary-pullbacks-v4"
 assert any(projection.one_root_predicate for projection in trace.partition.projections)
-assert any(not fibre.events for fibre in trace.partition.fibres)
+assert one_root_physical_root_ids(trace.partition)
+assert one_root_conjugate_root_ids(trace.partition)
 assert verify_event_partition(trace.partition).verdict.name == "CERTIFIED"
 ```
 
-The docstring must explain why an eventless norm fibre is positive evidence
-that a conjugate root was retained as a partition boundary but denied physical
-ownership.
+The docstring explains why the clipped conjugate remains a partition root but
+may not own an endpoint event. A generic eventless fibre is not sufficient
+evidence because it may belong to an unrelated projection family.
 
-- [ ] **Step 3: Add mutation contracts**
+- [x] **Step 3: Add mutation contracts**
 
 Require `delete-one-root-predicate`, `alter-one-root-radicand`,
 `alter-one-root-rational-part`, and `move-one-root-event-to-conjugate` to
 produce `UNRESOLVED_DEGENERACY`.
 
-- [ ] **Step 4: Run RED**
+- [x] **Step 4: Run RED**
 
 ```bash
 pixi run pytest tests/adaptive/test_circle_oracle.py \
@@ -109,13 +111,13 @@ unresolved.
 - Optional `ProjectionInput2::one_root_predicate`
 - Optional `ProjectionRecord2::one_root_predicate`
 
-- [ ] **Step 1: Implement one coordinate grammar**
+- [x] **Step 1: Implement one coordinate grammar**
 
 Encode `full-circle-one-root-coordinate-v1` with exact rational base,
 coefficient, and radicand. Canonicalize rational coordinates to `(base, 0, 0)`
 and reject negative or malformed radicands.
 
-- [ ] **Step 2: Implement validated radical predicates**
+- [x] **Step 2: Implement validated radical predicates**
 
 `OneRootPredicate2::build(...)` requires nonempty, jointly normalized integer
 coefficient arrays and a positive exact radicand. Normalize only their shared
@@ -123,7 +125,7 @@ content and shared sign: independently making both arrays primitive changes
 the represented radical equation. Add no public raw construction path in
 Python.
 
-- [ ] **Step 3: Validate norm ownership in the algebraic partition**
+- [x] **Step 3: Validate norm ownership in the algebraic partition**
 
 For a one-root input, reconstruct
 
@@ -134,17 +136,17 @@ den(alpha) A^2 - num(alpha) B^2
 and require canonical equality with the submitted projection polynomial.
 Reject simultaneous integer and one-root signed predicates.
 
-- [ ] **Step 4: Filter source events per algebraic root**
+- [x] **Step 4: Filter source events per algebraic root**
 
 Evaluate `A` and `B` with `sign_at_1_object()`. Attach input events only when
 `A + B sqrt(alpha) == 0`; retain every norm root in the partition regardless.
 
-- [ ] **Step 5: Bind and expose the authority**
+- [x] **Step 5: Bind and expose the authority**
 
 Canonicalize the radical predicate in `projection-record-v3`, expose a
 read-only nanobind view, and add the four named mutation operators.
 
-- [ ] **Step 6: Run the focused native/Python build**
+- [x] **Step 6: Run the focused native/Python build**
 
 ```bash
 pixi run pytest tests/adaptive/test_circle_oracle.py \
@@ -165,6 +167,10 @@ yet emit the new predicate.
 - Modify: `src/continuous_tea_2/circle_projection.cpp`
 - Modify: `src/continuous_tea_2/circle_fibre_state.cpp`
 - Modify: `src/continuous_tea_2/circle_source.cpp`
+- Modify: `src/continuous_tea_2/circle_pair_projection.h`
+- Modify: `src/continuous_tea_2/circle_pair_projection.cpp`
+- Modify: `src/continuous_tea_2/circle_strata.h`
+- Modify: `src/continuous_tea_2/circle_strata.cpp`
 - Modify: `src/continuous_tea_2/event_certificate.cpp`
 
 **Interfaces**
@@ -174,37 +180,52 @@ yet emit the new predicate.
   predicate form.
 - Source kind `full-circle-boundary-pullbacks-v4`.
 
-- [ ] **Step 1: Emit exact coordinate sources**
+- [x] **Step 1: Emit exact coordinate sources**
 
 Replace rational-coordinate admission in `circle_oracle.cpp` with the canonical
 one-root encoding for every source and target vertex. Remove
 `rational_boundary_vertices`; do not retain a v3 path.
 
-- [ ] **Step 2: Derive the quarter-chart radical equation**
+- [x] **Step 2: Derive the quarter-chart radical equation**
 
 Construct jointly normalized integer `A` and `B`, derive the integer norm, and
 submit all three as one `ProjectionInput2`. Require a shared radicand for
 nonzero coordinate radical terms.
 
-- [ ] **Step 3: Evaluate active sheets exactly**
+- [x] **Step 3: Evaluate active sheets exactly**
 
 At each rational cell witness, evaluate homogeneous `A` and `B`, then determine
 `sign(A + B sqrt(alpha))` through exact sign and squared-magnitude comparison.
 Never use the norm sign for material-side state.
 
-- [ ] **Step 4: Mark physical endpoint evidence**
+- [x] **Step 4: Mark physical endpoint evidence**
 
 Every retained endpoint event must set
 `original_equations_rechecked = true`,
 `orientation_rechecked = true`, and `trim_disposition = "accepted"`.
 
-- [ ] **Step 5: Bump and reconstruct the source**
+- [x] **Step 5: Add and reconstruct the source**
 
-Emit/reconstruct v4 only and update oracle/strategy versions to
+Emit/reconstruct v4 for algebraic coordinates while retaining the
+independently replayed rational v3 path. Update oracle/strategy versions to
 `event-exact-motion-oracle-v5` and
 `full-circle-cell-strata-exact-v3`.
 
-- [ ] **Step 6: Run GREEN**
+- [x] **Step 6: Replace the quadratic pair product**
+
+Build topology without pair factors, derive canonical pair requests from the
+exact active branches at each topology-cell witness, and rebuild with only
+those requested center/rim branch pairs. Union requests exposed by each
+refinement and repeat until the finite request set reaches a fixed point. Bind
+the closed request set into the v4 source. Final cell authority must remain
+unresolved when an active material run lacks either required pair factor.
+
+Before circle/circle elimination, exactly divide each circle pullback by its
+proved `1 + u²` chart-denominator factor. It has no real roots but otherwise
+introduces a complex common component that makes the resultant identically
+zero.
+
+- [x] **Step 7: Run GREEN**
 
 ```bash
 pixi run pytest tests/adaptive/test_circle_oracle.py \
@@ -212,7 +233,8 @@ pixi run pytest tests/adaptive/test_circle_oracle.py \
   -n auto --testmon -q
 ```
 
-Expected: both files pass and the post-capsule case has a proved exact verdict.
+Result: `30 passed in 40.25s`; the post-capsule case has a proved exact
+verdict, and the rational v3 144-factor positive control remains unchanged.
 
 ---
 
@@ -275,7 +297,7 @@ git commit -m "feat(tea): admit one-root circle sources"
 - Modify: `docs/superpowers/plans/2026-07-28-causal-mat-traversal.md`
 - Modify: this plan
 
-- [ ] **Step 1: Capture the theorem**
+- [x] **Step 1: Capture the theorem**
 
 Document source grammar, norm-versus-physical-root separation, signed
 active-sheet proof, exact limitation, mutation evidence, Task 13F effect, and
@@ -287,7 +309,7 @@ Repeat five warm Release audits for the rational concentric,
 rational cross-support, and one-root post-capsule cases. Report medians and
 structural projection/root/cell counts without claiming Held parity.
 
-- [ ] **Step 3: Run all gates**
+- [x] **Step 3: Run all gates**
 
 ```bash
 pixi run pytest tests/adaptive -n auto -q
@@ -297,7 +319,10 @@ pixi run docs
 git diff --check
 ```
 
-- [ ] **Step 4: Commit documentation**
+Result: `522 passed in 242.54s`; Ruff, strict mypy over `27` source files,
+strict MkDocs, affected `--testmon`, and diff checks passed.
+
+- [x] **Step 4: Commit documentation**
 
 ```bash
 git add docs

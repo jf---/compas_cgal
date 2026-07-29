@@ -1787,9 +1787,9 @@ proof order.
 That nonuniform circle exposed a second exact-oracle classification gap. A
 reconstructed four-chart event partition proves every algebraic change
 location, but not the engagement disposition of the open cells between them.
-`event-exact-motion-oracle-v4` maps each global rational cell witness to one
-owned quarter chart, constructs the exact rational cutter station, reuses the
-segment stationary branch/pair classifier, and requires a chart-specific cap
+`event-exact-motion-oracle-v4` mapped each global rational cell witness to one
+owned quarter chart, constructed the exact rational cutter station, reused the
+segment stationary branch/pair classifier, and required a chart-specific cap
 projection for every partial material run. Same-support runs use the
 support-specific factor. Cross-support runs use pair-orientation resultants
 and, below `pi`, pair-cap resultants after removing the known-positive real
@@ -1811,16 +1811,37 @@ extraction reduced bounded warm Release medians from 252 ms to 128 ms for a
 audit on the Apple M1 Max. The broader v4 theorem measured 1,737.242 ms for a
 13-cell/576-projection concentric audit and 2,018.540 ms for a
 54-cell/452-projection cross-support audit over five warm calls. These are
-oracle-stage timings, not Held parity, and the current complete unordered-pair
-producer is a measured optimization obligation after terminal generation.
+oracle-stage timings, not Held parity.
 
 The radius-1 Task 13F probe subsequently exposed a different admission gap.
 Its launch and next link certify, but link depletion creates exact one-root
 algebraic trim vertices. Uniform sweep intersection already consumes those
-coordinates; the nonuniform pullback source currently admits only trim
-vertices whose radicals collapse to rationals. The following circle therefore
-returns `full-circle-task5-blocked-v1`. Exact one-root source reconstruction,
-not rounding or lower-candidate search, is now a Task 13F prerequisite.
+coordinates. `event-exact-motion-oracle-v5` now gives the nonuniform source one
+canonical rational/one-root grammar. On each quarter chart it isolates the
+integer norm `den(alpha) A² - num(alpha) B²`, rechecks
+`A + B sqrt(alpha) = 0` before attaching endpoint topology, and evaluates that
+original radical predicate for active-sheet signs. Exact physical/conjugate
+root diagnostics remain valid after coincident roots reduce to a common
+governing factor.
+
+The first post-capsule integration also exposed two structural defects. Its
+309 boundary records contain 290 pair-admitted line/circle features; the
+complete feature/chart product would request 670,480 orientation eliminations
+and remained unfinished after 100 s. The algebraic v4 producer now builds
+topology first, derives 233 canonical requests from the exact active branches
+in those cells, and rebuilds from the growing request set until refined
+witnesses add no request. This monotone closure is necessary because a
+first-pass witness may lie on a pair-order coincidence and hide a pair that a
+refined witness exposes. The closed request set is bound into source v4. Pair
+roots still cannot create physical branches, and final cell authority fails
+closed if a material run lacks its factor. Rational source v3 remains an
+independently replayed complete-product path. Circle pullbacks additionally
+carry a nonphysical `1 + u²` chart-denominator factor. Exact saturation before
+pair elimination prevents that complex pole component from making every
+circle/circle resultant identically zero. The real positive control now proves
+its named cap exceedance in 30.46 s. Complete Task 13F continuation integration
+remains pending; no lower-candidate outcome is inferred from the isolated
+gate.
 
 Fresh neck replay now rebuilds `NeckInventory`, seeds both immutable
 orientations, resolves each recorded owner, and reconstructs the cap decision
