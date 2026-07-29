@@ -360,6 +360,23 @@ Published at `b16dd82`.
 - Test: `tests/adaptive/test_acceptance.py`
 - Test: `tests/adaptive/test_replay.py`
 
+Implementation note (2026-07-29): radius-1 fixture exploration found a valid
+point-site launch and a deterministic 16-cell continuation family. The first
+three cells are proved gouges. The fourth link certifies exactly, but its
+depleted capsule introduces one-root algebraic boundary vertices; the
+following nonuniform circle therefore reaches
+`full-circle-task5-blocked-v1`, because the pullback source currently admits
+rational trim coordinates only. Cross-support stationary cells themselves
+are now closed by exact pair-orientation and sub-pi pair-cap resultants under
+`event-exact-motion-oracle-v4`. The one-root source extension is a prerequisite
+to freezing the fixture; searching lower cells past the unresolved fourth
+trial is forbidden.
+
+Prerequisite gate evidence (2026-07-29): the full circle-oracle file passed
+`17` tests; the affected motion/identity/replay/acceptance/generator slice
+passed `97`; the complete adaptive suite passed `521` in `230.33 s`; Ruff,
+strict mypy over `27` source files, strict MkDocs, and diff checks passed.
+
 - [ ] **Step 1: Commit exact fixture inputs**
 
 Record polygon, holes, cut plane, tool, entry evidence identity, MAT sampling,

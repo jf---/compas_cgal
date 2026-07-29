@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 
 import numpy as np
+import pytest
 
 from compas_cgal import _continuous_tea_2
 from compas_cgal import _stock_2
@@ -112,7 +113,7 @@ def test_concentric_cleared_disk_certifies_every_nonuniform_cell() -> None:
     assert verdict == "certified"
     assert trace.exact_verdict == "certified"
     assert trace.whole_rim_disposition == "partial"
-    assert trace.oracle_strategy_version == "full-circle-cell-strata-exact-v1"
+    assert trace.oracle_strategy_version == "full-circle-cell-strata-exact-v2"
     assert trace.event_cell_count > 0
     assert trace.decision_authority_digest != trace.partition.canonical_digest
     assert hashlib.sha256(trace.decision_authority_bytes).digest() == trace.decision_authority_digest
@@ -146,6 +147,11 @@ def test_uniform_circle_certificate_replays_and_rejects_mutation() -> None:
 
 
 def test_nonuniform_axis_circle_replays_every_exact_line_rim_pullback() -> None:
+    """Retain line pullbacks plus every four-chart pair orientation.
+
+    Four line features contribute 48 existing topology projections and
+    `6 * 4 * 2 * 2 == 96` unordered-feature/center/rim pair projections.
+    """
     verdict, trace = _continuous_tea_2.audit_full_circle_tea_event_exact(
         _stock_2.Stock2(SQUARE, []),
         0.5,
@@ -160,18 +166,54 @@ def test_nonuniform_axis_circle_replays_every_exact_line_rim_pullback() -> None:
     assert verdict == "cap_exceeded"
     assert trace.exact_verdict == "cap_exceeded"
     assert trace.whole_rim_disposition == "partial"
-    assert trace.partition.source_kind == "full-circle-boundary-pullbacks-v2"
+    assert trace.partition.source_kind == "full-circle-boundary-pullbacks-v3"
     pullbacks = tuple(projection for projection in trace.partition.projections if projection.degree_bound_id == "full-circle-line-(2,2)-v1")
-    event_projections = tuple(projection for projection in trace.partition.projections if projection.degree_bound_id.startswith("exact-univariate-"))
+    partition_projections = tuple(projection for projection in trace.partition.projections if projection.degree_bound_id.startswith("exact-univariate-"))
     assert len(pullbacks) == 32
-    assert len(event_projections) == 48
+    assert len(partition_projections) == 144
     assert trace.partition.roots
     assert len(trace.partition.fibres) == len(trace.partition.roots)
     assert {event.kind for fibre in trace.partition.fibres for event in fibre.events} >= {"tangent", "endpoint-order"}
     assert _continuous_tea_2.verify_event_partition(trace.partition).verdict.name == "CERTIFIED"
 
 
+@pytest.mark.parametrize("cap_chord_ratio", (3.0, 4.0))
+def test_cross_support_cells_do_not_erase_proved_cap_exceedance(
+    cap_chord_ratio: float,
+) -> None:
+    """Retain a proved 240-degree material arc across mixed supports.
+
+    At the phase station `(2, 5)`, the radius-2 cutter and the radius-2
+    cleared disk have centers two units apart.  Their intersection removes a
+    120-degree cutter arc, leaving a 240-degree material arc.  Both the
+    120-degree and 180-degree caps are therefore exceeded independently of
+    how adjacent line/circle boundary branches divide the other full-circle
+    parameter cells.
+    """
+    stock = _stock_2.Stock2(SQUARE, [])
+    stock.subtract_disk(0.0, 5.0, 2.0)
+
+    verdict, trace = _continuous_tea_2.audit_full_circle_tea_event_exact(
+        stock,
+        1.0,
+        5.0,
+        1.0,
+        0.0,
+        False,
+        2.0,
+        cap_chord_ratio,
+    )
+
+    assert verdict == "cap_exceeded"
+    mutated = _continuous_tea_2.mutate_certificate_record(
+        trace.partition,
+        "delete-pair-projection",
+    )
+    assert _continuous_tea_2.verify_event_partition(mutated).verdict.name == "UNRESOLVED_DEGENERACY"
+
+
 def test_slotted_stock_replays_circle_tangency_and_coincidence_fibres() -> None:
+    """Preserve topology fibres while mixed-support cells prove exceedance."""
     stock = _stock_2.Stock2(SQUARE, [])
     stock.subtract_disk(0.0, 5.0, 2.0)
     line_support_ids = {record.support_id for record in _continuous_tea_2.extract_boundary_records(stock) if record.support_kind == "line"}
@@ -190,7 +232,7 @@ def test_slotted_stock_replays_circle_tangency_and_coincidence_fibres() -> None:
     circle_pullbacks = tuple(projection for projection in trace.partition.projections if projection.degree_bound_id == "full-circle-circle-(4,4)-v1")
     event_kinds = {event.kind for fibre in trace.partition.fibres for event in fibre.events}
     directed_fibres = tuple(fibre for fibre in trace.partition.fibres if fibre.ccw_direction in {"merge", "split"})
-    assert verdict == "unresolved"
+    assert verdict == "cap_exceeded"
     assert circle_pullbacks
     assert event_kinds >= {"tangent", "support-overlap", "cap-crossing"}
     assert any(event.kind == "cap-crossing" and event.support_id in line_support_ids for fibre in trace.partition.fibres for event in fibre.events)
@@ -248,6 +290,7 @@ def test_negative_vertex_radial_predicate_preserves_merge_split_sign() -> None:
 
 
 def test_general_phase_replays_tangencies_and_oriented_trace() -> None:
+    """Keep CW/CCW evidence distinct after closing mixed-support cells."""
     stock = _stock_2.Stock2(SQUARE, [])
     stock.subtract_disk(0.0, 5.0, 2.0)
 
@@ -272,7 +315,7 @@ def test_general_phase_replays_tangencies_and_oriented_trace() -> None:
         4.0,
     )
 
-    assert ccw_verdict == cw_verdict == "unresolved"
+    assert ccw_verdict == cw_verdict == "cap_exceeded"
     assert ccw.events and cw.events
     assert ccw.canonical_digest != cw.canonical_digest
     assert tuple(event.canonical_id for event in ccw.events) != tuple(event.canonical_id for event in cw.events)

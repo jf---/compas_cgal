@@ -770,7 +770,7 @@ audit_full_circle_tea_event_exact(
                 exact_cap_identity,
                 authority.verdict,
                 authority.whole_rim_disposition,
-                "full-circle-cell-strata-exact-v1",
+                "full-circle-cell-strata-exact-v2",
                 std::move(events));
         const std::string verdict =
             authority.verdict

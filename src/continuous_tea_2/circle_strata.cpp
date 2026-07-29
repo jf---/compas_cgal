@@ -207,21 +207,92 @@ std::vector<std::string> projection_fields(
     }
 }
 
-std::string cap_projection_for(
+bool pair_projection_matches(
+    const std::vector<std::string>& fields,
+    const std::string& projection_tag,
+    const SegmentBoundaryBranch2& first,
+    const SegmentBoundaryBranch2& second,
+    const std::string& chart_id)
+{
+    if (fields.size() != 8
+        || fields[0] != projection_tag
+        || fields[5] != chart_id) {
+        return false;
+    }
+    const bool forward =
+        fields[1] == first.feature_id
+        && fields[2] == second.feature_id
+        && fields[3] == first.support_id
+        && fields[4] == second.support_id
+        && fields[6] == first.rim_chart_id
+        && fields[7] == second.rim_chart_id;
+    const bool reverse =
+        fields[1] == second.feature_id
+        && fields[2] == first.feature_id
+        && fields[3] == second.support_id
+        && fields[4] == first.support_id
+        && fields[6] == second.rim_chart_id
+        && fields[7] == first.rim_chart_id;
+    return forward || reverse;
+}
+
+std::vector<std::string> cap_projections_for(
     const EventPartitionCertificate2& partition,
     const SegmentCellStratum2& cell,
     const BranchPairDisposition2& run,
-    const std::string& chart_id)
+    const std::string& chart_id,
+    bool cap_is_pi)
 {
     const SegmentBoundaryBranch2* first =
         branch_for(cell, run.first_branch_id);
     const SegmentBoundaryBranch2* second =
         branch_for(cell, run.second_branch_id);
-    if (first == nullptr || second == nullptr
-        || first->support_id != second->support_id
-        || first->support_kind
-            != second->support_kind) {
+    if (first == nullptr || second == nullptr) {
         return {};
+    }
+    const bool same_support =
+        first->support_id == second->support_id
+        && first->support_kind
+            == second->support_kind;
+    if (!same_support) {
+        if (run.cap_disposition == "equal-cap") {
+            return {};
+        }
+        std::vector<std::string> result;
+        for (const std::string& projection_tag :
+             {
+                 std::string(
+                     "full-circle-pair-orientation-v1"),
+                 std::string(
+                     "full-circle-pair-cap-v2"),
+             }) {
+            if (cap_is_pi
+                && projection_tag
+                    == "full-circle-pair-cap-v2") {
+                continue;
+            }
+            std::string matched;
+            for (const ProjectionRecord2& projection :
+                 partition.projections) {
+                if (pair_projection_matches(
+                        projection_fields(
+                            projection.projection_id),
+                        projection_tag,
+                        *first,
+                        *second,
+                        chart_id)) {
+                    matched =
+                        projection.projection_id;
+                    break;
+                }
+            }
+            if (matched.empty()) {
+                return {};
+            }
+            result.push_back(std::move(matched));
+        }
+        std::sort(result.begin(), result.end());
+        return result;
     }
     const std::string prefix =
         first->support_kind == "line"
@@ -250,7 +321,9 @@ std::string cap_projection_for(
                 && fields[0] == prefix
                 && owns_feature(fields[1])
                 && fields[2] == chart_id) {
-                return projection.projection_id;
+                return {
+                    projection.projection_id,
+                };
             }
         }
         return {};
@@ -265,7 +338,9 @@ std::string cap_projection_for(
             && fields[0] == prefix
             && owns_feature(fields[1])
             && fields[2] == chart_id) {
-            return overlap.branch_id;
+            return {
+                overlap.branch_id,
+            };
         }
     }
     return {};
@@ -344,6 +419,12 @@ construct_full_circle_cell_authority(
                partition.overlaps.begin(),
                partition.overlaps.end(),
                overlap_requires_resolution);
+    const bool cap_is_pi =
+        parse_rational(
+            exact_rational_text(
+                Epeck::FT(cap_chord_ratio)),
+            "circle cap chord ratio")
+        == Rational(4);
     std::vector<std::string> cell_records;
     cell_records.reserve(partition.cells.size());
     for (const ParameterCell2& parameter_cell :
@@ -381,20 +462,26 @@ construct_full_circle_cell_authority(
                 == StationCellDecision::CAP_EXCEEDED) {
             for (const BranchPairDisposition2& run :
                  classification.material_runs) {
-                const std::string projection_id =
-                    cap_projection_for(
-                        partition,
-                        cell,
-                        run,
-                        CENTER_CHART_IDS[
-                            witness.chart]);
-                if (projection_id.empty()) {
+                std::vector<std::string>
+                    projection_ids =
+                        cap_projections_for(
+                            partition,
+                            cell,
+                            run,
+                            CENTER_CHART_IDS[
+                                witness.chart],
+                            cap_is_pi);
+                if (projection_ids.empty()) {
                     classification.decision =
                         StationCellDecision::UNRESOLVED;
                     break;
                 }
-                cap_projection_ids.push_back(
-                    projection_id);
+                cap_projection_ids.insert(
+                    cap_projection_ids.end(),
+                    std::make_move_iterator(
+                        projection_ids.begin()),
+                    std::make_move_iterator(
+                        projection_ids.end()));
             }
         }
         std::sort(

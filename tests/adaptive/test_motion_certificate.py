@@ -136,13 +136,48 @@ def test_circle_cap_exceedance_is_named() -> None:
         )
 
 
-def test_real_native_unresolved_is_named_and_const() -> None:
+def test_cross_support_cap_exceedance_is_named_and_const() -> None:
+    """Map a proved mixed-support 240-degree arc without mutating stock."""
     stock = _stock_2.Stock2(SQUARE, [])
     stock.subtract_disk(0.0, 5.0, 2.0)
     certifier = _custom_certifier(stock, 2.0)
     motion = ExactCircleMotion.build(
         Point2[WorldXY].build(1.0, 5.0),
         Vector2[WorldXY].build(1.0, 0.0),
+        False,
+    )
+    boundary_digest = certifier.canonical_boundary_digest
+    lineage_digest = certifier.stock_lineage_digest
+    contains = certifier.contains(5.0, 5.0)
+
+    with pytest.raises(EngagementCapExceededError, match="exceeds"):
+        certifier.certify(
+            operation_index=2,
+            operation_kind=OperationType.CUT,
+            motion=motion,
+            user_cap=EngagementCap.build(math.pi),
+            effective_cap=EngagementCap.build(math.pi),
+        )
+
+    assert certifier.canonical_boundary_digest == boundary_digest
+    assert certifier.stock_lineage_digest == lineage_digest
+    assert certifier.contains(5.0, 5.0) is contains
+
+
+def test_one_root_post_capsule_circle_is_named_unresolved_and_const() -> None:
+    """Keep the post-link algebraic trim-source boundary explicit.
+
+    A diagonal exact capsule introduces one-root trim vertices on its circular
+    endcaps. The current nonuniform full-circle source admits only trim
+    coordinates whose radicals collapse to rationals, so this partial circle
+    must remain unresolved without changing the certifier snapshot.
+    """
+    stock = _stock_2.Stock2(SQUARE, [])
+    stock.subtract_capsule(2.0, 2.0, 3.0, 3.0, 0.5)
+    certifier = _custom_certifier(stock, 0.5)
+    motion = ExactCircleMotion.build(
+        Point2[WorldXY].build(3.0, 3.0),
+        Vector2[WorldXY].build(0.25, 0.0),
         False,
     )
     boundary_digest = certifier.canonical_boundary_digest
