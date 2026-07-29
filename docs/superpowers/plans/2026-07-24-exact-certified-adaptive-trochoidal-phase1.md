@@ -2102,12 +2102,12 @@ neck-side frontier. Chain, branch, cycle, multi-component, relabelled-node,
 same-union ambiguity, overlapping-transit, stale/terminal cursor,
 refinement-identity, and single-build contracts pass.
 Graph/sample/frontier authority is built once; accepted-candidate cursor
-lookup no longer rescans the native sample table. Task 13C now accepts
-increasing and decreasing native sample order, retains the selected ordinal
-step through derived cursors, rejects direction reversal inside one lineage,
-and uniquely reconstructs a real reverse P–S candidate without orientation
-inference. The global ledger advances its real reverse route edge. Entry
-bootstrap and generator integration remain open.
+lookup no longer rescans the native sample table. Task 13C is published at
+`0c2f631`: it accepts increasing and decreasing native sample order, retains
+the selected ordinal step through derived cursors, rejects direction reversal
+inside one lineage, and uniquely reconstructs a real reverse P–S candidate
+without orientation inference. The global ledger advances its real reverse
+route edge. Entry bootstrap and generator integration remain open.
 
 **Files**
 

@@ -178,7 +178,7 @@ Commit: `feat(adaptive): add causal traversal`
 
 ### Task 3: Bidirectional finite-lattice spans
 
-**Status (2026-07-29): complete locally; publication pending.**
+**Status (2026-07-29): complete and published at `0c2f631`.**
 
 **Files**
 
