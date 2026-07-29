@@ -20,11 +20,23 @@ from compas_cgal.adaptive.entry import PreclearedEntry
 from compas_cgal.adaptive.entry import QualifiedBore
 from compas_cgal.adaptive.errors import GougeContainmentError
 from compas_cgal.adaptive.errors import DegenerateSegmentMotionError
+from compas_cgal.adaptive.errors import EngagementCapExceededError
+from compas_cgal.adaptive.errors import EngagementCapInfeasibleError
 from compas_cgal.adaptive.errors import InitialCandidatePhaseError
 from compas_cgal.adaptive.errors import InitialCandidateStateMismatchError
+from compas_cgal.adaptive.errors import InvalidCandidateFamilyError
 from compas_cgal.adaptive.errors import InvalidInitialCandidateTransactionError
+from compas_cgal.adaptive.errors import InvalidTraversalCommitError
+from compas_cgal.adaptive.errors import NeckTooTightError
+from compas_cgal.adaptive.errors import NoFeasibleCandidateError
 from compas_cgal.adaptive.errors import StaleInitialCandidateTransactionError
+from compas_cgal.adaptive.errors import UnresolvedMotionEventError
+from compas_cgal.adaptive.generator import TraversalCommit
+from compas_cgal.adaptive.generator import commit_traversal_candidate
+from compas_cgal.adaptive.generator import evaluate_first_feasible_candidate
+from compas_cgal.adaptive.generator import evaluate_traversal_candidate
 from compas_cgal.adaptive.generation_state import GenerationState
+from compas_cgal.adaptive.generation_state import TraversalCursorState
 from compas_cgal.adaptive.identity import InputIdentity
 from compas_cgal.adaptive.medial_axis import MedialAxis
 from compas_cgal.adaptive.motion import EngagementCap
@@ -48,6 +60,8 @@ from compas_cgal.adaptive.policy import PassageState
 from compas_cgal.adaptive.policy import TraversalPolicy
 from compas_cgal.adaptive.reachable_domain import ReachableDomain
 from compas_cgal.adaptive.stock_area import Stock2Area
+from compas_cgal.adaptive.transaction import CandidateEvaluator
+from compas_cgal.adaptive.transaction import CandidateTransaction
 from compas_cgal.adaptive.traversal import MatTraversalState
 from compas_cgal.adaptive.units import ChordBound
 from compas_cgal.adaptive.units import ClearanceZ
@@ -74,6 +88,11 @@ OUTER = (
 ENTRY_RADIUS = Fraction(9, 16)
 LAUNCH_GUIDE_RADIUS = Fraction(1, 32)
 LAUNCH_PROGRESS = Fraction(1, 2)
+BRANCH_TOOL_RADIUS = Fraction(1, 4)
+BRANCH_ENTRY_RADIUS = Fraction(35, 32)
+BRANCH_LAUNCH_GUIDE_RADIUS = Fraction(27, 64)
+BRANCH_GUIDE_RADIUS = Fraction(13, 32)
+BRANCH_PROGRESS = Fraction(1, 4)
 
 
 @dataclass(frozen=True)
@@ -84,6 +103,19 @@ class _LaunchFixture:
     candidates: tuple[MiddleCurveCandidate, ...]
     candidate: MiddleCurveCandidate
     evaluator: InitialCandidateEvaluator
+
+
+@dataclass(frozen=True)
+class _BranchFixture:
+    identity: InputIdentity
+    seeded_traversal: MatTraversalState
+    initial_evaluator: InitialCandidateEvaluator
+    launch_transaction: InitialCandidateTransaction
+    physical: GenerationState
+    traversal: MatTraversalState
+    candidate: MiddleCurveCandidate
+    alternatives: tuple[MiddleCurveCandidate, ...]
+    evaluator: CandidateEvaluator
 
 
 def _ring() -> CanonicalRingV1:
@@ -351,9 +383,149 @@ def _build_fixture(
     )
 
 
+def _build_branch_fixture() -> _BranchFixture:
+    """Build one exact terminal-launch-to-adjacent-edge contract fixture."""
+    tool_radius = ToolRadius.build(float(BRANCH_TOOL_RADIUS))
+    user_cap = EngagementCap.build(math.pi)
+    sampling_policy = _sampling_policy()
+    candidate_policy = _candidate_policy()
+    neck_policy = _neck_policy(user_cap)
+    depletion_policy = _depletion_policy()
+    traversal_policy = TraversalPolicy.build(forward_window=4)
+    cut_direction_policy = CutDirectionPolicy.build(CutIntent.CLIMB)
+    material_side = MaterialSide.OUTSIDE
+    axis = _axis(
+        sampling_policy=sampling_policy,
+        tool_radius=tool_radius,
+    )
+    inventory = NeckInventory.build(
+        axis=axis,
+        policy=neck_policy,
+    )
+    entry_edge = axis.edges[0]
+    traversal = MatTraversalState.seed(
+        axis=axis,
+        inventory=inventory,
+        policy=traversal_policy,
+        entry_edge_id=entry_edge.identity,
+        entry_node_id=entry_edge.source.identity,
+    )
+    launch_candidates = _candidates(
+        traversal=traversal,
+        candidate_policy=candidate_policy,
+        user_cap=user_cap,
+        circle_orientation=cut_direction_policy.circle_orientation(
+            material_side,
+        ),
+        terminal=True,
+    )
+    launch = next(
+        candidate
+        for candidate in launch_candidates
+        if candidate.traversal_decision.makes_cursor_terminal
+        and candidate.guide_radius == BRANCH_LAUNCH_GUIDE_RADIUS
+        and candidate.phase_index == 2
+        and candidate.proposal.generator_site.kind == "point"
+        and candidate.proposal.generator_site.source == Point2[WorldXY].build(2.0, 2.0)
+    )
+    identity = _identity(
+        candidate=launch,
+        reachable_domain=ReachableDomain.build(
+            design_boundary=_ring(),
+            holes=(),
+            tool_radius=tool_radius,
+        ),
+        user_cap=user_cap,
+        sampling_policy=sampling_policy,
+        candidate_policy=candidate_policy,
+        neck_policy=neck_policy,
+        depletion_policy=depletion_policy,
+        traversal_policy=traversal_policy,
+        cut_direction_policy=cut_direction_policy,
+        cut_plane=_cut_plane(),
+        entry_radius=BRANCH_ENTRY_RADIUS,
+        process_identity=b"task-13e-branch-bore-process-v1",
+        evidence_bytes=b"task-13e-branch-bore-evidence-v1",
+    )
+    initial_evaluator = InitialCandidateEvaluator.build(
+        input_identity=identity,
+        material_side=material_side,
+    )
+    launch_transaction = initial_evaluator.evaluate(
+        traversal,
+        launch,
+    )
+    physical, traversal_after = initial_evaluator.commit(
+        traversal,
+        launch_transaction,
+    )
+    branch_parent = traversal_after.activate_next()
+    active = branch_parent.active_cursor
+    span = MiddleCurveSpan.build(
+        axis=axis,
+        cursor_before=active.cursor,
+        cursor_limit=active.terminal_cursor,
+    )
+    full_cap = FullCapDecision.build(
+        user_cap=user_cap,
+        effective_cap=user_cap,
+    )
+    branch_candidates = enumerate_middle_curve_candidates(
+        span=span,
+        policy=candidate_policy,
+        circle_orientation=cut_direction_policy.circle_orientation(
+            material_side,
+        ),
+        neck_scope=branch_parent.neck_scope,
+        effective_cap_decision=full_cap,
+        makes_cursor_terminal_at_limit=True,
+    )
+    candidate = next(
+        candidate
+        for candidate in branch_candidates
+        if candidate.spatial_progress == BRANCH_PROGRESS
+        and candidate.guide_radius == BRANCH_GUIDE_RADIUS
+        and candidate.phase_index == 2
+        and candidate.proposal.generator_site.kind == "point"
+        and candidate.proposal.generator_site.source == Point2[WorldXY].build(2.0, 2.0)
+    )
+    alternatives = tuple(
+        alternative
+        for alternative in branch_candidates
+        if alternative.spatial_progress == candidate.spatial_progress and alternative.guide_radius == candidate.guide_radius and alternative.identity != candidate.identity
+    )
+    evaluator = CandidateEvaluator.build(
+        reachable_domain=identity.reachable_domain,
+        tool_radius=identity.tool_radius,
+        user_cap=identity.user_cap,
+        candidate_policy=identity.candidate_policy,
+        neck_policy=identity.neck_policy,
+        depletion_policy=identity.depletion_policy,
+        cut_direction_policy=identity.cut_direction_policy,
+        cut_z=identity.cut_plane.cut_z,
+        material_side=material_side,
+    )
+    return _BranchFixture(
+        identity=identity,
+        seeded_traversal=traversal,
+        initial_evaluator=initial_evaluator,
+        launch_transaction=launch_transaction,
+        physical=physical,
+        traversal=branch_parent,
+        candidate=candidate,
+        alternatives=alternatives,
+        evaluator=evaluator,
+    )
+
+
 @pytest.fixture(scope="module")
 def launch() -> _LaunchFixture:
     return _build_fixture()
+
+
+@pytest.fixture(scope="module")
+def branch() -> _BranchFixture:
+    return _build_branch_fixture()
 
 
 def _terminal_candidate(
@@ -848,6 +1020,369 @@ def test_entry_launch_rejects_child_with_two_advanced_cursors(
         replace(
             transaction,
             traversal_after=two_advanced,
+        )
+
+
+def test_branch_switch_commit_binds_both_state_axes(
+    branch: _BranchFixture,
+) -> None:
+    """Certify one real adjacent-edge switch through the Task 12 proof path.
+
+    The terminal launch leaves the physical cursor on its completed edge,
+    while deterministic route activation authorizes another exact edge. The
+    continuation must certify one direct link then one circle and atomically
+    bind both physical and global parent/child identities.
+    """
+    physical_edge_before = branch.physical.traversal.edge_id
+    global_edge_before = branch.traversal.active_cursor.route_step.edge_id
+
+    transaction = evaluate_traversal_candidate(
+        evaluator=branch.evaluator,
+        physical=branch.physical,
+        traversal=branch.traversal,
+        candidate=branch.candidate,
+    )
+    physical_after, traversal_after, commit = commit_traversal_candidate(
+        evaluator=branch.evaluator,
+        physical=branch.physical,
+        traversal=branch.traversal,
+        transaction=transaction,
+    )
+
+    changed_cursors = tuple(
+        index
+        for index, (before, after) in enumerate(
+            zip(
+                branch.traversal.cursors,
+                traversal_after.cursors,
+                strict=True,
+            )
+        )
+        if before.canonical_bytes != after.canonical_bytes
+    )
+    assert physical_edge_before != global_edge_before
+    assert type(transaction) is CandidateTransaction
+    assert type(commit) is TraversalCommit
+    assert transaction.link_witness.operation_index + 1 == transaction.circle_witness.operation_index
+    assert transaction.parent_state_digest == branch.physical.digest
+    assert transaction.result_state_digest == physical_after.digest
+    assert physical_after.traversal == transaction.traversal_after
+    assert commit.physical_parent_digest == branch.physical.digest
+    assert commit.physical_child_digest == physical_after.digest
+    assert commit.traversal_before == branch.traversal
+    assert commit.traversal_after == traversal_after
+    assert commit.transaction == transaction
+    assert changed_cursors == (branch.traversal.active_route_index,)
+    assert traversal_after.active_cursor.accepted_candidate_count == 1
+    assert branch.traversal.pending_transit is None
+
+
+def test_branch_switch_commit_rejects_stale_and_cross_wired_axes(
+    branch: _BranchFixture,
+) -> None:
+    """Reject independently valid physical or global children from other steps.
+
+    Content-addressing is useful only when the commit closes the square. A
+    stale global parent, the unchanged physical parent, or a global child
+    advanced by another exact candidate must fail before it can acquire one
+    traversal-commit identity.
+    """
+    transaction = evaluate_traversal_candidate(
+        evaluator=branch.evaluator,
+        physical=branch.physical,
+        traversal=branch.traversal,
+        candidate=branch.candidate,
+    )
+    physical_after, traversal_after, _ = commit_traversal_candidate(
+        evaluator=branch.evaluator,
+        physical=branch.physical,
+        traversal=branch.traversal,
+        transaction=transaction,
+    )
+    stale_global = branch.traversal.advance(branch.candidate)
+
+    with pytest.raises(
+        InvalidTraversalCommitError,
+        match="physical child",
+    ):
+        TraversalCommit.build(
+            physical_before=branch.physical,
+            traversal_before=branch.traversal,
+            transaction=transaction,
+            physical_after=branch.physical,
+            traversal_after=traversal_after,
+        )
+    with pytest.raises(
+        InvalidTraversalCommitError,
+        match="global child",
+    ):
+        TraversalCommit.build(
+            physical_before=branch.physical,
+            traversal_before=branch.traversal,
+            transaction=transaction,
+            physical_after=physical_after,
+            traversal_after=branch.traversal.advance(
+                branch.alternatives[0],
+            ),
+        )
+    with pytest.raises(
+        InvalidTraversalCommitError,
+        match="global parent",
+    ):
+        commit_traversal_candidate(
+            evaluator=branch.evaluator,
+            physical=branch.physical,
+            traversal=stale_global,
+            transaction=transaction,
+        )
+
+
+def _ordered_branch_family(
+    branch: _BranchFixture,
+) -> tuple[MiddleCurveCandidate, ...]:
+    return branch.candidate.policy.order_candidates(
+        (branch.candidate, *branch.alternatives),
+        key=lambda candidate: candidate.order_key,
+    )
+
+
+def _first_causal_neck_family(
+    branch: _BranchFixture,
+) -> tuple[MatTraversalState, tuple[MiddleCurveCandidate, ...]]:
+    traversal = branch.traversal
+    while traversal.pending_transit is None:
+        terminal = next(
+            candidate
+            for candidate in _candidates(
+                traversal=traversal,
+                candidate_policy=branch.identity.candidate_policy,
+                user_cap=branch.identity.user_cap,
+                circle_orientation=branch.identity.cut_direction_policy.circle_orientation(
+                    branch.evaluator.material_side,
+                ),
+                terminal=True,
+            )
+            if candidate.traversal_decision.makes_cursor_terminal
+        )
+        traversal = traversal.advance(terminal).activate_next()
+    passage = traversal.pending_transit.passage(branch.physical.passages)
+    cap = passage.propose_cap_decision(branch.identity.neck_policy)
+    active = traversal.active_cursor
+    return traversal, enumerate_middle_curve_candidates(
+        span=MiddleCurveSpan.build(
+            axis=traversal.authority.axis,
+            cursor_before=active.cursor,
+            cursor_limit=active.terminal_cursor,
+        ),
+        policy=branch.identity.candidate_policy,
+        circle_orientation=branch.identity.cut_direction_policy.circle_orientation(
+            branch.evaluator.material_side,
+        ),
+        neck_scope=traversal.neck_scope,
+        effective_cap_decision=cap,
+        makes_cursor_terminal_at_limit=True,
+    )
+
+
+def test_finite_search_uses_order_and_stops_after_first_feasible(
+    branch: _BranchFixture,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Continue only proved local rejection, then stop at the dominant winner."""
+    family = _ordered_branch_family(branch)
+    winner = family[4]
+    accepted = branch.evaluator.evaluate_from_cursor(
+        branch.physical,
+        TraversalCursorState.before(winner.traversal_decision),
+        winner,
+    )
+    calls: list[bytes] = []
+    failures = (
+        GougeContainmentError("proved gouge"),
+        EngagementCapExceededError("proved cap"),
+        DegenerateSegmentMotionError("proved zero link"),
+        EngagementCapExceededError("proved cap"),
+    )
+
+    def controlled_trial(
+        self: CandidateEvaluator,
+        state: GenerationState,
+        traversal_before: TraversalCursorState,
+        candidate: MiddleCurveCandidate,
+    ) -> CandidateTransaction:
+        calls.append(candidate.identity)
+        index = family.index(candidate)
+        if index < len(failures):
+            raise failures[index]
+        if candidate == winner:
+            return accepted
+        raise AssertionError("lower-ranked candidate evaluated after winner")
+
+    monkeypatch.setattr(
+        CandidateEvaluator,
+        "evaluate_from_cursor",
+        controlled_trial,
+    )
+
+    selected = evaluate_first_feasible_candidate(
+        evaluator=branch.evaluator,
+        physical=branch.physical,
+        traversal=branch.traversal,
+        candidates=family,
+    )
+
+    assert selected == accepted
+    assert calls == [candidate.identity for candidate in family[:5]]
+
+
+def test_finite_search_rejects_noncanonical_family_order(
+    branch: _BranchFixture,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Reject reordered materialization before dispatching any exact proof."""
+    calls: list[bytes] = []
+
+    def forbidden_trial(
+        self: CandidateEvaluator,
+        state: GenerationState,
+        traversal_before: TraversalCursorState,
+        candidate: MiddleCurveCandidate,
+    ) -> CandidateTransaction:
+        calls.append(candidate.identity)
+        raise AssertionError("invalid family reached the proof engine")
+
+    monkeypatch.setattr(
+        CandidateEvaluator,
+        "evaluate_from_cursor",
+        forbidden_trial,
+    )
+
+    with pytest.raises(InvalidCandidateFamilyError, match="invariant order"):
+        evaluate_first_feasible_candidate(
+            evaluator=branch.evaluator,
+            physical=branch.physical,
+            traversal=branch.traversal,
+            candidates=tuple(reversed(_ordered_branch_family(branch))),
+        )
+
+    assert calls == []
+
+
+def test_finite_search_propagates_unresolved_authority_immediately(
+    branch: _BranchFixture,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Never convert an incomplete exact event partition into infeasibility."""
+    family = _ordered_branch_family(branch)
+    calls: list[bytes] = []
+
+    def unresolved_second_trial(
+        self: CandidateEvaluator,
+        state: GenerationState,
+        traversal_before: TraversalCursorState,
+        candidate: MiddleCurveCandidate,
+    ) -> CandidateTransaction:
+        calls.append(candidate.identity)
+        if candidate == family[0]:
+            raise GougeContainmentError("proved gouge")
+        raise UnresolvedMotionEventError("unresolved exact event partition")
+
+    monkeypatch.setattr(
+        CandidateEvaluator,
+        "evaluate_from_cursor",
+        unresolved_second_trial,
+    )
+
+    with pytest.raises(
+        UnresolvedMotionEventError,
+        match="unresolved exact event",
+    ):
+        evaluate_first_feasible_candidate(
+            evaluator=branch.evaluator,
+            physical=branch.physical,
+            traversal=branch.traversal,
+            candidates=family,
+        )
+
+    assert calls == [family[0].identity, family[1].identity]
+
+
+@pytest.mark.parametrize(
+    ("mixed", "error_type"),
+    (
+        (False, EngagementCapInfeasibleError),
+        (True, NoFeasibleCandidateError),
+    ),
+)
+def test_finite_search_names_non_neck_exhaustion(
+    branch: _BranchFixture,
+    monkeypatch: pytest.MonkeyPatch,
+    mixed: bool,
+    error_type: type[RuntimeError],
+) -> None:
+    """Distinguish cap-only process infeasibility from mixed exact rejection."""
+    family = _ordered_branch_family(branch)
+
+    def reject_trial(
+        self: CandidateEvaluator,
+        state: GenerationState,
+        traversal_before: TraversalCursorState,
+        candidate: MiddleCurveCandidate,
+    ) -> CandidateTransaction:
+        if mixed and candidate == family[0]:
+            raise GougeContainmentError("proved gouge")
+        raise EngagementCapExceededError("proved cap")
+
+    monkeypatch.setattr(
+        CandidateEvaluator,
+        "evaluate_from_cursor",
+        reject_trial,
+    )
+
+    with pytest.raises(
+        error_type,
+        match=rf"attempts={len(family)}; cap={len(family) - int(mixed)}; "
+        rf"gouge={int(mixed)}; degenerate-link=0",
+    ):
+        evaluate_first_feasible_candidate(
+            evaluator=branch.evaluator,
+            physical=branch.physical,
+            traversal=branch.traversal,
+            candidates=family,
+        )
+
+
+def test_finite_search_names_causal_neck_cap_exhaustion(
+    branch: _BranchFixture,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Report cap-only failure under authenticated neck scope as too tight."""
+    traversal, family = _first_causal_neck_family(branch)
+
+    def reject_cap(
+        self: CandidateEvaluator,
+        state: GenerationState,
+        traversal_before: TraversalCursorState,
+        candidate: MiddleCurveCandidate,
+    ) -> CandidateTransaction:
+        raise EngagementCapExceededError("proved neck cap")
+
+    monkeypatch.setattr(
+        CandidateEvaluator,
+        "evaluate_from_cursor",
+        reject_cap,
+    )
+
+    with pytest.raises(
+        NeckTooTightError,
+        match=rf"attempts={len(family)}; cap={len(family)}; gouge=0; "
+        r"degenerate-link=0",
+    ):
+        evaluate_first_feasible_candidate(
+            evaluator=branch.evaluator,
+            physical=branch.physical,
+            traversal=traversal,
+            candidates=family,
         )
 
 

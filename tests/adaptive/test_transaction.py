@@ -1107,6 +1107,41 @@ def test_commit_replays_winner_and_advances_every_owner_together() -> None:
     assert committed.traversal == transaction.traversal_after
 
 
+def test_explicit_cursor_trial_is_byte_identical_to_same_edge_api() -> None:
+    """Keep one deciding engine when global traversal supplies the cursor.
+
+    The Task 13 branch-switch consumer needs to authenticate a cursor that may
+    differ from the last physical edge. On the existing same-edge path, the
+    explicit-cursor evaluation and commit must remain byte-identical to the
+    Task 12 API before any cross-edge behavior is admitted.
+    """
+    fixture = _state_fixture()
+    evaluator = _evaluator(fixture.identity)
+
+    existing = evaluator.evaluate(
+        fixture.state,
+        fixture.second,
+    )
+    explicit = evaluator.evaluate_from_cursor(
+        fixture.state,
+        fixture.state.traversal,
+        fixture.second,
+    )
+    existing_child = evaluator.commit(
+        fixture.state,
+        existing,
+    )
+    explicit_child = evaluator.commit_from_cursor(
+        fixture.state,
+        fixture.state.traversal,
+        explicit,
+    )
+
+    assert explicit.canonical_bytes == existing.canonical_bytes
+    assert explicit_child.digest == existing_child.digest
+    assert explicit_child.operations == existing_child.operations
+
+
 def test_commit_rejects_stale_parent_before_native_replay() -> None:
     """Prevent an accepted candidate from committing after state advances.
 

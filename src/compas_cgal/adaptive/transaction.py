@@ -358,7 +358,41 @@ class CandidateEvaluator:
             EngagementCapExceededError: If either exact motion exceeds cap.
             UnresolvedMotionEventError: If either event proof is incomplete.
         """
-        transaction, _ = self._evaluate_trial(state, candidate)
+        return self.evaluate_from_cursor(
+            state,
+            state.traversal,
+            candidate,
+        )
+
+    def evaluate_from_cursor(
+        self,
+        state: GenerationState,
+        traversal_before: TraversalCursorState,
+        candidate: MiddleCurveCandidate,
+    ) -> CandidateTransaction:
+        """Evaluate through one explicitly authenticated physical cursor.
+
+        Args:
+            state: Immutable physical parent snapshot.
+            traversal_before: Active MAT cursor authorized by the caller's
+                global traversal state.
+            candidate: Exact finite-lattice proposal beginning at that cursor.
+
+        Returns:
+            Content-addressed joint link-and-circle evidence.
+
+        Raises:
+            CandidateStateMismatchError: If physical state, cursor, candidate,
+                or evaluator authority disagree.
+            GougeContainmentError: If either cutter sweep leaves the pocket.
+            EngagementCapExceededError: If either exact motion exceeds cap.
+            UnresolvedMotionEventError: If either event proof is incomplete.
+        """
+        transaction, _ = self._evaluate_trial(
+            state,
+            traversal_before,
+            candidate,
+        )
         return transaction
 
     def commit(
@@ -380,12 +414,43 @@ class CandidateEvaluator:
             InvalidCandidateTransactionError: If independent evaluation does
                 not reproduce byte-identical evidence.
         """
-        if type(state) is not GenerationState or type(transaction) is not CandidateTransaction:
-            raise InvalidCandidateTransactionError("candidate commit requires exact state and transaction types.")
+        return self.commit_from_cursor(
+            state,
+            state.traversal,
+            transaction,
+        )
+
+    def commit_from_cursor(
+        self,
+        state: GenerationState,
+        traversal_before: TraversalCursorState,
+        transaction: CandidateTransaction,
+    ) -> GenerationState:
+        """Commit one winner from an explicitly authenticated MAT cursor.
+
+        Args:
+            state: Authoritative physical parent named by `transaction`.
+            traversal_before: Same active cursor used during evaluation.
+            transaction: Previously accepted immutable evidence.
+
+        Returns:
+            New authoritative physical child snapshot.
+
+        Raises:
+            StaleCandidateTransactionError: If the physical parent changed.
+            InvalidCandidateTransactionError: If types are foreign or
+                independent replay differs.
+            CandidateStateMismatchError: If the supplied cursor is stale.
+        """
+        if type(state) is not GenerationState or type(traversal_before) is not TraversalCursorState or type(transaction) is not CandidateTransaction:
+            raise InvalidCandidateTransactionError(
+                "candidate commit requires exact state, cursor, and transaction types.",
+            )
         if transaction.parent_state_digest != state.digest:
             raise StaleCandidateTransactionError("candidate transaction parent no longer names authoritative state.")
         reproduced, next_state = self._evaluate_trial(
             state,
+            traversal_before,
             transaction.candidate,
         )
         if reproduced.canonical_bytes != transaction.canonical_bytes:
@@ -395,10 +460,17 @@ class CandidateEvaluator:
     def _evaluate_trial(
         self,
         state: GenerationState,
+        traversal_before: TraversalCursorState,
         candidate: MiddleCurveCandidate,
     ) -> tuple[CandidateTransaction, GenerationState]:
-        self._validate_parent(state, candidate)
-        traversal_after = state.traversal.advance(candidate.traversal_decision)
+        self._validate_parent(
+            state,
+            traversal_before,
+            candidate,
+        )
+        traversal_after = traversal_before.advance(
+            candidate.traversal_decision,
+        )
         effective_cap, passage_after = self._effective_cap(state, candidate)
         phase_point = _phase_point(candidate)
         link_motion = ExactSegmentMotion.build(
@@ -475,10 +547,13 @@ class CandidateEvaluator:
     def _validate_parent(
         self,
         state: GenerationState,
+        traversal_before: TraversalCursorState,
         candidate: MiddleCurveCandidate,
     ) -> None:
-        if type(state) is not GenerationState or type(candidate) is not MiddleCurveCandidate:
-            raise CandidateStateMismatchError("candidate evaluation requires exact state and candidate types.")
+        if type(state) is not GenerationState or type(traversal_before) is not TraversalCursorState or type(candidate) is not MiddleCurveCandidate:
+            raise CandidateStateMismatchError(
+                "candidate evaluation requires exact state, cursor, and candidate types.",
+            )
         if candidate.policy != self.candidate_policy:
             raise CandidateStateMismatchError("candidate policy contradicts its evaluator.")
         expected_orientation = self.cut_direction_policy.circle_orientation(
@@ -499,7 +574,7 @@ class CandidateEvaluator:
         if any(witness.policy != self.depletion_policy for witness in stock.lineage[1:]):
             raise CandidateStateMismatchError("candidate parent depletion policy contradicts its evaluator.")
         self._validate_parent_operations(state)
-        state.traversal.advance(candidate.traversal_decision)
+        traversal_before.advance(candidate.traversal_decision)
 
     def _validate_parent_operations(
         self,

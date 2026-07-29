@@ -163,6 +163,39 @@ def test_real_native_unresolved_is_named_and_const() -> None:
     assert certifier.contains(5.0, 5.0) is contains
 
 
+def test_incomplete_native_segment_partition_is_named_unresolved(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Translate a closed native proof gap without discarding its cause."""
+
+    def incomplete_partition(
+        *args: object,
+    ) -> tuple[str, _continuous_tea_2.EventTrace2]:
+        raise _continuous_tea_2.IncompleteSegmentPartitionError(
+            "adjacent exact sheets disagree",
+        )
+
+    monkeypatch.setattr(
+        _continuous_tea_2,
+        "audit_segment_tea_event_exact",
+        incomplete_partition,
+    )
+
+    with pytest.raises(
+        UnresolvedMotionEventError,
+        match="operation 3.*IncompleteSegmentPartitionError",
+    ) as captured:
+        _certifier().certify(
+            operation_index=3,
+            operation_kind=OperationType.LINK,
+            motion=_clear_segment(),
+            user_cap=EngagementCap.build(math.pi),
+            effective_cap=EngagementCap.build(math.pi),
+        )
+
+    assert type(captured.value.__cause__) is (_continuous_tea_2.IncompleteSegmentPartitionError)
+
+
 def test_segment_certification_binds_exact_native_trace() -> None:
     certifier = _certifier()
     motion = _clear_segment()

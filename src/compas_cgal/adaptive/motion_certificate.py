@@ -285,28 +285,47 @@ class MotionCertifier:
             raise InvalidMotionCertificateError("operation kind and motion are incompatible.")
         if operation_kind is OperationType.CUT and type(motion) is not ExactCircleMotion:
             raise InvalidMotionCertificateError("operation kind and motion are incompatible.")
-        if type(motion) is ExactSegmentMotion:
-            verdict, trace = _continuous_tea_2.audit_segment_tea_event_exact(
-                self._stock,
-                motion.start.x,
-                motion.start.y,
-                motion.end.x,
-                motion.end.y,
-                self.tool_radius.value,
-                effective_cap.chord_ratio,
-            )
-        else:
-            circle = cast(ExactCircleMotion, motion)
-            verdict, trace = _continuous_tea_2.audit_full_circle_tea_event_exact(
-                self._stock,
-                circle.center.x,
-                circle.center.y,
-                circle.phase_vector.x,
-                circle.phase_vector.y,
-                circle.clockwise,
-                self.tool_radius.value,
-                effective_cap.chord_ratio,
-            )
+        try:
+            if type(motion) is ExactSegmentMotion:
+                verdict, trace = _continuous_tea_2.audit_segment_tea_event_exact(
+                    self._stock,
+                    motion.start.x,
+                    motion.start.y,
+                    motion.end.x,
+                    motion.end.y,
+                    self.tool_radius.value,
+                    effective_cap.chord_ratio,
+                )
+            else:
+                circle = cast(ExactCircleMotion, motion)
+                verdict, trace = _continuous_tea_2.audit_full_circle_tea_event_exact(
+                    self._stock,
+                    circle.center.x,
+                    circle.center.y,
+                    circle.phase_vector.x,
+                    circle.phase_vector.y,
+                    circle.clockwise,
+                    self.tool_radius.value,
+                    effective_cap.chord_ratio,
+                )
+        except (
+            _continuous_tea_2.EventPartitionVerificationError,
+            _continuous_tea_2.EventTraceVerificationError,
+            _continuous_tea_2.InvalidCapChordRatioError,
+            _continuous_tea_2.NonFiniteSegmentInputError,
+            _continuous_tea_2.NonPositiveToolRadiusError,
+            _continuous_tea_2.ZeroLengthSegmentMotionError,
+        ) as error:
+            raise InvalidMotionCertificateError(
+                f"operation {operation_index} violates the native event contract ({type(error).__name__}).",
+            ) from error
+        except (
+            _continuous_tea_2.BoundaryExtractionError,
+            _continuous_tea_2.EventSubstrateError,
+        ) as error:
+            raise UnresolvedMotionEventError(
+                f"operation {operation_index} has an unresolved exact event substrate ({type(error).__name__}).",
+            ) from error
         _validate_native_trace(verdict, trace)
         if verdict == "cap_exceeded":
             raise EngagementCapExceededError(f"operation {operation_index} exceeds its exact effective cap.")
