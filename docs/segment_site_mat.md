@@ -127,6 +127,13 @@ needed by every downstream traversal and engagement decision.
     against either L input orientation. Rectangle profile adoption remains
     pending; Task 10 now consumes the production L evidence through the typed
     neck-policy boundary described below.
+    Task 13A now retains those exact records in the native MAT owner and
+    projects all four locus variants plus every individual separating-cut
+    partition without changing the frozen 20-field tuple. The two production
+    L-pocket plateau necks each expose three canonical sides with partition
+    cardinalities `(6, 1, 1)`, rather than only their eight-edge union.
+    `NeckInventory` binds each typed side to its evidence digest and rejects a
+    same-union repartition or cross-wired locus against the retained owner.
     A catalog-fed rectangle orchestration carries the same owner architecture
     through its complete bounded graph:
     one adaptor traversal emits five S–S edges and six canonical nodes,
@@ -153,11 +160,11 @@ needed by every downstream traversal and engagement decision.
     respective frozen pre-cut stock before depletion and coverage. It also
     rebuilds exact neck owners and oriented passage/cap state; a genuine legal
     second passage remains rejected when its circle exceeds the reconstructed
-    `80 degrees` cap. Candidate selection has not yet been connected to
-    containment and engagement together. General
+    `80 degrees` cap. Task 12 connects isolated finite-candidate selection to
+    containment and engagement through atomic link/circle commit. General
     arbitrary-pocket traversal, arbitrary composite segment/segment cells,
-    rectangle neck evidence, arbitrary-pocket sampling/verdicts, and
-    complete end-to-end replay are not complete.
+    rectangle neck evidence, arbitrary-pocket sampling/verdicts, and complete
+    end-to-end replay are not complete.
 
     Treat the low-level tuple as the Task 9 producer boundary, not as the final
     adaptive-planner API. The maturity table below is the claim boundary.
@@ -258,13 +265,57 @@ certificate for every evidence record.
 - the two exact defining-site identities;
 - the SHA-256 digest of the exact evidence bytes;
 - the exact width class and comparison certificate;
-- the canonical separating-cut edge identities.
+- the canonical separating-cut edge union;
+- one closed typed exact locus; and
+- every canonical separating-cut side, including its partition ordinal and
+  evidence-bound identity.
 
 The aggregate then requires the complete canonical neck-owner inventory to
 equal the retained native owner's inventory and rejects any defining-site or
 cut-edge identity not owned by the same typed MAT. Exact evidence therefore
 cannot be replayed successfully and subsequently cross-wired onto another
 topology at the Python consumer boundary.
+
+### Exact sides are not a cut union
+
+The frozen 20-field numeric projection retains one sorted cut-edge union per
+neck because that is sufficient for compatibility and reporting. Causal
+traversal needs the stronger native fact: the complete partition of that cut.
+`SegmentSiteMedialAxis` therefore adds five read-only owner projections:
+
+- `neck_location_tags`;
+- `neck_location_edge_ids`;
+- `neck_location_node_ids`;
+- `neck_parameter_root_ids`; and
+- `neck_cut_edge_partitions`.
+
+They are derived directly from retained `MatNeckEvidenceV1` records. Python
+never decodes certificate bytes and never rematches reporting coordinates.
+`StrictEdgeNeckLocus`, `ClearanceEndpointNeckLocus`,
+`SharedVertexNeckLocus`, and `PlateauNeckLocus` form the closed typed locus
+union. Each `NeckSide` hashes:
+
+- the exact neck-evidence digest;
+- its canonical partition ordinal; and
+- its canonical edge-ID tuple.
+
+The ordinal is not cosmetic. Distinct certified sides can contain identical
+edge-ID sets in bridge-like synthetic records; dropping the ordinal would
+alias topologically different partitions. `ClassifiedNeck` requires at least
+two ordered sides, requires their union to equal the compatibility cut union,
+and embeds the locus plus every side in `classified-neck-v2` bytes.
+`NeckInventory` then reconstructs all expected native topology in one
+`O(Q + P)` batch, where `Q` is the number of necks and `P` is total partition
+membership. It rejects deleted, reordered, repartitioned, foreign-edge, and
+cross-wired topology before traversal begins.
+
+!!! warning "Three sides invalidate binary neck assumptions"
+
+    Both production L-pocket plateau necks have three exact partitions:
+    one six-edge component and two one-edge components. The flattened
+    eight-edge union cannot reveal which side was left or entered. Task 13
+    must carry the side identity in global traversal history; local motion
+    geometry or edge membership cannot recreate it afterwards.
 
 Each `ClassifiedNeck` creates independent forward and reverse
 `NeckPassage` values. A passage is immutable and admits exactly:
@@ -465,6 +516,10 @@ then depletes stock and adds coverage. Replay subsequently fails at the
 nonterminal-traversal boundary because other MAT edges remain untouched.
 Task 12 now applies the same proof order to isolated finite-candidate trials
 and commits only independently reproduced, byte-identical winner evidence.
+Task 13A additionally exposes the complete native neck loci and partitions as
+typed, evidence-bound values and proves the production three-side plateau
+topology survives input reversal. It does not yet decide which side the
+traversal occupies or authorize a crossing.
 This does **not** mean a Task 10 proposal is generally accepted:
 arbitrary-pocket neck-scope assignment, global candidate-loop traversal,
 terminal traversal, complete residual coverage, and the immutable replay
@@ -856,7 +911,7 @@ construction.
 | Engagement limit | stronger exact candidate-transaction contract; global loop incomplete | Analytic circle construction followed by bisection until `θmax − 0.001 <= θ <= θmax` radians | Exact rational chord surrogate and event-exact segment/full-circle partition. Segment verdicts bind ordered active branches and exact pair-cap dispositions. `event-exact-motion-oracle-v3` maps every nonuniform circle cell to an exact rational station, reuses the same stationary branch/pair theorem, and binds same-support material-run dispositions to chart-specific cap projections; unsupported cross-support cells remain unresolved. The uniform path also proves an exact circular sweep is disjoint from nonempty remote stock, closing zero-engagement entry recuts without sampling. Certified, exceeded, and unresolved outcomes remain distinct. Task 12 now delivers the reconstructed cap to both link and circle on isolated stock and discards the pair if either fails; the production `80 degrees` second circle is a gated negative. Task 13 must orchestrate this over the complete traversal |
 | Candidate spacing | stronger bounded-fixture contract; atomic acceptance gated, global search incomplete | Bisection along the middle curve | All nine adopted L edges emit exact-identity line/parabola stations with independent reporting-only spacing and sagitta refinement, deterministic CSR offsets, and structural equidistant/no-site-closer verdicts. Task 10 enumerates every declared dyadic spatial/radius lane, both exact generator sites, and every finite phase; re-evaluates P–S refinement on the focus/directrix parabola rather than its sample chord; merges duplicate values without losing level provenance; performs no feasibility bisection; and matches an independent exhaustive 72-cell oracle with byte-identical repeat order. Task 12 evaluates those immutable candidates transactionally and selects accepted evidence by exact progress/radius/identity order independent of completion order. Task 13 still must bind each family to global traversal and search exhaustion |
 | Machined state | stronger atomic contract; end-to-end loop incomplete | Ordered contour of prior machining disks; transition sweeps omitted from that contour model | Exact stock mutation and exact full-sweep coverage use ordered certify-before-deplete lineage. Task 11 adds the physically qualified precleared disk as a distinct first-and-once depletion witness; `coverage-certificate-v2` seeds the residual with its authenticated `EntryRadius` while lateral sweeps retain `ToolRadius`. Task 11A reconstructs fresh owners and cross-validates each proof plus initial/terminal snapshots. Task 12 makes the accepted boundary explicit: `GenerationState` hashes independently owned stock, coverage, phase, cursor, complete passage history, qualified cut depth, and operation prefix; losing trials mutate forks only, while commit independently reproduces the winner before returning a child state. Global terminal lineage remains pending |
-| Bottlenecks | stronger exact contract on the adopted L fixture; traversal-owned scope incomplete | Graph search, width, and heuristic cap reduction on first passage | A typed four-variant classifier composes exact profile minima with canonical separating cuts and deterministic ownership. Native classification compares algebraic widths to strictly ordered rational policy boundaries and certifies every comparison; equality stays in the narrower class. The adopted L graph emits exactly two reversal-invariant, replay-verified single-edge plateau restrictions at exact `width² = 4`, not fabricated strict roots. Task 10 binds each result to exact owner/sites/cut, creates independent forward/reverse passage state, permits only the three canonical advances to terminal, and seals every selected cap into candidate identity. Task 11A validates a submitted oriented owner/state transition and commits it only after unique candidate reconstruction; it deliberately does not infer scope from motion or edge membership. Task 13 must assign scope from global certified-side traversal. Rectangle profiles and arbitrary-pocket traversal remain pending |
+| Bottlenecks | stronger exact topology and policy contract on the adopted L fixture; traversal-owned scope incomplete | Graph search, width, and heuristic cap reduction on first passage | A typed four-variant classifier composes exact profile minima with canonical separating cuts and deterministic ownership. Native classification compares algebraic widths to strictly ordered rational policy boundaries and certifies every comparison; equality stays in the narrower class. The adopted L graph emits exactly two reversal-invariant plateau restrictions at exact `width² = 4`. Task 13A now retains their complete loci and all three sides `(6, 1, 1)`, binds stable side identities to evidence plus partition ordinal, preserves the existing cut union only as a cross-check, and rejects a same-union repartition. Task 10's forward/reverse passage state and Task 11A's submitted transition replay remain intact. Task 13 must still derive the occupied/crossed side from global traversal. Rectangle profiles and arbitrary-pocket traversal remain pending |
 | Validation | stronger exact local and atomic-state contracts; weaker end-to-end evidence | Dense engagement sampling for result plots; complete path and runtime experiments | Exact MAT/neck/engagement replay rejects mutation, truncation, domain mismatch, refinement drift, input-order drift, verdict/trace contradiction, omitted deciding authority, foreign neck ownership, reused passage state, and independent neck evidence/class/cap mutations. Typed contracts lock exact-ID projection, finite candidate cardinality, MATHSM geometry, passage/cap/traversal identity, containment, entry semantics, motion witnesses, and input identity. Task 12's 29 focused L-pocket contracts add authoritative cursor mismatch, isolated link/circle failure, real gouge rejection, stale parents, foreign cut depth and candidate/depletion/cap/cut-direction policy, unearned/discontinuous passage histories, cross-wired link/circle history and containment, deplete-before-certify mutation, reindexed/reordered bundles, duplicate/cross-policy winner sets, and permutation-invariant selection. Complete replay/path generation and exact residual proof remain planned |
 | Independent removal and thermal-response replay | incomplete; planned stronger validation breadth | Volumetric stock replay and thermal-response rendering are not part of the paper's reported validation | Task 14A will replay the authenticated artifact through a separately versioned tri-dexel stock consumer, compare bounded removal evidence, and render uncalibrated modeled thermal response. No integration result exists yet, and this consumer will not replace an exact certificate |
 | End-to-end evidence | weaker | Complete paths, figures, path-length gains, and 3–100 ms path-generation timings excluding Voronoi construction | Tasks 6–8 and 10–12 provide exact local engagement, typed proposals, gouge certification, qualified entry, motion witnesses, input identity, fresh-prefix replay, and atomic candidate commit. The production `80 degrees` second-passage candidate is correctly rejected rather than counted as progress, while an equal-cap control commits both link and circle. Untouched MAT edges remain nonterminal. Tasks 13–16 remain; no complete certified path, tri-dexel replay, Fig. 5 reproduction, or matched performance result yet |
@@ -914,6 +969,15 @@ traversals; replacing that simple end-to-end path with a bridge/articulation
 index is measurement-gated future work. This preserves Held and Pfeiffer's
 complete graph-linear bottleneck implementation as a real current performance
 advantage.
+
+Task 13A retains the already-built exact neck evidence in the MAT owner; it
+does not reconstruct the graph, rerun neck extraction, or decode CCAN.
+Typed inventory construction fetches each additive owner projection once and
+builds all loci and sides in `O(Q + P)`. An earlier per-neck whole-owner
+projection would have been `O(Q²)` and was removed before publication. This is
+a structural safeguard, not a planner timing result: Held and Pfeiffer retain
+the current end-to-end performance-evidence advantage until the complete
+certified generator and matched fixture benchmark exist.
 
 Exact width classification adds `Q × B` algebraic comparisons for `Q` neck
 records and `B` policy boundaries, plus canonical certificate serialization.

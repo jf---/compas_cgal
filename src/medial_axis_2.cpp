@@ -147,6 +147,56 @@ nested_bytes_tuple(const std::vector<std::vector<std::string>> &records) {
   return nb::tuple(result);
 }
 
+nb::tuple neck_location_tags(const SegmentSiteMatBundle2 &owner) {
+  nb::list result;
+  for (const MatNeckEvidenceV1 &record : owner.neck_evidence()) {
+    result.append(
+        bytes_value(mat_neck_location_tag(record.evidence().location())));
+  }
+  return nb::tuple(result);
+}
+
+nb::tuple neck_location_edge_ids(const SegmentSiteMatBundle2 &owner) {
+  nb::list result;
+  for (const MatNeckEvidenceV1 &record : owner.neck_evidence()) {
+    result.append(bytes_tuple(
+        mat_neck_location_edge_ids(record.evidence().location())));
+  }
+  return nb::tuple(result);
+}
+
+nb::tuple neck_location_node_ids(const SegmentSiteMatBundle2 &owner) {
+  nb::list result;
+  for (const MatNeckEvidenceV1 &record : owner.neck_evidence()) {
+    result.append(bytes_tuple(
+        mat_neck_location_node_ids(record.evidence().location())));
+  }
+  return nb::tuple(result);
+}
+
+nb::tuple neck_parameter_root_ids(const SegmentSiteMatBundle2 &owner) {
+  nb::list result;
+  for (const MatNeckEvidenceV1 &record : owner.neck_evidence()) {
+    const std::optional<std::string> parameter =
+        mat_neck_location_parameter_root_id(record.evidence().location());
+    if (parameter.has_value()) {
+      result.append(bytes_value(*parameter));
+    } else {
+      result.append(nb::none());
+    }
+  }
+  return nb::tuple(result);
+}
+
+nb::tuple neck_cut_edge_partitions(const SegmentSiteMatBundle2 &owner) {
+  nb::list result;
+  for (const MatNeckEvidenceV1 &record : owner.neck_evidence()) {
+    result.append(nested_bytes_tuple(
+        record.evidence().separating_cut().edge_partitions()));
+  }
+  return nb::tuple(result);
+}
+
 std::string from_bytes(const nb::bytes &value) {
   char *data = nullptr;
   Py_ssize_t size = 0;
@@ -316,6 +366,11 @@ NB_MODULE(_medial_axis_2, m) {
                    [](const SegmentSiteMatBundle2 &owner) {
                      return bytes_tuple(owner.neck_owner_ids());
                    })
+      .def_prop_ro("neck_location_tags", &neck_location_tags)
+      .def_prop_ro("neck_location_edge_ids", &neck_location_edge_ids)
+      .def_prop_ro("neck_location_node_ids", &neck_location_node_ids)
+      .def_prop_ro("neck_parameter_root_ids", &neck_parameter_root_ids)
+      .def_prop_ro("neck_cut_edge_partitions", &neck_cut_edge_partitions)
       .def_prop_ro("neck_defining_site_ids",
                    [](const SegmentSiteMatBundle2 &owner) {
                      return nested_bytes_tuple(owner.neck_defining_site_ids());

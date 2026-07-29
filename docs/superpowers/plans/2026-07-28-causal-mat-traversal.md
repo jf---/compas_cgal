@@ -39,14 +39,21 @@ pytest-testmon, Ruff, strict mypy, strict MkDocs.
 
 ### Task 1: Exact neck topology projection
 
+**Status (2026-07-29): implementation and focused gates complete; publication
+pending.**
+
 **Files**
 
 - Modify: `src/segment_site_mat_bundle.h`
 - Modify: `src/segment_site_mat_bundle.cpp`
+- Modify: `src/segment_site_neck_evidence.h`
+- Modify: `src/segment_site_neck_evidence.cpp`
+- Modify: `src/segment_site_neck_evidence_bytes.cpp`
 - Modify: `src/medial_axis_2.cpp`
 - Modify: `src/compas_cgal/_medial_axis_2.pyi`
 - Modify: `src/compas_cgal/adaptive/neck.py`
-- Modify: `src/compas_cgal/adaptive/errors.py`
+- Create: `src/compas_cgal/adaptive/neck_topology.py`
+- Test: `tests/native/task9_neck_evidence_gate.cpp`
 - Test: `tests/native/task9_mat_numeric_table_gate.cpp`
 - Test: `tests/adaptive/test_neck.py`
 
@@ -60,17 +67,18 @@ pytest-testmon, Ruff, strict mypy, strict MkDocs.
 - Typed four-variant Python neck locus.
 - `NeckSide` and complete `ClassifiedNeck.sides`.
 
-- [ ] **Step 1: Write native RED retention tests**
+- [x] **Step 1: Write native RED retention tests**
 
 Require exact evidence construction to retain all location fields and nested
-partitions after `SegmentSiteMatBundle2::build()`. The L gate must prove both
-plateau necks have three canonical partitions and that reversal produces the
-same records.
+partitions after `SegmentSiteMatBundle2::build()`. Native synthetic gates cover
+all four location variants and malformed endpoint projection. The L gate
+proves both plateau necks have three canonical partitions and that reversal
+produces the same records.
 
-- [ ] **Step 2: Write Python RED projection tests**
+- [x] **Step 2: Write Python RED projection tests**
 
-Require all four synthetic location variants to round-trip through the binding.
-For the production L owner, require:
+Require the generic native projection to cover all four synthetic location
+variants, then require the production L owner to cross the binding with:
 
 - two plateau loci;
 - three sides per neck;
@@ -79,13 +87,13 @@ For the production L owner, require:
 - deleted, reordered, duplicated, unknown-edge, and cross-wired partitions
   fail `InvalidNeckEvidenceError`.
 
-- [ ] **Step 3: Implement retained native topology**
+- [x] **Step 3: Implement retained native topology**
 
 Derive binding fields directly from each retained `MatNeckEvidenceV1`. Keep
 the exact evidence records or their complete derived topology inside
 `SegmentSiteMatBundle2`; never decode its canonical bytes.
 
-- [ ] **Step 4: Implement typed Python topology**
+- [x] **Step 4: Implement typed Python topology**
 
 Construct the closed neck-locus union, canonical `NeckSide` values, and
 cross-validated `ClassifiedNeck` fields. Keep the existing cut union as an
@@ -95,7 +103,7 @@ authority.
 - [ ] **Step 5: GREEN and publish the coherent stage**
 
 ```bash
-pixi run task9-mat-numeric-table-gate
+pixi run task9-mat-compile-gate
 pixi run pytest tests/adaptive/test_neck.py -n auto --testmon -q
 pixi run lint
 pixi run types-adaptive

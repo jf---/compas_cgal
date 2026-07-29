@@ -3,6 +3,7 @@
 #include "segment_site_catalog_neck.h"
 #include "segment_site_neck.h"
 
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <variant>
@@ -107,6 +108,17 @@ private:
   MatExactSquaredWidth2 squared_width_;
   MatNeckSeparatingCut2 separating_cut_;
 };
+
+std::string mat_neck_location_tag(const MatExactNeckLocation2 &location);
+
+std::vector<std::string>
+mat_neck_location_edge_ids(const MatExactNeckLocation2 &location);
+
+std::vector<std::string>
+mat_neck_location_node_ids(const MatExactNeckLocation2 &location);
+
+std::optional<std::string>
+mat_neck_location_parameter_root_id(const MatExactNeckLocation2 &location);
 
 std::vector<MatExactNeckEvidence2>
 exact_neck_evidence(const MatClearanceProfileGraph2 &bundle);

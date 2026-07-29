@@ -10,12 +10,14 @@
 SegmentSiteMatBundle2::SegmentSiteMatBundle2(
     MatProposalSamplingGraph2 sampled, CanonicalMatSiteCatalog2 catalog,
     std::string center_domain_digest, MatNumericMatTable2 numeric_table,
+    std::vector<MatNeckEvidenceV1> neck_evidence,
     std::vector<std::string> sample_parameter_ids,
     std::vector<std::string> neck_owner_ids,
     std::vector<std::vector<std::string>> neck_defining_site_ids)
     : sampled_(std::move(sampled)), catalog_(std::move(catalog)),
       center_domain_digest_(std::move(center_domain_digest)),
       numeric_table_(std::move(numeric_table)),
+      neck_evidence_(std::move(neck_evidence)),
       sample_parameter_ids_(std::move(sample_parameter_ids)),
       neck_owner_ids_(std::move(neck_owner_ids)),
       neck_defining_site_ids_(std::move(neck_defining_site_ids)) {}
@@ -69,7 +71,8 @@ SegmentSiteMatBundle2::build(const CanonicalReachInput2 &input,
   };
   return SegmentSiteMatBundle2(
       std::move(sampled), std::move(catalog), center_domain_digest,
-      std::move(numeric_table), std::move(sample_parameter_ids),
+      std::move(numeric_table), std::move(exact.neck_evidence),
+      std::move(sample_parameter_ids),
       std::move(neck_owner_ids), std::move(neck_defining_site_ids));
 }
 
@@ -101,6 +104,11 @@ std::vector<std::string> SegmentSiteMatBundle2::edge_ids() const {
     result.push_back(edge.edge_id);
   }
   return result;
+}
+
+const std::vector<MatNeckEvidenceV1> &
+SegmentSiteMatBundle2::neck_evidence() const noexcept {
+  return neck_evidence_;
 }
 
 const std::vector<std::string> &

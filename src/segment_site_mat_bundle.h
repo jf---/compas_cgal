@@ -22,6 +22,7 @@ public:
   const std::string &center_domain_digest() const noexcept;
   const MatNumericMatTable2 &numeric_table() const noexcept;
   std::vector<std::string> edge_ids() const;
+  const std::vector<MatNeckEvidenceV1> &neck_evidence() const noexcept;
   const std::vector<std::string> &sample_parameter_ids() const noexcept;
   const std::vector<std::string> &neck_owner_ids() const noexcept;
   const std::vector<std::vector<std::string>> &
@@ -39,6 +40,7 @@ private:
   SegmentSiteMatBundle2(
       MatProposalSamplingGraph2 sampled, CanonicalMatSiteCatalog2 catalog,
       std::string center_domain_digest, MatNumericMatTable2 numeric_table,
+      std::vector<MatNeckEvidenceV1> neck_evidence,
       std::vector<std::string> sample_parameter_ids,
       std::vector<std::string> neck_owner_ids,
       std::vector<std::vector<std::string>> neck_defining_site_ids);
@@ -47,6 +49,7 @@ private:
   CanonicalMatSiteCatalog2 catalog_;
   std::string center_domain_digest_;
   MatNumericMatTable2 numeric_table_;
+  std::vector<MatNeckEvidenceV1> neck_evidence_;
   std::vector<std::string> sample_parameter_ids_;
   std::vector<std::string> neck_owner_ids_;
   std::vector<std::vector<std::string>> neck_defining_site_ids_;

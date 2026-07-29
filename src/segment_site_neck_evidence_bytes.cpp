@@ -134,29 +134,25 @@ std::string canonical_neck_evidence(const MatExactNeckEvidence2 &evidence) {
       [&evidence](const auto &location) {
         using Location = std::decay_t<decltype(location)>;
         CanonicalFields fields = common_fields(evidence);
-        std::string tag;
+        const std::string tag = mat_neck_location_tag(evidence.location());
         if constexpr (std::is_same_v<Location, MatStrictEdgeNeckLocation2>) {
-          tag = "mat-neck-strict-edge-v1";
           fields.emplace_back("edge-id", location.edge_id());
           fields.emplace_back("parameter-root-id",
                               location.parameter_root_id());
         } else if constexpr (std::is_same_v<
                                  Location, MatClearanceEndpointNeckLocation2>) {
-          tag = "mat-neck-clearance-endpoint-v1";
           fields.emplace_back("edge-id", location.edge_id());
           fields.emplace_back("node-id", location.node_id());
           fields.emplace_back("endpoint",
                               canonical_endpoint(location.endpoint()));
         } else if constexpr (std::is_same_v<Location,
                                             MatSharedVertexNeckLocation2>) {
-          tag = "mat-neck-shared-vertex-v1";
           fields.emplace_back("node-id", location.node_id());
           fields.emplace_back(
               "minimizing-edge-ids",
               canonical_encode_sequence(location.minimizing_edge_ids()));
         } else {
           static_assert(std::is_same_v<Location, MatPlateauNeckLocation2>);
-          tag = "mat-neck-plateau-v1";
           fields.emplace_back("node-ids",
                               canonical_encode_sequence(location.node_ids()));
           fields.emplace_back("edge-ids",

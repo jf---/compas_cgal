@@ -2,6 +2,7 @@
 
 #include "segment_site_catalog.h"
 #include "segment_site_catalog_graph.h"
+#include "segment_site_mat_bundle.h"
 
 #include <algorithm>
 #include <array>
@@ -107,6 +108,40 @@ bool native_table_is_reversal_invariant() {
   return first == reversed;
 }
 
+bool bundle_retains_complete_exact_neck_topology() {
+  const SegmentSiteMatBundle2 owner = SegmentSiteMatBundle2::build(
+      l_shape_input(false), MatStationSpacingMm2::build(0.75),
+      MatSagittaBoundMm2::build(0.02), 32);
+  const SegmentSiteMatBundle2 reversed = SegmentSiteMatBundle2::build(
+      l_shape_input(true), MatStationSpacingMm2::build(0.75),
+      MatSagittaBoundMm2::build(0.02), 32);
+  const std::vector<MatNeckEvidenceV1> &evidence = owner.neck_evidence();
+  const std::vector<MatNeckEvidenceV1> &reversed_evidence =
+      reversed.neck_evidence();
+  if (evidence.size() != 2 || reversed_evidence.size() != evidence.size()) {
+    return false;
+  }
+  for (std::size_t index = 0; index < evidence.size(); ++index) {
+    const MatExactNeckEvidence2 &record = evidence[index].evidence();
+    const auto *plateau =
+        std::get_if<MatPlateauNeckLocation2>(&record.location());
+    const auto &partitions = record.separating_cut().edge_partitions();
+    if (plateau == nullptr || plateau->node_ids().size() != 2 ||
+        plateau->edge_ids().size() != 1 || partitions.size() != 3 ||
+        partitions[0].size() != 6 || partitions[1].size() != 1 ||
+        partitions[2].size() != 1 ||
+        evidence[index].canonical_bytes() !=
+            reversed_evidence[index].canonical_bytes() ||
+        partitions != reversed_evidence[index]
+                          .evidence()
+                          .separating_cut()
+                          .edge_partitions()) {
+      return false;
+    }
+  }
+  return true;
+}
+
 bool mismatched_neck_graph_fails_loudly() {
   const MatClearanceProfileGraph2 l_bundle =
       canonical_l_shape_mat_clearance_graph(l_shape_input(false),
@@ -128,5 +163,6 @@ bool mat_numeric_table_gate() {
          threshold_tool_radius_has_no_separating_neck() &&
          native_table_composes_existing_proposal_projection() &&
          native_table_is_reversal_invariant() &&
+         bundle_retains_complete_exact_neck_topology() &&
          mismatched_neck_graph_fails_loudly();
 }
