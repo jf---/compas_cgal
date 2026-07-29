@@ -2092,8 +2092,7 @@ divides the stage into exact topology projection, global traversal,
 bidirectional spans, launch, continuation, terminal replay, and publication
 gates.
 
-**Status (2026-07-29): Tasks 13A–13C published; Task 13D entry bootstrap
-complete with publication commit pending.**
+**Status (2026-07-29): Tasks 13A–13D published; global continuation next.**
 Task 13A is published at `d289f79`: the native owner retains all four exact
 neck-locus variants and every cut partition, and each production L plateau
 exposes three reversal-invariant sides `(6, 1, 1)`. Task 13B is published at
@@ -2112,8 +2111,9 @@ route edge. Task 13D now composes one real reverse P–S entry launch from
 pristine stock through qualified entry depletion, empty coverage, exact
 entry/design containment, post-entry motion certification, depletion,
 coverage, and exactly one global cursor advance. Independent commit requires
-byte-identical evidence; 15 focused launch contracts pass. Global continuation
-and generator integration remain open.
+byte-identical evidence; 15 focused launch contracts and all 501 adaptive tests
+pass. Task 13D is published at `d35410d`. Global continuation and generator
+integration remain open.
 
 **Files**
 

@@ -224,7 +224,7 @@ Commit: `feat(adaptive): traverse mat both ways`
 
 ### Task 4: Entry-circle bootstrap
 
-**Status (2026-07-29): complete; publication commit pending.** Fifteen focused
+**Status (2026-07-29): complete and published at `d35410d`.** Fifteen focused
 launch contracts and the complete 501-test adaptive suite pass.
 
 **Files**
