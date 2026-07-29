@@ -518,7 +518,7 @@ EventPartitionCertificate2 reconstruct(
             fields[1]);
     }
     if (certificate.source_kind
-        == "full-circle-boundary-pullbacks-v2") {
+        == "full-circle-boundary-pullbacks-v3") {
         const std::vector<std::string> fields =
             decode_string_sequence(
                 certificate.source_payload);
@@ -743,6 +743,27 @@ EventPartitionCertificate2 mutate_certificate_record(
             ? fibre->left_active_branches
             : fibre->right_active_branches;
         active.pop_back();
+    } else if (
+        mutation == "delete-pair-projection") {
+        const auto projection = std::find_if(
+            result.projections.begin(),
+            result.projections.end(),
+            [](const ProjectionRecord2& candidate) {
+                const std::vector<std::string> fields =
+                    decode_string_sequence(
+                        candidate.projection_id);
+                return fields.size() == 8
+                    && (
+                        fields.front()
+                            == "full-circle-pair-orientation-v1"
+                        || fields.front()
+                            == "full-circle-pair-cap-v2");
+            });
+        if (projection == result.projections.end()) {
+            throw EventPartitionVerificationError(
+                "certificate has no full-circle pair projection");
+        }
+        result.projections.erase(projection);
     } else if (
         mutation == "alter-degree"
         && !result.projections.empty()) {

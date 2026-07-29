@@ -278,7 +278,7 @@ construct_full_circle_boundary_pullback_partition(
             });
     }
     certificate.source_kind =
-        "full-circle-boundary-pullbacks-v2";
+        "full-circle-boundary-pullbacks-v3";
     certificate.source_payload =
         encode_string_sequence(
             {

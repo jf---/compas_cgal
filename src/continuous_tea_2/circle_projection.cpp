@@ -1,6 +1,7 @@
 #include "circle_projection.h"
 
 #include "circle_fibre_state.h"
+#include "circle_pair_projection.h"
 #include "event_certificate.h"
 #include "event_partition.h"
 #include "parameter_charts.h"
@@ -1107,6 +1108,18 @@ partition_full_circle_boundary_geometry(
                 });
         }
     }
+    FullCirclePairProjectionBundle2 pair_projections =
+        derive_full_circle_pair_cap_projections(
+            line_sources,
+            circle_sources,
+            cap_chord_ratio,
+            pullbacks);
+    tangencies.insert(
+        tangencies.end(),
+        std::make_move_iterator(
+            pair_projections.projections.begin()),
+        std::make_move_iterator(
+            pair_projections.projections.end()));
     EventPartitionCertificate2 certificate =
         partition_projections(tangencies);
     classify_full_circle_endpoint_fibres(
@@ -1119,6 +1132,12 @@ partition_full_circle_boundary_geometry(
         certificate.projections.end(),
         pullbacks.begin(),
         pullbacks.end());
+    certificate.projections.insert(
+        certificate.projections.end(),
+        std::make_move_iterator(
+            pair_projections.constants.begin()),
+        std::make_move_iterator(
+            pair_projections.constants.end()));
     for (ParameterCell2& cell :
          certificate.cells) {
         cell.disposition = "sign-invariant";

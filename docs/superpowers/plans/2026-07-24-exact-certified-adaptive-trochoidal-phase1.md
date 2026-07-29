@@ -1772,7 +1772,7 @@ stock remains. The old full-circle uniform path recognized clear engagement
 only when the complete stock was empty, so a valid reconstructed event
 partition still returned unresolved. `event-exact-motion-oracle-v2` introduced
 the lift from the current Epeck stock boundary and one-root endpoints into the
-sqrt-capable exact-region kernel; v3 retains it and certifies clear only when
+sqrt-capable exact-region kernel; v4 retains it and certifies clear only when
 the canonical full-circle sweep has empty regularized intersection with stock.
 Replay does not bypass the certifier with entry metadata.
 
@@ -1787,23 +1787,40 @@ proof order.
 That nonuniform circle exposed a second exact-oracle classification gap. A
 reconstructed four-chart event partition proves every algebraic change
 location, but not the engagement disposition of the open cells between them.
-`event-exact-motion-oracle-v3` maps each global rational cell witness to one
+`event-exact-motion-oracle-v4` maps each global rational cell witness to one
 owned quarter chart, constructs the exact rational cutter station, reuses the
 segment stationary branch/pair classifier, and requires a chart-specific cap
-projection for every same-support partial material run. Its
+projection for every partial material run. Same-support runs use the
+support-specific factor. Cross-support runs use pair-orientation resultants
+and, below `pi`, pair-cap resultants after removing the known-positive real
+chart denominator. Pair roots refine cells without being emitted as physical
+topology events. Its
 `FullCircleCellAuthority2` binds the generic partition, stock features,
 motion/cap inputs, complete stationary strata, dispositions, and projection
-identities under a distinct SHA-256 digest. Cross-support runs remain
-unresolved; the whole-motion cell authority never lets a local violation erase
-an unsupported cell.
+identities under a distinct SHA-256 digest. A missing factor leaves the
+dependent cell unresolved; the whole-motion authority never lets a local
+violation erase an unsupported cell.
 
-The first implementation repeated three full partition verifications, built
-every stationary cell twice, and extracted the stock boundary once per cell.
+The same-support implementation repeated three full partition verifications,
+built every stationary cell twice, and extracted the stock boundary once per
+cell.
 Passing verifiedness as `VerifiedEventPartition2`, constructing the authority
 once, moving the verified partition into the trace, and hoisting boundary
 extraction reduced bounded warm Release medians from 252 ms to 128 ms for a
 10-cell certificate and from 572 ms to 301 ms for a 43-cell cross-support
-audit on the Apple M1 Max. These are oracle-stage timings, not Held parity.
+audit on the Apple M1 Max. The broader v4 theorem measured 1,737.242 ms for a
+13-cell/576-projection concentric audit and 2,018.540 ms for a
+54-cell/452-projection cross-support audit over five warm calls. These are
+oracle-stage timings, not Held parity, and the current complete unordered-pair
+producer is a measured optimization obligation after terminal generation.
+
+The radius-1 Task 13F probe subsequently exposed a different admission gap.
+Its launch and next link certify, but link depletion creates exact one-root
+algebraic trim vertices. Uniform sweep intersection already consumes those
+coordinates; the nonuniform pullback source currently admits only trim
+vertices whose radicals collapse to rationals. The following circle therefore
+returns `full-circle-task5-blocked-v1`. Exact one-root source reconstruction,
+not rounding or lower-candidate search, is now a Task 13F prerequisite.
 
 Fresh neck replay now rebuilds `NeckInventory`, seeds both immutable
 orientations, resolves each recorded owner, and reconstructs the cap decision
