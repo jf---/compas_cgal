@@ -372,6 +372,13 @@ are now closed by exact pair-orientation and sub-pi pair-cap resultants under
 to freezing the fixture; searching lower cells past the unresolved fourth
 trial is forbidden.
 
+The approved prerequisite design is
+[`2026-07-29-one-root-full-circle-source-design.md`](../specs/2026-07-29-one-root-full-circle-source-design.md);
+its executable plan is
+[`2026-07-29-one-root-full-circle-source.md`](2026-07-29-one-root-full-circle-source.md).
+It uses the existing segment-oracle doctrine: norm roots refine the partition,
+but the original radical equation alone owns physical endpoint events.
+
 Prerequisite gate evidence (2026-07-29): the full circle-oracle file passed
 `17` tests; the affected motion/identity/replay/acceptance/generator slice
 passed `97`; the complete adaptive suite passed `521` in `230.33 s`; Ruff,
