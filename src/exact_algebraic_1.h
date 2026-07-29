@@ -28,5 +28,13 @@ std::string algebraic_root_id_v1(
 void validate_algebraic_root_intervals(
     const std::vector<AlgebraicRootRecord2>& roots);
 
+std::vector<std::string>
+one_root_physical_root_ids(
+    const EventPartitionCertificate2& certificate);
+
+std::vector<std::string>
+one_root_conjugate_root_ids(
+    const EventPartitionCertificate2& certificate);
+
 EventPartitionCertificate2 partition_integer_projections(
     const std::vector<ProjectionInput2>& projections);

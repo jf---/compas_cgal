@@ -113,7 +113,7 @@ def test_concentric_cleared_disk_certifies_every_nonuniform_cell() -> None:
     assert verdict == "certified"
     assert trace.exact_verdict == "certified"
     assert trace.whole_rim_disposition == "partial"
-    assert trace.oracle_strategy_version == "full-circle-cell-strata-exact-v2"
+    assert trace.oracle_strategy_version == "full-circle-cell-strata-exact-v3"
     assert trace.event_cell_count > 0
     assert trace.decision_authority_digest != trace.partition.canonical_digest
     assert hashlib.sha256(trace.decision_authority_bytes).digest() == trace.decision_authority_digest
@@ -467,6 +467,61 @@ def test_equal_cardinality_phase_seam_is_classified_as_mixed() -> None:
     assert seam.ccw_direction == "mixed"
     assert seam.cw_direction == "mixed"
     assert _continuous_tea_2.verify_event_partition(trace.partition).verdict.name == "CERTIFIED"
+
+
+def test_one_root_vertex_norm_filters_conjugates_before_topology() -> None:
+    """Retain a norm conjugate without inventing an endpoint event.
+
+    Two overlapping disks cross once inside the square and once below it.
+    Only the upper shared-radical vertex belongs to the regularized stock
+    boundary, while this cutter orbit reaches both algebraic conjugates. The
+    integer norm must retain both roots, but original-equation recheck may
+    attach endpoint topology only to the physical upper vertex.
+    """
+    stock = _stock_2.Stock2(SQUARE, [])
+    stock.subtract_disk(4.5, 0.2, 1.0)
+    stock.subtract_disk(5.5, 0.2, 1.0)
+
+    verdict, trace = _continuous_tea_2.audit_full_circle_tea_event_exact(
+        stock,
+        5.0,
+        0.2,
+        0.6,
+        0.0,
+        False,
+        0.6,
+        4.0,
+    )
+
+    one_root_projections = tuple(projection for projection in trace.partition.projections if projection.one_root_predicate is not None)
+    assert verdict == "certified"
+    assert trace.partition.source_kind == "full-circle-boundary-pullbacks-v4"
+    assert one_root_projections
+    physical_root_ids = set(
+        _continuous_tea_2.one_root_physical_root_ids(trace.partition),
+    )
+    conjugate_root_ids = set(
+        _continuous_tea_2.one_root_conjugate_root_ids(trace.partition),
+    )
+    physical_fibres = tuple(fibre for fibre in trace.partition.fibres if fibre.root_id in physical_root_ids)
+    conjugate_fibres = tuple(fibre for fibre in trace.partition.fibres if fibre.root_id in conjugate_root_ids)
+    assert physical_fibres
+    assert conjugate_fibres
+    assert any(any(event.kind == "endpoint-order" for event in fibre.events) for fibre in physical_fibres)
+    assert all(not any(event.kind == "endpoint-order" for event in fibre.events) for fibre in conjugate_fibres)
+    assert _continuous_tea_2.verify_event_partition(trace.partition).verdict.name == "CERTIFIED"
+
+    for mutation in (
+        "delete-one-root-predicate",
+        "alter-one-root-radicand",
+        "alter-one-root-rational-part",
+        "move-one-root-event-to-conjugate",
+    ):
+        mutated = _continuous_tea_2.mutate_certificate_record(
+            trace.partition,
+            mutation,
+        )
+        assert _continuous_tea_2.verify_event_partition(mutated).verdict.name == "UNRESOLVED_DEGENERACY"
 
 
 def test_phase_seam_rejects_conflicting_branch_local_multiplicity() -> None:

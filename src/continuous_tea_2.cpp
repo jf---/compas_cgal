@@ -1375,6 +1375,24 @@ NB_MODULE(_continuous_tea_2, m)
             &verify_event_partition),
         "certificate"_a);
     m.def(
+        "one_root_physical_root_ids",
+        [](const EventPartitionCertificate2&
+               certificate) {
+            return bytes_tuple(
+                one_root_physical_root_ids(
+                    certificate));
+        },
+        "certificate"_a);
+    m.def(
+        "one_root_conjugate_root_ids",
+        [](const EventPartitionCertificate2&
+               certificate) {
+            return bytes_tuple(
+                one_root_conjugate_root_ids(
+                    certificate));
+        },
+        "certificate"_a);
+    m.def(
         "order_full_circle_events",
         &order_full_circle_events,
         "verified_partition"_a,

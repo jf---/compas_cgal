@@ -4,12 +4,14 @@
 
 #include <algorithm>
 #include <array>
+#include <map>
 #include <string_view>
 #include <tuple>
 #include <utility>
 #include <vector>
 
 #include <CGAL/CORE/BigRat.h>
+#include <CGAL/Algebraic_structure_traits.h>
 #include <CGAL/Fraction_traits.h>
 #include <CGAL/Polynomial.h>
 #include <CGAL/Polynomial_traits_d.h>
@@ -84,7 +86,8 @@ Polynomial3Q variable(
 
 Polynomial3Q pullback(
     const ProjectionRecord2& projection,
-    int rim_variable)
+    int rim_variable,
+    const std::string& support_kind)
 {
     const Polynomial3Q motion = variable(0);
     const Polynomial3Q rim = variable(rim_variable);
@@ -101,7 +104,27 @@ Polynomial3Q pullback(
         }
         motion_power *= motion;
     }
-    return result;
+    if (support_kind == "line") {
+        return result;
+    }
+    if (support_kind != "circle") {
+        throw InvalidAlgebraicPolynomialError(
+            "full-circle pair pullback uses an unknown support kind");
+    }
+    const Polynomial3Q rim_denominator =
+        Polynomial3Q(Rational(1)) + rim * rim;
+    Polynomial3Q saturated;
+    using PolynomialTraits =
+        CGAL::Algebraic_structure_traits<
+            Polynomial3Q>;
+    if (!typename PolynomialTraits::Divides()(
+            rim_denominator,
+            result,
+            saturated)) {
+        throw InvalidAlgebraicPolynomialError(
+            "circle pair pullback lacks its exact rim denominator factor");
+    }
+    return saturated;
 }
 
 struct RimCoordinates {
@@ -371,24 +394,230 @@ void append_pair_projection(
 
 } // namespace
 
-FullCirclePairProjectionBundle2
-derive_full_circle_pair_cap_projections(
-    const std::vector<std::string>& line_sources,
-    const std::vector<std::string>& circle_sources,
-    const std::string& cap_chord_ratio,
-    const std::vector<ProjectionRecord2>& pullbacks)
+FullCirclePairRequest2::FullCirclePairRequest2(
+    std::string center_chart_id,
+    std::string first_feature_id,
+    std::string first_support_id,
+    std::string first_support_kind,
+    std::string first_rim_chart_id,
+    std::string second_feature_id,
+    std::string second_support_id,
+    std::string second_support_kind,
+    std::string second_rim_chart_id)
+    : center_chart_id_(std::move(center_chart_id)),
+      first_feature_id_(std::move(first_feature_id)),
+      first_support_id_(std::move(first_support_id)),
+      first_support_kind_(std::move(first_support_kind)),
+      first_rim_chart_id_(std::move(first_rim_chart_id)),
+      second_feature_id_(std::move(second_feature_id)),
+      second_support_id_(std::move(second_support_id)),
+      second_support_kind_(std::move(second_support_kind)),
+      second_rim_chart_id_(std::move(second_rim_chart_id))
 {
-    const Rational cap_ratio =
-        parse_rational(cap_chord_ratio,
-                       "full-circle pair cap chord ratio");
-    if (cap_ratio <= 0 || cap_ratio > 4) {
-        throw InvalidAlgebraicPolynomialError(
-            "full-circle pair cap chord ratio lies outside "
-            "(0, 4]");
+}
+
+FullCirclePairRequest2
+FullCirclePairRequest2::build(
+    std::string center_chart_id,
+    std::string first_feature_id,
+    std::string first_support_id,
+    std::string first_support_kind,
+    std::string first_rim_chart_id,
+    std::string second_feature_id,
+    std::string second_support_id,
+    std::string second_support_kind,
+    std::string second_rim_chart_id)
+{
+    const auto known_center_chart =
+        std::find(
+            CENTER_CHART_IDS.begin(),
+            CENTER_CHART_IDS.end(),
+            center_chart_id)
+        != CENTER_CHART_IDS.end();
+    const auto known_rim_chart =
+        [](const std::string& chart_id) {
+            return std::find(
+                       RIM_CHART_IDS.begin(),
+                       RIM_CHART_IDS.end(),
+                       chart_id)
+                != RIM_CHART_IDS.end();
+        };
+    const auto known_support_kind =
+        [](const std::string& support_kind) {
+            return support_kind == "line"
+                || support_kind == "circle";
+        };
+    if (!known_center_chart
+        || !known_rim_chart(first_rim_chart_id)
+        || !known_rim_chart(second_rim_chart_id)) {
+        throw InvalidFullCirclePairRequestError(
+            "full-circle pair request uses an unknown chart");
     }
+    if (first_feature_id.empty()
+        || first_support_id.empty()
+        || second_feature_id.empty()
+        || second_support_id.empty()
+        || !known_support_kind(first_support_kind)
+        || !known_support_kind(second_support_kind)) {
+        throw InvalidFullCirclePairRequestError(
+            "full-circle pair request has malformed feature identity");
+    }
+    if (first_feature_id == second_feature_id) {
+        throw InvalidFullCirclePairRequestError(
+            "full-circle pair request repeats one feature");
+    }
+    if (first_support_kind == second_support_kind
+        && first_support_id == second_support_id) {
+        throw InvalidFullCirclePairRequestError(
+            "full-circle pair request requires distinct supports");
+    }
+    const auto first_key =
+        std::tie(
+            first_feature_id,
+            first_support_kind,
+            first_support_id,
+            first_rim_chart_id);
+    const auto second_key =
+        std::tie(
+            second_feature_id,
+            second_support_kind,
+            second_support_id,
+            second_rim_chart_id);
+    if (second_key < first_key) {
+        std::swap(first_feature_id, second_feature_id);
+        std::swap(first_support_id, second_support_id);
+        std::swap(first_support_kind, second_support_kind);
+        std::swap(first_rim_chart_id, second_rim_chart_id);
+    }
+    return FullCirclePairRequest2(
+        std::move(center_chart_id),
+        std::move(first_feature_id),
+        std::move(first_support_id),
+        std::move(first_support_kind),
+        std::move(first_rim_chart_id),
+        std::move(second_feature_id),
+        std::move(second_support_id),
+        std::move(second_support_kind),
+        std::move(second_rim_chart_id));
+}
+
+FullCirclePairRequest2
+FullCirclePairRequest2::decode(
+    const std::string& canonical_source)
+{
+    std::vector<std::string> fields;
+    try {
+        fields = decode_string_sequence(
+            canonical_source);
+    } catch (const EventSubstrateError&) {
+        throw InvalidFullCirclePairRequestError(
+            "full-circle pair request is not one encoded sequence");
+    }
+    if (fields.size() != 10
+        || fields[0]
+            != "full-circle-active-pair-request-v1") {
+        throw InvalidFullCirclePairRequestError(
+            "full-circle pair request has malformed source fields");
+    }
+    FullCirclePairRequest2 result =
+        FullCirclePairRequest2::build(
+            fields[1],
+            fields[2],
+            fields[3],
+            fields[4],
+            fields[5],
+            fields[6],
+            fields[7],
+            fields[8],
+            fields[9]);
+    if (result.canonical_source()
+        != canonical_source) {
+        throw InvalidFullCirclePairRequestError(
+            "full-circle pair request is not canonical");
+    }
+    return result;
+}
+
+const std::string&
+FullCirclePairRequest2::center_chart_id() const
+{
+    return center_chart_id_;
+}
+
+const std::string&
+FullCirclePairRequest2::first_feature_id() const
+{
+    return first_feature_id_;
+}
+
+const std::string&
+FullCirclePairRequest2::first_support_id() const
+{
+    return first_support_id_;
+}
+
+const std::string&
+FullCirclePairRequest2::first_support_kind() const
+{
+    return first_support_kind_;
+}
+
+const std::string&
+FullCirclePairRequest2::first_rim_chart_id() const
+{
+    return first_rim_chart_id_;
+}
+
+const std::string&
+FullCirclePairRequest2::second_feature_id() const
+{
+    return second_feature_id_;
+}
+
+const std::string&
+FullCirclePairRequest2::second_support_id() const
+{
+    return second_support_id_;
+}
+
+const std::string&
+FullCirclePairRequest2::second_support_kind() const
+{
+    return second_support_kind_;
+}
+
+const std::string&
+FullCirclePairRequest2::second_rim_chart_id() const
+{
+    return second_rim_chart_id_;
+}
+
+std::string
+FullCirclePairRequest2::canonical_source() const
+{
+    return encode_string_sequence(
+        {
+            "full-circle-active-pair-request-v1",
+            center_chart_id_,
+            first_feature_id_,
+            first_support_id_,
+            first_support_kind_,
+            first_rim_chart_id_,
+            second_feature_id_,
+            second_support_id_,
+            second_support_kind_,
+            second_rim_chart_id_,
+        });
+}
+
+std::vector<std::string>
+full_circle_exhaustive_pair_requests(
+    const std::vector<std::string>& line_sources,
+    const std::vector<std::string>& circle_sources)
+{
     const std::vector<FullCircleFeatureSource> sources =
         feature_sources(line_sources, circle_sources);
-    FullCirclePairProjectionBundle2 result;
+    std::vector<std::string> requests;
     for (std::size_t first_index = 0;
          first_index < sources.size(); ++first_index) {
         for (std::size_t second_index = first_index + 1;
@@ -402,67 +631,174 @@ derive_full_circle_pair_cap_projections(
                 && first.support_id == second.support_id) {
                 continue;
             }
-            for (std::size_t center_index = 0;
-                 center_index < CENTER_CHART_IDS.size();
-                 ++center_index) {
-                const std::string center_chart =
-                    CENTER_CHART_IDS[center_index];
+            for (const std::string center_chart :
+                 CENTER_CHART_IDS) {
                 for (const std::string first_rim_chart :
                      RIM_CHART_IDS) {
                     for (const std::string
                              second_rim_chart :
                          RIM_CHART_IDS) {
-                        const Polynomial3Q first_pullback =
-                            pullback(pullback_for(
-                                         pullbacks, first,
-                                         center_chart,
-                                         first_rim_chart),
-                                     1);
-                        const Polynomial3Q second_pullback =
-                            pullback(pullback_for(
-                                         pullbacks, second,
-                                         center_chart,
-                                         second_rim_chart),
-                                     2);
-                        append_pair_projection(
-                            result,
-                            "full-circle-pair-orientation-"
-                            "v1",
-                            first, second, center_chart,
-                            center_index, first_rim_chart,
-                            second_rim_chart,
-                            eliminate(
-                                first_pullback,
-                                second_pullback,
-                                orientation_predicate(
-                                    rim_coordinates(
-                                        1, first_rim_chart),
-                                    rim_coordinates(
-                                        2,
-                                        second_rim_chart))));
-                        if (cap_ratio < Rational(4)) {
-                            append_pair_projection(
-                                result,
-                                "full-circle-pair-cap-v2",
-                                first, second, center_chart,
-                                center_index,
+                        requests.push_back(
+                            FullCirclePairRequest2::build(
+                                center_chart,
+                                first.feature_id,
+                                first.support_id,
+                                first.support_kind,
                                 first_rim_chart,
-                                second_rim_chart,
-                                eliminate(
-                                    first_pullback,
-                                    second_pullback,
-                                    cap_predicate(
-                                        rim_coordinates(
-                                            1,
-                                            first_rim_chart),
-                                        rim_coordinates(
-                                            2,
-                                            second_rim_chart),
-                                        cap_ratio)));
-                        }
+                                second.feature_id,
+                                second.support_id,
+                                second.support_kind,
+                                second_rim_chart)
+                                .canonical_source());
                     }
                 }
             }
+        }
+    }
+    std::sort(requests.begin(), requests.end());
+    requests.erase(
+        std::unique(requests.begin(), requests.end()),
+        requests.end());
+    return requests;
+}
+
+FullCirclePairProjectionBundle2
+derive_full_circle_pair_cap_projections(
+    const std::vector<std::string>& line_sources,
+    const std::vector<std::string>& circle_sources,
+    const std::string& cap_chord_ratio,
+    const std::vector<ProjectionRecord2>& pullbacks,
+    const std::vector<std::string>& pair_requests)
+{
+    const Rational cap_ratio =
+        parse_rational(cap_chord_ratio,
+                       "full-circle pair cap chord ratio");
+    if (cap_ratio <= 0 || cap_ratio > 4) {
+        throw InvalidAlgebraicPolynomialError(
+            "full-circle pair cap chord ratio lies outside "
+            "(0, 4]");
+    }
+    const std::vector<FullCircleFeatureSource> sources =
+        feature_sources(line_sources, circle_sources);
+    if (!std::is_sorted(
+            pair_requests.begin(),
+            pair_requests.end())
+        || std::adjacent_find(
+               pair_requests.begin(),
+               pair_requests.end())
+            != pair_requests.end()) {
+        throw InvalidFullCirclePairRequestError(
+            "full-circle pair requests are not a canonical set");
+    }
+    std::map<std::string, const FullCircleFeatureSource*>
+        source_by_feature;
+    for (const FullCircleFeatureSource& source :
+         sources) {
+        source_by_feature.emplace(
+            source.feature_id,
+            &source);
+    }
+    FullCirclePairProjectionBundle2 result;
+    for (const std::string& encoded_request :
+         pair_requests) {
+        const FullCirclePairRequest2 request =
+            FullCirclePairRequest2::decode(
+                encoded_request);
+        const auto first_found =
+            source_by_feature.find(
+                request.first_feature_id());
+        const auto second_found =
+            source_by_feature.find(
+                request.second_feature_id());
+        if (first_found == source_by_feature.end()
+            || second_found
+                == source_by_feature.end()) {
+            throw InvalidFullCirclePairRequestError(
+                "full-circle pair request names an unknown feature");
+        }
+        const FullCircleFeatureSource& first =
+            *first_found->second;
+        const FullCircleFeatureSource& second =
+            *second_found->second;
+        if (first.support_id
+                != request.first_support_id()
+            || first.support_kind
+                != request.first_support_kind()
+            || second.support_id
+                != request.second_support_id()
+            || second.support_kind
+                != request.second_support_kind()) {
+            throw InvalidFullCirclePairRequestError(
+                "full-circle pair request has inconsistent support identity");
+        }
+        const auto center_found =
+            std::find(
+                CENTER_CHART_IDS.begin(),
+                CENTER_CHART_IDS.end(),
+                request.center_chart_id());
+        const std::size_t center_index =
+            static_cast<std::size_t>(
+                std::distance(
+                    CENTER_CHART_IDS.begin(),
+                    center_found));
+        const Polynomial3Q first_pullback =
+            pullback(
+                pullback_for(
+                    pullbacks,
+                    first,
+                    request.center_chart_id(),
+                    request.first_rim_chart_id()),
+                1,
+                first.support_kind);
+        const Polynomial3Q second_pullback =
+            pullback(
+                pullback_for(
+                    pullbacks,
+                    second,
+                    request.center_chart_id(),
+                    request.second_rim_chart_id()),
+                2,
+                second.support_kind);
+        const RimCoordinates first_rim =
+            rim_coordinates(
+                1,
+                request.first_rim_chart_id());
+        const RimCoordinates second_rim =
+            rim_coordinates(
+                2,
+                request.second_rim_chart_id());
+        append_pair_projection(
+            result,
+            "full-circle-pair-orientation-v1",
+            first,
+            second,
+            request.center_chart_id(),
+            center_index,
+            request.first_rim_chart_id(),
+            request.second_rim_chart_id(),
+            eliminate(
+                first_pullback,
+                second_pullback,
+                orientation_predicate(
+                    first_rim,
+                    second_rim)));
+        if (cap_ratio < Rational(4)) {
+            append_pair_projection(
+                result,
+                "full-circle-pair-cap-v2",
+                first,
+                second,
+                request.center_chart_id(),
+                center_index,
+                request.first_rim_chart_id(),
+                request.second_rim_chart_id(),
+                eliminate(
+                    first_pullback,
+                    second_pullback,
+                    cap_predicate(
+                        first_rim,
+                        second_rim,
+                        cap_ratio)));
         }
     }
     return result;

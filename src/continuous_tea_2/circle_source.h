@@ -42,3 +42,13 @@ construct_full_circle_boundary_pullback_partition(
     const std::string& cap_chord_ratio,
     const std::vector<std::string>& line_sources,
     const std::vector<std::string>& circle_sources);
+
+EventPartitionCertificate2
+construct_full_circle_boundary_pullback_partition(
+    const std::string& stock_identity,
+    const std::vector<std::string>& motion_data,
+    const std::string& cutter_radius,
+    const std::string& cap_chord_ratio,
+    const std::vector<std::string>& line_sources,
+    const std::vector<std::string>& circle_sources,
+    const std::vector<std::string>& pair_requests);

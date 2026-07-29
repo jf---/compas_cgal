@@ -164,13 +164,14 @@ def test_cross_support_cap_exceedance_is_named_and_const() -> None:
     assert certifier.contains(5.0, 5.0) is contains
 
 
-def test_one_root_post_capsule_circle_is_named_unresolved_and_const() -> None:
-    """Keep the post-link algebraic trim-source boundary explicit.
+def test_one_root_post_capsule_circle_is_named_cap_exceedance_and_const() -> None:
+    """Certify a post-link algebraic boundary without mutating its snapshot.
 
-    A diagonal exact capsule introduces one-root trim vertices on its circular
-    endcaps. The current nonuniform full-circle source admits only trim
-    coordinates whose radicals collapse to rationals, so this partial circle
-    must remain unresolved without changing the certifier snapshot.
+    The diagonal capsule introduces shared-radical trim vertices. At the
+    outward phase the cutter and cleared endcap are radius-1/2 circles whose
+    centres are 1/4 apart, leaving more than pi of the cutter rim in material.
+    The exact one-root source must prove that violation rather than report an
+    unresolved source-admission boundary.
     """
     stock = _stock_2.Stock2(SQUARE, [])
     stock.subtract_capsule(2.0, 2.0, 3.0, 3.0, 0.5)
@@ -184,7 +185,7 @@ def test_one_root_post_capsule_circle_is_named_unresolved_and_const() -> None:
     lineage_digest = certifier.stock_lineage_digest
     contains = certifier.contains(5.0, 5.0)
 
-    with pytest.raises(UnresolvedMotionEventError, match="unresolved"):
+    with pytest.raises(EngagementCapExceededError, match="exceeds"):
         certifier.certify(
             operation_index=2,
             operation_kind=OperationType.CUT,

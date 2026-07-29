@@ -10,6 +10,7 @@
 #include <stdexcept>
 #include <string_view>
 #include <tuple>
+#include <utility>
 
 namespace {
 
@@ -124,11 +125,28 @@ std::string canonical_projection(
                 projection
                     .signed_predicate_coefficients));
     }
+    if (projection.one_root_predicate.has_value()) {
+        fields.push_back(
+            encode_string_sequence(
+                projection.one_root_predicate
+                    ->rational_coefficients()));
+        fields.push_back(
+            encode_string_sequence(
+                projection.one_root_predicate
+                    ->radical_coefficients()));
+        fields.push_back(
+            projection.one_root_predicate
+                ->radicand());
+    }
     return record(
-        projection.signed_predicate_coefficients
-                .empty()
-            ? "projection-record-v1"
-            : "signed-projection-record-v2",
+        projection.one_root_predicate.has_value()
+            ? "one-root-projection-record-v3"
+            : (
+                  projection
+                          .signed_predicate_coefficients
+                          .empty()
+                      ? "projection-record-v1"
+                      : "signed-projection-record-v2"),
         fields);
 }
 
@@ -534,6 +552,24 @@ EventPartitionCertificate2 reconstruct(
             decode_string_sequence(fields[4]),
             decode_string_sequence(fields[5]));
     }
+    if (certificate.source_kind
+        == "full-circle-boundary-pullbacks-v4") {
+        const std::vector<std::string> fields =
+            decode_string_sequence(
+                certificate.source_payload);
+        if (fields.size() != 7) {
+            throw EventPartitionVerificationError(
+                "full-circle line source payload is malformed");
+        }
+        return construct_full_circle_boundary_pullback_partition(
+            fields[0],
+            decode_string_sequence(fields[1]),
+            fields[2],
+            fields[3],
+            decode_string_sequence(fields[4]),
+            decode_string_sequence(fields[5]),
+            decode_string_sequence(fields[6]));
+    }
     if (certificate.source_kind != "cap-crossings-v1") {
         throw EventPartitionVerificationError(
             "unsupported certificate source kind");
@@ -723,6 +759,132 @@ EventPartitionCertificate2 mutate_certificate_record(
         }
         projection->signed_predicate_coefficients
             .clear();
+    } else if (
+        mutation == "delete-one-root-predicate") {
+        const auto projection = std::find_if(
+            result.projections.begin(),
+            result.projections.end(),
+            [](const ProjectionRecord2& candidate) {
+                return candidate
+                    .one_root_predicate
+                    .has_value();
+            });
+        if (projection == result.projections.end()) {
+            throw EventPartitionVerificationError(
+                "certificate has no one-root predicate");
+        }
+        projection->one_root_predicate.reset();
+    } else if (
+        mutation == "alter-one-root-radicand") {
+        const auto projection = std::find_if(
+            result.projections.begin(),
+            result.projections.end(),
+            [](const ProjectionRecord2& candidate) {
+                return candidate
+                    .one_root_predicate
+                    .has_value();
+            });
+        if (projection == result.projections.end()) {
+            throw EventPartitionVerificationError(
+                "certificate has no one-root predicate");
+        }
+        const OneRootPredicate2& predicate =
+            *projection->one_root_predicate;
+        projection->one_root_predicate =
+            OneRootPredicate2::build(
+                predicate.rational_coefficients(),
+                predicate.radical_coefficients(),
+                predicate.radicand() == "2"
+                    ? "3"
+                    : "2");
+    } else if (
+        mutation == "alter-one-root-rational-part") {
+        const auto projection = std::find_if(
+            result.projections.begin(),
+            result.projections.end(),
+            [](const ProjectionRecord2& candidate) {
+                return candidate
+                    .one_root_predicate
+                    .has_value();
+            });
+        if (projection == result.projections.end()) {
+            throw EventPartitionVerificationError(
+                "certificate has no one-root predicate");
+        }
+        const OneRootPredicate2& predicate =
+            *projection->one_root_predicate;
+        std::vector<std::string> rational =
+            predicate.rational_coefficients();
+        rational.front() =
+            rational.front() == "0"
+            ? "1"
+            : "0";
+        projection->one_root_predicate =
+            OneRootPredicate2::build(
+                std::move(rational),
+                predicate.radical_coefficients(),
+                predicate.radicand());
+    } else if (
+        mutation
+        == "move-one-root-event-to-conjugate") {
+        const std::vector<std::string>
+            physical_root_ids =
+                one_root_physical_root_ids(
+                    result);
+        const std::vector<std::string>
+            conjugate_root_ids =
+                one_root_conjugate_root_ids(
+                    result);
+        const auto source = std::find_if(
+            result.fibres.begin(),
+            result.fibres.end(),
+            [&physical_root_ids](
+                const EventFibre2& candidate) {
+                return std::find(
+                           physical_root_ids.begin(),
+                           physical_root_ids.end(),
+                           candidate.root_id)
+                        != physical_root_ids.end()
+                    && std::any_of(
+                        candidate.events.begin(),
+                        candidate.events.end(),
+                        [](const PartitionEvent2& event) {
+                            return event.kind
+                                == "endpoint-order";
+                        });
+            });
+        const auto target = std::find_if(
+            result.fibres.begin(),
+            result.fibres.end(),
+            [&conjugate_root_ids](
+                const EventFibre2& candidate) {
+                return std::find(
+                           conjugate_root_ids.begin(),
+                           conjugate_root_ids.end(),
+                           candidate.root_id)
+                        != conjugate_root_ids.end()
+                    && std::none_of(
+                        candidate.events.begin(),
+                        candidate.events.end(),
+                        [](const PartitionEvent2& event) {
+                            return event.kind
+                                == "endpoint-order";
+                        });
+            });
+        if (source == result.fibres.end()
+            || target == result.fibres.end()) {
+            throw EventPartitionVerificationError(
+                "certificate lacks a physical and conjugate one-root fibre");
+        }
+        const auto event = std::find_if(
+            source->events.begin(),
+            source->events.end(),
+            [](const PartitionEvent2& candidate) {
+                return candidate.kind
+                    == "endpoint-order";
+            });
+        target->events.push_back(*event);
+        source->events.erase(event);
     } else if (
         mutation == "delete-active-sheet") {
         const auto fibre = std::find_if(
