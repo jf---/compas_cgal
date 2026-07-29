@@ -15,8 +15,19 @@ from compas_cgal.adaptive.errors import InvalidNeckPassageTransitionError
 from compas_cgal.adaptive.errors import TerminalNeckPassageError
 from compas_cgal.adaptive.identity import IdentityDigest
 from compas_cgal.adaptive.medial_axis import MatEdgeId
+from compas_cgal.adaptive.medial_axis import MatNodeId
 from compas_cgal.adaptive.medial_axis import MatSiteId
 from compas_cgal.adaptive.medial_axis import MedialAxis
+from compas_cgal.adaptive.neck_topology import NECK_LOCUS_TYPES
+from compas_cgal.adaptive.neck_topology import ClearanceEndpointNeckLocus as ClearanceEndpointNeckLocus
+from compas_cgal.adaptive.neck_topology import NeckLocus
+from compas_cgal.adaptive.neck_topology import NeckSide
+from compas_cgal.adaptive.neck_topology import PlateauNeckLocus as PlateauNeckLocus
+from compas_cgal.adaptive.neck_topology import SharedVertexNeckLocus as SharedVertexNeckLocus
+from compas_cgal.adaptive.neck_topology import StrictEdgeNeckLocus as StrictEdgeNeckLocus
+from compas_cgal.adaptive.neck_topology import build_neck_locus
+from compas_cgal.adaptive.neck_topology import neck_locus_edge_ids
+from compas_cgal.adaptive.neck_topology import neck_locus_node_ids
 from compas_cgal.adaptive.operation import NeckCapDecision
 from compas_cgal.adaptive.operation import NeckOwnerId
 from compas_cgal.adaptive.operation import NeckTraversalOrientation
@@ -50,6 +61,8 @@ class ClassifiedNeck:
     width_class_id: WidthClassId
     comparison_certificate: bytes
     separating_cut_edge_ids: tuple[MatEdgeId, ...]
+    locus: NeckLocus
+    sides: tuple[NeckSide, ...]
 
     def __post_init__(self) -> None:
         _exact_bytes(self.owner_id, "neck owner identity")
@@ -66,6 +79,45 @@ class ClassifiedNeck:
             raise InvalidNeckEvidenceError("neck comparison certificate omits its evidence digest.")
         if type(self.separating_cut_edge_ids) is not tuple or not self.separating_cut_edge_ids or self.separating_cut_edge_ids != tuple(sorted(set(self.separating_cut_edge_ids))):
             raise InvalidNeckEvidenceError("neck separating cut must contain canonical edge identities.")
+        if type(self.locus) not in NECK_LOCUS_TYPES:
+            raise InvalidNeckEvidenceError("neck locus is outside the closed exact type.")
+        if type(self.sides) is not tuple or len(self.sides) < 2 or any(type(side) is not NeckSide for side in self.sides):
+            raise InvalidNeckEvidenceError("neck separating cut requires at least two exact sides.")
+        if tuple(side.partition_ordinal for side in self.sides) != tuple(range(len(self.sides))):
+            raise InvalidNeckEvidenceError("neck sides must preserve canonical side order.")
+        if any(side.neck_evidence_digest != self.evidence_digest for side in self.sides):
+            raise InvalidNeckEvidenceError("neck side is cross-wired to another evidence record.")
+        if len({side.identity for side in self.sides}) != len(self.sides):
+            raise InvalidNeckEvidenceError("neck side identities must remain distinct.")
+        side_union = tuple(sorted({edge_id for side in self.sides for edge_id in side.edge_ids}))
+        if side_union != self.separating_cut_edge_ids:
+            raise InvalidNeckEvidenceError("neck sides contradict the projected separating-cut union.")
+
+    @classmethod
+    def build(
+        cls,
+        *,
+        owner_id: NeckOwnerId,
+        defining_site_ids: tuple[MatSiteId, ...],
+        evidence_bytes: bytes,
+        evidence_digest: IdentityDigest,
+        width_class_id: WidthClassId,
+        comparison_certificate: bytes,
+        separating_cut_edge_ids: tuple[MatEdgeId, ...],
+        locus: NeckLocus,
+        sides: tuple[NeckSide, ...],
+    ) -> Self:
+        return cls(
+            owner_id,
+            defining_site_ids,
+            evidence_bytes,
+            evidence_digest,
+            width_class_id,
+            comparison_certificate,
+            separating_cut_edge_ids,
+            locus,
+            sides,
+        )
 
     @property
     def canonical_bytes(self) -> bytes:
@@ -76,15 +128,17 @@ class ClassifiedNeck:
             class, and separating cut.
         """
         return encode_tagged_union(
-            b"classified-neck-v1",
+            b"classified-neck-v2",
             encode_component_map(
                 {
                     b"comparison-certificate": encode_bytes(self.comparison_certificate),
                     b"defining-site-ids": encode_sequence(tuple(encode_bytes(bytes(site_id)) for site_id in self.defining_site_ids)),
                     b"evidence": encode_bytes(self.evidence_bytes),
                     b"evidence-digest": encode_bytes(bytes(self.evidence_digest)),
+                    b"locus": self.locus.canonical_bytes,
                     b"owner-id": encode_bytes(bytes(self.owner_id)),
                     b"separating-cut-edge-ids": encode_sequence(tuple(encode_bytes(bytes(edge_id)) for edge_id in self.separating_cut_edge_ids)),
+                    b"sides": encode_sequence(tuple(side.canonical_bytes for side in self.sides)),
                     b"width-class": self.width_class_id.canonical_bytes,
                 }
             ),
@@ -220,6 +274,16 @@ class NeckInventory:
             raise InvalidNeckEvidenceError("neck inventory references an unknown MAT site.")
         if any(edge_id not in self.axis.edge_by_id for neck in self.necks for edge_id in neck.separating_cut_edge_ids):
             raise InvalidNeckEvidenceError("neck inventory references an unknown MAT edge.")
+        if any(edge_id not in self.axis.edge_by_id for neck in self.necks for edge_id in neck_locus_edge_ids(neck.locus)):
+            raise InvalidNeckEvidenceError("neck inventory locus references an unknown MAT edge.")
+        if any(node_id not in self.axis.node_by_id for neck in self.necks for node_id in neck_locus_node_ids(neck.locus)):
+            raise InvalidNeckEvidenceError("neck inventory locus references an unknown MAT node.")
+        expected_topology = _native_neck_topologies(
+            axis=self.axis,
+            evidence_digests=tuple(neck.evidence_digest for neck in self.necks),
+        )
+        if tuple((neck.locus, neck.sides) for neck in self.necks) != expected_topology:
+            raise InvalidNeckEvidenceError("neck inventory contradicts its retained native neck topology.")
 
     @classmethod
     def build(
@@ -249,6 +313,11 @@ class NeckInventory:
         defining_site_ids = axis.native_owner.neck_defining_site_ids
         if len(owner_ids) != len(evidence) or len(defining_site_ids) != len(evidence):
             raise InvalidNeckEvidenceError("native neck identities contradict evidence cardinality.")
+        evidence_digests = tuple(IdentityDigest(hashlib.sha256(evidence_bytes).digest()) for evidence_bytes in evidence)
+        native_topologies = _native_neck_topologies(
+            axis=axis,
+            evidence_digests=evidence_digests,
+        )
 
         cut_offsets = projection[16]
         cut_edge_indices = projection[17]
@@ -273,18 +342,79 @@ class NeckInventory:
             cut_indices = cut_edge_indices[begin:end]
             if np.any(cut_indices < 0) or np.any(cut_indices >= len(axis.edges)):
                 raise InvalidNeckEvidenceError("native neck separating cut references an unknown MAT edge.")
+            evidence_digest = evidence_digests[index]
+            locus, sides = native_topologies[index]
             necks.append(
-                ClassifiedNeck(
-                    NeckOwnerId(_exact_bytes(owner_ids[index], "neck owner identity")),
-                    tuple(MatSiteId(_exact_bytes(site_id, "neck defining-site identity")) for site_id in defining_site_ids[index]),
-                    _exact_bytes(evidence_bytes, "neck evidence"),
-                    IdentityDigest(hashlib.sha256(evidence_bytes).digest()),
-                    WidthClassId.build(class_id),
-                    _exact_bytes(
+                ClassifiedNeck.build(
+                    owner_id=NeckOwnerId(_exact_bytes(owner_ids[index], "neck owner identity")),
+                    defining_site_ids=tuple(MatSiteId(_exact_bytes(site_id, "neck defining-site identity")) for site_id in defining_site_ids[index]),
+                    evidence_bytes=_exact_bytes(evidence_bytes, "neck evidence"),
+                    evidence_digest=evidence_digest,
+                    width_class_id=WidthClassId.build(class_id),
+                    comparison_certificate=_exact_bytes(
                         comparison_certificates[index],
                         "neck comparison certificate",
                     ),
-                    tuple(axis.edges[int(edge_index)].identity for edge_index in cut_indices),
+                    separating_cut_edge_ids=tuple(axis.edges[int(edge_index)].identity for edge_index in cut_indices),
+                    locus=locus,
+                    sides=sides,
                 )
             )
         return cls(axis, policy, tuple(necks))
+
+
+def _native_neck_topologies(
+    *,
+    axis: MedialAxis,
+    evidence_digests: tuple[IdentityDigest, ...],
+) -> tuple[tuple[NeckLocus, tuple[NeckSide, ...]], ...]:
+    owner = axis.native_owner
+    cardinality = len(owner.neck_owner_ids)
+    location_tags = owner.neck_location_tags
+    location_edge_ids = owner.neck_location_edge_ids
+    location_node_ids = owner.neck_location_node_ids
+    parameter_root_ids = owner.neck_parameter_root_ids
+    cut_edge_partitions = owner.neck_cut_edge_partitions
+    projections = (
+        location_tags,
+        location_edge_ids,
+        location_node_ids,
+        parameter_root_ids,
+        cut_edge_partitions,
+    )
+    if type(evidence_digests) is not tuple or len(evidence_digests) != cardinality or any(type(records) is not tuple or len(records) != cardinality for records in projections):
+        raise InvalidNeckEvidenceError("native neck topology projections have inconsistent cardinality.")
+
+    topologies: list[tuple[NeckLocus, tuple[NeckSide, ...]]] = []
+    for index, evidence_digest in enumerate(evidence_digests):
+        _exact_bytes(evidence_digest, "neck evidence digest", digest=True)
+        raw_edge_ids = location_edge_ids[index]
+        raw_node_ids = location_node_ids[index]
+        raw_partitions = cut_edge_partitions[index]
+        if type(raw_edge_ids) is not tuple or type(raw_node_ids) is not tuple or type(raw_partitions) is not tuple:
+            raise InvalidNeckEvidenceError("native neck topology must use immutable nested tuples.")
+        edge_ids = tuple(MatEdgeId(_exact_bytes(edge_id, "neck locus edge identity")) for edge_id in raw_edge_ids)
+        node_ids = tuple(MatNodeId(_exact_bytes(node_id, "neck locus node identity")) for node_id in raw_node_ids)
+        parameter_root_id = parameter_root_ids[index]
+        if parameter_root_id is not None:
+            parameter_root_id = _exact_bytes(parameter_root_id, "neck locus parameter root")
+        locus = build_neck_locus(
+            tag=_exact_bytes(location_tags[index], "neck location tag"),
+            edge_ids=edge_ids,
+            node_ids=node_ids,
+            parameter_root_id=parameter_root_id,
+        )
+
+        sides: list[NeckSide] = []
+        for ordinal, raw_partition in enumerate(raw_partitions):
+            if type(raw_partition) is not tuple:
+                raise InvalidNeckEvidenceError("native neck side must use one immutable edge tuple.")
+            sides.append(
+                NeckSide.build(
+                    neck_evidence_digest=evidence_digest,
+                    partition_ordinal=ordinal,
+                    edge_ids=tuple(MatEdgeId(_exact_bytes(edge_id, "neck side edge identity")) for edge_id in raw_partition),
+                )
+            )
+        topologies.append((locus, tuple(sides)))
+    return tuple(topologies)

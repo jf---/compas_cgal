@@ -397,6 +397,17 @@ bool malformed_evidence_inputs_fail_loudly() {
     endpoint_rejected = true;
   }
 
+  bool endpoint_projection_rejected = false;
+  try {
+    static_cast<void>(mat_neck_location_parameter_root_id(
+        MatClearanceEndpointNeckLocation2(
+            "e0",
+            "n0",
+            MatParameterEndpoint2{})));
+  } catch (const InvalidMatNeckEvidenceRecordError &) {
+    endpoint_projection_rejected = true;
+  }
+
   bool site_count_rejected = false;
   try {
     const auto valid = exact_neck_evidence(strict_bridge_bundle());
@@ -409,7 +420,8 @@ bool malformed_evidence_inputs_fail_loudly() {
     site_count_rejected = true;
   }
   return width_rejected && isolated_rejected && record_rejected &&
-         endpoint_rejected && site_count_rejected;
+         endpoint_rejected && endpoint_projection_rejected &&
+         site_count_rejected;
 }
 
 bool nonseparating_minima_are_filtered() {
@@ -547,6 +559,59 @@ bool all_neck_variants_have_canonical_bytes() {
          shared[0].canonical_bytes() != plateau[0].canonical_bytes();
 }
 
+bool all_neck_variant_projections_are_complete() {
+  const std::vector<MatExactNeckEvidence2> strict =
+      exact_neck_evidence(strict_bridge_bundle());
+  const std::vector<MatExactNeckEvidence2> endpoint =
+      exact_neck_evidence(shared_vertex_bundle(true));
+  const std::vector<MatExactNeckEvidence2> shared =
+      exact_neck_evidence(shared_vertex_bundle(false));
+  const std::vector<MatExactNeckEvidence2> plateau =
+      exact_neck_evidence(plateau_bundle(false));
+  if (strict.size() != 1 || endpoint.size() != 1 || shared.size() != 1 ||
+      plateau.size() != 1) {
+    return false;
+  }
+  const std::optional<std::string> endpoint_parameter =
+      mat_neck_location_parameter_root_id(endpoint[0].location());
+  return mat_neck_location_tag(strict[0].location()) ==
+             "mat-neck-strict-edge-v1" &&
+         mat_neck_location_edge_ids(strict[0].location()) ==
+             std::vector<std::string>{"e0"} &&
+         mat_neck_location_node_ids(strict[0].location()).empty() &&
+         mat_neck_location_parameter_root_id(strict[0].location()) ==
+             algebraic_root_id_v1({-1, 2}, 0) &&
+         mat_neck_location_tag(endpoint[0].location()) ==
+             "mat-neck-clearance-endpoint-v1" &&
+         mat_neck_location_edge_ids(endpoint[0].location()) ==
+             std::vector<std::string>{"e0"} &&
+         mat_neck_location_node_ids(endpoint[0].location()) ==
+             std::vector<std::string>{"n1"} &&
+         endpoint_parameter.has_value() &&
+         endpoint_parameter ==
+             algebraic_root_identity_v1(
+                 *std::get<MatClearanceEndpointNeckLocation2>(
+                      endpoint[0].location())
+                      .endpoint()
+                      .parameter) &&
+         mat_neck_location_tag(shared[0].location()) ==
+             "mat-neck-shared-vertex-v1" &&
+         mat_neck_location_edge_ids(shared[0].location()) ==
+             std::vector<std::string>({"e0", "e1"}) &&
+         mat_neck_location_node_ids(shared[0].location()) ==
+             std::vector<std::string>{"n1"} &&
+         !mat_neck_location_parameter_root_id(shared[0].location())
+              .has_value() &&
+         mat_neck_location_tag(plateau[0].location()) ==
+             "mat-neck-plateau-v1" &&
+         mat_neck_location_edge_ids(plateau[0].location()) ==
+             std::vector<std::string>({"e1", "e2"}) &&
+         mat_neck_location_node_ids(plateau[0].location()) ==
+             std::vector<std::string>({"n1", "n2", "n3"}) &&
+         !mat_neck_location_parameter_root_id(plateau[0].location())
+              .has_value();
+}
+
 bool canonical_neck_bytes_replay_exactly() {
   const MatClearanceProfileGraph2 bundle = two_strict_bridges_bundle();
   const std::vector<MatNeckEvidenceV1> first = exact_neck_evidence_v1(bundle);
@@ -611,5 +676,6 @@ bool neck_evidence_gate() {
          malformed_canonical_encoding_fails_loudly() &&
          strict_record_matches_frozen_schema() &&
          all_neck_variants_have_canonical_bytes() &&
+         all_neck_variant_projections_are_complete() &&
          canonical_neck_bytes_replay_exactly();
 }

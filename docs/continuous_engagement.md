@@ -23,10 +23,11 @@ cells.
     nonterminal-traversal boundary because other MAT edges remain untouched.
     Fresh exact neck inventory plus submitted oriented-owner/state/cap replay
     are also gated, including the production `80 degrees` second-passage
-    rejection. Global traversal has not yet derived that neck scope
-    independently. Complete traversal/coverage, replay/artifact certification,
-    arbitrary-pocket evidence, and matched Held–Pfeiffer performance remain
-    incomplete.
+    rejection. Task 13A now retains the exact neck loci and all three certified
+    sides of each production plateau neck; global traversal has not yet used
+    that side history to derive scope independently. Complete
+    traversal/coverage, replay/artifact certification, arbitrary-pocket
+    evidence, and matched Held–Pfeiffer performance remain incomplete.
 
 ## Authority hierarchy
 

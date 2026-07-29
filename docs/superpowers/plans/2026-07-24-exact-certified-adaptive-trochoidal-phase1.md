@@ -2092,14 +2092,18 @@ divides the stage into exact topology projection, global traversal,
 bidirectional spans, launch, continuation, terminal replay, and publication
 gates.
 
-**Status (2026-07-28): interface audit and written design complete; RED
-implementation pending.** Native evidence retains every exact cut partition,
-but the current 20-field projection exposes only their union. The two
-production L-pocket plateau necks each have three certified sides.
-`GenerationState` must remain the physical accepted boundary while a separate
-global traversal value owns all edge cursors and side history. The first circle
-also requires a distinct precleared-entry transaction; later candidates retain
-Task 12's joint link/circle transaction.
+**Status (2026-07-29): Task 13A exact topology projection complete; directed
+global traversal next.** The native owner now retains every exact neck record
+and additively projects all four locus variants plus every cut partition while
+the frozen 20-field tuple remains unchanged. The two production L-pocket
+plateau necks each expose three reversal-invariant sides `(6, 1, 1)`.
+Typed side identities bind evidence digest, partition ordinal, and edge IDs;
+same-union repartition and cross-wired-locus attacks fail against the retained
+owner. Batched typed construction is `O(Q + P)`, not per-neck whole-owner
+projection. `GenerationState` remains the physical accepted boundary while a
+separate global traversal value will own all edge cursors and side history.
+The first circle still requires a distinct precleared-entry transaction; later
+candidates retain Task 12's joint link/circle transaction.
 
 **Files**
 

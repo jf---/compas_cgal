@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <iterator>
 #include <optional>
+#include <type_traits>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -267,6 +268,95 @@ MatExactNeckEvidence2::squared_width() const noexcept {
 const MatNeckSeparatingCut2 &
 MatExactNeckEvidence2::separating_cut() const noexcept {
   return separating_cut_;
+}
+
+std::string mat_neck_location_tag(const MatExactNeckLocation2 &location) {
+  return std::visit(
+      [](const auto &value) {
+        using Location = std::decay_t<decltype(value)>;
+        if constexpr (std::is_same_v<Location,
+                                     MatStrictEdgeNeckLocation2>) {
+          return std::string("mat-neck-strict-edge-v1");
+        } else if constexpr (std::is_same_v<
+                                 Location,
+                                 MatClearanceEndpointNeckLocation2>) {
+          return std::string("mat-neck-clearance-endpoint-v1");
+        } else if constexpr (std::is_same_v<Location,
+                                            MatSharedVertexNeckLocation2>) {
+          return std::string("mat-neck-shared-vertex-v1");
+        } else {
+          static_assert(std::is_same_v<Location, MatPlateauNeckLocation2>);
+          return std::string("mat-neck-plateau-v1");
+        }
+      },
+      location);
+}
+
+std::vector<std::string>
+mat_neck_location_edge_ids(const MatExactNeckLocation2 &location) {
+  return std::visit(
+      [](const auto &value) {
+        using Location = std::decay_t<decltype(value)>;
+        if constexpr (std::is_same_v<Location,
+                                     MatStrictEdgeNeckLocation2> ||
+                      std::is_same_v<Location,
+                                     MatClearanceEndpointNeckLocation2>) {
+          return std::vector<std::string>{value.edge_id()};
+        } else if constexpr (std::is_same_v<Location,
+                                            MatSharedVertexNeckLocation2>) {
+          return value.minimizing_edge_ids();
+        } else {
+          static_assert(std::is_same_v<Location, MatPlateauNeckLocation2>);
+          return value.edge_ids();
+        }
+      },
+      location);
+}
+
+std::vector<std::string>
+mat_neck_location_node_ids(const MatExactNeckLocation2 &location) {
+  return std::visit(
+      [](const auto &value) {
+        using Location = std::decay_t<decltype(value)>;
+        if constexpr (std::is_same_v<Location,
+                                     MatStrictEdgeNeckLocation2>) {
+          return std::vector<std::string>{};
+        } else if constexpr (std::is_same_v<
+                                 Location,
+                                 MatClearanceEndpointNeckLocation2> ||
+                             std::is_same_v<
+                                 Location,
+                                 MatSharedVertexNeckLocation2>) {
+          return std::vector<std::string>{value.node_id()};
+        } else {
+          static_assert(std::is_same_v<Location, MatPlateauNeckLocation2>);
+          return value.node_ids();
+        }
+      },
+      location);
+}
+
+std::optional<std::string>
+mat_neck_location_parameter_root_id(const MatExactNeckLocation2 &location) {
+  return std::visit(
+      [](const auto &value) -> std::optional<std::string> {
+        using Location = std::decay_t<decltype(value)>;
+        if constexpr (std::is_same_v<Location,
+                                     MatStrictEdgeNeckLocation2>) {
+          return value.parameter_root_id();
+        } else if constexpr (std::is_same_v<
+                                 Location,
+                                 MatClearanceEndpointNeckLocation2>) {
+          if (!value.endpoint().parameter.has_value()) {
+            throw InvalidMatNeckEvidenceRecordError(
+                "clearance-endpoint neck location has no exact parameter");
+          }
+          return algebraic_root_identity_v1(*value.endpoint().parameter);
+        } else {
+          return std::nullopt;
+        }
+      },
+      location);
 }
 
 std::vector<MatExactNeckEvidence2>
