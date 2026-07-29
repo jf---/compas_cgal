@@ -345,6 +345,8 @@ source files, strict MkDocs, and `git diff --check` passed.
 
 Commit: `feat(adaptive): generate traversal continuation`
 
+Published at `b16dd82`.
+
 ---
 
 ### Task 6: Tractable fixture, terminal coverage, and fresh replay
