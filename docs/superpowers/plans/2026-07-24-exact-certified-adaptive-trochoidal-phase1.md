@@ -2092,8 +2092,7 @@ divides the stage into exact topology projection, global traversal,
 bidirectional spans, launch, continuation, terminal replay, and publication
 gates.
 
-**Status (2026-07-29): Tasks 13A–13D published; Task 13E implemented and
-under publication gates.**
+**Status (2026-07-29): Tasks 13A–13E published; terminal seal next.**
 Task 13A is published at `d289f79`: the native owner retains all four exact
 neck-locus variants and every cut partition, and each production L plateau
 exposes three reversal-invariant sides `(6, 1, 1)`. Task 13B is published at
@@ -2113,8 +2112,8 @@ pristine stock through qualified entry depletion, empty coverage, exact
 entry/design containment, post-entry motion certification, depletion,
 coverage, and exactly one global cursor advance. Independent commit requires
 byte-identical evidence; 15 focused launch contracts and all 501 adaptive tests
-pass. Task 13D is published at `d35410d`. Task 13E publication gates remain
-open.
+pass. Task 13D is published at `d35410d`. Task 13E is published at
+`b16dd82`.
 
 Task 13E now refactors Task 12 behind one explicit-cursor trial engine,
 cross-binds physical and global parents/children in `TraversalCommit`,
@@ -2130,7 +2129,7 @@ Native event-substrate incompleteness now becomes
 immediately. Focused branch, search, orchestration, cursor, and native-boundary
 gates pass. Affected selection passed `113` tests; all `518` adaptive tests,
 Ruff, strict mypy over `27` source files, strict MkDocs, and diff checks pass.
-Publication is pending. Task 13F owns the tractable complete fixture, exact
+Published at `b16dd82`. Task 13F owns the tractable complete fixture, exact
 empty residual, and fresh terminal `GenerationResult`.
 
 **Files**
