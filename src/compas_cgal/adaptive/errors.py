@@ -278,5 +278,25 @@ class StaleInitialCandidateTransactionError(RuntimeError):
     """An entry transaction no longer names the authoritative traversal parent."""
 
 
+class InvalidTraversalCommitError(ValueError):
+    """A continuation commit cross-wires its physical or global state axis."""
+
+
+class InvalidCandidateFamilyError(ValueError):
+    """A finite candidate family is foreign, duplicated, or out of order."""
+
+
+class EngagementCapInfeasibleError(RuntimeError):
+    """Every non-neck candidate is proved to exceed its engagement cap."""
+
+
+class NeckTooTightError(RuntimeError):
+    """Every candidate for one causal neck crossing is proved cap-infeasible."""
+
+
+class NoFeasibleCandidateError(RuntimeError):
+    """A finite candidate family is exhausted by mixed exact rejection."""
+
+
 class CandidateSelectionError(ValueError):
     """Accepted transactions cannot form one deterministic winner set."""

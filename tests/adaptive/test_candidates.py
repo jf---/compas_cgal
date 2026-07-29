@@ -6,6 +6,7 @@ import pytest
 
 from compas_cgal.adaptive.canonical import CanonicalRingV1
 from compas_cgal.adaptive.candidates import DerivedCandidateCursor
+from compas_cgal.adaptive.candidates import ExhaustedCandidateCursor
 from compas_cgal.adaptive.candidates import MathsmCircleProposal
 from compas_cgal.adaptive.candidates import MiddleCurveSpan
 from compas_cgal.adaptive.candidates import enumerate_middle_curve_candidates
@@ -87,6 +88,24 @@ def _parabolic_span() -> MiddleCurveSpan:
         axis=axis,
         cursor_before=samples[0],
         cursor_limit=samples[1],
+    )
+
+
+def _clearance_leaf_span() -> MiddleCurveSpan:
+    axis = _axis()
+    edge = next(
+        edge
+        for edge in axis.edges
+        if (
+            (samples := tuple(sample for sample in axis.samples if sample.edge_id == edge.identity))[-1].clearance.value == axis.tool_radius.value
+            and samples[0].clearance.value > axis.tool_radius.value
+        )
+    )
+    samples = tuple(sample for sample in axis.samples if sample.edge_id == edge.identity)
+    return MiddleCurveSpan.build(
+        axis=axis,
+        cursor_before=samples[0],
+        cursor_limit=samples[-1],
     )
 
 
@@ -365,21 +384,7 @@ def test_spatial_lattice_never_backsteps_below_non_aligned_minimum() -> None:
 
 
 def test_terminal_clearance_leaf_ends_at_last_feasible_candidate_cell() -> None:
-    axis = _axis()
-    edge = next(
-        edge
-        for edge in axis.edges
-        if (
-            (samples := tuple(sample for sample in axis.samples if sample.edge_id == edge.identity))[-1].clearance.value == axis.tool_radius.value
-            and samples[0].clearance.value > axis.tool_radius.value
-        )
-    )
-    samples = tuple(sample for sample in axis.samples if sample.edge_id == edge.identity)
-    span = MiddleCurveSpan.build(
-        axis=axis,
-        cursor_before=samples[0],
-        cursor_limit=samples[-1],
-    )
+    span = _clearance_leaf_span()
     candidates = enumerate_middle_curve_candidates(
         span=span,
         policy=_policy(),
@@ -406,6 +411,72 @@ def test_terminal_clearance_leaf_ends_at_last_feasible_candidate_cell() -> None:
     )
 
     assert not any(candidate.traversal_decision.makes_cursor_terminal for candidate in nonterminal_candidates)
+
+
+def test_exhausted_cursor_rejects_nonterminal_and_native_endpoint_candidates() -> None:
+    """Close only a terminal positive-radius station before its native bound.
+
+    `DerivedCandidateCursor` owns continuation and `MatSample` owns a reached
+    native endpoint. The exhausted cursor must reject both states so terminal
+    identity cannot silently change representation.
+    """
+    clearance_span = _clearance_leaf_span()
+    clearance_candidates = enumerate_middle_curve_candidates(
+        span=clearance_span,
+        policy=_policy(),
+        circle_orientation=CircleOrientation.COUNTERCLOCKWISE,
+        neck_scope=NoNeckScope.build(),
+        effective_cap_decision=_full_cap(),
+        makes_cursor_terminal_at_limit=True,
+    )
+    exhausted_candidate = next(candidate for candidate in clearance_candidates if candidate.traversal_decision.makes_cursor_terminal)
+    exhausted = ExhaustedCandidateCursor.build(
+        span=clearance_span,
+        candidate=exhausted_candidate,
+    )
+    nonterminal = next(
+        candidate
+        for candidate in enumerate_middle_curve_candidates(
+            span=clearance_span,
+            policy=_policy(),
+            circle_orientation=CircleOrientation.COUNTERCLOCKWISE,
+            neck_scope=NoNeckScope.build(),
+            effective_cap_decision=_full_cap(),
+            makes_cursor_terminal_at_limit=False,
+        )
+        if candidate.spatial_progress == exhausted_candidate.spatial_progress
+    )
+    native_span, _, _ = _constant_clearance_span()
+    native_terminal = next(
+        candidate
+        for candidate in enumerate_middle_curve_candidates(
+            span=native_span,
+            policy=_policy(),
+            circle_orientation=CircleOrientation.COUNTERCLOCKWISE,
+            neck_scope=NoNeckScope.build(),
+            effective_cap_decision=_full_cap(),
+            makes_cursor_terminal_at_limit=True,
+        )
+        if candidate.traversal_decision.makes_cursor_terminal
+    )
+
+    assert exhausted.cursor_identity == exhausted_candidate.traversal_decision.cursor_after
+    with pytest.raises(
+        InvalidMiddleCurveCursorError,
+        match="terminal candidate",
+    ):
+        ExhaustedCandidateCursor.build(
+            span=clearance_span,
+            candidate=nonterminal,
+        )
+    with pytest.raises(
+        InvalidMiddleCurveCursorError,
+        match="native terminal endpoint",
+    ):
+        ExhaustedCandidateCursor.build(
+            span=native_span,
+            candidate=native_terminal,
+        )
 
 
 def test_mathsm_factory_fails_named_before_reading_untyped_geometry() -> None:

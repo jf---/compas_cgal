@@ -11,6 +11,7 @@ import pytest
 import compas_cgal.adaptive.traversal as traversal_module
 from compas_cgal.adaptive.canonical import CanonicalRingV1
 from compas_cgal.adaptive.candidates import MiddleCurveSpan
+from compas_cgal.adaptive.candidates import ExhaustedCandidateCursor
 from compas_cgal.adaptive.candidates import enumerate_middle_curve_candidates
 from compas_cgal.adaptive.errors import InvalidCausalNeckTransitError
 from compas_cgal.adaptive.errors import InvalidMatTraversalStateError
@@ -19,6 +20,7 @@ from compas_cgal.adaptive.errors import AmbiguousNeckSideError
 from compas_cgal.adaptive.errors import NonterminalMatTraversalError
 from compas_cgal.adaptive.errors import OverlappingNeckTransitError
 from compas_cgal.adaptive.errors import TerminalTraversalCursorError
+from compas_cgal.adaptive.medial_axis import MatSample
 from compas_cgal.adaptive.medial_axis import MedialAxis
 from compas_cgal.adaptive.motion import EngagementCap
 from compas_cgal.adaptive.neck import NeckInventory
@@ -638,6 +640,123 @@ def test_reverse_route_edge_advances_to_its_exact_entry_endpoint() -> None:
     assert candidate.spatial_progress > 0
     assert child.active_cursor.terminal
     assert child.active_cursor.cursor == active.terminal_cursor
+
+
+def test_clearance_leaf_retains_proof_carrying_exhausted_cursor() -> None:
+    """Terminalize a tool-radius leaf without forging its native endpoint.
+
+    The adopted L pocket contains a line leaf whose exact MAT endpoint has
+    clearance equal to the tool radius. No positive-radius MATHSM circle can
+    reach that point, so exhaustive enumeration marks its greatest feasible
+    station terminal. Global traversal must retain that derived station while
+    keeping the distinct native endpoint as the immutable route bound.
+    """
+    axis = _axis()
+    inventory = NeckInventory.build(
+        axis=axis,
+        policy=_neck_policy(),
+    )
+    edge = next(edge for edge in axis.edges if edge.source.point == Point2[WorldXY].build(5.0, 1.0) and edge.target.point == Point2[WorldXY].build(5.5, 1.5))
+    state = MatTraversalState.seed(
+        axis=axis,
+        inventory=inventory,
+        policy=_policy(),
+        entry_edge_id=edge.identity,
+        entry_node_id=edge.source.identity,
+    )
+    active = state.active_cursor
+    span = MiddleCurveSpan.build(
+        axis=axis,
+        cursor_before=active.cursor,
+        cursor_limit=active.terminal_cursor,
+    )
+    candidate = next(
+        candidate
+        for candidate in enumerate_middle_curve_candidates(
+            span=span,
+            policy=_candidate_policy(),
+            circle_orientation=CircleOrientation.COUNTERCLOCKWISE,
+            neck_scope=state.neck_scope,
+            effective_cap_decision=FullCapDecision.build(
+                user_cap=inventory.policy.user_cap,
+                effective_cap=inventory.policy.user_cap,
+            ),
+            makes_cursor_terminal_at_limit=True,
+        )
+        if candidate.traversal_decision.makes_cursor_terminal
+    )
+
+    child = state.advance(candidate)
+
+    assert candidate.spatial_progress < span.reported_length
+    assert child.active_cursor.terminal
+    assert type(child.active_cursor.cursor) is ExhaustedCandidateCursor
+    assert child.active_cursor.cursor.candidate == candidate
+    assert child.active_cursor.cursor.cursor_identity == candidate.traversal_decision.cursor_after
+    assert child.active_cursor.cursor.point == candidate.middle_point
+    assert child.active_cursor.terminal_cursor == active.terminal_cursor
+    assert child.active_cursor.cursor != child.active_cursor.terminal_cursor
+    assert child.activate_next().active_route_index == 1
+
+
+def test_intermediate_native_limit_remains_a_continuable_sample() -> None:
+    """Retain exact native identity when a candidate reaches a window limit.
+
+    An intermediate forward-window endpoint is not an interior derived cursor
+    and is not the route terminal. Its accepted candidate must advance onto
+    the owned native sample so the next span can continue from that exact
+    algebraic parameter without rematching coordinates.
+    """
+    axis = _axis()
+    edge = next(edge for edge in axis.edges if len(tuple(sample for sample in axis.samples if sample.edge_id == edge.identity)) >= 3)
+    samples = tuple(sample for sample in axis.samples if sample.edge_id == edge.identity)
+    state = MatTraversalState.seed(
+        axis=axis,
+        inventory=NeckInventory.build(
+            axis=axis,
+            policy=_neck_policy(),
+        ),
+        policy=_policy(),
+        entry_edge_id=edge.identity,
+        entry_node_id=edge.source.identity,
+    )
+    active = state.active_cursor
+    intermediate = samples[1]
+    span = MiddleCurveSpan.build(
+        axis=axis,
+        cursor_before=active.cursor,
+        cursor_limit=intermediate,
+    )
+    candidate = next(
+        candidate
+        for candidate in enumerate_middle_curve_candidates(
+            span=span,
+            policy=_candidate_policy(),
+            circle_orientation=CircleOrientation.COUNTERCLOCKWISE,
+            neck_scope=state.neck_scope,
+            effective_cap_decision=FullCapDecision.build(
+                user_cap=state.authority.inventory.policy.user_cap,
+                effective_cap=state.authority.inventory.policy.user_cap,
+            ),
+            makes_cursor_terminal_at_limit=False,
+        )
+        if candidate.spatial_progress == span.reported_length
+    )
+
+    child = state.advance(candidate)
+
+    assert not child.active_cursor.terminal
+    assert child.active_cursor.accepted_candidate_count == 1
+    assert type(child.active_cursor.cursor) is MatSample
+    assert child.active_cursor.cursor == intermediate
+    assert (
+        MiddleCurveSpan.build(
+            axis=axis,
+            cursor_before=child.active_cursor.cursor,
+            cursor_limit=samples[2],
+        ).reported_length
+        > 0
+    )
 
 
 def test_route_activation_retains_source_side_until_scoped_candidate_commit() -> None:

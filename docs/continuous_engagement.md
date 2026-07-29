@@ -32,9 +32,15 @@ cells.
     using cutter rotation as topology. Task 13D now composes the qualified
     entry, pristine exact stock, empty coverage, first full-circle oracle, and
     global cursor into one independently replayed launch transaction. The
-    complete candidate loop, traversal/coverage closure, replay/artifact
-    certification, arbitrary-pocket evidence, and matched Held–Pfeiffer
-    performance remain incomplete.
+    Task 13E now cross-binds physical and global continuation, materializes
+    each directed forward span once, searches one invariant-ordered finite
+    family, and stops at the first accepted transaction. Expected
+    gouge/cap/degenerate-link rejection may continue; unresolved native
+    authority aborts immediately. A launch-rooted `GenerationContinuation`
+    records the resulting prefix, but the adopted real L family currently
+    exposes an unresolved segment-partition case before global completion.
+    Traversal/coverage closure, fresh terminal replay, arbitrary-pocket
+    evidence, and matched Held–Pfeiffer performance remain incomplete.
 
 ## Authority hierarchy
 
@@ -389,6 +395,84 @@ replay produce identical canonical bytes.
     deciding source, but never share compiled exact-kernel objects until every
     consumer inherits one verified interface definition set.
 
+### Task 13E global continuation and finite search
+
+Task 13E keeps Task 12 as the only deciding link-and-circle engine.
+`CandidateEvaluator.evaluate_from_cursor(...)` accepts the physical cursor
+authenticated by the global route; the existing same-edge API delegates to
+that same implementation. Containment, motion certification, depletion,
+coverage, passage advance, and witness construction therefore retain one
+proof order across same-edge and branch-switch consumers.
+
+`TraversalCommit` closes the square after independent replay:
+
+```text
+physical parent  --Task 12 transaction-->  physical child
+       |                                        |
+       | same candidate                         | same candidate
+       v                                        v
+global MAT parent  --------------------->  global MAT child
+```
+
+It binds both parent/child digests, requires exactly one active global cursor
+to change, preserves every other cursor byte-for-byte, and verifies causal
+neck scope against the pending transit. A stale physical parent, stale global
+parent, valid child from another candidate, or manufactured neck scope cannot
+acquire one commit identity.
+
+For one active route cursor, `materialize_active_candidate_family(...)`:
+
+1. derives the directed native limits from `TraversalPolicy.forward_window`;
+2. derives `FullCapDecision` or the pending transit's exact
+   `NeckCapDecision` from current physical passage state;
+3. enumerates each exact span once with the shared candidate grammar;
+4. combines all cells in furthest-progress, largest-radius, canonical-identity
+   order; and
+5. submits that immutable tuple to the single Task 12 trial engine.
+
+The search may continue only after `GougeContainmentError`,
+`EngagementCapExceededError`, or a candidate-specific
+`DegenerateSegmentMotionError`. It stops at the first accepted transaction and
+does not evaluate lower-ranked cells. Exhaustion reports fixed canonical
+counts plus the active cursor identity as
+`EngagementCapInfeasibleError`, `NeckTooTightError`, or
+`NoFeasibleCandidateError`; rejected mutable trial owners are not retained.
+
+`GenerationContinuation` roots the post-launch chain in the independently
+replayed `InitialCandidateTransaction`, normalizes deterministic zero-cut
+route activation between commits, and binds the current physical state,
+global state, and ordered `TraversalCommit` tuple. It deliberately does not
+assert exact residual emptiness. The terminal-seal stage must still call the
+coverage gate and rebuild the complete run through fresh replay before a
+`GenerationResult` exists.
+
+!!! warning "Three cursor endpoints carry different proof"
+
+    A candidate may stop inside a native span, exactly on an intermediate
+    native window limit, or at the finite family's terminal cell. The first
+    retains a `DerivedCandidateCursor`; the second must retain the owned
+    `MatSample` so the next exact span starts from the same algebraic parameter;
+    the third retains either the native route endpoint or an
+    `ExhaustedCandidateCursor` at the last positive-radius cell. Exact finite
+    exhaustion before a tool-radius MAT leaf is terminal traversal evidence,
+    not a claim that the cutter reached the native endpoint.
+
+!!! danger "Unresolved substrate is not candidate infeasibility"
+
+    The first real ordered continuation family on the adopted scaled L fixture
+    reaches a native `IncompleteSegmentPartitionError` on a high-ranked link.
+    `MotionCertifier` translates the closed native proof gap to
+    `UnresolvedMotionEventError`, retains the native exception as its cause,
+    and the search aborts before later accepted cells. Searching around that
+    event would silently convert missing proof into feasibility.
+
+Focused gates cover a real exact branch-switch commit, stale/cross-wired
+parents, invariant ordering, first-feasible stopping, all three exhaustion
+classes, causal neck-cap derivation, one materialization per forward span,
+launch-rooted continuation, intermediate native cursors, and immediate
+propagation of the real unresolved substrate. Complete terminal coverage is
+not part of this stage.
+
 ## Exact reach pruning before pair resultants
 
 Pair-event generation is quadratic in the number of scheduled boundary
@@ -455,6 +539,8 @@ with reversed reverse-motion fibres and require:
 | `certified` | immutable `MotionWitness` | Complete exact proof that the effective cap is respected |
 | `cap_exceeded` | `EngagementCapExceededError` | Physical infeasibility proved; candidate evaluation may reject it normally |
 | `unresolved` | `UnresolvedMotionEventError` | Proof completeness failed; never relabel as physical infeasibility |
+| incomplete/unsupported native event substrate | `UnresolvedMotionEventError` with native cause | Backend authority is incomplete; generation aborts immediately |
+| malformed native input or trace-verification failure | `InvalidMotionCertificateError` with native cause | Typed/native proof contract is corrupt |
 | tuple/trace contradiction | `InvalidMotionCertificateError` | Native consumer contract is corrupt |
 
 Before native dispatch, the certifier proves the exact cap surrogate satisfies
@@ -513,9 +599,18 @@ pixi run pytest --testmon -n auto -q \
   tests/adaptive/test_circle_oracle.py \
   tests/adaptive/test_motion_certificate.py \
   tests/adaptive/test_replay.py \
-  tests/adaptive/test_identity.py
+  tests/adaptive/test_identity.py \
+  tests/adaptive/test_transaction.py \
+  tests/adaptive/test_traversal.py \
+  tests/adaptive/test_acceptance.py \
+  tests/adaptive/test_generator.py
 pixi run -e docs docs
 ```
+
+At the Task 13E stage gate on 2026-07-29, affected selection passed `113`
+tests and the complete adaptive suite passed `518` tests in `223.88 s`. Ruff,
+strict mypy over `27` source files, strict MkDocs, and diff checks passed.
+These are correctness gates, not planner-performance measurements.
 
 The comparative claim and matched performance boundary remain in
 [Exact Segment-Site Medial Axis](segment_site_mat.md#relation-to-held-and-pfeiffer-2025).

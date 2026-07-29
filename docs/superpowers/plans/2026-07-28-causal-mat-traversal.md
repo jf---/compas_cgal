@@ -284,34 +284,36 @@ Commit: `feat(adaptive): certify entry launch`
 - Test: `tests/adaptive/test_transaction.py`
 - Test: `tests/adaptive/test_traversal.py`
 - Test: `tests/adaptive/test_acceptance.py`
+- Create: `tests/adaptive/test_generator.py`
+- Modify: `tests/adaptive/test_motion_certificate.py`
 
 **Interfaces**
 
 - One internal candidate-trial engine accepting an authenticated active cursor.
 - `TraversalCommit.build(...) -> TraversalCommit`
-- `generate_exact_adaptive(...) -> GenerationResult`
+- `generate_exact_adaptive_continuation(...) -> GenerationContinuation`
 
-- [ ] **Step 1: RED branch-switch transaction tests**
+- [x] **Step 1: RED branch-switch transaction tests**
 
 Require the same Task 12 proof order when the active global edge differs from
 the last physical edge. Bind physical and traversal parents, advance exactly
 one cursor, and reject stale/cross-wired parents. Existing same-edge Task 12
 tests stay unchanged and GREEN.
 
-- [ ] **Step 2: RED finite-search tests**
+- [x] **Step 2: RED finite-search tests**
 
 Require invariant ordered search, first-feasible winner, no lower-ranked
 evaluation afterward, exact continuation after gouge/cap failures, immediate
 propagation of unresolved events, and named exhaustion errors. Count one
 candidate-family build per attempted span.
 
-- [ ] **Step 3: Implement one deciding trial engine**
+- [x] **Step 3: Implement one deciding trial engine**
 
 Refactor only enough to let both Task 12 and the traversal consumer supply an
 authenticated cursor. Keep exactly one containment/certification/depletion/
 coverage/witness path.
 
-- [ ] **Step 4: Implement route orchestration**
+- [x] **Step 4: Implement route orchestration**
 
 Seed with the launch transaction, activate deterministic directed edges,
 derive scope/cap from causal side state, enumerate each forward window once,
@@ -319,7 +321,7 @@ commit the first feasible candidate, and continue until every component is
 terminal. No recursion or iteration bound substitutes for the well-founded
 cursor measure.
 
-- [ ] **Step 5: GREEN and document**
+- [x] **Step 5: GREEN and document**
 
 ```bash
 pixi run pytest tests/adaptive/test_transaction.py \
@@ -330,7 +332,18 @@ pixi run types-adaptive
 pixi run docs
 ```
 
-Commit: `feat(adaptive): generate covered traversal`
+Implementation note (2026-07-29): Task 5 returns a launch-rooted
+`GenerationContinuation`, not `GenerationResult`. Task 6 owns the exact empty
+residual and fresh terminal replay required to construct the latter. The real
+scaled-L ordered family currently stops fail-closed at a native incomplete
+segment partition; this is translated to `UnresolvedMotionEventError` and is
+not counted as candidate infeasibility.
+
+Gate evidence (2026-07-29): affected selection passed `113` tests; the complete
+adaptive suite passed `518` tests in `223.88 s`; Ruff, strict mypy over `27`
+source files, strict MkDocs, and `git diff --check` passed.
+
+Commit: `feat(adaptive): generate traversal continuation`
 
 ---
 

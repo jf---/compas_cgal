@@ -7,8 +7,10 @@ from types import MappingProxyType
 from typing import Mapping
 from typing import Self
 from typing import TypeAlias
+from typing import cast
 
 from compas_cgal.adaptive.candidates import DerivedCandidateCursor
+from compas_cgal.adaptive.candidates import ExhaustedCandidateCursor
 from compas_cgal.adaptive.candidates import MiddleCurveCandidate
 from compas_cgal.adaptive.candidates import MiddleCurveSpan
 from compas_cgal.adaptive.canonical import encode_binary64
@@ -216,7 +218,7 @@ class VisitedEdgeIncidence:
         )
 
 
-TraversalCursor: TypeAlias = MatSample | DerivedCandidateCursor
+TraversalCursor: TypeAlias = MatSample | DerivedCandidateCursor | ExhaustedCandidateCursor
 
 
 @dataclass(frozen=True)
@@ -232,7 +234,11 @@ class DirectedEdgeCursor:
     def __post_init__(self) -> None:
         if type(self.route_step) is not DirectedRouteStep:
             raise InvalidMatTraversalStateError("directed cursor requires one exact route step.")
-        if type(self.cursor) not in (MatSample, DerivedCandidateCursor):
+        if type(self.cursor) not in (
+            MatSample,
+            DerivedCandidateCursor,
+            ExhaustedCandidateCursor,
+        ):
             raise InvalidMatTraversalStateError("directed cursor requires one native or proof-carrying cursor.")
         if type(self.terminal_cursor) is not MatSample:
             raise InvalidMatTraversalStateError("directed cursor terminal bound must be one native sample.")
@@ -248,10 +254,26 @@ class DirectedEdgeCursor:
             if type(self.cursor) is not MatSample or self.cursor.cursor_identity != self.route_step.initial_cursor_id or self.terminal:
                 raise InvalidMatTraversalStateError("untouched directed cursor must remain at its native route entry.")
         elif self.terminal:
-            if type(self.cursor) is not MatSample or self.cursor.cursor_identity != self.route_step.terminal_cursor_id:
-                raise InvalidMatTraversalStateError("terminal directed cursor must retain its native route limit.")
+            if type(self.cursor) is MatSample:
+                if self.cursor.cursor_identity != self.route_step.terminal_cursor_id:
+                    raise InvalidMatTraversalStateError("native terminal cursor must retain its exact route limit.")
+            elif type(self.cursor) is ExhaustedCandidateCursor:
+                if self.cursor.span.cursor_limit != self.terminal_cursor or self.cursor.candidate.cursor_limit_identity != self.route_step.terminal_cursor_id:
+                    raise InvalidMatTraversalStateError("exhausted terminal cursor must retain its native route bound.")
+            else:
+                raise InvalidMatTraversalStateError("terminal directed cursor requires one native or exhausted proof cursor.")
+        elif type(self.cursor) is MatSample:
+            if self.cursor.cursor_identity in (
+                self.route_step.initial_cursor_id,
+                self.route_step.terminal_cursor_id,
+            ):
+                raise InvalidMatTraversalStateError(
+                    "advanced nonterminal native cursor must be one intermediate route sample.",
+                )
         elif type(self.cursor) is not DerivedCandidateCursor:
-            raise InvalidMatTraversalStateError("advanced nonterminal cursor must retain proof-carrying candidate lineage.")
+            raise InvalidMatTraversalStateError(
+                "advanced nonterminal cursor must retain native or proof-carrying lineage.",
+            )
 
     @classmethod
     def build(
@@ -336,15 +358,39 @@ class DirectedEdgeCursor:
         limit = sample_index.sample_by_cursor_id.get(candidate.cursor_limit_identity)
         if limit is None or limit.edge_id != self.route_step.edge_id:
             raise StaleTraversalCursorError("candidate limit is not one owned native cursor.")
+        cursor_before = self.cursor
+        if type(cursor_before) not in (MatSample, DerivedCandidateCursor):
+            raise StaleTraversalCursorError(
+                "nonterminal global cursor cannot retain exhausted lineage.",
+            )
         span = MiddleCurveSpan.build(
             axis=axis,
-            cursor_before=self.cursor,
+            cursor_before=cast(
+                MatSample | DerivedCandidateCursor,
+                cursor_before,
+            ),
             cursor_limit=limit,
         )
         if decision.makes_cursor_terminal:
-            if decision.cursor_after != self.route_step.terminal_cursor_id or limit != self.terminal_cursor or candidate.spatial_progress != span.reported_length:
-                raise StaleTraversalCursorError("terminal candidate does not reach the directed edge limit.")
-            cursor: TraversalCursor = self.terminal_cursor
+            if limit != self.terminal_cursor:
+                raise StaleTraversalCursorError("terminal candidate has a foreign directed edge limit.")
+            if candidate.spatial_progress == span.reported_length:
+                if decision.cursor_after != self.route_step.terminal_cursor_id:
+                    raise StaleTraversalCursorError("native terminal candidate contradicts the route endpoint.")
+                cursor: TraversalCursor = self.terminal_cursor
+            else:
+                if decision.cursor_after == self.route_step.terminal_cursor_id:
+                    raise StaleTraversalCursorError("exhausted terminal candidate aliases the native route endpoint.")
+                cursor = ExhaustedCandidateCursor.build(
+                    span=span,
+                    candidate=candidate,
+                )
+        elif candidate.spatial_progress == span.reported_length:
+            if limit == self.terminal_cursor:
+                raise StaleTraversalCursorError(
+                    "native route endpoint requires terminal candidate intent.",
+                )
+            cursor = limit
         else:
             cursor = DerivedCandidateCursor.build(
                 span=span,
