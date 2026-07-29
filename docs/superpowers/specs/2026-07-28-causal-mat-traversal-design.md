@@ -198,14 +198,15 @@ It enumerates entry-compatible candidates across directed native spans and
 accepts only candidates whose exact phase equals the qualified entry center.
 For each trial it:
 
-1. derives scope from the seeded global traversal state;
+1. derives `NoNeckScope` from the genuinely seeded global traversal state;
 2. proves the complete cutter sweep lies inside the authenticated precleared
    disk with `PreclearedEntry.certify_first_circle()`;
 3. containment-checks the same circle in the design domain;
 4. event-certifies it against frozen post-entry stock;
 5. depletes stock;
 6. appends the exact coverage sweep;
-7. advances exactly one traversal cursor and, when causal, one passage; and
+7. advances exactly one traversal cursor while retaining every seeded passage
+   as `UNVISITED`; and
 8. builds `GenerationState` beginning with approach, plunge, and the circle.
 
 The immutable `InitialCandidateTransaction` binds the entry, candidate,
@@ -214,6 +215,11 @@ Commit independently reproduces byte-identical evidence.
 
 There is no zero-length synthetic link and no exemption from the motion
 oracle.
+
+A seeded route has no previously occupied side, so it cannot own a causal
+transit. The first route edge establishes side history. Passage advance begins
+only after a later branch activation proves distinct source and target sides,
+and remains commit-only at that continuation boundary.
 
 ## Continuation and branch switches
 
