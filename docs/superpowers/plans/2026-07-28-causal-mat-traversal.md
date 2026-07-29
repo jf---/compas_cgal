@@ -39,8 +39,7 @@ pytest-testmon, Ruff, strict mypy, strict MkDocs.
 
 ### Task 1: Exact neck topology projection
 
-**Status (2026-07-29): implementation and focused gates complete; publication
-pending.**
+**Status (2026-07-29): complete and published at `d289f79`.**
 
 **Files**
 
@@ -100,7 +99,7 @@ cross-validated `ClassifiedNeck` fields. Keep the existing cut union as an
 additive compatibility fact during validation; do not use it as traversal
 authority.
 
-- [ ] **Step 5: GREEN and publish the coherent stage**
+- [x] **Step 5: GREEN and publish the coherent stage**
 
 ```bash
 pixi run task9-mat-compile-gate
