@@ -253,11 +253,18 @@ verdict, and the rational v3 144-factor positive control remains unchanged.
 - Produces: Task 13F continuation beyond the previously unresolved fourth
   trial.
 
-- [ ] **Step 1: Add the real continuation RED**
+- [x] **Step 1: Add the real continuation RED**
 
 Require the fixed radius-1 family to certify the fourth link and following
 circle without translating native authority to `UnresolvedMotionEventError`.
 Keep the invariant no-lower-ranked-dispatch assertion.
+
+Result (2026-07-29): the 16-cell family dispatches exactly three proved gouges
+before trial 4. Its independently replayed `TraversalCommit` accepts the
+following circle and terminalizes route 0. The reproduced native trace binds
+the same digest as the transaction and proves a mixed phase seam despite
+exact endpoint incidences inactive on both adjacent cells. Full continuation
+then reaches a distinct zero-guide link-only requirement on route 1.
 
 - [ ] **Step 2: Add source/replay cross-wiring mutations**
 

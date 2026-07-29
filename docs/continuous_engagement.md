@@ -39,16 +39,20 @@ cells.
     authority aborts immediately. A launch-rooted `GenerationContinuation`
     records the resulting prefix, but the adopted real L family currently
     exposes an unresolved segment-partition case before global completion.
-    A shorter radius-1 Task 13F family exposed the next exact boundary: its
-    launch and first continuation link certified, but the link depletion
-    introduced one-root algebraic trim vertices. The new source v4 path now
-    admits that coordinate family without binary64 collapse, separates
-    physical roots from norm conjugates, and proves the real post-capsule
-    circle's named cap exceedance without mutating its stock snapshot. The
-    rational-coordinate source v3 path remains independently reconstructible
-    and retains its complete-product positive controls. Integration of the
-    stronger v4 oracle back into the complete Task 13F ordered continuation
-    is the next gate; this stage does not yet claim terminal traversal.
+    A shorter radius-1 Task 13F family then exposed a one-root algebraic trim
+    boundary after its first continuation link. Source v4 admits that
+    coordinate family without binary64 collapse and separates physical roots
+    from norm conjugates; rational-coordinate source v3 remains independently
+    reconstructible. The real 16-cell ordered family now proves its first
+    three trials are gouges and independently commits trial 4. At that
+    circle's phase seam, incomparable exact active sets prove a mixed
+    transition even though tangent incidence evidence remains inactive on
+    both adjacent cells. The accepted transaction binds the independently
+    reproduced native trace digest, and the first MAT route becomes terminal.
+    Full continuation next reaches a constant-clearance arm whose clearance
+    equals the tool radius everywhere. Its guide radius is therefore exactly
+    zero: the arm requires a certified link-only cutting advance, not a fake
+    zero-radius circle or a traversal-only skip.
     Traversal/coverage closure, fresh terminal replay, arbitrary-pocket
     evidence, and matched Held–Pfeiffer performance remain incomplete.
 
@@ -761,8 +765,22 @@ one-root roots, and all four one-root mutations failed reconstruction. The
 cap-exceedance exception in `30.46 s`. The complete circle/motion files passed
 `30` tests in `40.25 s`, and the complete adaptive suite passed `522` tests in
 `242.54 s`. Ruff, strict mypy over `27` source files, strict MkDocs, affected
-`--testmon`, and diff checks passed. Task 13F continuation remains a separate
-pending gate; these results do not claim that Task 13F is terminal.
+`--testmon`, and diff checks passed.
+
+At the Task 13F route-0 integration checkpoint on 2026-07-29, the real
+16-cell family dispatched exactly four trials: three named gouges followed by
+the accepted winner. Independent commit replay reproduced the physical child,
+and a separately reconstructed eight-cell native circle trace matched the
+transaction's event-trace digest. Its phase-seam fibre retained exact inactive
+endpoint incidences while certifying mixed directions. Full continuation then
+failed loud at the next route with an empty circle family because the complete
+MAT arm has exact zero guide radius. Task 13F is not terminal; the required
+link-only advance remains an implementation stage.
+
+The focused seam/Task 13F slice passed `4` tests in `28.22 s`; affected
+`--testmon` selection passed `5` in `29.37 s`; and the complete adaptive suite
+passed `523` in `245.18 s`. Ruff, strict mypy over `27` source files, strict
+MkDocs, and `git diff --check` also passed.
 
 The comparative claim and matched performance boundary remain in
 [Exact Segment-Site Medial Axis](segment_site_mat.md#relation-to-held-and-pfeiffer-2025).
