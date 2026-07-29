@@ -2095,16 +2095,16 @@ gates.
 **Status (2026-07-29): Tasks 13A and 13B complete; bidirectional spans next.**
 Task 13A is published at `d289f79`: the native owner retains all four exact
 neck-locus variants and every cut partition, and each production L plateau
-exposes three reversal-invariant sides `(6, 1, 1)`. Task 13B now adds one
-content-addressed sample authority, deterministic directed graph route, cursor
-per edge, exact visited incidences, and causal neck-side frontier. Chain,
-branch, cycle, multi-component, relabelled-node, same-union ambiguity,
-overlapping-transit, stale/terminal cursor, refinement-identity, and
-single-build contracts pass. Graph/sample/frontier authority is built once;
-accepted-candidate cursor lookup no longer rescans the native sample table.
-Current `MiddleCurveSpan` remains forward-only, so Task 13C must consume the
-reverse route edges before bootstrap and generator integration. Task 13B
-publication is pending this worktree commit.
+exposes three reversal-invariant sides `(6, 1, 1)`. Task 13B is published at
+`6ac2050`: it adds one content-addressed sample authority, deterministic
+directed graph route, cursor per edge, exact visited incidences, and causal
+neck-side frontier. Chain, branch, cycle, multi-component, relabelled-node,
+same-union ambiguity, overlapping-transit, stale/terminal cursor,
+refinement-identity, and single-build contracts pass.
+Graph/sample/frontier authority is built once; accepted-candidate cursor
+lookup no longer rescans the native sample table. Current `MiddleCurveSpan`
+remains forward-only, so Task 13C must consume the reverse route edges before
+bootstrap and generator integration.
 
 **Files**
 
