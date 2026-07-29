@@ -7,6 +7,7 @@
 #include "circle_projection.h"
 #include "circle_source.h"
 #include "circle_strata.h"
+#include "circle_vertex_source.h"
 #include "event_certificate.h"
 #include "event_partition.h"
 #include "parameter_charts.h"
@@ -598,105 +599,146 @@ audit_full_circle_tea_event_exact(
 
     std::vector<std::string> line_sources;
     std::vector<std::string> circle_sources;
+    std::vector<std::string> rational_line_sources;
+    std::vector<std::string> rational_circle_sources;
     bool rational_boundary_vertices = true;
     for (const BoundaryFeatureRecord2& record :
          boundary_records) {
-        if (record.support_kind == "line") {
-            const std::optional<std::string> source_x =
+        const std::string source_x =
+            FullCircleCoordinate2::from_exact(
+                record.curve.source().x())
+                .canonical_source();
+        const std::string source_y =
+            FullCircleCoordinate2::from_exact(
+                record.curve.source().y())
+                .canonical_source();
+        const std::string target_x =
+            FullCircleCoordinate2::from_exact(
+                record.curve.target().x())
+                .canonical_source();
+        const std::string target_y =
+            FullCircleCoordinate2::from_exact(
+                record.curve.target().y())
+                .canonical_source();
+        const std::optional<std::string>
+            rational_source_x =
                 rational_coordinate_text(
                     record.curve.source().x());
-            const std::optional<std::string> source_y =
+        const std::optional<std::string>
+            rational_source_y =
                 rational_coordinate_text(
                     record.curve.source().y());
-            const std::optional<std::string> target_x =
+        const std::optional<std::string>
+            rational_target_x =
                 rational_coordinate_text(
                     record.curve.target().x());
-            const std::optional<std::string> target_y =
+        const std::optional<std::string>
+            rational_target_y =
                 rational_coordinate_text(
                     record.curve.target().y());
-            if (!source_x.has_value()
-                || !source_y.has_value()
-                || !target_x.has_value()
-                || !target_y.has_value()) {
-                rational_boundary_vertices = false;
-                break;
-            }
+        const bool record_has_rational_vertices =
+            rational_source_x.has_value()
+            && rational_source_y.has_value()
+            && rational_target_x.has_value()
+            && rational_target_y.has_value();
+        rational_boundary_vertices =
+            rational_boundary_vertices
+            && record_has_rational_vertices;
+        const std::vector<std::string> source_fields{
+            record.feature_id,
+            record.support_id,
+            record.trim_predicate,
+            encode_string_sequence(
+                record.primitive_coefficients),
+            record.source_vertex_id,
+            source_x,
+            source_y,
+            record.target_vertex_id,
+            target_x,
+            target_y,
+        };
+        std::vector<std::string>
+            rational_source_fields;
+        if (record_has_rational_vertices) {
+            rational_source_fields = {
+                record.feature_id,
+                record.support_id,
+                record.trim_predicate,
+                encode_string_sequence(
+                    record.primitive_coefficients),
+                record.source_vertex_id,
+                *rational_source_x,
+                *rational_source_y,
+                record.target_vertex_id,
+                *rational_target_x,
+                *rational_target_y,
+            };
+        }
+        if (record.support_kind == "line") {
             line_sources.push_back(
                 encode_string_sequence(
-                    {
-                        record.feature_id,
-                        record.support_id,
-                        record.trim_predicate,
-                        encode_string_sequence(
-                            record.primitive_coefficients),
-                        record.source_vertex_id,
-                        *source_x,
-                        *source_y,
-                        record.target_vertex_id,
-                        *target_x,
-                        *target_y,
-                    }));
-        } else if (record.support_kind == "circle") {
-            const std::optional<std::string> source_x =
-                rational_coordinate_text(
-                    record.curve.source().x());
-            const std::optional<std::string> source_y =
-                rational_coordinate_text(
-                    record.curve.source().y());
-            const std::optional<std::string> target_x =
-                rational_coordinate_text(
-                    record.curve.target().x());
-            const std::optional<std::string> target_y =
-                rational_coordinate_text(
-                    record.curve.target().y());
-            if (!source_x.has_value()
-                || !source_y.has_value()
-                || !target_x.has_value()
-                || !target_y.has_value()) {
-                rational_boundary_vertices = false;
-                break;
+                    source_fields));
+            if (record_has_rational_vertices) {
+                rational_line_sources.push_back(
+                    encode_string_sequence(
+                        rational_source_fields));
             }
+        } else if (record.support_kind == "circle") {
             circle_sources.push_back(
                 encode_string_sequence(
-                    {
-                        record.feature_id,
-                        record.support_id,
-                        record.trim_predicate,
-                        encode_string_sequence(
-                            record.primitive_coefficients),
-                        record.source_vertex_id,
-                        *source_x,
-                        *source_y,
-                        record.target_vertex_id,
-                        *target_x,
-                        *target_y,
-                    }));
+                    source_fields));
+            if (record_has_rational_vertices) {
+                rational_circle_sources.push_back(
+                    encode_string_sequence(
+                        rational_source_fields));
+            }
         }
     }
     const Epeck::FT exact_phase_x(phase_dx);
     const Epeck::FT exact_phase_y(phase_dy);
-    if ((!line_sources.empty()
-            || !circle_sources.empty())
-        && rational_boundary_vertices) {
+    if (!line_sources.empty()
+        || !circle_sources.empty()) {
+        const std::vector<std::string> motion_data{
+            exact_rational_text(
+                Epeck::FT(center_x)),
+            exact_rational_text(
+                Epeck::FT(center_y)),
+            exact_rational_text(
+                exact_phase_x),
+            exact_rational_text(
+                exact_phase_y),
+        };
+        const std::string cutter_radius =
+            exact_rational_text(
+                Epeck::FT(tool_radius));
+        const std::string cap_ratio =
+            exact_rational_text(
+                Epeck::FT(cap_chord_ratio));
         EventPartitionCertificate2 partition =
-            construct_full_circle_boundary_pullback_partition(
-                full_circle_stock_identity(boundary_records),
-                {
-                    exact_rational_text(
-                        Epeck::FT(center_x)),
-                    exact_rational_text(
-                        Epeck::FT(center_y)),
-                    exact_rational_text(
-                        exact_phase_x),
-                    exact_rational_text(
-                        exact_phase_y),
-                },
-                exact_rational_text(
-                    Epeck::FT(tool_radius)),
-                exact_rational_text(
-                    Epeck::FT(cap_chord_ratio)),
-                line_sources,
-                circle_sources);
+            rational_boundary_vertices
+            ? construct_full_circle_boundary_pullback_partition(
+                  full_circle_stock_identity(
+                      boundary_records),
+                  motion_data,
+                  cutter_radius,
+                  cap_ratio,
+                  rational_line_sources,
+                  rational_circle_sources)
+            : construct_full_circle_pair_closed_partition(
+                  stock,
+                  full_circle_stock_identity(
+                      boundary_records),
+                  motion_data,
+                  cutter_radius,
+                  cap_ratio,
+                  line_sources,
+                  circle_sources,
+                  center_x,
+                  center_y,
+                  phase_dx,
+                  phase_dy,
+                  tool_radius,
+                  cap_chord_ratio);
         const bool cap_exceeded =
             line_sources.size()
                 == boundary_records.size()
@@ -770,7 +812,7 @@ audit_full_circle_tea_event_exact(
                 exact_cap_identity,
                 authority.verdict,
                 authority.whole_rim_disposition,
-                "full-circle-cell-strata-exact-v2",
+                "full-circle-cell-strata-exact-v3",
                 std::move(events));
         const std::string verdict =
             authority.verdict

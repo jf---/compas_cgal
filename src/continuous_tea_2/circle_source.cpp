@@ -2,6 +2,7 @@
 
 #include "../exact_stock_region_2.h"
 #include "../exact_sweep_2.h"
+#include "circle_pair_projection.h"
 #include "circle_projection.h"
 #include "event_certificate.h"
 #include "event_partition.h"
@@ -161,6 +162,57 @@ bool has_material_rational_chart_witness(
     return cutter_disk.is_empty();
 }
 
+std::vector<std::string>
+encode_rational_vertex_sources(
+    const std::vector<std::string>& sources)
+{
+    std::vector<std::string> result;
+    result.reserve(sources.size());
+    for (const std::string& encoded_source : sources) {
+        std::vector<std::string> fields =
+            decode_string_sequence(encoded_source);
+        if (fields.size() != 10) {
+            throw EventPartitionVerificationError(
+                "full-circle rational source is malformed");
+        }
+        for (const std::size_t coordinate :
+             {5U, 6U, 8U, 9U}) {
+            fields[coordinate] =
+                encode_string_sequence(
+                    {
+                        "full-circle-one-root-coordinate-v1",
+                        fields[coordinate],
+                        "0",
+                        "0",
+                    });
+        }
+        result.push_back(
+            encode_string_sequence(fields));
+    }
+    return result;
+}
+
+void finalize_full_circle_boundary_source(
+    EventPartitionCertificate2& certificate,
+    const std::string& source_kind,
+    const std::vector<std::string>& source_fields)
+{
+    certificate.seams.reserve(
+        certificate.charts.size());
+    for (const ParameterChart2& chart :
+         certificate.charts) {
+        certificate.seams.push_back(
+            {
+                chart.start_seam_id,
+                chart.chart_id,
+            });
+    }
+    certificate.source_kind = source_kind;
+    certificate.source_payload =
+        encode_string_sequence(source_fields);
+    finalize_event_partition(certificate);
+}
+
 
 EventPartitionCertificate2
 construct_full_circle_uniform_partition(
@@ -260,35 +312,69 @@ construct_full_circle_boundary_pullback_partition(
         throw EventPartitionVerificationError(
             "full-circle boundary source lacks stock identity");
     }
+    const std::vector<std::string> encoded_lines =
+        encode_rational_vertex_sources(line_sources);
+    const std::vector<std::string> encoded_circles =
+        encode_rational_vertex_sources(circle_sources);
+    const std::vector<std::string> pair_requests =
+        full_circle_exhaustive_pair_requests(
+            encoded_lines,
+            encoded_circles);
+    EventPartitionCertificate2 certificate =
+        partition_full_circle_boundary_geometry(
+            motion_data,
+            cutter_radius,
+            cap_chord_ratio,
+            encoded_lines,
+            encoded_circles,
+            pair_requests);
+    finalize_full_circle_boundary_source(
+        certificate,
+        "full-circle-boundary-pullbacks-v3",
+        {
+            stock_identity_value,
+            encode_string_sequence(motion_data),
+            cutter_radius,
+            cap_chord_ratio,
+            encode_string_sequence(line_sources),
+            encode_string_sequence(circle_sources),
+        });
+    return certificate;
+}
+
+EventPartitionCertificate2
+construct_full_circle_boundary_pullback_partition(
+    const std::string& stock_identity_value,
+    const std::vector<std::string>& motion_data,
+    const std::string& cutter_radius,
+    const std::string& cap_chord_ratio,
+    const std::vector<std::string>& line_sources,
+    const std::vector<std::string>& circle_sources,
+    const std::vector<std::string>& pair_requests)
+{
+    if (stock_identity_value.empty()) {
+        throw EventPartitionVerificationError(
+            "full-circle boundary source lacks stock identity");
+    }
     EventPartitionCertificate2 certificate =
         partition_full_circle_boundary_geometry(
             motion_data,
             cutter_radius,
             cap_chord_ratio,
             line_sources,
-            circle_sources);
-    certificate.seams.reserve(
-        certificate.charts.size());
-    for (const ParameterChart2& chart :
-         certificate.charts) {
-        certificate.seams.push_back(
-            {
-                chart.start_seam_id,
-                chart.chart_id,
-            });
-    }
-    certificate.source_kind =
-        "full-circle-boundary-pullbacks-v3";
-    certificate.source_payload =
-        encode_string_sequence(
-            {
-                stock_identity_value,
-                encode_string_sequence(motion_data),
-                cutter_radius,
-                cap_chord_ratio,
-                encode_string_sequence(line_sources),
-                encode_string_sequence(circle_sources),
-            });
-    finalize_event_partition(certificate);
+            circle_sources,
+            pair_requests);
+    finalize_full_circle_boundary_source(
+        certificate,
+        "full-circle-boundary-pullbacks-v4",
+        {
+            stock_identity_value,
+            encode_string_sequence(motion_data),
+            cutter_radius,
+            cap_chord_ratio,
+            encode_string_sequence(line_sources),
+            encode_string_sequence(circle_sources),
+            encode_string_sequence(pair_requests),
+        });
     return certificate;
 }

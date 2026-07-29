@@ -2,7 +2,9 @@
 
 #include "../stock_2.h"
 #include "boundary_events.h"
+#include "circle_pair_projection.h"
 #include "circle_projection.h"
+#include "circle_source.h"
 #include "event_certificate.h"
 #include "segment_partition.h"
 #include "segment_strata.h"
@@ -373,6 +375,144 @@ bool overlap_requires_resolution(
 }
 
 } // namespace
+
+std::vector<std::string>
+derive_full_circle_pair_requests(
+    const Stock2& stock,
+    const EventPartitionCertificate2& topology_partition,
+    double center_x,
+    double center_y,
+    double phase_dx,
+    double phase_dy,
+    double tool_radius,
+    double cap_chord_ratio)
+{
+    const std::vector<BoundaryFeatureRecord2>
+        boundary_records =
+            extract_boundary_records(stock);
+    if (boundary_records.empty()
+        || topology_partition.cells.empty()) {
+        throw IncompleteFullCircleCellAuthorityError(
+            "full-circle pair demand requires nonempty topology cells and stock features");
+    }
+    std::vector<std::string> requests;
+    for (const ParameterCell2& parameter_cell :
+         topology_partition.cells) {
+        const Rational global_witness(
+            Integer(
+                parameter_cell.witness_numerator),
+            Integer(
+                parameter_cell.witness_denominator));
+        const ChartWitness witness =
+            chart_witness(global_witness);
+        const StationEventSource2 source =
+            station_source(
+                center_x,
+                center_y,
+                phase_dx,
+                phase_dy,
+                tool_radius,
+                cap_chord_ratio,
+                witness);
+        const SegmentCellStratum2 cell =
+            construct_station_cell_stratum(
+                boundary_records,
+                source);
+        for (std::size_t first_index = 0;
+             first_index < cell.branches.size();
+             ++first_index) {
+            for (std::size_t second_index =
+                     first_index + 1;
+                 second_index < cell.branches.size();
+                 ++second_index) {
+                const SegmentBoundaryBranch2& first =
+                    cell.branches[first_index];
+                const SegmentBoundaryBranch2& second =
+                    cell.branches[second_index];
+                if (first.support_kind
+                        == second.support_kind
+                    && first.support_id
+                        == second.support_id) {
+                    continue;
+                }
+                requests.push_back(
+                    FullCirclePairRequest2::build(
+                        CENTER_CHART_IDS[
+                            witness.chart],
+                        first.feature_id,
+                        first.support_id,
+                        first.support_kind,
+                        first.rim_chart_id,
+                        second.feature_id,
+                        second.support_id,
+                        second.support_kind,
+                        second.rim_chart_id)
+                        .canonical_source());
+            }
+        }
+    }
+    std::sort(
+        requests.begin(),
+        requests.end());
+    requests.erase(
+        std::unique(
+            requests.begin(),
+            requests.end()),
+        requests.end());
+    return requests;
+}
+
+EventPartitionCertificate2
+construct_full_circle_pair_closed_partition(
+    const Stock2& stock,
+    const std::string& stock_identity,
+    const std::vector<std::string>& motion_data,
+    const std::string& cutter_radius,
+    const std::string& cap_chord_ratio,
+    const std::vector<std::string>& line_sources,
+    const std::vector<std::string>& circle_sources,
+    double center_x,
+    double center_y,
+    double phase_dx,
+    double phase_dy,
+    double tool_radius,
+    double cap_chord_ratio_value)
+{
+    std::vector<std::string> pair_requests;
+    while (true) {
+        EventPartitionCertificate2 partition =
+            construct_full_circle_boundary_pullback_partition(
+                stock_identity,
+                motion_data,
+                cutter_radius,
+                cap_chord_ratio,
+                line_sources,
+                circle_sources,
+                pair_requests);
+        const std::vector<std::string>
+            observed_requests =
+                derive_full_circle_pair_requests(
+                    stock,
+                    partition,
+                    center_x,
+                    center_y,
+                    phase_dx,
+                    phase_dy,
+                    tool_radius,
+                    cap_chord_ratio_value);
+        std::vector<std::string> closed_requests;
+        std::set_union(
+            pair_requests.begin(),
+            pair_requests.end(),
+            observed_requests.begin(),
+            observed_requests.end(),
+            std::back_inserter(closed_requests));
+        if (closed_requests == pair_requests) {
+            return partition;
+        }
+        pair_requests = std::move(closed_requests);
+    }
+}
 
 FullCircleCellAuthority2
 construct_full_circle_cell_authority(

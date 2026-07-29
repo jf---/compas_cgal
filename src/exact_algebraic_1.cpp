@@ -192,6 +192,132 @@ Polynomial polynomial_from_strings(
     return construct(parsed.begin(), parsed.end());
 }
 
+std::vector<Integer> integer_coefficients(
+    const std::vector<std::string>& coefficients,
+    std::string_view role)
+{
+    if (coefficients.empty()) {
+        throw InvalidAlgebraicPolynomialError(
+            std::string(role)
+            + " requires coefficients");
+    }
+    std::vector<Integer> parsed;
+    parsed.reserve(coefficients.size());
+    try {
+        for (const std::string& coefficient :
+             coefficients) {
+            parsed.emplace_back(coefficient);
+        }
+    } catch (const std::exception& error) {
+        throw InvalidAlgebraicPolynomialError(
+            std::string(role)
+            + " has an invalid integer coefficient: "
+            + error.what());
+    }
+    while (parsed.size() > 1
+           && parsed.back() == 0) {
+        parsed.pop_back();
+    }
+    return parsed;
+}
+
+Integer greatest_common_divisor(
+    Integer left,
+    Integer right)
+{
+    left = left < 0 ? -left : left;
+    right = right < 0 ? -right : right;
+    while (right != 0) {
+        const Integer remainder = left % right;
+        left = right;
+        right = remainder;
+    }
+    return left;
+}
+
+Rational parse_one_root_radicand(
+    const std::string& text)
+{
+    const std::size_t separator = text.find('/');
+    try {
+        if (separator == std::string::npos) {
+            return Rational(Integer(text));
+        }
+        if (text.find('/', separator + 1)
+                != std::string::npos
+            || Integer(text.substr(separator + 1))
+                == 0) {
+            throw InvalidAlgebraicPolynomialError(
+                "one-root predicate radicand is not an exact rational");
+        }
+        return Rational(
+            Integer(text.substr(0, separator)),
+            Integer(text.substr(separator + 1)));
+    } catch (const EventSubstrateError&) {
+        throw;
+    } catch (const std::exception&) {
+        throw InvalidAlgebraicPolynomialError(
+            "one-root predicate radicand is not an exact rational");
+    }
+}
+
+Polynomial one_root_norm(
+    const OneRootPredicate2& predicate)
+{
+    const Polynomial rational =
+        polynomial_from_strings(
+            predicate.rational_coefficients());
+    const Polynomial radical =
+        polynomial_from_strings(
+            predicate.radical_coefficients());
+    const Rational radicand =
+        parse_one_root_radicand(
+            predicate.radicand());
+    return boost::multiprecision::denominator(
+               radicand)
+               * rational * rational
+        - boost::multiprecision::numerator(
+              radicand)
+              * radical * radical;
+}
+
+bool one_root_equation_holds(
+    const OneRootPredicate2& predicate,
+    const AlgebraicReal& root,
+    Kernel& kernel)
+{
+    const Polynomial rational =
+        polynomial_from_strings(
+            predicate.rational_coefficients());
+    const Polynomial radical =
+        polynomial_from_strings(
+            predicate.radical_coefficients());
+    const CGAL::Sign rational_sign =
+        CGAL::is_zero(rational)
+        ? CGAL::ZERO
+        : kernel.sign_at_1_object()(
+              rational,
+              root);
+    const CGAL::Sign radical_sign =
+        CGAL::is_zero(radical)
+        ? CGAL::ZERO
+        : kernel.sign_at_1_object()(
+              radical,
+              root);
+    if (rational_sign == CGAL::ZERO
+        || radical_sign == CGAL::ZERO) {
+        return rational_sign == CGAL::ZERO
+            && radical_sign == CGAL::ZERO;
+    }
+    if (rational_sign == radical_sign) {
+        return false;
+    }
+    return kernel.sign_at_1_object()(
+               one_root_norm(predicate),
+               root)
+        == CGAL::ZERO;
+}
+
 Polynomial normalized_polynomial(
     const Polynomial& polynomial)
 {
@@ -476,6 +602,87 @@ Polynomial common_governing_factor(
     return normalized_polynomial(common);
 }
 
+struct OneRootPartitionRootIds {
+    std::vector<std::string> physical;
+    std::vector<std::string> conjugate_only;
+};
+
+OneRootPartitionRootIds
+classify_one_root_partition_roots(
+    const EventPartitionCertificate2& certificate)
+{
+    Kernel kernel;
+    std::vector<FactorRootCacheEntry>
+        root_factor_cache;
+    OneRootPartitionRootIds result;
+    for (const AlgebraicRootRecord2& record :
+         certificate.roots) {
+        const Polynomial governing_factor =
+            normalized_polynomial(
+                polynomial_from_strings(
+                    record.factor_coefficients));
+        const std::vector<AlgebraicReal>&
+            governing_roots =
+                cached_factor_roots(
+                    governing_factor,
+                    root_factor_cache,
+                    kernel);
+        if (record.root_ordinal
+            >= governing_roots.size()) {
+            throw AlgebraicRootIsolationError(
+                "one-root classification received an invalid root ordinal");
+        }
+        const AlgebraicReal& root =
+            governing_roots[record.root_ordinal];
+        bool physical = false;
+        bool conjugate = false;
+        for (const ProjectionRecord2& projection :
+             certificate.projections) {
+            if (!projection
+                     .one_root_predicate
+                     .has_value()) {
+                continue;
+            }
+            if (projection.coefficient_rows.size()
+                    != 1
+                || projection
+                       .coefficient_rows.front()
+                       .empty()) {
+                throw InvalidAlgebraicPolynomialError(
+                    "one-root projection lacks one univariate coefficient row");
+            }
+            const Polynomial norm =
+                polynomial_from_strings(
+                    projection
+                        .coefficient_rows
+                        .front());
+            if (kernel.sign_at_1_object()(
+                    norm,
+                    root)
+                != CGAL::ZERO) {
+                continue;
+            }
+            if (one_root_equation_holds(
+                    *projection
+                         .one_root_predicate,
+                    root,
+                    kernel)) {
+                physical = true;
+            } else {
+                conjugate = true;
+            }
+        }
+        if (physical) {
+            result.physical.push_back(
+                record.root_id);
+        } else if (conjugate) {
+            result.conjugate_only.push_back(
+                record.root_id);
+        }
+    }
+    return result;
+}
+
 Rational simplest_dyadic_between(
     const AlgebraicReal& left,
     const AlgebraicReal& right)
@@ -566,6 +773,61 @@ bool event_less(
 }
 
 } // namespace
+
+OneRootPredicate2 OneRootPredicate2::build(
+    std::vector<std::string> rational_coefficients,
+    std::vector<std::string> radical_coefficients,
+    std::string radicand)
+{
+    std::vector<Integer> rational =
+        integer_coefficients(
+            rational_coefficients,
+            "one-root rational predicate");
+    std::vector<Integer> radical =
+        integer_coefficients(
+            radical_coefficients,
+            "one-root radical predicate");
+    if (std::all_of(
+            radical.begin(),
+            radical.end(),
+            [](const Integer& coefficient) {
+                return coefficient == 0;
+            })) {
+        throw InvalidAlgebraicPolynomialError(
+            "one-root predicate requires a nonzero radical part");
+    }
+    const Rational exact_radicand =
+        parse_one_root_radicand(radicand);
+    if (exact_radicand <= 0) {
+        throw InvalidAlgebraicPolynomialError(
+            "one-root predicate requires a positive radicand");
+    }
+    Integer divisor = 0;
+    for (const Integer& coefficient : rational) {
+        divisor = greatest_common_divisor(
+            divisor,
+            coefficient);
+    }
+    for (const Integer& coefficient : radical) {
+        divisor = greatest_common_divisor(
+            divisor,
+            coefficient);
+    }
+    if (divisor == 0) {
+        throw InvalidAlgebraicPolynomialError(
+            "one-root predicate is identically zero");
+    }
+    for (Integer& coefficient : rational) {
+        coefficient /= divisor;
+    }
+    for (Integer& coefficient : radical) {
+        coefficient /= divisor;
+    }
+    return OneRootPredicate2(
+        coefficient_text(rational),
+        coefficient_text(radical),
+        rational_text(exact_radicand));
+}
 
 AlgebraicBackendEvidence2 exact_algebraic_backend_evidence()
 {
@@ -676,6 +938,24 @@ void validate_algebraic_root_intervals(
     }
 }
 
+std::vector<std::string>
+one_root_physical_root_ids(
+    const EventPartitionCertificate2& certificate)
+{
+    return classify_one_root_partition_roots(
+               certificate)
+        .physical;
+}
+
+std::vector<std::string>
+one_root_conjugate_root_ids(
+    const EventPartitionCertificate2& certificate)
+{
+    return classify_one_root_partition_roots(
+               certificate)
+        .conjugate_only;
+}
+
 EventPartitionCertificate2 partition_integer_projections(
     const std::vector<ProjectionInput2>& projections)
 {
@@ -697,6 +977,11 @@ EventPartitionCertificate2 partition_integer_projections(
                 "projection polynomial must be nonzero and nonconstant");
         }
         Polynomial signed_predicate;
+        if (!input.signed_predicate_coefficients.empty()
+            && input.one_root_predicate.has_value()) {
+            throw InvalidAlgebraicPolynomialError(
+                "projection cannot own two signed predicate forms");
+        }
         if (!input.signed_predicate_coefficients.empty()) {
             signed_predicate = polynomial_from_strings(
                 input.signed_predicate_coefficients);
@@ -705,6 +990,14 @@ EventPartitionCertificate2 partition_integer_projections(
                 throw InvalidAlgebraicPolynomialError(
                     "signed predicate does not govern the projection zero set");
             }
+        }
+        if (input.one_root_predicate.has_value()
+            && normalized_polynomial(
+                   one_root_norm(
+                       *input.one_root_predicate))
+                != normalized_polynomial(polynomial)) {
+            throw InvalidAlgebraicPolynomialError(
+                "one-root predicate does not govern the projection zero set");
         }
         std::vector<std::pair<Polynomial, int>> factors;
         kernel.square_free_factorize_1_object()(
@@ -734,6 +1027,8 @@ EventPartitionCertificate2 partition_integer_projections(
                 projection_record.coefficient_rows.front());
         projection_record.signed_predicate_coefficients =
             input.signed_predicate_coefficients;
+        projection_record.one_root_predicate =
+            input.one_root_predicate;
 
         for (const auto& [raw_factor, multiplicity] : factors) {
             const Polynomial factor =
@@ -767,18 +1062,26 @@ EventPartitionCertificate2 partition_integer_projections(
                 std::vector<
                     RootCandidate::SourceEventEvidence>
                     event_evidence;
-                event_evidence.reserve(
-                    input.events.size());
-                for (const PartitionEvent2& event :
-                     input.events) {
-                    event_evidence.push_back(
-                        {
-                            event,
-                            input.projection_id,
-                            ccan_sequence(factor_text),
-                            static_cast<unsigned int>(
-                                multiplicity),
-                        });
+                const bool physical_root =
+                    !input.one_root_predicate.has_value()
+                    || one_root_equation_holds(
+                        *input.one_root_predicate,
+                        root,
+                        kernel);
+                if (physical_root) {
+                    event_evidence.reserve(
+                        input.events.size());
+                    for (const PartitionEvent2& event :
+                         input.events) {
+                        event_evidence.push_back(
+                            {
+                                event,
+                                input.projection_id,
+                                ccan_sequence(factor_text),
+                                static_cast<unsigned int>(
+                                    multiplicity),
+                            });
+                    }
                 }
                 candidates.push_back(
                     {

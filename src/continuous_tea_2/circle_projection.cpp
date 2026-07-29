@@ -2,6 +2,7 @@
 
 #include "circle_fibre_state.h"
 #include "circle_pair_projection.h"
+#include "circle_vertex_source.h"
 #include "event_certificate.h"
 #include "event_partition.h"
 #include "parameter_charts.h"
@@ -9,6 +10,7 @@
 #include <algorithm>
 #include <array>
 #include <map>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -225,6 +227,8 @@ std::vector<std::string> primitive_factor(
 struct RadialPassageFactors {
     std::vector<std::string> zero_set;
     std::vector<std::string> signed_predicate;
+    std::optional<OneRootPredicate2>
+        one_root_predicate;
 };
 
 IntegerPolynomial polynomial_column(
@@ -278,6 +282,56 @@ IntegerPolynomial add_polynomials(
         left[index] += scale * right[index];
     }
     return left;
+}
+
+void trim_polynomial(
+    IntegerPolynomial& polynomial)
+{
+    while (polynomial.size() > 1
+           && polynomial.back() == 0) {
+        polynomial.pop_back();
+    }
+}
+
+std::vector<std::string> coefficient_text(
+    const IntegerPolynomial& polynomial)
+{
+    std::vector<std::string> result;
+    result.reserve(polynomial.size());
+    for (const Integer& coefficient : polynomial) {
+        result.push_back(
+            coefficient.convert_to<std::string>());
+    }
+    return result;
+}
+
+void normalize_polynomial_pair(
+    IntegerPolynomial& rational,
+    IntegerPolynomial& radical)
+{
+    trim_polynomial(rational);
+    trim_polynomial(radical);
+    Integer divisor = 0;
+    for (const Integer& coefficient : rational) {
+        divisor = greatest_common_divisor(
+            divisor,
+            coefficient);
+    }
+    for (const Integer& coefficient : radical) {
+        divisor = greatest_common_divisor(
+            divisor,
+            coefficient);
+    }
+    if (divisor == 0) {
+        throw InvalidAlgebraicPolynomialError(
+            "full-circle one-root passage is identically zero");
+    }
+    for (Integer& coefficient : rational) {
+        coefficient /= divisor;
+    }
+    for (Integer& coefficient : radical) {
+        coefficient /= divisor;
+    }
 }
 
 IntegerPolynomial compose_global_chart(
@@ -459,6 +513,165 @@ RadialPassageFactors radial_passage_factor(
         primitive_factor(
             std::move(global),
             false),
+        std::nullopt,
+    };
+}
+
+RadialPassageFactors vertex_passage_factor(
+    const std::vector<std::string>& motion_data,
+    const std::string& radial_distance,
+    const std::string& vertex_x,
+    const std::string& vertex_y,
+    std::size_t chart)
+{
+    const FullCircleCoordinate2 x =
+        FullCircleCoordinate2::decode(vertex_x);
+    const FullCircleCoordinate2 y =
+        FullCircleCoordinate2::decode(vertex_y);
+    Rational radicand = 0;
+    if (x.radical_coefficient() != 0) {
+        radicand = x.radicand();
+    }
+    if (y.radical_coefficient() != 0) {
+        if (radicand != 0
+            && radicand != y.radicand()) {
+            throw UnsupportedAlgebraicVertexProjectionError(
+                "full-circle vertex coordinates use distinct radicals");
+        }
+        radicand = y.radicand();
+    }
+    if (radicand == 0) {
+        return radial_passage_factor(
+            motion_data,
+            radial_distance,
+            rational_text(x.base()),
+            rational_text(y.base()),
+            chart);
+    }
+
+    std::vector<Rational> values{
+        parse_rational_text(motion_data[0]),
+        parse_rational_text(motion_data[1]),
+        parse_rational_text(motion_data[2]),
+        parse_rational_text(motion_data[3]),
+        parse_rational_text(radial_distance),
+        x.base(),
+        y.base(),
+        x.radical_coefficient(),
+        y.radical_coefficient(),
+    };
+    Integer denominator = 1;
+    for (const Rational& value : values) {
+        denominator = least_common_multiple(
+            denominator,
+            CORE::denominator(value));
+    }
+    std::vector<Integer> scaled;
+    scaled.reserve(values.size());
+    for (const Rational& value : values) {
+        scaled.push_back(
+            CORE::numerator(
+                value * Rational(denominator)));
+    }
+
+    const IntegerPolynomial unit_denominator{
+        Integer(1),
+        Integer(0),
+        Integer(1),
+    };
+    const IntegerPolynomial denominator_squared =
+        multiply_polynomials(
+            unit_denominator,
+            unit_denominator);
+    const auto [center_x, center_y] =
+        scaled_motion_center(scaled, chart);
+    const IntegerPolynomial dx =
+        add_polynomials(
+            center_x,
+            unit_denominator,
+            -scaled[5]);
+    const IntegerPolynomial dy =
+        add_polynomials(
+            center_y,
+            unit_denominator,
+            -scaled[6]);
+    const Integer radicand_numerator =
+        CORE::numerator(radicand);
+    const Integer radicand_denominator =
+        CORE::denominator(radicand);
+
+    IntegerPolynomial rational_part =
+        add_polynomials(
+            multiply_polynomials(dx, dx),
+            multiply_polynomials(dy, dy),
+            Integer(1));
+    rational_part = add_polynomials(
+        std::move(rational_part),
+        denominator_squared,
+        -scaled[4] * scaled[4]);
+    for (Integer& coefficient :
+         rational_part) {
+        coefficient *= radicand_denominator;
+    }
+    rational_part = add_polynomials(
+        std::move(rational_part),
+        denominator_squared,
+        radicand_numerator
+            * (
+                scaled[7] * scaled[7]
+                + scaled[8] * scaled[8]));
+
+    IntegerPolynomial radical_part =
+        add_polynomials(
+            multiply_polynomials(
+                dx,
+                {scaled[7]}),
+            multiply_polynomials(
+                dy,
+                {scaled[8]}),
+            Integer(1));
+    radical_part =
+        multiply_polynomials(
+            radical_part,
+            unit_denominator);
+    for (Integer& coefficient :
+         radical_part) {
+        coefficient *=
+            -Integer(2)
+            * radicand_denominator;
+    }
+
+    rational_part = compose_global_chart(
+        rational_part,
+        chart);
+    radical_part = compose_global_chart(
+        radical_part,
+        chart);
+    normalize_polynomial_pair(
+        rational_part,
+        radical_part);
+    const OneRootPredicate2 predicate =
+        OneRootPredicate2::build(
+            coefficient_text(rational_part),
+            coefficient_text(radical_part),
+            rational_text(radicand));
+    IntegerPolynomial norm =
+        multiply_polynomials(
+            rational_part,
+            rational_part);
+    for (Integer& coefficient : norm) {
+        coefficient *= radicand_denominator;
+    }
+    norm = add_polynomials(
+        std::move(norm),
+        multiply_polynomials(
+            radical_part,
+            radical_part),
+        -radicand_numerator);
+    return {
+        primitive_factor(std::move(norm)),
+        {},
+        predicate,
     };
 }
 
@@ -679,7 +892,8 @@ partition_full_circle_boundary_geometry(
     const std::string& cutter_radius,
     const std::string& cap_chord_ratio,
     const std::vector<std::string>& line_sources,
-    const std::vector<std::string>& circle_sources)
+    const std::vector<std::string>& circle_sources,
+    const std::vector<std::string>& pair_requests)
 {
     if (motion_data.size() != 4
         || cutter_radius.empty()
@@ -1084,10 +1298,14 @@ partition_full_circle_boundary_geometry(
                     disposition,
                 };
                 event.endpoint_role = incident[3];
+                event.original_equations_rechecked =
+                    true;
+                event.orientation_rechecked = true;
+                event.trim_disposition = "accepted";
                 events.push_back(std::move(event));
             }
             RadialPassageFactors passage =
-                radial_passage_factor(
+                vertex_passage_factor(
                     motion_data,
                     cutter_radius,
                     vertex.x,
@@ -1105,6 +1323,8 @@ partition_full_circle_boundary_geometry(
                     std::move(events),
                     std::move(
                         passage.signed_predicate),
+                    std::move(
+                        passage.one_root_predicate),
                 });
         }
     }
@@ -1113,7 +1333,8 @@ partition_full_circle_boundary_geometry(
             line_sources,
             circle_sources,
             cap_chord_ratio,
-            pullbacks);
+            pullbacks,
+            pair_requests);
     tangencies.insert(
         tangencies.end(),
         std::make_move_iterator(

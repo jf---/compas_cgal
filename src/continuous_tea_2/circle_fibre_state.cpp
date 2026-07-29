@@ -17,12 +17,113 @@
 namespace {
 
 using Integer = CORE::BigInt;
+using Rational = CORE::BigRat;
 using Polynomial = CGAL::Polynomial<Integer>;
+
+Rational parse_rational(
+    const std::string& text)
+{
+    const std::size_t separator = text.find('/');
+    try {
+        if (separator == std::string::npos) {
+            return Rational(Integer(text));
+        }
+        if (text.find('/', separator + 1)
+                != std::string::npos
+            || Integer(text.substr(separator + 1))
+                == 0) {
+            throw EventPartitionVerificationError(
+                "one-root signed predicate has a malformed rational");
+        }
+        return Rational(
+            Integer(text.substr(0, separator)),
+            Integer(text.substr(separator + 1)));
+    } catch (const EventSubstrateError&) {
+        throw;
+    } catch (const std::exception&) {
+        throw EventPartitionVerificationError(
+            "one-root signed predicate has a malformed rational");
+    }
+}
+
+Rational evaluate_rational(
+    const std::vector<std::string>& coefficients,
+    const ParameterCell2& cell)
+{
+    const Rational parameter(
+        Integer(cell.witness_numerator),
+        Integer(cell.witness_denominator));
+    Rational result(0);
+    for (auto coefficient = coefficients.rbegin();
+         coefficient != coefficients.rend();
+         ++coefficient) {
+        result =
+            result * parameter
+            + Rational(Integer(*coefficient));
+    }
+    return result;
+}
+
+CGAL::Sign signed_one_root_projection_sign(
+    const OneRootPredicate2& predicate,
+    const ParameterCell2& cell)
+{
+    const Rational rational =
+        evaluate_rational(
+            predicate.rational_coefficients(),
+            cell);
+    const Rational radical =
+        evaluate_rational(
+            predicate.radical_coefficients(),
+            cell);
+    const CGAL::Sign rational_sign =
+        CGAL::sign(rational);
+    const CGAL::Sign radical_sign =
+        CGAL::sign(radical);
+    if (radical_sign == CGAL::ZERO) {
+        return rational_sign;
+    }
+    if (rational_sign == CGAL::ZERO) {
+        return radical_sign;
+    }
+    if (rational_sign == radical_sign) {
+        return rational_sign;
+    }
+    const Rational magnitude =
+        rational * rational
+        - parse_rational(predicate.radicand())
+            * radical * radical;
+    const CGAL::Sign magnitude_sign =
+        CGAL::sign(magnitude);
+    if (magnitude_sign == CGAL::ZERO) {
+        return CGAL::ZERO;
+    }
+    return magnitude_sign == CGAL::POSITIVE
+        ? rational_sign
+        : radical_sign;
+}
 
 CGAL::Sign signed_projection_sign(
     const ProjectionRecord2& projection,
     const ParameterCell2& cell)
 {
+    if (projection.one_root_predicate.has_value()) {
+        if (!projection
+                 .signed_predicate_coefficients
+                 .empty()) {
+            throw EventPartitionVerificationError(
+                "full-circle event state owns two signed predicates");
+        }
+        const CGAL::Sign sign =
+            signed_one_root_projection_sign(
+                *projection.one_root_predicate,
+                cell);
+        if (sign == CGAL::ZERO) {
+            throw EventPartitionVerificationError(
+                "full-circle cell witness lies on a one-root event projection");
+        }
+        return sign;
+    }
     if (projection
             .signed_predicate_coefficients.empty()) {
         throw EventPartitionVerificationError(

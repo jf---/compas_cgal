@@ -73,12 +73,58 @@ struct PartitionEvent2 {
     }
 };
 
+class OneRootPredicate2 {
+public:
+    static OneRootPredicate2 build(
+        std::vector<std::string> rational_coefficients,
+        std::vector<std::string> radical_coefficients,
+        std::string radicand);
+
+    const std::vector<std::string>&
+    rational_coefficients() const
+    {
+        return rational_coefficients_;
+    }
+
+    const std::vector<std::string>&
+    radical_coefficients() const
+    {
+        return radical_coefficients_;
+    }
+
+    const std::string& radicand() const
+    {
+        return radicand_;
+    }
+
+private:
+    OneRootPredicate2(
+        std::vector<std::string> rational_coefficients,
+        std::vector<std::string> radical_coefficients,
+        std::string radicand)
+        : rational_coefficients_(
+              std::move(rational_coefficients)),
+          radical_coefficients_(
+              std::move(radical_coefficients)),
+          radicand_(std::move(radicand))
+    {
+    }
+
+    std::vector<std::string>
+        rational_coefficients_;
+    std::vector<std::string>
+        radical_coefficients_;
+    std::string radicand_;
+};
+
 struct ProjectionInput2 {
     std::string projection_id;
     std::vector<std::string> coefficients;
     std::vector<PartitionEvent2> events;
     std::vector<std::string>
         signed_predicate_coefficients;
+    std::optional<OneRootPredicate2>
+        one_root_predicate;
 
     ProjectionInput2() = default;
     ProjectionInput2(
@@ -86,13 +132,17 @@ struct ProjectionInput2 {
         std::vector<std::string> coefficients_,
         std::vector<PartitionEvent2> events_,
         std::vector<std::string>
-            signed_predicate_coefficients_ = {})
+            signed_predicate_coefficients_ = {},
+        std::optional<OneRootPredicate2>
+            one_root_predicate_ = std::nullopt)
         : projection_id(std::move(projection_id_)),
           coefficients(std::move(coefficients_)),
           events(std::move(events_)),
           signed_predicate_coefficients(
               std::move(
-                  signed_predicate_coefficients_))
+                  signed_predicate_coefficients_)),
+          one_root_predicate(
+              std::move(one_root_predicate_))
     {
     }
 };
@@ -215,6 +265,8 @@ struct ProjectionRecord2 {
     std::string normalized_coefficient_bytes;
     std::vector<std::string>
         signed_predicate_coefficients;
+    std::optional<OneRootPredicate2>
+        one_root_predicate;
 };
 
 struct OverlapInterval2 {
@@ -258,6 +310,12 @@ struct VerifiedEventPartition2 {
 class EventSubstrateError : public std::runtime_error {
 public:
     using std::runtime_error::runtime_error;
+};
+
+class UnsupportedAlgebraicVertexProjectionError
+    : public EventSubstrateError {
+public:
+    using EventSubstrateError::EventSubstrateError;
 };
 
 class AlgebraicBackendError : public EventSubstrateError {

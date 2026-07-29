@@ -351,6 +351,12 @@ class CcwOrientation2:
     dot_sign: str
 
 
+class OneRootPredicate2:
+    rational_coefficients: Sequence[str]
+    radical_coefficients: Sequence[str]
+    radicand: str
+
+
 class ProjectionRecord2:
     projection_id: str
     coefficient_rows: Sequence[Sequence[str]]
@@ -360,6 +366,7 @@ class ProjectionRecord2:
     degree_bound_id: str
     normalized_coefficient_bytes: bytes
     signed_predicate_coefficients: Sequence[str]
+    one_root_predicate: OneRootPredicate2 | None
 
 
 class OverlapInterval2:
@@ -587,6 +594,12 @@ def partition_cap_crossings(
 def verify_event_partition(
     certificate: EventPartitionCertificate2,
 ) -> VerifiedEventPartition2: ...
+def one_root_physical_root_ids(
+    certificate: EventPartitionCertificate2,
+) -> tuple[bytes, ...]: ...
+def one_root_conjugate_root_ids(
+    certificate: EventPartitionCertificate2,
+) -> tuple[bytes, ...]: ...
 def order_full_circle_events(
     verified_partition: VerifiedEventPartition2,
     clockwise: bool,

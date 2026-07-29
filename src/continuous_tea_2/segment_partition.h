@@ -100,12 +100,6 @@ SegmentEventPartition2 mutate_segment_event_partition(
     const SegmentEventPartition2& partition,
     const std::string& mutation);
 
-class UnsupportedAlgebraicVertexProjectionError
-    : public EventSubstrateError {
-public:
-    using EventSubstrateError::EventSubstrateError;
-};
-
 class IncompleteSegmentPartitionError
     : public EventSubstrateError {
 public:

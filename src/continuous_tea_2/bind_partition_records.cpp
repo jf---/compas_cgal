@@ -222,6 +222,27 @@ void bind_partition_records(nb::module_& module)
             "cw_direction",
             &EventFibre2::cw_direction);
 
+    nb::class_<OneRootPredicate2>(
+        module,
+        "OneRootPredicate2")
+        .def_prop_ro(
+            "rational_coefficients",
+            [](const OneRootPredicate2& predicate) {
+                return string_tuple(
+                    predicate
+                        .rational_coefficients());
+            })
+        .def_prop_ro(
+            "radical_coefficients",
+            [](const OneRootPredicate2& predicate) {
+                return string_tuple(
+                    predicate
+                        .radical_coefficients());
+            })
+        .def_prop_ro(
+            "radicand",
+            &OneRootPredicate2::radicand);
+
     nb::class_<ProjectionRecord2>(
         module,
         "ProjectionRecord2")
@@ -269,6 +290,19 @@ void bind_partition_records(nb::module_& module)
                 return string_tuple(
                     projection
                         .signed_predicate_coefficients);
+            })
+        .def_prop_ro(
+            "one_root_predicate",
+            [](const ProjectionRecord2& projection)
+                -> nb::object {
+                if (!projection
+                         .one_root_predicate
+                         .has_value()) {
+                    return nb::none();
+                }
+                return nb::cast(
+                    *projection
+                         .one_root_predicate);
             });
 
     nb::class_<OverlapInterval2>(
