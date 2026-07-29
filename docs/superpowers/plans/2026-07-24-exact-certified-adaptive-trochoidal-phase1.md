@@ -2100,9 +2100,10 @@ plateau necks each expose three reversal-invariant sides `(6, 1, 1)`.
 Typed side identities bind evidence digest, partition ordinal, and edge IDs;
 same-union repartition and cross-wired-locus attacks fail against the retained
 owner. Batched typed construction is `O(Q + P)`, not per-neck whole-owner
-projection. `GenerationState` remains the physical accepted boundary while a
-separate global traversal value will own all edge cursors and side history.
-The first circle still requires a distinct precleared-entry transaction; later
+projection. This coherent stage is published at `d289f79`.
+`GenerationState` remains the physical accepted boundary while a separate
+global traversal value will own all edge cursors and side history. The first
+circle still requires a distinct precleared-entry transaction; later
 candidates retain Task 12's joint link/circle transaction.
 
 **Files**
