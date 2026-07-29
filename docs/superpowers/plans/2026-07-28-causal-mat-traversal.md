@@ -115,7 +115,7 @@ Commit: `feat(mat): expose exact neck sides`
 
 ### Task 2: Directed global traversal ledger
 
-**Status (2026-07-29): complete locally; publication pending.**
+**Status (2026-07-29): complete and published at `6ac2050`.**
 
 **Files**
 
