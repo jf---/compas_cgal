@@ -118,6 +118,38 @@ class InvalidTraversalPolicyError(ValueError):
     """A traversal order or forward window is invalid."""
 
 
+class InvalidTraversalGraphError(ValueError):
+    """An exact MAT traversal graph or directed route is inconsistent."""
+
+
+class InvalidCausalNeckTransitError(ValueError):
+    """A causal transition does not bind two owned exact neck sides."""
+
+
+class AmbiguousNeckSideError(ValueError):
+    """An exact route edge does not resolve one unique certified neck side."""
+
+
+class OverlappingNeckTransitError(ValueError):
+    """One operation would cross multiple independently active necks."""
+
+
+class InvalidMatTraversalStateError(ValueError):
+    """Global MAT traversal state violates its exact graph authority."""
+
+
+class StaleTraversalCursorError(ValueError):
+    """A candidate does not begin at the active exact global cursor."""
+
+
+class TerminalTraversalCursorError(RuntimeError):
+    """A candidate attempts to advance an already terminal MAT edge."""
+
+
+class NonterminalMatTraversalError(RuntimeError):
+    """Global MAT traversal is queried or switched before terminal state."""
+
+
 class InvalidCutDirectionPolicyError(ValueError):
     """A cut-direction intent or material-side decision is invalid."""
 

@@ -84,14 +84,23 @@ the same exact evidence object.
 
 ## Global traversal state
 
-`MatTraversalState` is immutable and content-addressed. It owns the MAT
-identity and state that evolves on the graph lifetime:
+Static and evolving facts have separate lifetimes.
+`TraversalSampleIndex` binds every refinement-dependent exact parameter,
+cursor, edge, and ordinal once. `TraversalGraph` projects exact component,
+branch, node, edge, and endpoint-cursor authority. `MatTraversalAuthority`
+derives both plus the deterministic route and complete causal neck-frontier
+schedule from the exact owners, policies, and authenticated entry exactly
+once. It binds the MAT sampling policy separately from its realized sample
+index so coincident outputs from distinct policies cannot alias.
+
+`MatTraversalState` is immutable and content-addressed. It retains that static
+authority and only the state that evolves on the graph lifetime:
 
 - one `DirectedEdgeCursor` per exact MAT edge;
 - the active edge;
-- explicit visited edge-side incidences;
-- canonical component/branch discovery state; and
-- the current exact side of every classified neck.
+- explicit visited `(edge, node)` incidences;
+- the current exact side of every classified neck; and
+- at most one pending causal neck transit.
 
 `DirectedEdgeCursor` owns:
 
@@ -278,7 +287,10 @@ replay evidence. It is internal and content-addressed.
 Before timing, Task 13 enforces these counts:
 
 - one MAT and neck-inventory construction per generation or fresh replay;
+- one native sample index, graph projection, route, and causal-frontier build
+  per traversal authority;
 - one exact side index per neck;
+- constant-time accepted-candidate native cursor-limit lookup;
 - one candidate-family materialization per attempted span;
 - one isolated stock/coverage fork per candidate trial;
 - no repeated full MAT build, cut reconstruction, or `O(k n)` coordinate

@@ -363,7 +363,7 @@ def _candidate_record_bytes(
     spatial_progress: ExactMillimetre,
     spatial_levels: tuple[int, ...],
     radius_levels: tuple[int, ...],
-    cursor_limit_identity: bytes,
+    cursor_limit_identity: CursorIdentity,
     neck_scope: NeckScope,
     effective_cap_decision: EffectiveCapDecision,
     traversal_decision: AdvanceTraversalDecision,
@@ -429,7 +429,7 @@ class MiddleCurveCandidate:
     spatial_progress: ExactMillimetre
     spatial_levels: tuple[int, ...]
     radius_levels: tuple[int, ...]
-    cursor_limit_identity: bytes
+    cursor_limit_identity: CursorIdentity
     neck_scope: NeckScope
     effective_cap_decision: EffectiveCapDecision
     traversal_decision: AdvanceTraversalDecision
@@ -461,7 +461,7 @@ class MiddleCurveCandidate:
         spatial_progress: ExactMillimetre,
         spatial_levels: tuple[int, ...],
         radius_levels: tuple[int, ...],
-        cursor_limit_identity: bytes,
+        cursor_limit_identity: CursorIdentity,
         neck_scope: NeckScope,
         effective_cap_decision: EffectiveCapDecision,
         traversal_decision: AdvanceTraversalDecision,

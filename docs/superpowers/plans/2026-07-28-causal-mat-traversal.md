@@ -115,11 +115,16 @@ Commit: `feat(mat): expose exact neck sides`
 
 ### Task 2: Directed global traversal ledger
 
+**Status (2026-07-29): complete locally; publication pending.**
+
 **Files**
 
 - Create: `src/compas_cgal/adaptive/traversal.py`
+- Create: `src/compas_cgal/adaptive/traversal_graph.py`
+- Modify: `src/compas_cgal/adaptive/candidates.py`
 - Modify: `src/compas_cgal/adaptive/errors.py`
 - Test: `tests/adaptive/test_traversal.py`
+- Modify: `tests/adaptive/typecheck/consumer_contract.py`
 
 **Interfaces**
 
@@ -129,34 +134,36 @@ Commit: `feat(mat): expose exact neck sides`
 - `MatTraversalState.advance(candidate) -> MatTraversalState`
 - `MatTraversalState.activate_next(...) -> MatTraversalState`
 - `MatTraversalState.require_terminal() -> None`
+- `TraversalSampleIndex.build(...) -> TraversalSampleIndex`
+- `TraversalGraph.from_axis(...) -> TraversalGraph`
 
-- [ ] **Step 1: Write RED state contracts**
+- [x] **Step 1: Write RED state contracts**
 
 Test one cursor per edge, canonical state identity, exact owner binding,
 single-cursor advancement, stale cursor rejection, terminal-edge rejection,
 alias-free immutable transitions, and deterministic component/branch order.
 
-- [ ] **Step 2: Write RED graph-route contracts**
+- [x] **Step 2: Write RED graph-route contracts**
 
 Use exact synthetic chain, branch, cycle, and multi-component topologies.
 Require transitions to use shared node IDs, retain both cycle incidences, and
 visit every edge. Mutate a node ID while preserving reporting coordinates and
 require loud failure.
 
-- [ ] **Step 3: Write RED causal-side contracts**
+- [x] **Step 3: Write RED causal-side contracts**
 
 Require unique side initialization, a three-partition plateau transition,
 canonical forward/reverse orientation, passage-state lookup, and exact
 NoNeckScope outside a transit. Reject union-only inference, ambiguous sides,
 overlapping active necks, and a relabelled partition.
 
-- [ ] **Step 4: Implement immutable traversal**
+- [x] **Step 4: Implement immutable traversal**
 
 Keep route discovery, per-edge cursors, visited incidences, and neck sides in
 one graph-lifetime value. Hash the MAT certificate digest plus complete
 canonical state. Do not include mutable stock or coverage.
 
-- [ ] **Step 5: GREEN and document**
+- [x] **Step 5: GREEN and document**
 
 ```bash
 pixi run pytest tests/adaptive/test_traversal.py -n auto --testmon -q
