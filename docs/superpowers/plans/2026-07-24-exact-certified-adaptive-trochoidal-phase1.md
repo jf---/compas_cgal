@@ -2092,7 +2092,7 @@ divides the stage into exact topology projection, global traversal,
 bidirectional spans, launch, continuation, terminal replay, and publication
 gates.
 
-**Status (2026-07-29): Tasks 13A and 13B complete; bidirectional spans next.**
+**Status (2026-07-29): Tasks 13A–13C complete; entry bootstrap next.**
 Task 13A is published at `d289f79`: the native owner retains all four exact
 neck-locus variants and every cut partition, and each production L plateau
 exposes three reversal-invariant sides `(6, 1, 1)`. Task 13B is published at
@@ -2102,9 +2102,12 @@ neck-side frontier. Chain, branch, cycle, multi-component, relabelled-node,
 same-union ambiguity, overlapping-transit, stale/terminal cursor,
 refinement-identity, and single-build contracts pass.
 Graph/sample/frontier authority is built once; accepted-candidate cursor
-lookup no longer rescans the native sample table. Current `MiddleCurveSpan`
-remains forward-only, so Task 13C must consume the reverse route edges before
-bootstrap and generator integration.
+lookup no longer rescans the native sample table. Task 13C now accepts
+increasing and decreasing native sample order, retains the selected ordinal
+step through derived cursors, rejects direction reversal inside one lineage,
+and uniquely reconstructs a real reverse P–S candidate without orientation
+inference. The global ledger advances its real reverse route edge. Entry
+bootstrap and generator integration remain open.
 
 **Files**
 

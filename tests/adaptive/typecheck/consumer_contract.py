@@ -1,3 +1,4 @@
+from typing import Literal
 from typing import assert_never
 from typing import assert_type
 
@@ -152,6 +153,7 @@ candidate_span = MiddleCurveSpan.build(
     cursor_limit=typed_axis.samples[1],
 )
 assert_type(candidate_span, MiddleCurveSpan)
+assert_type(candidate_span.ordinal_step, Literal[-1, 1])
 candidate_policy = CandidatePolicy.build(
     spatial_resolution=Spacing.build(0.5),
     spatial_refinement_levels=2,
@@ -180,6 +182,8 @@ derived_cursor = DerivedCandidateCursor.build(
     candidate=intermediate_candidate,
 )
 assert_type(derived_cursor, DerivedCandidateCursor)
+assert_type(derived_cursor.ordinal_step, Literal[-1, 1])
+assert_type(derived_cursor.next_limit_ordinal, int)
 continued_span = MiddleCurveSpan.build(
     axis=typed_axis,
     cursor_before=derived_cursor,

@@ -11,6 +11,7 @@ from compas_cgal.adaptive.candidates import MiddleCurveSpan
 from compas_cgal.adaptive.candidates import enumerate_middle_curve_candidates
 from compas_cgal.adaptive.errors import InvalidMathsmProposalError
 from compas_cgal.adaptive.errors import InvalidMiddleCurveCursorError
+from compas_cgal.adaptive.errors import InvalidMiddleCurveSpanError
 from compas_cgal.adaptive.medial_axis import MatEdge
 from compas_cgal.adaptive.medial_axis import MatSample
 from compas_cgal.adaptive.medial_axis import MedialAxis
@@ -448,3 +449,165 @@ def test_spatial_refinement_follows_point_segment_parabola_not_sample_chord() ->
 
     assert refined_points == {Point2[WorldXY].build(1.75, 1.015625)}
     assert Point2[WorldXY].build(1.75, 1.03125) not in refined_points
+
+
+def test_reverse_line_span_preserves_positive_progress_and_separate_identity() -> None:
+    """Traverse a real constant-clearance MAT line from its higher ordinal.
+
+    Connected graph discovery may enter this edge at either endpoint. The
+    reverse lattice must keep positive machining progress and deterministic
+    ordering while remaining cryptographically distinct from the forward
+    traversal of the same native interval.
+    """
+    base, edge, _ = _constant_clearance_span()
+    samples = tuple(
+        sorted(
+            (sample for sample in base.axis.samples if sample.edge_id == edge.identity),
+            key=lambda sample: sample.ordinal_on_edge,
+        )
+    )
+    forward = MiddleCurveSpan.build(
+        axis=base.axis,
+        cursor_before=samples[1],
+        cursor_limit=samples[2],
+    )
+    reverse = MiddleCurveSpan.build(
+        axis=base.axis,
+        cursor_before=samples[2],
+        cursor_limit=samples[1],
+    )
+    arguments = {
+        "policy": _policy(),
+        "circle_orientation": CircleOrientation.COUNTERCLOCKWISE,
+        "neck_scope": NoNeckScope.build(),
+        "effective_cap_decision": _full_cap(),
+        "makes_cursor_terminal_at_limit": True,
+    }
+    forward_candidates = enumerate_middle_curve_candidates(
+        span=forward,
+        **arguments,
+    )
+    reverse_candidates = enumerate_middle_curve_candidates(
+        span=reverse,
+        **arguments,
+    )
+    repeated = enumerate_middle_curve_candidates(
+        span=reverse,
+        **arguments,
+    )
+
+    assert reverse.ordinal_step == -1
+    assert {candidate.spatial_progress for candidate in reverse_candidates} == {candidate.spatial_progress for candidate in forward_candidates}
+    assert all(candidate.spatial_progress > 0 for candidate in reverse_candidates)
+    assert {candidate.identity for candidate in reverse_candidates}.isdisjoint(candidate.identity for candidate in forward_candidates)
+    assert tuple(candidate.identity for candidate in reverse_candidates) == tuple(candidate.identity for candidate in repeated)
+    terminal = tuple(candidate for candidate in reverse_candidates if candidate.traversal_decision.makes_cursor_terminal)
+    assert terminal
+    assert {candidate.spatial_progress for candidate in terminal} == {reverse.reported_length}
+
+
+def test_reverse_parabola_uses_the_same_point_segment_geometry() -> None:
+    """Mirror one real point-segment parabola without mirroring its formula.
+
+    Reversing the ordered endpoints must reach the identical half-parameter
+    point on the analytic parabola. Candidate lineage still differs because
+    the exact cursor-before and cursor-limit records are reversed.
+    """
+    forward = _parabolic_span()
+    reverse = MiddleCurveSpan.build(
+        axis=forward.axis,
+        cursor_before=forward.cursor_limit,
+        cursor_limit=forward.cursor_before,
+    )
+    half_span = float(forward.reported_length) / 2.0
+    policy = CandidatePolicy.build(
+        spatial_resolution=Spacing.build(half_span),
+        spatial_refinement_levels=1,
+        radius_resolution=Spacing.build(0.125),
+        radius_refinement_levels=1,
+        phase_count=1,
+        minimum_guide_radius=GuideRadius.build(0.125),
+        minimum_progress=Spacing.build(half_span),
+    )
+    arguments = {
+        "policy": policy,
+        "circle_orientation": CircleOrientation.COUNTERCLOCKWISE,
+        "neck_scope": NoNeckScope.build(),
+        "effective_cap_decision": _full_cap(),
+        "makes_cursor_terminal_at_limit": False,
+    }
+    forward_candidates = enumerate_middle_curve_candidates(
+        span=forward,
+        **arguments,
+    )
+    reverse_candidates = enumerate_middle_curve_candidates(
+        span=reverse,
+        **arguments,
+    )
+    forward_midpoints = {candidate.middle_point for candidate in forward_candidates if candidate.spatial_progress < forward.reported_length}
+    reverse_midpoints = {candidate.middle_point for candidate in reverse_candidates if candidate.spatial_progress < reverse.reported_length}
+
+    assert reverse.ordinal_step == -1
+    assert (
+        forward_midpoints
+        == reverse_midpoints
+        == {
+            Point2[WorldXY].build(1.75, 1.015625),
+        }
+    )
+    assert {candidate.identity for candidate in reverse_candidates}.isdisjoint(candidate.identity for candidate in forward_candidates)
+
+
+def test_derived_reverse_cursor_rejects_direction_reversal() -> None:
+    """Retain reverse ordinal causality after stopping between native samples.
+
+    A derived cursor has no native ordinal of its own. Its producing span must
+    therefore carry the direction and nearest legal native limit; otherwise a
+    continuation could backtrack while presenting one uninterrupted lineage.
+    """
+    forward, edge, _ = _constant_clearance_span()
+    samples = tuple(
+        sorted(
+            (sample for sample in forward.axis.samples if sample.edge_id == edge.identity),
+            key=lambda sample: sample.ordinal_on_edge,
+        )
+    )
+    reverse = MiddleCurveSpan.build(
+        axis=forward.axis,
+        cursor_before=samples[2],
+        cursor_limit=samples[1],
+    )
+    candidate = next(
+        candidate
+        for candidate in enumerate_middle_curve_candidates(
+            span=reverse,
+            policy=_policy(),
+            circle_orientation=CircleOrientation.COUNTERCLOCKWISE,
+            neck_scope=NoNeckScope.build(),
+            effective_cap_decision=_full_cap(),
+            makes_cursor_terminal_at_limit=False,
+        )
+        if candidate.spatial_progress == Fraction(1, 4)
+    )
+    cursor = DerivedCandidateCursor.build(
+        span=reverse,
+        candidate=candidate,
+    )
+    continuation = MiddleCurveSpan.build(
+        axis=forward.axis,
+        cursor_before=cursor,
+        cursor_limit=samples[0],
+    )
+
+    assert cursor.ordinal_step == -1
+    assert cursor.next_limit_ordinal == samples[1].ordinal_on_edge
+    assert continuation.ordinal_step == -1
+    with pytest.raises(
+        InvalidMiddleCurveSpanError,
+        match="retained sample direction",
+    ):
+        MiddleCurveSpan.build(
+            axis=forward.axis,
+            cursor_before=cursor,
+            cursor_limit=samples[2],
+        )

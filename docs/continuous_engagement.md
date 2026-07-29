@@ -26,9 +26,11 @@ cells.
     rejection. Task 13A retains the exact neck loci and all three certified
     sides of each production plateau neck. Task 13B now carries those sides
     through one content-addressed route over every MAT edge and derives a
-    unique pending oriented neck scope from causal side history. Bidirectional
-    span consumption, entry bootstrap, the complete candidate loop,
-    traversal/coverage closure, replay/artifact certification,
+    unique pending oriented neck scope from causal side history. Task 13C now
+    consumes increasing and decreasing native spans, retains direction through
+    derived cursors, and freshly reconstructs one reverse P–S candidate without
+    using cutter rotation as topology. Entry bootstrap, the complete candidate
+    loop, traversal/coverage closure, replay/artifact certification,
     arbitrary-pocket evidence, and matched Held–Pfeiffer performance remain
     incomplete.
 
@@ -310,10 +312,11 @@ circle exceeds that cap and the complete joint trial is discarded. A separate
 larger lattice circle passes its direct link and fails exact containment.
 
 Task 13B is now the sole authority for assigning causal neck scope and choosing
-the active global MAT branch. Later Task 13 stages decide which candidate
-failures constitute normal search exhaustion. Task 12 validates a supplied
-finite candidate and state transition; it does not infer global traversal
-facts.
+the active global MAT branch. Task 13C lets that authority consume either
+native ordinal direction without changing positive MATHSM progress or cutter
+rotation. Later Task 13 stages decide which candidate failures constitute
+normal search exhaustion. Task 12 validates a supplied finite candidate and
+state transition; it does not infer global traversal facts.
 
 !!! danger "Exact-number backend definitions are an ABI contract"
 

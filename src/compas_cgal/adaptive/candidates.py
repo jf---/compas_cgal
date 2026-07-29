@@ -4,6 +4,7 @@ import hashlib
 import math
 from dataclasses import dataclass
 from fractions import Fraction
+from typing import Literal
 from typing import NewType
 from typing import Self
 from typing import cast
@@ -187,14 +188,16 @@ class MiddleCurveSpan:
         if type(self.cursor_before) is MatSample:
             if self.cursor_before not in self.axis.samples:
                 raise InvalidMiddleCurveSpanError("middle-curve native cursor is not owned by its MAT.")
-            minimum_limit_ordinal = self.cursor_before.ordinal_on_edge + 1
+            ordinal_delta = self.cursor_limit.ordinal_on_edge - self.cursor_before.ordinal_on_edge
+            if ordinal_delta == 0:
+                raise InvalidMiddleCurveSpanError("middle-curve native span requires distinct sample ordinals.")
         else:
             derived_cursor = cast(DerivedCandidateCursor, self.cursor_before)
             if derived_cursor.axis is not self.axis:
                 raise InvalidMiddleCurveSpanError("middle-curve derived cursor belongs to another MAT owner.")
-            minimum_limit_ordinal = derived_cursor.minimum_limit_ordinal
-        if self.cursor_limit.ordinal_on_edge < minimum_limit_ordinal:
-            raise InvalidMiddleCurveSpanError("middle-curve span must advance in canonical sample order.")
+            ordinal_delta = self.cursor_limit.ordinal_on_edge - derived_cursor.next_limit_ordinal
+            if ordinal_delta != 0 and (1 if ordinal_delta > 0 else -1) != derived_cursor.ordinal_step:
+                raise InvalidMiddleCurveSpanError("middle-curve continuation contradicts its retained sample direction.")
         if self.cursor_before.point == self.cursor_limit.point:
             raise InvalidMiddleCurveSpanError("middle-curve span requires nonzero reporting progress.")
 
@@ -216,6 +219,16 @@ class MiddleCurveSpan:
     @property
     def reported_length(self) -> ExactMillimetre:
         return ExactMillimetre(Fraction.from_float(_distance(self.cursor_before.point, self.cursor_limit.point)))
+
+    @property
+    def ordinal_step(self) -> Literal[-1, 1]:
+        """Return the monotone native-sample direction of this span."""
+        if type(self.cursor_before) is MatSample:
+            return 1 if self.cursor_limit.ordinal_on_edge > self.cursor_before.ordinal_on_edge else -1
+        return cast(
+            DerivedCandidateCursor,
+            self.cursor_before,
+        ).ordinal_step
 
 
 @dataclass(frozen=True)
@@ -616,8 +629,21 @@ class DerivedCandidateCursor:
         return self.candidate.middle_point
 
     @property
-    def minimum_limit_ordinal(self) -> int:
+    def ordinal_step(self) -> Literal[-1, 1]:
+        """Retain the direction selected by the producing native span."""
+        return self.span.ordinal_step
+
+    @property
+    def next_limit_ordinal(self) -> int:
+        """Return the nearest native ordinal legal for a continuation."""
         return self.span.cursor_limit.ordinal_on_edge
+
+    @property
+    def minimum_limit_ordinal(self) -> int:
+        """Return the forward-only lower limit retained by this cursor."""
+        if self.ordinal_step != 1:
+            raise InvalidMiddleCurveCursorError("reverse derived cursor has no minimum native limit ordinal.")
+        return self.next_limit_ordinal
 
 
 def _refined_spatial_values(
