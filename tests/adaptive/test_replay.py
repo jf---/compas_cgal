@@ -567,6 +567,100 @@ def test_replay_reconstructs_unique_candidate_before_stock_replay() -> None:
         )
 
 
+def test_replay_reconstructs_unique_reverse_candidate_window() -> None:
+    """Recover a reverse P-S candidate from exact finite-lattice lineage.
+
+    Circle orientation describes cutting intent, not MAT graph direction.
+    Fresh replay must search the native window on both sides of an initial
+    cursor, select the unique cryptographic match, then retain the selected
+    reverse direction in its derived continuation cursor.
+    """
+    identity = _input_identity()
+    axis = _axis()
+    edge = next(edge for edge in axis.edges if edge.curve_kind == "parabola" and len(tuple(sample for sample in axis.samples if sample.edge_id == edge.identity)) >= 3)
+    samples = tuple(
+        sorted(
+            (sample for sample in axis.samples if sample.edge_id == edge.identity),
+            key=lambda sample: sample.ordinal_on_edge,
+        )
+    )
+    span = MiddleCurveSpan.build(
+        axis=axis,
+        cursor_before=samples[2],
+        cursor_limit=samples[1],
+    )
+    full_cap = FullCapDecision.build(
+        user_cap=identity.user_cap,
+        effective_cap=identity.user_cap,
+    )
+    candidate = next(
+        candidate
+        for candidate in enumerate_middle_curve_candidates(
+            span=span,
+            policy=identity.candidate_policy,
+            circle_orientation=CircleOrientation.COUNTERCLOCKWISE,
+            neck_scope=NoNeckScope.build(),
+            effective_cap_decision=full_cap,
+            makes_cursor_terminal_at_limit=False,
+        )
+        if candidate.spatial_progress == Fraction(1, 4)
+    )
+    operation = _candidate_circle_operation(identity, candidate)
+    current_by_edge = {}
+
+    reconstructed = replay_module._match_circle_candidate(
+        axis=axis,
+        operation=operation,
+        user_cap=identity.user_cap,
+        candidate_policy=identity.candidate_policy,
+        neck_policy=identity.neck_policy,
+        traversal_policy=identity.traversal_policy,
+        cut_direction_policy=identity.cut_direction_policy,
+        passages={},
+        current_by_edge=current_by_edge,
+    )
+
+    assert reconstructed == candidate
+    cursor = current_by_edge[edge.identity]
+    assert type(cursor) is DerivedCandidateCursor
+    assert cursor.ordinal_step == -1
+
+    terminal_span = MiddleCurveSpan.build(
+        axis=axis,
+        cursor_before=cursor,
+        cursor_limit=samples[0],
+    )
+    terminal_candidate = next(
+        candidate
+        for candidate in enumerate_middle_curve_candidates(
+            span=terminal_span,
+            policy=identity.candidate_policy,
+            circle_orientation=CircleOrientation.COUNTERCLOCKWISE,
+            neck_scope=NoNeckScope.build(),
+            effective_cap_decision=full_cap,
+            makes_cursor_terminal_at_limit=True,
+        )
+        if candidate.traversal_decision.makes_cursor_terminal and candidate.spatial_progress == terminal_span.reported_length
+    )
+    terminal_reconstructed = replay_module._match_circle_candidate(
+        axis=axis,
+        operation=_candidate_circle_operation(
+            identity,
+            terminal_candidate,
+        ),
+        user_cap=identity.user_cap,
+        candidate_policy=identity.candidate_policy,
+        neck_policy=identity.neck_policy,
+        traversal_policy=identity.traversal_policy,
+        cut_direction_policy=identity.cut_direction_policy,
+        passages={},
+        current_by_edge=current_by_edge,
+    )
+
+    assert terminal_reconstructed == terminal_candidate
+    assert current_by_edge[edge.identity] is None
+
+
 def test_replay_certifies_before_motion_depletion(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

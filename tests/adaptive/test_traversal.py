@@ -603,6 +603,43 @@ def test_candidate_advance_mutates_one_cursor_then_activates_next_route_edge() -
     assert child.active_route_index == 0
 
 
+def test_reverse_route_edge_advances_to_its_exact_entry_endpoint() -> None:
+    """Consume the first route edge when graph discovery enters at its target.
+
+    Seeding the real L-pocket parabola from its exact target node reverses the
+    native sample order. The global ledger must accept a positive-progress
+    terminal candidate and land on ordinal zero without changing route
+    causality.
+    """
+    axis = _axis()
+    inventory = NeckInventory.build(
+        axis=axis,
+        policy=_neck_policy(),
+    )
+    entry_edge = axis.edges[0]
+    state = MatTraversalState.seed(
+        axis=axis,
+        inventory=inventory,
+        policy=_policy(),
+        entry_edge_id=entry_edge.identity,
+        entry_node_id=entry_edge.target.identity,
+    )
+    active = state.active_cursor
+    span = MiddleCurveSpan.build(
+        axis=axis,
+        cursor_before=active.cursor,
+        cursor_limit=active.terminal_cursor,
+    )
+    candidate = _terminal_candidate(state)
+    child = state.advance(candidate)
+
+    assert span.ordinal_step == -1
+    assert active.cursor.ordinal_on_edge > active.terminal_cursor.ordinal_on_edge
+    assert candidate.spatial_progress > 0
+    assert child.active_cursor.terminal
+    assert child.active_cursor.cursor == active.terminal_cursor
+
+
 def test_route_activation_retains_source_side_until_scoped_candidate_commit() -> None:
     """Carry a plateau side through its locus before exposing one transit.
 

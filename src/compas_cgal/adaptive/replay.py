@@ -371,6 +371,26 @@ def _initial_cursor(
     return matches[0]
 
 
+def _directed_limits(
+    *,
+    samples: tuple[MatSample, ...],
+    cursor_before: MatSample | DerivedCandidateCursor,
+    window: int,
+) -> tuple[MatSample, ...]:
+    """Enumerate exact native limits without inferring from circle orientation."""
+    if type(cursor_before) is MatSample:
+        ordinal = cursor_before.ordinal_on_edge
+        increasing = tuple(sample for sample in samples if sample.ordinal_on_edge > ordinal)[:window]
+        decreasing = tuple(sample for sample in reversed(samples) if sample.ordinal_on_edge < ordinal)[:window]
+        return (*increasing, *decreasing)
+
+    derived_cursor = cast(DerivedCandidateCursor, cursor_before)
+    next_ordinal = derived_cursor.next_limit_ordinal
+    if derived_cursor.ordinal_step == 1:
+        return tuple(sample for sample in samples if sample.ordinal_on_edge >= next_ordinal)[:window]
+    return tuple(sample for sample in reversed(samples) if sample.ordinal_on_edge <= next_ordinal)[:window]
+
+
 def _fresh_neck_passages(
     inventory: NeckInventory,
 ) -> dict[OrientedNeckScope, NeckPassage]:
@@ -494,16 +514,13 @@ def _match_circle_candidate(
         passages=passages,
     )
     orientation = cut_direction_policy.circle_orientation(operation.material_side)
-    if type(cursor_before) is MatSample:
-        first_limit_ordinal = cursor_before.ordinal_on_edge + 1
-    else:
-        first_limit_ordinal = cast(
-            DerivedCandidateCursor,
-            cursor_before,
-        ).minimum_limit_ordinal
-    limits = tuple(sample for sample in samples if sample.ordinal_on_edge >= first_limit_ordinal)[: traversal_policy.forward_window]
+    limits = _directed_limits(
+        samples=samples,
+        cursor_before=cursor_before,
+        window=traversal_policy.forward_window,
+    )
     if not limits:
-        raise ReplayTraversalError("recorded cursor has no fresh native limit inside the forward window.")
+        raise ReplayTraversalError("recorded cursor has no fresh native limit inside its directed window.")
 
     matches: dict[
         bytes,
@@ -515,7 +532,8 @@ def _match_circle_candidate(
             cursor_before=cursor_before,
             cursor_limit=limit,
         )
-        terminal_limit = limit.ordinal_on_edge == samples[-1].ordinal_on_edge
+        terminal_sample = samples[-1] if span.ordinal_step == 1 else samples[0]
+        terminal_limit = limit.ordinal_on_edge == terminal_sample.ordinal_on_edge
         for candidate in enumerate_middle_curve_candidates(
             span=span,
             policy=candidate_policy,

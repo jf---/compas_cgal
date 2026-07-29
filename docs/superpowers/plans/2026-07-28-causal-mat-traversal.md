@@ -178,6 +178,8 @@ Commit: `feat(adaptive): add causal traversal`
 
 ### Task 3: Bidirectional finite-lattice spans
 
+**Status (2026-07-29): complete locally; publication pending.**
+
 **Files**
 
 - Modify: `src/compas_cgal/adaptive/candidates.py`
@@ -186,26 +188,26 @@ Commit: `feat(adaptive): add causal traversal`
 - Test: `tests/adaptive/test_replay.py`
 - Test: `tests/adaptive/test_traversal.py`
 
-- [ ] **Step 1: Write RED reverse-span tests**
+- [x] **Step 1: Write RED reverse-span tests**
 
 Mirror a real L line edge and P-S parabola span. Require reverse progress,
 geometry, native/derived cursor identity, deterministic enumeration, terminal
 limit, and forward/reverse identity separation. Reject a direction reversal
 inside one derived continuation.
 
-- [ ] **Step 2: Implement inferred span direction**
+- [x] **Step 2: Implement inferred span direction**
 
 Allow ordered native cursor pairs in either ordinal direction. Retain the
 direction in `DerivedCandidateCursor`, compute the next legal limit ordinal,
 and leave positive progress and MATHSM geometry unchanged.
 
-- [ ] **Step 3: Extend fresh unique reconstruction**
+- [x] **Step 3: Extend fresh unique reconstruction**
 
 Replay searches the directed window owned by traversal state. It must uniquely
 reconstruct old forward fixtures and new reverse fixtures with no
 orientation-based inference.
 
-- [ ] **Step 4: GREEN and document**
+- [x] **Step 4: GREEN and document**
 
 ```bash
 pixi run pytest tests/adaptive/test_candidates.py \

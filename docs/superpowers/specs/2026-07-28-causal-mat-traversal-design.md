@@ -140,6 +140,18 @@ Fresh replay enumerates the same directed window and requires a unique
 candidate match. It never guesses direction from circle orientation or
 reporting coordinates.
 
+The pre-integration prefix replay boundary has one narrower exception: when a
+submitted native cursor predates global-route reconstruction, it enumerates
+the bounded windows on both ordinal sides and requires exactly one complete
+candidate identity to match. The selected `DerivedCandidateCursor` then owns
+one direction. Complete terminal replay instead consumes the rebuilt
+`MatTraversalState` direction from its first candidate.
+
+An open-segment generator remains open at a MAT node. If a directed limit
+projects exactly to that excluded endpoint, the candidate cell is infeasible;
+the implementation must not close the site, perturb reporting geometry, or
+reinterpret the event as a direction failure.
+
 ## Route and side causality
 
 The route planner operates only on exact node and edge identities:
