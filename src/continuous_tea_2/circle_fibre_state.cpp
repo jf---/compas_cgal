@@ -691,20 +691,6 @@ void classify_full_circle_endpoint_fibres(
             throw EventPartitionVerificationError(
                 "full-circle active sheet lacks physical incidence evidence");
         }
-        std::vector<std::string> active_union =
-            left_keys;
-        active_union.insert(
-            active_union.end(),
-            right_keys.begin(),
-            right_keys.end());
-        std::sort(
-            active_union.begin(),
-            active_union.end());
-        active_union.erase(
-            std::unique(
-                active_union.begin(),
-                active_union.end()),
-            active_union.end());
         if (left_keys != right_keys
             && contains(right_keys, left_keys)) {
             fibre.ccw_direction = "split";
@@ -718,23 +704,13 @@ void classify_full_circle_endpoint_fibres(
             left_keys == right_keys) {
             fibre.ccw_direction = "unchanged";
             fibre.cw_direction = "unchanged";
-        } else if (
-            active_union == incident_keys) {
+        } else {
+            // Incomparable exact active sets prove simultaneous
+            // merge and split.  A tangent physical incidence may
+            // remain inactive on both adjacent cells, so the union
+            // of those sets need not exhaust incident_keys.
             fibre.ccw_direction = "mixed";
             fibre.cw_direction = "mixed";
-        } else {
-            throw EventPartitionVerificationError(
-                fibre.seam_id.empty()
-                    ? "full-circle event active sheets do not prove a merge or split: left="
-                        + std::to_string(
-                            left_keys.size())
-                        + ", right="
-                        + std::to_string(
-                            right_keys.size())
-                        + ", incident="
-                        + std::to_string(
-                            incident_keys.size())
-                    : "full-circle phase-seam active sheets do not prove a cyclic merge or split");
         }
     }
 }

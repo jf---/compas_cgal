@@ -4,8 +4,10 @@ from unittest.mock import Mock
 
 import pytest
 
+from compas_cgal import _continuous_tea_2
 import compas_cgal.adaptive.generator as generator_module
 from compas_cgal.adaptive.candidates import MiddleCurveCandidate
+from compas_cgal.adaptive.errors import GougeContainmentError
 from compas_cgal.adaptive.errors import UnresolvedMotionEventError
 from compas_cgal.adaptive.generation_state import GenerationState
 from compas_cgal.adaptive.generation_state import TraversalCursorState
@@ -14,17 +16,27 @@ from compas_cgal.adaptive.generator import TraversalCommit
 from compas_cgal.adaptive.generator import advance_active_candidate_family
 from compas_cgal.adaptive.generator import generate_exact_adaptive_continuation
 from compas_cgal.adaptive.generator import materialize_active_candidate_family
+from compas_cgal.adaptive.motion import ExactSegmentMotion
 from compas_cgal.adaptive.transaction import CandidateEvaluator
 from compas_cgal.adaptive.transaction import CandidateTransaction
 from compas_cgal.adaptive.traversal import MatTraversalState
+from compas_cgal.adaptive.units import Point2
+from compas_cgal.adaptive.units import WorldXY
 from tests.adaptive.test_acceptance import _BranchFixture
 from tests.adaptive.test_acceptance import _build_branch_fixture
+from tests.adaptive.task13f_fixture import Task13FFixture
 
 
 @pytest.fixture(scope="module")
 def branch() -> _BranchFixture:
     """Build the exact terminal-launch branch-switch fixture once."""
     return _build_branch_fixture()
+
+
+@pytest.fixture(scope="module")
+def task13f() -> Task13FFixture:
+    """Build the exact radius-1 one-root continuation fixture once."""
+    return Task13FFixture.build()
 
 
 def _forward_limit_identities(
@@ -128,6 +140,128 @@ def test_real_active_family_stops_at_unresolved_exact_event(
             physical=branch.physical,
             traversal=branch.traversal,
         )
+
+
+def test_task13f_fourth_trial_accepts_mixed_seam_with_inactive_incidence(
+    task13f: Task13FFixture,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Reach the real post-link one-root circle through exact trial order.
+
+    The fixed family has sixteen cells. Its first three trials are proved
+    gouges. The fourth link certifies and leaves four simultaneous boundary
+    vertices at the following circle's phase seam: two enter, one leaves, and
+    one is tangent. The neighboring active sets are incomparable but do not
+    exhaust the exact incidences. The circle is feasible under the pi cap, so
+    its accepted transaction must bind the independently reproduced mixed
+    native trace instead of rejecting its inactive tangent evidence.
+    """
+    family = materialize_active_candidate_family(
+        evaluator=task13f.evaluator,
+        physical=task13f.physical,
+        traversal=task13f.traversal,
+    )
+
+    assert len(family) == 16
+    fourth = family[3]
+    original_evaluate = CandidateEvaluator.evaluate_from_cursor
+    calls: list[bytes] = []
+    gouges: list[bytes] = []
+
+    def track_real_trial(
+        self: CandidateEvaluator,
+        state: GenerationState,
+        traversal_before: TraversalCursorState,
+        candidate: MiddleCurveCandidate,
+    ) -> CandidateTransaction:
+        calls.append(candidate.identity)
+        try:
+            return original_evaluate(
+                self,
+                state,
+                traversal_before,
+                candidate,
+            )
+        except GougeContainmentError:
+            gouges.append(candidate.identity)
+            raise
+
+    monkeypatch.setattr(
+        CandidateEvaluator,
+        "evaluate_from_cursor",
+        track_real_trial,
+    )
+    physical_after, traversal_after, commit = advance_active_candidate_family(
+        evaluator=task13f.evaluator,
+        physical=task13f.physical,
+        traversal=task13f.traversal,
+    )
+    transaction = commit.transaction
+
+    assert calls == [candidate.identity for candidate in family[:4]]
+    assert gouges == [candidate.identity for candidate in family[:3]]
+    assert transaction.candidate == fourth
+    assert physical_after.digest == (commit.physical_child_digest)
+    assert traversal_after.active_cursor.terminal
+
+    motion = transaction.candidate.motion
+    phase_point = Point2[WorldXY].build(
+        motion.center.x + motion.phase_vector.x,
+        motion.center.y + motion.phase_vector.y,
+    )
+    post_link_stock = task13f.physical.fork_stock()
+    post_link_stock.deplete(
+        ExactSegmentMotion.build(
+            task13f.physical.phase_point,
+            phase_point,
+        ),
+        task13f.identity.tool_radius,
+        task13f.identity.depletion_policy,
+    )
+    verdict, trace = _continuous_tea_2.audit_full_circle_tea_event_exact(
+        post_link_stock.raw,
+        motion.center.x,
+        motion.center.y,
+        motion.phase_vector.x,
+        motion.phase_vector.y,
+        motion.clockwise,
+        task13f.identity.tool_radius.value,
+        task13f.identity.user_cap.chord_ratio,
+    )
+    seam_fibres = tuple(fibre for fibre in trace.partition.fibres if fibre.seam_id)
+    assert len(seam_fibres) == 1
+    seam = seam_fibres[0]
+
+    def physical_key(item: object) -> tuple[object, ...]:
+        return (
+            item.kind,
+            item.feature_id,
+            item.support_id,
+            item.trim_id,
+            item.vertex_id,
+            item.endpoint_role,
+        )
+
+    left_incidence = {physical_key(branch.physical_incidence) for branch in seam.left_active_branches}
+    right_incidence = {physical_key(branch.physical_incidence) for branch in seam.right_active_branches}
+    active_incidence = left_incidence | right_incidence
+    witnessed_incidence = {physical_key(witness) for witness in seam.local_event_witnesses if witness.kind == "endpoint-order"}
+
+    assert verdict == "certified"
+    assert trace.canonical_digest == (transaction.circle_witness.motion_witness.event_trace_digest)
+    assert left_incidence - right_incidence
+    assert right_incidence - left_incidence
+    assert active_incidence < witnessed_incidence
+    assert (seam.ccw_direction, seam.cw_direction) == (
+        "mixed",
+        "mixed",
+    )
+    assert (
+        _continuous_tea_2.verify_event_partition(
+            trace.partition,
+        ).verdict.name
+        == "CERTIFIED"
+    )
 
 
 def test_generation_commits_launch_before_propagating_route_uncertainty(
