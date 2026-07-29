@@ -39,12 +39,16 @@ cells.
     authority aborts immediately. A launch-rooted `GenerationContinuation`
     records the resulting prefix, but the adopted real L family currently
     exposes an unresolved segment-partition case before global completion.
-    A shorter radius-1 Task 13F family reaches a later boundary: its launch and
-    first continuation link certify exactly, but the link depletion introduces
-    one-root algebraic trim vertices that the nonuniform full-circle pullback
-    source does not yet admit. That circle returns the explicit
-    `full-circle-task5-blocked-v1` unresolved scaffold rather than falling
-    through to the cell authority.
+    A shorter radius-1 Task 13F family exposed the next exact boundary: its
+    launch and first continuation link certified, but the link depletion
+    introduced one-root algebraic trim vertices. The new source v4 path now
+    admits that coordinate family without binary64 collapse, separates
+    physical roots from norm conjugates, and proves the real post-capsule
+    circle's named cap exceedance without mutating its stock snapshot. The
+    rational-coordinate source v3 path remains independently reconstructible
+    and retains its complete-product positive controls. Integration of the
+    stronger v4 oracle back into the complete Task 13F ordered continuation
+    is the next gate; this stage does not yet claim terminal traversal.
     Traversal/coverage closure, fresh terminal replay, arbitrary-pocket
     evidence, and matched Held–Pfeiffer performance remain incomplete.
 
@@ -89,7 +93,7 @@ deciding record.
 
 The planning `InputIdentity` separately binds
 `motion-certificate-schema-v1` and the native
-`event-exact-motion-oracle-v4` component. Changing the witness schema or
+`event-exact-motion-oracle-v5` component. Changing the witness schema or
 oracle implementation family therefore changes the planning root before
 replay begins.
 
@@ -144,9 +148,9 @@ or unreconstructed degeneracy is unresolved, never sampled into acceptance.
 
 The event partition proves where the engagement combinatorics may change. It
 does not prove the disposition of the open cells between those events.
-`event-exact-motion-oracle-v4` closes that second proof obligation for
-same-support and noncoincident cross-support material runs over admitted
-rational trim vertices.
+`event-exact-motion-oracle-v5` closes that second proof obligation for
+same-support and noncoincident cross-support material runs over rational and
+shared-radical one-root trim vertices.
 
 Each global rational cell witness is assigned to its unique owned quarter
 chart. The rational Pythagorean parametrization
@@ -165,9 +169,50 @@ For a same-support partial material run, the authority requires the existing
 chart-specific support-cap projection. An equal-cap same-support run requires
 the corresponding identically-equal overlap record.
 
-For a cross-support run, each unordered feature pair and each
-center/rim-chart triple contributes the eliminant of the two boundary
-pullbacks with the oriented-rim determinant
+### One-root vertex passages
+
+Source v4 encodes every coordinate with one grammar:
+
+```text
+q = a + b sqrt(alpha)
+```
+
+where `a`, `b`, and the positive radicand `alpha` are exact rationals.
+Rational coordinates canonicalize to `b = alpha = 0`. A vertex may use one
+shared nonzero radicand across `x` and `y`; distinct nonzero coordinate
+radicands raise `UnsupportedAlgebraicVertexProjectionError`.
+
+On one owned quarter chart, a cutter-boundary passage through such a vertex
+has the exact form
+
+```text
+F(t) = A(t) + B(t) sqrt(alpha).
+```
+
+The integer polynomial
+
+```text
+N(t) = den(alpha) A(t)^2 - num(alpha) B(t)^2
+```
+
+discovers every candidate partition root. It also contains roots of the
+conjugate equation `A - B sqrt(alpha) = 0`. The algebraic kernel therefore
+retains every root of `N`, but endpoint events are attached only after exact
+re-evaluation of the original `F = 0` equation. Conjugate-only roots remain
+valid partition boundaries without acquiring physical topology.
+
+The active sheet cannot use `sign(N)`, because the norm loses the sign of the
+original radical equation. Each one-root projection consequently binds jointly
+normalized `A`, `B`, and `alpha`; cell classification evaluates
+`sign(A + B sqrt(alpha))` exactly from coefficient signs and squared
+magnitudes. `one_root_physical_root_ids(...)` and
+`one_root_conjugate_root_ids(...)` recompute this provenance even after
+coincident roots have been reduced to a common governing factor.
+
+### Exact active-pair demand
+
+For a cross-support run, the final partition contributes the eliminant of the
+two boundary pullbacks with the oriented-rim determinant
 
 ```text
 o = x₁ y₂ - y₁ x₂.
@@ -180,11 +225,39 @@ g = (2 - C) d₁ d₂ - 2 (x₁ x₂ + y₁ y₂),
 ```
 
 where `(xᵢ / dᵢ, yᵢ / dᵢ)` is the rational rim parametrization and `C` is the
-exact cap chord ratio. The omitted factor
-`d₁ d₂ = (1 + u²)(1 + v²)` is strictly positive on every real rim chart.
-Removing it before elimination therefore preserves every real sign while
-preventing complex projective chart poles from turning valid resultants into
-identically-zero polynomials.
+exact cap chord ratio.
+
+A circle-support pullback contains one exact rim-chart denominator factor
+`1 + u²`. That factor has no real roots, but its complex roots are projective
+chart poles. Leaving it in both pullbacks makes the pair resultant
+identically zero through a nonphysical shared component. The producer now
+proves exact divisibility and saturates each circle pullback by that factor
+before elimination. The pair predicate likewise omits the known-positive real
+factor `d₁ d₂ = (1 + u²)(1 + v²)`. Both transformations preserve every real
+sign and root used by the engagement proof.
+
+The algebraic v4 producer does not construct every unordered feature/chart
+product. It:
+
+1. builds the physical topology partition without cross-support pair factors;
+2. evaluates one exact rational station in each topology cell;
+3. records every cross-support branch pair active there, together with its
+   owned center and rim charts;
+4. sorts and deduplicates that canonical request set; and
+5. rebuilds with only the requested orientation and sub-`pi` cap factors; and
+6. unions any requests exposed by the refined witnesses and repeats until the
+   canonical request set reaches a fixed point.
+
+Pair roots cannot create a physical boundary branch, but a first-pass witness
+can lie exactly on a pair-order coincidence that was absent from the topology
+partition. Refinement then moves the child witnesses off that coincidence and
+can expose a request hidden at the parent witness. Monotone closure retains
+every earlier request and terminates because the feature/chart/rim request
+universe is finite. The closed request set is part of the v4 source payload
+and therefore reconstructs byte-identically. Completeness remains
+independently fail-closed:
+`FullCircleCellAuthority2` requires the matching factor for every active
+material run and returns unresolved if one is absent.
 
 These pair roots refine the motion partition but are not physical boundary
 events. Their projection inputs deliberately carry an empty event list;
@@ -205,8 +278,10 @@ runs and unsupported overlap families remain unresolved.
 
 Its SHA-256 digest is therefore deliberately distinct from the generic
 partition digest and is included inside `EventTrace2`. The strategy is
-versioned `full-circle-cell-strata-exact-v2`; its reconstructed pullback source
-is `full-circle-boundary-pullbacks-v3`.
+versioned `full-circle-cell-strata-exact-v3`. Rational-coordinate audits retain
+the independently replayed `full-circle-boundary-pullbacks-v3` source.
+Algebraic audits use `full-circle-boundary-pullbacks-v4`, whose seventh source
+field binds the closed pair-request set.
 
 !!! warning "A verified event partition is not an engagement verdict"
 
@@ -229,26 +304,36 @@ reduced its warm Apple M1 Max Release median from 252 ms to 128 ms for a
 10-cell concentric certificate, and from 572 ms to 301 ms for a 43-cell
 cross-support audit.
 
-The broader v2 theorem has a different cost. On the same machine and Release
+The earlier complete-product theorem had a different cost. On the same machine and Release
 worktree on 2026-07-29, five warm calls gave a 1,737.242 ms median for the
 13-cell/576-projection concentric certificate and 2,018.540 ms for the
-54-cell/452-projection cross-support audit. The simple producer deliberately
-builds every admitted unordered feature pair before Task 13F closes the
-end-to-end path. These are bounded oracle-development timings, not a planner
-comparison; they establish a measured optimization obligation rather than
-performance parity.
+54-cell/452-projection cross-support audit.
 
-!!! warning "Post-link one-root trims remain an admission boundary"
+The post-capsule positive control contains `309` boundary records, of which
+`290` are admitted line/circle pair features. The former product would build
 
-    Boundary records already retain exact coordinates of the form
-    `a0 + a1 sqrt(root)`, and uniform sweep intersection consumes them
-    exactly. The nonuniform pullback source currently serializes only vertices
-    whose radicals collapse to rational coordinates. A diagonal link capsule
-    can therefore be exact in stock, containment, and segment certification
-    yet still leave its following circle unresolved. Rounding the displayed
-    endpoint, substituting its binary64 approximation, or searching lower
-    candidates would all weaken the proof contract; Task 13F instead requires
-    an exact one-root source extension.
+```text
+290 * 289 / 2 * 4 center charts * 2 * 2 rim charts
+    = 670,480
+```
+
+orientation resultant chains before any sub-`pi` cap factors. The first
+integration run remained unfinished after `100 s`. Exact topology demand
+reduced that workload to `233` canonical active-pair requests. After
+circle-pullback saturation, the isolated pytest positive control proved the
+expected cap exceedance in `30.46 s`. This is a structural reduction of more
+than three orders of magnitude in requested pair combinations, but it is
+still a slow development fixture and not Held–Pfeiffer runtime parity.
+
+!!! warning "One-root scope is exact but deliberately narrow"
+
+    Source v4's coordinate grammar can represent rationals and one shared
+    radical extension per vertex, but the production oracle retains rational
+    inputs on source v3 until a separate demand-path migration is validated.
+    Neither source tag reconstructs the other. V4 does not silently combine
+    unrelated radicals or approximate an unsupported algebraic field. A
+    vertex with distinct nonzero `x`/`y` radicands remains an explicit
+    unsupported proof boundary.
 
 ### Exact clear sweeps in nonempty stock
 
@@ -260,7 +345,7 @@ old uniform classifier recognized `clear` only when the stock had no boundary
 records. It therefore returned `unresolved` for a physically and exactly
 zero-engagement motion.
 
-The retained uniform path in `event-exact-motion-oracle-v4` derives a
+The retained uniform path in `event-exact-motion-oracle-v5` derives a
 sqrt-capable exact-region
 view of the current stock. Every linear/circular support and every one-root
 endpoint is lifted without a double conversion:
@@ -667,9 +752,17 @@ These are correctness gates, not planner-performance measurements.
 At the cross-support v4 prerequisite gate on 2026-07-29, the complete circle
 oracle file passed `17` tests, the affected consumer/replay slice passed `97`,
 and the complete adaptive suite passed `521` tests in `230.33 s`. Ruff, strict
-mypy over `27` source files, and strict MkDocs also passed. The real
-post-capsule one-root unresolved case remains a positive fail-closed contract;
-these gates do not claim that Task 13F is terminal.
+mypy over `27` source files, and strict MkDocs also passed.
+
+At the source-v4 implementation checkpoint on 2026-07-29, the exact
+physical/conjugate fixture passed with `6` physical and `14` conjugate-only
+one-root roots, and all four one-root mutations failed reconstruction. The
+`290`-feature post-capsule positive control separately passed with the named
+cap-exceedance exception in `30.46 s`. The complete circle/motion files passed
+`30` tests in `40.25 s`, and the complete adaptive suite passed `522` tests in
+`242.54 s`. Ruff, strict mypy over `27` source files, strict MkDocs, affected
+`--testmon`, and diff checks passed. Task 13F continuation remains a separate
+pending gate; these results do not claim that Task 13F is terminal.
 
 The comparative claim and matched performance boundary remain in
 [Exact Segment-Site Medial Axis](segment_site_mat.md#relation-to-held-and-pfeiffer-2025).

@@ -689,14 +689,25 @@ regularized intersection with stock is empty. For nonuniform partial circles,
 features, exact motion/cap inputs, every stationary stratum and disposition,
 and the chart-specific cap projections that keep material-run signs invariant
 over each cell. Same-support runs use the established support-cap factor.
-Cross-support runs bind the exact unordered-feature orientation resultant and,
-below `pi`, a denominator-saturated chord resultant for every owned
-center/rim-chart combination. These roots refine sign-invariant cells without
-being misreported as physical topology events. Identically equal
-cross-support runs and nonuniform sources with non-rational one-root trim
-vertices remain unresolved.
-`event-exact-motion-oracle-v4`, `full-circle-uniform-event-exact-v2`, and
-`full-circle-cell-strata-exact-v2` make the stronger deciding procedures part
+Cross-support runs bind exact pair-orientation resultants and, below `pi`,
+pair-cap resultants. Rational source v3 retains the established exhaustive
+positive-control path. Algebraic source v4 requests only center/rim-chart
+combinations discovered by a finite monotone closure over exact stationary
+strata. Circle pullbacks are exactly saturated by their nonphysical `1 + u²`
+chart-pole factor before elimination. Pair roots refine sign-invariant cells
+without being misreported as physical topology events. Identically equal
+unsupported cross-support runs remain unresolved.
+
+Source v4 also admits a shared-radical trim vertex
+`(a_x + b_x sqrt(alpha), a_y + b_y sqrt(alpha))`. Its integer norm discovers
+candidate roots, exact original-equation recheck withholds endpoint topology
+from conjugates, and the original radical predicate supplies the active-sheet
+sign. The v4 payload binds the closed canonical pair-request set, so replay
+cannot substitute a broader, narrower, or differently charted elimination
+workload. Source v3 remains byte-reconstructible for rational audits; source
+v4 is selected when the boundary contains a non-rational one-root coordinate.
+`event-exact-motion-oracle-v5`, `full-circle-uniform-event-exact-v2`, and
+`full-circle-cell-strata-exact-v3` make the stronger deciding procedures part
 of input and witness identity.
 
 `MotionCertifier.certify(...)` now dispatches both exact motion shapes,
@@ -1022,13 +1033,13 @@ construction.
 | Gouge containment | stronger exact contract; finite global-family integration gated, complete generation incomplete | Gouge freedom follows from clearance-disk machining circles and offset-curve transition elements after the pocket is transformed to an assumed machinable `r + ε` geometry | One exact native kernel proves each segment capsule or circular annulus/disk is a subset of `D`, independently checks owned `C_r` anchor facts, and emits an input-replayable structural record. Exact tangency, reflex crossings, island contact, disk-sweep circles, and one-binary64-quantum gouges are gated. Task 11A replays this proof for a reconstructed L-pocket prefix. Task 12 applies it to each isolated direct-link/full-circle trial. Task 13D separately requires the first complete circle sweep to lie both in the authenticated entry void and in `D`; shrinking only the entry disk rejects the launch without changing authoritative state. Task 13E now runs the same exact containment gates inside one globally authenticated, invariant-ordered forward-window family and may continue only after proved candidate-local gouge failure. Complete traversal remains blocked by a separately reported unresolved event-substrate case |
 | MAT backend | stronger exact contract on bounded fixtures; incomplete end-to-end | Vroni/ArcVroni used end-to-end | Exact CGAL point graph plus catalog-fed rectangle and concave L-pocket graphs. The rectangle carries Task 3 identities through one indexed SDG build, swap-owned adaptor traversal, indexed endpoint binding, exact radius clipping, five edges, six feature-triple nodes, and explicit rejection of eight incident P–S rays. The L path authenticates all 23 raw duals, binds external point/open-segment endpoint events, rejects 12 incident feature transitions, proves its P–P ray and S2–S3 diagonal are outside the interior MAT, and emits a connected 10-node/9-edge tree with seven S–S lines and two P–S parabolas. Normalized-node inventory includes the exact four-feature `{P2, P4, S2, S3}` event without coordinate merging. Both graphs now project into one validated numeric topology/evidence table, but arbitrary-pocket traversal remains incomplete |
 | Replay identity | stronger bounded-fixture contract; launch-rooted cross-axis continuation gated, terminal certificate pending | The published algorithm consumes its MAT and updates one ordered machined contour; no exact topology/provenance replay certificate is reported | Stable site, node, dual, algebraic-root, component, and coincident endpoint-event identities project once into deterministic integer rows. Native MAT and neck records reject mutation, truncation, digest mismatch, input-order drift, detached-array mutation, and omitted-cap identity. `EventTrace2` v2 hashes the complete deciding authority; for nonuniform circles the cell-authority digest is deliberately distinct from the generic partition digest. `MotionWitness` owns canonical bytes and a content digest over that trace plus observed stock lineage. Task 11 adds the complete `InputIdentity`; Task 11A independently rebuilds reachable domain/MAT sampling and the exact neck inventory and emits deterministic `FreshReplayTrace` bundles. Task 12 adds content-addressed physical state and atomic candidate transactions. Task 13B separately binds the complete refinement-dependent sample inventory, deterministic directed route, every edge cursor and visited incidence, and the causal neck-side frontier under one traversal digest. Task 13C uniquely reconstructs reverse candidate lineage. Task 13D binds pristine stock, entry depletion, empty coverage, first-circle proofs, global traversal parent/child, and physical child digest in one independently reproduced transaction. Task 13E adds `TraversalCommit` over physical and global parents/children and a launch-rooted `GenerationContinuation` over the ordered commit prefix. Exact empty residual and fresh terminal `GenerationResult` remain open |
-| Engagement limit | stronger exact ordered-search contract; complete loop blocked by explicit source-admission cases | Analytic circle construction followed by bisection until `θmax − 0.001 <= θ <= θmax` radians | Exact rational chord surrogate and event-exact segment/full-circle partition. Segment verdicts bind ordered active branches and exact pair-cap dispositions. `event-exact-motion-oracle-v4` maps every admitted nonuniform circle cell to an exact rational station and reuses the same stationary branch/pair theorem. Same-support runs bind their support-cap factor; noncoincident cross-support runs bind exact pair-orientation resultants and, below `pi`, denominator-saturated pair-cap resultants. Their roots refine cells but do not invent physical events. Both 120-degree and 180-degree regressions retain a proved 240-degree mixed-support material arc, and deleting one pair projection kills reconstruction. The uniform path separately proves an exact circular sweep disjoint from nonempty remote stock. Certified, exceeded, and unresolved outcomes remain distinct. Task 13E derives full or causal neck cap from global/physical state and stops at the first feasible ordered cell. Its adopted L fixture still exposes an incomplete segment partition; the shorter Task 13F probe gets farther, then stops when post-link one-root algebraic trim vertices reach a nonuniform source that currently admits rational trim coordinates only |
+| Engagement limit | stronger exact ordered-search contract; complete loop still blocked by segment proof and integration gates | Analytic circle construction followed by bisection until `θmax − 0.001 <= θ <= θmax` radians | Exact rational chord surrogate and event-exact segment/full-circle partition. Segment verdicts bind ordered active branches and exact pair-cap dispositions. `event-exact-motion-oracle-v5` maps each nonuniform circle cell to an exact rational station and reuses the same stationary branch/pair theorem. Source v4 admits shared-radical one-root trim vertices: an integer norm discovers roots, the original radical equation filters physical endpoint events, and exact radical sign evaluation selects the active sheet. Same-support runs bind their support-cap factor; noncoincident cross-support runs bind only topology-active pair-orientation and sub-`pi` cap resultants after exact circle-chart-pole saturation. Missing factors remain unresolved and request identities are replay-bound. Both 120-degree and 180-degree regressions retain a proved 240-degree mixed-support material arc. The real post-capsule one-root positive control now proves its named cap exceedance. Certified, exceeded, and unresolved outcomes remain distinct. The adopted L fixture still exposes an incomplete segment partition, and the complete Task 13F continuation has not yet been rerun through source v4 |
 | Candidate spacing | stronger bounded-fixture finite-search contract; terminal end-to-end path incomplete | Bisection along the middle curve | All nine adopted L edges emit exact-identity line/parabola stations with independent reporting-only spacing and sagitta refinement, deterministic CSR offsets, and structural equidistant/no-site-closer verdicts. Task 10 enumerates every declared dyadic spatial/radius lane, both exact generator sites, and every finite phase; re-evaluates P–S refinement on the focus/directrix parabola rather than its sample chord; merges duplicate values without losing level provenance; performs no feasibility bisection; and matches an independent exhaustive 72-cell oracle with byte-identical repeat order. Task 12 evaluates those immutable candidates transactionally. Task 13B binds the native sample/cursor inventory to a deterministic route; Task 13C preserves the same positive lattice in either ordinal direction. Task 13E materializes each directed forward span exactly once, globally orders the combined immutable family by progress/radius/identity, stops at its first accepted transaction, rejects reordered/duplicated families, and reports canonical exhaustion counts. Intermediate native limits, derived interior cursors, native endpoints, and last-positive-cell exhausted cursors remain distinct proof states |
 | Machined state | stronger atomic launch and cross-axis continuation contract; terminal coverage incomplete | Ordered contour of prior machining disks; transition sweeps omitted from that contour model | Exact stock mutation and exact full-sweep coverage use ordered certify-before-deplete lineage. Task 11 adds the physically qualified precleared disk as a distinct first-and-once depletion witness; `coverage-certificate-v2` seeds the residual with its authenticated `EntryRadius` while lateral sweeps retain `ToolRadius`. Task 11A reconstructs fresh owners and cross-validates each proof plus initial/terminal snapshots. Task 12 makes one continuation atomic. Task 13D closes the distinct launch. Task 13E independently replays each selected link/circle pair, advances exactly one global cursor, cross-binds both physical/global parents and children, and chains those commits under the launch transaction. Traversal exhaustion still cannot substitute for exact empty reachable residual |
 | Bottlenecks | stronger exact topology, policy, and causal-side contract on the adopted L fixture; complete loop pending | Graph search, width, and heuristic cap reduction on first passage | A typed four-variant classifier composes exact profile minima with canonical separating cuts and deterministic ownership. Native classification compares algebraic widths to strictly ordered rational policy boundaries and certifies every comparison; equality stays in the narrower class. The adopted L graph emits exactly two reversal-invariant plateau restrictions at exact `width² = 4`. Task 13A retains their complete loci and all three sides `(6, 1, 1)` and rejects same-union repartition. Task 13B derives the occupied side and oriented crossing from deterministic global route history, defers transition while traversing the exact locus, rejects ambiguous side ownership and simultaneous independent-neck transitions, and selects one matching passage scope. Task 13C consumes both route directions. Rectangle profiles and arbitrary-pocket traversal remain pending |
 | Validation | stronger exact local, atomic-state, causal-traversal, launch, and finite-search contracts; weaker end-to-end evidence | Dense engagement sampling for result plots; complete path and runtime experiments | Exact MAT/neck/engagement replay rejects mutation, truncation, domain mismatch, refinement drift, input-order drift, verdict/trace contradiction, omitted deciding authority, foreign neck ownership, reused passage state, and independent neck evidence/class/cap mutations. Typed contracts lock exact-ID projection, finite candidate cardinality, MATHSM geometry, passage/cap/traversal identity, containment, entry semantics, motion witnesses, and input identity. Task 12 adds 29 atomic L-pocket contracts. Tasks 13B–13C add causal route and bidirectional-cursor gates; Task 13D adds 15 launch contracts. Task 13E adds real branch-switch, stale/cross-wired axes, invariant first-feasible search, no-lower-ranked dispatch, named non-neck/causal/mixed exhaustion, one-build-per-span, intermediate-native-cursor, launch-rooted continuation, and real unresolved-substrate gates. Complete terminal path, fresh replay, and exact residual proof remain planned |
 | Independent removal and thermal-response replay | incomplete; planned stronger validation breadth | Volumetric stock replay and thermal-response rendering are not part of the paper's reported validation | Task 14A will replay the authenticated artifact through a separately versioned tri-dexel stock consumer, compare bounded removal evidence, and render uncalibrated modeled thermal response. No integration result exists yet, and this consumer will not replace an exact certificate |
-| End-to-end evidence | weaker | Complete paths, figures, path-length gains, and 3–100 ms path-generation timings excluding Voronoi construction | Tasks 6–8 and 10–13E provide exact local engagement, typed proposals, gouge certification, qualified entry, motion witnesses, input identity, fresh-prefix replay, atomic continuation, exact neck partitions, a content-addressed global traversal ledger, bidirectional finite-lattice consumption, an independently committed entry launch, and launch-rooted global continuation mechanics. The adopted L continuation stops fail-closed at an unresolved exact segment partition. A separate shorter Task 13F family certifies its launch and next link, then stops fail-closed because the following nonuniform circle source does not yet admit the link capsule's exact one-root algebraic trim vertices. No complete certified path, tri-dexel replay, Fig. 5 reproduction, or matched performance result exists yet |
+| End-to-end evidence | weaker | Complete paths, figures, path-length gains, and 3–100 ms path-generation timings excluding Voronoi construction | Tasks 6–8 and 10–13E provide exact local engagement, typed proposals, gouge certification, qualified entry, motion witnesses, input identity, fresh-prefix replay, atomic continuation, exact neck partitions, a content-addressed global traversal ledger, bidirectional finite-lattice consumption, an independently committed entry launch, and launch-rooted global continuation mechanics. The adopted L continuation stops fail-closed at an unresolved exact segment partition. The separate Task 13F family certifies its launch and next link; its former one-root circle admission boundary is closed in the isolated exact oracle, but ordered continuation integration remains pending. No complete certified path, tri-dexel replay, Fig. 5 reproduction, or matched performance result exists yet |
 
 ### Performance claim boundary
 
@@ -1137,13 +1148,14 @@ candidate pruning or searching past the unresolved event is forbidden.
 The Task 13F radius-1 probe makes a different boundary visible. Its qualified
 point-site launch succeeds and materializes 16 ordered continuation
 candidates. Trials 1–3 are proved gouges. Trial 4 certifies and depletes its
-link, then the circle returns `full-circle-task5-blocked-v1`: the capsule has
-introduced non-rational one-root trim vertices outside the current
-nonuniform-source grammar. The complete 16-trial diagnostic took about 61 s
-and included repeated independent candidate reconstruction, so it is not a
-planner benchmark. It is causal evidence that algebraic trim-source support,
-not family ordering or cross-support stationary classification, is the next
-completion gate.
+link, then reaches a following circle over shared-radical trim vertices. Source
+v4 now admits that algebra exactly, and the isolated real post-capsule gate
+proves the circle's cap exceedance rather than returning
+`full-circle-task5-blocked-v1`. The complete ordered Task 13F continuation has
+not yet been rerun through this stronger oracle, so its next accepted or
+rejected candidate remains an integration result rather than an inferred
+outcome. The older 16-trial diagnostic took about 61 s and included repeated
+independent candidate reconstruction; it was not a planner benchmark.
 
 These facts are not planner timings. Current child-state validation and
 canonical serialization still visit the complete cursor/incidence/neck
@@ -1224,27 +1236,35 @@ containment time and candidate rejection counts separately; an outer-disk
 result may never replace the annular acceptance decision merely to improve
 runtime.
 
-The `event-exact-motion-oracle-v4` uniformly-clear path derives one
+The `event-exact-motion-oracle-v5` uniformly-clear path derives one
 sqrt-capable exact-region view of the pre-motion stock and performs one
-regularized sweep/stock intersection. The nonuniform path verifies one
-four-chart event partition, extracts the stock boundary once, and reconstructs
-one exact stationary stratum per open cell. It does not rebuild the partition
-or boundary inside the cell loop. Before cross-support factors, that structural
-repair changed a warm 10-cell certificate median from 252 ms to 128 ms and a
-43-cell audit from 572 ms to 301 ms.
+regularized sweep/stock intersection. The rational nonuniform v3 path retains
+its complete-product reconstruction. The algebraic v4 path starts without pair
+factors and rebuilds from a monotonically growing exact request set until
+refined witnesses add no request. Both extract the stock boundary once per
+authority construction and reconstruct one exact stationary stratum per open
+cell; neither rebuilds the boundary inside the cell loop. Before cross-support
+factors, the earlier structural repair changed a warm 10-cell certificate
+median from 252 ms to 128 ms and a 43-cell audit from 572 ms to 301 ms.
 
-The broader pair theorem resets the baseline. Five warm Apple M1 Max Release
+The earlier complete-product pair theorem reset the baseline. Five warm Apple M1 Max Release
 calls on 2026-07-29 measured a 1,737.242 ms median for the
 13-cell/576-projection concentric case and 2,018.540 ms for the
 54-cell/452-projection cross-support case. This is materially slower than the
 same-support predecessor and far slower than Held and Pfeiffer's complete
-planner clocks. The current producer intentionally uses the simple complete
-unordered-feature product while Task 13F is still proving its end-to-end path;
-pruning or a factor cache must be driven by measured structural counts after
-that path exists. These timings isolate one exact circle audit and are not
-comparable to a complete planner clock. Runtime pressure cannot justify a
-parallel mutable stock authority, sampled sign test, or search past unresolved
-proof.
+planner clocks.
+
+The source-v4 post-capsule fixture has 309 boundary records and 290 admitted
+line/circle pair features. A complete feature/chart product would require
+670,480 orientation eliminations before sub-`pi` cap factors and remained
+unfinished after 100 s. Exact topology demand emits 233 canonical requests
+instead. After exact saturation of the circle pullbacks' nonphysical
+`1 + u²` factors, the isolated positive-control test proved its expected cap
+exceedance in 30.46 s. The request count is more than three orders of
+magnitude smaller, but the wall time is still far slower than Held and
+Pfeiffer's complete planner clocks. These are different workloads and do not
+establish parity. Runtime pressure cannot justify a parallel mutable stock
+authority, sampled sign test, omitted factor, or search past unresolved proof.
 
 Two other clocks must remain separate. Five warm local Release executions of
 the current native Task 9 algebraic fixture suite took 6.53–6.63 s (6.56 s
@@ -3942,7 +3962,7 @@ consumers, or evolution differ from graph orchestration.
 | Planning `InputIdentity` | implemented and strictly typed | canonical `D`, world-XY millimetre frame, cut plane, tool, reachable-domain digest, entry/process evidence, cap, cut direction, all adaptive policies, schemas, and active exact strategy versions under one SHA-256 root; independent fresh rebuild/equality is gated, final replay certificate pending |
 | Independent fresh replay | input/grammar/candidate/neck prefix implemented and Python-gated | canonical geometry/policy argument equality; exact approach/plunge/lateral grammar and phase continuity; material-side-derived orientation; fresh reachable-domain, MAT, and exact neck-inventory reconstruction; center-domain authentication; complete forward-window candidate enumeration; unique motion/scope/cap/traversal match; native/derived cursor continuation; independent oriented passage state; exact effective-cap delivery to link/circle certification; foreign-owner, reused-transition, cap-exceeded, and traversal mutations fail loud; no certificate emitted until complete witnesses, terminal traversal, and empty residual close |
 | Atomic candidate transaction | implemented and Python-gated for the production L fixture | content-addressed `GenerationState`; independent stock/coverage forks; complete passage history, link/circle pairing, and qualified cut-depth replay; candidate/depletion/cap/cut-direction policy binding; exact containment/TEA/depletion/coverage order for direct link then circle; immutable evidence; real cap/gouge failures remain atomic; stale-parent rejection; independent byte-identical winner replay; deterministic exact-policy selection; 29 focused adversarial contracts; Task 13E supplies an explicit authenticated cursor to the same deciding engine and binds its physical/global result in `TraversalCommit` |
-| Global finite-search continuation | implemented and Python-gated; real L completion blocked fail-closed | launch-rooted `GenerationContinuation`; one family build per directed forward span; invariant first-feasible order; no lower-ranked dispatch; exact gouge/cap/degenerate-link continuation only; canonical non-neck/causal-neck/mixed exhaustion counts; independently replayed two-axis commit; deterministic zero-cut route activation; adopted fixture propagates an incomplete segment partition; radius-1 Task 13F probe certifies launch plus next link and then propagates the following circle's unsupported one-root trim-source boundary; terminal residual/replay seal pending |
+| Global finite-search continuation | implemented and Python-gated; real L completion blocked fail-closed | launch-rooted `GenerationContinuation`; one family build per directed forward span; invariant first-feasible order; no lower-ranked dispatch; exact gouge/cap/degenerate-link continuation only; canonical non-neck/causal-neck/mixed exhaustion counts; independently replayed two-axis commit; deterministic zero-cut route activation; adopted fixture propagates an incomplete segment partition; radius-1 Task 13F probe certifies launch plus next link, and its former one-root circle-source boundary is now closed in the isolated v5 oracle; ordered continuation integration and terminal residual/replay seal pending |
 | Tri-dexel removal and thermal-response consumer | planned Task 14A | no integration evidence yet; the future consumer is an independent, content-addressed falsification/visualization lane with bounded circle replay and an explicitly uncalibrated thermal-response claim |
 | GPU configuration-space distance field | planned post-Phase-1 layer | no integration evidence; future CDF-MP-based scoring binds machine/setup/field/motion identity, ranks or repairs trajectories on the GPU, invalidates changed motion, and remains subordinate to exact re-certification plus native continuous machine/controller qualification |
 

@@ -152,10 +152,13 @@ predicate form.
 
 ## Replay and versioning
 
-The authoritative source becomes `full-circle-boundary-pullbacks-v4`.
-Reconstruction accepts v4 only. `projection-record-v3` binds the optional
-one-root signed predicate. `event-exact-motion-oracle-v5` and
-`full-circle-cell-strata-exact-v3` identify the stronger execution graph.
+The algebraic authoritative source becomes
+`full-circle-boundary-pullbacks-v4`. Reconstruction accepts both source tags
+under distinct grammars: v3 retains the six-field exhaustive rational source,
+while v4 adds a seventh closed pair-request field.
+`projection-record-v3` binds the optional one-root signed predicate.
+`event-exact-motion-oracle-v5` and `full-circle-cell-strata-exact-v3`
+identify the stronger execution graph.
 
 Replay must reject:
 
@@ -166,8 +169,9 @@ Replay must reject:
 - loss of original-equation recheck evidence; and
 - a v3 source payload presented under the v4 tag.
 
-Rational-only fixtures run through the same v4 source grammar and must retain
-their verdicts, topology, orientation, and exact replay.
+Rational-only fixtures remain on source v3 and must retain their verdicts,
+topology, orientation, exact replay, and established complete-product
+positive controls. Algebraic fixtures select v4.
 
 ## Performance contract
 
@@ -175,16 +179,62 @@ This stage first closes the complete exact path. It may reason away duplicate
 source parsing and repeated root reconstruction, but it does not add a
 speculative index.
 
+The first one-root integration run exposed an already present structural
+pathology. A diagonal disk-chain depletion produced `309` boundary records,
+of which `290` were pair-admitted line/circle features. The complete
+unordered-feature producer would therefore request
+
+```text
+290 * 289 / 2 * 4 center charts * 2 * 2 rim charts
+    = 670,480
+```
+
+exact orientation-resultant chains before cap factors. The bounded test had
+not finished after `100 s`. This is an obvious quadratic full build, not a
+profiling question.
+
+The authoritative algebraic producer therefore computes a monotone closure:
+
+1. build the physical topology partition without cross-support pair factors;
+2. evaluate one exact rational station in every topology cell;
+3. collect the canonical cross-support branch pairs active in that cell and
+   its owned center chart;
+4. generate orientation and sub-pi cap factors only for that exact request
+   set;
+5. rebuild the partition with topology plus requested pair factors; and
+6. union requests exposed by the refined witnesses and repeat until no request
+   is added.
+
+Circle-support pullbacks are saturated by their exact `1 + u²` rim-chart
+denominator before pair elimination. The factor has no real roots, but its
+complex projective poles otherwise form a common resultant component and
+collapse every requested circle/circle orientation factor to zero.
+
+Pair roots cannot create a physical boundary branch, but an unrefined witness
+may lie exactly on a pair-order coincidence and hide a pair that appears at a
+refined witness. The monotone request union closes that witness degeneracy and
+terminates over the finite feature/chart/rim request universe. Final cell
+authority still requires the matching pair projection for every active
+material run; an omitted request remains unresolved. This is exact demand
+construction, not bounding-box pruning or sampled relevance.
+
 Required structural counts:
 
 - one coordinate decomposition per unique boundary vertex;
 - one passage predicate per unique vertex and quarter chart;
 - one algebraic-root solve per square-free factor through the existing cache;
 - one original-equation recheck per candidate root; and
+- one pair-resultant request per topology-active branch pair, never per
+  unordered boundary-feature product; and
 - no boundary extraction or partition rebuild inside the cell loop.
 
-After Task 13F is terminal, the measured unordered-feature product remains the
-next optimization target.
+The measured post-capsule request set contains `233` canonical active pairs,
+more than three orders of magnitude fewer combinations than the former
+product.
+
+After Task 13F is terminal, measurement may optimize the exact requested
+factors, but the complete unordered-feature product is no longer an admissible
+production architecture.
 
 ## Acceptance
 
@@ -194,7 +244,8 @@ The stage is complete only when:
 2. its exact partition reconstructs byte-identically;
 3. at least one norm root is retained without a physical endpoint event,
    proving conjugate filtering is exercised;
-4. rational full-circle fixtures remain green through v4;
+4. rational full-circle fixtures remain green through v3 while algebraic
+   fixtures replay through v4;
 5. every one-root mutation fails replay;
 6. the Task 13F fourth link and following circle advance to a proved verdict;
 7. the complete adaptive suite, Ruff, strict mypy, strict MkDocs, and diff
