@@ -66,6 +66,14 @@ class InvalidCandidateLatticeError(ValueError):
     """A finite candidate cell omits or contradicts bound decision state."""
 
 
+class InvalidZeroGuideCandidateError(ValueError):
+    """A zero-guide link candidate contradicts its exact proof or span state."""
+
+
+class UncertifiedZeroGuideEdgeError(ValueError):
+    """A link-only candidate was requested for an edge without exact proof."""
+
+
 class InvalidContainmentCertificateError(ValueError):
     """A native exact-containment record contradicts its typed motion."""
 

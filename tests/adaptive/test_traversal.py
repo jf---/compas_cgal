@@ -11,8 +11,10 @@ import pytest
 import compas_cgal.adaptive.traversal as traversal_module
 from compas_cgal.adaptive.canonical import CanonicalRingV1
 from compas_cgal.adaptive.candidates import MiddleCurveSpan
+from compas_cgal.adaptive.candidates import ZeroGuideLinkCandidate
 from compas_cgal.adaptive.candidates import ExhaustedCandidateCursor
 from compas_cgal.adaptive.candidates import enumerate_middle_curve_candidates
+from compas_cgal.adaptive.candidates import enumerate_zero_guide_link_candidates
 from compas_cgal.adaptive.errors import InvalidCausalNeckTransitError
 from compas_cgal.adaptive.errors import InvalidMatTraversalStateError
 from compas_cgal.adaptive.errors import InvalidTraversalGraphError
@@ -90,6 +92,7 @@ def _policy() -> TraversalPolicy:
 
 def _axis(
     *,
+    tool_radius: float = 0.5,
     station_spacing: float = 0.75,
     max_refinement_depth: int = 32,
 ) -> MedialAxis:
@@ -99,7 +102,7 @@ def _axis(
     return MedialAxis.build(
         design_boundary=boundary,
         holes=(),
-        tool_radius=ToolRadius.build(0.5),
+        tool_radius=ToolRadius.build(tool_radius),
         station_spacing=Spacing.build(station_spacing),
         max_sagitta=ChordBound.build(0.02),
         max_refinement_depth=max_refinement_depth,
@@ -603,6 +606,46 @@ def test_candidate_advance_mutates_one_cursor_then_activates_next_route_edge() -
     assert next_state.active_cursor.route_step == next_state.authority.route[1]
     assert len(next_state.visited_incidences) == 3
     assert child.active_route_index == 0
+
+
+def test_zero_guide_candidate_advances_the_closed_traversal_union() -> None:
+    """A proved terminal link reaches its native endpoint without a circle."""
+    axis = _axis(tool_radius=1.0)
+    edge = axis.edge_by_id[axis.zero_guide_inventory.runs[0].edge_id]
+    inventory = NeckInventory.build(
+        axis=axis,
+        policy=_neck_policy(),
+    )
+    state = MatTraversalState.seed(
+        axis=axis,
+        inventory=inventory,
+        policy=_policy(),
+        entry_edge_id=edge.identity,
+        entry_node_id=edge.source.identity,
+    )
+    span = MiddleCurveSpan.build(
+        axis=axis,
+        cursor_before=state.active_cursor.cursor,
+        cursor_limit=state.active_cursor.terminal_cursor,
+    )
+    candidate = enumerate_zero_guide_link_candidates(
+        span=span,
+        policy=_candidate_policy(),
+        neck_scope=state.neck_scope,
+        effective_cap_decision=FullCapDecision.build(
+            user_cap=inventory.policy.user_cap,
+            effective_cap=inventory.policy.user_cap,
+        ),
+        makes_cursor_terminal_at_limit=True,
+    )[0]
+
+    child = state.advance(candidate)
+
+    assert type(candidate) is ZeroGuideLinkCandidate
+    assert candidate.spatial_progress == span.reported_length
+    assert child.active_cursor.terminal
+    assert child.active_cursor.cursor == state.active_cursor.terminal_cursor
+    assert child.active_cursor.accepted_candidate_count == 1
 
 
 def test_reverse_route_edge_advances_to_its_exact_entry_endpoint() -> None:

@@ -12,7 +12,10 @@ from compas_cgal.adaptive.bootstrap import InitialCandidateTransaction
 from compas_cgal.adaptive.candidates import DerivedCandidateCursor
 from compas_cgal.adaptive.candidates import MiddleCurveCandidate
 from compas_cgal.adaptive.candidates import MiddleCurveSpan
+from compas_cgal.adaptive.candidates import TraversalCandidate
+from compas_cgal.adaptive.candidates import ZeroGuideLinkCandidate
 from compas_cgal.adaptive.candidates import enumerate_middle_curve_candidates
+from compas_cgal.adaptive.candidates import enumerate_zero_guide_link_candidates
 from compas_cgal.adaptive.canonical import CanonicalRingV1
 from compas_cgal.adaptive.containment import CircleContainmentCertificate
 from compas_cgal.adaptive.containment import GougeContainment
@@ -207,6 +210,41 @@ continued_span = MiddleCurveSpan.build(
     cursor_limit=typed_axis.samples[1],
 )
 assert_type(continued_span, MiddleCurveSpan)
+
+typed_zero_axis = MedialAxis.build(
+    design_boundary=typed_boundary,
+    holes=(),
+    tool_radius=ToolRadius.build(1.0),
+    station_spacing=Spacing.build(0.75),
+    max_sagitta=ChordBound.build(0.02),
+    max_refinement_depth=32,
+)
+typed_zero_run = typed_zero_axis.zero_guide_inventory.runs[0]
+typed_zero_samples = tuple(sample for sample in typed_zero_axis.samples if sample.edge_id == typed_zero_run.edge_id)
+typed_zero_span = MiddleCurveSpan.build(
+    axis=typed_zero_axis,
+    cursor_before=typed_zero_samples[0],
+    cursor_limit=typed_zero_samples[-1],
+)
+typed_zero_candidates = enumerate_zero_guide_link_candidates(
+    span=typed_zero_span,
+    policy=candidate_policy,
+    neck_scope=NoNeckScope.build(),
+    effective_cap_decision=FullCapDecision.build(
+        user_cap=candidate_cap,
+        effective_cap=candidate_cap,
+    ),
+    makes_cursor_terminal_at_limit=False,
+)
+assert_type(typed_zero_candidates, tuple[ZeroGuideLinkCandidate, ...])
+typed_zero_candidate = typed_zero_candidates[-1]
+assert_type(typed_zero_candidate, ZeroGuideLinkCandidate)
+assert_type(typed_zero_candidate.zero_guide_run, MatZeroGuideRun)
+zero_derived_cursor = DerivedCandidateCursor.build(
+    span=typed_zero_span,
+    candidate=typed_zero_candidate,
+)
+assert_type(zero_derived_cursor.candidate, TraversalCandidate)
 
 approach_operation = ApproachOperation.build(
     position=world_point_scalar,

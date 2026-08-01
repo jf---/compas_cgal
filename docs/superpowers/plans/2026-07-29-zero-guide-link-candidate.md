@@ -403,7 +403,7 @@ ceiling at `980` lines.
   `TraversalCandidate`,
   a `DerivedCandidateCursor` accepting either exact candidate variant.
 
-- [ ] **Step 1: Write RED candidate contracts**
+- [x] **Step 1: Write RED candidate contracts**
 
 Build forward and reverse spans on the two radius-1 zero-guide edges and
 require:
@@ -456,7 +456,7 @@ ordered = policy.order_candidates(
 assert ordered == (circle_candidate, zero_candidate)
 ```
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 ```bash
 pixi run pytest tests/adaptive/test_candidates.py \
@@ -467,7 +467,7 @@ pixi run pytest tests/adaptive/test_candidates.py \
 
 Expected: missing zero-guide candidate type and closed union.
 
-- [ ] **Step 3: Implement the candidate record**
+- [x] **Step 3: Implement the candidate record**
 
 Define the frozen content-addressed type beside the existing candidate domain
 types so the closed union and derived cursor have no import cycle:
@@ -504,7 +504,7 @@ CandidateOrderKey.build(
 Change `CandidateOrderKey` validation from positive to non-negative squared
 radius. The candidate contains no circle-derived field.
 
-- [ ] **Step 4: Enumerate only owned exact runs**
+- [x] **Step 4: Enumerate only owned exact runs**
 
 Reuse the existing spatial lattice and interpolation helpers without copying
 their deciding logic. At function entry:
@@ -520,7 +520,7 @@ if run is None:
 Build one candidate per refined spatial value, including the terminal endpoint.
 There is no radius or phase loop.
 
-- [ ] **Step 5: Extend traversal with a closed union**
+- [x] **Step 5: Extend traversal with a closed union**
 
 Define:
 
@@ -539,7 +539,7 @@ bytes and behavior. Require `wc -l src/compas_cgal/adaptive/candidates.py` to
 remain below 1,200 after the minimal implementation; if it cannot, stop for a
 separate module-boundary design instead of introducing a circular import.
 
-- [ ] **Step 6: Run GREEN, lint, and types**
+- [x] **Step 6: Run GREEN, lint, and types**
 
 ```bash
 pixi run format-adaptive
@@ -551,7 +551,7 @@ pixi run pytest tests/adaptive/test_candidates.py \
 pixi run types-adaptive
 ```
 
-- [ ] **Step 7: Document, commit, and push**
+- [x] **Step 7: Document, commit, and push**
 
 Update the finite-family section of `docs/segment_site_mat.md`, then:
 
@@ -567,6 +567,19 @@ git add src/compas_cgal/adaptive/candidates.py \
   docs/superpowers/plans/2026-07-29-zero-guide-link-candidate.md
 git commit -m "feat(adaptive): enumerate zero-guide links"
 ```
+
+Implementation note (2026-08-01): both exact radius-1 arms now emit one
+content-addressed link candidate per merged spatial value in either direction.
+The distinct record binds the complete zero-guide proof and carries no circle
+site/radius/phase/motion fields. `TraversalCandidate` remains closed; derived
+cursor validation branches on exact type, and exhausted terminal cursors
+remain positive-circle-only.
+
+Gate evidence: final affected `--testmon` selection passed `7`; the complete
+candidate/policy/traversal slice passed `52`; the complete adaptive suite
+passed `542` in `187.61 s`; Ruff, strict mypy over `27` source files, strict
+MkDocs, formatting, and diff checks passed. `candidates.py` remains below the
+hard plan ceiling at `1,197` lines.
 
 ---
 

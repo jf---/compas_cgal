@@ -13,6 +13,8 @@ from compas_cgal.adaptive.candidates import DerivedCandidateCursor
 from compas_cgal.adaptive.candidates import ExhaustedCandidateCursor
 from compas_cgal.adaptive.candidates import MiddleCurveCandidate
 from compas_cgal.adaptive.candidates import MiddleCurveSpan
+from compas_cgal.adaptive.candidates import TraversalCandidate
+from compas_cgal.adaptive.candidates import ZeroGuideLinkCandidate
 from compas_cgal.adaptive.canonical import encode_binary64
 from compas_cgal.adaptive.canonical import encode_boolean
 from compas_cgal.adaptive.canonical import encode_bytes
@@ -339,12 +341,12 @@ class DirectedEdgeCursor:
         *,
         axis: MedialAxis,
         sample_index: TraversalSampleIndex,
-        candidate: MiddleCurveCandidate,
+        candidate: TraversalCandidate,
     ) -> Self:
         if self.terminal:
             raise TerminalTraversalCursorError("candidate cannot advance a terminal global MAT cursor.")
-        if type(candidate) is not MiddleCurveCandidate:
-            raise StaleTraversalCursorError("global cursor advance requires one exact middle-curve candidate.")
+        if type(candidate) not in (MiddleCurveCandidate, ZeroGuideLinkCandidate):
+            raise StaleTraversalCursorError("global cursor advance requires one exact traversal candidate.")
         decision = candidate.traversal_decision
         if (
             decision.component_id != self.route_step.component_id
@@ -379,11 +381,13 @@ class DirectedEdgeCursor:
                     raise StaleTraversalCursorError("native terminal candidate contradicts the route endpoint.")
                 cursor: TraversalCursor = self.terminal_cursor
             else:
+                if type(candidate) is ZeroGuideLinkCandidate:
+                    raise StaleTraversalCursorError("terminal zero-guide candidate must reach its native route endpoint.")
                 if decision.cursor_after == self.route_step.terminal_cursor_id:
                     raise StaleTraversalCursorError("exhausted terminal candidate aliases the native route endpoint.")
                 cursor = ExhaustedCandidateCursor.build(
                     span=span,
-                    candidate=candidate,
+                    candidate=cast(MiddleCurveCandidate, candidate),
                 )
         elif candidate.spatial_progress == span.reported_length:
             if limit == self.terminal_cursor:
@@ -698,7 +702,7 @@ class MatTraversalState:
     def digest(self) -> IdentityDigest:
         return self._digest
 
-    def advance(self, candidate: MiddleCurveCandidate) -> Self:
+    def advance(self, candidate: TraversalCandidate) -> Self:
         """Advance exactly the active cursor with one accepted candidate.
 
         Args:
