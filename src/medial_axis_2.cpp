@@ -13,6 +13,7 @@
 #include <stdexcept>
 #include <string>
 #include <tuple>
+#include <utility>
 #include <vector>
 
 #include <Eigen/Core>
@@ -77,6 +78,30 @@ public:
   using MedialAxisConstructionError::MedialAxisConstructionError;
 };
 
+class BindingMissingMatZeroGuideEdgeError
+    : public MedialAxisConstructionError {
+public:
+  using MedialAxisConstructionError::MedialAxisConstructionError;
+};
+
+class BindingInvalidMatZeroGuideRecordError
+    : public MedialAxisConstructionError {
+public:
+  using MedialAxisConstructionError::MedialAxisConstructionError;
+};
+
+class BindingDuplicateMatZeroGuideEdgeError
+    : public MedialAxisConstructionError {
+public:
+  using MedialAxisConstructionError::MedialAxisConstructionError;
+};
+
+class BindingMismatchedMatZeroGuideRecordError
+    : public MedialAxisConstructionError {
+public:
+  using MedialAxisConstructionError::MedialAxisConstructionError;
+};
+
 class BindingInvalidMatNeckEvidenceError : public MedialAxisConstructionError {
 public:
   using MedialAxisConstructionError::MedialAxisConstructionError;
@@ -126,6 +151,17 @@ nb::tuple bytes_tuple(const std::vector<std::string> &records) {
   nb::list result;
   for (const std::string &record : records) {
     result.append(bytes_value(record));
+  }
+  return nb::tuple(result);
+}
+
+nb::tuple zero_guide_records(const SegmentSiteMatBundle2 &owner) {
+  nb::list result;
+  for (const MatZeroGuideRecordV1 &record : owner.zero_guide_records()) {
+    nb::list fields;
+    fields.append(bytes_value(record.edge_id()));
+    fields.append(bytes_value(record.canonical_bytes()));
+    result.append(nb::tuple(fields));
   }
   return nb::tuple(result);
 }
@@ -220,6 +256,27 @@ std::vector<std::string> from_bytes_tuple(const nb::tuple &values,
   return result;
 }
 
+std::vector<std::pair<std::string, std::string>>
+from_zero_guide_records(const nb::tuple &records) {
+  std::vector<std::pair<std::string, std::string>> result;
+  result.reserve(records.size());
+  for (nb::handle record : records) {
+    if (!PyTuple_Check(record.ptr()) || PyTuple_Size(record.ptr()) != 2) {
+      throw nb::type_error(
+          "zero-guide records must contain exact (edge ID, record bytes) pairs");
+    }
+    PyObject *edge_id = PyTuple_GetItem(record.ptr(), 0);
+    PyObject *record_bytes = PyTuple_GetItem(record.ptr(), 1);
+    if (!PyBytes_Check(edge_id) || !PyBytes_Check(record_bytes)) {
+      throw nb::type_error(
+          "zero-guide record fields must both be exact bytes");
+    }
+    result.emplace_back(from_bytes(nb::borrow<nb::bytes>(edge_id)),
+                        from_bytes(nb::borrow<nb::bytes>(record_bytes)));
+  }
+  return result;
+}
+
 auto validate_and_classify_necks(const SegmentSiteMatBundle2 &owner,
                                  const nb::bytes &mat_certificate,
                                  const nb::tuple &neck_evidence,
@@ -238,6 +295,25 @@ auto validate_and_classify_necks(const SegmentSiteMatBundle2 &owner,
     throw BindingInvalidMatNeckWidthBoundariesError(error.what());
   } catch (const std::exception &error) {
     throw MedialAxisConstructionError(error.what());
+  }
+}
+
+nb::tuple validate_zero_guide_records(const SegmentSiteMatBundle2 &owner,
+                                      const nb::bytes &mat_certificate,
+                                      const nb::tuple &records) {
+  try {
+    return bytes_tuple(owner.validate_zero_guide_records(
+        from_bytes(mat_certificate), from_zero_guide_records(records)));
+  } catch (const InvalidMatCertificateReplayError &error) {
+    throw BindingInvalidMatCertificateReplayError(error.what());
+  } catch (const InvalidMatZeroGuideRecordError &error) {
+    throw BindingInvalidMatZeroGuideRecordError(error.what());
+  } catch (const MissingMatZeroGuideEdgeError &error) {
+    throw BindingMissingMatZeroGuideEdgeError(error.what());
+  } catch (const DuplicateMatZeroGuideEdgeError &error) {
+    throw BindingDuplicateMatZeroGuideEdgeError(error.what());
+  } catch (const MismatchedMatZeroGuideRecordError &error) {
+    throw BindingMismatchedMatZeroGuideRecordError(error.what());
   }
 }
 
@@ -326,6 +402,14 @@ NB_MODULE(_medial_axis_2, m) {
       m, "UnsupportedCanonicalMatLShapeGraphError", construction_error.ptr());
   nb::exception<BindingInvalidMatCertificateReplayError>(
       m, "InvalidMatCertificateReplayError", construction_error.ptr());
+  nb::exception<BindingMissingMatZeroGuideEdgeError>(
+      m, "MissingMatZeroGuideEdgeError", construction_error.ptr());
+  nb::exception<BindingInvalidMatZeroGuideRecordError>(
+      m, "InvalidMatZeroGuideRecordError", construction_error.ptr());
+  nb::exception<BindingDuplicateMatZeroGuideEdgeError>(
+      m, "DuplicateMatZeroGuideEdgeError", construction_error.ptr());
+  nb::exception<BindingMismatchedMatZeroGuideRecordError>(
+      m, "MismatchedMatZeroGuideRecordError", construction_error.ptr());
   nb::exception<BindingInvalidMatNeckEvidenceError>(
       m, "InvalidMatNeckEvidenceError", construction_error.ptr());
   nb::exception<BindingInvalidMatNeckWidthBoundariesError>(
@@ -375,9 +459,12 @@ NB_MODULE(_medial_axis_2, m) {
                    [](const SegmentSiteMatBundle2 &owner) {
                      return nested_bytes_tuple(owner.neck_defining_site_ids());
                    })
+      .def_prop_ro("zero_guide_records", &zero_guide_records)
       .def("validate_and_classify_necks", &validate_and_classify_necks,
            "mat_certificate"_a, "neck_evidence"_a,
-           "squared_width_boundaries"_a);
+           "squared_width_boundaries"_a)
+      .def("validate_zero_guide_records", &validate_zero_guide_records,
+           "mat_certificate"_a, "records"_a);
 
   m.def("segment_site_medial_axis", &segment_site_medial_axis, "vertices"_a,
         "holes"_a, "tool_radius"_a, "station_spacing"_a, "max_sagitta"_a,

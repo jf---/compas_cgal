@@ -90,7 +90,7 @@ std::string canonical_endpoint(const MatParameterEndpoint2 &endpoint) {
       canonical_encode_component_map({
           {
               "parameter-root-id",
-              algebraic_root_identity_v1(*endpoint.parameter),
+              mat_endpoint_root_identity_v1(endpoint),
           },
           {
               "provenance-ids",
@@ -223,39 +223,6 @@ std::string canonical_edge(const MatExactGraphEdge2 &edge) {
       }));
 }
 
-std::string canonical_profile(const MatClearanceEdgeProfile2 &profile) {
-  std::vector<std::string> coefficients;
-  coefficients.reserve(profile.squared_clearance().coefficients().size());
-  for (const CORE::BigRat &coefficient :
-       profile.squared_clearance().coefficients()) {
-    coefficients.push_back(canonical_encode_rational(coefficient));
-  }
-  return canonical_encode_tagged_union(
-      "segment-site-mat-clearance-profile-v1",
-      canonical_encode_component_map({
-          {
-              "edge-id",
-              profile.edge_id(),
-          },
-          {
-              "defining-site-ids",
-              canonical_encode_sequence(profile.defining_site_ids()),
-          },
-          {
-              "lower-endpoint",
-              canonical_endpoint(profile.lower()),
-          },
-          {
-              "upper-endpoint",
-              canonical_endpoint(profile.upper()),
-          },
-          {
-              "squared-clearance-coefficients",
-              canonical_encode_sequence(coefficients),
-          },
-      }));
-}
-
 std::string canonical_numeric_projection(const MatNumericGraphTable2 &graph) {
   return canonical_encode_tagged_union(
       "segment-site-mat-numeric-projection-v1",
@@ -346,7 +313,7 @@ canonical_certificate_bytes(const MatClearanceProfileGraph2 &exact,
   std::vector<std::string> profiles;
   profiles.reserve(exact.profiles().size());
   for (const MatClearanceEdgeProfile2 &profile : exact.profiles()) {
-    profiles.push_back(canonical_profile(profile));
+    profiles.push_back(canonical_mat_clearance_profile_v1(profile));
   }
 
   return canonical_encode_tagged_union(
@@ -393,6 +360,40 @@ canonical_certificate_bytes(const MatClearanceProfileGraph2 &exact,
 }
 
 } // namespace
+
+std::string canonical_mat_clearance_profile_v1(
+    const MatClearanceEdgeProfile2 &profile) {
+  std::vector<std::string> coefficients;
+  coefficients.reserve(profile.squared_clearance().coefficients().size());
+  for (const CORE::BigRat &coefficient :
+       profile.squared_clearance().coefficients()) {
+    coefficients.push_back(canonical_encode_rational(coefficient));
+  }
+  return canonical_encode_tagged_union(
+      "segment-site-mat-clearance-profile-v1",
+      canonical_encode_component_map({
+          {
+              "edge-id",
+              profile.edge_id(),
+          },
+          {
+              "defining-site-ids",
+              canonical_encode_sequence(profile.defining_site_ids()),
+          },
+          {
+              "lower-endpoint",
+              canonical_endpoint(profile.lower()),
+          },
+          {
+              "upper-endpoint",
+              canonical_endpoint(profile.upper()),
+          },
+          {
+              "squared-clearance-coefficients",
+              canonical_encode_sequence(coefficients),
+          },
+      }));
+}
 
 MatCertificateV1::MatCertificateV1(std::string canonical_bytes,
                                    std::string canonical_digest)

@@ -192,6 +192,104 @@ def test_native_proof_owner_retains_exact_ids_behind_fixed_projection() -> None:
     _assert_same_result(owner.projection, _mat())
 
 
+def test_native_owner_proves_complete_radius_one_zero_guide_inventory() -> None:
+    """The two width-2 S-S arms have clearance square identically equal to one."""
+    owner = _owned_mat(tool_radius=1.0)
+    records = owner.zero_guide_records
+
+    assert len(records) == 2
+    assert records == tuple(sorted(records))
+    assert tuple(edge_id for edge_id, _ in records) == owner.edge_ids[2:4]
+    assert owner.validate_zero_guide_records(
+        owner.projection[19],
+        records,
+    ) == tuple(edge_id for edge_id, _ in records)
+
+
+def test_native_owner_zero_guide_inventory_is_canonical() -> None:
+    """Repeat construction and reversed ring input retain identical proof bytes."""
+    canonical = _owned_mat(tool_radius=1.0).zero_guide_records
+    repeated = _owned_mat(tool_radius=1.0).zero_guide_records
+    reversed_ring = _owned_mat(L_SHAPE[::-1].copy(), tool_radius=1.0)
+
+    assert canonical == repeated == reversed_ring.zero_guide_records
+
+
+def test_native_owner_requires_complete_profile_identity() -> None:
+    """Endpoint contact on P-S parabolas and binary64 near-equality prove nothing."""
+    radius_one = _owned_mat(tool_radius=1.0)
+    guide_radius = radius_one.projection[11]
+    sample_offsets = radius_one.projection[13]
+    zero_guide_edge_ids = {edge_id for edge_id, _ in radius_one.zero_guide_records}
+
+    assert guide_radius[sample_offsets[0]] == 0.0
+    assert radius_one.edge_ids[0] not in zero_guide_edge_ids
+    assert _owned_mat(tool_radius=0.5).zero_guide_records == ()
+    assert _owned_mat(tool_radius=np.nextafter(1.0, 0.0)).zero_guide_records == ()
+
+
+def test_native_owner_rejects_missing_zero_guide_record() -> None:
+    """Deleting one proved arm must fail complete-inventory replay."""
+    native = _native_module()
+    owner = _owned_mat(tool_radius=1.0)
+
+    with pytest.raises(native.MissingMatZeroGuideEdgeError, match="missing"):
+        owner.validate_zero_guide_records(
+            owner.projection[19],
+            owner.zero_guide_records[:-1],
+        )
+
+
+def test_native_owner_rejects_duplicate_zero_guide_edge() -> None:
+    """One edge identity cannot authenticate two zero-guide record payloads."""
+    native = _native_module()
+    owner = _owned_mat(tool_radius=1.0)
+    records = owner.zero_guide_records
+    duplicate_with_foreign_bytes = records + ((records[0][0], records[1][1]),)
+
+    with pytest.raises(native.DuplicateMatZeroGuideEdgeError, match="duplicate"):
+        owner.validate_zero_guide_records(
+            owner.projection[19],
+            duplicate_with_foreign_bytes,
+        )
+
+
+def test_native_owner_rejects_mismatched_zero_guide_bytes() -> None:
+    """Mutating one canonical byte must invalidate that edge's exact proof."""
+    native = _native_module()
+    owner = _owned_mat(tool_radius=1.0)
+    records = owner.zero_guide_records
+    mutated_bytes = bytearray(records[0][1])
+    mutated_bytes[-1] ^= 1
+    mutated = ((records[0][0], bytes(mutated_bytes)), records[1])
+
+    with pytest.raises(native.MismatchedMatZeroGuideRecordError, match="bytes"):
+        owner.validate_zero_guide_records(owner.projection[19], mutated)
+
+
+def test_native_owner_rejects_foreign_zero_guide_edge() -> None:
+    """A complete inventory cannot carry an unproved surplus edge record."""
+    native = _native_module()
+    owner = _owned_mat(tool_radius=1.0)
+    foreign = owner.zero_guide_records + ((b"foreign-edge", owner.zero_guide_records[0][1]),)
+
+    with pytest.raises(native.MismatchedMatZeroGuideRecordError, match="foreign"):
+        owner.validate_zero_guide_records(owner.projection[19], foreign)
+
+
+def test_native_owner_rejects_foreign_mat_certificate() -> None:
+    """Zero-guide records cannot be replayed under another tool-radius MAT."""
+    native = _native_module()
+    owner = _owned_mat(tool_radius=1.0)
+    foreign_mat_certificate = _owned_mat(tool_radius=0.5).projection[19]
+
+    with pytest.raises(native.InvalidMatCertificateReplayError, match="replay"):
+        owner.validate_zero_guide_records(
+            foreign_mat_certificate,
+            owner.zero_guide_records,
+        )
+
+
 def test_typed_medial_axis_projects_native_topology_without_coordinate_matching() -> None:
     from compas_cgal.adaptive.canonical import CanonicalRingV1
     from compas_cgal.adaptive.medial_axis import MedialAxis

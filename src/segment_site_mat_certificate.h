@@ -26,6 +26,9 @@ public:
 class MatCertificateV1;
 struct MatCertifiedExactProjection2;
 
+std::string canonical_mat_clearance_profile_v1(
+    const MatClearanceEdgeProfile2 &profile);
+
 class MatCertificateV1 {
 public:
   const std::string &canonical_bytes() const noexcept;

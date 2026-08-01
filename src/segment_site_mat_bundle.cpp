@@ -13,14 +13,18 @@ SegmentSiteMatBundle2::SegmentSiteMatBundle2(
     std::vector<MatNeckEvidenceV1> neck_evidence,
     std::vector<std::string> sample_parameter_ids,
     std::vector<std::string> neck_owner_ids,
-    std::vector<std::vector<std::string>> neck_defining_site_ids)
+    std::vector<std::vector<std::string>> neck_defining_site_ids,
+    MatToolRadiusMm2 tool_radius,
+    std::vector<MatZeroGuideRecordV1> zero_guide_records)
     : sampled_(std::move(sampled)), catalog_(std::move(catalog)),
       center_domain_digest_(std::move(center_domain_digest)),
       numeric_table_(std::move(numeric_table)),
       neck_evidence_(std::move(neck_evidence)),
       sample_parameter_ids_(std::move(sample_parameter_ids)),
       neck_owner_ids_(std::move(neck_owner_ids)),
-      neck_defining_site_ids_(std::move(neck_defining_site_ids)) {}
+      neck_defining_site_ids_(std::move(neck_defining_site_ids)),
+      tool_radius_(std::move(tool_radius)),
+      zero_guide_records_(std::move(zero_guide_records)) {}
 
 SegmentSiteMatBundle2
 SegmentSiteMatBundle2::build(const CanonicalReachInput2 &input,
@@ -30,7 +34,7 @@ SegmentSiteMatBundle2::build(const CanonicalReachInput2 &input,
   const ReachableDomain2 reachable = ReachableDomain2::build(input);
   const ReachableDomainCertificateIdentity2 domain_identity =
       reachable_domain_certificate_identity(input, reachable);
-  const MatToolRadiusMm2 tool_radius =
+  MatToolRadiusMm2 tool_radius =
       MatToolRadiusMm2::build(input.binary64_radius);
   MatProposalSamplingGraph2 sampled = canonical_l_shape_mat_proposal_graph(
       input, tool_radius.squared_exact(), station_spacing, max_sagitta,
@@ -56,6 +60,10 @@ SegmentSiteMatBundle2::build(const CanonicalReachInput2 &input,
 
   const std::string center_domain_digest =
       domain_identity.center_domain_digest();
+  std::vector<MatZeroGuideRecordV1> zero_guide_records =
+      certified_mat_zero_guide_records_v1(
+          sampled.profile_graph(), exact.certificate, center_domain_digest,
+          tool_radius);
   MatNumericProposalTable2 proposal{
       std::move(exact.graph),
       numeric_sample_table(sampled, tool_radius),
@@ -73,7 +81,8 @@ SegmentSiteMatBundle2::build(const CanonicalReachInput2 &input,
       std::move(sampled), std::move(catalog), center_domain_digest,
       std::move(numeric_table), std::move(exact.neck_evidence),
       std::move(sample_parameter_ids),
-      std::move(neck_owner_ids), std::move(neck_defining_site_ids));
+      std::move(neck_owner_ids), std::move(neck_defining_site_ids),
+      std::move(tool_radius), std::move(zero_guide_records));
 }
 
 const MatProposalSamplingGraph2 &
@@ -126,6 +135,11 @@ SegmentSiteMatBundle2::neck_defining_site_ids() const noexcept {
   return neck_defining_site_ids_;
 }
 
+const std::vector<MatZeroGuideRecordV1> &
+SegmentSiteMatBundle2::zero_guide_records() const noexcept {
+  return zero_guide_records_;
+}
+
 std::pair<std::vector<std::int64_t>, std::vector<std::string>>
 SegmentSiteMatBundle2::validate_and_classify_necks(
     const std::string &mat_certificate,
@@ -136,6 +150,14 @@ SegmentSiteMatBundle2::validate_and_classify_necks(
                                               mat_certificate));
   return validate_and_classify_necks_v1(sampled_.profile_graph(), neck_evidence,
                                         squared_width_boundaries);
+}
+
+std::vector<std::string> SegmentSiteMatBundle2::validate_zero_guide_records(
+    const std::string &mat_certificate,
+    const std::vector<std::pair<std::string, std::string>> &records) const {
+  return validate_mat_zero_guide_records_v1(
+      sampled_.profile_graph(), catalog_, center_domain_digest_, tool_radius_,
+      mat_certificate, records);
 }
 
 MatNumericMatTable2 SegmentSiteMatBundle2::release_numeric_table() && noexcept {

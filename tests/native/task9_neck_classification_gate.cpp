@@ -22,7 +22,7 @@ MatExactGraphNode2 node(const std::string &node_id) {
 MatParameterEndpoint2 endpoint(const CORE::BigRat &parameter) {
   ExactAlgebraicKernel1 kernel;
   const auto algebraic = kernel.construct_algebraic_real_1_object()(parameter);
-  return {
+  return exact_graph_endpoint_binding({
       algebraic,
       {
           algebraic_root_identity_v1(algebraic),
@@ -33,7 +33,7 @@ MatParameterEndpoint2 endpoint(const CORE::BigRat &parameter) {
           false,
           {},
       },
-  };
+  });
 }
 
 MatExactGraphEdge2 edge(const std::string &edge_id,

@@ -16,7 +16,7 @@ using Algebraic = ExactAlgebraicKernel1::Algebraic_real_1;
 MatParameterEndpoint2 endpoint(const CORE::BigRat &parameter) {
   ExactAlgebraicKernel1 kernel;
   const auto algebraic = kernel.construct_algebraic_real_1_object()(parameter);
-  return {
+  return exact_graph_endpoint_binding({
       algebraic,
       {
           algebraic_root_identity_v1(algebraic),
@@ -27,11 +27,11 @@ MatParameterEndpoint2 endpoint(const CORE::BigRat &parameter) {
           false,
           {},
       },
-  };
+  });
 }
 
 MatParameterEndpoint2 endpoint(const Algebraic &parameter) {
-  return {
+  return exact_graph_endpoint_binding({
       parameter,
       {
           algebraic_root_identity_v1(parameter),
@@ -42,7 +42,7 @@ MatParameterEndpoint2 endpoint(const Algebraic &parameter) {
           false,
           {},
       },
-  };
+  });
 }
 
 MatExactGraphEdge2 edge(const std::string &edge_id,

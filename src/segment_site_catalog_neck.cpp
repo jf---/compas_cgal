@@ -182,8 +182,8 @@ bool endpoints_equal(const MatParameterEndpoint2 &lhs,
                      const MatParameterEndpoint2 &rhs) {
   return lhs.parameter.has_value() == rhs.parameter.has_value() &&
          (!lhs.parameter.has_value() ||
-          algebraic_root_identity_v1(*lhs.parameter) ==
-              algebraic_root_identity_v1(*rhs.parameter)) &&
+          mat_endpoint_root_identity_v1(lhs) ==
+              mat_endpoint_root_identity_v1(rhs)) &&
          lhs.provenance_ids == rhs.provenance_ids &&
          lhs.exact_evidence == rhs.exact_evidence;
 }

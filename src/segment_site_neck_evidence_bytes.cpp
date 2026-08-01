@@ -66,7 +66,7 @@ std::string canonical_endpoint(const MatParameterEndpoint2 &endpoint) {
       canonical_encode_component_map({
           {
               "parameter-root-id",
-              algebraic_root_identity_v1(*endpoint.parameter),
+              mat_endpoint_root_identity_v1(endpoint),
           },
           {
               "provenance-ids",

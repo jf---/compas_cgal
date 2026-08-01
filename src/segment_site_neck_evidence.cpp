@@ -46,9 +46,10 @@ bool canonical_clearance_endpoint(const MatParameterEndpoint2 &endpoint) {
          std::adjacent_find(endpoint.exact_evidence.boundary_features.begin(),
                             endpoint.exact_evidence.boundary_features.end()) ==
              endpoint.exact_evidence.boundary_features.end() &&
+         endpoint.parameter_root_identity.has_value() &&
          std::binary_search(endpoint.provenance_ids.begin(),
                             endpoint.provenance_ids.end(),
-                            algebraic_root_identity_v1(*endpoint.parameter));
+                            mat_endpoint_root_identity_v1(endpoint));
 }
 
 std::size_t node_index(const MatExactGraph2 &graph,
@@ -351,7 +352,7 @@ mat_neck_location_parameter_root_id(const MatExactNeckLocation2 &location) {
             throw InvalidMatNeckEvidenceRecordError(
                 "clearance-endpoint neck location has no exact parameter");
           }
-          return algebraic_root_identity_v1(*value.endpoint().parameter);
+          return mat_endpoint_root_identity_v1(value.endpoint());
         } else {
           return std::nullopt;
         }

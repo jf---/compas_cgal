@@ -73,7 +73,7 @@ pytest-testmon, Ruff, strict mypy, strict MkDocs.
   `SegmentSiteMedialAxis.zero_guide_records`,
   `SegmentSiteMedialAxis.validate_zero_guide_records(...)`.
 
-- [ ] **Step 1: Write the failing native-owner tests**
+- [x] **Step 1: Write the failing native-owner tests**
 
 Add radius-1 and radius-0.5 owner tests with proof context:
 
@@ -109,7 +109,7 @@ absent because their complete polynomial is nonconstant. A
 `numpy.nextafter(1.0, 0.0)` radius also emits no records, proving binary64
 near-equality is not zero-guide authority.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 ```bash
 pixi run pytest tests/adaptive/test_medial_axis.py \
@@ -119,7 +119,7 @@ pixi run pytest tests/adaptive/test_medial_axis.py \
 Expected: collection or attribute failures because the owner exposes no
 zero-guide proof inventory.
 
-- [ ] **Step 3: Define the exact native record**
+- [x] **Step 3: Define the exact native record**
 
 Declare one value type with validated construction and canonical bytes:
 
@@ -147,7 +147,7 @@ binds edge ID, defining sites, both exact endpoint root IDs, and all clearance
 coefficients. Materialize concrete exact-number values before returning; never
 return a lazy CORE expression.
 
-- [ ] **Step 4: Build and verify the complete inventory**
+- [x] **Step 4: Build and verify the complete inventory**
 
 Implement classification as one pass over certificate profiles:
 
@@ -169,7 +169,7 @@ explicit verifier replay the MAT certificate, rebuild the full inventory, and
 compare edge IDs and canonical bytes exactly. An absent positive-guide edge is
 normal; an absent proved zero-guide record is an error.
 
-- [ ] **Step 5: Retain and bind the records**
+- [x] **Step 5: Retain and bind the records**
 
 Store `MatToolRadiusMm2` plus the records in `SegmentSiteMatBundle2` at graph
 lifetime and expose one read-only tuple:
@@ -190,7 +190,7 @@ owner.validate_zero_guide_records(
 Translate only the named native proof errors. Do not add fields to
 `projection_tuple`.
 
-- [ ] **Step 6: Run GREEN and native regressions**
+- [x] **Step 6: Run GREEN and native regressions**
 
 ```bash
 pixi run pytest tests/adaptive/test_medial_axis.py \
@@ -202,7 +202,7 @@ git diff --check
 Expected: exact inventory tests pass; the existing fixed projection and native
 Task-9 gates remain unchanged.
 
-- [ ] **Step 7: Document, commit, and push**
+- [x] **Step 7: Document, commit, and push**
 
 Update the native proof inventory and exact polynomial theorem in
 `docs/segment_site_mat.md`, then run:
@@ -218,6 +218,18 @@ git add CMakeLists.txt src/segment_site_zero_guide.h \
   docs/superpowers/plans/2026-07-29-zero-guide-link-candidate.md
 git commit -m "feat(mat): prove zero-guide runs"
 ```
+
+Implementation note (2026-08-01): Task 1 emits exactly two radius-1 L-pocket
+records and no radius-0.5, `nextafter(1, 0)`, or endpoint-only P–S false
+positive. The near-equality adversary exposed CGAL's mutable algebraic-real
+factor representation. Graph binding now freezes an invariant-bearing exact
+factor/root-ordinal record, validates the current parameter against it by exact
+reconstruction, and keeps certificate identity stable across equivalent
+quadratic-to-linear refinement without weakening parameter-mutation rejection.
+
+Gate evidence: the medial-axis owner file passed `17` tests; the complete
+adaptive suite passed `531` in `306.41 s`; the clean Task 9 gate, Ruff, strict
+mypy over `27` files, strict MkDocs, and diff checks passed.
 
 ---
 
