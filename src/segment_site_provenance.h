@@ -8,6 +8,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <CGAL/Segment_Delaunay_graph_2.h>
@@ -82,11 +83,44 @@ struct MatEndpointExactEvidence2 {
         const MatEndpointExactEvidence2&) const = default;
 };
 
+class MatEndpointRootIdentity2 {
+public:
+    static MatEndpointRootIdentity2 build(
+        const ExactAlgebraicKernel1::Algebraic_real_1& root);
+
+    const std::string& root_id() const noexcept
+    {
+        return root_id_;
+    }
+
+    void require_matches(
+        const ExactAlgebraicKernel1::Algebraic_real_1& root) const;
+
+private:
+    MatEndpointRootIdentity2(
+        std::vector<ExactAlgebraicInteger1> factor_coefficients,
+        std::size_t root_ordinal,
+        std::string root_id)
+        : factor_coefficients_(
+              std::move(factor_coefficients)),
+          root_ordinal_(root_ordinal),
+          root_id_(std::move(root_id))
+    {
+    }
+
+    std::vector<ExactAlgebraicInteger1>
+        factor_coefficients_;
+    std::size_t root_ordinal_;
+    std::string root_id_;
+};
+
 struct MatParameterEndpoint2 {
     std::optional<ExactAlgebraicKernel1::Algebraic_real_1>
         parameter;
     std::vector<std::string> provenance_ids;
     MatEndpointExactEvidence2 exact_evidence;
+    std::optional<MatEndpointRootIdentity2>
+        parameter_root_identity;
 };
 
 struct MatAdmissibleComponent2 {
@@ -137,6 +171,12 @@ public:
     using std::runtime_error::runtime_error;
 };
 
+class InvalidMatEndpointRootIdentityError
+    : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
+
 std::size_t matched_generator_site_count(
     const SegmentSiteDelaunay2& delaunay,
     const std::vector<GeneratorSite2>& generators);
@@ -170,6 +210,8 @@ std::string stable_normalized_voronoi_node_identity_v1(
     const std::vector<std::string>& ordered_generator_ids);
 std::string algebraic_root_identity_v1(
     const ExactAlgebraicKernel1::Algebraic_real_1& root);
+const std::string& mat_endpoint_root_identity_v1(
+    const MatParameterEndpoint2& endpoint);
 MatParameterEndpoint2 exact_graph_endpoint_binding(
     const MatParameterEndpoint2& endpoint);
 std::string stable_endpoint_node_identity_v1(

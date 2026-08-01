@@ -33,7 +33,8 @@ std::string length_framed(const std::string& value)
 
 } // namespace
 
-std::string algebraic_root_identity_v1(
+MatEndpointRootIdentity2
+MatEndpointRootIdentity2::build(
     const ExactAlgebraicKernel1::Algebraic_real_1& root)
 {
     using Polynomial = ExactAlgebraicKernel1::Polynomial_1;
@@ -60,13 +61,48 @@ std::string algebraic_root_identity_v1(
          ++ordinal) {
         if (kernel.compare_1_object()(roots[ordinal], root)
             == CGAL::EQUAL) {
-            return algebraic_root_id_v1(
+            return MatEndpointRootIdentity2(
                 coefficients,
-                ordinal);
+                ordinal,
+                algebraic_root_id_v1(
+                    coefficients,
+                    ordinal));
         }
     }
     throw InvalidAlgebraicPolynomialError(
         "canonical factor does not contain clipping root");
+}
+
+void MatEndpointRootIdentity2::require_matches(
+    const ExactAlgebraicKernel1::Algebraic_real_1& root) const
+{
+    using Polynomial = ExactAlgebraicKernel1::Polynomial_1;
+    const Polynomial factor =
+        typename CGAL::Polynomial_traits_d<
+            Polynomial>::Construct_polynomial()(
+            factor_coefficients_.begin(),
+            factor_coefficients_.end());
+    ExactAlgebraicKernel1 kernel;
+    std::vector<ExactAlgebraicKernel1::Algebraic_real_1> roots;
+    kernel.solve_1_object()(
+        factor,
+        true,
+        std::back_inserter(roots));
+    if (root_ordinal_ >= roots.size()
+        || kernel.compare_1_object()(
+               roots[root_ordinal_],
+               root)
+            != CGAL::EQUAL) {
+        throw InvalidMatEndpointRootIdentityError(
+            "frozen MAT endpoint root identity names a different parameter");
+    }
+}
+
+std::string algebraic_root_identity_v1(
+    const ExactAlgebraicKernel1::Algebraic_real_1& root)
+{
+    return MatEndpointRootIdentity2::build(root)
+        .root_id();
 }
 
 std::size_t matched_generator_site_count(
@@ -219,6 +255,17 @@ void union_endpoint_evidence(
     MatParameterEndpoint2& target,
     const MatParameterEndpoint2& source)
 {
+    if (target.parameter_root_identity.has_value()
+        && source.parameter_root_identity.has_value()
+        && target.parameter_root_identity->root_id()
+            != source.parameter_root_identity->root_id()) {
+        throw InvalidMatEndpointRootIdentityError(
+            "cannot union endpoints with different frozen root identities");
+    }
+    if (!target.parameter_root_identity.has_value()) {
+        target.parameter_root_identity =
+            source.parameter_root_identity;
+    }
     union_stable_ids(
         target.provenance_ids,
         source.provenance_ids);
@@ -338,10 +385,34 @@ MatParameterEndpoint2 exact_graph_endpoint_binding(
             "exact graph endpoint is unbounded");
     }
     MatParameterEndpoint2 bound = endpoint;
+    if (!bound.parameter_root_identity.has_value()) {
+        bound.parameter_root_identity =
+            MatEndpointRootIdentity2::build(
+                *bound.parameter);
+    } else {
+        bound.parameter_root_identity->require_matches(
+            *bound.parameter);
+    }
     union_stable_ids(
         bound.provenance_ids,
-        {algebraic_root_identity_v1(*bound.parameter)});
+        {bound.parameter_root_identity->root_id()});
     return bound;
+}
+
+const std::string& mat_endpoint_root_identity_v1(
+    const MatParameterEndpoint2& endpoint)
+{
+    if (!endpoint.parameter.has_value()) {
+        throw InvalidMatEndpointRootIdentityError(
+            "MAT endpoint root identity has no exact parameter");
+    }
+    if (!endpoint.parameter_root_identity.has_value()) {
+        throw InvalidMatEndpointRootIdentityError(
+            "MAT endpoint has no frozen root identity");
+    }
+    endpoint.parameter_root_identity->require_matches(
+        *endpoint.parameter);
+    return endpoint.parameter_root_identity->root_id();
 }
 
 std::string stable_endpoint_node_identity_v1(
@@ -352,8 +423,14 @@ std::string stable_endpoint_node_identity_v1(
         throw InvalidRationalPrimitiveError(
             "exact graph endpoint is unbounded");
     }
+    const std::string root_id =
+        !endpoint.parameter_root_identity.has_value()
+        ? algebraic_root_identity_v1(
+              *endpoint.parameter)
+        : mat_endpoint_root_identity_v1(
+              endpoint);
     return dual_id + "/node/"
-        + algebraic_root_identity_v1(*endpoint.parameter);
+        + root_id;
 }
 
 MatParameterEndpoint2 domain_endpoint(

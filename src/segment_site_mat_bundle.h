@@ -2,6 +2,7 @@
 
 #include "segment_site_catalog.h"
 #include "segment_site_mat_numeric_table.h"
+#include "segment_site_zero_guide.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -27,12 +28,17 @@ public:
   const std::vector<std::string> &neck_owner_ids() const noexcept;
   const std::vector<std::vector<std::string>> &
   neck_defining_site_ids() const noexcept;
+  const std::vector<MatZeroGuideRecordV1> &
+  zero_guide_records() const noexcept;
 
   std::pair<std::vector<std::int64_t>, std::vector<std::string>>
   validate_and_classify_necks(
       const std::string &mat_certificate,
       const std::vector<std::string> &neck_evidence,
       const std::vector<std::string> &squared_width_boundaries) const;
+  std::vector<std::string> validate_zero_guide_records(
+      const std::string &mat_certificate,
+      const std::vector<std::pair<std::string, std::string>> &records) const;
 
   MatNumericMatTable2 release_numeric_table() && noexcept;
 
@@ -43,7 +49,9 @@ private:
       std::vector<MatNeckEvidenceV1> neck_evidence,
       std::vector<std::string> sample_parameter_ids,
       std::vector<std::string> neck_owner_ids,
-      std::vector<std::vector<std::string>> neck_defining_site_ids);
+      std::vector<std::vector<std::string>> neck_defining_site_ids,
+      MatToolRadiusMm2 tool_radius,
+      std::vector<MatZeroGuideRecordV1> zero_guide_records);
 
   MatProposalSamplingGraph2 sampled_;
   CanonicalMatSiteCatalog2 catalog_;
@@ -53,4 +61,6 @@ private:
   std::vector<std::string> sample_parameter_ids_;
   std::vector<std::string> neck_owner_ids_;
   std::vector<std::vector<std::string>> neck_defining_site_ids_;
+  MatToolRadiusMm2 tool_radius_;
+  std::vector<MatZeroGuideRecordV1> zero_guide_records_;
 };

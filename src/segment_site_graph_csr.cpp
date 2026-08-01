@@ -198,8 +198,7 @@ void require_endpoint_provenance(
     const MatEndpointExactEvidence2& evidence =
         endpoint.exact_evidence;
     const std::string root_id =
-        algebraic_root_identity_v1(
-            *endpoint.parameter);
+        mat_endpoint_root_identity_v1(endpoint);
     if ((!evidence.original_voronoi_vertex
          && !evidence.domain_boundary
          && !evidence.clearance_root)

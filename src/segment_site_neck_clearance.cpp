@@ -222,8 +222,8 @@ void require_profile_endpoint(
         || !std::binary_search(
             endpoint.provenance_ids.begin(),
             endpoint.provenance_ids.end(),
-            algebraic_root_identity_v1(
-                *endpoint.parameter))) {
+            mat_endpoint_root_identity_v1(
+                endpoint))) {
         throw InvalidMatClearanceEdgeProfileError(
             "MAT clearance profile endpoint evidence is incomplete");
     }

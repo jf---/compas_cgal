@@ -5,9 +5,12 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <iterator>
 #include <string>
 #include <utility>
 #include <vector>
+
+#include <CGAL/Polynomial_traits_d.h>
 
 namespace {
 
@@ -369,6 +372,88 @@ bool malformed_public_graph_is_rejected()
         && admissibility_rejected;
 }
 
+bool bound_endpoint_root_identity_survives_refinement()
+{
+    using Polynomial =
+        ExactAlgebraicKernel1::Polynomial_1;
+    using Algebraic =
+        ExactAlgebraicKernel1::Algebraic_real_1;
+
+    const ExactAlgebraicInteger1 numerator(
+        "9007199254740991");
+    const ExactAlgebraicInteger1 denominator(
+        "9007199254740992");
+    const std::vector<ExactAlgebraicInteger1>
+        coefficients{
+            -(numerator * numerator),
+            0,
+            denominator * denominator,
+        };
+    const Polynomial polynomial =
+        typename CGAL::Polynomial_traits_d<
+            Polynomial>::Construct_polynomial()(
+            coefficients.begin(),
+            coefficients.end());
+    ExactAlgebraicKernel1 kernel;
+    std::vector<Algebraic> roots;
+    kernel.solve_1_object()(
+        polynomial,
+        true,
+        std::back_inserter(roots));
+    if (roots.size() != 2) {
+        return false;
+    }
+
+    const std::string frozen_root_id =
+        algebraic_root_id_v1(coefficients, 1);
+    const MatParameterEndpoint2 bound =
+        exact_graph_endpoint_binding(
+            {
+                roots.back(),
+                {frozen_root_id},
+                {
+                    false,
+                    false,
+                    true,
+                    {},
+                },
+            });
+    const Algebraic rational =
+        kernel.construct_algebraic_real_1_object()(
+            CORE::BigRat(
+                numerator,
+                denominator));
+    if (kernel.compare_1_object()(
+            *bound.parameter,
+            rational)
+        != CGAL::EQUAL) {
+        return false;
+    }
+
+    const std::string refined_root_id =
+        algebraic_root_identity_v1(
+            *bound.parameter);
+    bool mutation_rejected = false;
+    try {
+        MatParameterEndpoint2 mutated = bound;
+        mutated.parameter =
+            kernel.construct_algebraic_real_1_object()(0);
+        static_cast<void>(
+            mat_endpoint_root_identity_v1(mutated));
+    } catch (
+        const InvalidMatEndpointRootIdentityError&) {
+        mutation_rejected = true;
+    }
+    return refined_root_id != frozen_root_id
+        && mat_endpoint_root_identity_v1(bound)
+            == frozen_root_id
+        && std::binary_search(
+            bound.provenance_ids.begin(),
+            bound.provenance_ids.end(),
+            frozen_root_id)
+        && mutation_rejected;
+}
+
 } // namespace
 
 bool graph_csr_gate()
@@ -523,5 +608,6 @@ bool graph_csr_gate()
         && empty_sites_rejected
         && rectangle_public_table_is_exact()
         && l_shape_public_table_is_canonical()
-        && malformed_public_graph_is_rejected();
+        && malformed_public_graph_is_rejected()
+        && bound_endpoint_root_identity_survives_refinement();
 }

@@ -371,6 +371,11 @@ Full continuation then reaches route 1, a straight width-2 arm whose exact
 clearance equals the radius-1 tool throughout. It has no positive guide circle
 but still requires centerline removal, so Task 6 needs a separately typed,
 MAT-certified link-only candidate and transaction before terminal sealing.
+The native prerequisite is now implemented: `SegmentSiteMatBundle2` proves a
+complete two-record zero-guide inventory by exact profile-coefficient identity,
+retains it outside the fixed numeric projection, and rejects incomplete or
+mutated inventories under MAT replay. Typed projection and route consumption
+remain in the dedicated zero-guide implementation plan.
 
 The approved prerequisite design is
 [`2026-07-29-one-root-full-circle-source-design.md`](../specs/2026-07-29-one-root-full-circle-source-design.md);

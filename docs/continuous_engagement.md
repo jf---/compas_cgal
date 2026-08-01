@@ -50,9 +50,11 @@ cells.
     both adjacent cells. The accepted transaction binds the independently
     reproduced native trace digest, and the first MAT route becomes terminal.
     Full continuation next reaches a constant-clearance arm whose clearance
-    equals the tool radius everywhere. Its guide radius is therefore exactly
-    zero: the arm requires a certified link-only cutting advance, not a fake
-    zero-radius circle or a traversal-only skip.
+    equals the tool radius everywhere. The native MAT owner now proves both
+    radius-1 width-2 S–S arms with exact, replayable coefficient-identity
+    records. Their guide radius is therefore exactly zero: the next stage must
+    project that authority into a certified link-only cutting advance, not a
+    fake zero-radius circle or a traversal-only skip.
     Traversal/coverage closure, fresh terminal replay, arbitrary-pocket
     evidence, and matched Held–Pfeiffer performance remain incomplete.
 
@@ -775,12 +777,22 @@ transaction's event-trace digest. Its phase-seam fibre retained exact inactive
 endpoint incidences while certifying mixed directions. Full continuation then
 failed loud at the next route with an empty circle family because the complete
 MAT arm has exact zero guide radius. Task 13F is not terminal; the required
-link-only advance remains an implementation stage.
+link-only advance remains an implementation stage. Its native prerequisite is
+now closed: the retained MAT owner exposes two canonical zero-guide records,
+and exact replay rejects missing, duplicate, mutated, foreign, or
+MAT-certificate-cross-wired inventories.
 
 The focused seam/Task 13F slice passed `4` tests in `28.22 s`; affected
 `--testmon` selection passed `5` in `29.37 s`; and the complete adaptive suite
 passed `523` in `245.18 s`. Ruff, strict mypy over `27` source files, strict
 MkDocs, and `git diff --check` also passed.
+
+At the native zero-guide Task 1 checkpoint on 2026-08-01, the complete
+medial-axis owner file passed `17` tests and the complete adaptive suite passed
+`531` in `306.41 s`. The official clean Task 9 gate, Ruff, strict mypy over
+`27` source files, and strict MkDocs passed. These gates establish native
+zero-guide authority only; they do not yet certify or execute the advancing
+segment and do not change the matched-performance boundary.
 
 The comparative claim and matched performance boundary remain in
 [Exact Segment-Site Medial Axis](segment_site_mat.md#relation-to-held-and-pfeiffer-2025).

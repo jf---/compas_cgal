@@ -14,19 +14,20 @@ MatParameterEndpoint2 endpoint(
     const auto algebraic =
         kernel.construct_algebraic_real_1_object()(
             parameter);
-    return {
-        algebraic,
+    return exact_graph_endpoint_binding(
         {
-            algebraic_root_identity_v1(
-                algebraic),
-        },
-        {
-            true,
-            false,
-            false,
-            {},
-        },
-    };
+            algebraic,
+            {
+                algebraic_root_identity_v1(
+                    algebraic),
+            },
+            {
+                true,
+                false,
+                false,
+                {},
+            },
+        });
 }
 
 MatExactGraphEdge2 edge(

@@ -281,10 +281,10 @@ MatRationalSamplingCurve2 MatRationalSamplingCurve2::build(
       !edge.target_endpoint.parameter.has_value() ||
       clearance_profile.edge_id() != edge.edge_id ||
       clearance_profile.defining_site_ids() != edge.generator_site_ids ||
-      algebraic_root_identity_v1(*clearance_profile.lower().parameter) !=
-          algebraic_root_identity_v1(*edge.source_endpoint.parameter) ||
-      algebraic_root_identity_v1(*clearance_profile.upper().parameter) !=
-          algebraic_root_identity_v1(*edge.target_endpoint.parameter)) {
+      mat_endpoint_root_identity_v1(clearance_profile.lower()) !=
+          mat_endpoint_root_identity_v1(edge.source_endpoint) ||
+      mat_endpoint_root_identity_v1(clearance_profile.upper()) !=
+          mat_endpoint_root_identity_v1(edge.target_endpoint)) {
     throw InvalidMatSamplingCurveError(
         "MAT sampling curve does not match its exact edge/profile");
   }
