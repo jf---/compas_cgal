@@ -7,6 +7,7 @@ from fractions import Fraction
 from typing import Literal
 from typing import NewType
 from typing import Self
+from typing import TypeAlias
 from typing import cast
 
 from compas_cgal.adaptive.canonical import ExactRationalV1
@@ -22,11 +23,14 @@ from compas_cgal.adaptive.errors import InvalidCandidateLatticeError
 from compas_cgal.adaptive.errors import InvalidMathsmProposalError
 from compas_cgal.adaptive.errors import InvalidMiddleCurveCursorError
 from compas_cgal.adaptive.errors import InvalidMiddleCurveSpanError
+from compas_cgal.adaptive.errors import InvalidZeroGuideCandidateError
+from compas_cgal.adaptive.errors import UncertifiedZeroGuideEdgeError
 from compas_cgal.adaptive.medial_axis import MatEdge
 from compas_cgal.adaptive.medial_axis import MatEdgeId
 from compas_cgal.adaptive.medial_axis import MatSample
 from compas_cgal.adaptive.medial_axis import MatSite
 from compas_cgal.adaptive.medial_axis import MatSiteId
+from compas_cgal.adaptive.medial_axis import MatZeroGuideRun
 from compas_cgal.adaptive.medial_axis import MedialAxis
 from compas_cgal.adaptive.motion import ExactCircleMotion
 from compas_cgal.adaptive.operation import AdvanceTraversalDecision
@@ -49,6 +53,7 @@ from compas_cgal.adaptive.units import Vector2
 from compas_cgal.adaptive.units import WorldXY
 
 MiddleCurveCandidateId = NewType("MiddleCurveCandidateId", bytes)
+ZeroGuideLinkCandidateId = NewType("ZeroGuideLinkCandidateId", bytes)
 
 _SHA256_BYTES = hashlib.sha256().digest_size
 
@@ -76,16 +81,17 @@ def _canonical_levels(
 def _validate_scope_cap(
     neck_scope: NeckScope,
     effective_cap_decision: EffectiveCapDecision,
+    error_type: type[ValueError] = InvalidCandidateLatticeError,
 ) -> None:
     if type(neck_scope) is NoNeckScope:
         if type(effective_cap_decision) is not FullCapDecision:
-            raise InvalidCandidateLatticeError("no-neck candidate requires one exact full-cap decision.")
+            raise error_type("no-neck candidate requires one exact full-cap decision.")
         return
     if type(neck_scope) is OrientedNeckScope:
         if type(effective_cap_decision) is not NeckCapDecision:
-            raise InvalidCandidateLatticeError("oriented-neck candidate requires one exact neck-cap decision.")
+            raise error_type("oriented-neck candidate requires one exact neck-cap decision.")
         return
-    raise InvalidCandidateLatticeError("candidate neck scope must use the closed exact type.")
+    raise error_type("candidate neck scope must use the closed exact type.")
 
 
 def _distance(first: Point2[WorldXY], second: Point2[WorldXY]) -> float:
@@ -569,15 +575,183 @@ class MiddleCurveCandidate:
         return self.proposal.motion
 
 
+def _zero_guide_candidate_record_bytes(
+    *,
+    zero_guide_run: MatZeroGuideRun,
+    policy: CandidatePolicy,
+    spatial_progress: ExactMillimetre,
+    spatial_levels: tuple[int, ...],
+    target: Point2[WorldXY],
+    cursor_limit_identity: CursorIdentity,
+    neck_scope: NeckScope,
+    effective_cap_decision: EffectiveCapDecision,
+    traversal_decision: AdvanceTraversalDecision,
+) -> bytes:
+    _validate_zero_guide_candidate_inputs(
+        zero_guide_run=zero_guide_run,
+        policy=policy,
+        spatial_progress=spatial_progress,
+        spatial_levels=spatial_levels,
+        target=target,
+        cursor_limit_identity=cursor_limit_identity,
+        neck_scope=neck_scope,
+        effective_cap_decision=effective_cap_decision,
+        traversal_decision=traversal_decision,
+    )
+    run = encode_tagged_union(
+        b"mat-zero-guide-run-reference-v1",
+        encode_sequence(
+            (
+                encode_bytes(bytes(zero_guide_run.edge_id)),
+                encode_bytes(bytes(zero_guide_run.mat_certificate_digest)),
+                encode_bytes(zero_guide_run.native_certificate),
+            )
+        ),
+    )
+    return encode_tagged_union(
+        b"zero-guide-link-candidate-v1",
+        encode_component_map(
+            {
+                b"cap-decision": effective_cap_decision.canonical_bytes,
+                b"cursor-limit": encode_bytes(cursor_limit_identity),
+                b"neck-scope": neck_scope.canonical_bytes,
+                b"policy": canonical_task1_bytes(policy),
+                b"spatial-levels": _level_bytes(spatial_levels),
+                b"spatial-progress": _fraction_bytes(spatial_progress),
+                b"target": canonical_point2_bytes(target),
+                b"traversal": traversal_decision.canonical_bytes,
+                b"zero-guide-run": run,
+            }
+        ),
+    )
+
+
+def _validate_zero_guide_candidate_inputs(
+    *,
+    zero_guide_run: object,
+    policy: object,
+    spatial_progress: object,
+    spatial_levels: object,
+    target: object,
+    cursor_limit_identity: object,
+    neck_scope: NeckScope,
+    effective_cap_decision: EffectiveCapDecision,
+    traversal_decision: object,
+) -> None:
+    if type(zero_guide_run) is not MatZeroGuideRun:
+        raise InvalidZeroGuideCandidateError("zero-guide candidate must own one exact native proof run.")
+    if type(policy) is not CandidatePolicy:
+        raise InvalidZeroGuideCandidateError("zero-guide candidate must retain its finite policy.")
+    if type(spatial_progress) is not Fraction or spatial_progress <= 0:
+        raise InvalidZeroGuideCandidateError("zero-guide candidate progress must be exact and positive.")
+    _canonical_levels(
+        spatial_levels,
+        "zero-guide candidate spatial levels",
+        InvalidZeroGuideCandidateError,
+    )
+    if type(target) is not Point2:
+        raise InvalidZeroGuideCandidateError("zero-guide candidate target must use world-XY typed geometry.")
+    if type(cursor_limit_identity) is not bytes or not cursor_limit_identity:
+        raise InvalidZeroGuideCandidateError("zero-guide candidate must bind its exact cursor limit.")
+    _validate_scope_cap(neck_scope, effective_cap_decision, InvalidZeroGuideCandidateError)
+    if type(traversal_decision) is not AdvanceTraversalDecision:
+        raise InvalidZeroGuideCandidateError("zero-guide candidate must own one exact advance traversal.")
+    if bytes(traversal_decision.edge_id) != bytes(zero_guide_run.edge_id):
+        raise InvalidZeroGuideCandidateError("zero-guide proof edge contradicts candidate traversal identity.")
+
+
+@dataclass(frozen=True)
+class ZeroGuideLinkCandidate:
+    identity: ZeroGuideLinkCandidateId
+    zero_guide_run: MatZeroGuideRun
+    policy: CandidatePolicy
+    spatial_progress: ExactMillimetre
+    spatial_levels: tuple[int, ...]
+    target: Point2[WorldXY]
+    cursor_limit_identity: CursorIdentity
+    neck_scope: NeckScope
+    effective_cap_decision: EffectiveCapDecision
+    traversal_decision: AdvanceTraversalDecision
+
+    def __post_init__(self) -> None:
+        if type(self.identity) is not bytes or len(self.identity) != _SHA256_BYTES:
+            raise InvalidZeroGuideCandidateError("zero-guide candidate identity must be one SHA-256 digest.")
+        if self.identity != hashlib.sha256(self.canonical_bytes).digest():
+            raise InvalidZeroGuideCandidateError("zero-guide candidate identity contradicts its canonical record.")
+
+    @classmethod
+    def build(
+        cls,
+        *,
+        zero_guide_run: MatZeroGuideRun,
+        policy: CandidatePolicy,
+        spatial_progress: ExactMillimetre,
+        spatial_levels: tuple[int, ...],
+        target: Point2[WorldXY],
+        cursor_limit_identity: CursorIdentity,
+        neck_scope: NeckScope,
+        effective_cap_decision: EffectiveCapDecision,
+        traversal_decision: AdvanceTraversalDecision,
+    ) -> Self:
+        canonical = _zero_guide_candidate_record_bytes(
+            zero_guide_run=zero_guide_run,
+            policy=policy,
+            spatial_progress=spatial_progress,
+            spatial_levels=spatial_levels,
+            target=target,
+            cursor_limit_identity=cursor_limit_identity,
+            neck_scope=neck_scope,
+            effective_cap_decision=effective_cap_decision,
+            traversal_decision=traversal_decision,
+        )
+        return cls(
+            ZeroGuideLinkCandidateId(hashlib.sha256(canonical).digest()),
+            zero_guide_run,
+            policy,
+            spatial_progress,
+            spatial_levels,
+            target,
+            cursor_limit_identity,
+            neck_scope,
+            effective_cap_decision,
+            traversal_decision,
+        )
+
+    @property
+    def canonical_bytes(self) -> bytes:
+        return _zero_guide_candidate_record_bytes(
+            zero_guide_run=self.zero_guide_run,
+            policy=self.policy,
+            spatial_progress=self.spatial_progress,
+            spatial_levels=self.spatial_levels,
+            target=self.target,
+            cursor_limit_identity=self.cursor_limit_identity,
+            neck_scope=self.neck_scope,
+            effective_cap_decision=self.effective_cap_decision,
+            traversal_decision=self.traversal_decision,
+        )
+
+    @property
+    def order_key(self) -> CandidateOrderKey:
+        return CandidateOrderKey.build(
+            progress=self.spatial_progress,
+            squared_radius=SquaredMillimetre(Fraction(0)),
+            canonical_identity=bytes(self.identity),
+        )
+
+
+TraversalCandidate: TypeAlias = MiddleCurveCandidate | ZeroGuideLinkCandidate
+
+
 @dataclass(frozen=True)
 class DerivedCandidateCursor:
     """Proof-carrying continuation point produced by one lattice candidate."""
 
     span: MiddleCurveSpan
-    candidate: MiddleCurveCandidate
+    candidate: TraversalCandidate
 
     def __post_init__(self) -> None:
-        if type(self.span) is not MiddleCurveSpan or type(self.candidate) is not MiddleCurveCandidate:
+        if type(self.span) is not MiddleCurveSpan or type(self.candidate) not in (MiddleCurveCandidate, ZeroGuideLinkCandidate):
             raise InvalidMiddleCurveCursorError("derived cursor requires one exact span and candidate.")
         traversal = self.candidate.traversal_decision
         if traversal.makes_cursor_terminal:
@@ -594,7 +768,7 @@ class DerivedCandidateCursor:
         cls,
         *,
         span: MiddleCurveSpan,
-        candidate: MiddleCurveCandidate,
+        candidate: TraversalCandidate,
     ) -> Self:
         return cls(span, candidate)
 
@@ -612,7 +786,9 @@ class DerivedCandidateCursor:
 
     @property
     def point(self) -> Point2[WorldXY]:
-        return self.candidate.middle_point
+        if type(self.candidate) is MiddleCurveCandidate:
+            return self.candidate.middle_point
+        return cast(ZeroGuideLinkCandidate, self.candidate).target
 
     @property
     def ordinal_step(self) -> Literal[-1, 1]:
@@ -695,7 +871,7 @@ class ExhaustedCandidateCursor:
 def _validate_candidate_cursor_lineage(
     *,
     span: MiddleCurveSpan,
-    candidate: MiddleCurveCandidate,
+    candidate: TraversalCandidate,
 ) -> None:
     traversal = candidate.traversal_decision
     if (
@@ -706,9 +882,17 @@ def _validate_candidate_cursor_lineage(
         or candidate.cursor_limit_identity != span.cursor_limit.cursor_identity
     ):
         raise InvalidMiddleCurveCursorError("candidate traversal does not belong to its claimed exact span.")
-    if candidate.generator_site_id not in span.edge.generator_site_ids:
-        raise InvalidMiddleCurveCursorError("candidate generator does not belong to its claimed MAT edge.")
-    if candidate.middle_point != _middle_point(
+    if type(candidate) is MiddleCurveCandidate:
+        if candidate.generator_site_id not in span.edge.generator_site_ids:
+            raise InvalidMiddleCurveCursorError("candidate generator does not belong to its claimed MAT edge.")
+        target = candidate.middle_point
+    elif type(candidate) is ZeroGuideLinkCandidate:
+        if span.axis.zero_guide_run_by_edge_id.get(span.edge.identity) != candidate.zero_guide_run:
+            raise InvalidMiddleCurveCursorError("zero-guide candidate proof is not owned by its claimed MAT edge.")
+        target = candidate.target
+    else:
+        raise InvalidMiddleCurveCursorError("candidate lineage requires one closed exact candidate variant.")
+    if target != _middle_point(
         span,
         candidate.spatial_progress,
     ) or traversal.cursor_after != _cursor_after(
@@ -961,5 +1145,53 @@ def enumerate_middle_curve_candidates(
             candidates,
             terminal_limit=makes_cursor_terminal_at_limit,
         ),
+        key=lambda candidate: candidate.order_key,
+    )
+
+
+def enumerate_zero_guide_link_candidates(
+    *,
+    span: MiddleCurveSpan,
+    policy: CandidatePolicy,
+    neck_scope: NeckScope,
+    effective_cap_decision: EffectiveCapDecision,
+    makes_cursor_terminal_at_limit: bool,
+) -> tuple[ZeroGuideLinkCandidate, ...]:
+    if type(span) is not MiddleCurveSpan:
+        raise InvalidZeroGuideCandidateError("zero-guide enumeration requires one exact middle-curve span.")
+    if type(policy) is not CandidatePolicy:
+        raise InvalidZeroGuideCandidateError("zero-guide enumeration requires one finite policy.")
+    _validate_scope_cap(neck_scope, effective_cap_decision, InvalidZeroGuideCandidateError)
+    if type(makes_cursor_terminal_at_limit) is not bool:
+        raise InvalidZeroGuideCandidateError("zero-guide cursor-limit terminal intent must be explicitly boolean.")
+    run = span.axis.zero_guide_run_by_edge_id.get(span.edge.identity)
+    if run is None:
+        raise UncertifiedZeroGuideEdgeError(
+            "zero-guide enumeration requires native proof for the complete span edge.",
+        )
+
+    candidates = tuple(
+        ZeroGuideLinkCandidate.build(
+            zero_guide_run=run,
+            policy=policy,
+            spatial_progress=progress,
+            spatial_levels=spatial_levels,
+            target=_middle_point(span, progress),
+            cursor_limit_identity=span.cursor_limit.cursor_identity,
+            neck_scope=neck_scope,
+            effective_cap_decision=effective_cap_decision,
+            traversal_decision=AdvanceTraversalDecision.build(
+                component_id=span.axis.component_by_edge_id[span.edge.identity],
+                edge_id=EdgeId(bytes(span.edge.identity)),
+                branch_id=span.edge.branch_id,
+                cursor_before=span.cursor_before.cursor_identity,
+                cursor_after=_cursor_after(span, progress),
+                makes_cursor_terminal=(makes_cursor_terminal_at_limit and progress == span.reported_length),
+            ),
+        )
+        for progress, spatial_levels in _refined_spatial_values(span, policy)
+    )
+    return policy.order_candidates(
+        candidates,
         key=lambda candidate: candidate.order_key,
     )

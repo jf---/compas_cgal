@@ -87,8 +87,8 @@ class CandidateOrderKey:
     def __post_init__(self) -> None:
         if type(self.progress) is not Fraction or self.progress < 0:
             raise InvalidCandidatePolicyError("candidate progress must be an exact non-negative length.")
-        if type(self.squared_radius) is not Fraction or self.squared_radius <= 0:
-            raise InvalidCandidatePolicyError("candidate squared radius must be exact and positive.")
+        if type(self.squared_radius) is not Fraction or self.squared_radius < 0:
+            raise InvalidCandidatePolicyError("candidate squared radius must be exact and non-negative.")
         if type(self.canonical_identity) is not bytes or not self.canonical_identity:
             raise InvalidCandidatePolicyError("candidate canonical identity must be nonempty bytes.")
 

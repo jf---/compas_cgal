@@ -138,6 +138,34 @@ def test_candidate_policy_executes_canonical_tie_break_independent_of_input_orde
         assert tuple(candidate.name for candidate in ordered) == expected
 
 
+def test_candidate_policy_ranks_zero_radius_after_positive_radius() -> None:
+    """A proved link joins the closed order without outranking a circle."""
+    policy = _candidate_policy()
+    zero_candidate = _Candidate(
+        "zero",
+        CandidateOrderKey.build(
+            progress=ExactMillimetre(Fraction(2)),
+            squared_radius=SquaredMillimetre(Fraction(0)),
+            canonical_identity=b"zero",
+        ),
+    )
+    circle_candidate = _Candidate(
+        "circle",
+        CandidateOrderKey.build(
+            progress=ExactMillimetre(Fraction(2)),
+            squared_radius=SquaredMillimetre(Fraction(1)),
+            canonical_identity=b"circle",
+        ),
+    )
+
+    ordered = policy.order_candidates(
+        (zero_candidate, circle_candidate),
+        key=lambda candidate: candidate.order_key,
+    )
+
+    assert ordered == (circle_candidate, zero_candidate)
+
+
 @pytest.mark.parametrize(
     "changes",
     [

@@ -795,14 +795,31 @@ zero-guide authority only; they do not yet certify or execute the advancing
 segment and do not change the matched-performance boundary. Task 2 now
 projects that authority into immutable typed edge/MAT-digest/native-byte
 records, authenticates them against the retained owner, and rejects edge,
-record-byte, digest, and owner cross-wires. Link-only candidate generation,
-motion certification, and route consumption remain open.
+record-byte, digest, and owner cross-wires. Link-only motion certification and
+route consumption remain open.
 
 At this Task 2 checkpoint, the complete medial-axis file passed `22` tests and
 the complete adaptive suite passed `536` in `267.28 s`; affected `--testmon`
 selection passed `7`. Ruff, strict mypy over `27` source files, strict MkDocs,
 formatting, and diff checks passed. These are verification costs, not planner
 timings or evidence of Held–Pfeiffer performance parity.
+
+Task 3 now consumes that proof through a distinct content-addressed
+`ZeroGuideLinkCandidate`. Both certified three-millimetre arms emit `12`
+spatial-only candidates in forward and reverse directions under the focused
+policy, with byte-identical repeat order and disjoint directional identities.
+The candidate has no circle radius, phase, site choice, or motion; exact proof
+collapses the candidate product to one record per spatial station. The closed
+traversal union accepts derived and native-endpoint link cursors, while the
+positive-radius-only exhausted cursor remains circle-specific. Advancing
+operation, exact segment certification, atomic transaction, generator
+dispatch, and replay remain open.
+
+At this Task 3 checkpoint, the complete candidate/policy/traversal slice
+passed `52` tests and the complete adaptive suite passed `542` in `187.61 s`;
+final affected `--testmon` selection passed `7`. Ruff, strict mypy over `27`
+source files, strict MkDocs, formatting, and diff checks passed. These are
+verification costs, not matched planner timings.
 
 The comparative claim and matched performance boundary remain in
 [Exact Segment-Site Medial Axis](segment_site_mat.md#relation-to-held-and-pfeiffer-2025).

@@ -1,4 +1,5 @@
 import math
+from dataclasses import replace
 from fractions import Fraction
 
 import numpy as np
@@ -9,16 +10,21 @@ from compas_cgal.adaptive.candidates import DerivedCandidateCursor
 from compas_cgal.adaptive.candidates import ExhaustedCandidateCursor
 from compas_cgal.adaptive.candidates import MathsmCircleProposal
 from compas_cgal.adaptive.candidates import MiddleCurveSpan
+from compas_cgal.adaptive.candidates import ZeroGuideLinkCandidate
 from compas_cgal.adaptive.candidates import enumerate_middle_curve_candidates
+from compas_cgal.adaptive.candidates import enumerate_zero_guide_link_candidates
+from compas_cgal.adaptive.errors import InvalidZeroGuideCandidateError
 from compas_cgal.adaptive.errors import InvalidMathsmProposalError
 from compas_cgal.adaptive.errors import InvalidMiddleCurveCursorError
 from compas_cgal.adaptive.errors import InvalidMiddleCurveSpanError
+from compas_cgal.adaptive.errors import UncertifiedZeroGuideEdgeError
 from compas_cgal.adaptive.medial_axis import MatEdge
 from compas_cgal.adaptive.medial_axis import MatSample
 from compas_cgal.adaptive.medial_axis import MedialAxis
 from compas_cgal.adaptive.motion import EngagementCap
 from compas_cgal.adaptive.neck import NeckInventory
 from compas_cgal.adaptive.operation import AdvanceTraversalDecision
+from compas_cgal.adaptive.operation import EdgeId
 from compas_cgal.adaptive.operation import FullCapDecision
 from compas_cgal.adaptive.operation import NoNeckScope
 from compas_cgal.adaptive.policy import ACTIVE_PASSAGE_STATES
@@ -46,14 +52,14 @@ L_SHAPE = np.asarray(
 )
 
 
-def _axis() -> MedialAxis:
+def _axis(*, tool_radius: float = 0.5) -> MedialAxis:
     boundary = CanonicalRingV1.build_outer(
         tuple(Point2[WorldXY].build(x, y) for x, y, _ in L_SHAPE),
     )
     return MedialAxis.build(
         design_boundary=boundary,
         holes=(),
-        tool_radius=ToolRadius.build(0.5),
+        tool_radius=ToolRadius.build(tool_radius),
         station_spacing=Spacing.build(0.75),
         max_sagitta=ChordBound.build(0.02),
         max_refinement_depth=32,
@@ -124,6 +130,28 @@ def _policy() -> CandidatePolicy:
 def _full_cap() -> FullCapDecision:
     cap = EngagementCap.build(math.radians(90.0))
     return FullCapDecision.build(user_cap=cap, effective_cap=cap)
+
+
+def _zero_guide_spans() -> tuple[tuple[MiddleCurveSpan, MiddleCurveSpan], ...]:
+    axis = _axis(tool_radius=1.0)
+    spans = []
+    for run in axis.zero_guide_inventory.runs:
+        samples = tuple(sample for sample in axis.samples if sample.edge_id == run.edge_id)
+        spans.append(
+            (
+                MiddleCurveSpan.build(
+                    axis=axis,
+                    cursor_before=samples[0],
+                    cursor_limit=samples[-1],
+                ),
+                MiddleCurveSpan.build(
+                    axis=axis,
+                    cursor_before=samples[-1],
+                    cursor_limit=samples[0],
+                ),
+            )
+        )
+    return tuple(spans)
 
 
 def _neck_policy() -> NeckPolicy:
@@ -575,6 +603,125 @@ def test_reverse_line_span_preserves_positive_progress_and_separate_identity() -
     terminal = tuple(candidate for candidate in reverse_candidates if candidate.traversal_decision.makes_cursor_terminal)
     assert terminal
     assert {candidate.spatial_progress for candidate in terminal} == {reverse.reported_length}
+
+
+def test_zero_guide_lattice_covers_both_proved_arms_in_both_directions() -> None:
+    """Enumerate only spatial progress from each exact constant-profile proof."""
+    arguments = {
+        "policy": _policy(),
+        "neck_scope": NoNeckScope.build(),
+        "effective_cap_decision": _full_cap(),
+        "makes_cursor_terminal_at_limit": True,
+    }
+    span_pairs = _zero_guide_spans()
+
+    assert len(span_pairs) == 2
+    for forward, reverse in span_pairs:
+        forward_candidates = enumerate_zero_guide_link_candidates(
+            span=forward,
+            **arguments,
+        )
+        reverse_candidates = enumerate_zero_guide_link_candidates(
+            span=reverse,
+            **arguments,
+        )
+        repeated = enumerate_zero_guide_link_candidates(
+            span=reverse,
+            **arguments,
+        )
+
+        assert len(forward_candidates) == len(reverse_candidates) == 12
+        assert all(type(candidate) is ZeroGuideLinkCandidate for candidate in forward_candidates)
+        assert all(candidate.zero_guide_run.edge_id == forward.edge.identity for candidate in forward_candidates)
+        assert forward_candidates[0].spatial_progress == max(candidate.spatial_progress for candidate in forward_candidates)
+        assert forward_candidates[0].traversal_decision.makes_cursor_terminal
+        assert not hasattr(forward_candidates[0], "guide_radius")
+        assert not hasattr(forward_candidates[0], "phase_index")
+        assert not hasattr(forward_candidates[0], "motion")
+        assert b"zero-guide-link-candidate-v1" in forward_candidates[0].canonical_bytes
+        assert {candidate.identity for candidate in forward_candidates}.isdisjoint(candidate.identity for candidate in reverse_candidates)
+        assert tuple(candidate.identity for candidate in reverse_candidates) == tuple(candidate.identity for candidate in repeated)
+
+
+def test_zero_guide_candidate_produces_owned_derived_cursor() -> None:
+    """An interior link station retains the same span and cursor identity grammar."""
+    span = _zero_guide_spans()[0][0]
+    candidate = next(
+        candidate
+        for candidate in enumerate_zero_guide_link_candidates(
+            span=span,
+            policy=_policy(),
+            neck_scope=NoNeckScope.build(),
+            effective_cap_decision=_full_cap(),
+            makes_cursor_terminal_at_limit=False,
+        )
+        if candidate.spatial_progress == Fraction(1, 4)
+    )
+    cursor = DerivedCandidateCursor.build(
+        span=span,
+        candidate=candidate,
+    )
+
+    assert cursor.candidate is candidate
+    assert cursor.point == candidate.target
+    assert cursor.cursor_identity == candidate.traversal_decision.cursor_after
+
+
+def test_zero_guide_enumerator_rejects_unproved_positive_guide_edge() -> None:
+    """A zero reporting value or endpoint touch cannot replace native proof."""
+    axis = _axis(tool_radius=1.0)
+    edge = next(edge for edge in axis.edges if edge.identity not in axis.zero_guide_run_by_edge_id)
+    samples = tuple(sample for sample in axis.samples if sample.edge_id == edge.identity)
+    span = MiddleCurveSpan.build(
+        axis=axis,
+        cursor_before=samples[0],
+        cursor_limit=samples[-1],
+    )
+
+    with pytest.raises(UncertifiedZeroGuideEdgeError, match="native proof"):
+        enumerate_zero_guide_link_candidates(
+            span=span,
+            policy=_policy(),
+            neck_scope=NoNeckScope.build(),
+            effective_cap_decision=_full_cap(),
+            makes_cursor_terminal_at_limit=True,
+        )
+
+
+def test_zero_guide_candidate_rejects_every_cross_wired_decision_field() -> None:
+    """All candidate identity inputs remain closed under raw dataclass mutation."""
+    span_pairs = _zero_guide_spans()
+    span = span_pairs[0][0]
+    candidate = enumerate_zero_guide_link_candidates(
+        span=span,
+        policy=_policy(),
+        neck_scope=NoNeckScope.build(),
+        effective_cap_decision=_full_cap(),
+        makes_cursor_terminal_at_limit=True,
+    )[0]
+    foreign_run = span_pairs[1][0].axis.zero_guide_run_by_edge_id[span_pairs[1][0].edge.identity]
+    foreign_traversal = AdvanceTraversalDecision.build(
+        component_id=candidate.traversal_decision.component_id,
+        edge_id=EdgeId(bytes(foreign_run.edge_id)),
+        branch_id=candidate.traversal_decision.branch_id,
+        cursor_before=candidate.traversal_decision.cursor_before,
+        cursor_after=candidate.traversal_decision.cursor_after,
+        makes_cursor_terminal=candidate.traversal_decision.makes_cursor_terminal,
+    )
+    mutations = (
+        {"zero_guide_run": foreign_run},
+        {"target": Point2[WorldXY].build(candidate.target.x, candidate.target.y + 0.125)},
+        {"spatial_progress": Fraction(0)},
+        {"spatial_levels": (1, 0)},
+        {"cursor_limit_identity": b"foreign-cursor"},
+        {"neck_scope": object()},
+        {"effective_cap_decision": object()},
+        {"traversal_decision": foreign_traversal},
+    )
+
+    for changes in mutations:
+        with pytest.raises(InvalidZeroGuideCandidateError):
+            replace(candidate, **changes)  # type: ignore[arg-type]
 
 
 def test_reverse_parabola_uses_the_same_point_segment_geometry() -> None:
