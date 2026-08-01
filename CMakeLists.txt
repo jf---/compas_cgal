@@ -206,6 +206,7 @@ add_library(coverage_exact_core STATIC
     src/reachable_domain_2.cpp
     src/coverage_2.cpp
 )
+add_dependencies(coverage_exact_core external_downloads)
 set_target_properties(coverage_exact_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_compile_definitions(coverage_exact_core PRIVATE CGAL_USE_CORE=1)
 target_include_directories(coverage_exact_core
