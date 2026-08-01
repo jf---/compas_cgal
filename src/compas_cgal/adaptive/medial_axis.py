@@ -19,7 +19,11 @@ from compas_cgal.adaptive.canonical import encode_bytes
 from compas_cgal.adaptive.canonical import encode_component_map
 from compas_cgal.adaptive.canonical import encode_sequence
 from compas_cgal.adaptive.canonical import encode_tagged_union
+from compas_cgal.adaptive.canonical import require_canonical_record
+from compas_cgal.adaptive.errors import CanonicalEncodingError
 from compas_cgal.adaptive.errors import InvalidMedialAxisProjectionError
+from compas_cgal.adaptive.errors import InvalidZeroGuideCertificateError
+from compas_cgal.adaptive.identity import IdentityDigest
 from compas_cgal.adaptive.operation import CursorIdentity
 from compas_cgal.adaptive.policy import BranchId
 from compas_cgal.adaptive.policy import ComponentId
@@ -68,6 +72,21 @@ def _identity(value: object, name: str) -> bytes:
     if type(value) is not bytes or not value:
         raise InvalidMedialAxisProjectionError(f"{name} must be nonempty exact bytes.")
     return value
+
+
+def _zero_guide_digest(value: object, name: str) -> IdentityDigest:
+    if type(value) is not bytes or len(value) != _SHA256_BYTES:
+        raise InvalidZeroGuideCertificateError(f"{name} must be one SHA-256 digest.")
+    return IdentityDigest(value)
+
+
+def _zero_guide_record(value: object) -> bytes:
+    if type(value) is not bytes or not value:
+        raise InvalidZeroGuideCertificateError("zero-guide native certificate must be nonempty exact bytes.")
+    try:
+        return require_canonical_record(value)
+    except CanonicalEncodingError:
+        raise InvalidZeroGuideCertificateError("zero-guide native certificate must be one complete canonical record.") from None
 
 
 def _int64_array(
@@ -422,10 +441,80 @@ class MatProposalSampling:
 
 
 @dataclass(frozen=True)
+class MatZeroGuideRun:
+    edge_id: MatEdgeId
+    mat_certificate_digest: IdentityDigest
+    native_certificate: bytes
+
+    def __post_init__(self) -> None:
+        if type(self.edge_id) is not bytes or not self.edge_id:
+            raise InvalidZeroGuideCertificateError("zero-guide edge ID must be nonempty exact bytes.")
+        _zero_guide_digest(self.mat_certificate_digest, "zero-guide MAT certificate digest")
+        _zero_guide_record(self.native_certificate)
+
+    @classmethod
+    def build(
+        cls,
+        *,
+        edge_id: MatEdgeId,
+        mat_certificate: bytes,
+        native_certificate: bytes,
+    ) -> Self:
+        if type(mat_certificate) is not bytes or not mat_certificate:
+            raise InvalidZeroGuideCertificateError("zero-guide MAT certificate must be nonempty exact bytes.")
+        return cls(
+            edge_id,
+            IdentityDigest(hashlib.sha256(mat_certificate).digest()),
+            native_certificate,
+        )
+
+
+@dataclass(frozen=True)
+class MatZeroGuideInventory:
+    runs: tuple[MatZeroGuideRun, ...]
+    mat_certificate_digest: IdentityDigest
+
+    def __post_init__(self) -> None:
+        digest = _zero_guide_digest(self.mat_certificate_digest, "zero-guide MAT certificate digest")
+        if type(self.runs) is not tuple or any(type(run) is not MatZeroGuideRun for run in self.runs):
+            raise InvalidZeroGuideCertificateError("zero-guide runs must be one immutable typed tuple.")
+        edge_ids = tuple(run.edge_id for run in self.runs)
+        if edge_ids != tuple(sorted(set(edge_ids))):
+            raise InvalidZeroGuideCertificateError("zero-guide edge IDs must be unique and canonical.")
+        if any(run.mat_certificate_digest != digest for run in self.runs):
+            raise InvalidZeroGuideCertificateError("zero-guide runs contradict their MAT certificate digest.")
+
+    @classmethod
+    def build(
+        cls,
+        *,
+        mat_certificate: bytes,
+        records: tuple[tuple[bytes, bytes], ...],
+    ) -> Self:
+        if type(mat_certificate) is not bytes or not mat_certificate:
+            raise InvalidZeroGuideCertificateError("zero-guide MAT certificate must be nonempty exact bytes.")
+        if type(records) is not tuple or any(type(record) is not tuple or len(record) != 2 for record in records):
+            raise InvalidZeroGuideCertificateError("zero-guide records must be immutable edge/certificate pairs.")
+        digest = IdentityDigest(hashlib.sha256(mat_certificate).digest())
+        return cls(
+            tuple(
+                MatZeroGuideRun.build(
+                    edge_id=MatEdgeId(edge_id),
+                    mat_certificate=mat_certificate,
+                    native_certificate=native_certificate,
+                )
+                for edge_id, native_certificate in records
+            ),
+            digest,
+        )
+
+
+@dataclass(frozen=True)
 class MatProof:
     center_domain_digest: bytes
     mat_certificate: bytes
     native_owner: _medial_axis_2.SegmentSiteMedialAxis
+    zero_guide_inventory: MatZeroGuideInventory
 
     def __post_init__(self) -> None:
         if type(self.center_domain_digest) is not bytes or len(self.center_domain_digest) != _SHA256_BYTES:
@@ -433,6 +522,16 @@ class MatProof:
         _identity(self.mat_certificate, "MAT certificate")
         if type(self.native_owner) is not _medial_axis_2.SegmentSiteMedialAxis:
             raise InvalidMedialAxisProjectionError("MAT proof must retain its exact native owner.")
+        if type(self.zero_guide_inventory) is not MatZeroGuideInventory:
+            raise InvalidZeroGuideCertificateError("MAT proof must retain one typed zero-guide inventory.")
+        expected_digest = IdentityDigest(hashlib.sha256(self.mat_certificate).digest())
+        projected_records = tuple((bytes(run.edge_id), run.native_certificate) for run in self.zero_guide_inventory.runs)
+        if (
+            self.zero_guide_inventory.mat_certificate_digest != expected_digest
+            or self.native_owner.projection[19] != self.mat_certificate
+            or self.native_owner.zero_guide_records != projected_records
+        ):
+            raise InvalidZeroGuideCertificateError("zero-guide inventory contradicts its MAT certificate or native owner.")
 
 
 @dataclass(frozen=True)
@@ -464,6 +563,8 @@ class MedialAxis:
         sampled_edge_ids = {sample.edge_id for sample in self.proposal_sampling.samples}
         if sampled_edge_ids != edge_ids:
             raise InvalidMedialAxisProjectionError("typed MAT proposal samples must cover every exact edge.")
+        if any(run.edge_id not in edge_ids for run in self.proof.zero_guide_inventory.runs):
+            raise InvalidZeroGuideCertificateError("zero-guide inventory references an unknown typed MAT edge.")
 
     @classmethod
     def build(
@@ -571,6 +672,14 @@ class MedialAxis:
     @property
     def native_owner(self) -> _medial_axis_2.SegmentSiteMedialAxis:
         return self.proof.native_owner
+
+    @property
+    def zero_guide_inventory(self) -> MatZeroGuideInventory:
+        return self.proof.zero_guide_inventory
+
+    @property
+    def zero_guide_run_by_edge_id(self) -> Mapping[MatEdgeId, MatZeroGuideRun]:
+        return MappingProxyType({run.edge_id: run for run in self.zero_guide_inventory.runs})
 
 
 def _sites(
@@ -848,9 +957,24 @@ def _project_native(
         component_by_edge_id,
     )
     proposal_sampling = MatProposalSampling(tuple(samples))
+    mat_certificate = _identity(projection[19], "MAT certificate")
+    zero_guide_records = native_owner.zero_guide_records
+    try:
+        verified_zero_guide_ids = native_owner.validate_zero_guide_records(
+            mat_certificate,
+            zero_guide_records,
+        )
+    except _medial_axis_2.MedialAxisConstructionError as error:
+        raise InvalidZeroGuideCertificateError("zero-guide records failed exact native-owner replay.") from error
+    if verified_zero_guide_ids != tuple(edge_id for edge_id, _ in zero_guide_records):
+        raise InvalidZeroGuideCertificateError("zero-guide native-owner replay returned a contradictory edge sequence.")
     proof = MatProof(
-        _identity(projection[18], "MAT center-domain digest"),
-        _identity(projection[19], "MAT certificate"),
-        native_owner,
+        center_domain_digest=_identity(projection[18], "MAT center-domain digest"),
+        mat_certificate=mat_certificate,
+        native_owner=native_owner,
+        zero_guide_inventory=MatZeroGuideInventory.build(
+            mat_certificate=mat_certificate,
+            records=zero_guide_records,
+        ),
     )
     return topology, proposal_sampling, proof

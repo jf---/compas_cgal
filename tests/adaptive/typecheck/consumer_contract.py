@@ -1,3 +1,4 @@
+from collections.abc import Mapping
 from typing import Literal
 from typing import assert_never
 from typing import assert_type
@@ -22,6 +23,9 @@ from compas_cgal.adaptive.entry import QualifiedBore
 from compas_cgal.adaptive.generation_state import GenerationState
 from compas_cgal.adaptive.identity import InputIdentity
 from compas_cgal.adaptive.medial_axis import MedialAxis
+from compas_cgal.adaptive.medial_axis import MatEdgeId
+from compas_cgal.adaptive.medial_axis import MatZeroGuideInventory
+from compas_cgal.adaptive.medial_axis import MatZeroGuideRun
 from compas_cgal.adaptive.motion import EngagementCap
 from compas_cgal.adaptive.neck import NeckInventory
 from compas_cgal.adaptive.operation import AdvanceTraversalDecision
@@ -139,6 +143,15 @@ typed_axis = MedialAxis.build(
     max_refinement_depth=32,
 )
 assert_type(typed_axis, MedialAxis)
+assert_type(typed_axis.zero_guide_inventory, MatZeroGuideInventory)
+assert_type(
+    typed_axis.zero_guide_run_by_edge_id,
+    Mapping[MatEdgeId, MatZeroGuideRun],
+)
+for zero_guide_run in typed_axis.zero_guide_inventory.runs:
+    assert_type(zero_guide_run, MatZeroGuideRun)
+    assert_type(zero_guide_run.edge_id, MatEdgeId)
+    assert_type(zero_guide_run.native_certificate, bytes)
 typed_traversal = MatTraversalState.seed(
     axis=typed_axis,
     inventory=NeckInventory.__new__(NeckInventory),

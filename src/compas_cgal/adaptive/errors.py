@@ -86,6 +86,10 @@ class InvalidMedialAxisProjectionError(ValueError):
     """A native MAT projection contradicts its exact topology owner."""
 
 
+class InvalidZeroGuideCertificateError(ValueError):
+    """A zero-guide proof record contradicts its MAT or native owner."""
+
+
 class InvalidNeckEvidenceError(ValueError):
     """Native neck evidence or exact classification is structurally inconsistent."""
 

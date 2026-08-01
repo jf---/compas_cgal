@@ -1,6 +1,7 @@
 import hashlib
 import importlib
 import math
+from dataclasses import replace
 
 import numpy as np
 import pytest
@@ -67,6 +68,28 @@ def _owned_mat(
         station_spacing,
         max_sagitta,
         max_refinement_depth,
+    )
+
+
+def _typed_axis(*, tool_radius: float = 0.5):
+    from compas_cgal.adaptive.canonical import CanonicalRingV1
+    from compas_cgal.adaptive.medial_axis import MedialAxis
+    from compas_cgal.adaptive.units import ChordBound
+    from compas_cgal.adaptive.units import Point2
+    from compas_cgal.adaptive.units import Spacing
+    from compas_cgal.adaptive.units import ToolRadius
+    from compas_cgal.adaptive.units import WorldXY
+
+    boundary = CanonicalRingV1.build_outer(
+        tuple(Point2[WorldXY].build(x, y) for x, y, _ in L_SHAPE),
+    )
+    return MedialAxis.build(
+        design_boundary=boundary,
+        holes=(),
+        tool_radius=ToolRadius.build(tool_radius),
+        station_spacing=Spacing.build(0.75),
+        max_sagitta=ChordBound.build(0.02),
+        max_refinement_depth=32,
     )
 
 
@@ -325,6 +348,71 @@ def test_typed_medial_axis_projects_native_topology_without_coordinate_matching(
     assert all(sample.exact_parameter_id for sample in axis.samples)
     assert axis.center_domain_digest == CENTER_DOMAIN_DIGEST
     assert hashlib.sha256(axis.mat_certificate).digest() == MAT_CERTIFICATE_DIGEST
+
+
+def test_typed_axis_projects_owned_zero_guide_runs() -> None:
+    """Python preserves native proof bytes instead of reclassifying floats."""
+    axis = _typed_axis(tool_radius=1.0)
+    inventory = axis.zero_guide_inventory
+
+    assert type(inventory.runs) is tuple
+    assert tuple(run.edge_id for run in inventory.runs) == tuple(edge_id for edge_id, _ in axis.native_owner.zero_guide_records)
+    assert {edge_id: run.native_certificate for edge_id, run in axis.zero_guide_run_by_edge_id.items()} == dict(axis.native_owner.zero_guide_records)
+    assert inventory.mat_certificate_digest == hashlib.sha256(axis.mat_certificate).digest()
+    assert all(run.mat_certificate_digest == inventory.mat_certificate_digest for run in inventory.runs)
+
+
+def test_typed_axis_rejects_cross_wired_zero_guide_edge() -> None:
+    """A native proof record cannot migrate to another exact MAT edge."""
+    from compas_cgal.adaptive.errors import InvalidZeroGuideCertificateError
+
+    axis = _typed_axis(tool_radius=1.0)
+    inventory = axis.zero_guide_inventory
+    foreign_edge_id = next(edge.identity for edge in axis.edges if edge.identity not in axis.zero_guide_run_by_edge_id)
+    mutated_run = replace(inventory.runs[0], edge_id=foreign_edge_id)
+    mutated_runs = tuple(sorted((mutated_run, *inventory.runs[1:]), key=lambda run: run.edge_id))
+    mutated_inventory = replace(inventory, runs=mutated_runs)
+
+    with pytest.raises(InvalidZeroGuideCertificateError, match="native owner"):
+        replace(axis.proof, zero_guide_inventory=mutated_inventory)
+
+
+def test_typed_axis_rejects_mutated_zero_guide_certificate_bytes() -> None:
+    """One changed canonical byte invalidates the Python proof projection."""
+    from compas_cgal.adaptive.errors import InvalidZeroGuideCertificateError
+
+    axis = _typed_axis(tool_radius=1.0)
+    inventory = axis.zero_guide_inventory
+    certificate = bytearray(inventory.runs[0].native_certificate)
+    certificate[-1] ^= 1
+    mutated_run = replace(inventory.runs[0], native_certificate=bytes(certificate))
+    mutated_inventory = replace(inventory, runs=(mutated_run, *inventory.runs[1:]))
+
+    with pytest.raises(InvalidZeroGuideCertificateError, match="native owner"):
+        replace(axis.proof, zero_guide_inventory=mutated_inventory)
+
+
+def test_typed_axis_rejects_cross_wired_mat_digest() -> None:
+    """Zero-guide runs remain bound to the MAT certificate that proved them."""
+    from compas_cgal.adaptive.errors import InvalidZeroGuideCertificateError
+    from compas_cgal.adaptive.identity import IdentityDigest
+
+    axis = _typed_axis(tool_radius=1.0)
+    foreign_digest = IdentityDigest(hashlib.sha256(b"foreign MAT certificate").digest())
+
+    with pytest.raises(InvalidZeroGuideCertificateError, match="MAT certificate digest"):
+        replace(axis.zero_guide_inventory, mat_certificate_digest=foreign_digest)
+
+
+def test_typed_axis_rejects_cross_wired_native_owner() -> None:
+    """A typed inventory cannot outlive or change its exact native authority."""
+    from compas_cgal.adaptive.errors import InvalidZeroGuideCertificateError
+
+    axis = _typed_axis(tool_radius=1.0)
+    foreign_owner = _typed_axis(tool_radius=0.5).native_owner
+
+    with pytest.raises(InvalidZeroGuideCertificateError, match="native owner"):
+        replace(axis.proof, native_owner=foreign_owner)
 
 
 def test_typed_topology_rejects_mutable_lookup_views() -> None:

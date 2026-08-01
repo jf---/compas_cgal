@@ -253,7 +253,7 @@ mypy over `27` files, strict MkDocs, and diff checks passed.
   `MedialAxis.zero_guide_inventory`,
   `MedialAxis.zero_guide_run_by_edge_id`.
 
-- [ ] **Step 1: Write RED projection and mutation tests**
+- [x] **Step 1: Write RED projection and mutation tests**
 
 Require immutable typed projection and exact owner cross-validation:
 
@@ -275,7 +275,7 @@ Use `dataclasses.replace` to cross-wire edge ID, certificate bytes, MAT digest,
 and native owner. Require `InvalidZeroGuideCertificateError`. Add strict-mypy
 consumer assertions for immutable bytes and `MatEdgeId` keys.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 ```bash
 pixi run pytest tests/adaptive/test_medial_axis.py \
@@ -285,7 +285,7 @@ pixi run types-adaptive
 
 Expected: missing Python proof types and axis properties.
 
-- [ ] **Step 3: Implement focused proof types**
+- [x] **Step 3: Implement focused proof types**
 
 Define these graph-lifetime proof types in `medial_axis.py` beside
 `MatEdgeId`, before `MatProof`, so no module needs a duplicate identity type or
@@ -318,7 +318,7 @@ Factories validate exact concrete types, nonempty canonical bytes, sorted
 unique edge IDs, and one common MAT digest. The inventory owns only proof
 records; `MedialAxis` validates edge existence and native byte equality.
 
-- [ ] **Step 4: Project once during `MedialAxis.build`**
+- [x] **Step 4: Project once during `MedialAxis.build`**
 
 Extend `MatProof`, not the 20-field projection, with the immutable inventory:
 
@@ -337,7 +337,7 @@ properties on `MedialAxis`; do not cache a second mutable dictionary. Require
 `wc -l src/compas_cgal/adaptive/medial_axis.py` to remain below 1,000 after the
 minimal implementation.
 
-- [ ] **Step 5: Run GREEN and type gates**
+- [x] **Step 5: Run GREEN and type gates**
 
 ```bash
 pixi run format-adaptive
@@ -347,7 +347,7 @@ pixi run pytest tests/adaptive/test_medial_axis.py \
 pixi run types-adaptive
 ```
 
-- [ ] **Step 6: Document, commit, and push**
+- [x] **Step 6: Document, commit, and push**
 
 Document native-to-Python ownership in `docs/segment_site_mat.md`, then:
 
@@ -360,6 +360,19 @@ git add src/compas_cgal/adaptive/medial_axis.py \
   docs/superpowers/plans/2026-07-29-zero-guide-link-candidate.md
 git commit -m "feat(adaptive): project zero-guide proof"
 ```
+
+Implementation note (2026-08-01): Python now carries each native zero-guide
+record as an immutable exact edge/MAT-digest/native-byte triple. Projection
+performs one complete native replay before constructing runs; `MatProof` then
+binds those runs to the retained native owner without a duplicate replay.
+Raw-constructor and `dataclasses.replace` cross-wires fail through the named
+`InvalidZeroGuideCertificateError`.
+
+Gate evidence: affected `--testmon` selection passed `7`; the complete
+medial-axis file passed `22`; the complete adaptive suite passed `536` in
+`267.28 s`; Ruff, strict mypy over `27` source files, strict MkDocs,
+formatting, and diff checks passed. `medial_axis.py` remains below the planned
+ceiling at `980` lines.
 
 ---
 
