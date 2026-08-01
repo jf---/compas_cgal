@@ -792,7 +792,17 @@ medial-axis owner file passed `17` tests and the complete adaptive suite passed
 `531` in `306.41 s`. The official clean Task 9 gate, Ruff, strict mypy over
 `27` source files, and strict MkDocs passed. These gates establish native
 zero-guide authority only; they do not yet certify or execute the advancing
-segment and do not change the matched-performance boundary.
+segment and do not change the matched-performance boundary. Task 2 now
+projects that authority into immutable typed edge/MAT-digest/native-byte
+records, authenticates them against the retained owner, and rejects edge,
+record-byte, digest, and owner cross-wires. Link-only candidate generation,
+motion certification, and route consumption remain open.
+
+At this Task 2 checkpoint, the complete medial-axis file passed `22` tests and
+the complete adaptive suite passed `536` in `267.28 s`; affected `--testmon`
+selection passed `7`. Ruff, strict mypy over `27` source files, strict MkDocs,
+formatting, and diff checks passed. These are verification costs, not planner
+timings or evidence of Held–Pfeiffer performance parity.
 
 The comparative claim and matched performance boundary remain in
 [Exact Segment-Site Medial Axis](segment_site_mat.md#relation-to-held-and-pfeiffer-2025).
