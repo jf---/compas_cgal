@@ -28,3 +28,19 @@ cd compas_cgal
 pixi install --locked
 pixi run pytest -- tests -n auto
 ```
+
+### Clean native builds
+
+The first editable build downloads and verifies the locked CGAL, Boost, and
+Eigen source trees before compiling any target that consumes their headers.
+That ordering is part of the build contract, not a manual bootstrap step.
+`coverage_exact_core` and every nanobind module therefore depend explicitly on
+the `external_downloads` target. A clean worktree must be able to run the test
+gate directly; requiring a prior `native-lock-check` would conceal a broken
+dependency graph.
+
+Use the standalone lock gate when auditing the native inputs themselves:
+
+```bash
+pixi run native-lock-check
+```
