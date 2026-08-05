@@ -81,7 +81,7 @@ class SegmentContainmentCertificate:
         if type(self.tool_radius) is not ToolRadius:
             raise InvalidContainmentCertificateError("segment certificate requires one typed tool radius.")
         record = _record(self.native_record)
-        if not record.contained or not record.guide_anchor_in_center_domain:
+        if not record.contained:
             raise InvalidContainmentCertificateError("segment certificate does not contain one accepted exact verdict.")
         if not record.matches_exact_segment(
             self.domain_digest,

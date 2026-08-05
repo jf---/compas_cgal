@@ -12,7 +12,7 @@
 
 namespace {
 
-const std::string STRATEGY_VERSION = "exact-sweep-containment-v1";
+const std::string STRATEGY_VERSION = "exact-sweep-containment-v2";
 constexpr std::size_t SHA256_DIGEST_BYTES = 32;
 
 double finite_value(const double value, const std::string &name) {
@@ -237,8 +237,11 @@ ContainmentRecord2 evaluate_exact_segment_containment(
   const ReachFT radius = positive_length(tool_radius, "segment tool radius");
   const bool anchors = contains_exact_point(center_domain, start) &&
                        contains_exact_point(center_domain, end);
+  // Regularized area erosion omits valid lower-dimensional centre loci, such
+  // as the axis of a corridor exactly one tool diameter wide. The exact sweep
+  // subset is the authoritative gouge predicate; anchor membership remains
+  // independent diagnostic evidence for full-dimensional centre domains.
   const bool contained =
-      anchors &&
       reach_exact_subset(capsule_set(start, end, radius), design.set());
   return {
       ContainmentKind2::Segment,

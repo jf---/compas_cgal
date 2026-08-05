@@ -1176,6 +1176,69 @@ NB_MODULE(_continuous_tea_2, m)
             return as_bytes(
                 event_oracle_component_version());
         });
+    m.def(
+        "swept_prefix_strategy_version",
+        []() {
+            return as_bytes(
+                swept_prefix_strategy_version());
+        });
+    m.def(
+        "swept_prefix_theorem_version",
+        []() {
+            return as_bytes(
+                swept_prefix_theorem_version());
+        });
+
+    nb::class_<SweptPrefixSegmentTeaAudit2>(
+        m,
+        "SweptPrefixSegmentTeaAudit2")
+        .def_prop_ro(
+            "exact_verdict",
+            [](const SweptPrefixSegmentTeaAudit2& audit) {
+                return continuous_tea_verdict_text(
+                    audit.verdict);
+            })
+        .def_prop_ro(
+            "canonical_bytes",
+            [](const SweptPrefixSegmentTeaAudit2& audit) {
+                return as_bytes(audit.canonical_bytes);
+            })
+        .def_prop_ro(
+            "canonical_digest",
+            [](const SweptPrefixSegmentTeaAudit2& audit) {
+                return as_bytes(audit.canonical_digest);
+            })
+        .def_prop_ro(
+            "strategy_version",
+            [](const SweptPrefixSegmentTeaAudit2& audit) {
+                return as_bytes(audit.strategy_version);
+            })
+        .def_prop_ro(
+            "theorem_version",
+            [](const SweptPrefixSegmentTeaAudit2& audit) {
+                return as_bytes(audit.theorem_version);
+            })
+        .def_prop_ro(
+            "source_canonical_bytes",
+            [](const SweptPrefixSegmentTeaAudit2& audit) {
+                return as_bytes(
+                    audit.source_canonical_bytes);
+            })
+        .def_prop_ro(
+            "stock_boundary_digest",
+            [](const SweptPrefixSegmentTeaAudit2& audit) {
+                return as_bytes(
+                    audit.stock_boundary_digest);
+            })
+        .def_ro(
+            "motion_stratum_count",
+            &SweptPrefixSegmentTeaAudit2::motion_stratum_count)
+        .def_prop_ro(
+            "is_self_consistent",
+            [](const SweptPrefixSegmentTeaAudit2& audit) {
+                return swept_prefix_segment_tea_audit_is_self_consistent(
+                    audit);
+            });
 
     nb::class_<BoundaryFeatureRecord2>(
         m,
@@ -1526,6 +1589,34 @@ NB_MODULE(_continuous_tea_2, m)
                 continuous_tea_verdict_text(
                     audit.verdict),
                 std::move(audit.trace));
+        },
+        "stock"_a,
+        "x0"_a,
+        "y0"_a,
+        "x1"_a,
+        "y1"_a,
+        "tool_radius"_a,
+        "cap_chord_ratio"_a);
+    m.def(
+        "audit_swept_prefix_segment_tea_exact",
+        [](const Stock2& stock,
+           double x0,
+           double y0,
+           double x1,
+           double y1,
+           double tool_radius,
+           double cap_chord_ratio) {
+            SweptPrefixSegmentTeaAudit2 audit =
+                audit_swept_prefix_segment_tea_exact(
+                    stock,
+                    SegmentEventSource2::from_binary64(
+                        x0,
+                        y0,
+                        x1,
+                        y1,
+                        tool_radius,
+                        cap_chord_ratio));
+            return audit;
         },
         "stock"_a,
         "x0"_a,

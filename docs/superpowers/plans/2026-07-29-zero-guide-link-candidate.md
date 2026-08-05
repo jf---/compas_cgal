@@ -741,9 +741,24 @@ files, strict MkDocs, formatting, and diff checks passed.
 **Files**
 
 - Modify: `src/compas_cgal/adaptive/transaction.py`
+- Create: `src/compas_cgal/adaptive/advancing_segment_trial.py`
+- Modify: `src/compas_cgal/adaptive/motion_certificate.py`
 - Modify: `src/compas_cgal/adaptive/replay_trace.py`
 - Modify: `src/compas_cgal/adaptive/errors.py`
-- Modify: `tests/adaptive/test_transaction.py`
+- Modify: `src/compas_cgal/adaptive/identity.py`
+- Modify: `src/compas_cgal/adaptive/containment.py`
+- Modify: `src/containment_2.cpp`
+- Modify: `src/continuous_tea_2/segment_oracle.h`
+- Modify: `src/continuous_tea_2/segment_oracle.cpp`
+- Modify: `src/continuous_tea_2/boundary_events.h`
+- Modify: `src/continuous_tea_2/boundary_events.cpp`
+- Modify: `src/continuous_tea_2.cpp`
+- Modify: `src/compas_cgal/_continuous_tea_2.pyi`
+- Create: `tests/adaptive/test_zero_guide_transaction.py`
+- Modify: `tests/adaptive/test_motion_certificate.py`
+- Modify: `tests/adaptive/test_segment_oracle.py`
+- Modify: `tests/adaptive/test_containment.py`
+- Modify: `tests/adaptive/test_identity.py`
 - Modify: `tests/adaptive/typecheck/consumer_contract.py`
 
 **Interfaces**
@@ -759,7 +774,7 @@ files, strict MkDocs, formatting, and diff checks passed.
   `CandidateEvaluator.evaluate_zero_guide_from_cursor(...)`,
   `CandidateEvaluator.commit_zero_guide_from_cursor(...)`.
 
-- [ ] **Step 1: Write RED atomicity and chronology tests**
+- [x] **Step 1: Write RED atomicity and chronology tests**
 
 Use a real radius-1 arm segment and require:
 
@@ -787,21 +802,21 @@ that exact order. Force each proof stage to fail and assert the immutable
 parent stock, coverage, traversal cursor, operations, and passage remain
 unchanged.
 
-- [ ] **Step 2: Write RED mutation and stale-parent tests**
+- [x] **Step 2: Write RED mutation and stale-parent tests**
 
 Cross-wire parent digest, candidate run, target, cap, scope, operation,
 pre-depletion lineage, coverage lineage, traversal result, passage result, and
 child digest. Require `InvalidZeroGuideTransactionError`. Commit against a
 different parent or cursor and require `StaleZeroGuideTransactionError`.
 
-- [ ] **Step 3: Run RED**
+- [x] **Step 3: Run RED**
 
 ```bash
-pixi run pytest tests/adaptive/test_transaction.py \
+pixi run pytest tests/adaptive/test_zero_guide_transaction.py \
   -n auto --testmon -q
 ```
 
-- [ ] **Step 4: Implement the one-witness transaction**
+- [x] **Step 4: Implement the one-witness transaction**
 
 Define the second transaction beside `CandidateTransaction` so both variants
 share the one authoritative stock-lineage and passage-validation helpers
@@ -825,7 +840,7 @@ Extend `ReplayLateralWitness` with the exact `AdvanceSegmentOperation` variant;
 like a hold link it requires `OperationType.LINK` and a
 `SegmentContainmentCertificate`.
 
-- [ ] **Step 5: Add explicit evaluator methods**
+- [x] **Step 5: Add explicit evaluator methods**
 
 Implement:
 
@@ -852,7 +867,37 @@ and transaction construction. Commit independently repeats the same complete
 path and compares transaction bytes plus child digest. Do not dispatch both
 calling conventions inside one method body.
 
-- [ ] **Step 6: Define the accepted closed union**
+Implementation note (2026-08-05): the real width-2 arm exposed two exact
+boundary cases that the original plan did not name. First, regularized `C_r`
+has no two-dimensional interior on a centerline exactly one tool diameter from
+both walls, although the segment capsule is exactly contained in `D`.
+Containment v2 therefore makes capsule subset decisive and retains the two
+anchors as diagnostics. Second, the generic segment oracle sees frozen stock,
+while an advancing cutter consumes its own swept prefix. The dedicated
+`swept-prefix-segment-tea-exact-v1` theorem proves a clear-start translation
+has at most the closed forward semicircle engaged and certifies exactly `pi`.
+Its sealed native audit reconstructs and verifies the complete canonical
+record binding exact motion, stock-boundary digest, cap, strategy, theorem,
+verdict, start-clear and exact-`pi` decisions, and two motion strata; an
+uncleared start or tighter cap remains unresolved. Python preserves that
+authority in the distinct `SweptPrefixMotionWitness`, so a generic
+`MotionWitness` cannot be relabelled as advancing-cut evidence. The planning
+`InputIdentity` binds the strategy and geometric theorem as independent
+component versions, so either change cannot retain the previous root input
+identity. Same-shape opaque coverage-lineage substitutions remain locally
+structural and are rejected by authoritative independent commit replay.
+
+The trial pipeline lives in the single-purpose
+`advancing_segment_trial.py`. `transaction.py` is `1,190` lines after the
+extraction. RED evidence included the absent transaction boundary, the
+lower-dimensional anchor false rejection, the absent native theorem API, and
+operation 5's unresolved frozen-stock partition. Adversarial review then
+exposed substring-based proof validation and generic-witness relabelling;
+sealed whole-record verification and the dedicated witness type close both
+boundaries. The real Task 13F transaction then passed ordered evaluation and
+independent byte-identical commit.
+
+- [x] **Step 6: Define the accepted closed union**
 
 ```python
 AcceptedCandidateTransaction: TypeAlias = (
@@ -864,17 +909,17 @@ Keep existing circle evaluator methods unchanged and add strict-mypy narrowing
 tests. Require `wc -l src/compas_cgal/adaptive/transaction.py` to remain below
 1,200 after the complete minimal implementation.
 
-- [ ] **Step 7: Run GREEN, lint, and types**
+- [x] **Step 7: Run GREEN, lint, and types**
 
 ```bash
 pixi run format-adaptive
 pixi run lint
-pixi run pytest tests/adaptive/test_transaction.py \
+pixi run pytest tests/adaptive/test_zero_guide_transaction.py \
   -n auto --testmon -q
 pixi run types-adaptive
 ```
 
-- [ ] **Step 8: Document, commit, and push**
+- [x] **Step 8: Document, commit, and push**
 
 Update the atomicity section in `docs/continuous_engagement.md`, then:
 
@@ -888,6 +933,13 @@ git add src/compas_cgal/adaptive/transaction.py \
   docs/superpowers/plans/2026-07-29-zero-guide-link-candidate.md
 git commit -m "feat(adaptive): commit zero-guide links"
 ```
+
+Gate evidence: the uncached exact containment/oracle/certificate/transaction/
+identity slice passed `93` tests in `42.34 s`; the complete adaptive suite
+passed `562` in `224.43 s`. Ruff, strict mypy over `28` source files, strict
+MkDocs, formatting, and diff checks passed. `transaction.py` remains below the
+task ceiling at `1,190` lines. These are correctness-gate costs, not matched
+planner timings.
 
 ---
 

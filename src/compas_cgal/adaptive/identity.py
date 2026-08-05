@@ -181,6 +181,8 @@ def _current_component_versions(
     from compas_cgal.adaptive.entry import ENTRY_DEPLETION_STRATEGY_VERSION
     from compas_cgal.adaptive.entry import ENTRY_SCHEMA_VERSION
     from compas_cgal.adaptive.motion_certificate import MOTION_CERTIFICATE_SCHEMA_VERSION
+    from compas_cgal.adaptive.motion_certificate import SWEPT_PREFIX_STRATEGY_VERSION
+    from compas_cgal.adaptive.motion_certificate import SWEPT_PREFIX_THEOREM_VERSION
 
     bindings = (
         ComponentVersionBinding.build(
@@ -222,6 +224,14 @@ def _current_component_versions(
         ComponentVersionBinding.build(
             component=b"event-exact-motion-oracle",
             version=_continuous_tea_2.event_oracle_component_version(),
+        ),
+        ComponentVersionBinding.build(
+            component=b"swept-prefix-motion-oracle",
+            version=SWEPT_PREFIX_STRATEGY_VERSION,
+        ),
+        ComponentVersionBinding.build(
+            component=b"swept-prefix-motion-theorem",
+            version=SWEPT_PREFIX_THEOREM_VERSION,
         ),
     )
     return tuple(sorted(bindings, key=lambda binding: binding.component))

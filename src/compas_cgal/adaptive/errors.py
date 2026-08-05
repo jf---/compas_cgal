@@ -274,6 +274,14 @@ class StaleCandidateTransactionError(RuntimeError):
     """A transaction parent digest no longer names authoritative state."""
 
 
+class InvalidZeroGuideTransactionError(ValueError):
+    """A zero-guide transaction contradicts its candidate or proof lineage."""
+
+
+class StaleZeroGuideTransactionError(RuntimeError):
+    """A zero-guide transaction no longer names its physical parent or cursor."""
+
+
 class InvalidInitialCandidateEvaluatorError(ValueError):
     """An entry-launch evaluator has foreign or incomplete root authority."""
 

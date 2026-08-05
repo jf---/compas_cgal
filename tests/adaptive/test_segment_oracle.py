@@ -189,6 +189,61 @@ def test_fully_clear_and_fully_material_rims_are_not_conflated() -> None:
     )
 
 
+def test_swept_prefix_segment_certifies_only_clear_start_and_pi_cap() -> None:
+    """Prove a slot-opening translation from its exact moving sweep prefix.
+
+    Frozen stock sees material around more than a semicircle after the cutter
+    leaves its clear start disk. The physical motion has already removed every
+    strictly trailing rim point, so the native theorem may certify the closed
+    forward semicircle at an exact pi cap, while refusing an uncleared start or
+    a tighter cap.
+    """
+    cleared = _stock_2.Stock2(HALF_PLANE_WINDOW, [])
+    cleared.subtract_disk(2.0, 5.0, 1.0)
+    motion = _motion(2.0, 5.0, 8.0, 5.0)
+
+    audit = _continuous_tea_2.audit_swept_prefix_segment_tea_exact(
+        cleared,
+        motion.start.x,
+        motion.start.y,
+        motion.end.x,
+        motion.end.y,
+        1.0,
+        4.0,
+    )
+    uncleared = _continuous_tea_2.audit_swept_prefix_segment_tea_exact(
+        _stock_2.Stock2(HALF_PLANE_WINDOW, []),
+        motion.start.x,
+        motion.start.y,
+        motion.end.x,
+        motion.end.y,
+        1.0,
+        4.0,
+    )
+    tighter = _continuous_tea_2.audit_swept_prefix_segment_tea_exact(
+        cleared,
+        motion.start.x,
+        motion.start.y,
+        motion.end.x,
+        motion.end.y,
+        1.0,
+        2.0,
+    )
+
+    assert type(audit) is _continuous_tea_2.SweptPrefixSegmentTeaAudit2
+    assert audit.exact_verdict == "certified"
+    assert audit.is_self_consistent
+    assert hashlib.sha256(audit.canonical_bytes).digest() == audit.canonical_digest
+    assert audit.strategy_version == b"swept-prefix-segment-tea-exact-v1"
+    assert audit.theorem_version == b"translation-swept-prefix-forward-semicircle-v1"
+    assert audit.source_canonical_bytes
+    assert len(audit.stock_boundary_digest) == hashlib.sha256().digest_size
+    assert audit.motion_stratum_count == 2
+    assert uncleared.exact_verdict == tighter.exact_verdict == "unresolved"
+    with pytest.raises(TypeError):
+        _continuous_tea_2.SweptPrefixSegmentTeaAudit2()
+
+
 @pytest.mark.parametrize(
     ("reverse", "disposition"),
     [

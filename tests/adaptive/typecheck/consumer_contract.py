@@ -24,6 +24,7 @@ from compas_cgal.adaptive.entry import BoreProcessIdentity
 from compas_cgal.adaptive.entry import PreclearedEntry
 from compas_cgal.adaptive.entry import QualifiedBore
 from compas_cgal.adaptive.generation_state import GenerationState
+from compas_cgal.adaptive.generation_state import TraversalCursorState
 from compas_cgal.adaptive.identity import InputIdentity
 from compas_cgal.adaptive.medial_axis import MedialAxis
 from compas_cgal.adaptive.medial_axis import MatEdgeId
@@ -57,6 +58,10 @@ from compas_cgal.adaptive.policy import TraversalPolicy
 from compas_cgal.adaptive.reachable_domain import ReachableDomain
 from compas_cgal.adaptive.stock_area import DepletionWitness
 from compas_cgal.adaptive.stock_area import Stock2Area
+from compas_cgal.adaptive.transaction import AcceptedCandidateTransaction
+from compas_cgal.adaptive.transaction import CandidateEvaluator
+from compas_cgal.adaptive.transaction import CandidateTransaction
+from compas_cgal.adaptive.transaction import ZeroGuideLinkTransaction
 from compas_cgal.adaptive.traversal import DirectedEdgeCursor
 from compas_cgal.adaptive.traversal import MatTraversalState
 from compas_cgal.adaptive.traversal_graph import DirectedRouteStep
@@ -387,3 +392,34 @@ def traversal_kind(decision: TraversalDecision) -> str:
     if isinstance(decision, AdvanceTraversalDecision):
         return "advance"
     assert_never(decision)
+
+
+def accepted_transaction_kind(
+    transaction: AcceptedCandidateTransaction,
+) -> str:
+    if isinstance(transaction, CandidateTransaction):
+        return "circle"
+    if isinstance(transaction, ZeroGuideLinkTransaction):
+        return "zero-guide"
+    assert_never(transaction)
+
+
+def commit_typed_zero_guide_transaction(
+    evaluator: CandidateEvaluator,
+    state: GenerationState,
+    traversal_before: TraversalCursorState,
+    candidate: ZeroGuideLinkCandidate,
+) -> GenerationState:
+    transaction = evaluator.evaluate_zero_guide_from_cursor(
+        state,
+        traversal_before,
+        candidate,
+    )
+    assert_type(transaction, ZeroGuideLinkTransaction)
+    child = evaluator.commit_zero_guide_from_cursor(
+        state,
+        traversal_before,
+        transaction,
+    )
+    assert_type(child, GenerationState)
+    return child

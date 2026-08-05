@@ -1,6 +1,9 @@
 #include "segment_oracle.h"
 
+#include "../exact_stock_region_2.h"
+#include "../exact_sweep_2.h"
 #include "../stock_2.h"
+#include "boundary_events.h"
 #include "event_certificate.h"
 #include "segment_partition.h"
 #include "segment_source.h"
@@ -9,6 +12,7 @@
 #include "station_classifier.h"
 
 #include <algorithm>
+#include <cstddef>
 #include <map>
 #include <string_view>
 #include <utility>
@@ -19,6 +23,12 @@ namespace {
 
 using Integer = CORE::BigInt;
 using Rational = CORE::BigRat;
+
+const std::string SWEPT_PREFIX_STRATEGY_VERSION =
+    "swept-prefix-segment-tea-exact-v1";
+const std::string SWEPT_PREFIX_THEOREM_VERSION =
+    "translation-swept-prefix-forward-semicircle-v1";
+constexpr std::size_t SWEPT_PREFIX_MOTION_STRATA = 2;
 
 Rational parse_rational(
     const std::string& text,
@@ -178,6 +188,70 @@ std::string verdict_text(ContinuousTeaVerdict verdict)
         return "cap_exceeded";
     }
     return "unresolved";
+}
+
+std::string segment_stock_boundary_digest(
+    const Stock2& stock)
+{
+    return sha256_bytes(
+        canonical_stock_boundary_identity(stock));
+}
+
+bool start_disk_has_no_material_interior(
+    const Stock2& stock,
+    const SegmentEventSource2& source)
+{
+    const ReachKernelPoint start(
+        ReachFT(parse_rational(
+            source.x0().text(),
+            "swept-prefix start x")),
+        ReachFT(parse_rational(
+            source.y0().text(),
+            "swept-prefix start y")));
+    const ReachFT radius(parse_rational(
+        source.tool_radius().text(),
+        "swept-prefix tool radius"));
+    ReachSet overlap;
+    overlap.insert(reach_disk_polygon(start, radius));
+    overlap.intersection(lift_exact_stock_region(stock));
+    return overlap.is_empty();
+}
+
+bool cap_is_exact_pi(
+    const SegmentEventSource2& source)
+{
+    // chord_ratio = 4 sin^2(theta/2), hence theta = pi iff ratio = 4.
+    const Rational pi_cap_chord_ratio(4);
+    return parse_rational(
+               source.cap_chord_ratio().text(),
+               "swept-prefix cap chord ratio")
+        == pi_cap_chord_ratio;
+}
+
+std::string canonical_swept_prefix_audit(
+    const std::string& source_canonical_bytes,
+    const std::string& stock_boundary_digest,
+    bool start_clear,
+    bool pi_cap,
+    ContinuousTeaVerdict verdict)
+{
+    return encode_canonical_record(
+        "swept-prefix-segment-tea-proof-v1",
+        {
+            SWEPT_PREFIX_STRATEGY_VERSION,
+            SWEPT_PREFIX_THEOREM_VERSION,
+            stock_boundary_digest,
+            source_canonical_bytes,
+            start_clear
+                ? "start-disk-clear"
+                : "start-disk-overlaps-material",
+            pi_cap
+                ? "effective-cap-exact-pi"
+                : "effective-cap-not-exact-pi",
+            verdict_text(verdict),
+            std::to_string(
+                SWEPT_PREFIX_MOTION_STRATA),
+        });
 }
 
 EventTrace2 build_segment_trace(
@@ -364,6 +438,42 @@ std::vector<EventTraceEvent2> trace_events(
 
 } // namespace
 
+const std::string& swept_prefix_strategy_version()
+{
+    return SWEPT_PREFIX_STRATEGY_VERSION;
+}
+
+const std::string& swept_prefix_theorem_version()
+{
+    return SWEPT_PREFIX_THEOREM_VERSION;
+}
+
+bool swept_prefix_segment_tea_audit_is_self_consistent(
+    const SweptPrefixSegmentTeaAudit2& audit)
+{
+    const ContinuousTeaVerdict expected_verdict =
+        audit.start_disk_clear && audit.exact_pi_cap
+        ? ContinuousTeaVerdict::CERTIFIED
+        : ContinuousTeaVerdict::UNRESOLVED_DEGENERACY;
+    const std::string expected_bytes =
+        canonical_swept_prefix_audit(
+            audit.source_canonical_bytes,
+            audit.stock_boundary_digest,
+            audit.start_disk_clear,
+            audit.exact_pi_cap,
+            expected_verdict);
+    return audit.verdict == expected_verdict
+        && audit.strategy_version
+            == SWEPT_PREFIX_STRATEGY_VERSION
+        && audit.theorem_version
+            == SWEPT_PREFIX_THEOREM_VERSION
+        && audit.motion_stratum_count
+            == SWEPT_PREFIX_MOTION_STRATA
+        && audit.canonical_bytes == expected_bytes
+        && audit.canonical_digest
+            == sha256_bytes(expected_bytes);
+}
+
 SegmentTeaAudit2 audit_segment_tea_event_exact(
     const Stock2& stock,
     const SegmentEventSource2& source)
@@ -448,6 +558,62 @@ SegmentTeaAudit2 audit_segment_tea_event_exact(
             whole_rim_disposition,
             trace_events(partition)),
     };
+}
+
+SweptPrefixSegmentTeaAudit2
+audit_swept_prefix_segment_tea_exact(
+    const Stock2& stock,
+    const SegmentEventSource2& source)
+{
+    bool start_clear;
+    try {
+        start_clear =
+            start_disk_has_no_material_interior(stock, source);
+    } catch (const ExactStockRegionLiftError& error) {
+        throw IncompleteSegmentOracleError(
+            std::string(
+                "swept-prefix start-clearance lift is incomplete: ")
+            + error.what());
+    } catch (const ReachableDomainConstructionError& error) {
+        throw IncompleteSegmentOracleError(
+            std::string(
+                "swept-prefix start-clearance construction is incomplete: ")
+            + error.what());
+    }
+    const bool pi_cap = cap_is_exact_pi(source);
+    const ContinuousTeaVerdict verdict =
+        start_clear && pi_cap
+        ? ContinuousTeaVerdict::CERTIFIED
+        : ContinuousTeaVerdict::UNRESOLVED_DEGENERACY;
+    const std::string stock_boundary_digest =
+        segment_stock_boundary_digest(stock);
+    const std::string source_canonical_bytes =
+        source.canonical_bytes();
+    const std::string canonical_bytes =
+        canonical_swept_prefix_audit(
+            source_canonical_bytes,
+            stock_boundary_digest,
+            start_clear,
+            pi_cap,
+            verdict);
+    SweptPrefixSegmentTeaAudit2 audit{
+        verdict,
+        canonical_bytes,
+        sha256_bytes(canonical_bytes),
+        SWEPT_PREFIX_STRATEGY_VERSION,
+        SWEPT_PREFIX_THEOREM_VERSION,
+        source_canonical_bytes,
+        stock_boundary_digest,
+        SWEPT_PREFIX_MOTION_STRATA,
+        start_clear,
+        pi_cap,
+    };
+    if (!swept_prefix_segment_tea_audit_is_self_consistent(
+            audit)) {
+        throw IncompleteSegmentOracleError(
+            "swept-prefix audit failed native self-verification");
+    }
+    return audit;
 }
 
 bool segment_station_cap_exceeded_exact(

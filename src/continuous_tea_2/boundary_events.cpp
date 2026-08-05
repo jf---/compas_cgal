@@ -794,6 +794,21 @@ std::vector<BoundaryFeatureRecord2> extract_boundary_records(
     return records_from_curves(stock_curves(stock));
 }
 
+std::string canonical_stock_boundary_identity(
+    const Stock2& stock)
+{
+    const std::vector<BoundaryFeatureRecord2> records =
+        extract_boundary_records(stock);
+    std::vector<std::string> feature_ids;
+    feature_ids.reserve(records.size());
+    for (const BoundaryFeatureRecord2& record : records) {
+        feature_ids.push_back(record.feature_id);
+    }
+    return ccan_tagged(
+        "exact-stock-boundary-v1",
+        ccan_sequence(feature_ids));
+}
+
 std::vector<BoundaryEvent2> classify_boundary_pair(
     const Stock2& stock,
     std::size_t first_index,

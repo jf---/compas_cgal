@@ -58,8 +58,11 @@ cells.
     state grammar accepts either a paired hold-link/full-circle group or one
     advancing segment, updates phase and neck passage from the advancing
     operation, and rejects dangling or cross-variant pairs. Atomic segment
-    evaluation, generator dispatch, and fresh replay remain the next stages;
-    no fake zero-radius circle or traversal-only skip is admitted.
+    evaluation now uses a dedicated exact swept-prefix theorem, then
+    independently reproduces one content-addressed zero-guide transaction
+    before exposing its child state. Generator dispatch and fresh replay remain
+    the next stages; no fake zero-radius circle or traversal-only skip is
+    admitted.
     Traversal/coverage closure, fresh terminal replay, arbitrary-pocket
     evidence, and matched Held–Pfeiffer performance remain incomplete.
 
@@ -72,7 +75,7 @@ The records have deliberately different jobs:
 | Reconstructed partition | `EventPartitionCertificate2` | `SegmentEventPartition2`, including its nested `EventPartitionCertificate2` | Proves that every declared projection, algebraic root, cell, fibre, overlap, and seam can be reconstructed |
 | Deciding data | Exact uniform-sweep disposition, dedicated violation witness, or `FullCircleCellAuthority2` with reconstructed stationary strata | Ordered segment strata, active branches, and pair orientation/cap dispositions | Authorizes the exact verdict |
 | Trace | `EventTrace2` v2 | `EventTrace2` v2 | Orders canonical events and binds the deciding record by SHA-256 |
-| Typed witness | `MotionWitness` | `MotionWitness` | Canonically binds operation ordinal/kind, exact motion, caps, stock lineage, strategy, and trace digest under one content identity |
+| Typed witness | `MotionWitness` | `MotionWitness`; advancing cuts use `SweptPrefixMotionWitness` | Canonically binds operation ordinal/kind, exact motion, caps, stock lineage, strategy, and complete deciding proof under one content identity |
 
 A generic event certificate is topology authority, not generally decision
 authority for either motion family. Segment cell classification consumes the
@@ -103,10 +106,12 @@ deciding record.
     be inside the canonical trace record.
 
 The planning `InputIdentity` separately binds
-`motion-certificate-schema-v1` and the native
-`event-exact-motion-oracle-v5` component. Changing the witness schema or
-oracle implementation family therefore changes the planning root before
-replay begins.
+`motion-certificate-schema-v1`, the native
+`event-exact-motion-oracle-v5` component, and the advancing-cut
+`swept-prefix-segment-tea-exact-v1` strategy plus its
+`translation-swept-prefix-forward-semicircle-v1` theorem. Changing a witness
+schema, a generic oracle family, the operation-specific strategy, or its
+geometric theorem therefore changes the planning root before replay begins.
 
 ## Exact segment partition
 
@@ -853,7 +858,87 @@ affected `--testmon` selection each passed `34` tests, and the complete
 adaptive suite passed `553` in `301.89 s`. Ruff, strict mypy over `27` source
 files, strict MkDocs, formatting, and diff checks passed. These are correctness
 gates, not planner-performance measurements. The one-witness atomic
-transaction, global dispatch, and fresh replay remain Tasks 5–7.
+transaction was the Task 4 boundary; Task 5 closes it below. Global dispatch
+and fresh replay remain Tasks 6–7.
+
+### Task 5 atomic zero-guide consumer
+
+An advancing segment is physically different from a hold link. The generic
+segment oracle asks which cutter-rim intervals lie in the frozen pre-motion
+stock at every station. That is correct for a transit-style link, but it is too
+pessimistic for a slot-opening cutter: at station `t`, every earlier cutter
+disk has already removed material from the swept prefix.
+
+The dedicated native `swept-prefix-segment-tea-exact-v1` theorem partitions
+the translation into the start station and the open advancing interval. Let
+`v` be the unit motion direction and let a rim point at station `t > 0` be
+`q = p(t) + r u`. For any strictly trailing direction `u · v < 0`, choose a
+sufficiently small earlier displacement `δ > 0`. Then:
+
+```text
+|q - (p(t) - δv)|² = r² + 2rδ(u · v) + δ² < r²
+```
+
+So `q` lies in an earlier cutter disk. If the exact start disk has no
+positive-area overlap with stock, possible engagement is confined to the
+closed forward semicircle, including its two orthogonal boundary points. The
+theorem therefore certifies exactly a `pi` cap. It returns unresolved for an
+uncleared start or a tighter cap; it never relabels those cases as proved cap
+exceedance and never falls back from the generic event oracle.
+
+The native producer returns a sealed `SweptPrefixSegmentTeaAudit2`; Python
+cannot construct or mutate it. Native self-verification reconstructs the whole
+canonical record from its typed fields and checks its SHA-256 digest. That
+record binds the exact binary64 motion source, exact cap, strategy version,
+theorem version, two motion strata, start-clear and exact-`pi` decisions, and
+the SHA-256 identity reconstructed from the sorted exact stock-boundary
+features. `MotionCertifier` independently requires the native stock and motion
+identities to equal its Python-side pre-state and reconstructed source before
+constructing a distinct `SweptPrefixMotionWitness`. `InputIdentity` binds the
+swept-prefix strategy and geometric theorem as separate planning components,
+independently of the motion-witness schema and generic event oracle.
+
+!!! danger "Proof bytes must authenticate their complete schema"
+
+    Finding expected byte substrings inside a record does not establish field
+    boundaries, uniqueness, ordering, or theorem ownership. Whole-record
+    native reconstruction establishes those properties. The operation-specific
+    Python witness then prevents a generic frozen-stock proof from being
+    relabelled as swept-prefix evidence, even if every superficial field has a
+    plausible value.
+
+`ZeroGuideLinkTransaction` then owns one `AdvanceSegmentOperation` and its
+ordered proof bundle:
+
+```text
+exact capsule containment
+    -> swept-prefix TEA
+    -> exact trial-stock depletion
+    -> exact trial-coverage update
+```
+
+`evaluate_zero_guide_from_cursor(...)` performs that pipeline only on private
+stock and coverage forks. `commit_zero_guide_from_cursor(...)` authenticates
+the parent state and cursor, repeats the complete evaluation, and requires
+byte-identical transaction evidence before returning the child. Injected
+failures at all four stages leave the parent byte-identical; candidate run,
+target, cap, neck scope, operation, stock lineage, coverage lineage, traversal,
+passage, parent, cursor, and child cross-wires fail at named boundaries.
+Same-length replacement of an opaque coverage-parent digest is structurally
+valid in isolation; commit rejects it by independently rebuilding the complete
+transaction and comparing canonical bytes. The constructor does not pretend
+to authenticate a parent preimage it does not own.
+
+The implementation keeps this physical pipeline in
+`advancing_segment_trial.py`; `transaction.py` remains the coordinator and is
+`1,190` lines. Task 6 still has to dispatch the real Task 13F route through the
+new transaction, and Tasks 7–8 still own fresh replay and terminal evidence.
+
+At the Task 5 checkpoint, the uncached containment/oracle/certificate/
+transaction/identity slice passed `93` tests in `42.34 s`; the complete
+adaptive suite passed `562` in `224.43 s`. Ruff, strict mypy over `28` source
+files, strict MkDocs, formatting, and diff checks passed. These are
+correctness-gate costs, not Held–Pfeiffer planner timings.
 
 The comparative claim and matched performance boundary remain in
 [Exact Segment-Site Medial Axis](segment_site_mat.md#relation-to-held-and-pfeiffer-2025).

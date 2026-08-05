@@ -41,6 +41,8 @@ from compas_cgal.adaptive.identity import SupportKind
 from compas_cgal.adaptive.identity import TrimIncidenceOrientation
 from compas_cgal.adaptive.motion import EngagementCap
 from compas_cgal.adaptive.motion_certificate import MOTION_CERTIFICATE_SCHEMA_VERSION
+from compas_cgal.adaptive.motion_certificate import SWEPT_PREFIX_STRATEGY_VERSION
+from compas_cgal.adaptive.motion_certificate import SWEPT_PREFIX_THEOREM_VERSION
 from compas_cgal.adaptive.policy import ACTIVE_PASSAGE_STATES
 from compas_cgal.adaptive.policy import CandidatePolicy
 from compas_cgal.adaptive.policy import CutDirectionPolicy
@@ -124,11 +126,15 @@ def test_schema_and_component_versions_are_frozen_nonempty_bytes() -> None:
         COMPONENT_IDENTITY_VERSION,
         BOUNDARY_VERTEX_ID_VERSION,
         MOTION_CERTIFICATE_SCHEMA_VERSION,
+        SWEPT_PREFIX_STRATEGY_VERSION,
+        SWEPT_PREFIX_THEOREM_VERSION,
         _continuous_tea_2.event_oracle_component_version(),
     )
 
     assert all(type(version) is bytes and version for version in versions)
     assert len(set(versions)) == len(versions)
+    assert _continuous_tea_2.swept_prefix_strategy_version() == SWEPT_PREFIX_STRATEGY_VERSION
+    assert _continuous_tea_2.swept_prefix_theorem_version() == SWEPT_PREFIX_THEOREM_VERSION
 
 
 def test_component_identity_binds_every_declared_input() -> None:
@@ -576,6 +582,8 @@ def test_input_identity_binds_entry_domain_policies_schemas_and_components() -> 
     component_versions = {binding.component: binding.version for binding in identity.component_versions}
     assert component_versions[b"motion-certificate-schema"] == MOTION_CERTIFICATE_SCHEMA_VERSION
     assert component_versions[b"event-exact-motion-oracle"] == _continuous_tea_2.event_oracle_component_version()
+    assert component_versions[b"swept-prefix-motion-oracle"] == SWEPT_PREFIX_STRATEGY_VERSION
+    assert component_versions[b"swept-prefix-motion-theorem"] == SWEPT_PREFIX_THEOREM_VERSION
     assert "digest" not in {field.name for field in fields(identity)}
     assert identity.digest == hashlib.sha256(canonical).digest()
     assert identity.digest not in canonical
