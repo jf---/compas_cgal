@@ -960,7 +960,7 @@ planner timings.
 - Produces:
   exact variant selection in `advance_active_candidate_family(...)`.
 
-- [ ] **Step 1: Write the Task 13F RED route-1 test**
+- [x] **Step 1: Write the Task 13F RED route-1 test**
 
 Extend the authenticated fixture from the already committed route-0 child:
 
@@ -1013,7 +1013,7 @@ existing calling convention instead of adding a callback API. Require the
 first accepted winner to stop dispatch with no lower-ranked evaluation, and
 require route 0 to remain the exact same fourth-circle winner.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 ```bash
 pixi run pytest tests/adaptive/test_generator.py \
@@ -1022,7 +1022,7 @@ pixi run pytest tests/adaptive/test_generator.py \
 
 Expected: route 1 still exhausts with `attempts=0`.
 
-- [ ] **Step 3: Implement exact one-time variant selection**
+- [x] **Step 3: Implement exact one-time variant selection**
 
 At the active span:
 
@@ -1044,7 +1044,7 @@ global advance, physical commit, and suffix validation over
 invariant ordering and the existing named local-rejection set; zero-guide
 proof failures abort.
 
-- [ ] **Step 4: Run GREEN and structural counts**
+- [x] **Step 4: Run GREEN and structural counts**
 
 ```bash
 pixi run pytest tests/adaptive/test_generator.py \
@@ -1055,7 +1055,31 @@ Record route number, family size, dispatch count, winner rank, operation count,
 and elapsed time for route 1. This is structural measurement, not a
 Held–Pfeiffer runtime comparison.
 
-- [ ] **Step 5: Document, commit, and push**
+Implementation note (2026-08-05): RED reproduced the intended boundary with
+`attempts=0` and an empty circle family. The generator now authenticates the
+active edge's `MatZeroGuideRun` against the retained MAT inventory before
+selecting exactly one candidate variant. Family validation, global advance,
+physical evaluation/commit, `TraversalCommit`, and physical-suffix validation
+consume the closed `TraversalCandidate` and `AcceptedCandidateTransaction`
+unions through exact-type branches. Route 0 retains its fourth-circle
+`CandidateTransaction`; route 1 materializes `36` invariant-ordered spatial
+records, evaluates and accepts rank `1`, and adds exactly one operation
+(`5 -> 6`). A bounded warm dispatch/evaluate/independent-commit observation
+took `0.133066 s`. This is an internal structural datum, not a matched planner
+timing. Adversarial review then exposed two bypasses: direct evaluation/commit
+did not repeat active-run ownership after family validation, and commit suffix
+validation accepted a matching tail without proving the parent prefix. Exact
+variant/run validation now closes every public consumer boundary, and the
+physical child must equal `parent.operations + transaction_suffix` for both
+transaction variants. `generator.py` is `1,017` lines: large by project
+guidance, below the `1,200`-line suspicious threshold, and still
+single-purpose. The uncached generator file passed `6` tests in `27.77 s`, affected
+`--testmon` selection passed `6` in `28.52 s`, and the complete adaptive suite
+passed `563` in `224.39 s`. No new error class was needed:
+`InvalidCandidateFamilyError` already owns the precise failure mode in which a
+submitted family contradicts its active MAT proof variant or proof bytes.
+
+- [x] **Step 5: Document, commit, and push**
 
 Update Task 13F evidence in `docs/segment_site_mat.md` and check off the
 corresponding causal traversal plan step:
