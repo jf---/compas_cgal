@@ -605,7 +605,7 @@ hard plan ceiling at `1,197` lines.
   `AdvanceSegmentOperation.build(...)`,
   extended `CanonicalOperation`.
 
-- [ ] **Step 1: Write RED operation identity tests**
+- [x] **Step 1: Write RED operation identity tests**
 
 Require:
 
@@ -635,7 +635,7 @@ changed endpoint. Every invalid construction raises
 `InvalidAdvanceSegmentOperationError`, not the generic operation identity
 error. Add mypy exhaustiveness for all five operation variants.
 
-- [ ] **Step 2: Write RED chronology tests**
+- [x] **Step 2: Write RED chronology tests**
 
 Require `GenerationState` to accept:
 
@@ -649,7 +649,7 @@ Reject a dangling hold link, hold link followed by advancing segment,
 advancing segment followed by a circle claiming the same cursor, and final
 phase/traversal state not matching the last advancing operation.
 
-- [ ] **Step 3: Run RED**
+- [x] **Step 3: Run RED**
 
 ```bash
 pixi run pytest tests/adaptive/test_operation.py \
@@ -657,7 +657,7 @@ pixi run pytest tests/adaptive/test_operation.py \
   -n auto --testmon -q
 ```
 
-- [ ] **Step 4: Implement the distinct operation**
+- [x] **Step 4: Implement the distinct operation**
 
 Add:
 
@@ -674,7 +674,7 @@ class AdvanceSegmentOperation:
 Use `advance-segment-v1`; do not add a mode field to `LinkSegmentOperation`.
 Extend `CanonicalOperation` explicitly.
 
-- [ ] **Step 5: Implement the closed state grammar**
+- [x] **Step 5: Implement the closed state grammar**
 
 Parse lateral operations with explicit cases:
 
@@ -692,7 +692,7 @@ else:
 Require exactly one traversal advance per accepted lateral chronology and
 allow the state to end on either a circle or advancing segment.
 
-- [ ] **Step 6: Run GREEN, lint, and types**
+- [x] **Step 6: Run GREEN, lint, and types**
 
 ```bash
 pixi run format-adaptive
@@ -703,7 +703,7 @@ pixi run pytest tests/adaptive/test_operation.py \
 pixi run types-adaptive
 ```
 
-- [ ] **Step 7: Document, commit, and push**
+- [x] **Step 7: Document, commit, and push**
 
 Update the operation/replay grammar in `docs/continuous_engagement.md`, then:
 
@@ -718,6 +718,21 @@ git add src/compas_cgal/adaptive/operation.py \
   docs/superpowers/plans/2026-07-29-zero-guide-link-candidate.md
 git commit -m "feat(adaptive): add advancing segment"
 ```
+
+Implementation note (2026-08-05): the fifth canonical operation is a distinct
+`advance-segment-v1` record with its own named error boundary. The physical
+state accepts `entry circle ((hold link, full circle) | advancing segment)*`,
+allows either advancing variant to end the prefix, binds final phase/cursor,
+and replays oriented passage transitions from circles or segments. It does not
+duplicate `TraversalCommit` by requiring adjacent operation groups to retain
+one MAT edge or branch; the existing real branch-switch positive control
+rejects that false coupling.
+
+Gate evidence: RED failed with `10` missing-variant contracts, then the state
+slice failed at the old closed grammar. Final affected `--testmon` selection
+and the complete operation/state slice each passed `34`; the complete
+adaptive suite passed `553` in `301.89 s`. Ruff, strict mypy over `27` source
+files, strict MkDocs, formatting, and diff checks passed.
 
 ---
 

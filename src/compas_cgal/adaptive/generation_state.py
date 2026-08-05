@@ -21,6 +21,7 @@ from compas_cgal.adaptive.identity import IdentityDigest
 from compas_cgal.adaptive.motion import ExactCircleMotion
 from compas_cgal.adaptive.motion_certificate import MotionCertifier
 from compas_cgal.adaptive.neck import NeckPassage
+from compas_cgal.adaptive.operation import AdvanceSegmentOperation
 from compas_cgal.adaptive.operation import AdvanceTraversalDecision
 from compas_cgal.adaptive.operation import ApproachOperation
 from compas_cgal.adaptive.operation import CanonicalOperation
@@ -146,7 +147,7 @@ class TraversalCursorState:
 
 @dataclass(frozen=True)
 class GenerationState:
-    """Alias-safe authoritative state at one accepted circle boundary."""
+    """Alias-safe authoritative state at one accepted lateral boundary."""
 
     _stock: Stock2Area = field(repr=False)
     _coverage: CoverageLedger = field(repr=False)
@@ -179,6 +180,7 @@ class GenerationState:
                 PlungeOperation,
                 LinkSegmentOperation,
                 CutFullCircleOperation,
+                AdvanceSegmentOperation,
             )
             for operation in self.operations
         ):
@@ -246,8 +248,8 @@ class GenerationState:
             stock: Exact stock owner after the operation prefix.
             coverage: Exact coverage owner after the same lateral prefix.
             tool_radius: Cutter radius bound by every witness.
-            phase_point: Exact start point of the next direct link.
-            traversal: Active MAT cursor after the final circle.
+            phase_point: Exact start point of the next lateral motion.
+            traversal: Active MAT cursor after the final advancing operation.
             passages: Current oriented-neck passage states.
             operations: Complete accepted operation prefix.
 
@@ -296,9 +298,23 @@ class GenerationState:
         if len(self.operations) < 3 or self.operations[0] != entry.approach or self.operations[1] != entry.plunge:
             raise InvalidGenerationStateError("generation operation chronology must begin with its exact entry.")
         raw_lateral = self.operations[2:]
-        if any(type(operation) not in (LinkSegmentOperation, CutFullCircleOperation) for operation in raw_lateral):
+        if any(
+            type(operation)
+            not in (
+                LinkSegmentOperation,
+                CutFullCircleOperation,
+                AdvanceSegmentOperation,
+            )
+            for operation in raw_lateral
+        ):
             raise InvalidGenerationStateError("generation operation chronology contains a foreign lateral type.")
-        lateral = tuple(cast(LinkSegmentOperation | CutFullCircleOperation, operation) for operation in raw_lateral)
+        lateral = tuple(
+            cast(
+                LinkSegmentOperation | CutFullCircleOperation | AdvanceSegmentOperation,
+                operation,
+            )
+            for operation in raw_lateral
+        )
         if any(operation.cut_z != entry.cut_plane.cut_z for operation in lateral):
             raise InvalidGenerationStateError("generation lateral cut depth contradicts its qualified entry.")
         if tuple(operation.motion for operation in lateral) != tuple(witness.motion for witness in coverage_lineage):
@@ -309,40 +325,72 @@ class GenerationState:
 
         current_phase = entry.center
         pending_link: LinkSegmentOperation | None = None
-        accepted_circle = False
-        for operation in lateral:
+        last_advance: AdvanceTraversalDecision | None = None
+        for index, operation in enumerate(lateral):
             if type(operation) is LinkSegmentOperation:
                 if pending_link is not None or operation.motion.start != current_phase:
                     raise InvalidGenerationStateError("link chronology does not begin at the accepted phase.")
                 current_phase = operation.motion.end
                 pending_link = operation
                 continue
-            if type(operation) is not CutFullCircleOperation:
-                raise InvalidGenerationStateError("operation chronology contains an unknown lateral type.")
-            if _phase_point(operation.motion) != current_phase:
-                raise InvalidGenerationStateError("circle phase contradicts the accepted operation chronology.")
-            if accepted_circle and pending_link is None:
-                raise InvalidGenerationStateError("generation circle after entry requires one direct link.")
-            if pending_link is not None:
-                hold = pending_link.traversal_decision
-                advance = operation.traversal_decision
-                if (
-                    pending_link.neck_scope != operation.neck_scope
-                    or pending_link.effective_cap_decision != operation.effective_cap_decision
-                    or hold.component_id != advance.component_id
-                    or hold.edge_id != advance.edge_id
-                    or hold.branch_id != advance.branch_id
-                    or hold.cursor_before != advance.cursor_before
-                ):
-                    raise InvalidGenerationStateError("generation link and circle histories are cross-wired.")
-            pending_link = None
-            accepted_circle = True
-        if pending_link is not None or type(lateral[-1]) is not CutFullCircleOperation:
-            raise InvalidGenerationStateError("generation state must end at one complete accepted circle.")
-        final_circle = lateral[-1]
+
+            if type(operation) is CutFullCircleOperation:
+                if _phase_point(operation.motion) != current_phase:
+                    raise InvalidGenerationStateError(
+                        "circle phase contradicts the accepted operation chronology.",
+                    )
+                if index > 0 and pending_link is None:
+                    raise InvalidGenerationStateError(
+                        "generation circle after entry requires one paired hold link.",
+                    )
+                if pending_link is not None:
+                    hold = pending_link.traversal_decision
+                    advance = operation.traversal_decision
+                    if (
+                        pending_link.neck_scope != operation.neck_scope
+                        or pending_link.effective_cap_decision != operation.effective_cap_decision
+                        or hold.component_id != advance.component_id
+                        or hold.edge_id != advance.edge_id
+                        or hold.branch_id != advance.branch_id
+                        or hold.cursor_before != advance.cursor_before
+                    ):
+                        raise InvalidGenerationStateError(
+                            "generation link and circle histories are cross-wired.",
+                        )
+                pending_link = None
+                last_advance = operation.traversal_decision
+                continue
+
+            if type(operation) is AdvanceSegmentOperation:
+                if pending_link is not None:
+                    raise InvalidGenerationStateError(
+                        "hold link must be paired with a full circle, not an advancing segment.",
+                    )
+                if operation.motion.start != current_phase:
+                    raise InvalidGenerationStateError(
+                        "advancing segment does not begin at the accepted phase.",
+                    )
+                current_phase = operation.motion.end
+                last_advance = operation.traversal_decision
+                continue
+
+            raise InvalidGenerationStateError(
+                "operation chronology contains an unknown lateral type.",
+            )
+
+        if pending_link is not None:
+            raise InvalidGenerationStateError(
+                "generation state cannot end with a dangling hold link.",
+            )
+        if last_advance is None:
+            raise InvalidGenerationStateError(
+                "generation state requires one accepted traversal advance.",
+            )
         if current_phase != self.phase_point:
-            raise InvalidGenerationStateError("generation phase contradicts its final circle.")
-        decision = final_circle.traversal_decision
+            raise InvalidGenerationStateError(
+                "generation phase contradicts its final advancing operation.",
+            )
+        decision = last_advance
         if (
             self.traversal.component_id != decision.component_id
             or self.traversal.edge_id != decision.edge_id
@@ -350,7 +398,9 @@ class GenerationState:
             or self.traversal.cursor != decision.cursor_after
             or self.traversal.terminal != decision.makes_cursor_terminal
         ):
-            raise InvalidGenerationStateError("generation traversal contradicts its final circle.")
+            raise InvalidGenerationStateError(
+                "generation traversal contradicts its final advancing operation.",
+            )
 
         certificate = self._coverage.certificate
         if (
@@ -366,11 +416,18 @@ class GenerationState:
         by_scope = {passage.scope: passage for passage in self.passages}
         expected_states = {scope: PassageState.UNVISITED for scope in by_scope}
         for operation in self.operations[2:]:
-            if type(operation) is CutFullCircleOperation and type(operation.neck_scope) is OrientedNeckScope:
-                decision = operation.effective_cap_decision
+            advancing_operation: CutFullCircleOperation | AdvanceSegmentOperation
+            if type(operation) is CutFullCircleOperation:
+                advancing_operation = operation
+            elif type(operation) is AdvanceSegmentOperation:
+                advancing_operation = operation
+            else:
+                continue
+            if type(advancing_operation.neck_scope) is OrientedNeckScope:
+                decision = advancing_operation.effective_cap_decision
                 if type(decision) is not NeckCapDecision:
                     raise InvalidGenerationStateError("oriented operation omits its exact neck-cap transition.")
-                scope = operation.neck_scope
+                scope = advancing_operation.neck_scope
                 passage = by_scope.get(scope)
                 expected_before = expected_states.get(scope)
                 if (

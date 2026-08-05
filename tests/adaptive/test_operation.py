@@ -5,6 +5,8 @@ from dataclasses import fields
 
 import pytest
 
+from compas_cgal.adaptive.canonical import require_canonical_record
+from compas_cgal.adaptive.errors import InvalidAdvanceSegmentOperationError
 from compas_cgal.adaptive.errors import InvalidEffectiveCapDecisionError
 from compas_cgal.adaptive.errors import InvalidOperationIdentityError
 from compas_cgal.adaptive.errors import InvalidTraversalDecisionError
@@ -12,6 +14,7 @@ from compas_cgal.adaptive.identity import IdentityDigest
 from compas_cgal.adaptive.motion import EngagementCap
 from compas_cgal.adaptive.motion import ExactCircleMotion
 from compas_cgal.adaptive.motion import ExactSegmentMotion
+from compas_cgal.adaptive.operation import AdvanceSegmentOperation
 from compas_cgal.adaptive.operation import ApproachOperation
 from compas_cgal.adaptive.operation import CanonicalOperation
 from compas_cgal.adaptive.operation import CursorIdentity
@@ -306,6 +309,161 @@ def test_link_segment_binds_motion_neck_scope_cap_and_hold() -> None:
     )
 
     assert baseline.canonical_bytes != changed_scope.canonical_bytes
+
+
+def test_advance_segment_is_a_distinct_canonical_traversal_operation() -> None:
+    """Separate link-only progress from a hold link awaiting one circle.
+
+    A mode bit on `LinkSegmentOperation` would make consumers interpret one
+    record through two chronologies. The advancing variant instead owns its
+    cursor transition and changes identity when its physical endpoint changes.
+    """
+    segment = ExactSegmentMotion.build(
+        Point2[WorldXY].build(0.0, 0.0),
+        Point2[WorldXY].build(1.0, 0.0),
+    )
+    scope = OrientedNeckScope.build(
+        neck_owner_id=NeckOwnerId(b"neck-a"),
+        orientation=NeckTraversalOrientation.FORWARD,
+    )
+    operation = AdvanceSegmentOperation.build(
+        motion=segment,
+        cut_z=CutZ.build(-2.0),
+        neck_scope=scope,
+        effective_cap_decision=_neck_cap(),
+        traversal_decision=_advance(),
+    )
+    hold_link = LinkSegmentOperation.build(
+        motion=segment,
+        cut_z=operation.cut_z,
+        neck_scope=operation.neck_scope,
+        effective_cap_decision=operation.effective_cap_decision,
+        traversal_decision=_hold(),
+    )
+    variants = (
+        operation,
+        AdvanceSegmentOperation.build(
+            motion=ExactSegmentMotion.build(
+                segment.start,
+                Point2[WorldXY].build(2.0, 0.0),
+            ),
+            cut_z=operation.cut_z,
+            neck_scope=operation.neck_scope,
+            effective_cap_decision=operation.effective_cap_decision,
+            traversal_decision=operation.traversal_decision,
+        ),
+        AdvanceSegmentOperation.build(
+            motion=operation.motion,
+            cut_z=CutZ.build(-3.0),
+            neck_scope=operation.neck_scope,
+            effective_cap_decision=operation.effective_cap_decision,
+            traversal_decision=operation.traversal_decision,
+        ),
+        AdvanceSegmentOperation.build(
+            motion=operation.motion,
+            cut_z=operation.cut_z,
+            neck_scope=OrientedNeckScope.build(
+                neck_owner_id=NeckOwnerId(b"neck-a"),
+                orientation=NeckTraversalOrientation.REVERSE,
+            ),
+            effective_cap_decision=operation.effective_cap_decision,
+            traversal_decision=operation.traversal_decision,
+        ),
+        AdvanceSegmentOperation.build(
+            motion=operation.motion,
+            cut_z=operation.cut_z,
+            neck_scope=operation.neck_scope,
+            effective_cap_decision=NeckCapDecision.build(
+                neck_evidence_digest=IdentityDigest(b"\x23" * 32),
+                width_class_id=WidthClassId.build(0),
+                passage_before=PassageState.UNVISITED,
+                passage_after=PassageState.FIRST_PASS_COMPLETE,
+                user_cap=EngagementCap.build(math.pi / 2.0),
+                effective_cap=EngagementCap.build(math.pi / 3.0),
+            ),
+            traversal_decision=operation.traversal_decision,
+        ),
+        AdvanceSegmentOperation.build(
+            motion=operation.motion,
+            cut_z=operation.cut_z,
+            neck_scope=operation.neck_scope,
+            effective_cap_decision=operation.effective_cap_decision,
+            traversal_decision=_advance(terminal=True),
+        ),
+    )
+
+    assert require_canonical_record(operation.canonical_bytes) == (operation.canonical_bytes)
+    assert b"advance-segment-v1" in operation.canonical_bytes
+    assert operation != hold_link
+    assert len({variant.canonical_bytes for variant in variants}) == len(variants)
+
+
+def test_advance_segment_fails_through_its_named_error_boundary() -> None:
+    """Keep every malformed advancing record distinguishable from old links.
+
+    Evaluation and replay need to report corruption of the new one-motion
+    chronology directly. Letting nested generic operation errors escape would
+    erase which closed-union variant failed authentication.
+    """
+    segment = ExactSegmentMotion.build(
+        Point2[WorldXY].build(0.0, 0.0),
+        Point2[WorldXY].build(1.0, 0.0),
+    )
+    cap = _full_cap()
+    advance = _advance()
+    with pytest.raises(InvalidAdvanceSegmentOperationError, match="advance traversal"):
+        AdvanceSegmentOperation(  # type: ignore[arg-type]
+            segment,
+            CutZ.build(-2.0),
+            NoNeckScope.build(),
+            cap,
+            _hold(),
+        )
+    with pytest.raises(InvalidAdvanceSegmentOperationError, match="neck scope"):
+        AdvanceSegmentOperation.build(
+            motion=segment,
+            cut_z=CutZ.build(-2.0),
+            neck_scope=NoNeckScope.build(),
+            effective_cap_decision=_neck_cap(),
+            traversal_decision=advance,
+        )
+    with pytest.raises(InvalidAdvanceSegmentOperationError, match="ExactSegmentMotion"):
+        AdvanceSegmentOperation(  # type: ignore[arg-type]
+            object(),
+            CutZ.build(-2.0),
+            NoNeckScope.build(),
+            cap,
+            advance,
+        )
+    with pytest.raises(InvalidAdvanceSegmentOperationError, match="exact Point2"):
+        AdvanceSegmentOperation.build(
+            motion=ExactSegmentMotion.build(
+                SemanticPoint(0.0, 0.0, True),
+                segment.end,
+            ),
+            cut_z=CutZ.build(-2.0),
+            neck_scope=NoNeckScope.build(),
+            effective_cap_decision=cap,
+            traversal_decision=advance,
+        )
+
+    @dataclass(frozen=True)
+    class SemanticAdvance(AdvanceSegmentOperation):
+        provenance_bit: bool
+
+    semantic = SemanticAdvance(
+        segment,
+        CutZ.build(-2.0),
+        NoNeckScope.build(),
+        cap,
+        advance,
+        True,
+    )
+    with pytest.raises(
+        InvalidAdvanceSegmentOperationError,
+        match="exact AdvanceSegmentOperation",
+    ):
+        _ = semantic.canonical_bytes
 
 
 def test_cut_full_circle_binds_phase_orientation_scope_cap_and_advance() -> None:
@@ -836,6 +994,7 @@ def test_canonical_operations_do_not_embed_or_trust_witnesses() -> None:
         PlungeOperation,
         LinkSegmentOperation,
         CutFullCircleOperation,
+        AdvanceSegmentOperation,
     )
 
     for operation_type in operation_types:

@@ -238,6 +238,10 @@ class InvalidOperationIdentityError(ArtifactIdentityError):
     """A canonical operation omits or contradicts an owned decision."""
 
 
+class InvalidAdvanceSegmentOperationError(ArtifactIdentityError):
+    """An advancing segment violates its one-motion traversal contract."""
+
+
 class InvalidReachableDomainCertificateError(ValueError):
     """Reachable-domain reconstruction evidence violates its exact contract."""
 
