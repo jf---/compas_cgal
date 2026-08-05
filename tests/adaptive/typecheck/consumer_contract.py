@@ -32,6 +32,7 @@ from compas_cgal.adaptive.medial_axis import MatZeroGuideRun
 from compas_cgal.adaptive.motion import EngagementCap
 from compas_cgal.adaptive.neck import NeckInventory
 from compas_cgal.adaptive.operation import AdvanceTraversalDecision
+from compas_cgal.adaptive.operation import AdvanceSegmentOperation
 from compas_cgal.adaptive.operation import ApproachOperation
 from compas_cgal.adaptive.operation import CanonicalOperation
 from compas_cgal.adaptive.operation import CutFullCircleOperation
@@ -367,6 +368,8 @@ def operation_kind(operation: CanonicalOperation) -> str:
         return "link"
     if isinstance(operation, CutFullCircleOperation):
         return "circle"
+    if isinstance(operation, AdvanceSegmentOperation):
+        return "advance-segment"
     assert_never(operation)
 
 

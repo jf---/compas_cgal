@@ -20,6 +20,7 @@ from compas_cgal.adaptive.canonical import encode_material_side
 from compas_cgal.adaptive.canonical import encode_passage_state
 from compas_cgal.adaptive.canonical import encode_tagged_union
 from compas_cgal.adaptive.errors import ArtifactIdentityError
+from compas_cgal.adaptive.errors import InvalidAdvanceSegmentOperationError
 from compas_cgal.adaptive.errors import InvalidEffectiveCapDecisionError
 from compas_cgal.adaptive.errors import InvalidOperationIdentityError
 from compas_cgal.adaptive.errors import InvalidTraversalDecisionError
@@ -267,11 +268,12 @@ EffectiveCapDecision: TypeAlias = FullCapDecision | NeckCapDecision
 def _validate_scope_cap_decision(
     neck_scope: NeckScope,
     effective_cap_decision: EffectiveCapDecision,
+    error_type: type[ArtifactIdentityError] = InvalidOperationIdentityError,
 ) -> None:
     if type(neck_scope) is NoNeckScope and type(effective_cap_decision) is not FullCapDecision:
-        raise InvalidOperationIdentityError("no-neck scope requires an exact full-cap decision.")
+        raise error_type("no-neck scope requires an exact full-cap decision.")
     if type(neck_scope) is OrientedNeckScope and type(effective_cap_decision) is not NeckCapDecision:
-        raise InvalidOperationIdentityError("oriented neck scope requires an exact neck-evidence cap decision.")
+        raise error_type("oriented neck scope requires an exact neck-evidence cap decision.")
 
 
 def _validate_traversal_ids(
@@ -546,6 +548,106 @@ class LinkSegmentOperation:
 
 
 @dataclass(frozen=True)
+class AdvanceSegmentOperation:
+    """One exact segment that owns a MAT traversal advance."""
+
+    motion: ExactSegmentMotion
+    cut_z: CutZ
+    neck_scope: NeckScope
+    effective_cap_decision: EffectiveCapDecision
+    traversal_decision: AdvanceTraversalDecision
+
+    def __post_init__(self) -> None:
+        if type(self.motion) is not ExactSegmentMotion or type(self.cut_z) is not CutZ:
+            raise InvalidAdvanceSegmentOperationError(
+                "advancing segment requires exact ExactSegmentMotion and CutZ.",
+            )
+        if type(self.motion.start) is not Point2 or type(self.motion.end) is not Point2:
+            raise InvalidAdvanceSegmentOperationError(
+                "advancing segment motion endpoints must be exact Point2[WorldXY].",
+            )
+        if type(self.neck_scope) not in (NoNeckScope, OrientedNeckScope):
+            raise InvalidAdvanceSegmentOperationError(
+                "advancing segment requires an exact closed neck scope.",
+            )
+        if type(self.effective_cap_decision) not in (
+            FullCapDecision,
+            NeckCapDecision,
+        ):
+            raise InvalidAdvanceSegmentOperationError(
+                "advancing segment requires an exact effective-cap decision.",
+            )
+        _validate_scope_cap_decision(
+            self.neck_scope,
+            self.effective_cap_decision,
+            InvalidAdvanceSegmentOperationError,
+        )
+        if type(self.traversal_decision) is not AdvanceTraversalDecision:
+            raise InvalidAdvanceSegmentOperationError(
+                "advancing segment must own one exact advance traversal decision.",
+            )
+
+    @classmethod
+    def build(
+        cls,
+        *,
+        motion: ExactSegmentMotion,
+        cut_z: CutZ,
+        neck_scope: NeckScope,
+        effective_cap_decision: EffectiveCapDecision,
+        traversal_decision: AdvanceTraversalDecision,
+    ) -> Self:
+        """Build one exact link-only traversal operation.
+
+        Args:
+            motion: Nondegenerate exact centre-line segment.
+            cut_z: Qualified cutting plane depth.
+            neck_scope: Closed causal neck scope for this motion.
+            effective_cap_decision: Cap decision owned by the scope.
+            traversal_decision: The one cursor advance owned by the segment.
+
+        Returns:
+            Validated advancing segment operation.
+
+        Raises:
+            InvalidAdvanceSegmentOperationError: If any field is foreign or
+                the scope, cap, and traversal contracts disagree.
+        """
+        return cls(
+            motion,
+            cut_z,
+            neck_scope,
+            effective_cap_decision,
+            traversal_decision,
+        )
+
+    @property
+    def canonical_bytes(self) -> bytes:
+        """Return the complete canonical advancing-operation record.
+
+        Returns:
+            Versioned CCAN bytes binding motion and every owned decision.
+
+        Raises:
+            InvalidAdvanceSegmentOperationError: If invoked on a subclass.
+        """
+        if type(self) is not AdvanceSegmentOperation:
+            raise InvalidAdvanceSegmentOperationError(
+                "operation must be exact AdvanceSegmentOperation, not a subclass.",
+            )
+        return _operation_bytes(
+            b"advance-segment-v1",
+            {
+                b"cut-z": canonical_cut_z_bytes(self.cut_z),
+                b"effective-cap-decision": self.effective_cap_decision.canonical_bytes,
+                b"motion": canonical_task1_bytes(self.motion),
+                b"neck-scope": self.neck_scope.canonical_bytes,
+                b"traversal-decision": self.traversal_decision.canonical_bytes,
+            },
+        )
+
+
+@dataclass(frozen=True)
 class CutFullCircleOperation:
     motion: ExactCircleMotion
     cut_z: CutZ
@@ -606,4 +708,4 @@ class CutFullCircleOperation:
         )
 
 
-CanonicalOperation: TypeAlias = ApproachOperation | PlungeOperation | LinkSegmentOperation | CutFullCircleOperation
+CanonicalOperation: TypeAlias = ApproachOperation | PlungeOperation | LinkSegmentOperation | CutFullCircleOperation | AdvanceSegmentOperation

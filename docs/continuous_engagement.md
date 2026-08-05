@@ -52,9 +52,14 @@ cells.
     Full continuation next reaches a constant-clearance arm whose clearance
     equals the tool radius everywhere. The native MAT owner now proves both
     radius-1 width-2 S–S arms with exact, replayable coefficient-identity
-    records. Their guide radius is therefore exactly zero: the next stage must
-    project that authority into a certified link-only cutting advance, not a
-    fake zero-radius circle or a traversal-only skip.
+    records and Python projects them into finite spatial-only candidates. A
+    distinct `AdvanceSegmentOperation` now binds the exact segment, cut plane,
+    neck scope, cap decision, and its owned traversal advance. The physical
+    state grammar accepts either a paired hold-link/full-circle group or one
+    advancing segment, updates phase and neck passage from the advancing
+    operation, and rejects dangling or cross-variant pairs. Atomic segment
+    evaluation, generator dispatch, and fresh replay remain the next stages;
+    no fake zero-radius circle or traversal-only skip is admitted.
     Traversal/coverage closure, fresh terminal replay, arbitrary-pocket
     evidence, and matched Held–Pfeiffer performance remain incomplete.
 
@@ -820,6 +825,35 @@ passed `52` tests and the complete adaptive suite passed `542` in `187.61 s`;
 final affected `--testmon` selection passed `7`. Ruff, strict mypy over `27`
 source files, strict MkDocs, formatting, and diff checks passed. These are
 verification costs, not matched planner timings.
+
+Task 4 adds the fifth canonical operation variant,
+`AdvanceSegmentOperation`, under the distinct `advance-segment-v1` tag and
+the named `InvalidAdvanceSegmentOperationError` boundary. Its construction
+accepts only exact segment geometry, typed cut depth, a closed neck scope with
+the matching cap decision, and one `AdvanceTraversalDecision`. Changing the
+endpoint changes canonical identity; a hold decision, foreign motion,
+subclass, or mismatched scope/cap fails loud.
+
+`GenerationState` now recognizes the closed lateral language:
+
+```text
+entry circle ((hold link, full circle) | advancing segment)*
+```
+
+A hold link must still be consumed by its immediately following circle. An
+advancing segment instead updates the accepted phase to its endpoint and may
+end the state without a circle. Either advancing operation replays one
+oriented-neck passage transition, and the final physical cursor must match the
+final advancing operation. The state deliberately leaves route-to-route graph
+transitions to `TraversalCommit`; authenticated MAT branch switches can change
+edge and branch identity between physical operation groups.
+
+At this Task 4 checkpoint, the complete operation/state slice and final
+affected `--testmon` selection each passed `34` tests, and the complete
+adaptive suite passed `553` in `301.89 s`. Ruff, strict mypy over `27` source
+files, strict MkDocs, formatting, and diff checks passed. These are correctness
+gates, not planner-performance measurements. The one-witness atomic
+transaction, global dispatch, and fresh replay remain Tasks 5–7.
 
 The comparative claim and matched performance boundary remain in
 [Exact Segment-Site Medial Axis](segment_site_mat.md#relation-to-held-and-pfeiffer-2025).
