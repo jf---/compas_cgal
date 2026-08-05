@@ -12,7 +12,10 @@ from compas_cgal.adaptive.bootstrap import InitialCandidateTransaction
 from compas_cgal.adaptive.candidates import DerivedCandidateCursor
 from compas_cgal.adaptive.candidates import MiddleCurveCandidate
 from compas_cgal.adaptive.candidates import MiddleCurveSpan
+from compas_cgal.adaptive.candidates import TraversalCandidate
+from compas_cgal.adaptive.candidates import ZeroGuideLinkCandidate
 from compas_cgal.adaptive.candidates import enumerate_middle_curve_candidates
+from compas_cgal.adaptive.candidates import enumerate_zero_guide_link_candidates
 from compas_cgal.adaptive.canonical import encode_bytes
 from compas_cgal.adaptive.canonical import encode_component_map
 from compas_cgal.adaptive.canonical import encode_sequence
@@ -32,12 +35,16 @@ from compas_cgal.adaptive.generation_state import GenerationState
 from compas_cgal.adaptive.generation_state import TraversalCursorState
 from compas_cgal.adaptive.identity import IdentityDigest
 from compas_cgal.adaptive.medial_axis import MatSample
+from compas_cgal.adaptive.medial_axis import MatZeroGuideRun
+from compas_cgal.adaptive.operation import CanonicalOperation
 from compas_cgal.adaptive.operation import EffectiveCapDecision
 from compas_cgal.adaptive.operation import FullCapDecision
 from compas_cgal.adaptive.operation import NoNeckScope
 from compas_cgal.adaptive.operation import OrientedNeckScope
+from compas_cgal.adaptive.transaction import AcceptedCandidateTransaction
 from compas_cgal.adaptive.transaction import CandidateEvaluator
 from compas_cgal.adaptive.transaction import CandidateTransaction
+from compas_cgal.adaptive.transaction import ZeroGuideLinkTransaction
 from compas_cgal.adaptive.traversal import MatTraversalState
 
 _DIGEST_SIZE = hashlib.sha256().digest_size
@@ -53,13 +60,13 @@ def _digest(value: object, name: str) -> bytes:
 
 def _advance_global(
     traversal: MatTraversalState,
-    candidate: MiddleCurveCandidate,
+    candidate: TraversalCandidate,
 ) -> MatTraversalState:
     if type(traversal) is not MatTraversalState:
         raise InvalidTraversalCommitError(
             "global parent must be one exact MAT traversal state.",
         )
-    if type(candidate) is not MiddleCurveCandidate:
+    if type(candidate) not in (MiddleCurveCandidate, ZeroGuideLinkCandidate):
         raise InvalidTraversalCommitError(
             "global continuation requires one exact candidate.",
         )
@@ -99,11 +106,66 @@ def _validate_evaluator_authority(
         )
 
 
+def _active_zero_guide_run(
+    traversal: MatTraversalState,
+    error_type: type[ValueError],
+) -> MatZeroGuideRun | None:
+    """Return the active edge's inventory-authenticated zero-guide proof.
+
+    Args:
+        traversal: Authoritative nonterminal MAT traversal state.
+        error_type: Named public-boundary error to raise on contradiction.
+
+    Returns:
+        Exact owned proof run, or `None` for the ordinary circle family.
+
+    Raises:
+        ValueError: Through `error_type` if the active edge or projected record
+            contradicts the immutable MAT proof inventory.
+    """
+    if type(traversal) is not MatTraversalState or traversal.active_route_index is None:
+        raise error_type(
+            "candidate variant selection requires one active exact MAT route.",
+        )
+    axis = traversal.authority.axis
+    edge_id = traversal.active_cursor.route_step.edge_id
+    run = axis.zero_guide_run_by_edge_id.get(edge_id)
+    if run is None:
+        return None
+    inventory_matches = tuple(owned for owned in axis.zero_guide_inventory.runs if bytes(owned.edge_id) == bytes(edge_id))
+    if type(run) is not MatZeroGuideRun or len(inventory_matches) != 1 or inventory_matches[0] != run or inventory_matches[0].native_certificate != run.native_certificate:
+        raise error_type(
+            "active zero-guide record contradicts its MAT proof inventory.",
+        )
+    return run
+
+
+def _validate_candidate_variant(
+    candidate: TraversalCandidate,
+    zero_guide_run: MatZeroGuideRun | None,
+    error_type: type[ValueError],
+) -> None:
+    if zero_guide_run is None:
+        if type(candidate) is MiddleCurveCandidate:
+            return
+        raise error_type(
+            "candidate contradicts its active MAT proof variant.",
+        )
+    if type(candidate) is not ZeroGuideLinkCandidate:
+        raise error_type(
+            "candidate contradicts its active MAT proof variant.",
+        )
+    if candidate.zero_guide_run != zero_guide_run or candidate.zero_guide_run.native_certificate != zero_guide_run.native_certificate:
+        raise error_type(
+            "zero-guide candidate contradicts its owned native proof bytes.",
+        )
+
+
 def _validate_candidate_family(
     *,
     evaluator: CandidateEvaluator,
     traversal: MatTraversalState,
-    candidates: tuple[MiddleCurveCandidate, ...],
+    candidates: tuple[TraversalCandidate, ...],
 ) -> None:
     _validate_evaluator_authority(
         evaluator,
@@ -113,9 +175,19 @@ def _validate_candidate_family(
         raise InvalidCandidateFamilyError(
             "finite search requires one active global MAT cursor.",
         )
-    if type(candidates) is not tuple or any(type(candidate) is not MiddleCurveCandidate for candidate in candidates):
+    if type(candidates) is not tuple or any(type(candidate) not in (MiddleCurveCandidate, ZeroGuideLinkCandidate) for candidate in candidates):
         raise InvalidCandidateFamilyError(
             "finite search requires one immutable exact candidate tuple.",
+        )
+    zero_guide_run = _active_zero_guide_run(
+        traversal,
+        InvalidCandidateFamilyError,
+    )
+    for candidate in candidates:
+        _validate_candidate_variant(
+            candidate,
+            zero_guide_run,
+            InvalidCandidateFamilyError,
         )
     if any(candidate.policy != evaluator.candidate_policy for candidate in candidates):
         raise InvalidCandidateFamilyError(
@@ -173,7 +245,7 @@ class TraversalCommit:
 
     physical_parent_digest: IdentityDigest
     traversal_before: MatTraversalState
-    transaction: CandidateTransaction
+    transaction: AcceptedCandidateTransaction
     physical_child_digest: IdentityDigest
     traversal_after: MatTraversalState
 
@@ -190,7 +262,7 @@ class TraversalCommit:
             raise InvalidTraversalCommitError(
                 "traversal commit requires exact global parent and child states.",
             )
-        if type(self.transaction) is not CandidateTransaction:
+        if type(self.transaction) not in (CandidateTransaction, ZeroGuideLinkTransaction):
             raise InvalidTraversalCommitError(
                 "traversal commit requires one exact physical transaction.",
             )
@@ -202,6 +274,14 @@ class TraversalCommit:
             raise InvalidTraversalCommitError(
                 "transaction contradicts traversal commit physical child.",
             )
+        _validate_candidate_variant(
+            self.transaction.candidate,
+            _active_zero_guide_run(
+                self.traversal_before,
+                InvalidTraversalCommitError,
+            ),
+            InvalidTraversalCommitError,
+        )
         expected_after = _advance_global(
             self.traversal_before,
             self.transaction.candidate,
@@ -245,7 +325,7 @@ class TraversalCommit:
         *,
         physical_before: GenerationState,
         traversal_before: MatTraversalState,
-        transaction: CandidateTransaction,
+        transaction: AcceptedCandidateTransaction,
         physical_after: GenerationState,
         traversal_after: MatTraversalState,
     ) -> Self:
@@ -254,7 +334,7 @@ class TraversalCommit:
         Args:
             physical_before: Authoritative stock/coverage parent.
             traversal_before: Authoritative global graph parent.
-            transaction: Accepted Task 12 link-and-circle evidence.
+            transaction: Accepted circle or advancing-segment evidence.
             physical_after: Independently reproduced physical child.
             traversal_after: Candidate-derived global child.
 
@@ -269,7 +349,7 @@ class TraversalCommit:
             raise InvalidTraversalCommitError(
                 "traversal commit requires exact physical parent and child states.",
             )
-        if type(transaction) is not CandidateTransaction:
+        if type(transaction) not in (CandidateTransaction, ZeroGuideLinkTransaction):
             raise InvalidTraversalCommitError(
                 "traversal commit requires one exact physical transaction.",
             )
@@ -281,12 +361,21 @@ class TraversalCommit:
             raise InvalidTraversalCommitError(
                 "transaction contradicts authoritative physical child.",
             )
-        if physical_after.operations[-2:] != (
-            transaction.link_witness.operation,
-            transaction.circle_witness.operation,
-        ):
+        transaction_suffix: tuple[CanonicalOperation, ...]
+        if type(transaction) is CandidateTransaction:
+            transaction_suffix = (
+                transaction.link_witness.operation,
+                transaction.circle_witness.operation,
+            )
+        elif type(transaction) is ZeroGuideLinkTransaction:
+            transaction_suffix = (transaction.segment_witness.operation,)
+        else:
             raise InvalidTraversalCommitError(
-                "physical child omits the transaction link-and-circle suffix.",
+                "traversal commit received a foreign physical transaction.",
+            )
+        if physical_after.operations != physical_before.operations + transaction_suffix:
+            raise InvalidTraversalCommitError(
+                "physical child must append the exact transaction suffix.",
             )
         return cls(
             physical_before.digest,
@@ -437,8 +526,8 @@ def evaluate_traversal_candidate(
     evaluator: CandidateEvaluator,
     physical: GenerationState,
     traversal: MatTraversalState,
-    candidate: MiddleCurveCandidate,
-) -> CandidateTransaction:
+    candidate: TraversalCandidate,
+) -> AcceptedCandidateTransaction:
     """Evaluate one globally authenticated candidate through Task 12.
 
     Args:
@@ -448,7 +537,7 @@ def evaluate_traversal_candidate(
         candidate: Candidate beginning at `traversal.active_cursor`.
 
     Returns:
-        Accepted link-and-circle transaction.
+        Accepted circle or advancing-segment transaction.
 
     Raises:
         InvalidTraversalCommitError: If global or evaluator authority differs.
@@ -464,14 +553,35 @@ def evaluate_traversal_candidate(
         evaluator,
         traversal,
     )
+    _validate_candidate_variant(
+        candidate,
+        _active_zero_guide_run(
+            traversal,
+            InvalidTraversalCommitError,
+        ),
+        InvalidTraversalCommitError,
+    )
     _advance_global(
         traversal,
         candidate,
     )
-    return evaluator.evaluate_from_cursor(
-        physical,
-        TraversalCursorState.before(candidate.traversal_decision),
-        candidate,
+    local_cursor = TraversalCursorState.before(
+        candidate.traversal_decision,
+    )
+    if type(candidate) is MiddleCurveCandidate:
+        return evaluator.evaluate_from_cursor(
+            physical,
+            local_cursor,
+            candidate,
+        )
+    if type(candidate) is ZeroGuideLinkCandidate:
+        return evaluator.evaluate_zero_guide_from_cursor(
+            physical,
+            local_cursor,
+            candidate,
+        )
+    raise InvalidTraversalCommitError(
+        "global continuation received a foreign candidate variant.",
     )
 
 
@@ -480,8 +590,8 @@ def evaluate_first_feasible_candidate(
     evaluator: CandidateEvaluator,
     physical: GenerationState,
     traversal: MatTraversalState,
-    candidates: tuple[MiddleCurveCandidate, ...],
-) -> CandidateTransaction:
+    candidates: tuple[TraversalCandidate, ...],
+) -> AcceptedCandidateTransaction:
     """Evaluate one materialized family in invariant candidate order.
 
     Args:
@@ -556,7 +666,7 @@ def commit_traversal_candidate(
     evaluator: CandidateEvaluator,
     physical: GenerationState,
     traversal: MatTraversalState,
-    transaction: CandidateTransaction,
+    transaction: AcceptedCandidateTransaction,
 ) -> tuple[GenerationState, MatTraversalState, TraversalCommit]:
     """Independently commit one candidate on both state axes.
 
@@ -573,13 +683,21 @@ def commit_traversal_candidate(
         InvalidTraversalCommitError: If either parent or authority is stale.
         InvalidCandidateTransactionError: If independent replay differs.
     """
-    if type(transaction) is not CandidateTransaction:
+    if type(transaction) not in (CandidateTransaction, ZeroGuideLinkTransaction):
         raise InvalidTraversalCommitError(
             "global continuation commit requires one exact transaction.",
         )
     _validate_evaluator_authority(
         evaluator,
         traversal,
+    )
+    _validate_candidate_variant(
+        transaction.candidate,
+        _active_zero_guide_run(
+            traversal,
+            InvalidTraversalCommitError,
+        ),
+        InvalidTraversalCommitError,
     )
     traversal_after = _advance_global(
         traversal,
@@ -588,11 +706,22 @@ def commit_traversal_candidate(
     local_cursor = TraversalCursorState.before(
         transaction.candidate.traversal_decision,
     )
-    physical_after = evaluator.commit_from_cursor(
-        physical,
-        local_cursor,
-        transaction,
-    )
+    if type(transaction) is CandidateTransaction:
+        physical_after = evaluator.commit_from_cursor(
+            physical,
+            local_cursor,
+            transaction,
+        )
+    elif type(transaction) is ZeroGuideLinkTransaction:
+        physical_after = evaluator.commit_zero_guide_from_cursor(
+            physical,
+            local_cursor,
+            transaction,
+        )
+    else:
+        raise InvalidTraversalCommitError(
+            "global continuation commit received a foreign transaction variant.",
+        )
     commit = TraversalCommit.build(
         physical_before=physical,
         traversal_before=traversal,
@@ -672,7 +801,7 @@ def materialize_active_candidate_family(
     evaluator: CandidateEvaluator,
     physical: GenerationState,
     traversal: MatTraversalState,
-) -> tuple[MiddleCurveCandidate, ...]:
+) -> tuple[TraversalCandidate, ...]:
     """Materialize each active forward span exactly once.
 
     Args:
@@ -705,7 +834,11 @@ def materialize_active_candidate_family(
         physical=physical,
         traversal=traversal,
     )
-    candidates: list[MiddleCurveCandidate] = []
+    zero_guide_run = _active_zero_guide_run(
+        traversal,
+        InvalidCandidateFamilyError,
+    )
+    candidates: list[TraversalCandidate] = []
     cursor_before = active.cursor
     if type(cursor_before) not in (MatSample, DerivedCandidateCursor):
         raise InvalidCandidateFamilyError(
@@ -720,22 +853,37 @@ def materialize_active_candidate_family(
             ),
             cursor_limit=limit,
         )
+        if zero_guide_run is None:
+            candidates.extend(
+                enumerate_middle_curve_candidates(
+                    span=span,
+                    policy=evaluator.candidate_policy,
+                    circle_orientation=(
+                        evaluator.cut_direction_policy.circle_orientation(
+                            evaluator.material_side,
+                        )
+                    ),
+                    neck_scope=traversal.neck_scope,
+                    effective_cap_decision=effective_cap,
+                    makes_cursor_terminal_at_limit=(limit == active.terminal_cursor),
+                )
+            )
+            continue
+        if bytes(span.edge.identity) != bytes(zero_guide_run.edge_id):
+            raise InvalidCandidateFamilyError(
+                "active zero-guide run contradicts its directed forward span.",
+            )
         candidates.extend(
-            enumerate_middle_curve_candidates(
+            enumerate_zero_guide_link_candidates(
                 span=span,
                 policy=evaluator.candidate_policy,
-                circle_orientation=(
-                    evaluator.cut_direction_policy.circle_orientation(
-                        evaluator.material_side,
-                    )
-                ),
                 neck_scope=traversal.neck_scope,
                 effective_cap_decision=effective_cap,
                 makes_cursor_terminal_at_limit=(limit == active.terminal_cursor),
             )
         )
     try:
-        return evaluator.candidate_policy.order_candidates(
+        family = evaluator.candidate_policy.order_candidates(
             tuple(candidates),
             key=lambda candidate: candidate.order_key,
         )
@@ -743,6 +891,7 @@ def materialize_active_candidate_family(
         raise InvalidCandidateFamilyError(
             "materialized forward spans contain duplicate candidate identities.",
         ) from error
+    return family
 
 
 def advance_active_candidate_family(

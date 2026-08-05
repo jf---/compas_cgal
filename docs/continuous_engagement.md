@@ -60,9 +60,9 @@ cells.
     operation, and rejects dangling or cross-variant pairs. Atomic segment
     evaluation now uses a dedicated exact swept-prefix theorem, then
     independently reproduces one content-addressed zero-guide transaction
-    before exposing its child state. Generator dispatch and fresh replay remain
-    the next stages; no fake zero-radius circle or traversal-only skip is
-    admitted.
+    before exposing its child state. Proof-directed generator dispatch now
+    consumes that exact transaction; fresh replay remains the next stage. No
+    fake zero-radius circle or traversal-only skip is admitted.
     Traversal/coverage closure, fresh terminal replay, arbitrary-pocket
     evidence, and matched Held–Pfeiffer performance remain incomplete.
 
@@ -931,14 +931,58 @@ to authenticate a parent preimage it does not own.
 
 The implementation keeps this physical pipeline in
 `advancing_segment_trial.py`; `transaction.py` remains the coordinator and is
-`1,190` lines. Task 6 still has to dispatch the real Task 13F route through the
-new transaction, and Tasks 7–8 still own fresh replay and terminal evidence.
+`1,190` lines. Task 6 dispatches the real Task 13F route through the new
+transaction below; Tasks 7–8 still own fresh replay and terminal evidence.
 
 At the Task 5 checkpoint, the uncached containment/oracle/certificate/
 transaction/identity slice passed `93` tests in `42.34 s`; the complete
 adaptive suite passed `562` in `224.43 s`. Ruff, strict mypy over `28` source
 files, strict MkDocs, formatting, and diff checks passed. These are
 correctness-gate costs, not Held–Pfeiffer planner timings.
+
+### Task 6 proof-directed generator dispatch
+
+The generator now selects its candidate variant once from the active exact MAT
+edge. It authenticates any `MatZeroGuideRun` against the retained inventory
+before enumeration. An edge without that proof uses the existing positive
+MATHSM circle family; a proved zero-guide edge uses only
+`enumerate_zero_guide_link_candidates(...)`. Submitting the wrong family type
+fails before physical evaluation.
+
+The same closed union continues through global cursor validation, invariant
+first-feasible search, physical evaluation, independent commit, and
+`TraversalCommit`. Circle transactions must append their hold-link/circle
+pair; zero-guide transactions must append exactly their advancing segment.
+There is no mixed family and no fallback from one theorem to the other.
+
+!!! tip "Captured insight: exact classification can remove search dimensions"
+
+    On a proved zero-guide edge, radius, phase, and generator-site choices do
+    not become poorly conditioned optimization variables; they do not exist.
+    The MAT proof selects a spatial-only family before feasibility work begins.
+    This is both stronger semantically and cheaper structurally than generating
+    invalid zero-radius circles and rejecting them later.
+
+!!! danger "Cursor compatibility is not proof ownership"
+
+    A terminal candidate can carry a cursor, edge ID, and endpoint that all
+    advance correctly while retaining a foreign same-edge theorem record.
+    Family validation is therefore insufficient: direct evaluation, direct
+    commit, and `TraversalCommit` each re-authenticate the active MAT variant
+    and native proof bytes. Likewise, seeing the expected final operation is
+    not an append proof. The physical child must equal the complete parent
+    operation prefix plus exactly the transaction-owned suffix.
+
+For Task 13F route 1, the active forward window contains `36` deterministic
+spatial candidates. Rank `1` is accepted after one dispatch and independent
+commit adds exactly one operation (`5 -> 6`). The bounded warm
+dispatch/evaluate/commit observation was `0.133066 s`. The uncached generator
+file passed `6` tests in `27.77 s`, affected `--testmon` selection passed `6`
+in `28.52 s`, and the complete adaptive suite passed `563` in `224.39 s`.
+`generator.py` is `1,017` lines: large by project guidance, below the
+`1,200`-line suspicious threshold, and still single-purpose. These values are
+internal structural and regression evidence, not matched Held–Pfeiffer planner
+timings.
 
 The comparative claim and matched performance boundary remain in
 [Exact Segment-Site Medial Axis](segment_site_mat.md#relation-to-held-and-pfeiffer-2025).

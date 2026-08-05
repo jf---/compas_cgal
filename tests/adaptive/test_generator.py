@@ -1,5 +1,6 @@
 """Contracts for exact global adaptive-generation orchestration."""
 
+from copy import copy
 from unittest.mock import Mock
 
 import pytest
@@ -7,7 +8,11 @@ import pytest
 from compas_cgal import _continuous_tea_2
 import compas_cgal.adaptive.generator as generator_module
 from compas_cgal.adaptive.candidates import MiddleCurveCandidate
+from compas_cgal.adaptive.candidates import TraversalCandidate
+from compas_cgal.adaptive.candidates import ZeroGuideLinkCandidate
 from compas_cgal.adaptive.errors import GougeContainmentError
+from compas_cgal.adaptive.errors import InvalidCandidateFamilyError
+from compas_cgal.adaptive.errors import InvalidTraversalCommitError
 from compas_cgal.adaptive.errors import UnresolvedMotionEventError
 from compas_cgal.adaptive.generation_state import GenerationState
 from compas_cgal.adaptive.generation_state import TraversalCursorState
@@ -16,9 +21,11 @@ from compas_cgal.adaptive.generator import TraversalCommit
 from compas_cgal.adaptive.generator import advance_active_candidate_family
 from compas_cgal.adaptive.generator import generate_exact_adaptive_continuation
 from compas_cgal.adaptive.generator import materialize_active_candidate_family
+from compas_cgal.adaptive.medial_axis import MatZeroGuideRun
 from compas_cgal.adaptive.motion import ExactSegmentMotion
 from compas_cgal.adaptive.transaction import CandidateEvaluator
 from compas_cgal.adaptive.transaction import CandidateTransaction
+from compas_cgal.adaptive.transaction import ZeroGuideLinkTransaction
 from compas_cgal.adaptive.traversal import MatTraversalState
 from compas_cgal.adaptive.units import Point2
 from compas_cgal.adaptive.units import WorldXY
@@ -262,6 +269,172 @@ def test_task13f_fourth_trial_accepts_mixed_seam_with_inactive_incidence(
         ).verdict.name
         == "CERTIFIED"
     )
+
+
+def test_task13f_route_one_accepts_exact_zero_guide_link(
+    task13f: Task13FFixture,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Machine the width-2 arm by its exact MAT centerline segment.
+
+    Route 0 must retain its established fourth-circle winner. Activating route
+    1 then selects only the native-proved zero-guide family, stops dispatch at
+    its first accepted member, and commits one advancing segment whose endpoint
+    becomes the authoritative physical phase point.
+    """
+    route_zero_family = materialize_active_candidate_family(
+        evaluator=task13f.evaluator,
+        physical=task13f.physical,
+        traversal=task13f.traversal,
+    )
+    physical_zero, traversal_zero, route_zero_commit = advance_active_candidate_family(
+        evaluator=task13f.evaluator,
+        physical=task13f.physical,
+        traversal=task13f.traversal,
+    )
+    traversal_one = traversal_zero.activate_next()
+    route_one_family = materialize_active_candidate_family(
+        evaluator=task13f.evaluator,
+        physical=physical_zero,
+        traversal=traversal_one,
+    )
+    active_run = traversal_one.authority.axis.zero_guide_run_by_edge_id.get(
+        traversal_one.active_cursor.route_step.edge_id,
+    )
+    assert active_run is not None
+    with pytest.raises(
+        InvalidCandidateFamilyError,
+        match="active MAT proof variant",
+    ):
+        generator_module.evaluate_first_feasible_candidate(
+            evaluator=task13f.evaluator,
+            physical=physical_zero,
+            traversal=traversal_one,
+            candidates=route_zero_family,
+        )
+    other_run = next(run for run in traversal_one.authority.axis.zero_guide_inventory.runs if run != active_run)
+    foreign_run = MatZeroGuideRun.build(
+        edge_id=active_run.edge_id,
+        mat_certificate=traversal_one.authority.axis.mat_certificate,
+        native_certificate=other_run.native_certificate,
+    )
+    owned_candidate = route_one_family[0]
+    assert type(owned_candidate) is ZeroGuideLinkCandidate
+    foreign_candidate = ZeroGuideLinkCandidate.build(
+        zero_guide_run=foreign_run,
+        policy=owned_candidate.policy,
+        spatial_progress=owned_candidate.spatial_progress,
+        spatial_levels=owned_candidate.spatial_levels,
+        target=owned_candidate.target,
+        cursor_limit_identity=owned_candidate.cursor_limit_identity,
+        neck_scope=owned_candidate.neck_scope,
+        effective_cap_decision=owned_candidate.effective_cap_decision,
+        traversal_decision=owned_candidate.traversal_decision,
+    )
+    with pytest.raises(
+        InvalidCandidateFamilyError,
+        match="owned native proof bytes",
+    ):
+        generator_module.evaluate_first_feasible_candidate(
+            evaluator=task13f.evaluator,
+            physical=physical_zero,
+            traversal=traversal_one,
+            candidates=(foreign_candidate, *route_one_family[1:]),
+        )
+    with pytest.raises(
+        InvalidTraversalCommitError,
+        match="owned native proof bytes",
+    ):
+        generator_module.evaluate_traversal_candidate(
+            evaluator=task13f.evaluator,
+            physical=physical_zero,
+            traversal=traversal_one,
+            candidate=foreign_candidate,
+        )
+    attempts: list[TraversalCandidate] = []
+    real_evaluate = CandidateEvaluator.evaluate_zero_guide_from_cursor
+
+    def track_trial(
+        self: CandidateEvaluator,
+        state: GenerationState,
+        traversal_before: TraversalCursorState,
+        candidate: ZeroGuideLinkCandidate,
+    ) -> ZeroGuideLinkTransaction:
+        attempts.append(candidate)
+        return real_evaluate(
+            self,
+            state,
+            traversal_before,
+            candidate,
+        )
+
+    monkeypatch.setattr(
+        CandidateEvaluator,
+        "evaluate_zero_guide_from_cursor",
+        track_trial,
+    )
+
+    physical_after, traversal_after, route_one_commit = advance_active_candidate_family(
+        evaluator=task13f.evaluator,
+        physical=physical_zero,
+        traversal=traversal_one,
+    )
+
+    assert type(route_zero_commit.transaction) is CandidateTransaction
+    assert len(route_one_family) == 36
+    assert all(
+        type(candidate) is ZeroGuideLinkCandidate and candidate.zero_guide_run == active_run and candidate.zero_guide_run.native_certificate == active_run.native_certificate
+        for candidate in route_one_family
+    )
+    assert attempts
+    assert all(type(candidate) is ZeroGuideLinkCandidate for candidate in attempts)
+    assert len(attempts) == 1
+    assert type(route_one_commit.transaction) is ZeroGuideLinkTransaction
+    assert route_one_commit.transaction.candidate == route_one_family[0] == attempts[0]
+    assert len(physical_after.operations) == len(physical_zero.operations) + 1
+    assert physical_after.operations[-1].motion.end == physical_after.phase_point
+    assert traversal_after.active_cursor != traversal_one.active_cursor
+
+    transaction = route_one_commit.transaction
+    foreign_transaction = ZeroGuideLinkTransaction.build(
+        parent_state_digest=transaction.parent_state_digest,
+        candidate=foreign_candidate,
+        segment_witness=transaction.segment_witness,
+        traversal_after=transaction.traversal_after,
+        passage_after=transaction.passage_after,
+        result_state_digest=transaction.result_state_digest,
+    )
+    with pytest.raises(
+        InvalidTraversalCommitError,
+        match="owned native proof bytes",
+    ):
+        generator_module.commit_traversal_candidate(
+            evaluator=task13f.evaluator,
+            physical=physical_zero,
+            traversal=traversal_one,
+            transaction=foreign_transaction,
+        )
+    hidden_prefix_child = copy(physical_after)
+    object.__setattr__(
+        hidden_prefix_child,
+        "operations",
+        (
+            *physical_zero.operations,
+            physical_zero.operations[-1],
+            transaction.segment_witness.operation,
+        ),
+    )
+    with pytest.raises(
+        InvalidTraversalCommitError,
+        match="exact transaction suffix",
+    ):
+        TraversalCommit.build(
+            physical_before=physical_zero,
+            traversal_before=traversal_one,
+            transaction=transaction,
+            physical_after=hidden_prefix_child,
+            traversal_after=traversal_after,
+        )
 
 
 def test_generation_commits_launch_before_propagating_route_uncertainty(
