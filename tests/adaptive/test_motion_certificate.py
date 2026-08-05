@@ -16,6 +16,7 @@ from compas_cgal.adaptive.motion import ExactCircleMotion
 from compas_cgal.adaptive.motion import ExactSegmentMotion
 from compas_cgal.adaptive.motion_certificate import MotionCertifier
 from compas_cgal.adaptive.motion_certificate import MotionWitness
+from compas_cgal.adaptive.motion_certificate import SweptPrefixMotionWitness
 from compas_cgal.adaptive.stock_area import Stock2Area
 from compas_cgal.adaptive.units import Point2
 from compas_cgal.adaptive.units import ToolRadius
@@ -66,6 +67,19 @@ def _clear_segment() -> ExactSegmentMotion:
         Point2[WorldXY].build(2.0, -2.0),
         Point2[WorldXY].build(8.0, -2.0),
     )
+
+
+def _advancing_segment() -> ExactSegmentMotion:
+    return ExactSegmentMotion.build(
+        Point2[WorldXY].build(2.0, 5.0),
+        Point2[WorldXY].build(8.0, 5.0),
+    )
+
+
+def _swept_prefix_certifier() -> MotionCertifier:
+    stock = _stock_2.Stock2(SQUARE, [])
+    stock.subtract_disk(2.0, 5.0, 1.0)
+    return _custom_certifier(stock, 1.0)
 
 
 def test_certifier_rejects_invalid_local_contract_before_native_dispatch() -> None:
@@ -266,6 +280,145 @@ def test_segment_certification_binds_exact_native_trace() -> None:
     assert witness.event_cell_count == trace.event_cell_count
     assert witness.verdict == "certified"
     assert witness.unresolved_count == 0
+
+
+def test_swept_prefix_certification_binds_its_native_theorem() -> None:
+    """Consume the dedicated advancing-cut theorem without generic fallback.
+
+    The accepted witness must name the native theorem, the exact pre-state,
+    and its two motion strata. This makes replay distinguish a physically
+    advancing slot cut from an ordinary frozen-stock link audit.
+    """
+    certifier = _swept_prefix_certifier()
+    motion = _advancing_segment()
+    cap = EngagementCap.build(math.pi)
+
+    witness = certifier.certify_swept_prefix_segment(
+        operation_index=4,
+        motion=motion,
+        user_cap=cap,
+        effective_cap=cap,
+    )
+    audit = _continuous_tea_2.audit_swept_prefix_segment_tea_exact(
+        certifier._stock,
+        motion.start.x,
+        motion.start.y,
+        motion.end.x,
+        motion.end.y,
+        certifier.tool_radius.value,
+        cap.chord_ratio,
+    )
+
+    assert type(witness) is SweptPrefixMotionWitness
+    assert audit.exact_verdict == "certified"
+    assert audit.stock_boundary_digest == certifier.canonical_boundary_digest
+    assert witness.operation_index == 4
+    assert witness.operation_kind is OperationType.LINK
+    assert witness.motion is motion
+    assert witness.strategy_identity == audit.strategy_version
+    assert witness.theorem_identity == audit.theorem_version
+    assert witness.event_trace_digest == audit.canonical_digest
+    assert witness.event_cell_count == audit.motion_stratum_count == 2
+    assert witness.unresolved_count == 0
+    assert audit.canonical_bytes in witness.canonical_bytes
+
+
+def test_swept_prefix_certification_refuses_unproved_preconditions() -> None:
+    """Fail loud when start clearance or the exact pi-cap theorem is absent."""
+    cap = EngagementCap.build(math.pi)
+    with pytest.raises(UnresolvedMotionEventError, match="swept-prefix"):
+        _custom_certifier(_stock_2.Stock2(SQUARE, []), 1.0).certify_swept_prefix_segment(
+            operation_index=5,
+            motion=_advancing_segment(),
+            user_cap=cap,
+            effective_cap=cap,
+        )
+    with pytest.raises(UnresolvedMotionEventError, match="swept-prefix"):
+        _swept_prefix_certifier().certify_swept_prefix_segment(
+            operation_index=5,
+            motion=_advancing_segment(),
+            user_cap=cap,
+            effective_cap=EngagementCap.build(math.pi / 2.0),
+        )
+
+
+def test_swept_prefix_certification_rejects_corrupt_native_proof(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Authenticate proof bytes and exact boundary identity at the consumer."""
+    monkeypatch.setattr(
+        _continuous_tea_2,
+        "audit_swept_prefix_segment_tea_exact",
+        lambda *_arguments: object(),
+    )
+    cap = EngagementCap.build(math.pi)
+    with pytest.raises(InvalidMotionCertificateError, match="sealed audit"):
+        _swept_prefix_certifier().certify_swept_prefix_segment(
+            operation_index=6,
+            motion=_advancing_segment(),
+            user_cap=cap,
+            effective_cap=cap,
+        )
+
+
+def test_swept_prefix_certification_rejects_motion_and_stock_crosswires(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Bind every native theorem output to the exact request it answers."""
+    native = _continuous_tea_2.audit_swept_prefix_segment_tea_exact
+    cap = EngagementCap.build(math.pi)
+    certifier = _swept_prefix_certifier()
+    motion = _advancing_segment()
+    wrong_motion = ExactSegmentMotion.build(
+        motion.start,
+        Point2[WorldXY].build(7.0, 5.0),
+    )
+    wrong_motion_proof = native(
+        certifier._stock,
+        wrong_motion.start.x,
+        wrong_motion.start.y,
+        wrong_motion.end.x,
+        wrong_motion.end.y,
+        certifier.tool_radius.value,
+        cap.chord_ratio,
+    )
+    with monkeypatch.context() as motion_patch:
+        motion_patch.setattr(
+            _continuous_tea_2,
+            "audit_swept_prefix_segment_tea_exact",
+            lambda *_arguments: wrong_motion_proof,
+        )
+        with pytest.raises(InvalidMotionCertificateError, match="motion source"):
+            certifier.certify_swept_prefix_segment(
+                operation_index=7,
+                motion=motion,
+                user_cap=cap,
+                effective_cap=cap,
+            )
+
+    uncleared = _custom_certifier(_stock_2.Stock2(SQUARE, []), 1.0)
+    unresolved = native(
+        uncleared._stock,
+        motion.start.x,
+        motion.start.y,
+        motion.end.x,
+        motion.end.y,
+        uncleared.tool_radius.value,
+        cap.chord_ratio,
+    )
+    with monkeypatch.context() as stock_patch:
+        stock_patch.setattr(
+            _continuous_tea_2,
+            "audit_swept_prefix_segment_tea_exact",
+            lambda *_arguments: unresolved,
+        )
+        with pytest.raises(InvalidMotionCertificateError, match="stock boundary"):
+            certifier.certify_swept_prefix_segment(
+                operation_index=7,
+                motion=motion,
+                user_cap=cap,
+                effective_cap=cap,
+            )
 
 
 def test_circle_certification_binds_exact_native_trace() -> None:

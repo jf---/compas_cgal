@@ -37,6 +37,9 @@ struct BoundaryEvent2 {
 std::vector<BoundaryFeatureRecord2> extract_boundary_records(
     const Stock2& stock);
 
+std::string canonical_stock_boundary_identity(
+    const Stock2& stock);
+
 std::vector<BoundaryEvent2> classify_boundary_pair(
     const Stock2& stock,
     std::size_t first_index,

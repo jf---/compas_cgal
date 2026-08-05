@@ -4,8 +4,12 @@ import hashlib
 from dataclasses import dataclass
 from dataclasses import field
 from typing import Self
+from typing import TypeAlias
+from typing import cast
 
+from compas_cgal.adaptive.advancing_segment_trial import evaluate_advancing_segment_trial
 from compas_cgal.adaptive.candidates import MiddleCurveCandidate
+from compas_cgal.adaptive.candidates import ZeroGuideLinkCandidate
 from compas_cgal.adaptive.canonical import encode_bytes
 from compas_cgal.adaptive.canonical import encode_component_map
 from compas_cgal.adaptive.canonical import encode_sequence
@@ -18,14 +22,22 @@ from compas_cgal.adaptive.entry import PreclearedEntry
 from compas_cgal.adaptive.errors import CandidateSelectionError
 from compas_cgal.adaptive.errors import CandidateStateMismatchError
 from compas_cgal.adaptive.errors import InvalidCandidateTransactionError
+from compas_cgal.adaptive.errors import InvalidReplayTraceError
+from compas_cgal.adaptive.errors import InvalidZeroGuideTransactionError
 from compas_cgal.adaptive.errors import StaleCandidateTransactionError
+from compas_cgal.adaptive.errors import StaleZeroGuideTransactionError
 from compas_cgal.adaptive.generation_state import GenerationState
 from compas_cgal.adaptive.generation_state import TraversalCursorState
 from compas_cgal.adaptive.identity import IdentityDigest
 from compas_cgal.adaptive.motion import EngagementCap
 from compas_cgal.adaptive.motion import ExactSegmentMotion
+from compas_cgal.adaptive.motion_certificate import SWEPT_PREFIX_MOTION_STRATA
+from compas_cgal.adaptive.motion_certificate import SWEPT_PREFIX_STRATEGY_VERSION
+from compas_cgal.adaptive.motion_certificate import SWEPT_PREFIX_THEOREM_VERSION
 from compas_cgal.adaptive.motion_certificate import MotionCertifier
+from compas_cgal.adaptive.motion_certificate import SweptPrefixMotionWitness
 from compas_cgal.adaptive.neck import NeckPassage
+from compas_cgal.adaptive.operation import AdvanceSegmentOperation
 from compas_cgal.adaptive.operation import CanonicalOperation
 from compas_cgal.adaptive.operation import CutFullCircleOperation
 from compas_cgal.adaptive.operation import FullCapDecision
@@ -51,15 +63,22 @@ from compas_cgal.toolpath import OperationType
 _DIGEST_SIZE = hashlib.sha256().digest_size
 
 
-def _digest(value: object, name: str) -> bytes:
+def _digest(
+    value: object,
+    name: str,
+    error_type: type[ValueError] = InvalidCandidateTransactionError,
+) -> bytes:
     if type(value) is not bytes or len(value) != _DIGEST_SIZE:
-        raise InvalidCandidateTransactionError(f"{name} must be one exact SHA-256 digest.")
+        raise error_type(f"{name} must be one exact SHA-256 digest.")
     return value
 
 
-def _stock_lineage_digest(lineage: tuple[IdentityDigest, ...]) -> bytes:
+def _stock_lineage_digest(
+    lineage: tuple[IdentityDigest, ...],
+    error_type: type[ValueError] = InvalidCandidateTransactionError,
+) -> bytes:
     if type(lineage) is not tuple or any(type(digest) is not bytes or len(digest) != _DIGEST_SIZE for digest in lineage):
-        raise InvalidCandidateTransactionError("stock lineage must contain exact SHA-256 identities.")
+        raise error_type("stock lineage must contain exact SHA-256 identities.")
     return hashlib.sha256(
         encode_tagged_union(
             b"exact-stock-lineage-v1",
@@ -250,6 +269,199 @@ class CandidateTransaction:
 
 
 @dataclass(frozen=True)
+class ZeroGuideLinkTransaction:
+    """Immutable accepted evidence for one advancing zero-guide segment."""
+
+    parent_state_digest: IdentityDigest
+    candidate: ZeroGuideLinkCandidate
+    segment_witness: ReplayLateralWitness
+    traversal_after: TraversalCursorState
+    passage_after: NeckPassage | None
+    result_state_digest: IdentityDigest
+
+    def __post_init__(self) -> None:
+        _digest(
+            self.parent_state_digest,
+            "zero-guide transaction parent state",
+            InvalidZeroGuideTransactionError,
+        )
+        _digest(
+            self.result_state_digest,
+            "zero-guide transaction result state",
+            InvalidZeroGuideTransactionError,
+        )
+        if type(self.candidate) is not ZeroGuideLinkCandidate:
+            raise InvalidZeroGuideTransactionError(
+                "zero-guide transaction requires one exact spatial-only candidate.",
+            )
+        if type(self.segment_witness) is not ReplayLateralWitness:
+            raise InvalidZeroGuideTransactionError(
+                "zero-guide transaction requires one exact segment witness.",
+            )
+        if type(self.traversal_after) is not TraversalCursorState:
+            raise InvalidZeroGuideTransactionError(
+                "zero-guide transaction requires one exact resulting traversal state.",
+            )
+        if self.passage_after is not None and type(self.passage_after) is not NeckPassage:
+            raise InvalidZeroGuideTransactionError(
+                "zero-guide transaction passage result must use the closed exact type.",
+            )
+        self._validate_candidate_result()
+        self._validate_chronology()
+
+    @classmethod
+    def build(
+        cls,
+        *,
+        parent_state_digest: IdentityDigest,
+        candidate: ZeroGuideLinkCandidate,
+        segment_witness: ReplayLateralWitness,
+        traversal_after: TraversalCursorState,
+        passage_after: NeckPassage | None,
+        result_state_digest: IdentityDigest,
+    ) -> Self:
+        """Build one content-addressed link-only acceptance record.
+
+        Args:
+            parent_state_digest: Complete authoritative pre-state identity.
+            candidate: Spatial-only proposal retaining its native zero-guide
+                proof.
+            segment_witness: Ordered proof bundle for the advancing segment.
+            traversal_after: Cursor state after the owned MAT advance.
+            passage_after: Oriented passage result, or `None` without a neck.
+            result_state_digest: Complete identity of the evaluated child.
+
+        Returns:
+            Frozen one-witness acceptance evidence.
+
+        Raises:
+            InvalidZeroGuideTransactionError: If any candidate field, proof,
+                lineage, traversal result, or passage result is cross-wired.
+        """
+        return cls(
+            parent_state_digest,
+            candidate,
+            segment_witness,
+            traversal_after,
+            passage_after,
+            result_state_digest,
+        )
+
+    def _validate_candidate_result(self) -> None:
+        candidate = self.candidate
+        witness = self.segment_witness
+        operation = witness.operation
+        if type(operation) is not AdvanceSegmentOperation:
+            raise InvalidZeroGuideTransactionError(
+                "zero-guide transaction requires one advancing segment operation.",
+            )
+        try:
+            ReplayLateralWitness.validate(witness)
+        except InvalidReplayTraceError as error:
+            raise InvalidZeroGuideTransactionError(
+                f"zero-guide swept-prefix replay witness is invalid ({error}).",
+            ) from error
+        motion_witness = witness.motion_witness
+        if (
+            type(motion_witness) is not SweptPrefixMotionWitness
+            or motion_witness.strategy_identity != SWEPT_PREFIX_STRATEGY_VERSION
+            or motion_witness.theorem_identity != SWEPT_PREFIX_THEOREM_VERSION
+            or motion_witness.event_cell_count != SWEPT_PREFIX_MOTION_STRATA
+        ):
+            raise InvalidZeroGuideTransactionError(
+                "zero-guide transaction requires the exact swept-prefix theorem witness.",
+            )
+        if (
+            operation.motion.end != candidate.target
+            or operation.neck_scope != candidate.neck_scope
+            or operation.effective_cap_decision != candidate.effective_cap_decision
+            or operation.traversal_decision != candidate.traversal_decision
+        ):
+            raise InvalidZeroGuideTransactionError(
+                "zero-guide segment proof does not belong to its candidate.",
+            )
+        expected_traversal = TraversalCursorState.before(
+            candidate.traversal_decision,
+        ).advance(candidate.traversal_decision)
+        if self.traversal_after != expected_traversal:
+            raise InvalidZeroGuideTransactionError(
+                "zero-guide transaction result traversal contradicts its candidate.",
+            )
+
+        decision = candidate.effective_cap_decision
+        if type(candidate.neck_scope) is NoNeckScope:
+            if self.passage_after is not None or type(decision) is not FullCapDecision:
+                raise InvalidZeroGuideTransactionError(
+                    "no-neck zero-guide transaction cannot advance an oriented passage.",
+                )
+            return
+        if type(candidate.neck_scope) is not OrientedNeckScope or type(decision) is not NeckCapDecision:
+            raise InvalidZeroGuideTransactionError(
+                "zero-guide transaction candidate uses a foreign neck decision.",
+            )
+        passage = self.passage_after
+        if (
+            type(passage) is not NeckPassage
+            or passage.scope != candidate.neck_scope
+            or passage.neck.evidence_digest != decision.neck_evidence_digest
+            or passage.neck.width_class_id != decision.width_class_id
+            or passage.state is not decision.passage_after
+        ):
+            raise InvalidZeroGuideTransactionError(
+                "zero-guide transaction passage result contradicts its candidate.",
+            )
+
+    def _validate_chronology(self) -> None:
+        witness = self.segment_witness
+        depletion_parents = witness.depletion_witness.parent_lineage
+        sweep_parents = witness.sweep_witness.parent_lineage
+        if witness.motion_witness.stock_lineage_digest != _stock_lineage_digest(
+            depletion_parents,
+            InvalidZeroGuideTransactionError,
+        ):
+            raise InvalidZeroGuideTransactionError(
+                "zero-guide transaction violates certify-before-deplete chronology.",
+            )
+        if len(depletion_parents) != len(sweep_parents) + 1 or witness.operation_index != len(depletion_parents) + 1:
+            raise InvalidZeroGuideTransactionError(
+                "zero-guide stock and coverage updates do not share one parent prefix.",
+            )
+
+    @property
+    def canonical_bytes(self) -> bytes:
+        """Return the complete versioned one-witness acceptance record.
+
+        Returns:
+            Canonical CCAN bytes binding parent, candidate, proof, and child.
+        """
+        return encode_tagged_union(
+            b"zero-guide-link-transaction-v1",
+            encode_component_map(
+                {
+                    b"candidate": self.candidate.canonical_bytes,
+                    b"parent-state": encode_bytes(bytes(self.parent_state_digest)),
+                    b"passage-after": _optional_passage_bytes(self.passage_after),
+                    b"result-state": encode_bytes(bytes(self.result_state_digest)),
+                    b"segment-witness": self.segment_witness.canonical_bytes,
+                    b"traversal-after": self.traversal_after.canonical_bytes,
+                }
+            ),
+        )
+
+    @property
+    def digest(self) -> IdentityDigest:
+        """Return the SHA-256 identity of `canonical_bytes`.
+
+        Returns:
+            Content identity of the accepted zero-guide transaction.
+        """
+        return IdentityDigest(hashlib.sha256(self.canonical_bytes).digest())
+
+
+AcceptedCandidateTransaction: TypeAlias = CandidateTransaction | ZeroGuideLinkTransaction
+
+
+@dataclass(frozen=True)
 class CandidateEvaluator:
     """Short-lived exact authority for isolated candidate trials."""
 
@@ -395,6 +607,37 @@ class CandidateEvaluator:
         )
         return transaction
 
+    def evaluate_zero_guide_from_cursor(
+        self,
+        state: GenerationState,
+        traversal_before: TraversalCursorState,
+        candidate: ZeroGuideLinkCandidate,
+    ) -> ZeroGuideLinkTransaction:
+        """Evaluate one proved link-only candidate without mutating its parent.
+
+        Args:
+            state: Immutable physical parent snapshot.
+            traversal_before: Active MAT cursor authenticated by global
+                traversal.
+            candidate: Spatial-only candidate beginning at that cursor.
+
+        Returns:
+            Content-addressed one-segment acceptance evidence.
+
+        Raises:
+            CandidateStateMismatchError: If physical state, cursor, candidate,
+                or evaluator authority disagree.
+            GougeContainmentError: If the segment sweep leaves the pocket.
+            UnresolvedMotionEventError: If the clear-start exact-pi theorem
+                cannot certify the advancing segment.
+        """
+        transaction, _ = self._evaluate_zero_guide_trial(
+            state,
+            traversal_before,
+            candidate,
+        )
+        return transaction
+
     def commit(
         self,
         state: GenerationState,
@@ -455,6 +698,54 @@ class CandidateEvaluator:
         )
         if reproduced.canonical_bytes != transaction.canonical_bytes:
             raise InvalidCandidateTransactionError("candidate transaction differs from independent commit replay.")
+        return next_state
+
+    def commit_zero_guide_from_cursor(
+        self,
+        state: GenerationState,
+        traversal_before: TraversalCursorState,
+        transaction: ZeroGuideLinkTransaction,
+    ) -> GenerationState:
+        """Independently replay and commit one zero-guide winner.
+
+        Args:
+            state: Authoritative physical parent named by `transaction`.
+            traversal_before: Same authenticated cursor used for evaluation.
+            transaction: Previously accepted one-segment evidence.
+
+        Returns:
+            New authoritative physical child snapshot.
+
+        Raises:
+            InvalidZeroGuideTransactionError: If types are foreign or replay
+                does not reproduce byte-identical evidence.
+            StaleZeroGuideTransactionError: If the physical parent or local
+                traversal cursor changed after evaluation.
+        """
+        if type(state) is not GenerationState or type(traversal_before) is not TraversalCursorState or type(transaction) is not ZeroGuideLinkTransaction:
+            raise InvalidZeroGuideTransactionError(
+                "zero-guide commit requires exact state, cursor, and transaction types.",
+            )
+        if transaction.parent_state_digest != state.digest:
+            raise StaleZeroGuideTransactionError(
+                "zero-guide transaction parent no longer names authoritative state.",
+            )
+        expected_cursor = TraversalCursorState.before(
+            transaction.candidate.traversal_decision,
+        )
+        if traversal_before != expected_cursor:
+            raise StaleZeroGuideTransactionError(
+                "zero-guide transaction cursor no longer names its evaluated route position.",
+            )
+        reproduced, next_state = self._evaluate_zero_guide_trial(
+            state,
+            traversal_before,
+            transaction.candidate,
+        )
+        if reproduced.canonical_bytes != transaction.canonical_bytes:
+            raise InvalidZeroGuideTransactionError(
+                "zero-guide transaction differs from independent commit replay.",
+            )
         return next_state
 
     def _evaluate_trial(
@@ -544,6 +835,67 @@ class CandidateEvaluator:
         )
         return transaction, next_state
 
+    def _evaluate_zero_guide_trial(
+        self,
+        state: GenerationState,
+        traversal_before: TraversalCursorState,
+        candidate: ZeroGuideLinkCandidate,
+    ) -> tuple[ZeroGuideLinkTransaction, GenerationState]:
+        self._validate_zero_guide_parent(
+            state,
+            traversal_before,
+            candidate,
+        )
+        traversal_after = traversal_before.advance(
+            candidate.traversal_decision,
+        )
+        effective_cap, passage_after = self._effective_cap(state, candidate)
+        operation = AdvanceSegmentOperation.build(
+            motion=ExactSegmentMotion.build(
+                state.phase_point,
+                candidate.target,
+            ),
+            cut_z=self.cut_z,
+            neck_scope=candidate.neck_scope,
+            effective_cap_decision=candidate.effective_cap_decision,
+            traversal_decision=candidate.traversal_decision,
+        )
+        stock = state.fork_stock()
+        coverage = state.clone_coverage()
+        segment_witness = evaluate_advancing_segment_trial(
+            containment_authority=self._containment,
+            stock=stock,
+            coverage=coverage,
+            operation_index=len(state.operations),
+            operation=operation,
+            tool_radius=self.tool_radius,
+            user_cap=self.user_cap,
+            effective_cap=effective_cap,
+            depletion_policy=self.depletion_policy,
+        )
+        passages = self._next_passages(
+            state.passages,
+            passage_after,
+        )
+        next_state = GenerationState.build(
+            stock=stock,
+            coverage=coverage,
+            tool_radius=self.tool_radius,
+            phase_point=candidate.target,
+            traversal=traversal_after,
+            passages=passages,
+            operations=state.operations + (operation,),
+        )
+        transaction = ZeroGuideLinkTransaction.build(
+            parent_state_digest=state.digest,
+            candidate=candidate,
+            segment_witness=segment_witness,
+            traversal_after=traversal_after,
+            passage_after=passage_after,
+            result_state_digest=next_state.digest,
+        )
+        return transaction, next_state
+
     def _validate_parent(
         self,
         state: GenerationState,
@@ -561,6 +913,36 @@ class CandidateEvaluator:
         )
         if candidate.proposal.circle_orientation is not expected_orientation:
             raise CandidateStateMismatchError("candidate circle contradicts evaluator cut direction.")
+        self._validate_physical_parent(state)
+        traversal_before.advance(candidate.traversal_decision)
+
+    def _validate_zero_guide_parent(
+        self,
+        state: GenerationState,
+        traversal_before: TraversalCursorState,
+        candidate: ZeroGuideLinkCandidate,
+    ) -> None:
+        if type(state) is not GenerationState or type(traversal_before) is not TraversalCursorState or type(candidate) is not ZeroGuideLinkCandidate:
+            raise CandidateStateMismatchError(
+                "zero-guide evaluation requires exact state, cursor, and candidate types.",
+            )
+        if candidate.policy != self.candidate_policy:
+            raise CandidateStateMismatchError(
+                "zero-guide candidate policy contradicts its evaluator.",
+            )
+        if bytes(candidate.zero_guide_run.edge_id) != bytes(
+            candidate.traversal_decision.edge_id,
+        ):
+            raise CandidateStateMismatchError(
+                "zero-guide native proof contradicts its traversal edge.",
+            )
+        self._validate_physical_parent(state)
+        traversal_before.advance(candidate.traversal_decision)
+
+    def _validate_physical_parent(
+        self,
+        state: GenerationState,
+    ) -> None:
         if state.tool_radius != self.tool_radius:
             raise CandidateStateMismatchError("candidate state tool radius contradicts its evaluator.")
         stock = state.fork_stock()
@@ -574,7 +956,6 @@ class CandidateEvaluator:
         if any(witness.policy != self.depletion_policy for witness in stock.lineage[1:]):
             raise CandidateStateMismatchError("candidate parent depletion policy contradicts its evaluator.")
         self._validate_parent_operations(state)
-        traversal_before.advance(candidate.traversal_decision)
 
     def _validate_parent_operations(
         self,
@@ -585,12 +966,16 @@ class CandidateEvaluator:
             effective_cap=self.user_cap,
         )
         for raw_operation in state.operations[2:]:
-            if not isinstance(
-                raw_operation,
-                (LinkSegmentOperation, CutFullCircleOperation),
+            if type(raw_operation) not in (
+                LinkSegmentOperation,
+                CutFullCircleOperation,
+                AdvanceSegmentOperation,
             ):
                 raise CandidateStateMismatchError("candidate parent contains a foreign lateral operation.")
-            operation = raw_operation
+            operation = cast(
+                LinkSegmentOperation | CutFullCircleOperation | AdvanceSegmentOperation,
+                raw_operation,
+            )
             decision = operation.effective_cap_decision
             if type(operation.neck_scope) is NoNeckScope:
                 expected_decision: FullCapDecision | NeckCapDecision = expected_full_cap
@@ -622,7 +1007,7 @@ class CandidateEvaluator:
     def _effective_cap(
         self,
         state: GenerationState,
-        candidate: MiddleCurveCandidate,
+        candidate: MiddleCurveCandidate | ZeroGuideLinkCandidate,
     ) -> tuple[EngagementCap, NeckPassage | None]:
         decision = candidate.effective_cap_decision
         if type(candidate.neck_scope) is NoNeckScope:
@@ -646,6 +1031,23 @@ class CandidateEvaluator:
         return effective_cap, passage.advance(expected_neck_cap)
 
     def _evaluate_link(
+        self,
+        *,
+        stock: Stock2Area,
+        coverage: CoverageLedger,
+        operation_index: int,
+        operation: LinkSegmentOperation,
+        effective_cap: EngagementCap,
+    ) -> ReplayLateralWitness:
+        return self._evaluate_segment(
+            stock=stock,
+            coverage=coverage,
+            operation_index=operation_index,
+            operation=operation,
+            effective_cap=effective_cap,
+        )
+
+    def _evaluate_segment(
         self,
         *,
         stock: Stock2Area,

@@ -172,6 +172,29 @@ def test_segment_capsule_accepts_equality_and_rejects_one_binary_quantum_gouge()
         containment.certify_segment(across, ToolRadius.build(1.0))
 
 
+def test_segment_capsule_accepts_a_lower_dimensional_center_locus() -> None:
+    """Certify an exact tool-diameter arm even when 2D erosion drops its axis.
+
+    A radius-1 cutter fits the width-2 horizontal arm exactly. Its center locus
+    is one-dimensional and therefore absent from the regularized area-valued
+    center domain, but the complete closed capsule remains an exact subset of
+    the L-shaped design and must retain independent gouge evidence.
+    """
+    domain = _domain(L_SHAPE, tool_radius=1.0)
+    motion = ExactSegmentMotion.build(
+        Point2[WorldXY].build(2.0, 1.0),
+        Point2[WorldXY].build(5.0, 1.0),
+    )
+
+    certificate = GougeContainment.build(domain).certify_segment(
+        motion,
+        ToolRadius.build(1.0),
+    )
+
+    assert certificate.native_record.contained
+    assert not certificate.endpoints_in_center_domain
+
+
 def test_reflex_crossing_is_rejected_even_when_motion_is_nondegenerate() -> None:
     domain = _domain(L_SHAPE, tool_radius=0.5)
     containment = GougeContainment.build(domain)

@@ -508,6 +508,20 @@ class EventTrace2:
 
 
 def event_oracle_component_version() -> bytes: ...
+def swept_prefix_strategy_version() -> bytes: ...
+def swept_prefix_theorem_version() -> bytes: ...
+
+
+class SweptPrefixSegmentTeaAudit2:
+    exact_verdict: Literal["certified", "unresolved"]
+    canonical_bytes: bytes
+    canonical_digest: bytes
+    strategy_version: bytes
+    theorem_version: bytes
+    source_canonical_bytes: bytes
+    stock_boundary_digest: bytes
+    motion_stratum_count: int
+    is_self_consistent: bool
 
 
 class SegmentCellStratum2:
@@ -671,6 +685,15 @@ def audit_segment_tea_event_exact(
     tool_radius: float,
     cap_chord_ratio: float,
 ) -> tuple[Literal["certified", "cap_exceeded", "unresolved"], EventTrace2]: ...
+def audit_swept_prefix_segment_tea_exact(
+    stock: Stock2,
+    x0: float,
+    y0: float,
+    x1: float,
+    y1: float,
+    tool_radius: float,
+    cap_chord_ratio: float,
+) -> SweptPrefixSegmentTeaAudit2: ...
 def segment_station_cap_exceeded_exact(
     stock: Stock2,
     x0: float,
