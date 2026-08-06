@@ -202,6 +202,10 @@ class ReplayCandidateError(ValueError):
     """A recorded circle is not one unique finite-lattice candidate."""
 
 
+class ReplayZeroGuideCandidateError(ValueError):
+    """An advancing segment lacks one unique fresh zero-guide candidate."""
+
+
 class ReplayPairingError(ValueError):
     """A link does not belong exactly to its following circle candidate."""
 

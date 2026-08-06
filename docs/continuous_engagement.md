@@ -61,9 +61,12 @@ cells.
     evaluation now uses a dedicated exact swept-prefix theorem, then
     independently reproduces one content-addressed zero-guide transaction
     before exposing its child state. Proof-directed generator dispatch now
-    consumes that exact transaction; fresh replay remains the next stage. No
-    fake zero-radius circle or traversal-only skip is admitted.
-    Traversal/coverage closure, fresh terminal replay, arbitrary-pocket
+    consumes that exact transaction. Fresh replay independently rebuilds the
+    MAT owner, authenticates the typed record against native proof bytes,
+    reconstructs the unique spatial candidate, and reproduces the segment
+    witness byte for byte before the expected nonterminal gate. No fake
+    zero-radius circle or traversal-only skip is admitted.
+    Traversal/coverage closure, fresh terminal sealing, arbitrary-pocket
     evidence, and matched Held–Pfeiffer performance remain incomplete.
 
 ## Authority hierarchy
@@ -986,3 +989,64 @@ timings.
 
 The comparative claim and matched performance boundary remain in
 [Exact Segment-Site Medial Axis](segment_site_mat.md#relation-to-held-and-pfeiffer-2025).
+
+### Task 7 fresh zero-guide replay
+
+Replay now recognizes the full closed lateral grammar without conflating its
+two segment meanings:
+
+```text
+entry circle ((hold link, full circle) | advancing segment)*
+```
+
+A hold link maps to the immediately following `MiddleCurveCandidate`; the link
+and circle share that one owner. An `AdvanceSegmentOperation` instead maps
+one-to-one to a `ZeroGuideLinkCandidate`. The replay MAT must contain exactly
+one typed zero-guide run and exactly one byte-identical native record for the
+operation's edge. Only the freshly proved zero-guide lattice is enumerated on
+the recorded directed window, and exactly one candidate must reproduce the
+complete operation bytes.
+
+The complete operation sequence is parsed before any native candidate search.
+The selected candidate is then not merely reconstructed geometrically. Its
+edge, MAT-certificate digest, and native theorem bytes must equal the fresh
+owner's record before stock replay begins. A missing record, foreign same-edge
+record, second matching candidate, changed edge or endpoint, or mutation that
+retains an advancing proof role raises `ReplayZeroGuideCandidateError`; none
+falls through to circle matching. Relabelling an advancing segment as an
+ordinary hold erases that proof role and instead creates a dangling relational
+pair, which raises `ReplayPairingError` at grammar preflight.
+
+!!! tip "Captured insight: operation shape does not establish proof role"
+
+    A hold link and an advancing segment both contain exact segment geometry,
+    cut depth, neck scope, and cap identity. Their distinction is causal: the
+    hold link borrows its following circle's traversal advance, while the
+    advancing segment owns the advance and the zero-guide theorem. Replay must
+    reconstruct that ownership, not infer it from geometric shape.
+
+!!! tip "Captured insight: legal tokens can still form an illegal proof"
+
+    Valid operation variants do not imply a valid operation sequence. An
+    advance before the entry circle or a later unpaired circle is individually
+    decodable but has no causal owner. Parsing the full lateral grammar before
+    native reconstruction keeps structural corruption distinct from geometric
+    candidate failure.
+
+Physical replay delegates the advancing operation to the same
+`evaluate_advancing_segment_trial(...)` pipeline used by live evaluation, but
+with independently rebuilt stock and coverage owners. Exact capsule
+containment, swept-prefix TEA, depletion, and coverage therefore execute in the
+same proof-before-mutation order and reproduce the committed
+`ReplayLateralWitness` byte for byte. The route-1 prefix still ends at the
+deliberate `ReplayTraversalError`: Task 8 owns the remaining routes, exact empty
+reachable residual, and terminal certificate seal.
+
+The review-fixed affected `--testmon` selection passed `20` tests in `63.97 s`;
+the uncached replay/generator files passed `28` in `39.52 s`. Ruff and strict
+mypy over `28` source files passed; the complete adaptive suite passed `566` in
+`235.47 s`; strict MkDocs and diff checks passed. Independent re-review found
+no remaining Critical or Important issue. These are regression costs, not
+matched Held–Pfeiffer planner timings. General replay tests remain in the
+`1,265`-line `test_replay.py`; the Task 13F proof-mutation matrix lives
+separately in the `400`-line `test_zero_guide_replay.py`.
