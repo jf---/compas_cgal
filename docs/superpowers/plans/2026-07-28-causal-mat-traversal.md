@@ -433,6 +433,30 @@ re-review found no remaining Critical or Important issue. The expected
 remaining failure is nonterminal traversal, not candidate reconstruction or
 physical certification.
 
+Full-continuation boundary (2026-08-05): the launch-rooted generator rebuilds
+families `(16, 36, 56)`, commits routes 0 and 1, then exhausts route 2 at cursor
+`def1bf1471e2df355ba488378ffad7b9e20116ac81909d9f9822a5a62b6abbb0` with
+`56` gouges, zero cap failures, and zero degenerate links. All 56 failures are
+the direct transition from physical phase `(5,1)`; 30 candidate circles are
+individually contained. Reversing accepted route-1 motion to
+`(1.7480694691784169,1)` is contained and restores 10 candidate links plus six
+complete containment-valid pairs. The traversal route is DFS edge-discovery
+authority, not physical continuity; an authenticated inter-route retrace is
+the next exact boundary.
+
+Performance premise (2026-08-05): generic event certification of that reverse
+remained active beyond `10 min` at approximately 99% CPU and the bounded probe
+was terminated. The existing swept-prefix theorem certified the same motion in
+`0.040943 s` with two exact motion strata. The retrace stage must reuse the
+motion-class theorem under a distinct causal operation role; it must not route
+through the generic event oracle or silently reuse zero-guide traversal
+semantics.
+
+Boundary publication gate (2026-08-05): the final focused affected `--testmon`
+gate passed `1` in `31.34 s`; the post-review uncached adaptive suite passed
+`567` in `237.09 s`; Ruff, strict mypy over `28` source files, strict MkDocs,
+formatting, and diff checks passed.
+
 Require approach/plunge, at least one segment and two circles, complete witness
 bijection, terminal traversal, exact empty reachable residual, separately
 bound unreachable residual, and fresh causal replay with zero cap violations.

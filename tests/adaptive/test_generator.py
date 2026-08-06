@@ -1,5 +1,6 @@
 """Contracts for exact global adaptive-generation orchestration."""
 
+import hashlib
 from copy import copy
 from unittest.mock import Mock
 
@@ -10,9 +11,11 @@ import compas_cgal.adaptive.generator as generator_module
 from compas_cgal.adaptive.candidates import MiddleCurveCandidate
 from compas_cgal.adaptive.candidates import TraversalCandidate
 from compas_cgal.adaptive.candidates import ZeroGuideLinkCandidate
+from compas_cgal.adaptive.containment import GougeContainment
 from compas_cgal.adaptive.errors import GougeContainmentError
 from compas_cgal.adaptive.errors import InvalidCandidateFamilyError
 from compas_cgal.adaptive.errors import InvalidTraversalCommitError
+from compas_cgal.adaptive.errors import NoFeasibleCandidateError
 from compas_cgal.adaptive.errors import UnresolvedMotionEventError
 from compas_cgal.adaptive.generation_state import GenerationState
 from compas_cgal.adaptive.generation_state import TraversalCursorState
@@ -483,3 +486,149 @@ def test_generation_commits_launch_before_propagating_route_uncertainty(
             branch.traversal.digest,
         )
     ]
+
+
+def test_task13f_full_continuation(
+    task13f: Task13FFixture,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Expose the first exact boundary after both established Task 13F routes.
+
+    The bounded generator must rediscover the mixed-seam circle and zero-guide
+    segment from the authenticated launch root. Route 2 then exposes a physical
+    discontinuity in DFS edge-discovery order: every direct link from the
+    horizontal leaf gouges, although reversing the accepted route-1 segment
+    restores six containment-valid link/circle pairs. This contract preserves
+    the route, cursor, family, disposition, and geometric evidence needed by
+    the next inter-route-transit stage.
+    """
+    observed: list[
+        tuple[
+            GenerationState,
+            MatTraversalState,
+            tuple[TraversalCandidate, ...],
+        ]
+    ] = []
+    real_materialize = generator_module.materialize_active_candidate_family
+
+    def track_family(
+        *,
+        evaluator: CandidateEvaluator,
+        physical: GenerationState,
+        traversal: MatTraversalState,
+    ) -> tuple[TraversalCandidate, ...]:
+        family = real_materialize(
+            evaluator=evaluator,
+            physical=physical,
+            traversal=traversal,
+        )
+        observed.append((physical, traversal, family))
+        return family
+
+    monkeypatch.setattr(
+        generator_module,
+        "materialize_active_candidate_family",
+        track_family,
+    )
+
+    with pytest.raises(
+        NoFeasibleCandidateError,
+        match=("finite candidate family exhausted.*attempts=56; cap=0; gouge=56; degenerate-link=0"),
+    ) as raised:
+        generate_exact_adaptive_continuation(
+            initial_evaluator=task13f.initial_evaluator,
+            evaluator=task13f.evaluator,
+            seeded_traversal=task13f.seeded_traversal,
+            launch_transaction=task13f.launch_transaction,
+        )
+
+    assert [traversal.active_route_index for _, traversal, _ in observed] == [
+        0,
+        1,
+        2,
+    ]
+    assert [len(family) for _, _, family in observed] == [16, 36, 56]
+    assert all(type(candidate) is MiddleCurveCandidate for candidate in observed[0][2])
+    assert all(type(candidate) is ZeroGuideLinkCandidate for candidate in observed[1][2])
+    assert all(type(candidate) is MiddleCurveCandidate for candidate in observed[2][2])
+
+    route = task13f.seeded_traversal.authority.route
+    route_two_physical, route_two_traversal, route_two_family = observed[2]
+    route_two_cursor = route_two_traversal.active_cursor
+    assert route_two_cursor.route_step == route[2]
+    assert route[1].exit_node_id != route[2].entry_node_id
+    assert route[2].entry_node_id == route[0].entry_node_id
+    assert route_two_physical.phase_point == Point2[WorldXY].build(5.0, 1.0)
+    assert len(route_two_physical.operations) == 6
+    assert route_two_cursor.cursor.cursor_identity.hex() == ("def1bf1471e2df355ba488378ffad7b9e20116ac81909d9f9822a5a62b6abbb0")
+    assert hashlib.sha256(
+        b"".join(bytes(candidate.identity) for candidate in route_two_family),
+    ).hexdigest() == ("56d92fcf2089c1e771a9add79bd356d172904a69e6c7acb18ab02522f4ed093b")
+    assert str(raised.value) == (
+        "finite candidate family exhausted at cursor=def1bf1471e2df355ba488378ffad7b9e20116ac81909d9f9822a5a62b6abbb0; attempts=56; cap=0; gouge=56; degenerate-link=0."
+    )
+
+    containment = GougeContainment.build(
+        task13f.identity.reachable_domain,
+    )
+    route_one_parent = observed[1][0]
+    reverse_motion = ExactSegmentMotion.build(
+        route_two_physical.phase_point,
+        route_one_parent.phase_point,
+    )
+    containment.certify_segment(
+        reverse_motion,
+        task13f.identity.tool_radius,
+    )
+
+    direct_link_gouges = 0
+    restored_links = 0
+    contained_circles = 0
+    restored_pairs = 0
+    for candidate in route_two_family:
+        assert type(candidate) is MiddleCurveCandidate
+        phase_point = Point2[WorldXY].build(
+            candidate.motion.center.x + candidate.motion.phase_vector.x,
+            candidate.motion.center.y + candidate.motion.phase_vector.y,
+        )
+        try:
+            containment.certify_segment(
+                ExactSegmentMotion.build(
+                    route_two_physical.phase_point,
+                    phase_point,
+                ),
+                task13f.identity.tool_radius,
+            )
+        except GougeContainmentError:
+            direct_link_gouges += 1
+        try:
+            containment.certify_segment(
+                ExactSegmentMotion.build(
+                    route_one_parent.phase_point,
+                    phase_point,
+                ),
+                task13f.identity.tool_radius,
+            )
+        except GougeContainmentError:
+            link_contained = False
+        else:
+            link_contained = True
+        try:
+            containment.certify_full_circle(
+                candidate.motion,
+                task13f.identity.tool_radius,
+            )
+        except GougeContainmentError:
+            circle_contained = False
+        else:
+            circle_contained = True
+        restored_links += int(link_contained)
+        contained_circles += int(circle_contained)
+        restored_pairs += int(link_contained and circle_contained)
+
+    assert (
+        direct_link_gouges,
+        restored_links,
+        contained_circles,
+        restored_pairs,
+    ) == (56, 10, 30, 6)
