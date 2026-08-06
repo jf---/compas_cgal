@@ -5,10 +5,14 @@ from typing import cast
 
 from compas.geometry import Polygon  # type: ignore[import-untyped]
 
+from compas_cgal.adaptive.advancing_segment_trial import evaluate_advancing_segment_trial
 from compas_cgal.adaptive.candidates import DerivedCandidateCursor
 from compas_cgal.adaptive.candidates import MiddleCurveCandidate
 from compas_cgal.adaptive.candidates import MiddleCurveSpan
+from compas_cgal.adaptive.candidates import TraversalCandidate
+from compas_cgal.adaptive.candidates import ZeroGuideLinkCandidate
 from compas_cgal.adaptive.candidates import enumerate_middle_curve_candidates
+from compas_cgal.adaptive.candidates import enumerate_zero_guide_link_candidates
 from compas_cgal.adaptive.canonical import CanonicalRingV1
 from compas_cgal.adaptive.canonical import encode_bytes
 from compas_cgal.adaptive.canonical import encode_component_map
@@ -32,16 +36,20 @@ from compas_cgal.adaptive.errors import ReplayGrammarError
 from compas_cgal.adaptive.errors import ReplayInputMismatchError
 from compas_cgal.adaptive.errors import ReplayPairingError
 from compas_cgal.adaptive.errors import ReplayTraversalError
+from compas_cgal.adaptive.errors import ReplayZeroGuideCandidateError
 from compas_cgal.adaptive.errors import TerminalNeckPassageError
 from compas_cgal.adaptive.identity import IdentityDigest
 from compas_cgal.adaptive.identity import InputIdentity
 from compas_cgal.adaptive.medial_axis import MatEdgeId
 from compas_cgal.adaptive.medial_axis import MatSample
+from compas_cgal.adaptive.medial_axis import MatZeroGuideRun
 from compas_cgal.adaptive.medial_axis import MedialAxis
 from compas_cgal.adaptive.motion import EngagementCap
+from compas_cgal.adaptive.motion import ExactSegmentMotion
 from compas_cgal.adaptive.motion_certificate import MotionCertifier
 from compas_cgal.adaptive.neck import NeckInventory
 from compas_cgal.adaptive.neck import NeckPassage
+from compas_cgal.adaptive.operation import AdvanceSegmentOperation
 from compas_cgal.adaptive.operation import ApproachOperation
 from compas_cgal.adaptive.operation import CanonicalOperation
 from compas_cgal.adaptive.operation import CutFullCircleOperation
@@ -233,20 +241,66 @@ def _validate_grammar(
     if operations[0] != entry.approach or operations[1] != entry.plunge:
         raise ReplayGrammarError("approach and plunge must exactly match the qualified entry.")
     lateral = operations[2:]
-    has_circle = False
     for operation in lateral:
         if type(operation) is LinkSegmentOperation:
+            if operation.cut_z != cut_plane.cut_z:
+                raise ReplayContinuityError(
+                    "every lateral operation must remain on the authenticated cut plane.",
+                )
+            continue
+        if type(operation) is AdvanceSegmentOperation:
             if operation.cut_z != cut_plane.cut_z:
                 raise ReplayContinuityError("every lateral operation must remain on the authenticated cut plane.")
             continue
         if type(operation) is CutFullCircleOperation:
-            has_circle = True
             if operation.cut_z != cut_plane.cut_z:
                 raise ReplayContinuityError("every lateral operation must remain on the authenticated cut plane.")
             continue
-        raise ReplayGrammarError("operation grammar permits only link segments and full circles after plunge.")
-    if not has_circle:
-        raise ReplayGrammarError("operation grammar requires at least one accepted full circle.")
+        raise ReplayGrammarError(
+            "operation grammar permits only hold links, advancing segments, and full circles after plunge.",
+        )
+    if type(lateral[0]) is not CutFullCircleOperation:
+        raise ReplayGrammarError(
+            "first lateral operation must be the authenticated entry full circle.",
+        )
+
+    lateral_index = 1
+    while lateral_index < len(lateral):
+        operation = lateral[lateral_index]
+        if type(operation) is AdvanceSegmentOperation:
+            if lateral_index + 1 < len(lateral) and type(lateral[lateral_index + 1]) is CutFullCircleOperation:
+                raise ReplayZeroGuideCandidateError(
+                    "zero-guide advance cannot replace the hold link of a later circle.",
+                )
+            lateral_index += 1
+            continue
+        if type(operation) is CutFullCircleOperation:
+            raise ReplayGrammarError(
+                "every later circle must immediately follow one hold link.",
+            )
+        if type(operation) is LinkSegmentOperation:
+            if lateral_index + 1 >= len(lateral):
+                raise ReplayPairingError(
+                    "link has no immediately following circle.",
+                )
+            following = lateral[lateral_index + 1]
+            if type(following) is LinkSegmentOperation:
+                raise ReplayPairingError(
+                    "consecutive links do not have one immediately following circle.",
+                )
+            if type(following) is AdvanceSegmentOperation:
+                raise ReplayZeroGuideCandidateError(
+                    "zero-guide advance cannot consume a preceding hold link.",
+                )
+            if type(following) is not CutFullCircleOperation:
+                raise ReplayGrammarError(
+                    "hold link must immediately precede one full circle.",
+                )
+            lateral_index += 2
+            continue
+        raise ReplayGrammarError(
+            "operation grammar contains an unknown lateral type.",
+        )
 
 
 def _phase_point(
@@ -266,7 +320,16 @@ def _validate_continuity(
     for operation in operations[2:]:
         if type(operation) is LinkSegmentOperation:
             if operation.motion.start != current:
-                raise ReplayContinuityError("link start does not equal the preceding exact phase endpoint.")
+                raise ReplayContinuityError(
+                    "link start does not equal the preceding exact phase endpoint.",
+                )
+            current = operation.motion.end
+            continue
+        if type(operation) is AdvanceSegmentOperation:
+            if operation.motion.start != current:
+                raise ReplayContinuityError(
+                    "advancing segment start does not equal the preceding exact phase endpoint.",
+                )
             current = operation.motion.end
             continue
         if type(operation) is CutFullCircleOperation:
@@ -363,7 +426,7 @@ def _edge_samples(
 def _initial_cursor(
     *,
     samples: tuple[MatSample, ...],
-    operation: CutFullCircleOperation,
+    operation: CutFullCircleOperation | AdvanceSegmentOperation,
 ) -> MatSample:
     matches = tuple(sample for sample in samples if sample.cursor_identity == operation.traversal_decision.cursor_before)
     if len(matches) != 1:
@@ -403,7 +466,7 @@ def _fresh_neck_passages(
 
 def _reconstruct_cap_decision(
     *,
-    operation: CutFullCircleOperation,
+    operation: CutFullCircleOperation | AdvanceSegmentOperation,
     user_cap: EngagementCap,
     neck_policy: NeckPolicy,
     passages: dict[OrientedNeckScope, NeckPassage],
@@ -448,7 +511,7 @@ def _reconstruct_cap_decision(
 
 def _candidate_effective_cap(
     *,
-    candidate: MiddleCurveCandidate,
+    candidate: TraversalCandidate,
     user_cap: EngagementCap,
     neck_policy: NeckPolicy,
 ) -> EngagementCap:
@@ -473,6 +536,42 @@ def _candidate_matches_operation(
         and candidate.effective_cap_decision == operation.effective_cap_decision
         and candidate.traversal_decision == operation.traversal_decision
     )
+
+
+def _zero_guide_candidate_matches_operation(
+    candidate: ZeroGuideLinkCandidate,
+    operation: AdvanceSegmentOperation,
+) -> bool:
+    expected = AdvanceSegmentOperation.build(
+        motion=ExactSegmentMotion.build(
+            operation.motion.start,
+            candidate.target,
+        ),
+        cut_z=operation.cut_z,
+        neck_scope=candidate.neck_scope,
+        effective_cap_decision=candidate.effective_cap_decision,
+        traversal_decision=candidate.traversal_decision,
+    )
+    return expected.canonical_bytes == operation.canonical_bytes
+
+
+def _fresh_zero_guide_run(
+    *,
+    axis: MedialAxis,
+    edge_id: MatEdgeId,
+) -> MatZeroGuideRun:
+    inventory_matches = tuple(run for run in axis.zero_guide_inventory.runs if bytes(run.edge_id) == bytes(edge_id))
+    native_matches = tuple(record for record in axis.native_owner.zero_guide_records if record[0] == bytes(edge_id))
+    if len(inventory_matches) != 1 or len(native_matches) != 1:
+        raise ReplayZeroGuideCandidateError(
+            "zero-guide replay requires one fresh typed and native proof record.",
+        )
+    run = inventory_matches[0]
+    if run.mat_certificate_digest != hashlib.sha256(axis.mat_certificate).digest() or native_matches[0] != (bytes(run.edge_id), run.native_certificate):
+        raise ReplayZeroGuideCandidateError(
+            "zero-guide replay proof bytes contradict the fresh MAT owner.",
+        )
+    return run
 
 
 def _match_circle_candidate(
@@ -564,6 +663,146 @@ def _match_circle_candidate(
     return selected
 
 
+def _match_zero_guide_candidate(
+    *,
+    axis: MedialAxis,
+    operation: AdvanceSegmentOperation,
+    user_cap: EngagementCap,
+    candidate_policy: CandidatePolicy,
+    neck_policy: NeckPolicy,
+    traversal_policy: TraversalPolicy,
+    passages: dict[OrientedNeckScope, NeckPassage],
+    current_by_edge: dict[
+        MatEdgeId,
+        MatSample | DerivedCandidateCursor | None,
+    ],
+) -> ZeroGuideLinkCandidate:
+    """Reconstruct one advancing segment from the fresh zero-guide proof.
+
+    Args:
+        axis: Independently rebuilt exact MAT owner.
+        operation: Recorded advancing-segment operation.
+        user_cap: Authenticated user engagement limit.
+        candidate_policy: Authenticated finite-lattice policy.
+        neck_policy: Authenticated causal neck policy.
+        traversal_policy: Authenticated directed-window policy.
+        passages: Fresh mutable replay view of oriented passage state.
+        current_by_edge: Fresh replay cursor state by exact MAT edge.
+
+    Returns:
+        The unique fresh spatial candidate owning `operation`.
+
+    Raises:
+        ReplayZeroGuideCandidateError: If proof ownership, cursor lineage, or
+            unique finite reconstruction fails.
+    """
+    if type(operation) is not AdvanceSegmentOperation:
+        raise ReplayZeroGuideCandidateError(
+            "zero-guide reconstruction requires one exact advancing segment.",
+        )
+    edge_id = MatEdgeId(bytes(operation.traversal_decision.edge_id))
+    edge = axis.edge_by_id.get(edge_id)
+    if edge is None:
+        raise ReplayZeroGuideCandidateError(
+            "zero-guide traversal edge is absent from the fresh MAT graph.",
+        )
+    owned_run = _fresh_zero_guide_run(
+        axis=axis,
+        edge_id=edge_id,
+    )
+    samples = _edge_samples(axis, edge_id)
+    if edge_id in current_by_edge:
+        cursor_before = current_by_edge[edge_id]
+        if cursor_before is None:
+            raise ReplayZeroGuideCandidateError(
+                "zero-guide operation advances an already terminal fresh cursor.",
+            )
+        if cursor_before.cursor_identity != operation.traversal_decision.cursor_before:
+            raise ReplayZeroGuideCandidateError(
+                "zero-guide cursor-before does not continue fresh edge state.",
+            )
+    else:
+        try:
+            cursor_before = _initial_cursor(
+                samples=samples,
+                operation=operation,
+            )
+        except ReplayTraversalError as error:
+            raise ReplayZeroGuideCandidateError(
+                f"zero-guide initial cursor is not fresh ({error}).",
+            ) from None
+
+    expected_scope, expected_cap, _, next_passage = _reconstruct_cap_decision(
+        operation=operation,
+        user_cap=user_cap,
+        neck_policy=neck_policy,
+        passages=passages,
+    )
+    limits = _directed_limits(
+        samples=samples,
+        cursor_before=cursor_before,
+        window=traversal_policy.forward_window,
+    )
+    if not limits:
+        raise ReplayZeroGuideCandidateError(
+            "zero-guide cursor has no fresh native limit in its directed window.",
+        )
+
+    matches: dict[
+        bytes,
+        tuple[MiddleCurveSpan, ZeroGuideLinkCandidate],
+    ] = {}
+    for limit in limits:
+        span = MiddleCurveSpan.build(
+            axis=axis,
+            cursor_before=cursor_before,
+            cursor_limit=limit,
+        )
+        terminal_sample = samples[-1] if span.ordinal_step == 1 else samples[0]
+        terminal_limit = limit.ordinal_on_edge == terminal_sample.ordinal_on_edge
+        candidates = enumerate_zero_guide_link_candidates(
+            span=span,
+            policy=candidate_policy,
+            neck_scope=expected_scope,
+            effective_cap_decision=expected_cap,
+            makes_cursor_terminal_at_limit=terminal_limit,
+        )
+        for candidate in candidates:
+            if (
+                type(candidate) is not ZeroGuideLinkCandidate
+                or candidate.zero_guide_run != owned_run
+                or candidate.zero_guide_run.native_certificate != owned_run.native_certificate
+            ):
+                raise ReplayZeroGuideCandidateError(
+                    "zero-guide candidate contradicts fresh native proof bytes.",
+                )
+            if _zero_guide_candidate_matches_operation(
+                candidate,
+                operation,
+            ):
+                matches[bytes(candidate.identity)] = (
+                    span,
+                    candidate,
+                )
+    if len(matches) != 1:
+        raise ReplayZeroGuideCandidateError(
+            "recorded zero-guide segment does not identify one unique fresh candidate.",
+        )
+    span, selected = next(iter(matches.values()))
+    if selected.traversal_decision.makes_cursor_terminal:
+        current_by_edge[edge_id] = None
+    elif selected.spatial_progress == span.reported_length:
+        current_by_edge[edge_id] = span.cursor_limit
+    else:
+        current_by_edge[edge_id] = DerivedCandidateCursor.build(
+            span=span,
+            candidate=selected,
+        )
+    if next_passage is not None:
+        passages[next_passage.scope] = next_passage
+    return selected
+
+
 def _replay_candidate_stream(
     *,
     axis: MedialAxis,
@@ -574,7 +813,7 @@ def _replay_candidate_stream(
     traversal_policy: TraversalPolicy,
     cut_direction_policy: CutDirectionPolicy,
 ) -> tuple[
-    tuple[MiddleCurveCandidate, ...],
+    tuple[TraversalCandidate, ...],
     dict[MatEdgeId, MatSample | DerivedCandidateCursor | None],
 ]:
     current_by_edge: dict[
@@ -587,8 +826,17 @@ def _replay_candidate_stream(
             policy=neck_policy,
         )
     )
-    candidates: list[MiddleCurveCandidate] = []
+    candidates: list[TraversalCandidate] = []
     for operation in operations[2:]:
+        if type(operation) is LinkSegmentOperation:
+            edge_id = MatEdgeId(
+                bytes(operation.traversal_decision.edge_id),
+            )
+            if edge_id in axis.zero_guide_run_by_edge_id:
+                raise ReplayZeroGuideCandidateError(
+                    "zero-guide advancement cannot be relabelled as a hold link.",
+                )
+            continue
         if type(operation) is CutFullCircleOperation:
             candidates.append(
                 _match_circle_candidate(
@@ -603,15 +851,29 @@ def _replay_candidate_stream(
                     current_by_edge=current_by_edge,
                 )
             )
+            continue
+        if type(operation) is AdvanceSegmentOperation:
+            candidates.append(
+                _match_zero_guide_candidate(
+                    axis=axis,
+                    operation=operation,
+                    user_cap=user_cap,
+                    candidate_policy=candidate_policy,
+                    neck_policy=neck_policy,
+                    traversal_policy=traversal_policy,
+                    passages=passages,
+                    current_by_edge=current_by_edge,
+                )
+            )
     return tuple(candidates), current_by_edge
 
 
 def _pair_lateral_operations(
     *,
     operations: tuple[CanonicalOperation, ...],
-    candidates: tuple[MiddleCurveCandidate, ...],
-) -> dict[int, MiddleCurveCandidate]:
-    paired: dict[int, MiddleCurveCandidate] = {}
+    candidates: tuple[TraversalCandidate, ...],
+) -> dict[int, TraversalCandidate]:
+    paired: dict[int, TraversalCandidate] = {}
     candidate_index = 0
     pending_link: tuple[int, LinkSegmentOperation] | None = None
     for operation_index, operation in enumerate(operations[2:], start=2):
@@ -620,13 +882,36 @@ def _pair_lateral_operations(
                 raise ReplayPairingError("consecutive links do not have one immediately following circle.")
             pending_link = operation_index, operation
             continue
+        if type(operation) is AdvanceSegmentOperation:
+            if pending_link is not None:
+                raise ReplayZeroGuideCandidateError(
+                    "zero-guide advance cannot consume a preceding hold link.",
+                )
+            if candidate_index >= len(candidates):
+                raise ReplayZeroGuideCandidateError(
+                    "fresh candidate lineage omits an advancing segment.",
+                )
+            candidate = candidates[candidate_index]
+            candidate_index += 1
+            if type(candidate) is not ZeroGuideLinkCandidate or not _zero_guide_candidate_matches_operation(
+                candidate,
+                operation,
+            ):
+                raise ReplayZeroGuideCandidateError(
+                    "fresh zero-guide lineage diverged before state replay.",
+                )
+            paired[operation_index] = candidate
+            continue
         if type(operation) is not CutFullCircleOperation:
             raise ReplayGrammarError("operation grammar contains an unknown lateral type.")
         if candidate_index >= len(candidates):
             raise ReplayCandidateError("fresh candidate lineage is shorter than the recorded circle stream.")
         candidate = candidates[candidate_index]
         candidate_index += 1
-        if not _candidate_matches_operation(candidate, operation):
+        if type(candidate) is not MiddleCurveCandidate or not _candidate_matches_operation(
+            candidate,
+            operation,
+        ):
             raise ReplayCandidateError("fresh candidate lineage diverged before state replay.")
         paired[operation_index] = candidate
         if pending_link is None:
@@ -652,7 +937,9 @@ def _pair_lateral_operations(
     if pending_link is not None:
         raise ReplayPairingError("link has no immediately following circle.")
     if candidate_index != len(candidates):
-        raise ReplayCandidateError("fresh candidate lineage is longer than the recorded circle stream.")
+        raise ReplayCandidateError(
+            "fresh candidate lineage is longer than the recorded lateral stream.",
+        )
     return paired
 
 
@@ -667,7 +954,7 @@ def _replay_fresh_state(
     neck_policy: NeckPolicy,
     depletion_policy: DepletionPolicy,
     operations: tuple[CanonicalOperation, ...],
-    paired_candidates: dict[int, MiddleCurveCandidate],
+    paired_candidates: dict[int, TraversalCandidate],
     axis: MedialAxis,
     current_by_edge: dict[
         MatEdgeId,
@@ -707,6 +994,10 @@ def _replay_fresh_state(
             if operation_index not in paired_candidates:
                 raise ReplayPairingError("fresh link has no validated circle pairing.")
             candidate = paired_candidates[operation_index]
+            if type(candidate) is not MiddleCurveCandidate:
+                raise ReplayPairingError(
+                    "fresh hold link is paired with a foreign candidate variant.",
+                )
             effective_cap = _candidate_effective_cap(
                 candidate=candidate,
                 user_cap=user_cap,
@@ -749,11 +1040,47 @@ def _replay_fresh_state(
                 tool_radius=tool_radius,
             )
             continue
+        if type(operation) is AdvanceSegmentOperation:
+            if operation_index not in paired_candidates:
+                raise ReplayZeroGuideCandidateError(
+                    "fresh advancing segment has no reconstructed zero-guide candidate.",
+                )
+            candidate = paired_candidates[operation_index]
+            if type(candidate) is not ZeroGuideLinkCandidate:
+                raise ReplayZeroGuideCandidateError(
+                    "fresh advancing segment is paired with a foreign candidate variant.",
+                )
+            effective_cap = _candidate_effective_cap(
+                candidate=candidate,
+                user_cap=user_cap,
+                neck_policy=neck_policy,
+            )
+            segment_witness = evaluate_advancing_segment_trial(
+                containment_authority=containment,
+                stock=stock,
+                coverage=coverage,
+                operation_index=operation_index,
+                operation=operation,
+                tool_radius=tool_radius,
+                user_cap=user_cap,
+                effective_cap=effective_cap,
+                depletion_policy=depletion_policy,
+            )
+            lateral_witnesses.append(segment_witness)
+            current_stock_state = MotionCertifier.build(
+                stock=stock,
+                tool_radius=tool_radius,
+            )
+            continue
         if type(operation) is not CutFullCircleOperation:
             continue
         if operation_index not in paired_candidates:
             raise ReplayCandidateError("fresh circle has no reconstructed candidate.")
         candidate = paired_candidates[operation_index]
+        if type(candidate) is not MiddleCurveCandidate:
+            raise ReplayCandidateError(
+                "fresh circle is paired with a foreign candidate variant.",
+            )
         effective_cap = _candidate_effective_cap(
             candidate=candidate,
             user_cap=user_cap,

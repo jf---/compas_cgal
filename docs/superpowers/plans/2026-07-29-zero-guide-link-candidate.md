@@ -1101,11 +1101,15 @@ git commit -m "feat(adaptive): advance zero-guide route"
 **Files**
 
 - Modify: `src/compas_cgal/adaptive/replay.py`
-- Modify: `src/compas_cgal/adaptive/replay_trace.py`
-- Modify: `tests/adaptive/test_replay.py`
-- Modify: `tests/adaptive/test_generator.py`
 - Modify: `src/compas_cgal/adaptive/errors.py`
-- Modify: `tests/adaptive/typecheck/consumer_contract.py`
+- Add: `tests/adaptive/test_zero_guide_replay.py`
+- Modify: `docs/continuous_engagement.md`
+- Modify: `docs/segment_site_mat.md`
+
+`replay_trace.py` already admitted the exact advancing operation and distinct
+`SweptPrefixMotionWitness` under Task 5, so Task 7 consumes that closed proof
+union without a ceremonial edit. The public type contract was likewise already
+gated there.
 
 **Interfaces**
 
@@ -1117,7 +1121,7 @@ git commit -m "feat(adaptive): advance zero-guide route"
   unique operation-to-candidate reconstruction and fresh physical replay for
   both lateral variants.
 
-- [ ] **Step 1: Write RED reconstruction tests**
+- [x] **Step 1: Write RED reconstruction tests**
 
 From the Task 13F route-1 child, intercept the existing fresh-replay terminal
 gate without weakening it:
@@ -1157,23 +1161,25 @@ The matcher must require the rebuilt MAT owner's zero-guide record bytes to
 match the committed candidate before `_replay_fresh_state` begins physical
 replay.
 
-- [ ] **Step 2: Write RED grammar and mutation tests**
+- [x] **Step 2: Write RED grammar and mutation tests**
 
 Relabel a hold link as `AdvanceSegmentOperation`, relabel an advancing segment
 as a hold link, change its edge/run certificate, alter the endpoint, delete the
 native record, and supply two matching candidates. Require
-`ReplayZeroGuideCandidateError`; no mutation may fall through to circle
-reconstruction.
+`ReplayZeroGuideCandidateError` while the mutation retains an advancing proof
+role; the advance-to-hold mutation must raise `ReplayPairingError` because the
+serialized proof role has been erased. No mutation may fall through to circle
+reconstruction. Also reject advance-before-entry and unpaired-later-circle
+sequences before invoking candidate search.
 
-- [ ] **Step 3: Run RED**
+- [x] **Step 3: Run RED**
 
 ```bash
-pixi run pytest tests/adaptive/test_replay.py \
-  tests/adaptive/test_generator.py \
+pixi run pytest tests/adaptive/test_zero_guide_replay.py \
   -n auto --testmon -q
 ```
 
-- [ ] **Step 4: Extend operation pairing**
+- [x] **Step 4: Extend operation pairing**
 
 Extend the existing `dict[int, TraversalCandidate]` owner mapping. Pair
 `LinkSegmentOperation` only with its immediate circle and map both indices to
@@ -1181,7 +1187,7 @@ that circle candidate. Map each `AdvanceSegmentOperation` index to its one
 zero-guide candidate. Reject every other grammar before candidate search; no
 new wrapper type is needed for this simple mapping.
 
-- [ ] **Step 5: Reconstruct uniquely from the fresh MAT**
+- [x] **Step 5: Reconstruct uniquely from the fresh MAT**
 
 For an advancing segment, enumerate only the freshly proved zero-guide family
 on the authenticated directed window and require exactly one candidate whose
@@ -1191,28 +1197,58 @@ match. Extend `_replay_candidate_stream`, `_candidate_effective_cap`,
 candidate union. Then run the same segment containment, TEA, depletion, and
 coverage sequence as live evaluation using `OperationType.LINK`.
 
-- [ ] **Step 6: Run GREEN, lint, and types**
+- [x] **Step 6: Run GREEN, lint, and types**
 
 ```bash
 pixi run format-adaptive
 pixi run lint
 pixi run pytest tests/adaptive/test_replay.py \
+  tests/adaptive/test_zero_guide_replay.py \
   tests/adaptive/test_generator.py \
   -n auto --testmon -q
 pixi run types-adaptive
 ```
 
-- [ ] **Step 7: Document, commit, and push**
+Implementation note (2026-08-05): RED first failed because replay exposed no
+zero-guide matcher and admitted only hold links plus circles. The closed
+lateral grammar now accepts advancing segments explicitly. Fresh replay
+requires one typed run and one byte-identical native record on the operation's
+edge, enumerates only the proved spatial family across the recorded window,
+and requires one candidate to reproduce the complete operation bytes. The
+operation-index owner map assigns a hold-link/circle pair to one circle
+candidate and an advancing segment one-to-one to one zero-guide candidate.
+Physical replay reuses `evaluate_advancing_segment_trial(...)` on independently
+rebuilt stock and coverage, reproducing the live segment witness byte for byte
+before the expected nonterminal gate.
+
+Review exposed a sequence-level gap: individually legal operation tokens could
+place an advance before entry or leave a later circle without an owner. Replay
+now parses the complete lateral grammar before native candidate search. The
+adversarial matrix rejects advancing-proof mutations, changed endpoint, changed
+edge, missing native record, foreign same-edge proof bytes, and two matching
+candidate identities under `ReplayZeroGuideCandidateError`. Relabelling the
+advance as a hold instead raises `ReplayPairingError`, because that token no
+longer encodes the zero-guide proof role. The review-fixed affected `--testmon`
+selection passed `20` tests in `63.97 s`; the uncached replay and generator
+files passed `28` in `39.52 s`; Ruff and strict mypy over `28` source files
+passed; the complete adaptive suite passed `566` in `235.47 s`; strict MkDocs
+and diff checks passed. Independent re-review found no remaining Critical or
+Important issue. `test_zero_guide_replay.py` owns the focused `400`-line Task
+13F fixture and mutations, leaving general `test_replay.py` at `1,265` lines.
+`replay.py` is `1,276` lines: above the project's suspicious threshold, but
+still one replay pipeline; no mid-task mechanical split was introduced. These
+timings are regression evidence, not a Held–Pfeiffer comparison.
+
+- [x] **Step 7: Document, commit, and push**
 
 Update replay strength and remaining gaps in both developer pages:
 
 ```bash
 git add src/compas_cgal/adaptive/replay.py \
-  src/compas_cgal/adaptive/replay_trace.py \
   src/compas_cgal/adaptive/errors.py \
-  tests/adaptive/test_replay.py tests/adaptive/test_generator.py \
-  tests/adaptive/typecheck/consumer_contract.py \
+  tests/adaptive/test_zero_guide_replay.py \
   docs/continuous_engagement.md docs/segment_site_mat.md \
+  docs/superpowers/plans/2026-07-28-causal-mat-traversal.md \
   docs/superpowers/plans/2026-07-29-zero-guide-link-candidate.md
 git commit -m "feat(adaptive): replay zero-guide links"
 ```
