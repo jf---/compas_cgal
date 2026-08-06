@@ -66,7 +66,10 @@ cells.
     reconstructs the unique spatial candidate, and reproduces the segment
     witness byte for byte before the expected nonterminal gate. No fake
     zero-radius circle or traversal-only skip is admitted.
-    Traversal/coverage closure, fresh terminal sealing, arbitrary-pocket
+    Full continuation now reaches the next exact boundary at route 2: the DFS
+    discovery ledger is not a continuous physical walk, and every direct link
+    from the completed horizontal leaf gouges. Exact inter-route retrace,
+    traversal/coverage closure, fresh terminal sealing, arbitrary-pocket
     evidence, and matched Held–Pfeiffer performance remain incomplete.
 
 ## Authority hierarchy
@@ -1050,3 +1053,60 @@ no remaining Critical or Important issue. These are regression costs, not
 matched Held–Pfeiffer planner timings. General replay tests remain in the
 `1,265`-line `test_replay.py`; the Task 13F proof-mutation matrix lives
 separately in the `400`-line `test_zero_guide_replay.py`.
+
+### Task 8 route-transition boundary
+
+The bounded full-continuation control now rediscovers both established routes
+from the authenticated launch root before stopping fail-closed at route `2`:
+
+| Route | Exact family | Result |
+| --- | ---: | --- |
+| `0` | 16 circle candidates | trial 4 accepted; mixed-seam circle commits |
+| `1` | 36 zero-guide candidates | rank 1 accepted; advancing segment commits to `(5, 1)` |
+| `2` | 56 circle candidates | 56 direct-link gouges; 0 cap failures; 0 degenerate links |
+
+The route-2 cursor is
+`def1bf1471e2df355ba488378ffad7b9e20116ac81909d9f9822a5a62b6abbb0`.
+The ordered 56-candidate identity sequence hashes to
+`56d92fcf2089c1e771a9add79bd356d172904a69e6c7acb18ab02522f4ed093b`.
+Its P–S edge runs from approximately `(1.171573, 1.171573)` to `(1, 2)`,
+while the physical phase remains at the completed horizontal leaf `(5, 1)`.
+The exact graph route is a deterministic DFS edge-discovery ledger, not an
+Euler walk and not a physical-motion sequence. A candidate transaction's one
+direct hold link therefore attempts to cross the concave unreachable region.
+
+This is a transition failure, not an exhausted circle lattice. Of the 56
+route-2 candidates, 30 circles are individually containment-valid. Reversing
+the accepted route-1 segment from `(5, 1)` to `(1.7480694691784169, 1)` is
+exactly contained; from that restored phase, 10 candidate links and 6 complete
+link/circle pairs are containment-valid. The boundary test preserves all of
+these counts so a future change cannot hide the missing transit by widening the
+lattice or weakening gouge containment.
+
+!!! tip "Captured insight: graph coverage order is not toolpath continuity"
+
+    A route can visit every MAT edge exactly once while consecutive route
+    entries remain physically disconnected. Graph traversal proves coverage
+    order; a separate, content-addressed transit must prove how the cutter
+    returns through already accepted motion lineage before the next candidate
+    may own a direct link.
+
+!!! tip "Captured insight: select the theorem before optimizing it"
+
+    On the exact reverse segment, the generic event certifier remained active
+    at approximately 99% CPU beyond `10 min` and the bounded diagnostic was
+    terminated. The existing swept-prefix theorem certified the same submitted
+    motion in `0.040943 s`, with two exact strata and trace digest
+    `04a763be1cd1d25576660f5a0909f3f43df24a66974136c11321e2ccec92d469`.
+    These are diagnostic observations, not stable benchmark gates, but they
+    rule out generic recertification as the retrace architecture.
+
+The next coherent stage is an exact inter-route retrace operation derived from
+accepted motion lineage, with its own causal decision, atomic transaction, and
+fresh-replay grammar. Terminal traversal and residual sealing remain downstream
+of that stage. No retract/re-plunge fallback or traversal-only skip is admitted.
+
+The final focused affected `--testmon` gate passed `1` in `31.34 s`; the
+post-review uncached adaptive suite passed `567` in `237.09 s`. Ruff, strict
+mypy over `28` source files, strict MkDocs, formatting, and diff checks passed.
+These are regression timings, not matched planner measurements.

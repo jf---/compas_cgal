@@ -1260,7 +1260,6 @@ git commit -m "feat(adaptive): replay zero-guide links"
 **Files**
 
 - Modify: `tests/adaptive/test_generator.py`
-- Modify: `tests/adaptive/test_replay.py`
 - Modify: `docs/segment_site_mat.md`
 - Modify: `docs/continuous_engagement.md`
 - Modify:
@@ -1277,7 +1276,7 @@ git commit -m "feat(adaptive): replay zero-guide links"
   either a complete Task 13F terminal certificate or a named, reproducible next
   exact boundary with all prior routes committed.
 
-- [ ] **Step 1: Run the full Task 13F continuation**
+- [x] **Step 1: Run the full Task 13F continuation**
 
 ```bash
 pixi run pytest \
@@ -1288,6 +1287,28 @@ pixi run pytest \
 If it fails, preserve the exact route/cursor/attempt/cap/exception evidence in
 the test and documentation. Do not widen scope by guessing at the next
 geometric theorem. Add this named test in Step 1; it does not pre-exist.
+
+Boundary evidence (2026-08-05): RED raised `NoFeasibleCandidateError` at route
+`2`, cursor
+`def1bf1471e2df355ba488378ffad7b9e20116ac81909d9f9822a5a62b6abbb0`, after
+the generator reproduced route-family sizes `(16, 36, 56)` and committed the
+established route-0 circle plus route-1 advancing segment. The route-2 summary
+is `attempts=56; cap=0; gouge=56; degenerate-link=0`. A contextual boundary
+test now preserves that exception and proves the missing capability is
+inter-route transit: 30 route-2 circles are individually contained, while a
+contained reverse of accepted route-1 motion restores 10 links and six complete
+link/circle pairs. The focused contract passed in `31.34 s`.
+
+The bounded performance probe ruled out the general segment event oracle for
+this motion class: it remained active beyond `10 min` at approximately 99% CPU.
+The existing swept-prefix theorem certified the same reverse in `0.040943 s`
+with two exact strata. These are diagnostic observations, not stable benchmark
+gates or a Held–Pfeiffer comparison.
+
+Publication evidence (2026-08-05): the final focused affected `--testmon` gate
+passed `1` in `31.34 s`; the post-review uncached adaptive suite passed `567`
+in `237.09 s`; Ruff, strict mypy over `28` source files, strict MkDocs,
+formatting, and diff checks passed.
 
 - [ ] **Step 2: Close terminal traversal and physical coverage when reached**
 
@@ -1343,7 +1364,7 @@ wall-clock seconds
 Compare against Held–Pfeiffer only on a matched disclosed workload. Until
 then, retain “stronger proof contract; weaker measured-performance evidence.”
 
-- [ ] **Step 4: Run the publication gate**
+- [x] **Step 4: Run the publication gate**
 
 ```bash
 pixi run pytest tests/adaptive -n auto --testmon -q
@@ -1354,7 +1375,7 @@ pixi run docs
 git diff --check
 ```
 
-- [ ] **Step 5: Update MkDocs and the insight record**
+- [x] **Step 5: Update MkDocs and the insight record**
 
 Update:
 
@@ -1366,18 +1387,17 @@ Update:
 - next exact boundary;
 - Held–Pfeiffer `stronger | equivalent | weaker | incomplete` table.
 
-- [ ] **Step 6: Commit and push the coherent checkpoint**
+- [x] **Step 6: Commit and push the coherent checkpoint**
 
 ```bash
 git add tests/adaptive/test_generator.py \
-  tests/adaptive/test_replay.py \
   docs/segment_site_mat.md docs/continuous_engagement.md \
   docs/superpowers/plans/2026-07-28-causal-mat-traversal.md \
   docs/superpowers/plans/2026-07-29-zero-guide-link-candidate.md
-git commit -m "docs(adaptive): record zero-guide stage"
+git commit -m "test(adaptive): expose route transit boundary"
 ```
 
 Before pushing, list and cancel every `in_progress` run for
-`codex/exact-certified-adaptive-phase1-t9` in `jf---/compas_cgal`. Push
+`codex/exact-certified-adaptive-phase1-t9-zero-guide` in `jf---/compas_cgal`. Push
 without force, verify `git ls-remote` equals `git rev-parse HEAD`, and require
 a clean worktree.
