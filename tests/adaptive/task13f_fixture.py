@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import math
 from dataclasses import dataclass
 from fractions import Fraction
@@ -18,11 +19,17 @@ from compas_cgal.adaptive.entry import PreclearedEntry
 from compas_cgal.adaptive.entry import QualifiedBore
 from compas_cgal.adaptive.generation_state import GenerationState
 from compas_cgal.adaptive.generator import _active_forward_limits
+from compas_cgal.adaptive.generator import TraversalCommit
+from compas_cgal.adaptive.generator import advance_active_candidate_family
+from compas_cgal.adaptive.identity import IdentityDigest
 from compas_cgal.adaptive.identity import InputIdentity
 from compas_cgal.adaptive.medial_axis import MedialAxis
 from compas_cgal.adaptive.motion import EngagementCap
 from compas_cgal.adaptive.neck import NeckInventory
+from compas_cgal.adaptive.operation import AdvanceSegmentOperation
 from compas_cgal.adaptive.operation import FullCapDecision
+from compas_cgal.adaptive.operation import RouteNodeId
+from compas_cgal.adaptive.operation import RouteRetraceDecision
 from compas_cgal.adaptive.policy import ACTIVE_PASSAGE_STATES
 from compas_cgal.adaptive.policy import CandidatePolicy
 from compas_cgal.adaptive.policy import CutDirectionPolicy
@@ -253,3 +260,64 @@ class Task13FFixture:
             traversal=traversal,
             evaluator=evaluator,
         )
+
+
+def task13f_route_one_terminal(
+    fixture: Task13FFixture,
+) -> tuple[
+    GenerationState,
+    MatTraversalState,
+    tuple[TraversalCommit, TraversalCommit],
+]:
+    """Advance both established Task 13F routes to the retrace boundary.
+
+    Args:
+        fixture: Authenticated launch child and continuation authority.
+
+    Returns:
+        Physical child, route-one terminal traversal, and both commits.
+    """
+    physical, traversal, route_zero = advance_active_candidate_family(
+        evaluator=fixture.evaluator,
+        physical=fixture.physical,
+        traversal=fixture.traversal,
+    )
+    assert traversal.active_cursor.terminal
+    physical, traversal, route_one = advance_active_candidate_family(
+        evaluator=fixture.evaluator,
+        physical=physical,
+        traversal=traversal.activate_next(),
+    )
+    assert traversal.active_route_index == 1
+    assert traversal.active_cursor.terminal
+    return physical, traversal, (route_zero, route_one)
+
+
+def task13f_retrace_decision(
+    *,
+    physical: GenerationState,
+    terminal: MatTraversalState,
+    source_commit: TraversalCommit,
+) -> RouteRetraceDecision:
+    """Seal fixture preimages for physical-unit tests before generator wiring."""
+    activated = terminal.activate_next()
+    source = physical.operations[-1]
+    assert type(source) is AdvanceSegmentOperation
+    return RouteRetraceDecision.build(
+        completed_route_index=terminal.active_route_index,
+        activated_route_index=activated.active_route_index,
+        completed_exit_node_id=RouteNodeId(
+            bytes(terminal.active_cursor.route_step.exit_node_id),
+        ),
+        activated_entry_node_id=RouteNodeId(
+            bytes(activated.active_cursor.route_step.entry_node_id),
+        ),
+        terminal_traversal_digest=terminal.digest,
+        activated_traversal_digest=activated.digest,
+        source_commit_digest=source_commit.digest,
+        source_transaction_digest=source_commit.transaction.digest,
+        source_operation_index=len(physical.operations) - 1,
+        source_operation_digest=IdentityDigest(
+            hashlib.sha256(source.canonical_bytes).digest(),
+        ),
+    )

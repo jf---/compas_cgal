@@ -44,6 +44,7 @@ from compas_cgal.adaptive.operation import NeckCapDecision
 from compas_cgal.adaptive.operation import NeckScope
 from compas_cgal.adaptive.operation import NoNeckScope
 from compas_cgal.adaptive.operation import PlungeOperation
+from compas_cgal.adaptive.operation import RetraceSegmentOperation
 from compas_cgal.adaptive.operation import TraversalDecision
 from compas_cgal.adaptive.motion import ExactCircleMotion
 from compas_cgal.adaptive.motion import ExactSegmentMotion
@@ -375,6 +376,8 @@ def operation_kind(operation: CanonicalOperation) -> str:
         return "circle"
     if isinstance(operation, AdvanceSegmentOperation):
         return "advance-segment"
+    if isinstance(operation, RetraceSegmentOperation):
+        return "retrace-segment"
     assert_never(operation)
 
 

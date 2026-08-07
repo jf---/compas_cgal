@@ -23,6 +23,8 @@ from compas_cgal.adaptive.errors import ArtifactIdentityError
 from compas_cgal.adaptive.errors import InvalidAdvanceSegmentOperationError
 from compas_cgal.adaptive.errors import InvalidEffectiveCapDecisionError
 from compas_cgal.adaptive.errors import InvalidOperationIdentityError
+from compas_cgal.adaptive.errors import InvalidRetraceSegmentOperationError
+from compas_cgal.adaptive.errors import InvalidRouteRetraceDecisionError
 from compas_cgal.adaptive.errors import InvalidTraversalDecisionError
 from compas_cgal.adaptive.identity import OPERATION_SCHEMA_VERSION
 from compas_cgal.adaptive.identity import IdentityDigest
@@ -42,6 +44,9 @@ from compas_cgal.adaptive.units import WorldXY
 EdgeId = NewType("EdgeId", bytes)
 CursorIdentity = NewType("CursorIdentity", bytes)
 NeckOwnerId = NewType("NeckOwnerId", bytes)
+RouteNodeId = NewType("RouteNodeId", bytes)
+
+ROUTE_RETRACE_STRATEGY_VERSION = b"reverse-final-zero-guide-v1"
 
 _BINARY64 = struct.Struct(">d")
 
@@ -423,6 +428,178 @@ class AdvanceTraversalDecision:
 TraversalDecision: TypeAlias = HoldTraversalDecision | AdvanceTraversalDecision
 
 
+@dataclass(frozen=True)
+class RouteRetraceDecision:
+    """Authenticated causal boundary for one nonincident route switch."""
+
+    completed_route_index: int
+    activated_route_index: int
+    completed_exit_node_id: RouteNodeId
+    activated_entry_node_id: RouteNodeId
+    terminal_traversal_digest: IdentityDigest
+    activated_traversal_digest: IdentityDigest
+    source_commit_digest: IdentityDigest
+    source_transaction_digest: IdentityDigest
+    source_operation_index: int
+    source_operation_digest: IdentityDigest
+    strategy_identity: bytes = ROUTE_RETRACE_STRATEGY_VERSION
+
+    def __post_init__(self) -> None:
+        self._validate()
+
+    def _validate(self) -> None:
+        if type(self) is not RouteRetraceDecision:
+            raise InvalidRouteRetraceDecisionError(
+                "route retrace decision must use the exact owned type.",
+            )
+        if type(self.completed_route_index) is not int or self.completed_route_index < 0:
+            raise InvalidRouteRetraceDecisionError(
+                "completed route index must be an exact nonnegative integer.",
+            )
+        if type(self.activated_route_index) is not int or self.activated_route_index < 0:
+            raise InvalidRouteRetraceDecisionError(
+                "activated route index must be an exact nonnegative integer.",
+            )
+        if self.activated_route_index != self.completed_route_index + 1:
+            raise InvalidRouteRetraceDecisionError(
+                "activated route index must immediately follow the completed route.",
+            )
+        completed_node = _identity_bytes(
+            self.completed_exit_node_id,
+            "completed exit node ID",
+            InvalidRouteRetraceDecisionError,
+        )
+        activated_node = _identity_bytes(
+            self.activated_entry_node_id,
+            "activated entry node ID",
+            InvalidRouteRetraceDecisionError,
+        )
+        if completed_node == activated_node:
+            raise InvalidRouteRetraceDecisionError(
+                "route retrace decision requires distinct nonincident boundary nodes.",
+            )
+        for digest, name in (
+            (self.terminal_traversal_digest, "terminal traversal digest"),
+            (self.activated_traversal_digest, "activated traversal digest"),
+            (self.source_commit_digest, "source commit digest"),
+            (self.source_transaction_digest, "source transaction digest"),
+            (self.source_operation_digest, "source operation digest"),
+        ):
+            _identity_bytes(
+                digest,
+                name,
+                InvalidRouteRetraceDecisionError,
+                digest=True,
+            )
+        if type(self.source_operation_index) is not int or self.source_operation_index < 2:
+            raise InvalidRouteRetraceDecisionError(
+                "source operation index must be an exact integer of at least two.",
+            )
+        if type(self.strategy_identity) is not bytes or self.strategy_identity != ROUTE_RETRACE_STRATEGY_VERSION:
+            raise InvalidRouteRetraceDecisionError(
+                "route retrace decision requires the fixed exact strategy identity.",
+            )
+
+    @classmethod
+    def build(
+        cls,
+        *,
+        completed_route_index: int,
+        activated_route_index: int,
+        completed_exit_node_id: RouteNodeId,
+        activated_entry_node_id: RouteNodeId,
+        terminal_traversal_digest: IdentityDigest,
+        activated_traversal_digest: IdentityDigest,
+        source_commit_digest: IdentityDigest,
+        source_transaction_digest: IdentityDigest,
+        source_operation_index: int,
+        source_operation_digest: IdentityDigest,
+    ) -> Self:
+        """Build one exact adjacent-route retrace decision.
+
+        Args:
+            completed_route_index: Terminal route ordinal.
+            activated_route_index: Immediately following route ordinal.
+            completed_exit_node_id: Exact completed-route endpoint identity.
+            activated_entry_node_id: Exact activated-route entry identity.
+            terminal_traversal_digest: Terminal global traversal identity.
+            activated_traversal_digest: Activated global traversal identity.
+            source_commit_digest: Accepted source commit identity.
+            source_transaction_digest: Accepted source transaction identity.
+            source_operation_index: Source ordinal in the physical programme.
+            source_operation_digest: Canonical source operation identity.
+
+        Returns:
+            Validated content-addressed route-boundary decision.
+
+        Raises:
+            InvalidRouteRetraceDecisionError: If an identity is malformed or
+                the route boundary and admitted source are cross-wired.
+        """
+        return cls(
+            completed_route_index,
+            activated_route_index,
+            completed_exit_node_id,
+            activated_entry_node_id,
+            terminal_traversal_digest,
+            activated_traversal_digest,
+            source_commit_digest,
+            source_transaction_digest,
+            source_operation_index,
+            source_operation_digest,
+        )
+
+    @property
+    def canonical_bytes(self) -> bytes:
+        """Return CCAN bytes binding every causal identity field."""
+        self._validate()
+        return encode_tagged_union(
+            b"route-retrace-decision-v1",
+            encode_component_map(
+                {
+                    b"activated-entry-node-id": encode_bytes(
+                        bytes(self.activated_entry_node_id),
+                    ),
+                    b"activated-route-index": encode_integer(
+                        self.activated_route_index,
+                    ),
+                    b"activated-traversal-digest": encode_bytes(
+                        bytes(self.activated_traversal_digest),
+                    ),
+                    b"completed-exit-node-id": encode_bytes(
+                        bytes(self.completed_exit_node_id),
+                    ),
+                    b"completed-route-index": encode_integer(
+                        self.completed_route_index,
+                    ),
+                    b"source-commit-digest": encode_bytes(
+                        bytes(self.source_commit_digest),
+                    ),
+                    b"source-operation-digest": encode_bytes(
+                        bytes(self.source_operation_digest),
+                    ),
+                    b"source-operation-index": encode_integer(
+                        self.source_operation_index,
+                    ),
+                    b"source-transaction-digest": encode_bytes(
+                        bytes(self.source_transaction_digest),
+                    ),
+                    b"strategy-identity": encode_bytes(self.strategy_identity),
+                    b"terminal-traversal-digest": encode_bytes(
+                        bytes(self.terminal_traversal_digest),
+                    ),
+                }
+            ),
+        )
+
+    @property
+    def digest(self) -> IdentityDigest:
+        """Return the SHA-256 identity of `canonical_bytes`."""
+        return IdentityDigest(
+            hashlib.sha256(self.canonical_bytes).digest(),
+        )
+
+
 def _operation_bytes(tag: bytes, components: dict[bytes, bytes]) -> bytes:
     return encode_tagged_union(
         OPERATION_SCHEMA_VERSION,
@@ -647,6 +824,112 @@ class AdvanceSegmentOperation:
         )
 
 
+@dataclass(frozen=True, init=False)
+class RetraceSegmentOperation:
+    """Exact source-derived reversal restoring an adjacent route entry."""
+
+    motion: ExactSegmentMotion
+    cut_z: CutZ
+    effective_cap_decision: FullCapDecision
+    decision: RouteRetraceDecision
+
+    def _validate(self) -> None:
+        if type(self) is not RetraceSegmentOperation:
+            raise InvalidRetraceSegmentOperationError(
+                "retrace operation must use the exact owned type.",
+            )
+        if type(self.motion) is not ExactSegmentMotion or type(self.cut_z) is not CutZ:
+            raise InvalidRetraceSegmentOperationError(
+                "retrace requires exact ExactSegmentMotion and CutZ.",
+            )
+        if type(self.motion.start) is not Point2 or type(self.motion.end) is not Point2:
+            raise InvalidRetraceSegmentOperationError(
+                "retrace motion endpoints must be exact Point2[WorldXY].",
+            )
+        if type(self.effective_cap_decision) is not FullCapDecision:
+            raise InvalidRetraceSegmentOperationError(
+                "retrace requires one exact full-cap decision.",
+            )
+        if type(self.decision) is not RouteRetraceDecision or self.decision.strategy_identity != ROUTE_RETRACE_STRATEGY_VERSION:
+            raise InvalidRetraceSegmentOperationError(
+                "retrace requires one exact fixed-strategy route decision.",
+            )
+
+    @classmethod
+    def build(
+        cls,
+        *,
+        source_operation: AdvanceSegmentOperation,
+        decision: RouteRetraceDecision,
+    ) -> Self:
+        """Derive the only admitted reverse motion from its accepted source.
+
+        Args:
+            source_operation: Accepted route-terminal advancing segment.
+            decision: Authenticated nonincident route boundary and source.
+
+        Returns:
+            Validated retrace with source depth and full-cap authority.
+
+        Raises:
+            InvalidRetraceSegmentOperationError: If the source is foreign,
+                neck-owned, non-full-cap, nonterminal, or misidentified.
+        """
+        if type(source_operation) is not AdvanceSegmentOperation:
+            raise InvalidRetraceSegmentOperationError(
+                "retrace source must be one exact advancing segment.",
+            )
+        if type(decision) is not RouteRetraceDecision:
+            raise InvalidRetraceSegmentOperationError(
+                "retrace requires one exact route retrace decision.",
+            )
+        decision._validate()
+        if (
+            type(source_operation.neck_scope) is not NoNeckScope
+            or type(source_operation.effective_cap_decision) is not FullCapDecision
+            or not source_operation.traversal_decision.makes_cursor_terminal
+        ):
+            raise InvalidRetraceSegmentOperationError(
+                "retrace source must be no-neck, full-cap, and route-terminal.",
+            )
+        source_digest = IdentityDigest(
+            hashlib.sha256(source_operation.canonical_bytes).digest(),
+        )
+        if decision.source_operation_digest != source_digest:
+            raise InvalidRetraceSegmentOperationError(
+                "retrace decision does not name its source operation.",
+            )
+        motion = ExactSegmentMotion.build(
+            source_operation.motion.end,
+            source_operation.motion.start,
+        )
+        operation = object.__new__(cls)
+        object.__setattr__(operation, "motion", motion)
+        object.__setattr__(operation, "cut_z", source_operation.cut_z)
+        object.__setattr__(
+            operation,
+            "effective_cap_decision",
+            source_operation.effective_cap_decision,
+        )
+        object.__setattr__(operation, "decision", decision)
+        operation._validate()
+        return operation
+
+    @property
+    def canonical_bytes(self) -> bytes:
+        """Return the distinct source-derived retrace operation record."""
+        self._validate()
+        return _operation_bytes(
+            b"retrace-segment-v1",
+            {
+                b"cut-z": canonical_cut_z_bytes(self.cut_z),
+                b"decision": self.decision.canonical_bytes,
+                b"effective-cap-decision": self.effective_cap_decision.canonical_bytes,
+                b"motion": canonical_task1_bytes(self.motion),
+            },
+        )
+
+
 @dataclass(frozen=True)
 class CutFullCircleOperation:
     motion: ExactCircleMotion
@@ -708,4 +991,4 @@ class CutFullCircleOperation:
         )
 
 
-CanonicalOperation: TypeAlias = ApproachOperation | PlungeOperation | LinkSegmentOperation | CutFullCircleOperation | AdvanceSegmentOperation
+CanonicalOperation: TypeAlias = ApproachOperation | PlungeOperation | LinkSegmentOperation | CutFullCircleOperation | AdvanceSegmentOperation | RetraceSegmentOperation
