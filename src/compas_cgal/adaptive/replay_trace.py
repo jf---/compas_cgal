@@ -25,6 +25,7 @@ from compas_cgal.adaptive.operation import EffectiveCapDecision
 from compas_cgal.adaptive.operation import FullCapDecision
 from compas_cgal.adaptive.operation import LinkSegmentOperation
 from compas_cgal.adaptive.operation import NeckCapDecision
+from compas_cgal.adaptive.operation import RetraceSegmentOperation
 from compas_cgal.adaptive.stock_area import DepletionWitness
 from compas_cgal.toolpath import OperationType
 
@@ -51,7 +52,7 @@ class ReplayLateralWitness:
     """One ordered, cross-validated proof bundle for a lateral operation."""
 
     operation_index: int
-    operation: LinkSegmentOperation | CutFullCircleOperation | AdvanceSegmentOperation
+    operation: LinkSegmentOperation | CutFullCircleOperation | AdvanceSegmentOperation | RetraceSegmentOperation
     effective_cap_decision: EffectiveCapDecision
     stock_boundary_digest: bytes
     containment_certificate: SegmentContainmentCertificate | CircleContainmentCertificate
@@ -75,6 +76,7 @@ class ReplayLateralWitness:
             LinkSegmentOperation,
             CutFullCircleOperation,
             AdvanceSegmentOperation,
+            RetraceSegmentOperation,
         ):
             raise InvalidReplayTraceError("lateral replay witness requires one exact lateral operation.")
         if type(witness.effective_cap_decision) not in (
@@ -88,17 +90,23 @@ class ReplayLateralWitness:
             witness.stock_boundary_digest,
             "lateral pre-motion stock boundary digest",
         )
-        if type(witness.operation) is AdvanceSegmentOperation:
+        if type(witness.operation) in (
+            AdvanceSegmentOperation,
+            RetraceSegmentOperation,
+        ):
             if type(witness.motion_witness) is not SweptPrefixMotionWitness:
-                raise InvalidReplayTraceError("advancing segment requires one exact swept-prefix motion witness.")
+                raise InvalidReplayTraceError(
+                    "swept-prefix segment requires one exact swept-prefix witness.",
+                )
             if (
                 witness.motion_witness.strategy_identity != SWEPT_PREFIX_STRATEGY_VERSION
                 or witness.motion_witness.theorem_identity != SWEPT_PREFIX_THEOREM_VERSION
                 or witness.motion_witness.event_cell_count != SWEPT_PREFIX_MOTION_STRATA
+                or witness.motion_witness.stock_boundary_digest != witness.stock_boundary_digest
             ):
-                raise InvalidReplayTraceError("advancing segment witness contradicts its exact swept-prefix theorem.")
-            if witness.motion_witness.stock_boundary_digest != witness.stock_boundary_digest:
-                raise InvalidReplayTraceError("advancing segment witness contradicts its exact stock boundary.")
+                raise InvalidReplayTraceError(
+                    "swept-prefix segment contradicts its exact theorem.",
+                )
         elif type(witness.motion_witness) is not MotionWitness:
             raise InvalidReplayTraceError("ordinary lateral operation requires one exact event motion witness.")
         if type(witness.depletion_witness) is not DepletionWitness:
@@ -121,7 +129,7 @@ class ReplayLateralWitness:
         if not (witness.containment_certificate.tool_radius == witness.depletion_witness.tool_radius == witness.sweep_witness.tool_radius):
             raise InvalidReplayTraceError("lateral proof bundle contains cross-wired tool radii.")
         if type(witness.motion_witness) is SweptPrefixMotionWitness and witness.motion_witness.tool_radius != witness.containment_certificate.tool_radius:
-            raise InvalidReplayTraceError("advancing segment motion witness contains a cross-wired tool radius.")
+            raise InvalidReplayTraceError("swept-prefix segment motion witness contains a cross-wired tool radius.")
         if (
             witness.motion_witness.user_cap_bytes != witness.effective_cap_decision.user_cap_bytes
             or witness.motion_witness.effective_cap_bytes != witness.effective_cap_decision.effective_cap_bytes
