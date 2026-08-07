@@ -254,6 +254,14 @@ class InvalidRetraceSegmentOperationError(ArtifactIdentityError):
     """Raised when a retrace is not the exact admitted source reversal."""
 
 
+class InvalidRouteRetraceTransactionError(ValueError):
+    """Raised when retrace physical evidence is malformed or cross-wired."""
+
+
+class StaleRouteRetraceTransactionError(RuntimeError):
+    """Raised when a retrace no longer names the authoritative parent."""
+
+
 class UnsupportedRouteRetraceError(RuntimeError):
     """Raised when a nonincident route boundary has no admitted retrace source."""
 
