@@ -17,6 +17,7 @@ from compas_cgal.adaptive.coverage import CoverageLedger
 from compas_cgal.adaptive.entry import PreclearedEntry
 from compas_cgal.adaptive.errors import CandidateStateMismatchError
 from compas_cgal.adaptive.errors import InvalidGenerationStateError
+from compas_cgal.adaptive.errors import InvalidRetraceSegmentOperationError
 from compas_cgal.adaptive.identity import IdentityDigest
 from compas_cgal.adaptive.motion import ExactCircleMotion
 from compas_cgal.adaptive.motion_certificate import MotionCertifier
@@ -318,6 +319,14 @@ class GenerationState:
             )
             for operation in raw_lateral
         )
+        for operation in lateral:
+            if type(operation) is RetraceSegmentOperation:
+                try:
+                    operation._validate()
+                except (InvalidRetraceSegmentOperationError, AttributeError) as error:
+                    raise InvalidGenerationStateError(
+                        "generation state contains an invalid retrace operation.",
+                    ) from error
         if any(operation.cut_z != entry.cut_plane.cut_z for operation in lateral):
             raise InvalidGenerationStateError("generation lateral cut depth contradicts its qualified entry.")
         if tuple(operation.motion for operation in lateral) != tuple(witness.motion for witness in coverage_lineage):

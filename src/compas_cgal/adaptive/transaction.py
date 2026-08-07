@@ -23,6 +23,7 @@ from compas_cgal.adaptive.errors import CandidateSelectionError
 from compas_cgal.adaptive.errors import CandidateStateMismatchError
 from compas_cgal.adaptive.errors import InvalidCandidateTransactionError
 from compas_cgal.adaptive.errors import InvalidReplayTraceError
+from compas_cgal.adaptive.errors import InvalidRetraceSegmentOperationError
 from compas_cgal.adaptive.errors import InvalidZeroGuideTransactionError
 from compas_cgal.adaptive.errors import StaleCandidateTransactionError
 from compas_cgal.adaptive.errors import StaleZeroGuideTransactionError
@@ -968,6 +969,12 @@ class CandidateEvaluator:
         )
         for raw_operation in state.operations[2:]:
             if type(raw_operation) is RetraceSegmentOperation:
+                try:
+                    raw_operation._validate()
+                except (InvalidRetraceSegmentOperationError, AttributeError) as error:
+                    raise CandidateStateMismatchError(
+                        "candidate parent contains an invalid retrace operation.",
+                    ) from error
                 if raw_operation.effective_cap_decision != expected_full_cap:
                     raise CandidateStateMismatchError(
                         "candidate parent retrace contradicts evaluator full cap.",
