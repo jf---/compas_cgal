@@ -3,6 +3,7 @@
 import hashlib
 from dataclasses import dataclass
 from typing import Self
+from typing import cast
 
 from compas_cgal.adaptive.canonical import encode_bytes
 from compas_cgal.adaptive.canonical import encode_component_map
@@ -22,9 +23,6 @@ from compas_cgal.adaptive.errors import InvalidRouteRetraceTransactionError
 from compas_cgal.adaptive.errors import StaleRouteRetraceTransactionError
 from compas_cgal.adaptive.generation_state import GenerationState
 from compas_cgal.adaptive.identity import IdentityDigest
-from compas_cgal.adaptive.motion_certificate import SWEPT_PREFIX_MOTION_STRATA
-from compas_cgal.adaptive.motion_certificate import SWEPT_PREFIX_STRATEGY_VERSION
-from compas_cgal.adaptive.motion_certificate import SWEPT_PREFIX_THEOREM_VERSION
 from compas_cgal.adaptive.motion_certificate import SweptPrefixMotionWitness
 from compas_cgal.adaptive.operation import AdvanceSegmentOperation
 from compas_cgal.adaptive.operation import RetraceSegmentOperation
@@ -123,16 +121,10 @@ class RouteRetraceTransaction:
                     "retrace operation decision contradicts its transaction.",
                 )
 
-            motion_witness = witness.motion_witness
-            if (
-                type(motion_witness) is not SweptPrefixMotionWitness
-                or motion_witness.strategy_identity != SWEPT_PREFIX_STRATEGY_VERSION
-                or motion_witness.theorem_identity != SWEPT_PREFIX_THEOREM_VERSION
-                or motion_witness.event_cell_count != SWEPT_PREFIX_MOTION_STRATA
-            ):
-                raise InvalidRouteRetraceTransactionError(
-                    "retrace transaction requires the fixed exact two-stratum theorem.",
-                )
+            motion_witness = cast(
+                SweptPrefixMotionWitness,
+                witness.motion_witness,
+            )
             containment = witness.containment_certificate
             if type(containment) is not SegmentContainmentCertificate:
                 raise InvalidRouteRetraceTransactionError(
@@ -333,6 +325,12 @@ class RouteRetraceEvaluator:
                 "retrace evaluation requires exact state and decision types.",
             )
         try:
+            parent_digest = state.digest
+        except (AttributeError, InvalidGenerationStateError) as error:
+            raise InvalidRouteRetraceTransactionError(
+                "retrace evaluation parent contains incomplete exact state.",
+            ) from error
+        try:
             decision._validate()
         except AttributeError as error:
             raise InvalidRouteRetraceTransactionError(
@@ -386,7 +384,7 @@ class RouteRetraceEvaluator:
             operations=state.operations + (operation,),
         )
         transaction = RouteRetraceTransaction.build(
-            parent_state_digest=state.digest,
+            parent_state_digest=parent_digest,
             decision=decision,
             segment_witness=segment_witness,
             result_state_digest=child.digest,

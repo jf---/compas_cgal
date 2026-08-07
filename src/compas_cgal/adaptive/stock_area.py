@@ -9,6 +9,7 @@ from compas_cgal.adaptive.canonical import canonical_depletion_witness_bytes
 from compas_cgal.adaptive.canonical import canonical_precleared_depletion_witness_bytes
 from compas_cgal.adaptive.entry import ENTRY_DEPLETION_STRATEGY_VERSION
 from compas_cgal.adaptive.entry import PreclearedEntry
+from compas_cgal.adaptive.errors import InvalidDepletionPolicyError
 from compas_cgal.adaptive.errors import InvalidDepletionTraceError
 from compas_cgal.adaptive.errors import InvalidDepletionWitnessError
 from compas_cgal.adaptive.errors import InvalidStockAreaError
@@ -103,6 +104,12 @@ class DepletionWitness:
         if type(self.policy) is not DepletionPolicy:
             raise InvalidDepletionWitnessError("motion depletion witness requires an exact depletion policy.")
         policy = self.policy
+        try:
+            policy.__post_init__()
+        except InvalidDepletionPolicyError as error:
+            raise InvalidDepletionWitnessError(
+                "motion depletion witness contains a malformed depletion policy.",
+            ) from error
         if type(self.center_parameters) is not tuple or not self.center_parameters:
             raise InvalidDepletionWitnessError("depletion witness requires nonempty structural center parameters.")
         if any(type(parameter) is not ExactCenterParameterV1 for parameter in self.center_parameters):

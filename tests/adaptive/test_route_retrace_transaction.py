@@ -23,6 +23,8 @@ from compas_cgal.adaptive.coverage import SweepWitness
 from compas_cgal.adaptive.errors import CandidateStateMismatchError
 from compas_cgal.adaptive.errors import GougeContainmentError
 from compas_cgal.adaptive.errors import InvalidCoverageSweepError
+from compas_cgal.adaptive.errors import InvalidDepletionPolicyError
+from compas_cgal.adaptive.errors import InvalidDepletionWitnessError
 from compas_cgal.adaptive.errors import InvalidGenerationStateError
 from compas_cgal.adaptive.errors import InvalidRouteRetraceTransactionError
 from compas_cgal.adaptive.errors import InvalidStockAreaError
@@ -186,11 +188,13 @@ def test_route_retrace_transaction_binds_one_physical_suffix(
 
 
 def test_route_retrace_transaction_has_one_frozen_four_field_identity(
+    retrace: _RouteRetraceFixture,
     accepted_retrace: tuple[RouteRetraceTransaction, GenerationState],
 ) -> None:
-    """Encode exactly the parent, decision, proof, and child under one tag.
+    """Encode and distinguish the parent, decision, proof, and child fields.
 
     Args:
+        retrace: Accepted parent supplying the decision's owned source.
         accepted_retrace: Real accepted transaction and its reproduced child.
     """
     transaction, _ = accepted_retrace
@@ -212,6 +216,60 @@ def test_route_retrace_transaction_has_one_frozen_four_field_identity(
 
     assert transaction.canonical_bytes == expected
     assert transaction.digest == IdentityDigest(hashlib.sha256(expected).digest())
+
+    changed_decision = replace(
+        transaction.decision,
+        source_commit_digest=_identity(b"changed-source-commit"),
+    )
+    source = retrace.parent.operations[transaction.decision.source_operation_index]
+    assert type(source) is AdvanceSegmentOperation
+    changed_operation = RetraceSegmentOperation.build(
+        source_operation=source,
+        decision=changed_decision,
+    )
+    changed_decision_witness = replace(
+        transaction.segment_witness,
+        operation=changed_operation,
+    )
+    sweep_parents = transaction.segment_witness.sweep_witness.parent_lineage
+    assert sweep_parents
+    changed_sweep = replace(
+        transaction.segment_witness.sweep_witness,
+        parent_lineage=(
+            bytes(_identity(b"changed-opaque-coverage-parent")),
+            *sweep_parents[1:],
+        ),
+    )
+    changed_witness = replace(
+        transaction.segment_witness,
+        sweep_witness=changed_sweep,
+    )
+    variants = (
+        replace(
+            transaction,
+            parent_state_digest=_identity(b"changed-parent-state"),
+        ),
+        RouteRetraceTransaction.build(
+            parent_state_digest=transaction.parent_state_digest,
+            decision=changed_decision,
+            segment_witness=changed_decision_witness,
+            result_state_digest=transaction.result_state_digest,
+        ),
+        replace(transaction, segment_witness=changed_witness),
+        replace(
+            transaction,
+            result_state_digest=_identity(b"changed-result-state"),
+        ),
+    )
+    records = (transaction.canonical_bytes,) + tuple(variant.canonical_bytes for variant in variants)
+    digests = (transaction.digest,) + tuple(variant.digest for variant in variants)
+
+    assert len(set(records)) == 5
+    assert len(set(digests)) == 5
+    for variant in variants:
+        assert variant.digest == IdentityDigest(
+            hashlib.sha256(variant.canonical_bytes).digest(),
+        )
     with pytest.raises(FrozenInstanceError):
         setattr(transaction, "parent_state_digest", _identity(b"mutable-parent"))
 
@@ -416,6 +474,81 @@ def test_route_retrace_transaction_translates_hollow_nested_records(
                 segment_witness=nested["segment_witness"],  # type: ignore[arg-type]
                 result_state_digest=transaction.result_state_digest,
             )
+
+
+def test_route_retrace_transaction_translates_malformed_depletion_policy(
+    accepted_retrace: tuple[RouteRetraceTransaction, GenerationState],
+) -> None:
+    """Translate a malformed exact nested policy through its witness owner.
+
+    Args:
+        accepted_retrace: Real transaction supplying all sibling evidence.
+    """
+    transaction, _ = accepted_retrace
+    witness = transaction.segment_witness
+    policy = witness.depletion_witness.policy
+    assert type(policy) is DepletionPolicy
+    malformed_policy = _raw_copy(policy, center_count_limit="4096")
+    malformed_depletion = _raw_copy(
+        witness.depletion_witness,
+        policy=malformed_policy,
+    )
+    malformed_witness = _raw_copy(
+        witness,
+        depletion_witness=malformed_depletion,
+    )
+
+    with pytest.raises(
+        InvalidRouteRetraceTransactionError,
+        match="malformed nested exact state",
+    ) as captured:
+        _transaction_with_witness(transaction, malformed_witness)
+
+    assert type(captured.value.__cause__) is InvalidDepletionWitnessError
+    assert type(captured.value.__cause__.__cause__) is InvalidDepletionPolicyError
+
+
+def test_route_retrace_evaluation_rejects_hollow_exact_state(
+    retrace: _RouteRetraceFixture,
+) -> None:
+    """Translate an unsealed exact state before physical-policy delegation.
+
+    Args:
+        retrace: Accepted decision and exact evaluator authority.
+    """
+    hollow = object.__new__(GenerationState)
+
+    with pytest.raises(
+        InvalidRouteRetraceTransactionError,
+        match="evaluation parent contains incomplete exact state",
+    ):
+        retrace.evaluator.evaluate(hollow, retrace.decision)
+
+
+def test_route_retrace_commit_validates_transaction_before_hollow_state(
+    retrace: _RouteRetraceFixture,
+    accepted_retrace: tuple[RouteRetraceTransaction, GenerationState],
+) -> None:
+    """Validate submitted evidence before reading the exact parent shell.
+
+    Args:
+        retrace: Exact evaluator authority for both commit attempts.
+        accepted_retrace: Real accepted transaction for the state control.
+    """
+    transaction, _ = accepted_retrace
+    hollow_state = object.__new__(GenerationState)
+    hollow_transaction = object.__new__(RouteRetraceTransaction)
+
+    with pytest.raises(
+        InvalidRouteRetraceTransactionError,
+        match="transaction contains incomplete nested exact state",
+    ):
+        retrace.evaluator.commit(hollow_state, hollow_transaction)
+    with pytest.raises(
+        InvalidRouteRetraceTransactionError,
+        match="commit parent contains incomplete exact state",
+    ):
+        retrace.evaluator.commit(hollow_state, transaction)
 
 
 def test_failed_retrace_containment_leaves_parent_byte_identical(
