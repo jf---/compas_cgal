@@ -294,6 +294,23 @@ def _unchecked_foreign_traversal_source(
     return operation, traversal_owner
 
 
+def _unchecked_hollow_full_cap_source(
+    source: AdvanceSegmentOperation,
+) -> AdvanceSegmentOperation:
+    """Forge an exact full-cap shell with no required nested state."""
+    operation = object.__new__(AdvanceSegmentOperation)
+    object.__setattr__(operation, "motion", source.motion)
+    object.__setattr__(operation, "cut_z", source.cut_z)
+    object.__setattr__(operation, "neck_scope", source.neck_scope)
+    object.__setattr__(
+        operation,
+        "effective_cap_decision",
+        object.__new__(FullCapDecision),
+    )
+    object.__setattr__(operation, "traversal_decision", source.traversal_decision)
+    return operation
+
+
 def _unchecked_retrace_operation(
     *,
     motion: ExactSegmentMotion,
@@ -314,13 +331,24 @@ def _unchecked_retrace_operation(
     return operation
 
 
-def test_retrace_operation_rejects_raw_construction() -> None:
+@pytest.mark.parametrize(
+    ("args", "kwargs"),
+    (
+        pytest.param((), {}, id="zero-argument"),
+        pytest.param((object(),), {}, id="positional"),
+        pytest.param((), {"motion": object()}, id="keyword"),
+    ),
+)
+def test_retrace_operation_rejects_raw_construction(
+    args: tuple[object, ...],
+    kwargs: dict[str, object],
+) -> None:
     """Keep every retrace instance behind source-derived admission."""
     with pytest.raises(
         InvalidRetraceSegmentOperationError,
         match="must be built from an admitted source",
     ):
-        RetraceSegmentOperation()
+        RetraceSegmentOperation(*args, **kwargs)
 
 
 def test_retrace_operation_rejects_foreign_traversal_owner(
@@ -354,6 +382,33 @@ def test_retrace_operation_rejects_foreign_traversal_owner(
             decision=decision,
         )
     assert traversal_owner.canonical_read_count == 1
+
+
+def test_retrace_operation_rejects_hollow_full_cap_source(
+    established_prefix: tuple[
+        GenerationState,
+        MatTraversalState,
+        tuple[TraversalCommit, TraversalCommit],
+    ],
+) -> None:
+    """Translate an exact hollow nested record through the retrace error model."""
+    physical, terminal, commits = established_prefix
+    source = physical.operations[-1]
+    assert type(source) is AdvanceSegmentOperation
+    decision = task13f_retrace_decision(
+        physical=physical,
+        terminal=terminal,
+        source_commit=commits[-1],
+    )
+
+    with pytest.raises(
+        InvalidRetraceSegmentOperationError,
+        match="valid exact advancing segment",
+    ):
+        RetraceSegmentOperation.build(
+            source_operation=_unchecked_hollow_full_cap_source(source),
+            decision=decision,
+        )
 
 
 def test_retrace_operation_derives_only_the_exact_source_reverse(
