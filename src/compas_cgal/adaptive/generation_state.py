@@ -32,6 +32,7 @@ from compas_cgal.adaptive.operation import LinkSegmentOperation
 from compas_cgal.adaptive.operation import NeckCapDecision
 from compas_cgal.adaptive.operation import OrientedNeckScope
 from compas_cgal.adaptive.operation import PlungeOperation
+from compas_cgal.adaptive.operation import RetraceSegmentOperation
 from compas_cgal.adaptive.policy import BranchId
 from compas_cgal.adaptive.policy import ComponentId
 from compas_cgal.adaptive.policy import PassageState
@@ -181,6 +182,7 @@ class GenerationState:
                 LinkSegmentOperation,
                 CutFullCircleOperation,
                 AdvanceSegmentOperation,
+                RetraceSegmentOperation,
             )
             for operation in self.operations
         ):
@@ -304,13 +306,14 @@ class GenerationState:
                 LinkSegmentOperation,
                 CutFullCircleOperation,
                 AdvanceSegmentOperation,
+                RetraceSegmentOperation,
             )
             for operation in raw_lateral
         ):
             raise InvalidGenerationStateError("generation operation chronology contains a foreign lateral type.")
         lateral = tuple(
             cast(
-                LinkSegmentOperation | CutFullCircleOperation | AdvanceSegmentOperation,
+                LinkSegmentOperation | CutFullCircleOperation | AdvanceSegmentOperation | RetraceSegmentOperation,
                 operation,
             )
             for operation in raw_lateral
@@ -326,7 +329,7 @@ class GenerationState:
         current_phase = entry.center
         pending_link: LinkSegmentOperation | None = None
         last_advance: AdvanceTraversalDecision | None = None
-        for index, operation in enumerate(lateral):
+        for operation_index, operation in enumerate(lateral, start=2):
             if type(operation) is LinkSegmentOperation:
                 if pending_link is not None or operation.motion.start != current_phase:
                     raise InvalidGenerationStateError("link chronology does not begin at the accepted phase.")
@@ -339,7 +342,7 @@ class GenerationState:
                     raise InvalidGenerationStateError(
                         "circle phase contradicts the accepted operation chronology.",
                     )
-                if index > 0 and pending_link is None:
+                if operation_index > 2 and pending_link is None:
                     raise InvalidGenerationStateError(
                         "generation circle after entry requires one paired hold link.",
                     )
@@ -359,6 +362,38 @@ class GenerationState:
                         )
                 pending_link = None
                 last_advance = operation.traversal_decision
+                continue
+
+            if type(operation) is RetraceSegmentOperation:
+                if pending_link is not None:
+                    raise InvalidGenerationStateError(
+                        "route retrace cannot consume a pending hold link.",
+                    )
+                source_index = operation.decision.source_operation_index
+                if source_index != operation_index - 1:
+                    raise InvalidGenerationStateError(
+                        "route retrace must immediately follow its named source.",
+                    )
+                source = self.operations[source_index]
+                if type(source) is not AdvanceSegmentOperation:
+                    raise InvalidGenerationStateError(
+                        "route retrace source is not an advancing segment.",
+                    )
+                source_digest = IdentityDigest(
+                    hashlib.sha256(source.canonical_bytes).digest(),
+                )
+                if (
+                    source_digest != operation.decision.source_operation_digest
+                    or operation.motion.start != current_phase
+                    or operation.motion.start != source.motion.end
+                    or operation.motion.end != source.motion.start
+                    or operation.cut_z != source.cut_z
+                    or operation.effective_cap_decision != source.effective_cap_decision
+                ):
+                    raise InvalidGenerationStateError(
+                        "route retrace contradicts its source or physical phase.",
+                    )
+                current_phase = operation.motion.end
                 continue
 
             if type(operation) is AdvanceSegmentOperation:
@@ -416,6 +451,8 @@ class GenerationState:
         by_scope = {passage.scope: passage for passage in self.passages}
         expected_states = {scope: PassageState.UNVISITED for scope in by_scope}
         for operation in self.operations[2:]:
+            if type(operation) is RetraceSegmentOperation:
+                continue
             advancing_operation: CutFullCircleOperation | AdvanceSegmentOperation
             if type(operation) is CutFullCircleOperation:
                 advancing_operation = operation
