@@ -744,10 +744,6 @@ class AdvanceSegmentOperation:
             raise InvalidAdvanceSegmentOperationError(
                 "advancing segment requires exact ExactSegmentMotion and CutZ.",
             )
-        if type(self.motion.start) is not Point2 or type(self.motion.end) is not Point2:
-            raise InvalidAdvanceSegmentOperationError(
-                "advancing segment motion endpoints must be exact Point2[WorldXY].",
-            )
         if type(self.neck_scope) not in (NoNeckScope, OrientedNeckScope):
             raise InvalidAdvanceSegmentOperationError(
                 "advancing segment requires an exact closed neck scope.",
@@ -769,6 +765,10 @@ class AdvanceSegmentOperation:
                 "advancing segment must own one exact advance traversal decision.",
             )
         try:
+            if type(self.motion.start) is not Point2 or type(self.motion.end) is not Point2:
+                raise InvalidAdvanceSegmentOperationError(
+                    "advancing segment motion endpoints must be exact Point2[WorldXY].",
+                )
             self.motion.__post_init__()
             canonical_task1_bytes(self.motion)
             canonical_cut_z_bytes(self.cut_z)
@@ -778,6 +778,10 @@ class AdvanceSegmentOperation:
             if type(self.effective_cap_decision) is NeckCapDecision:
                 self.effective_cap_decision.width_class_id.__post_init__()
             self.traversal_decision.__post_init__()
+        except AttributeError as error:
+            raise InvalidAdvanceSegmentOperationError(
+                "advancing segment contains incomplete nested domain state.",
+            ) from error
         except (
             CanonicalEncodingError,
             DegenerateSegmentMotionError,
@@ -858,7 +862,7 @@ class RetraceSegmentOperation:
     effective_cap_decision: FullCapDecision
     decision: RouteRetraceDecision
 
-    def __init__(self) -> None:
+    def __init__(self, *_args: object, **_kwargs: object) -> None:
         raise InvalidRetraceSegmentOperationError(
             "retrace operation must be built from an admitted source.",
         )
