@@ -211,6 +211,52 @@ def test_generation_state_accepts_entry_circle_then_advancing_segment(
     assert state.operations[-1] == segment
 
 
+def test_generation_state_validation_rejects_partial_exact_shell(
+    task13f: Task13FFixture,
+) -> None:
+    """Reject a SHA-shaped shell that omits the authoritative owners."""
+    partial = object.__new__(GenerationState)
+    object.__setattr__(partial, "_digest", task13f.physical.digest)
+
+    with pytest.raises(
+        InvalidGenerationStateError,
+        match="incomplete exact state",
+    ) as captured:
+        GenerationState.validate(partial)
+
+    assert type(captured.value.__cause__) is AttributeError
+
+
+def test_generation_state_validation_is_read_only(
+    task13f: Task13FFixture,
+) -> None:
+    """Revalidate a complete state without replacing authoritative owners."""
+    state = task13f.physical
+    stock_owner = state._stock
+    coverage_owner = state._coverage
+    passages = state.passages
+    before = (
+        state.digest,
+        state.stock_boundary_digest,
+        state.stock_lineage_digest,
+        state.operations,
+        state.traversal,
+    )
+
+    GenerationState.validate(state)
+
+    assert state._stock is stock_owner
+    assert state._coverage is coverage_owner
+    assert state.passages is passages
+    assert (
+        state.digest,
+        state.stock_boundary_digest,
+        state.stock_lineage_digest,
+        state.operations,
+        state.traversal,
+    ) == before
+
+
 def test_generation_state_advances_neck_passage_on_advancing_segment(
     oriented_state: _StateFixture,
 ) -> None:

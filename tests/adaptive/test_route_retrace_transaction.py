@@ -153,6 +153,13 @@ def _parent_identity(state: GenerationState) -> tuple[object, ...]:
     )
 
 
+def _partial_state_with_digest(parent: GenerationState) -> GenerationState:
+    """Forge one exact shell carrying only an authoritative-sized digest."""
+    partial = object.__new__(GenerationState)
+    object.__setattr__(partial, "_digest", parent.digest)
+    return partial
+
+
 def _transaction_with_witness(
     transaction: RouteRetraceTransaction,
     witness: ReplayLateralWitness,
@@ -508,6 +515,39 @@ def test_route_retrace_transaction_translates_malformed_depletion_policy(
     assert type(captured.value.__cause__.__cause__) is InvalidDepletionPolicyError
 
 
+def test_route_retrace_transaction_preserves_hollow_policy_cause_chain(
+    accepted_retrace: tuple[RouteRetraceTransaction, GenerationState],
+) -> None:
+    """Retain every named owner above one absent policy field set.
+
+    Args:
+        accepted_retrace: Real transaction supplying all sibling evidence.
+    """
+    transaction, _ = accepted_retrace
+    witness = transaction.segment_witness
+    hollow_policy = object.__new__(DepletionPolicy)
+    hollow_depletion = _raw_copy(
+        witness.depletion_witness,
+        policy=hollow_policy,
+    )
+    hollow_witness = _raw_copy(
+        witness,
+        depletion_witness=hollow_depletion,
+    )
+
+    with pytest.raises(
+        InvalidRouteRetraceTransactionError,
+        match="malformed nested exact state",
+    ) as captured:
+        _transaction_with_witness(transaction, hollow_witness)
+
+    witness_error = captured.value.__cause__
+    assert type(witness_error) is InvalidDepletionWitnessError
+    policy_error = witness_error.__cause__
+    assert type(policy_error) is InvalidDepletionPolicyError
+    assert type(policy_error.__cause__) is AttributeError
+
+
 def test_route_retrace_evaluation_rejects_hollow_exact_state(
     retrace: _RouteRetraceFixture,
 ) -> None:
@@ -523,6 +563,27 @@ def test_route_retrace_evaluation_rejects_hollow_exact_state(
         match="evaluation parent contains incomplete exact state",
     ):
         retrace.evaluator.evaluate(hollow, retrace.decision)
+
+
+def test_route_retrace_evaluation_rejects_partial_digest_only_state(
+    retrace: _RouteRetraceFixture,
+) -> None:
+    """Reject cached identity without the complete authoritative owners.
+
+    Args:
+        retrace: Accepted parent, decision, and evaluator authority.
+    """
+    partial = _partial_state_with_digest(retrace.parent)
+
+    with pytest.raises(
+        InvalidRouteRetraceTransactionError,
+        match="evaluation parent contains incomplete exact state",
+    ) as captured:
+        retrace.evaluator.evaluate(partial, retrace.decision)
+
+    state_error = captured.value.__cause__
+    assert type(state_error) is InvalidGenerationStateError
+    assert type(state_error.__cause__) is AttributeError
 
 
 def test_route_retrace_commit_validates_transaction_before_hollow_state(
@@ -549,6 +610,30 @@ def test_route_retrace_commit_validates_transaction_before_hollow_state(
         match="commit parent contains incomplete exact state",
     ):
         retrace.evaluator.commit(hollow_state, transaction)
+
+
+def test_route_retrace_commit_rejects_partial_digest_only_state(
+    retrace: _RouteRetraceFixture,
+    accepted_retrace: tuple[RouteRetraceTransaction, GenerationState],
+) -> None:
+    """Reject a valid transaction before trial reads a partial parent.
+
+    Args:
+        retrace: Exact evaluator authority for the commit attempt.
+        accepted_retrace: Real valid transaction naming the copied digest.
+    """
+    transaction, _ = accepted_retrace
+    partial = _partial_state_with_digest(retrace.parent)
+
+    with pytest.raises(
+        InvalidRouteRetraceTransactionError,
+        match="commit parent contains incomplete exact state",
+    ) as captured:
+        retrace.evaluator.commit(partial, transaction)
+
+    state_error = captured.value.__cause__
+    assert type(state_error) is InvalidGenerationStateError
+    assert type(state_error.__cause__) is AttributeError
 
 
 def test_failed_retrace_containment_leaves_parent_byte_identical(
@@ -775,8 +860,13 @@ def test_route_retrace_evaluation_rejects_wrong_full_cap_parent(
             effective_cap=foreign_cap,
         ),
     )
-    wrong_parent = _raw_copy(
-        retrace.parent,
+    wrong_parent = GenerationState.build(
+        stock=retrace.parent.fork_stock(),
+        coverage=retrace.parent.clone_coverage(),
+        tool_radius=retrace.parent.tool_radius,
+        phase_point=retrace.parent.phase_point,
+        traversal=retrace.parent.traversal,
+        passages=retrace.parent.passages,
         operations=retrace.parent.operations[:-1] + (wrong_source,),
     )
 

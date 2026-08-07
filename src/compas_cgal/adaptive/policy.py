@@ -315,11 +315,24 @@ class DepletionPolicy:
     chord_bound_bytes: bytes
 
     def __post_init__(self) -> None:
-        if not isinstance(self.chord_bound, ChordBound):
-            raise InvalidDepletionPolicyError("depletion chord bound must be typed.")
-        _positive_int(self.center_count_limit, "center-count limit", InvalidDepletionPolicyError)
-        if self.chord_bound_bytes != self.chord_bound.exact_bytes:
-            raise InvalidDepletionPolicyError("depletion policy must retain the exact chord-bound bytes.")
+        try:
+            if not isinstance(self.chord_bound, ChordBound):
+                raise InvalidDepletionPolicyError(
+                    "depletion chord bound must be typed.",
+                )
+            _positive_int(
+                self.center_count_limit,
+                "center-count limit",
+                InvalidDepletionPolicyError,
+            )
+            if self.chord_bound_bytes != self.chord_bound.exact_bytes:
+                raise InvalidDepletionPolicyError(
+                    "depletion policy must retain the exact chord-bound bytes.",
+                )
+        except AttributeError as error:
+            raise InvalidDepletionPolicyError(
+                "depletion policy contains incomplete exact state.",
+            ) from error
 
     @classmethod
     def build(cls, *, chord_bound: ChordBound, center_count_limit: int) -> Self:
