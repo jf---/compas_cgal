@@ -20,6 +20,8 @@ from compas_cgal.adaptive.canonical import encode_material_side
 from compas_cgal.adaptive.canonical import encode_passage_state
 from compas_cgal.adaptive.canonical import encode_tagged_union
 from compas_cgal.adaptive.errors import ArtifactIdentityError
+from compas_cgal.adaptive.errors import CanonicalEncodingError
+from compas_cgal.adaptive.errors import DegenerateSegmentMotionError
 from compas_cgal.adaptive.errors import InvalidAdvanceSegmentOperationError
 from compas_cgal.adaptive.errors import InvalidEffectiveCapDecisionError
 from compas_cgal.adaptive.errors import InvalidOperationIdentityError
@@ -735,6 +737,9 @@ class AdvanceSegmentOperation:
     traversal_decision: AdvanceTraversalDecision
 
     def __post_init__(self) -> None:
+        self._validate()
+
+    def _validate(self) -> None:
         if type(self.motion) is not ExactSegmentMotion or type(self.cut_z) is not CutZ:
             raise InvalidAdvanceSegmentOperationError(
                 "advancing segment requires exact ExactSegmentMotion and CutZ.",
@@ -763,6 +768,26 @@ class AdvanceSegmentOperation:
             raise InvalidAdvanceSegmentOperationError(
                 "advancing segment must own one exact advance traversal decision.",
             )
+        try:
+            self.motion.__post_init__()
+            canonical_task1_bytes(self.motion)
+            canonical_cut_z_bytes(self.cut_z)
+            if type(self.neck_scope) is OrientedNeckScope:
+                self.neck_scope.__post_init__()
+            self.effective_cap_decision.__post_init__()
+            if type(self.effective_cap_decision) is NeckCapDecision:
+                self.effective_cap_decision.width_class_id.__post_init__()
+            self.traversal_decision.__post_init__()
+        except (
+            CanonicalEncodingError,
+            DegenerateSegmentMotionError,
+            InvalidEffectiveCapDecisionError,
+            InvalidOperationIdentityError,
+            InvalidTraversalDecisionError,
+        ) as error:
+            raise InvalidAdvanceSegmentOperationError(
+                "advancing segment contains malformed nested domain state.",
+            ) from error
 
     @classmethod
     def build(
@@ -833,6 +858,11 @@ class RetraceSegmentOperation:
     effective_cap_decision: FullCapDecision
     decision: RouteRetraceDecision
 
+    def __init__(self) -> None:
+        raise InvalidRetraceSegmentOperationError(
+            "retrace operation must be built from an admitted source.",
+        )
+
     def _validate(self) -> None:
         if type(self) is not RetraceSegmentOperation:
             raise InvalidRetraceSegmentOperationError(
@@ -884,10 +914,16 @@ class RetraceSegmentOperation:
                 "retrace requires one exact route retrace decision.",
             )
         decision._validate()
+        try:
+            source_operation._validate()
+        except InvalidAdvanceSegmentOperationError as error:
+            raise InvalidRetraceSegmentOperationError(
+                "retrace source must be one valid exact advancing segment.",
+            ) from error
         if (
             type(source_operation.neck_scope) is not NoNeckScope
             or type(source_operation.effective_cap_decision) is not FullCapDecision
-            or not source_operation.traversal_decision.makes_cursor_terminal
+            or source_operation.traversal_decision.makes_cursor_terminal is not True
         ):
             raise InvalidRetraceSegmentOperationError(
                 "retrace source must be no-neck, full-cap, and route-terminal.",
