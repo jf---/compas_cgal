@@ -246,6 +246,18 @@ class InvalidAdvanceSegmentOperationError(ArtifactIdentityError):
     """An advancing segment violates its one-motion traversal contract."""
 
 
+class InvalidRouteRetraceDecisionError(ArtifactIdentityError):
+    """Raised when causal route-boundary identities are malformed or cross-wired."""
+
+
+class InvalidRetraceSegmentOperationError(ArtifactIdentityError):
+    """Raised when a retrace is not the exact admitted source reversal."""
+
+
+class UnsupportedRouteRetraceError(RuntimeError):
+    """Raised when a nonincident route boundary has no admitted retrace source."""
+
+
 class InvalidReachableDomainCertificateError(ValueError):
     """Reachable-domain reconstruction evidence violates its exact contract."""
 
