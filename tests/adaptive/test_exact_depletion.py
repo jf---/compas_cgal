@@ -10,6 +10,7 @@ from compas.geometry import Polygon
 from compas_cgal import _stock_2
 from compas_cgal.adaptive.canonical import ExactCenterParameterV1
 from compas_cgal.adaptive.errors import ExactDepletionCenterLimitError
+from compas_cgal.adaptive.errors import InvalidDepletionPolicyError
 from compas_cgal.adaptive.errors import InvalidDepletionTraceError
 from compas_cgal.adaptive.errors import InvalidDepletionWitnessError
 from compas_cgal.adaptive.errors import InvalidStockAreaError
@@ -412,6 +413,32 @@ def test_direct_witness_rejects_policy_limit_and_strategy_mutations() -> None:
         _rebuild_witness(witness, policy=too_small)
     with pytest.raises(InvalidDepletionWitnessError, match="strategy"):
         _rebuild_witness(witness, native_strategy_version=b"unsupported-exact-strategy-v0")
+
+
+def test_direct_witness_translates_malformed_exact_depletion_policy() -> None:
+    """Reject a raw exact policy shell before witness policy arithmetic."""
+    witness = Stock2Area.build(_stock()).deplete(
+        _segment(),
+        ToolRadius.build(0.75),
+        _policy(),
+    )
+    assert type(witness.policy) is DepletionPolicy
+    malformed = object.__new__(DepletionPolicy)
+    object.__setattr__(malformed, "chord_bound", witness.policy.chord_bound)
+    object.__setattr__(malformed, "center_count_limit", "4096")
+    object.__setattr__(
+        malformed,
+        "chord_bound_bytes",
+        witness.policy.chord_bound_bytes,
+    )
+
+    with pytest.raises(
+        InvalidDepletionWitnessError,
+        match="policy",
+    ) as captured:
+        _rebuild_witness(witness, policy=malformed)
+
+    assert type(captured.value.__cause__) is InvalidDepletionPolicyError
 
 
 def test_direct_witness_rejects_circle_chart_denominator_and_order_mutations() -> None:
