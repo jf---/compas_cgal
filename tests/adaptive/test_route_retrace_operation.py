@@ -331,6 +331,15 @@ def _unchecked_retrace_operation(
     return operation
 
 
+def _hollow_route_retrace_decision(
+    decision: RouteRetraceDecision,
+) -> RouteRetraceDecision:
+    """Forge an exact decision shell that passes the outer strategy check."""
+    hollow = object.__new__(RouteRetraceDecision)
+    object.__setattr__(hollow, "strategy_identity", decision.strategy_identity)
+    return hollow
+
+
 @pytest.mark.parametrize(
     ("args", "kwargs"),
     (
@@ -409,6 +418,70 @@ def test_retrace_operation_rejects_hollow_full_cap_source(
             source_operation=_unchecked_hollow_full_cap_source(source),
             decision=decision,
         )
+
+
+def test_retrace_operation_rejects_hollow_nested_route_decision(
+    established_prefix: tuple[
+        GenerationState,
+        MatTraversalState,
+        tuple[TraversalCommit, TraversalCommit],
+    ],
+) -> None:
+    """Reject an incomplete exact route decision at its operation owner."""
+    physical, terminal, commits = established_prefix
+    source = physical.operations[-1]
+    assert type(source) is AdvanceSegmentOperation
+    operation = RetraceSegmentOperation.build(
+        source_operation=source,
+        decision=task13f_retrace_decision(
+            physical=physical,
+            terminal=terminal,
+            source_commit=commits[-1],
+        ),
+    )
+    forged = _unchecked_retrace_operation(
+        motion=operation.motion,
+        cut_z=operation.cut_z,
+        effective_cap_decision=operation.effective_cap_decision,
+        decision=_hollow_route_retrace_decision(operation.decision),
+    )
+
+    with pytest.raises(InvalidRetraceSegmentOperationError) as raised:
+        forged._validate()
+
+    assert type(raised.value.__cause__) is AttributeError
+
+
+def test_retrace_operation_rejects_hollow_nested_full_cap_decision(
+    established_prefix: tuple[
+        GenerationState,
+        MatTraversalState,
+        tuple[TraversalCommit, TraversalCommit],
+    ],
+) -> None:
+    """Reject an incomplete exact full-cap decision at its operation owner."""
+    physical, terminal, commits = established_prefix
+    source = physical.operations[-1]
+    assert type(source) is AdvanceSegmentOperation
+    operation = RetraceSegmentOperation.build(
+        source_operation=source,
+        decision=task13f_retrace_decision(
+            physical=physical,
+            terminal=terminal,
+            source_commit=commits[-1],
+        ),
+    )
+    forged = _unchecked_retrace_operation(
+        motion=operation.motion,
+        cut_z=operation.cut_z,
+        effective_cap_decision=object.__new__(FullCapDecision),
+        decision=operation.decision,
+    )
+
+    with pytest.raises(InvalidRetraceSegmentOperationError) as raised:
+        forged._validate()
+
+    assert type(raised.value.__cause__) is AttributeError
 
 
 def test_retrace_operation_derives_only_the_exact_source_reverse(

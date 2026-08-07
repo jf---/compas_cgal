@@ -876,18 +876,41 @@ class RetraceSegmentOperation:
             raise InvalidRetraceSegmentOperationError(
                 "retrace requires exact ExactSegmentMotion and CutZ.",
             )
-        if type(self.motion.start) is not Point2 or type(self.motion.end) is not Point2:
-            raise InvalidRetraceSegmentOperationError(
-                "retrace motion endpoints must be exact Point2[WorldXY].",
-            )
         if type(self.effective_cap_decision) is not FullCapDecision:
             raise InvalidRetraceSegmentOperationError(
                 "retrace requires one exact full-cap decision.",
             )
-        if type(self.decision) is not RouteRetraceDecision or self.decision.strategy_identity != ROUTE_RETRACE_STRATEGY_VERSION:
+        if type(self.decision) is not RouteRetraceDecision:
             raise InvalidRetraceSegmentOperationError(
                 "retrace requires one exact fixed-strategy route decision.",
             )
+        try:
+            if type(self.motion.start) is not Point2 or type(self.motion.end) is not Point2:
+                raise InvalidRetraceSegmentOperationError(
+                    "retrace motion endpoints must be exact Point2[WorldXY].",
+                )
+            self.motion.__post_init__()
+            canonical_task1_bytes(self.motion)
+            canonical_cut_z_bytes(self.cut_z)
+            self.effective_cap_decision.__post_init__()
+            self.decision._validate()
+            if self.decision.strategy_identity != ROUTE_RETRACE_STRATEGY_VERSION:
+                raise InvalidRetraceSegmentOperationError(
+                    "retrace requires one exact fixed-strategy route decision.",
+                )
+        except AttributeError as error:
+            raise InvalidRetraceSegmentOperationError(
+                "retrace contains incomplete nested domain state.",
+            ) from error
+        except (
+            CanonicalEncodingError,
+            DegenerateSegmentMotionError,
+            InvalidEffectiveCapDecisionError,
+            InvalidRouteRetraceDecisionError,
+        ) as error:
+            raise InvalidRetraceSegmentOperationError(
+                "retrace contains malformed nested domain state.",
+            ) from error
 
     @classmethod
     def build(

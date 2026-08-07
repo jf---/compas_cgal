@@ -10,6 +10,7 @@ from compas_cgal.adaptive.containment import GougeContainment
 from compas_cgal.adaptive.coverage import CoverageLedger
 from compas_cgal.adaptive.errors import CandidateStateMismatchError
 from compas_cgal.adaptive.errors import InvalidGenerationStateError
+from compas_cgal.adaptive.errors import InvalidRetraceSegmentOperationError
 from compas_cgal.adaptive.generation_state import GenerationState
 from compas_cgal.adaptive.identity import IdentityDigest
 from compas_cgal.adaptive.motion import EngagementCap
@@ -113,6 +114,15 @@ def _unchecked_retrace(
     )
     object.__setattr__(operation, "decision", decision)
     return operation
+
+
+def _hollow_route_retrace_decision(
+    decision: RouteRetraceDecision,
+) -> RouteRetraceDecision:
+    """Forge an exact decision shell that passes the outer strategy check."""
+    hollow = object.__new__(RouteRetraceDecision)
+    object.__setattr__(hollow, "strategy_identity", decision.strategy_identity)
+    return hollow
 
 
 def _build_child(
@@ -221,6 +231,126 @@ def test_candidate_evaluator_rejects_hollow_exact_retrace_with_named_error(
 
     with pytest.raises(CandidateStateMismatchError):
         task13f.evaluator._validate_parent_operations(state)
+
+
+def test_generation_state_rejects_hollow_nested_route_decision_with_cause(
+    evaluated_retrace: tuple[
+        GenerationState,
+        AdvanceSegmentOperation,
+        RetraceSegmentOperation,
+        Stock2Area,
+        CoverageLedger,
+    ],
+) -> None:
+    """Translate an incomplete exact route decision through state ownership."""
+    parent, _, operation, stock, coverage = evaluated_retrace
+    forged = _unchecked_retrace(
+        motion=operation.motion,
+        cut_z=operation.cut_z,
+        effective_cap_decision=operation.effective_cap_decision,
+        decision=_hollow_route_retrace_decision(operation.decision),
+    )
+
+    with pytest.raises(InvalidGenerationStateError) as raised:
+        _build_child(
+            parent=parent,
+            operation=forged,
+            stock=stock.fork(),
+            coverage=coverage.clone(),
+        )
+
+    retrace_error = raised.value.__cause__
+    assert type(retrace_error) is InvalidRetraceSegmentOperationError
+    assert type(retrace_error.__cause__) is AttributeError
+
+
+def test_generation_state_rejects_hollow_nested_full_cap_with_cause(
+    evaluated_retrace: tuple[
+        GenerationState,
+        AdvanceSegmentOperation,
+        RetraceSegmentOperation,
+        Stock2Area,
+        CoverageLedger,
+    ],
+) -> None:
+    """Translate an incomplete exact full-cap record through state ownership."""
+    parent, _, operation, stock, coverage = evaluated_retrace
+    forged = _unchecked_retrace(
+        motion=operation.motion,
+        cut_z=operation.cut_z,
+        effective_cap_decision=object.__new__(FullCapDecision),
+        decision=operation.decision,
+    )
+
+    with pytest.raises(InvalidGenerationStateError) as raised:
+        _build_child(
+            parent=parent,
+            operation=forged,
+            stock=stock.fork(),
+            coverage=coverage.clone(),
+        )
+
+    retrace_error = raised.value.__cause__
+    assert type(retrace_error) is InvalidRetraceSegmentOperationError
+    assert type(retrace_error.__cause__) is AttributeError
+
+
+def test_candidate_evaluator_rejects_hollow_nested_route_decision_with_cause(
+    task13f: Task13FFixture,
+    evaluated_retrace: tuple[
+        GenerationState,
+        AdvanceSegmentOperation,
+        RetraceSegmentOperation,
+        Stock2Area,
+        CoverageLedger,
+    ],
+) -> None:
+    """Translate an incomplete exact route decision through evaluator ownership."""
+    parent, _, operation, _, _ = evaluated_retrace
+    forged = _unchecked_retrace(
+        motion=operation.motion,
+        cut_z=operation.cut_z,
+        effective_cap_decision=operation.effective_cap_decision,
+        decision=_hollow_route_retrace_decision(operation.decision),
+    )
+    state = object.__new__(GenerationState)
+    object.__setattr__(state, "operations", parent.operations + (forged,))
+
+    with pytest.raises(CandidateStateMismatchError) as raised:
+        task13f.evaluator._validate_parent_operations(state)
+
+    retrace_error = raised.value.__cause__
+    assert type(retrace_error) is InvalidRetraceSegmentOperationError
+    assert type(retrace_error.__cause__) is AttributeError
+
+
+def test_candidate_evaluator_rejects_hollow_nested_full_cap_with_cause(
+    task13f: Task13FFixture,
+    evaluated_retrace: tuple[
+        GenerationState,
+        AdvanceSegmentOperation,
+        RetraceSegmentOperation,
+        Stock2Area,
+        CoverageLedger,
+    ],
+) -> None:
+    """Translate an incomplete exact full-cap record through evaluator ownership."""
+    parent, _, operation, _, _ = evaluated_retrace
+    forged = _unchecked_retrace(
+        motion=operation.motion,
+        cut_z=operation.cut_z,
+        effective_cap_decision=object.__new__(FullCapDecision),
+        decision=operation.decision,
+    )
+    state = object.__new__(GenerationState)
+    object.__setattr__(state, "operations", parent.operations + (forged,))
+
+    with pytest.raises(CandidateStateMismatchError) as raised:
+        task13f.evaluator._validate_parent_operations(state)
+
+    retrace_error = raised.value.__cause__
+    assert type(retrace_error) is InvalidRetraceSegmentOperationError
+    assert type(retrace_error.__cause__) is AttributeError
 
 
 @pytest.mark.parametrize(
