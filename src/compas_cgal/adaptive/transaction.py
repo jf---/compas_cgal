@@ -46,6 +46,7 @@ from compas_cgal.adaptive.operation import LinkSegmentOperation
 from compas_cgal.adaptive.operation import NeckCapDecision
 from compas_cgal.adaptive.operation import NoNeckScope
 from compas_cgal.adaptive.operation import OrientedNeckScope
+from compas_cgal.adaptive.operation import RetraceSegmentOperation
 from compas_cgal.adaptive.policy import CandidatePolicy
 from compas_cgal.adaptive.policy import CutDirectionPolicy
 from compas_cgal.adaptive.policy import DepletionPolicy
@@ -966,6 +967,12 @@ class CandidateEvaluator:
             effective_cap=self.user_cap,
         )
         for raw_operation in state.operations[2:]:
+            if type(raw_operation) is RetraceSegmentOperation:
+                if raw_operation.effective_cap_decision != expected_full_cap:
+                    raise CandidateStateMismatchError(
+                        "candidate parent retrace contradicts evaluator full cap.",
+                    )
+                continue
             if type(raw_operation) not in (
                 LinkSegmentOperation,
                 CutFullCircleOperation,
