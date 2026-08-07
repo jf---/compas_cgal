@@ -4,15 +4,20 @@ from typing import NoReturn
 
 import pytest
 
+from compas_cgal.adaptive.advancing_segment_trial import evaluate_advancing_segment_trial
 from compas_cgal.adaptive.containment import GougeContainment
 from compas_cgal.adaptive.coverage import CoverageLedger
+from compas_cgal.adaptive.errors import InvalidAdvanceSegmentOperationError
+from compas_cgal.adaptive.errors import InvalidRetraceSegmentOperationError
 from compas_cgal.adaptive.generator import advance_active_candidate_family
 from compas_cgal.adaptive.motion_certificate import SWEPT_PREFIX_MOTION_STRATA
 from compas_cgal.adaptive.motion_certificate import MotionCertifier
 from compas_cgal.adaptive.motion_certificate import SweptPrefixMotionWitness
 from compas_cgal.adaptive.operation import AdvanceSegmentOperation
 from compas_cgal.adaptive.operation import RetraceSegmentOperation
+from compas_cgal.adaptive.retrace_segment_trial import evaluate_retrace_segment_trial
 from compas_cgal.adaptive.stock_area import Stock2Area
+from compas_cgal.adaptive.units import ToolRadius
 from tests.adaptive.task13f_fixture import Task13FFixture
 from tests.adaptive.task13f_fixture import task13f_retrace_decision
 from tests.adaptive.task13f_fixture import task13f_route_one_terminal
@@ -91,6 +96,205 @@ def _retrace_trial_arguments(
     }
 
 
+def _advancing_trial_arguments(
+    task13f: Task13FFixture,
+) -> dict[str, object]:
+    """Build advancing-trial arguments from the accepted route-one pre-state.
+
+    Args:
+        task13f: Authenticated launch child and continuation authority.
+
+    Returns:
+        Independent pre-route-one owners and its accepted advancing operation.
+    """
+    physical, traversal, _ = advance_active_candidate_family(
+        evaluator=task13f.evaluator,
+        physical=task13f.physical,
+        traversal=task13f.traversal,
+    )
+    traversal = traversal.activate_next()
+    _, _, route_one_commit = advance_active_candidate_family(
+        evaluator=task13f.evaluator,
+        physical=physical,
+        traversal=traversal,
+    )
+    operation = route_one_commit.transaction.segment_witness.operation
+    assert type(operation) is AdvanceSegmentOperation
+    return {
+        "containment_authority": GougeContainment.build(
+            task13f.identity.reachable_domain,
+        ),
+        "stock": physical.fork_stock(),
+        "coverage": physical.clone_coverage(),
+        "operation_index": len(physical.operations),
+        "operation": operation,
+        "tool_radius": task13f.identity.tool_radius,
+        "user_cap": task13f.identity.user_cap,
+        "effective_cap": task13f.identity.user_cap,
+        "depletion_policy": task13f.identity.depletion_policy,
+    }
+
+
+def _trial_owner_identity(
+    arguments: dict[str, object],
+) -> dict[str, object]:
+    """Capture exact stock and coverage identity without mutating either owner."""
+    stock = arguments["stock"]
+    coverage = arguments["coverage"]
+    tool_radius = arguments["tool_radius"]
+    assert type(stock) is Stock2Area
+    assert type(coverage) is CoverageLedger
+    assert type(tool_radius) is ToolRadius
+    return {
+        "stock_boundary": MotionCertifier.build(
+            stock=stock,
+            tool_radius=tool_radius,
+        ).canonical_boundary_digest,
+        "stock_lineage": tuple(witness.digest for witness in stock.lineage),
+        "coverage_digest": coverage.certificate.digest,
+        "coverage_lineage": tuple(witness.digest for witness in coverage.lineage),
+    }
+
+
+def _track_trial_authorities(
+    monkeypatch: pytest.MonkeyPatch,
+) -> dict[str, int]:
+    """Instrument every possible physical authority while preserving behavior."""
+    calls = {
+        "containment": 0,
+        "swept_prefix": 0,
+        "generic": 0,
+        "depletion": 0,
+        "coverage": 0,
+    }
+    real_containment = GougeContainment.certify_segment
+    real_swept_prefix = MotionCertifier.certify_swept_prefix_segment
+    real_generic = MotionCertifier.certify
+    real_deplete = Stock2Area.deplete
+    real_coverage = CoverageLedger.add_sweep
+
+    def tracked_containment(self: GougeContainment, *args: object) -> object:
+        calls["containment"] += 1
+        return real_containment(self, *args)  # type: ignore[arg-type]
+
+    def tracked_swept_prefix(
+        self: MotionCertifier,
+        **kwargs: object,
+    ) -> object:
+        calls["swept_prefix"] += 1
+        return real_swept_prefix(self, **kwargs)  # type: ignore[arg-type]
+
+    def tracked_generic(
+        self: MotionCertifier,
+        **kwargs: object,
+    ) -> object:
+        calls["generic"] += 1
+        return real_generic(self, **kwargs)  # type: ignore[arg-type]
+
+    def tracked_deplete(self: Stock2Area, *args: object) -> object:
+        calls["depletion"] += 1
+        return real_deplete(self, *args)  # type: ignore[arg-type]
+
+    def tracked_coverage(self: CoverageLedger, *args: object) -> object:
+        calls["coverage"] += 1
+        return real_coverage(self, *args)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(GougeContainment, "certify_segment", tracked_containment)
+    monkeypatch.setattr(
+        MotionCertifier,
+        "certify_swept_prefix_segment",
+        tracked_swept_prefix,
+    )
+    monkeypatch.setattr(MotionCertifier, "certify", tracked_generic)
+    monkeypatch.setattr(Stock2Area, "deplete", tracked_deplete)
+    monkeypatch.setattr(CoverageLedger, "add_sweep", tracked_coverage)
+    return calls
+
+
+def test_advancing_wrapper_rejects_retrace_before_any_authority_call(
+    task13f: Task13FFixture,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Keep a valid retrace outside the advancing physical boundary.
+
+    The operation-specific wrapper must reject the exact opposite union arm
+    before containment, either motion theorem, or either trial owner can run.
+
+    Args:
+        task13f: Authenticated launch child and continuation authority.
+        monkeypatch: Scoped instrumentation for every physical authority.
+    """
+    arguments = _retrace_trial_arguments(task13f)
+    before = _trial_owner_identity(arguments)
+    calls = _track_trial_authorities(monkeypatch)
+
+    try:
+        witness = evaluate_advancing_segment_trial(
+            **arguments,
+        )  # type: ignore[arg-type]
+    except InvalidAdvanceSegmentOperationError:
+        pass
+    else:
+        after = _trial_owner_identity(arguments)
+        pytest.fail(
+            "advancing wrapper admitted a valid RetraceSegmentOperation; "
+            f"returned={type(witness.operation).__name__}; calls={calls}; "
+            f"stock_lineage={len(before['stock_lineage'])}->{len(after['stock_lineage'])}; "
+            f"coverage_lineage={len(before['coverage_lineage'])}->{len(after['coverage_lineage'])}",
+        )
+
+    assert calls == {
+        "containment": 0,
+        "swept_prefix": 0,
+        "generic": 0,
+        "depletion": 0,
+        "coverage": 0,
+    }
+    assert _trial_owner_identity(arguments) == before
+
+
+def test_retrace_wrapper_rejects_advance_before_any_authority_call(
+    task13f: Task13FFixture,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Keep a valid advance outside the retrace physical boundary.
+
+    The source-derived retrace API must reject an accepted advancing operation
+    without reading proof authorities or changing either supplied trial owner.
+
+    Args:
+        task13f: Authenticated launch child and continuation authority.
+        monkeypatch: Scoped instrumentation for every physical authority.
+    """
+    arguments = _advancing_trial_arguments(task13f)
+    before = _trial_owner_identity(arguments)
+    calls = _track_trial_authorities(monkeypatch)
+
+    try:
+        witness = evaluate_retrace_segment_trial(
+            **arguments,
+        )  # type: ignore[arg-type]
+    except InvalidRetraceSegmentOperationError:
+        pass
+    else:
+        after = _trial_owner_identity(arguments)
+        pytest.fail(
+            "retrace wrapper admitted a valid AdvanceSegmentOperation; "
+            f"returned={type(witness.operation).__name__}; calls={calls}; "
+            f"stock_lineage={len(before['stock_lineage'])}->{len(after['stock_lineage'])}; "
+            f"coverage_lineage={len(before['coverage_lineage'])}->{len(after['coverage_lineage'])}",
+        )
+
+    assert calls == {
+        "containment": 0,
+        "swept_prefix": 0,
+        "generic": 0,
+        "depletion": 0,
+        "coverage": 0,
+    }
+    assert _trial_owner_identity(arguments) == before
+
+
 def test_retrace_uses_one_ordered_two_stratum_swept_prefix_proof(
     task13f: Task13FFixture,
     monkeypatch: pytest.MonkeyPatch,
@@ -105,10 +309,6 @@ def test_retrace_uses_one_ordered_two_stratum_swept_prefix_proof(
         task13f: Authenticated launch child and continuation authority.
         monkeypatch: Scoped instrumentation for the four physical authorities.
     """
-    from compas_cgal.adaptive.retrace_segment_trial import (
-        evaluate_retrace_segment_trial,
-    )
-
     arguments = _retrace_trial_arguments(task13f)
     order: list[str] = []
     calls = {"generic": 0, "swept_prefix": 0}

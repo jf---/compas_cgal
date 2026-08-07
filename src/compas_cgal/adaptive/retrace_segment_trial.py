@@ -4,6 +4,7 @@ from typing import TypeAlias
 
 from compas_cgal.adaptive.containment import GougeContainment
 from compas_cgal.adaptive.coverage import CoverageLedger
+from compas_cgal.adaptive.errors import InvalidRetraceSegmentOperationError
 from compas_cgal.adaptive.motion import EngagementCap
 from compas_cgal.adaptive.motion_certificate import MotionCertifier
 from compas_cgal.adaptive.operation import AdvanceSegmentOperation
@@ -96,6 +97,10 @@ def evaluate_retrace_segment_trial(
         InvalidCoverageSweepError: If exact coverage evidence diverges from
             the trial ledger.
     """
+    if type(operation) is not RetraceSegmentOperation:
+        raise InvalidRetraceSegmentOperationError(
+            "retrace trial requires one exact RetraceSegmentOperation.",
+        )
     return _evaluate_swept_prefix_segment_trial(
         containment_authority=containment_authority,
         stock=stock,

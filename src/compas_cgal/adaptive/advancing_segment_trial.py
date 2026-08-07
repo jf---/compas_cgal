@@ -2,6 +2,7 @@
 
 from compas_cgal.adaptive.containment import GougeContainment
 from compas_cgal.adaptive.coverage import CoverageLedger
+from compas_cgal.adaptive.errors import InvalidAdvanceSegmentOperationError
 from compas_cgal.adaptive.motion import EngagementCap
 from compas_cgal.adaptive.operation import AdvanceSegmentOperation
 from compas_cgal.adaptive.policy import DepletionPolicy
@@ -53,6 +54,10 @@ def evaluate_advancing_segment_trial(
         InvalidCoverageSweepError: If exact coverage evidence diverges from
             the trial ledger.
     """
+    if type(operation) is not AdvanceSegmentOperation:
+        raise InvalidAdvanceSegmentOperationError(
+            "advancing trial requires one exact AdvanceSegmentOperation.",
+        )
     return _evaluate_swept_prefix_segment_trial(
         containment_authority=containment_authority,
         stock=stock,
