@@ -894,10 +894,6 @@ class RetraceSegmentOperation:
             canonical_cut_z_bytes(self.cut_z)
             self.effective_cap_decision.__post_init__()
             self.decision._validate()
-            if self.decision.strategy_identity != ROUTE_RETRACE_STRATEGY_VERSION:
-                raise InvalidRetraceSegmentOperationError(
-                    "retrace requires one exact fixed-strategy route decision.",
-                )
         except AttributeError as error:
             raise InvalidRetraceSegmentOperationError(
                 "retrace contains incomplete nested domain state.",
