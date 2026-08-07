@@ -8,6 +8,7 @@ import pytest
 
 from compas_cgal.adaptive.containment import GougeContainment
 from compas_cgal.adaptive.coverage import CoverageLedger
+from compas_cgal.adaptive.errors import CandidateStateMismatchError
 from compas_cgal.adaptive.errors import InvalidGenerationStateError
 from compas_cgal.adaptive.generation_state import GenerationState
 from compas_cgal.adaptive.identity import IdentityDigest
@@ -136,6 +137,10 @@ def _build_child(
     )
 
 
+class _RetraceSubclass(RetraceSegmentOperation):
+    """Foreign subtype used to prove exact evaluator variant closure."""
+
+
 def test_retrace_state_changes_only_physical_chronology(
     task13f: Task13FFixture,
     evaluated_retrace: tuple[
@@ -167,6 +172,86 @@ def test_retrace_state_changes_only_physical_chronology(
     assert len(child.clone_coverage().lineage) == len(parent.clone_coverage().lineage) + 1
     assert child.operations[-1] == operation
     task13f.evaluator._validate_physical_parent(child)
+
+
+def test_generation_state_rejects_hollow_exact_retrace_with_named_error(
+    evaluated_retrace: tuple[
+        GenerationState,
+        AdvanceSegmentOperation,
+        RetraceSegmentOperation,
+        Stock2Area,
+        CoverageLedger,
+    ],
+) -> None:
+    """Close the state boundary before common lateral fields are read."""
+    parent, _, operation, stock, coverage = evaluated_retrace
+    hollow = object.__new__(RetraceSegmentOperation)
+
+    with pytest.raises(InvalidGenerationStateError):
+        GenerationState.build(
+            stock=stock.fork(),
+            coverage=coverage.clone(),
+            tool_radius=parent.tool_radius,
+            phase_point=operation.motion.end,
+            traversal=parent.traversal,
+            passages=parent.passages,
+            operations=parent.operations + (hollow,),
+        )
+
+
+def test_candidate_evaluator_rejects_hollow_exact_retrace_with_named_error(
+    task13f: Task13FFixture,
+    evaluated_retrace: tuple[
+        GenerationState,
+        AdvanceSegmentOperation,
+        RetraceSegmentOperation,
+        Stock2Area,
+        CoverageLedger,
+    ],
+) -> None:
+    """Close evaluator cap validation before a hollow retrace is read."""
+    parent, _, _, _, _ = evaluated_retrace
+    hollow = object.__new__(RetraceSegmentOperation)
+    state = object.__new__(GenerationState)
+    object.__setattr__(
+        state,
+        "operations",
+        parent.operations + (hollow,),
+    )
+
+    with pytest.raises(CandidateStateMismatchError):
+        task13f.evaluator._validate_parent_operations(state)
+
+
+@pytest.mark.parametrize(
+    "foreign_operation",
+    (
+        pytest.param(object(), id="foreign"),
+        pytest.param(object.__new__(_RetraceSubclass), id="subclass"),
+    ),
+)
+def test_candidate_evaluator_rejects_nonexact_parent_operation_variant(
+    task13f: Task13FFixture,
+    evaluated_retrace: tuple[
+        GenerationState,
+        AdvanceSegmentOperation,
+        RetraceSegmentOperation,
+        Stock2Area,
+        CoverageLedger,
+    ],
+    foreign_operation: object,
+) -> None:
+    """Keep foreign and subtype operations outside the exact parent union."""
+    parent, _, _, _, _ = evaluated_retrace
+    state = object.__new__(GenerationState)
+    object.__setattr__(
+        state,
+        "operations",
+        parent.operations + (foreign_operation,),  # type: ignore[arg-type]
+    )
+
+    with pytest.raises(CandidateStateMismatchError):
+        task13f.evaluator._validate_parent_operations(state)
 
 
 def test_retrace_state_rejects_non_advance_predecessor(
