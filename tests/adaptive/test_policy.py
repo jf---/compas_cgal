@@ -307,6 +307,19 @@ def test_depletion_policy_owns_exact_chord_bytes_and_finite_limit() -> None:
         DepletionPolicy.build(chord_bound=ChordBound.build(0.03125), center_count_limit=0)
 
 
+def test_depletion_policy_translates_completely_hollow_exact_owner() -> None:
+    """Translate absent owned fields at the policy boundary."""
+    hollow = object.__new__(DepletionPolicy)
+
+    with pytest.raises(
+        InvalidDepletionPolicyError,
+        match="incomplete exact state",
+    ) as captured:
+        hollow.__post_init__()
+
+    assert type(captured.value.__cause__) is AttributeError
+
+
 def test_traversal_policy_requires_typed_order_and_finite_window() -> None:
     policy = TraversalPolicy.build(forward_window=16)
 

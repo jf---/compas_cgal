@@ -59,6 +59,20 @@ def _stock_lineage_digest(
     ).digest()
 
 
+def _validated_state_digest(
+    state: GenerationState,
+    context: str,
+) -> IdentityDigest:
+    """Return one fully reproduced state identity at an evaluator boundary."""
+    try:
+        GenerationState.validate(state)
+        return state.digest
+    except (AttributeError, InvalidGenerationStateError) as error:
+        raise InvalidRouteRetraceTransactionError(
+            f"retrace {context} parent contains incomplete exact state.",
+        ) from error
+
+
 @dataclass(frozen=True)
 class RouteRetraceTransaction:
     """Immutable physical proof binding one parent to one retrace child."""
@@ -267,7 +281,16 @@ class RouteRetraceEvaluator:
         Returns:
             Immutable accepted proof transaction.
         """
-        transaction, _ = self._evaluate_trial(state, decision)
+        if type(state) is not GenerationState or type(decision) is not RouteRetraceDecision:
+            raise InvalidRouteRetraceTransactionError(
+                "retrace evaluation requires exact state and decision types.",
+            )
+        parent_digest = _validated_state_digest(state, "evaluation")
+        transaction, _ = self._evaluate_trial(
+            state,
+            decision,
+            parent_digest,
+        )
         return transaction
 
     def commit(
@@ -290,17 +313,12 @@ class RouteRetraceEvaluator:
             StaleRouteRetraceTransactionError: If the authoritative parent has
                 changed since evaluation.
         """
+        RouteRetraceTransaction.validate(transaction)
         if type(state) is not GenerationState:
             raise InvalidRouteRetraceTransactionError(
                 "retrace commit requires one exact generation state.",
             )
-        RouteRetraceTransaction.validate(transaction)
-        try:
-            parent_digest = state.digest
-        except (AttributeError, InvalidGenerationStateError) as error:
-            raise InvalidRouteRetraceTransactionError(
-                "retrace commit parent contains incomplete exact state.",
-            ) from error
+        parent_digest = _validated_state_digest(state, "commit")
         if transaction.parent_state_digest != parent_digest:
             raise StaleRouteRetraceTransactionError(
                 "retrace transaction parent is no longer authoritative.",
@@ -308,6 +326,7 @@ class RouteRetraceEvaluator:
         reproduced, child = self._evaluate_trial(
             state,
             transaction.decision,
+            parent_digest,
         )
         if reproduced.canonical_bytes != transaction.canonical_bytes:
             raise InvalidRouteRetraceTransactionError(
@@ -319,17 +338,8 @@ class RouteRetraceEvaluator:
         self,
         state: GenerationState,
         decision: RouteRetraceDecision,
+        parent_digest: IdentityDigest,
     ) -> tuple[RouteRetraceTransaction, GenerationState]:
-        if type(state) is not GenerationState or type(decision) is not RouteRetraceDecision:
-            raise InvalidRouteRetraceTransactionError(
-                "retrace evaluation requires exact state and decision types.",
-            )
-        try:
-            parent_digest = state.digest
-        except (AttributeError, InvalidGenerationStateError) as error:
-            raise InvalidRouteRetraceTransactionError(
-                "retrace evaluation parent contains incomplete exact state.",
-            ) from error
         try:
             decision._validate()
         except AttributeError as error:

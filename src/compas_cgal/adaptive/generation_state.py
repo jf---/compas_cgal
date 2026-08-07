@@ -273,6 +273,48 @@ class GenerationState:
             operations,
         )
 
+    @classmethod
+    def validate(
+        cls,
+        state: "GenerationState",
+    ) -> None:
+        """Revalidate one complete state without mutating its owners.
+
+        Args:
+            state: Exact immutable state whose owners and cached identities
+                must reproduce through the canonical constructor.
+
+        Raises:
+            InvalidGenerationStateError: If the state is foreign, incomplete,
+                internally invalid, or contradicts its cached identities.
+        """
+        if type(state) is not cls:
+            raise InvalidGenerationStateError(
+                "generation state validation requires the exact owned type.",
+            )
+        try:
+            reproduced = cls(
+                state._stock,
+                state._coverage,
+                state.tool_radius,
+                state.phase_point,
+                state.traversal,
+                state.passages,
+                state.operations,
+            )
+            if (
+                reproduced.stock_boundary_digest != state.stock_boundary_digest
+                or reproduced.stock_lineage_digest != state.stock_lineage_digest
+                or reproduced.digest != state.digest
+            ):
+                raise InvalidGenerationStateError(
+                    "generation state cached identities contradict its owners.",
+                )
+        except AttributeError as error:
+            raise InvalidGenerationStateError(
+                "generation state contains incomplete exact state.",
+            ) from error
+
     def _certifier(self) -> MotionCertifier:
         return MotionCertifier.build(
             stock=self._stock,

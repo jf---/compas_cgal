@@ -441,6 +441,26 @@ def test_direct_witness_translates_malformed_exact_depletion_policy() -> None:
     assert type(captured.value.__cause__) is InvalidDepletionPolicyError
 
 
+def test_direct_witness_translates_completely_hollow_depletion_policy() -> None:
+    """Preserve policy and witness owners for an exact empty shell."""
+    witness = Stock2Area.build(_stock()).deplete(
+        _segment(),
+        ToolRadius.build(0.75),
+        _policy(),
+    )
+    hollow = object.__new__(DepletionPolicy)
+
+    with pytest.raises(
+        InvalidDepletionWitnessError,
+        match="policy",
+    ) as captured:
+        _rebuild_witness(witness, policy=hollow)
+
+    policy_error = captured.value.__cause__
+    assert type(policy_error) is InvalidDepletionPolicyError
+    assert type(policy_error.__cause__) is AttributeError
+
+
 def test_direct_witness_rejects_circle_chart_denominator_and_order_mutations() -> None:
     witness = Stock2Area.build(_stock()).deplete(_circle(clockwise=False), ToolRadius.build(0.75), _policy())
     wrong_chart = (replace(witness.center_parameters[0], chart=1),) + witness.center_parameters[1:]
