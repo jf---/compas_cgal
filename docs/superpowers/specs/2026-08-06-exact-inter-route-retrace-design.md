@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-06
 
-**Status:** approved direction; written-spec review pending
+**Status:** approved 2026-08-07
 
 **Scope:** exact-certified adaptive trochoidal MAT Task 13F route-2 boundary
 
