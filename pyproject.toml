@@ -26,6 +26,10 @@ Homepage = "https://github.com/compas-dev/compas_cgal"
 [tool.pytest.ini_options]
 minversion = "6.0"
 testpaths = ["tests"]
+# The `benchmarks` corpus is a top-level source package that is deliberately not
+# shipped in the wheel, so it is never installed. `--import-mode=importlib` does
+# not put the rootdir on sys.path, so tests/benchmarks/* could not import it.
+pythonpath = ["."]
 python_files = ["test_*.py", "*_test.py", "test.py"]
 norecursedirs = [
     "external/*",
