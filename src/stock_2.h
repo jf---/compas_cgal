@@ -8,6 +8,7 @@
 // caster in its own (NB_STATIC) translation unit.
 #include <nanobind/stl/vector.h>
 
+#include <cstddef>
 #include <utility>
 
 #include <CGAL/Exact_predicates_exact_constructions_kernel.h>
@@ -65,6 +66,28 @@ public:
 
     const Gps& set() const { return set_; }          // engagement kernel reads this
     Gps& set() { return set_; }
+
+    // --- Instrumentation (diagnostics only; never on a timed path) ------------
+
+    // Feature counts of the underlying arrangement. Cheap: pure counters, no
+    // exact evaluation, so this MAY be read inside a timed run.
+    struct ArrangementStats {
+        std::size_t vertices;
+        std::size_t halfedges;
+        std::size_t faces;
+    };
+    ArrangementStats arrangement_stats() const;
+
+    // Decimal-digit length of the exact rational coordinates carried by the
+    // arrangement's vertices. WARNING: this calls .exact() on each coordinate,
+    // collapsing the lazy filter and changing subsequent timings -- it is a
+    // DIAGNOSTIC and must never be read inside a timed measurement.
+    struct CoordinateDigits {
+        std::size_t max_digits;
+        double mean_digits;
+        std::size_t sampled;
+    };
+    CoordinateDigits coordinate_digits() const;
 
 private:
     // Subtract the union of exact tool disks of the given radius centred at the

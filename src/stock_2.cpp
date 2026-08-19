@@ -3,8 +3,11 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <numbers>
+#include <sstream>
 #include <stdexcept>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -179,6 +182,68 @@ void Stock2::subtract_arc_sweep(double cx, double cy, double sx, double sy,
     subtract_point_chain(centers, tool_radius);
 }
 
+Stock2::ArrangementStats Stock2::arrangement_stats() const
+{
+    // General_polygon_set_2 exposes a CONST arrangement accessor (verified in the
+    // vendored CGAL 6.0.1: General_polygon_set_2.h declares both
+    // `const Arrangement_2& arrangement() const` and the mutable overload), so
+    // unlike engagement_2.cpp::engaged_arcs_zone -- which needs a non-const handle
+    // for Arrangement_zone_2 and therefore documents a read-only const_cast --
+    // this probe needs no cast at all. These are plain counters: no exact
+    // evaluation is triggered, so reading them does not perturb a timed run.
+    const Gps::Arrangement_2& arr = set_.arrangement();
+    return { arr.number_of_vertices(), arr.number_of_halfedges(), arr.number_of_faces() };
+}
+
+namespace {
+
+// Decimal length of an exact rational, measured by streaming it. Backend-agnostic
+// on purpose: the repo rule is to use kernel/number-type abstractions rather than
+// naming a concrete rational backend (this build is CGAL_DISABLE_GMP +
+// CGAL_USE_BOOST_MP), and operator<< is guaranteed by the number type's concept.
+// The printed length is a proxy for bit length (bits ~ digits * log2(10)); only
+// its GROWTH is interpreted, never its absolute magnitude.
+std::size_t decimal_digits(const Epeck::FT& v)
+{
+    std::ostringstream os;
+    os << v.exact();
+    return os.str().size();
+}
+
+// a1() and root() are only defined on an EXTENDED Sqrt_extension -- a rational
+// coordinate carries a0() alone. engagement_2.cpp::as_radpoint guards the same
+// way; reading the extension parts unconditionally is undefined behaviour.
+void accumulate(const GpsPoint::CoordNT& c, std::size_t& max_digits, double& sum, std::size_t& count)
+{
+    auto take = [&](const Epeck::FT& part) {
+        const std::size_t d = decimal_digits(part);
+        max_digits = std::max(max_digits, d);
+        sum += static_cast<double>(d);
+        ++count;
+    };
+    take(c.a0());
+    if (c.is_extended()) {
+        take(c.a1());
+        take(c.root());
+    }
+}
+
+} // namespace
+
+Stock2::CoordinateDigits Stock2::coordinate_digits() const
+{
+    const Gps::Arrangement_2& arr = set_.arrangement();
+    std::size_t max_digits = 0;
+    double sum = 0.0;
+    std::size_t count = 0;
+    for (auto v = arr.vertices_begin(); v != arr.vertices_end(); ++v) {
+        accumulate(v->point().x(), max_digits, sum, count);
+        accumulate(v->point().y(), max_digits, sum, count);
+    }
+    const double mean = (count == 0) ? 0.0 : sum / static_cast<double>(count);
+    return { max_digits, mean, count };
+}
+
 NB_MODULE(_stock_2, m)
 {
     nb::class_<Stock2>(m, "Stock2")
@@ -191,7 +256,17 @@ NB_MODULE(_stock_2, m)
              "x0"_a, "y0"_a, "x1"_a, "y1"_a, "radius"_a)
         .def("subtract_arc_sweep", &Stock2::subtract_arc_sweep,
              "cx"_a, "cy"_a, "sx"_a, "sy"_a, "ex"_a, "ey"_a, "cw"_a, "tool_radius"_a)
-        .def("subtract_disk", &Stock2::subtract_disk, "cx"_a, "cy"_a, "radius"_a);
+        .def("subtract_disk", &Stock2::subtract_disk, "cx"_a, "cy"_a, "radius"_a)
+        .def("arrangement_stats",
+             [](const Stock2& s) {
+                 const Stock2::ArrangementStats a = s.arrangement_stats();
+                 return std::make_tuple(a.vertices, a.halfedges, a.faces);
+             })
+        .def("coordinate_digits",
+             [](const Stock2& s) {
+                 const Stock2::CoordinateDigits d = s.coordinate_digits();
+                 return std::make_tuple(d.max_digits, d.mean_digits, d.sampled);
+             });
 
     register_engagement(m);
 }

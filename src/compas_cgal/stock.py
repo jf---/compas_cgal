@@ -172,3 +172,27 @@ class Stock:
             bool(cw),
             float(tool_radius),
         )
+
+    def arrangement_stats(self) -> tuple[int, int, int]:
+        """Feature counts of the underlying exact arrangement.
+
+        Cheap -- pure counters with no exact evaluation -- so this is safe to read
+        inside a timed measurement.
+
+        Returns:
+            ``(vertices, halfedges, faces)``.
+        """
+        return self._raw.arrangement_stats()
+
+    def coordinate_digits(self) -> tuple[int, float, int]:
+        """Decimal-digit statistics of the arrangement's exact coordinates.
+
+        Warning:
+            This forces exact evaluation of every sampled coordinate, collapsing
+            the lazy filter and changing subsequent timings. Never read it inside
+            a timed measurement; use a separate diagnostic pass.
+
+        Returns:
+            ``(max_digits, mean_digits, sampled)``.
+        """
+        return self._raw.coordinate_digits()
