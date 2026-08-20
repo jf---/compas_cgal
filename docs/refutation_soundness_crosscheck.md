@@ -199,13 +199,136 @@ and their partition verdicts are unknown.
 **Not established — and specifically retracted.** That the partition ever
 *certified* a violating motion. See the retraction below.
 
-**Not established.** The root cause inside exact event discovery. This page
-shows where the partition fails to decide; it does not show which event class is
-missed. That work is open.
+**Partially established.** Both failure sites are now located. The incomplete
+partition is a single check in `exact_fibre_branches`, see
+[Where the partition gives up](#where-the-partition-gives-up); the route-2 abort
+is an integer-to-`double` overflow in the bignum backend, see
+[Where the route-2 abort comes from](#where-the-route-2-abort-comes-from). The
+geometric cause of the first and one link of the second remain open.
 
 **Not established.** Any claim about motions outside these two fixtures. `31`
 refutations is the whole corpus the probe has produced so far, not a sample from
 a larger validated population.
+
+## Where the partition gives up
+
+Every incomplete case in the corpus raises the same message, captured by
+re-running the sweep and printing `str(error)` rather than the exception type:
+
+```text
+exact fibre branch multiplicity does not match adjacent sheets
+```
+
+One throw site, `src/continuous_tea_2/segment_fibre.cpp:958`, inside
+`exact_fibre_branches`:
+
+```cpp
+if (parameters.size() != identities.size()
+    && parameters.size() != 1) {
+    throw IncompleteSegmentPartitionError(
+        "exact fibre branch multiplicity does not match adjacent sheets");
+}
+```
+
+The two operands, read from the surrounding code:
+
+- `parameters` — the exact algebraic solutions lying **on the event fibre** for
+  one `(feature_id, rim_chart_id)`, filtered by `chart_accepts` and the line or
+  circle trim predicate, then sorted by parameter.
+- `identities` — the branch identities harvested from `side_states`, which
+  `evaluate_segment_fibre` builds as the **union of `left_states` and
+  `right_states`** deduplicated by `branch_id`, then sorted by
+  `rim_sheet_ordinal`.
+
+Immediately after the check, the two lists are consumed as a positional zip:
+`identities[index]` is paired with `parameters[index]`, or with the single
+`parameters.front()` when there is exactly one root.
+
+!!! note "Reading, not measurement"
+
+    The paragraph below is inferred from the source. It is consistent with every
+    observation on this page but the operand counts at a failing fibre have not
+    been instrumented, so it is a hypothesis about the geometric cause, not a
+    measured fact. The failing condition itself and the throw site *are*
+    measured.
+
+The correspondence therefore assumes the branch count is preserved across the
+event, with a single `1 -> N` broadcast as the only admitted exception. But
+`identities` is a union over *both* sides of the fibre, so at precisely the
+events that change the branch count — a split where one branch becomes two, a
+merge where two become one — the union carries more entries than the fibre
+carries roots, by a margin the `parameters.size() == 1` escape does not cover.
+There is no `k` roots against `m` identities case for `k > 1, k != m`. That is
+the shape of a gap in the correspondence rule, not a wrong verdict: the code
+declines to guess a pairing it cannot justify, which is why the failure is
+incompleteness and why it fails safe.
+
+One measured correlation worth carrying into that work, offered as a lead rather
+than a conclusion: across both fixtures, every motion the probe refutes at
+station `7/8` produced this error, and every motion it refutes at `1/1` produced
+a matching `cap_exceeded` verdict instead.
+
+Two cheap next steps for whoever takes this:
+
+1. Put `parameters.size()` and `identities.size()` into the exception message.
+   The error is currently self-describing in words but carries no payload, so
+   every occurrence needs a rebuild to diagnose.
+2. Decide the correspondence rule for `k != m, k > 1` — the split and merge
+   cases — rather than extending the escape hatch.
+
+## Where the route-2 abort comes from
+
+The second failure mode is not a `continuous_tea_2` logic bug at all. It is an
+integer-to-`double` overflow in the bignum backend, reached because the exact
+coordinates have grown large.
+
+Measured on the shipped path, without perturbing the trajectory — an earlier
+attempt rejected every link, which kept the generator inside route 0 and
+measured the wrong stocks:
+
+| link | operation | arrangement (v, he, f) | exact coordinate digits (max, mean, sampled) |
+| ---: | ---: | --- | --- |
+| `0`–`3` | `3` | `(9, 22, 4)` | `5`, `1.94`, `18` |
+| `4`–`13` | `7` | `(135, 402, 68)` | **`139`**, `47.61`, `522` |
+
+Four depletions take the arrangement from `9` to `135` vertices and the printed
+exact coordinates from `5` digits to `139`. Link `4` is the one whose full audit
+terminates the process.
+
+The build compiles CGAL with `CGAL_DISABLE_GMP` (`CMakeLists.txt:109,117-119`)
+and links neither GMP nor MPFR, so exact arithmetic runs on boost.multiprecision
+`cpp_int`. Its `eval_convert_to<double>` accumulates the top bits with `ldexp`
+and then rounds
+(`external/boost/boost/multiprecision/cpp_int/misc.hpp:247`):
+
+```cpp
+*result = boost::math::float_next(*result);
+```
+
+`boost::math::float_next` rejects a non-finite argument, and its diagnostic is
+the message observed verbatim, signature and all:
+`Error in function float_next<double>(double): Argument must be finite, but got inf`.
+
+!!! note "One inferred link in the chain"
+
+    Measured: the coordinate growth, the backend selection, the conversion code,
+    and the exact error text. Inferred: that an intermediate integer inside the
+    algebraic kernel exceeds `double` range — above roughly `308` decimal digits
+    — so the `ldexp` accumulation overflows to `inf` before the rounding step
+    runs. That step was not instrumented. A `139`-digit input is well short of
+    `308` on its own; resultants and subresultants over such coefficients
+    multiply digit counts, so a factor of three is unremarkable, but this is
+    reasoning rather than a measurement. An lldb backtrace would close it; two
+    attempts did not reach the abort within `35` minutes under the debugger.
+
+Two consequences worth separating:
+
+- The abort is a **missing overflow guard on a conversion**, not a wrong
+  geometric decision. Nothing in the exact decision path is compromised by it.
+- It is the same phenomenon as the cost. `139`-digit coordinates on a
+  `135`-vertex arrangement explain the seconds-per-motion audit and the `6.3 GB`
+  RSS as readily as they explain the overflow. Whether linking GMP instead of
+  `cpp_int` changes either is untested and worth an experiment.
 
 ## Retracted: the partition was never shown to certify a violation
 
