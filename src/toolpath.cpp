@@ -5,6 +5,7 @@
 #include <cmath>
 #include <limits>
 #include <numbers>
+#include <sstream>
 #include <stdexcept>
 #include <tuple>
 #include <vector>
@@ -602,6 +603,7 @@ void
 validate_toolpath_params(
     double tool_diameter, double stepover, double pitch,
     double min_trochoid_radius, double max_trochoid_radius,
+    double mat_scale, double radial_clearance,
     int samples_per_cycle, int max_passes)
 {
     if (tool_diameter <= 0.0) throw std::invalid_argument("tool_diameter should be positive.");
@@ -609,6 +611,21 @@ validate_toolpath_params(
     if (pitch <= 0.0) throw std::invalid_argument("pitch should be positive.");
     if (min_trochoid_radius < 0.0) throw std::invalid_argument("min_trochoid_radius should be >= 0.");
     if (max_trochoid_radius < 0.0) throw std::invalid_argument("max_trochoid_radius should be >= 0.");
+    // GOUGE-FREEDOM PRECONDITION. radius_from_clearance yields
+    // r = mat_scale * (clearance - R - radial_clearance), R = tool_radius; a trochoid
+    // circle reaches r + R from its centre. The circles are NOT certified against the
+    // boundary (only bridges and leads are), so gouge-freedom holds by construction and
+    // ONLY while mat_scale <= 1. Enforced here, at the one seam, rather than assumed.
+    // Negated form on purpose: it also rejects NaN, which no ordered comparison would.
+    if (!(mat_scale > 0.0 && mat_scale <= 1.0)) {
+        std::ostringstream message;
+        message << "mat_scale should be in (0, 1], got " << mat_scale
+                << ": values <= 0 leave no trochoid radius, and values > 1 scale the trochoid "
+                   "radius past the certified clearance.";
+        throw std::invalid_argument(message.str());
+    }
+    // radial_clearance is accepted here but deliberately not range-checked yet; its
+    // admissible range lands together with the validation that enforces it.
     if (samples_per_cycle < 4) throw std::invalid_argument("samples_per_cycle should be at least 4.");
     if (max_passes <= 0) throw std::invalid_argument("max_passes should be positive.");
 }
@@ -770,7 +787,8 @@ pmp_trochoidal_mat_toolpath(
     bool climb)
 {
     validate_toolpath_params(tool_diameter, stepover, pitch,
-        min_trochoid_radius, max_trochoid_radius, samples_per_cycle, max_passes);
+        min_trochoid_radius, max_trochoid_radius, mat_scale, radial_clearance,
+        samples_per_cycle, max_passes);
 
     auto [domain, boundary] = assemble_domain(vertices, holes);
     SsPtr skeleton = build_skeleton(domain);
@@ -929,7 +947,8 @@ pmp_trochoidal_mat_toolpath_circular(
     double samples_per_radian)
 {
     validate_toolpath_params(tool_diameter, stepover, pitch,
-        min_trochoid_radius, max_trochoid_radius, samples_per_cycle, max_passes);
+        min_trochoid_radius, max_trochoid_radius, mat_scale, radial_clearance,
+        samples_per_cycle, max_passes);
 
     auto [domain, boundary] = assemble_domain(vertices, holes);
     SsPtr skeleton = build_skeleton(domain);

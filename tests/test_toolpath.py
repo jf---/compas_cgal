@@ -877,3 +877,47 @@ def test_polyline_continuity_random(polygon):
     diffs = np.linalg.norm(np.diff(result.polyline, axis=0), axis=1)
     # Random polygons have diameter up to 30 (base_r up to 15)
     assert diffs.max() < 35.0
+
+
+# ---------------------------------------------------------------------------
+# ETH audit remediation (2026-08-19), Task 1: mat_scale contract.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("bad_scale", [1.0001, 1.5, 2.0, 10.0, 0.0, -1.0])
+def test_mat_scale_outside_unit_interval_is_rejected(bad_scale):
+    """mat_scale > 1 scales the trochoid radius past the available clearance and gouges.
+
+    The trochoid circles are not certified (only bridges and leads are), so the
+    gouge-free guarantee holds *by construction* and only for mat_scale <= 1.
+    That precondition must be enforced at the seam, not assumed.
+    """
+    with pytest.raises(ValueError, match="mat_scale"):
+        trochoidal_mat_toolpath(SQUARE, tool_diameter=1.0, mat_scale=bad_scale)
+
+
+@pytest.mark.parametrize("mat_scale", [0.25, 0.5, 1.0])
+def test_no_gouge_circular_primitives_across_admissible_mat_scale(mat_scale):
+    """clearance(center) >= trochoid radius + tool radius for every admissible mat_scale."""
+    tool_radius = 0.5
+    polygon = _dumbbell(2.4)
+    poly_xy = [list(pt[:2]) for pt in polygon.points]
+    result = trochoidal_mat_toolpath_circular(polygon, tool_diameter=1.0, pitch=0.75, clearance_z=3.0, mat_scale=mat_scale)
+    cut_arcs = [op for op in result.operations if op.operation == "cut" and isinstance(op.geometry, (Arc, Circle))]
+    assert len(cut_arcs) > 0
+    for op in cut_arcs:
+        c = op.geometry.frame.point
+        clearance = _distance_to_polygon_boundary_xy([float(c[0]), float(c[1])], poly_xy)
+        assert clearance + GOUGE_TOL >= op.geometry.radius + tool_radius
+
+
+@pytest.mark.parametrize("mat_scale", [0.25, 0.5, 1.0])
+def test_no_gouge_tool_centre_across_admissible_mat_scale(mat_scale):
+    """Every tessellated tool-centre point keeps exact wall clearance >= tool radius."""
+    tool_radius = 0.5
+    polygon = _dumbbell(2.4)
+    poly_xy = [list(pt[:2]) for pt in polygon.points]
+    paths = trochoidal_mat_toolpath(polygon, tool_diameter=1.0, pitch=0.75, samples_per_cycle=64, mat_scale=mat_scale)
+    assert len(paths) > 0
+    worst = max(tool_radius - _distance_to_polygon_boundary_xy(pt[:2].tolist(), poly_xy) for path in paths for pt in path)
+    assert worst <= GOUGE_TOL

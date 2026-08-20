@@ -44,7 +44,8 @@ pmp_polygon_skeleton_clearance(
  * @param pitch Desired trochoid advance per cycle (capped by stepover)
  * @param min_trochoid_radius Minimum trochoid radius
  * @param max_trochoid_radius Maximum trochoid radius
- * @param mat_scale Scale factor for clearance-derived radius
+ * @param mat_scale Scale factor for clearance-derived radius; must be in (0, 1].
+ *        Values above 1 push the trochoid circle past the certified clearance.
  * @param radial_clearance Safety clearance subtracted from available radius
  * @param samples_per_cycle Polyline samples per arc primitive (>= 4)
  * @param max_passes Maximum number of emitted toolpaths

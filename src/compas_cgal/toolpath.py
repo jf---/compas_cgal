@@ -310,7 +310,10 @@ def trochoidal_mat_toolpath(
     max_trochoid_radius
         Maximum trochoid radius. Defaults to no cap.
     mat_scale
-        Scale factor applied to the clearance-derived available radius.
+        Scale factor applied to the clearance-derived available radius, in
+        ``(0, 1]``. The trochoid circles are gouge-free by construction rather
+        than by certification, and that construction requires
+        ``mat_scale <= 1``; larger values raise `ValueError`.
     radial_clearance
         Safety clearance subtracted from the available radius. Defaults to
         ``RADIAL_CLEARANCE_FRACTION * tool_diameter`` (scale-free).
@@ -416,7 +419,10 @@ def trochoidal_mat_toolpath_circular(
     max_trochoid_radius
         Maximum trochoid radius. Defaults to no cap.
     mat_scale
-        Scale factor applied to the clearance-derived available radius.
+        Scale factor applied to the clearance-derived available radius, in
+        ``(0, 1]``. The trochoid circles are gouge-free by construction rather
+        than by certification, and that construction requires
+        ``mat_scale <= 1``; larger values raise `ValueError`.
     radial_clearance
         Safety clearance subtracted from the available radius. Defaults to
         ``RADIAL_CLEARANCE_FRACTION * tool_diameter`` (scale-free).
