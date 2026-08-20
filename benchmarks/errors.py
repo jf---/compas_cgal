@@ -19,3 +19,11 @@ class DegeneratePocketError(BenchmarkError):
 
 class PocketNotSimpleError(BenchmarkError):
     """A pocket boundary self-intersects, so it is not a valid general polygon."""
+
+
+class UnreplayableOperationError(BenchmarkError):
+    """A toolpath operation lies outside the cut-plane depletion model (e.g. a 3D ramp)."""
+
+
+class MalformedRecordError(BenchmarkError):
+    """A serialised measurement does not carry exactly the columns the schema declares."""
