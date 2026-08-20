@@ -266,6 +266,10 @@ class UnsupportedRouteRetraceError(RuntimeError):
     """Raised when a nonincident route boundary has no admitted retrace source."""
 
 
+class InvalidRouteRetraceCommitError(ValueError):
+    """Raised when physical retrace and global route activation disagree."""
+
+
 class InvalidReachableDomainCertificateError(ValueError):
     """Reachable-domain reconstruction evidence violates its exact contract."""
 

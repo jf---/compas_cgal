@@ -19,6 +19,9 @@ from compas_cgal.adaptive.entry import PreclearedEntry
 from compas_cgal.adaptive.entry import QualifiedBore
 from compas_cgal.adaptive.generation_state import GenerationState
 from compas_cgal.adaptive.generator import _active_forward_limits
+from compas_cgal.adaptive.generator import _derive_route_retrace_decision
+from compas_cgal.adaptive.generator import GenerationContinuation
+from compas_cgal.adaptive.generator import RouteRetraceCommit
 from compas_cgal.adaptive.generator import TraversalCommit
 from compas_cgal.adaptive.generator import advance_active_candidate_family
 from compas_cgal.adaptive.identity import IdentityDigest
@@ -40,6 +43,7 @@ from compas_cgal.adaptive.policy import MatSamplingPolicy
 from compas_cgal.adaptive.policy import NeckPolicy
 from compas_cgal.adaptive.policy import TraversalPolicy
 from compas_cgal.adaptive.reachable_domain import ReachableDomain
+from compas_cgal.adaptive.retrace_transaction import RouteRetraceEvaluator
 from compas_cgal.adaptive.transaction import CandidateEvaluator
 from compas_cgal.adaptive.traversal import MatTraversalState
 from compas_cgal.adaptive.units import ChordBound
@@ -67,6 +71,12 @@ TASK13F_LAUNCH_PROGRESS = Fraction(
 )
 TASK13F_LAUNCH_GUIDE_RADIUS = Fraction(1, 32)
 TASK13F_ENTRY_RADIUS = Fraction(17, 16)
+TASK13F_ROUTE_ZERO_COMMIT_DIGEST = (
+    "ea5f987e1beddb3a40dd8c70663fe44a18bd5cb955cf8300a3d74713d6da2a1d"
+)
+TASK13F_ROUTE_ONE_COMMIT_DIGEST = (
+    "0a20db00bf444336ffd0138da9e4a938f28dd8bf7bc0baacb69ebdc8f1656c73"
+)
 
 
 def _ring() -> CanonicalRingV1:
@@ -321,3 +331,69 @@ def task13f_retrace_decision(
             hashlib.sha256(source.canonical_bytes).digest(),
         ),
     )
+
+
+def task13f_retrace_continuation(
+    fixture: Task13FFixture,
+) -> GenerationContinuation:
+    """Cross the first nonincident Task 13F route boundary.
+
+    Args:
+        fixture: Authenticated launch child and continuation authority.
+
+    Returns:
+        Existing continuation artifact after the first accepted route-2
+        candidate.
+    """
+    physical, terminal, traversal_commits = task13f_route_one_terminal(
+        fixture,
+    )
+    assert tuple(commit.digest.hex() for commit in traversal_commits) == (
+        TASK13F_ROUTE_ZERO_COMMIT_DIGEST,
+        TASK13F_ROUTE_ONE_COMMIT_DIGEST,
+    )
+    activated = terminal.activate_next()
+    source_commit = traversal_commits[-1]
+    decision = _derive_route_retrace_decision(
+        physical=physical,
+        terminal=terminal,
+        activated=activated,
+        source_commit=source_commit,
+    )
+    evaluator = RouteRetraceEvaluator.build(
+        evaluator=fixture.evaluator,
+    )
+    transaction = evaluator.evaluate(physical, decision)
+    physical_after = evaluator.commit(physical, transaction)
+    retrace_commit = RouteRetraceCommit.build(
+        physical_before=physical,
+        traversal_before=terminal,
+        source_commit=source_commit,
+        transaction=transaction,
+        physical_after=physical_after,
+        traversal_after=activated,
+    )
+    physical_final, traversal_final, route_two_commit = (
+        advance_active_candidate_family(
+            evaluator=fixture.evaluator,
+            physical=physical_after,
+            traversal=activated,
+        )
+    )
+    continuation = GenerationContinuation.build(
+        launch_transaction=fixture.launch_transaction,
+        physical=physical_final,
+        traversal=traversal_final,
+        commits=(
+            *traversal_commits,
+            retrace_commit,
+            route_two_commit,
+        ),
+    )
+    assert tuple(type(commit) for commit in continuation.commits) == (
+        TraversalCommit,
+        TraversalCommit,
+        RouteRetraceCommit,
+        TraversalCommit,
+    )
+    return continuation
