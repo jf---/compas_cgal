@@ -75,6 +75,30 @@ Gps exact_disk_union(
     return region;
 }
 
+// The exact annulus between `inner_radius` and `outer_radius` about `center`.
+// One builder, shared by the depletion path (Stock2::subtract_annulus_exact) and
+// by the full-circle sweep ORACLE the depletion certificates are proved against,
+// so "the region we remove" and "the region we prove under-coverage against" are
+// the same construction by identity rather than by assertion.
+//
+// `inner_radius == 0` yields the plain disk: a guide no wider than the tool
+// sweeps a filled disk, with no hole to punch. That branch is structural -- an
+// exact sign test on an exact quantity -- not an epsilon.
+Gps exact_annulus_region(
+    const EPoint& center,
+    const Epeck::FT& inner_radius,
+    const Epeck::FT& outer_radius)
+{
+    Gps region;
+    region.insert(disk_polygon(center, outer_radius));
+    if (CGAL::sign(inner_radius) == CGAL::POSITIVE) {
+        Gps hole;
+        hole.insert(disk_polygon(center, inner_radius));
+        region.difference(hole);
+    }
+    return region;
+}
+
 void validate_depletion_trace(const DepletionTrace& trace)
 {
     if (trace.center_count != trace.center_parameters.size()
@@ -186,6 +210,52 @@ void Stock2::subtract_disk(double cx, double cy, double radius)
     set_->difference(region);
 }
 
+// Exact swept region of a disk of radius r carried about a circular guide of
+// radius rho: the annulus between rho - r and rho + r. This is the region
+// EXACTLY -- an equality, not a bound -- so unlike the disk chain it carries no
+// approximation to compensate for.
+//
+// It is representable because both radii arrive as doubles and every double IS a
+// rational: disk_polygon squares them into the rational squared radii
+// Gps_circle_segment_traits_2 requires. Two boundary circles (four x-monotone
+// arcs) replace the hundreds of disks a chain would need over the same turn.
+void Stock2::subtract_annulus(double cx, double cy, double inner_radius, double outer_radius)
+{
+    // Finiteness is a DOUBLE concept, so it is checked here, at the boundary,
+    // before anything is injected: Epeck::FT(NaN) has no meaning to build on.
+    if (!std::isfinite(cx) || !std::isfinite(cy)
+        || !std::isfinite(inner_radius) || !std::isfinite(outer_radius)) {
+        throw NonFiniteAnnulusInputError(
+            "subtract_annulus requires finite center coordinates and radii; got "
+            "cx=" + std::to_string(cx) + ", cy=" + std::to_string(cy)
+            + ", inner_radius=" + std::to_string(inner_radius)
+            + ", outer_radius=" + std::to_string(outer_radius) + ".");
+    }
+    // Each double is injected as itself -- no snapping, no tolerance at the seam.
+    // The radius ORDERING is then decided exactly, downstream, by the exact core.
+    subtract_annulus_exact(
+        EPoint(cx, cy),
+        Epeck::FT(inner_radius),
+        Epeck::FT(outer_radius));
+}
+
+void Stock2::subtract_annulus_exact(
+    const EPoint& center,
+    const Epeck::FT& inner_radius,
+    const Epeck::FT& outer_radius)
+{
+    if (CGAL::sign(inner_radius) == CGAL::NEGATIVE) {
+        throw InvalidAnnulusRadiiError(
+            "subtract_annulus requires inner_radius >= 0.");
+    }
+    if (CGAL::compare(outer_radius, inner_radius) != CGAL::LARGER) {
+        throw InvalidAnnulusRadiiError(
+            "subtract_annulus requires outer_radius > inner_radius.");
+    }
+    Gps region = exact_annulus_region(center, inner_radius, outer_radius);
+    set_->difference(region);
+}
+
 // Subtract the union of exact tool disks centered at the given points. One
 // chain implementation shared by the capsule (Task 2) and arc (Task 3) paths:
 // callers only choose where the centers sit; exact predicates still decide
@@ -243,12 +313,44 @@ void Stock2::subtract_arc_sweep(double cx, double cy, double sx, double sy,
     const double guide_r = std::hypot(rx, ry);
     if (guide_r == 0.0) { subtract_disk(cx, cy, tool_radius); return; }
 
+    // A FULL turn sweeps the exact annulus between guide_r - tool_radius and
+    // guide_r + tool_radius, so it needs no chain at all. This is a CORRECTNESS
+    // improvement, not a loosening of a tolerance: the chain deliberately
+    // UNDER-covers the true swept region, leaving the model with sagitta slivers
+    // of material the tool had in fact removed -- material that raises every
+    // later engagement reading. The annulus is the swept region exactly, so
+    // nothing is left over and nothing has to be compensated for.
+    //
+    // Direction of travel does not enter: a full turn sweeps the same set either
+    // way, so `cw` is irrelevant here (it still selects the arc for a partial
+    // sweep below).
+    //
+    // guide_r is a double surrogate for the guide radius, which is irrational in
+    // general (sqrt of a rational) and therefore NOT representable as a rational
+    // squared radius. That surrogate is a pre-existing property of this
+    // double-valued API -- the chain samples the very same approximate circle --
+    // and it is injected exactly, with no snapping and no correction constant.
+    if (sx == ex && sy == ey) {
+        // guide_r and tool_radius are injected as themselves and the two bounds
+        // are formed EXACTLY. Forming them in double arithmetic first would round
+        // rho +/- r to the nearest double and put the swept region about an ulp
+        // off the sweep oracle exact_full_circle_sweep_oracle certifies against --
+        // a snap at a seam where exactness costs nothing.
+        const Epeck::FT guide(guide_r);
+        const Epeck::FT tool(tool_radius);
+        // A guide no wider than the tool sweeps a filled disk, not a ring; the
+        // test is an exact comparison, not a tolerance.
+        const Epeck::FT inner = (CGAL::compare(guide, tool) == CGAL::LARGER)
+            ? Epeck::FT(guide - tool)
+            : Epeck::FT(0);
+        subtract_annulus_exact(EPoint(cx, cy), inner, guide + tool);
+        return;
+    }
+
     double a0 = std::atan2(ry, rx);
     double a1 = std::atan2(ey - cy, ex - cx);
     double sweep = cw ? a0 - a1 : a1 - a0;
     if (sweep <= 0.0) sweep += 2.0 * std::numbers::pi;
-    const bool full = (sx == ex && sy == ey);
-    if (full) sweep = 2.0 * std::numbers::pi;
 
     // Chain spacing along the guide: disks of tool_radius at arc-length step s
     // under-cover the true sweep by delta <= s^2/(4*tool_radius) (chord
@@ -377,17 +479,16 @@ ExactSweepOracle exact_full_circle_sweep_oracle(
         center_count_limit);
     Gps removal = exact_disk_union(construction.centers, tool_radius);
 
-    Gps sweep;
-    sweep.insert(disk_polygon(
+    // The true swept region of a full turn IS the annulus, built by the same
+    // shared exact_annulus_region that Stock2::subtract_annulus_exact removes --
+    // so the fast path removes precisely the region this oracle certifies.
+    const Epeck::FT inner = (CGAL::compare(guide_radius, tool_radius) == CGAL::LARGER)
+        ? Epeck::FT(guide_radius - tool_radius)
+        : Epeck::FT(0);
+    Gps sweep = exact_annulus_region(
         motion.center,
-        guide_radius + tool_radius));
-    if (CGAL::compare(guide_radius, tool_radius) == CGAL::LARGER) {
-        Gps inner;
-        inner.insert(disk_polygon(
-            motion.center,
-            guide_radius - tool_radius));
-        sweep.difference(inner);
-    }
+        inner,
+        guide_radius + tool_radius);
     return {std::move(removal), std::move(sweep)};
 }
 
@@ -560,6 +661,11 @@ NB_MODULE(_stock_2, m)
         "ExactDepletionCenterLimitError",
         construction_error.ptr());
 
+    // Argument faults at the double boundary: ValueError-derived so they read the
+    // same way as every other malformed-input rejection in this module.
+    nb::exception<InvalidAnnulusRadiiError>(m, "InvalidAnnulusRadiiError", PyExc_ValueError);
+    nb::exception<NonFiniteAnnulusInputError>(m, "NonFiniteAnnulusInputError", PyExc_ValueError);
+
     nb::class_<DepletionTrace>(m, "DepletionTrace")
         .def_prop_ro("center_count", [](const DepletionTrace& trace) {
             return trace.center_count;
@@ -664,6 +770,8 @@ NB_MODULE(_stock_2, m)
             "max_chord"_a,
             "center_count_limit"_a)
         .def("subtract_disk", &Stock2::subtract_disk, "cx"_a, "cy"_a, "radius"_a)
+        .def("subtract_annulus", &Stock2::subtract_annulus,
+             "cx"_a, "cy"_a, "inner_radius"_a, "outer_radius"_a)
         .def(
             "arrangement_stats",
             [](const Stock2& stock) {

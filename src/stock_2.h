@@ -12,6 +12,7 @@
 
 #include <cstddef>
 #include <memory>
+#include <stdexcept>
 #include <utility>
 
 #include <CGAL/Boolean_set_operations_2.h>
@@ -29,6 +30,20 @@ typedef GpsTraits::Polygon_2 GpsPolygon;             // circle-segment general p
 typedef GpsTraits::Polygon_with_holes_2 GpsPolygonWithHoles;
 typedef GpsTraits::Point_2 GpsPoint;                 // one-root coordinates
 typedef GpsTraits::X_monotone_curve_2 GpsXCurve;
+
+// One named exception per failure mode of the annulus sweep, so a caller can
+// tell a malformed radius pair from a non-finite coordinate without parsing
+// message text. Both are argument faults at the double boundary and are exposed
+// to Python as ValueError subclasses.
+class InvalidAnnulusRadiiError : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
+
+class NonFiniteAnnulusInputError : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
 
 // Full disk of the given radius centred at `center`, as a two-arc CCW general
 // polygon (split at its x-extreme vertical-tangency points). Shared by the
@@ -57,6 +72,24 @@ public:
 
     // Remove the exact disk of the given radius centred at (cx, cy).
     void subtract_disk(double cx, double cy, double radius);
+
+    // Remove the exact annulus between `inner_radius` and `outer_radius` about
+    // (cx, cy) -- the swept region of a disk of radius r carried about a circular
+    // guide of radius rho, with inner = rho - r and outer = rho + r. Both radii
+    // are doubles, hence exact rationals, so their squares are exactly what
+    // Gps_circle_segment_traits_2 needs: the region is TWO curves, not a chain.
+    // `inner_radius == 0` is the degenerate case (a full disk) and is handled
+    // structurally, not by a tolerance.
+    void subtract_annulus(double cx, double cy, double inner_radius, double outer_radius);
+
+    // Exact core of the above. Callers that already hold exact radii use this
+    // rather than round-tripping them through doubles: rho + r and rho - r are
+    // exact rationals, and rounding them to the nearest double would be a snap at
+    // a seam where exactness is free -- and would put the swept region roughly an
+    // ulp off the sweep oracle the depletion certificates are proved against.
+    void subtract_annulus_exact(const EPoint& center,
+                                const Epeck::FT& inner_radius,
+                                const Epeck::FT& outer_radius);
 
     // Remove the tool sweep along segment (x0,y0)->(x1,y1) as a certified
     // under-covering disk chain (the exact oriented capsule has irrational
