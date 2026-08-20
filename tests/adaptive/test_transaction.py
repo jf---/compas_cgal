@@ -7,6 +7,7 @@ from itertools import permutations
 import pytest
 from compas.geometry import Polygon
 
+from compas_cgal import _continuous_tea_2
 from compas_cgal.adaptive.canonical import CanonicalRingV1
 from compas_cgal.adaptive.candidates import DerivedCandidateCursor
 from compas_cgal.adaptive.candidates import MiddleCurveCandidate
@@ -34,6 +35,10 @@ from compas_cgal.adaptive.motion import ExactCircleMotion
 from compas_cgal.adaptive.motion import ExactSegmentMotion
 from compas_cgal.adaptive.motion_certificate import MotionCertifier
 from compas_cgal.adaptive.motion_certificate import MotionWitness
+from compas_cgal.adaptive.motion_oracle_cache import clear_native_motion_audit_cache
+from compas_cgal.adaptive.motion_refutation import CapRefutation
+from compas_cgal.adaptive.motion_refutation import StationOutcome
+from compas_cgal.adaptive.motion_refutation import classify_segment_station
 from compas_cgal.adaptive.neck import NeckInventory
 from compas_cgal.adaptive.neck import NeckPassage
 from compas_cgal.adaptive.operation import CutFullCircleOperation
@@ -1379,3 +1384,141 @@ def test_winner_selection_rejects_malformed_acceptance_sets() -> None:
         select_candidate_transaction((first, first))
     with pytest.raises(CandidateSelectionError, match="policy"):
         select_candidate_transaction((first, cross_policy))
+
+
+def _sweep_candidate_outcomes(
+    evaluator: CandidateEvaluator,
+    fixture: _StateFixture,
+    candidates: tuple[MiddleCurveCandidate, ...],
+) -> tuple[str, ...]:
+    """Return the exact rejection or acceptance class of each candidate."""
+    outcomes: list[str] = []
+    for candidate in candidates:
+        try:
+            evaluator.evaluate(fixture.state, candidate)
+        except (
+            EngagementCapExceededError,
+            GougeContainmentError,
+            UnresolvedMotionEventError,
+        ) as error:
+            outcomes.append(type(error).__name__)
+        else:
+            outcomes.append("accepted")
+    return tuple(outcomes)
+
+
+def test_link_refutation_is_observationally_equivalent_to_the_full_partition(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A/B the real candidate search with and without the refutation probe.
+
+    The probe is an optimisation only if it never moves a decision. This drives
+    one deterministic slice of the real candidate family through the real
+    evaluator twice: once as shipped, and once with `refute_segment` forced onto
+    its inconclusive `None` arm so every link reaches the full exact event
+    partition. The two outcome sequences must agree candidate for candidate.
+
+    The same run measures that the probe actually replaced work rather than
+    merely duplicating it: with the probe in place, strictly fewer links reach
+    the native full-audit entry point.
+    """
+    fixture = _state_fixture()
+    evaluator = _evaluator(fixture.identity)
+    # The leading eight candidates in invariant order already cover every path
+    # the change can touch: links refuted at the terminal and midpoint stations,
+    # links rejected earlier by containment, and one link the probe leaves alone
+    # whose following circle is then proved over cap by the full partition.
+    candidates = fixture.terminal_candidates[:8]
+    audits: list[str] = []
+    native = _continuous_tea_2.audit_segment_tea_event_exact
+
+    def _count(*arguments: object) -> object:
+        audits.append("segment")
+        return native(*arguments)
+
+    monkeypatch.setattr(
+        _continuous_tea_2,
+        "audit_segment_tea_event_exact",
+        _count,
+    )
+    clear_native_motion_audit_cache()
+    with_probe = _sweep_candidate_outcomes(evaluator, fixture, candidates)
+    audits_with_probe = len(audits)
+
+    def _never_refutes(
+        self: MotionCertifier,
+        *,
+        motion: ExactSegmentMotion,
+        effective_cap: EngagementCap,
+    ) -> CapRefutation | None:
+        return None
+
+    monkeypatch.setattr(MotionCertifier, "refute_segment", _never_refutes)
+    audits.clear()
+    clear_native_motion_audit_cache()
+    without_probe = _sweep_candidate_outcomes(evaluator, fixture, candidates)
+    audits_without_probe = len(audits)
+
+    assert with_probe == without_probe
+    assert "EngagementCapExceededError" in with_probe
+    assert "GougeContainmentError" in with_probe
+    # The probe removed audits without removing all of them: an unrefuted link
+    # still reaches the full exact partition on the shipped path.
+    assert 0 < audits_with_probe < audits_without_probe
+
+
+def test_refuted_link_names_its_witness_station_and_reproduces_it() -> None:
+    """Carry the exact counterexample into the rejection the search sees."""
+    fixture = _state_fixture()
+    evaluator = _evaluator(fixture.identity)
+    refuted = next(candidate for candidate in fixture.terminal_candidates if _refutation_for(fixture, candidate) is not None)
+    refutation = _refutation_for(fixture, refuted)
+    motion = _link_motion(fixture, refuted)
+    assert refutation is not None and motion is not None
+
+    with pytest.raises(
+        EngagementCapExceededError,
+        match=f"station {refutation.witness_station.numerator}/{refutation.witness_station.denominator}",
+    ):
+        evaluator.evaluate(fixture.state, refuted)
+
+    assert (
+        classify_segment_station(
+            stock=fixture.state.fork_stock().raw,
+            motion=motion,
+            tool_radius=fixture.identity.tool_radius,
+            effective_cap=fixture.identity.user_cap,
+            station=refutation.witness_station,
+        )
+        is StationOutcome.REFUTED
+    )
+
+
+def _link_motion(
+    fixture: _StateFixture,
+    candidate: MiddleCurveCandidate,
+) -> ExactSegmentMotion | None:
+    """Return the link this candidate would cut, or `None` when degenerate."""
+    target = _phase_point(candidate)
+    if target == fixture.state.phase_point:
+        return None
+    return ExactSegmentMotion.build(fixture.state.phase_point, target)
+
+
+def _refutation_for(
+    fixture: _StateFixture,
+    candidate: MiddleCurveCandidate,
+) -> CapRefutation | None:
+    """Probe the link of one candidate against the authoritative parent stock."""
+    assert type(candidate.neck_scope) is NoNeckScope
+    motion = _link_motion(fixture, candidate)
+    if motion is None:
+        return None
+    certifier = MotionCertifier.build(
+        stock=fixture.state.fork_stock(),
+        tool_radius=fixture.identity.tool_radius,
+    )
+    return certifier.refute_segment(
+        motion=motion,
+        effective_cap=fixture.identity.user_cap,
+    )

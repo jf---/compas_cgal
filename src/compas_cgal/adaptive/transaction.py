@@ -21,6 +21,7 @@ from compas_cgal.adaptive.coverage import CoverageLedger
 from compas_cgal.adaptive.entry import PreclearedEntry
 from compas_cgal.adaptive.errors import CandidateSelectionError
 from compas_cgal.adaptive.errors import CandidateStateMismatchError
+from compas_cgal.adaptive.errors import EngagementCapExceededError
 from compas_cgal.adaptive.errors import InvalidCandidateTransactionError
 from compas_cgal.adaptive.errors import InvalidReplayTraceError
 from compas_cgal.adaptive.errors import InvalidRetraceSegmentOperationError
@@ -37,6 +38,7 @@ from compas_cgal.adaptive.motion_certificate import SWEPT_PREFIX_STRATEGY_VERSIO
 from compas_cgal.adaptive.motion_certificate import SWEPT_PREFIX_THEOREM_VERSION
 from compas_cgal.adaptive.motion_certificate import MotionCertifier
 from compas_cgal.adaptive.motion_certificate import SweptPrefixMotionWitness
+from compas_cgal.adaptive.motion_refutation import CapRefutation
 from compas_cgal.adaptive.neck import NeckPassage
 from compas_cgal.adaptive.operation import AdvanceSegmentOperation
 from compas_cgal.adaptive.operation import CanonicalOperation
@@ -1078,6 +1080,23 @@ class CandidateEvaluator:
             stock=stock,
             tool_radius=self.tool_radius,
         )
+        # Candidate search rejects far more trials than it accepts, and a
+        # rejection needs only one exact counterexample while an acceptance
+        # needs the whole event partition. Probing the fixed station ladder
+        # first therefore rejects a violating link for a fraction of a percent
+        # of the audit it replaces. A refutation is a proof, so raising the
+        # same exception `certify` raises on cap exceedance keeps the search
+        # decision identical; an inconclusive probe changes nothing and falls
+        # through to the full exact certification below.
+        refutation: CapRefutation | None = certifier.refute_segment(
+            motion=operation.motion,
+            effective_cap=effective_cap,
+        )
+        if refutation is not None:
+            station = refutation.witness_station
+            raise EngagementCapExceededError(
+                f"operation {operation_index} exceeds its exact effective cap at station {station.numerator}/{station.denominator}.",
+            )
         motion_witness = certifier.certify(
             operation_index=operation_index,
             operation_kind=OperationType.LINK,
