@@ -759,6 +759,185 @@ with least-recently-used eviction, so a long generation run cannot grow without
 limit. `certify_swept_prefix_segment` is deliberately not memoized; its native
 theorem was not part of the measured duplication.
 
+### Witness-based refutation before certification
+
+Candidate search rejects far more link segments than it accepts, and rejecting
+one needs a single exact counterexample where accepting one needs the whole
+event partition. `CandidateEvaluator._evaluate_segment` therefore probes a fixed
+ladder of exact rational stations before certifying, and rejects a link the
+moment one station is proved over cap.
+
+Measured A/B on 2026-08-20 over the leading sixteen candidates of the real
+transaction family, once as shipped and once with `refute_segment` forced onto
+its inconclusive `None` arm:
+
+| | authority only | shipped | |
+| --- | ---: | ---: | --- |
+| wall clock | `188.736 s` | `35.046 s` | **5.39x** |
+| full segment audits | `13` (`187.034 s`) | `5` (`33.150 s`) | 8 eliminated |
+| full circle audits | `2` (`1.193 s`) | `2` (`1.156 s`) | unchanged |
+| station probes | `0` | `76` (`0.245 s`) | `3.2 ms` each |
+| outcome sequence | \- | identical, candidate for candidate | \- |
+
+The probe is close to free where it does not fire. On the Task 13F route-one
+terminal, whose links the ladder does not refute, `36` probes cost `0.147 s`
+against `16.643 s` of full segment audits — `0.83%` overhead on a `17.658 s`
+run.
+
+Refutation and certification are opposite quantifiers over the same exact
+predicate, and only one of them is cheap:
+
+| Question | Quantifier | Evidence needed | Cost |
+| --- | --- | --- | --- |
+| Does *some* station of this motion exceed the cap? | existential | one exact station | one exact cell classification |
+| Does *no* station of this motion exceed the cap? | universal | the complete exact event partition | event discovery over a continuum |
+
+A station probe is not an approximation of the audit. `segment_station_cap_exceeded_exact`
+builds the exact sign-invariant cell containing the exact rational station
+`numerator / denominator` and classifies it with the same
+`classify_station_cell` predicate the full audit applies to every cell of its
+partition. The full audit sets `cap_exceeded` when *any* cell classifies
+`MATERIAL` or `CAP_EXCEEDED`, and `cap_exceeded` dominates `unresolved` in its
+verdict aggregation. A station that classifies either way is therefore a
+complete proof that `certify` would report cap exceedance, because the motion's
+maximum engagement is at least its engagement at that station.
+
+!!! warning "Refutation is one-way and the types enforce it"
+
+    Absence of a counterexample among finitely many stations proves nothing.
+    `refute_segment_cap` returns `CapRefutation | None`, and neither arm is
+    assignable where a witness is required: `CapRefutation` shares no supertype
+    with `MotionWitness` or `SweptPrefixMotionWitness`, and it carries
+    `verdict: Literal["cap_exceeded"]` where a witness carries
+    `Literal["certified"]`. `tests/adaptive/typecheck/consumer_contract.py`
+    pins four `mypy --strict` rejections — passing a refutation or a `None`
+    probe result to a witness consumer, into `ReplayLateralWitness`
+    positionally, and through `dataclasses.replace` — and
+    `--warn-unused-ignores` fails the gate if any of those stops being an
+    error. Only `certify` can accept a motion.
+
+The ladder is a dyadic refinement enumerated coarsest level first. Level 0 is
+the two endpoints with the terminal station first, because a link starts inside
+stock the previous operation already cleared and advances into fresh material;
+level `m` then adds the odd multiples of `2**-m`, which are exactly the stations
+no coarser level has already probed:
+
+```python
+REFUTATION_LADDER_DEPTH = 3
+# 1/1, 0/1, 1/2, 1/4, 3/4, 1/8, 3/8, 5/8, 7/8
+```
+
+Depth 3 refutes every violation spanning more than an eighth of the motion, in
+at most nine exact evaluations. It is a named constant with a stated rationale,
+not a tuning knob: no depth can ever be "enough", because the full audit remains
+the sole authority for every motion the ladder fails to refute. Stations are
+pairs of Python integers throughout — no float ever names a station, and there
+is no tolerance anywhere in the decision.
+
+Every station yields one of three named outcomes. `StationOutcome.REFUTED` is
+conclusive; `NOT_REFUTED` and `UNKNOWN` are distinct reasons for the same
+non-result and are treated identically. `UNKNOWN` covers every native substrate
+failure — an unresolved exact station disposition, an unextractable boundary, an
+input the native source rejects — because an unposable or unresolved probe
+refutes nothing, and the certifier that runs next owns those error models and
+raises them with its own contract. One of the three Task 13F links measured
+above had exactly one unresolved station out of nine, so this is a live path,
+not a defensive branch.
+
+`test_link_refutation_is_observationally_equivalent_to_the_full_partition`
+pins the equivalence as a regression gate: it drives the leading eight
+candidates of the real family through the real evaluator twice, with and
+without the probe, and requires the two outcome sequences to agree candidate for
+candidate while strictly fewer links reach the native audit.
+`EngagementCapExceededError` carries the witness station in its message
+(`operation 3 exceeds its exact effective cap at station 1/1`).
+
+Two boundaries are deliberately untouched. `certify_swept_prefix_segment` keeps
+its own theorem-backed path, whose verdicts are certified or unresolved and
+never cap-exceeded, so a refutation there would convert an unresolved theorem
+into a rejection. Full-circle motions have no segment station and
+`MotionCertifier.refute_segment` refuses them by type rather than guessing.
+
+#### What the probe exposed in the full partition
+
+Equivalence holds wherever the full partition returns a verdict at all, and it
+was measured to hold: over `125` full audits dispatched with the probe disabled,
+the partition returned `certified` for `86` motions the probe left alone and
+`cap_exceeded` for `24` it refuted, with **`0`** cases of a refuted motion being
+certified. The probe and the partition never disagree on a decided motion.
+
+Equivalence does not hold where the partition *fails to decide*. The remaining
+`15` refuted motions raise `IncompleteSegmentPartitionError`, and on the Task
+13F route-2 family the failure is worse than a raise: the audit terminates the
+process. Adding the probe made both places visible. Both are properties of
+`continuous_tea_2`, not of the probe, and both are incompleteness rather than
+unsoundness.
+
+Every refutation the probe has produced on the two real fixtures — `31` of them,
+`10` on the Task 13F route-2 family at operation 7 and `21` on the branch family
+at operation 3 — was cross-checked against two wholly independent branch-A
+certifiers. Full per-station evidence is in
+[Refutation soundness cross-check](refutation_soundness_crosscheck.md).
+
+| check | result over all `31` |
+| --- | --- |
+| `engagement_at(...)[2]` — exact per-run `cap_exceeded`, `cap_chord_ratio=4.0`, `gap_close_ratio=0.0` | `True`, `31/31` |
+| `certify_segment_tea(..., cap_radians=pi)[1]` — independent whole-motion `cap_certified` | `False`, `31/31`, over `139` to `274` stations |
+| `engagement_at(...)[1]` — reported `max_run_tea`, corroborating only | `3.278950` to `5.150175 rad`, all above `pi` |
+
+Zero disagreements. For the stations at parameter `1/1` the witness is an exact
+binary64 point, so the independent oracles evaluated the identical exact point.
+A separate synthetic differential over `894` comparisons finds `0` refutations
+the exact `cap_exceeded` flag does not support and `36` in the safe direction;
+all `36` sit at station `0/1`, whose polarity is pinned by
+`test_start_station_refutation_never_contradicts_the_exact_cap_flag`.
+
+!!! warning "Compare `max_run_tea`, never `total_tea`"
+
+    The cap is a bound on each maximal engaged run, not on their sum.
+    `engagement_at` returns `(total_tea, max_run_tea, cap_exceeded)`, and
+    `engagement_2.cpp` decides per run. Two disjoint runs of `1.70 rad` give
+    `total_tea = 3.40` while neither run exceeds `pi`, so a comparison of
+    `total_tea` against `pi` proves nothing. The authoritative field is the
+    third, `cap_exceeded`: `engagement_2.h` states it is "the only DECISION
+    carried out here and it is decided EXACTLY on the exact arrangement, never
+    from these reported doubles". An earlier draft of this section quoted
+    `total_tea`; the numbers happened to coincide because every witness station
+    carries exactly one engaged run, but the comparison was not valid as
+    written.
+
+!!! danger "Two behavioural changes, both from partition failure"
+
+    **`test_task13f_full_continuation` (already failing, now failing better).**
+    With the probe disabled, `generate_exact_adaptive_continuation` on this
+    fixture terminates the process:
+    `boost float_next<double>: Argument must be finite, but got inf`. The test
+    was a `worker crashed` failure before this change. With the probe the run
+    completes and reports `attempts=56; cap=10; gouge=46`. Its recorded
+    expectation of `cap=0; gouge=56` predates the crash and cannot be
+    reproduced on the current tree.
+
+    **`test_real_active_family_stops_at_unresolved_exact_event` (newly
+    failing).** The higher-ranked candidate whose unresolved partition used to
+    stop the search is one of the `21` refutations above, carrying one engaged
+    run of `max_run_tea = 5.150175 rad` — `295` degrees against a `180` degree
+    cap — with `cap_exceeded` `True` and `cap_certified` `False`. There is no
+    longer a proof gap at that candidate; there is a proof of violation. The
+    search therefore skips it soundly and accepts a later feasible candidate.
+    This is a real change to the accepted toolpath for that fixture, in the
+    sound direction, and it is not observationally equivalent.
+
+    Both changes come from the same incomplete bucket, and neither
+    is a repaired certificate. An earlier draft of this section claimed
+    `certify` had been returning a `MotionWitness` for these links; that was
+    inferred from a stale recorded test expectation, was never measured, and is
+    retracted in
+    [Refutation soundness cross-check](refutation_soundness_crosscheck.md#retracted-the-partition-was-never-shown-to-certify-a-violation).
+    No certificate was wrong and no bad toolpath was emitted.
+
+    The root cause is in exact event discovery in `continuous_tea_2`, not in
+    the refutation ladder, and remains open.
+
 ### Canonical motion and replay handoff
 
 `MotionWitness.canonical_bytes` is the single serialization authority for a
@@ -1161,3 +1340,20 @@ The final focused affected `--testmon` gate passed `1` in `31.34 s`; the
 post-review uncached adaptive suite passed `567` in `237.09 s`. Ruff, strict
 mypy over `28` source files, strict MkDocs, formatting, and diff checks passed.
 These are regression timings, not matched planner measurements.
+
+At the witness-refutation gate on 2026-08-20, `tests/adaptive/test_motion_refutation.py`
+passed `12` in `0.80 s` and the complete suite reported `4 failed, 882 passed`
+in `229.71 s`. Strict mypy over `32` source files reported the same `4`
+pre-existing `generator.py` errors with and without the change, and ruff, ruff
+format, and strict MkDocs passed.
+
+The failure delta is `3` to `4`, and both sides need naming. Before the change
+the same tree reported `3`: two route-retrace failures and
+`test_task13f_full_continuation` as a `worker crashed` native abort. After the
+change the two route-retrace failures are unchanged,
+`test_task13f_full_continuation` no longer crashes but still fails on its stale
+recorded counts, and `test_real_active_family_stops_at_unresolved_exact_event`
+newly fails because its guarded proof gap became a proof of violation. Both
+generator failures are analysed under
+[What the probe exposed in the full partition](#what-the-probe-exposed-in-the-full-partition);
+neither test was modified.

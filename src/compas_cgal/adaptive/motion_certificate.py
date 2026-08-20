@@ -21,6 +21,8 @@ from compas_cgal.adaptive.motion import EngagementCap
 from compas_cgal.adaptive.motion import ExactCircleMotion
 from compas_cgal.adaptive.motion import ExactSegmentMotion
 from compas_cgal.adaptive.motion_oracle_cache import audit_motion_tea_event_exact
+from compas_cgal.adaptive.motion_refutation import CapRefutation
+from compas_cgal.adaptive.motion_refutation import refute_segment_cap
 from compas_cgal.adaptive.stock_area import Stock2Area
 from compas_cgal.adaptive.units import ToolRadius
 from compas_cgal.toolpath import OperationType
@@ -404,6 +406,48 @@ class MotionCertifier:
             Whether the exact stock contains the queried point.
         """
         return self._stock.contains(x, y)
+
+    def refute_segment(
+        self,
+        *,
+        motion: ExactSegmentMotion,
+        effective_cap: EngagementCap,
+    ) -> CapRefutation | None:
+        """Search for an exact station counterexample before certifying.
+
+        This is the cheap half of the refute/verify asymmetry. A returned
+        `CapRefutation` is a complete proof that `certify` would report cap
+        exceedance for the same motion, and it costs roughly two orders of
+        magnitude less than building the full event partition.
+
+        The `None` arm is not a certificate and carries no safety claim; it is
+        the absence of a counterexample among finitely many stations. Only
+        `certify` can accept a motion.
+
+        Args:
+            motion: Exact segment motion to refute.
+            effective_cap: Exact policy-derived engagement cap.
+
+        Returns:
+            The exact counterexample, or `None` when the ladder is
+            inconclusive.
+
+        Raises:
+            InvalidMotionCertificateError: If either argument has the wrong
+                exact type.
+        """
+        if type(motion) is not ExactSegmentMotion:
+            raise InvalidMotionCertificateError("segment refutation requires an exact segment motion.")
+        if type(effective_cap) is not EngagementCap:
+            raise InvalidMotionCertificateError("segment refutation requires an exact engagement cap.")
+        return refute_segment_cap(
+            stock=self._stock,
+            motion=motion,
+            tool_radius=self.tool_radius,
+            effective_cap=effective_cap,
+            stock_lineage_digest=self.stock_lineage_digest,
+            stock_boundary_digest=self.canonical_boundary_digest,
+        )
 
     def certify(
         self,

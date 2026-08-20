@@ -30,6 +30,14 @@ class InvalidMotionOracleCacheKeyError(ValueError):
     """A native motion-audit memo key input is not an exact content identity."""
 
 
+class InvalidStationLadderError(ValueError):
+    """An exact station is outside the closed unit interval or not integral."""
+
+
+class InvalidCapRefutationError(ValueError):
+    """A cap-refutation request or counterexample violates its exact contract."""
+
+
 class EngagementCapExceededError(RuntimeError):
     """An exact motion oracle proves that the effective cap is exceeded."""
 

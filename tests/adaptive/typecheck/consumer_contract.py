@@ -1,4 +1,5 @@
 from collections.abc import Mapping
+from dataclasses import replace
 from typing import Literal
 from typing import assert_never
 from typing import assert_type
@@ -6,6 +7,7 @@ from typing import assert_type
 import numpy as np
 
 from compas_cgal import _medial_axis_2
+from compas_cgal import _stock_2
 from compas_cgal._medial_axis_2 import MedialAxisResult
 from compas_cgal.adaptive.bootstrap import InitialCandidateEvaluator
 from compas_cgal.adaptive.bootstrap import InitialCandidateTransaction
@@ -31,7 +33,15 @@ from compas_cgal.adaptive.medial_axis import MatEdgeId
 from compas_cgal.adaptive.medial_axis import MatZeroGuideInventory
 from compas_cgal.adaptive.medial_axis import MatZeroGuideRun
 from compas_cgal.adaptive.motion import EngagementCap
+from compas_cgal.adaptive.motion_certificate import MotionCertifier
+from compas_cgal.adaptive.motion_certificate import MotionWitness
+from compas_cgal.adaptive.motion_refutation import CapRefutation
+from compas_cgal.adaptive.motion_refutation import ExactStation
+from compas_cgal.adaptive.motion_refutation import StationOutcome
+from compas_cgal.adaptive.motion_refutation import classify_segment_station
+from compas_cgal.adaptive.motion_refutation import refute_segment_cap
 from compas_cgal.adaptive.neck import NeckInventory
+from compas_cgal.adaptive.replay_trace import ReplayLateralWitness
 from compas_cgal.adaptive.operation import AdvanceTraversalDecision
 from compas_cgal.adaptive.operation import AdvanceSegmentOperation
 from compas_cgal.adaptive.operation import ApproachOperation
@@ -405,6 +415,89 @@ def accepted_transaction_kind(
     if isinstance(transaction, ZeroGuideLinkTransaction):
         return "zero-guide"
     assert_never(transaction)
+
+
+def accepts_motion_witness(witness: MotionWitness) -> bytes:
+    """Stand in for every consumer that requires proof a motion is safe."""
+    return witness.canonical_bytes
+
+
+def refutation_is_never_a_certificate(
+    certifier: MotionCertifier,
+    motion: ExactSegmentMotion,
+    cap: EngagementCap,
+    lateral: ReplayLateralWitness,
+) -> None:
+    """Pin the one-way soundness boundary in the type system.
+
+    A refutation proves violation and a witness proves safety. Neither the
+    refutation nor the "no counterexample found" `None` may reach a consumer
+    that requires a witness, and `--warn-unused-ignores` makes each suppression
+    below fail the gate if the underlying error ever disappears.
+    """
+    probe = certifier.refute_segment(motion=motion, effective_cap=cap)
+    assert_type(probe, CapRefutation | None)
+
+    # "No counterexample found" is not proof of safety.
+    accepts_motion_witness(probe)  # type: ignore[arg-type]
+    if probe is None:
+        return
+
+    # A proved violation is not proof of safety either, in any position.
+    assert_type(probe.verdict, Literal["cap_exceeded"])
+    assert_type(probe.witness_station, ExactStation)
+    accepts_motion_witness(probe)  # type: ignore[arg-type]
+    replace(lateral, motion_witness=probe)  # type: ignore[arg-type]
+    ReplayLateralWitness(
+        lateral.operation_index,
+        lateral.operation,
+        lateral.effective_cap_decision,
+        lateral.stock_boundary_digest,
+        lateral.containment_certificate,
+        probe,  # type: ignore[arg-type]
+        lateral.depletion_witness,
+        lateral.sweep_witness,
+    )
+
+
+def station_outcome_kind(outcome: StationOutcome) -> str:
+    """Prove the three-valued probe disposition is closed and exhaustive."""
+    if outcome is StationOutcome.REFUTED:
+        return "refuted"
+    if outcome is StationOutcome.NOT_REFUTED:
+        return "not-refuted"
+    if outcome is StationOutcome.UNKNOWN:
+        return "unknown"
+    assert_never(outcome)
+
+
+def free_refutation_probe_is_equally_constrained(
+    native_stock: _stock_2.Stock2,
+    motion: ExactSegmentMotion,
+    cap: EngagementCap,
+    digest: bytes,
+) -> None:
+    """Pin the module-level probe signatures the certifier delegates to."""
+    assert_type(
+        classify_segment_station(
+            stock=native_stock,
+            motion=motion,
+            tool_radius=ToolRadius.build(0.5),
+            effective_cap=cap,
+            station=ExactStation.build(1, 2),
+        ),
+        StationOutcome,
+    )
+    outcome = refute_segment_cap(
+        stock=native_stock,
+        motion=motion,
+        tool_radius=ToolRadius.build(0.5),
+        effective_cap=cap,
+        stock_lineage_digest=digest,
+        stock_boundary_digest=digest,
+    )
+    assert_type(outcome, CapRefutation | None)
+    accepts_motion_witness(outcome)  # type: ignore[arg-type]
 
 
 def commit_typed_zero_guide_transaction(
