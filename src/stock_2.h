@@ -10,6 +10,7 @@
 // caster in its own (NB_STATIC) translation unit.
 #include <nanobind/stl/vector.h>
 
+#include <cstddef>
 #include <memory>
 #include <utility>
 
@@ -82,6 +83,32 @@ public:
 
     const Gps& set() const { return *set_; }          // engagement kernel reads this
     Gps& set() { return *set_; }
+
+    // --- Instrumentation (diagnostics only) ----------------------------------
+    // Neither accessor participates in any decision: they report the SIZE and the
+    // exact-rational COMPLEXITY of the arrangement the boolean engine has built,
+    // so bit growth over a run of subtractions can be measured. No epsilon, no
+    // tolerance, no feedback into geometry.
+
+    // Feature counts of the underlying arrangement. Cheap: pure counters, no
+    // exact evaluation, so this MAY be read inside a timed run.
+    struct ArrangementStats {
+        std::size_t vertices;
+        std::size_t halfedges;
+        std::size_t faces;
+    };
+    ArrangementStats arrangement_stats() const;
+
+    // Printed decimal length of the exact coordinates carried by the
+    // arrangement's vertices. WARNING: this calls .exact() on every sampled
+    // coordinate, collapsing the lazy filter and changing subsequent timings --
+    // it is a DIAGNOSTIC and must never be read inside a timed measurement.
+    struct CoordinateDigits {
+        std::size_t max_digits;
+        double mean_digits;
+        std::size_t sampled;
+    };
+    CoordinateDigits coordinate_digits() const;
 
 private:
     explicit Stock2(std::unique_ptr<Gps> set) noexcept;
