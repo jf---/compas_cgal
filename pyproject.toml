@@ -86,8 +86,12 @@ CMAKE_POLICY_DEFAULT_CMP0135 = "NEW"
 # PIXI_PROJECT_NAME is verified present in the uv-driven build subprocess: keying this
 # override on a non-existent variable instead reproduces `Unrecognized options in
 # config-settings: pixi-conda-environment`, exit 7. Overrides apply before validate_may_exit().
-# The value is a string REGEX. Do not write `= true` — that tests truthiness, and a project
-# name is not a truthy string, so the override would silently never fire.
+# The value is a string REGEX matched against the variable's value. The boolean form `= true`
+# fires here too — strtobool (skbuild_overrides.py:78-87) counts any string outside
+# {n,no,off,false,f} and zero-digits as truthy — but it tests the value's TRUTHINESS rather
+# than the variable's presence, so it would stop firing if the project were renamed `0` or
+# `false`. The regex form has an explicit "key not in env" branch: it matches presence, which
+# is what is meant here.
 [[tool.scikit-build.overrides]]
 if.env.PIXI_PROJECT_NAME = ".+"
 strict-config = false
