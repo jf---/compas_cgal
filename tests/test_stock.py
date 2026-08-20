@@ -109,6 +109,210 @@ def test_arc_sweep_under_covers_never_over():
 
 
 # --------------------------------------------------------------------------- #
+# subtract_annulus: the exact swept region of a full circular guide           #
+# --------------------------------------------------------------------------- #
+
+# Full-circle guide used by every annulus test: tool radius 0.5 swept about the
+# circle of radius 2 centred at (5, 5). Both radii and both of their sums are
+# exact in binary floating point (2 - 0.5 = 1.5, 2 + 0.5 = 2.5), so the double
+# API and `subtract_arc_sweep` -- which forms the same two bounds in exact
+# rational arithmetic -- describe the identical region, with no rounding to
+# reason about. Radii whose sum is NOT exactly representable would differ by an
+# ulp, which is a property of the caller's arithmetic, not of the annulus.
+ANNULUS_CENTER = (5.0, 5.0)
+ANNULUS_GUIDE_RADIUS = 2.0
+ANNULUS_TOOL_RADIUS = 0.5
+ANNULUS_INNER = ANNULUS_GUIDE_RADIUS - ANNULUS_TOOL_RADIUS
+ANNULUS_OUTER = ANNULUS_GUIDE_RADIUS + ANNULUS_TOOL_RADIUS
+
+# Under-coverage of the disk chain, from its own construction in src/stock_2.cpp:
+# spacing s = 2*r*sqrt(CHAIN_SLACK_FRACTION) gives a sagitta shortfall of
+# s^2/(4r) = r*CHAIN_SLACK_FRACTION. At r = 0.5 that is 5.0e-5 mm.
+CHAIN_SLACK_FRACTION = 1e-4
+CHAIN_SAGITTA = ANNULUS_TOOL_RADIUS * CHAIN_SLACK_FRACTION
+# Ring probes per turn: comfortably denser than the 1260 disks the chain places
+# over the full turn, so probes land between disks rather than on them.
+CHAIN_PROBE_COUNT = 4001
+
+# Exact-centred reference chain: chord bound and center budget for
+# `subtract_exact_full_circle`, which parametrises the guide circle rationally.
+EXACT_CHAIN_MAX_CHORD = 0.1
+EXACT_CHAIN_CENTER_LIMIT = 4096
+
+
+def _annulus_stock():
+    """Virgin square with the exact swept annulus of the reference motion removed."""
+    stock = _stock_2.Stock2(SQUARE, [])
+    stock.subtract_annulus(*ANNULUS_CENTER, ANNULUS_INNER, ANNULUS_OUTER)
+    return stock
+
+
+def _chain_stock():
+    """Virgin square with the same full turn removed by the under-covering disk chain.
+
+    Driven as two clockwise half arcs rather than one full circle: the full-circle
+    branch now takes the exact annulus, so this is how the still-live chain path is
+    exercised over the identical region.
+    """
+    stock = _stock_2.Stock2(SQUARE, [])
+    stock.subtract_arc_sweep(5.0, 5.0, 7.0, 5.0, 3.0, 5.0, True, ANNULUS_TOOL_RADIUS)  # lower half
+    stock.subtract_arc_sweep(5.0, 5.0, 3.0, 5.0, 7.0, 5.0, True, ANNULUS_TOOL_RADIUS)  # upper half
+    return stock
+
+
+def _full_circle_arc_sweep_stock():
+    """Virgin square depleted through the public full-circle `subtract_arc_sweep`."""
+    stock = _stock_2.Stock2(SQUARE, [])
+    stock.subtract_arc_sweep(5.0, 5.0, 7.0, 5.0, 7.0, 5.0, True, ANNULUS_TOOL_RADIUS)
+    return stock
+
+
+def test_subtract_annulus_removes_the_band_and_nothing_else():
+    stock = _annulus_stock()
+    assert not stock.contains(7.0, 5.0)  # mid-band, on the guide circle
+    assert not stock.contains(5.0, 7.0)  # mid-band, quarter turn away
+    assert not stock.contains(6.55, 5.0)  # just inside the inner bound
+    assert not stock.contains(7.45, 5.0)  # just inside the outer bound
+    assert stock.contains(5.0, 5.0)  # island inside the hole survives
+    assert stock.contains(6.45, 5.0)  # strictly inside inner_radius
+    assert stock.contains(7.55, 5.0)  # strictly outside outer_radius
+
+
+def test_annulus_removes_the_slivers_the_disk_chain_retains():
+    """The chain UNDER-covers the swept region; the annulus IS the swept region.
+
+    The chain's shortfall is the sagitta between consecutive tool disks,
+    `CHAIN_SAGITTA` = 5.0e-5 mm here -- material the model kept although the tool
+    had in fact removed it, which reads high on every later engagement query.
+    Probing a ring at half that depth inside the outer bound, the chain leaves
+    material at the mid-angles between its disks and the annulus leaves none.
+
+    Note this is deliberately NOT phrased as exact set inclusion of the annulus
+    result in the chain result. That inclusion is FALSE, and not because of the
+    annulus: the chain's centres are `cx + guide_r*cos(a)` in double arithmetic
+    and land up to 7.0e-16 mm OFF the guide circle (measured over these 1260
+    disks), so the chain also removes a sub-femtometre crescent outside the true
+    swept region. Neither set contains the other; what is true, and what matters
+    at 11 orders of magnitude larger, is the shortfall asserted here.
+    `test_annulus_is_the_certified_full_circle_sweep_region` states the exact
+    inclusion, against a chain whose centres ARE exactly on the guide circle.
+    """
+    annulus = _annulus_stock()
+    chain = _chain_stock()
+    probe_radius = ANNULUS_OUTER - 0.5 * CHAIN_SAGITTA
+    angles = [2.0 * math.pi * i / CHAIN_PROBE_COUNT for i in range(CHAIN_PROBE_COUNT)]
+    ring = [(5.0 + probe_radius * math.cos(a), 5.0 + probe_radius * math.sin(a)) for a in angles]
+    assert not any(annulus.contains(x, y) for x, y in ring)
+    assert any(chain.contains(x, y) for x, y in ring)
+
+
+def test_annulus_is_the_certified_full_circle_sweep_region():
+    """The wired-in full-turn path removes exactly what the depletion oracle certifies.
+
+    `subtract_exact_full_circle` places its tool disks at EXACT rational points on
+    the guide circle and is proved to under-cover the swept annulus
+    (`exact_full_circle_undercover_holds`). Against that exactly-centred chain the
+    inclusion does hold exactly, in the direction the certificate states: the
+    annulus removes everything the chain removes, and strictly more.
+    """
+    swept = _full_circle_arc_sweep_stock()
+    exact_chain = _stock_2.Stock2(SQUARE, [])
+    exact_chain.subtract_exact_full_circle(
+        *ANNULUS_CENTER,
+        ANNULUS_GUIDE_RADIUS,
+        0.0,
+        False,
+        ANNULUS_TOOL_RADIUS,
+        EXACT_CHAIN_MAX_CHORD,
+        EXACT_CHAIN_CENTER_LIMIT,
+    )
+    assert swept.is_subset_of(exact_chain)
+    assert not exact_chain.is_subset_of(swept)
+
+
+def test_zero_inner_radius_is_exactly_a_disk():
+    annulus = _stock_2.Stock2(SQUARE, [])
+    annulus.subtract_annulus(*ANNULUS_CENTER, 0.0, ANNULUS_OUTER)
+    disk = _stock_2.Stock2(SQUARE, [])
+    disk.subtract_disk(*ANNULUS_CENTER, ANNULUS_OUTER)
+    assert annulus.exactly_equals(disk)
+
+
+# Floor for the arrangement-size win, well under the measured ratio so it
+# ratchets without tracking CGAL's exact arrangement bookkeeping.
+ANNULUS_VERTEX_REDUCTION_FLOOR = 100
+
+
+def test_annulus_arrangement_is_orders_smaller_than_the_chain():
+    """Two boundary circles instead of a 1260-disk union, in arrangement features.
+
+    Measured: 8 vertices after the annulus against 2536 after the chain, a 317x
+    reduction. Arrangement size is what makes every later `engagement_at` query
+    expensive, so this is the number the whole change exists to move.
+    """
+    annulus_vertices = _annulus_stock().arrangement_stats()[0]
+    chain_vertices = _chain_stock().arrangement_stats()[0]
+    assert annulus_vertices * ANNULUS_VERTEX_REDUCTION_FLOOR <= chain_vertices, (annulus_vertices, chain_vertices)
+
+
+def test_full_circle_arc_sweep_uses_the_exact_annulus():
+    """The wired-in path: a full-circle guide removes the annulus, not a disk chain.
+
+    Exact equality is available here only because ``2 +/- 0.5`` is exact in binary
+    floating point, so the double radii this test passes and the exact rational
+    bounds `subtract_arc_sweep` forms are the same two numbers.
+    """
+    assert _full_circle_arc_sweep_stock().exactly_equals(_annulus_stock())
+
+
+def test_partial_arc_sweep_still_uses_the_disk_chain():
+    """A quarter arc is untouched by this change: it sweeps one quadrant, not a ring."""
+    stock = _stock_2.Stock2(SQUARE, [])
+    stock.subtract_arc_sweep(5.0, 5.0, 7.0, 5.0, 5.0, 7.0, False, ANNULUS_TOOL_RADIUS)
+    assert not stock.contains(7.0, 5.0)  # arc start is swept
+    # Mid-band in the opposite quadrant: material iff the annulus was NOT taken.
+    opposite = 5.0 - ANNULUS_GUIDE_RADIUS / math.sqrt(2.0)
+    assert stock.contains(opposite, opposite)
+    assert stock.contains(5.0, 3.0)  # mid-band, quarter turn back from the start
+    assert stock.contains(3.0, 5.0)  # mid-band, quarter turn past the end
+
+
+@pytest.mark.parametrize(
+    "inner, outer",
+    [
+        (2.5, 2.5),  # empty annulus
+        (2.5, 1.5),  # inverted
+        (-0.1, 2.5),  # negative inner
+        (1.5, 0.0),  # non-positive outer
+    ],
+)
+def test_annulus_rejects_malformed_radii(inner, outer):
+    stock = _stock_2.Stock2(SQUARE, [])
+    with pytest.raises(_stock_2.InvalidAnnulusRadiiError):
+        stock.subtract_annulus(*ANNULUS_CENTER, inner, outer)
+
+
+@pytest.mark.parametrize("bad", [math.inf, -math.inf, math.nan])
+def test_annulus_rejects_non_finite_input(bad):
+    stock = _stock_2.Stock2(SQUARE, [])
+    with pytest.raises(_stock_2.NonFiniteAnnulusInputError):
+        stock.subtract_annulus(5.0, 5.0, ANNULUS_INNER, bad)
+    with pytest.raises(_stock_2.NonFiniteAnnulusInputError):
+        stock.subtract_annulus(bad, 5.0, ANNULUS_INNER, ANNULUS_OUTER)
+
+
+def test_stock_wrapper_exposes_subtract_annulus():
+    from compas.geometry import Polygon
+
+    from compas_cgal.stock import Stock
+
+    stock = Stock(Polygon([[0, 0, 0], [10, 0, 0], [10, 10, 0], [0, 10, 0]]))
+    stock.subtract_annulus(*ANNULUS_CENTER, ANNULUS_INNER, ANNULUS_OUTER)
+    assert not stock.contains(7.0, 5.0)
+    assert stock.contains(5.0, 5.0)
+
+
+# --------------------------------------------------------------------------- #
 # engagement_at: exact station TEA                                            #
 # --------------------------------------------------------------------------- #
 

@@ -159,6 +159,27 @@ class Stock:
         """
         self._raw.subtract_disk(float(cx), float(cy), float(radius))
 
+    def subtract_annulus(self, cx: float, cy: float, inner_radius: float, outer_radius: float) -> None:
+        """Remove the exact annulus between *inner_radius* and *outer_radius* about ``(cx, cy)``.
+
+        This is the swept region of a tool of radius ``r`` carried once around a
+        circular guide of radius ``rho``, with ``inner_radius = rho - r`` and
+        ``outer_radius = rho + r``. The region is removed exactly -- two boundary
+        circles, no discretisation -- so nothing is left behind to compensate for.
+
+        Args:
+            cx: X coordinate of the annulus center (the guide center).
+            cy: Y coordinate of the annulus center (the guide center).
+            inner_radius: Inner bound of the band; ``0.0`` removes a full disk.
+            outer_radius: Outer bound of the band; must exceed *inner_radius*.
+
+        Raises:
+            InvalidAnnulusRadiiError: If the radii do not satisfy
+                ``outer_radius > inner_radius >= 0``.
+            NonFiniteAnnulusInputError: If any coordinate or radius is not finite.
+        """
+        self._raw.subtract_annulus(float(cx), float(cy), float(inner_radius), float(outer_radius))
+
     def subtract_arc_sweep(
         self,
         cx: float,
@@ -171,6 +192,11 @@ class Stock:
         tool_radius: float,
     ) -> None:
         """Remove the area swept by a tool of *tool_radius* along a circular arc.
+
+        A FULL turn -- ``(sx, sy) == (ex, ey)`` -- removes the swept annulus
+        exactly, via `subtract_annulus`. A partial arc is still removed as a
+        certified under-covering chain of tool disks, which retains slivers of
+        material the tool has in fact removed and so reads high on engagement.
 
         Args:
             cx: X coordinate of the arc center.

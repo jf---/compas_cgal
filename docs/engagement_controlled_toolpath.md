@@ -62,7 +62,7 @@ anywhere in the accept/reject path.
 | Unregulated circles, same cap via `stepover=0.5` | 136.4 deg | `audit_toolpath_engagement` |
 | Motions measured above cap, 12x8 | 5 regulated vs 14 unregulated | `audit_toolpath_engagement` |
 | Cut travel, 12x8 | 411.6 vs 914.3 | sum of circle circumferences and bridge lengths |
-| Generation, 12x8, 2 mm tool | 2.70 s and 3.43 s over two runs, vs 2.9 ms | `time.perf_counter` around each generator |
+| Generation, 12x8, 2 mm tool | 0.226 s, vs 2.9 ms | `time.perf_counter` around each generator; was 2.70-3.43 s before exact-annulus depletion |
 | Residual stock, 10x6 | 2.35% vs 2.57%, none further than 0.28 mm from a wall | 200x120 `Stock.contains` grid |
 
 ### Why those four probe positions
@@ -91,6 +91,52 @@ materially different regime.
     already refuses and reports. That is a **measurement on one pocket**, not a proof that four probes
     suffice in general.
 
+## Depleting a full turn is exact, not sampled
+
+Every machining circle is a full turn, and the region a tool of radius `r` sweeps about a circular
+guide of radius `rho` is **exactly** the annulus between `rho - r` and `rho + r`. That region is
+representable in `Gps_circle_segment_traits_2`: both radii are doubles, hence rationals, so their
+squares are the rational squared radii the traits class needs. Two boundary circles — four
+x-monotone arcs — describe it completely.
+
+The generator previously under-approximated that sweep with a chain of tool disks spaced
+`2*r*sqrt(CHAIN_SLACK_FRACTION)` apart, which is **1260 disks** for one turn at `r = 0.5`. The chain
+was deliberately conservative: it under-covers, so the model retained more material than the tool had
+actually removed and every later engagement query read high. Moving to the annulus is a
+**correctness improvement, not a loosened tolerance** — the modelled region becomes the true region,
+so there is no longer an approximation to compensate for.
+
+`Stock2::subtract_annulus` is the new path, `subtract_arc_sweep` routes the full-turn case to it, and
+the partial-arc and capsule chains are untouched. The two radii are formed in exact rational
+arithmetic rather than in doubles: `subtract_annulus_exact` shares its region builder with
+`exact_full_circle_sweep_oracle`, so the region the fast path removes and the region the depletion
+certificates are proved to under-cover are the same construction by identity.
+
+| Claim | Value | Source |
+| --- | --- | --- |
+| Arrangement vertices after one full turn | **8** via the annulus vs **2536** via the chain — 317x | `Stock.arrangement_stats`, `test_annulus_arrangement_is_orders_smaller_than_the_chain` |
+| Depletion cost, 12x8, 2 mm tool | **2.5 ms/call** vs 57.4 ms/call, 49 calls | `time.perf_counter` around `Stock.subtract_*`, A/B on one machine |
+| `engagement_at` cost, same run | **0.160 ms/call** vs 1.288 ms/call, 427 calls | same harness |
+| Total generation, same run | **0.226 s** vs 3.411 s — 15x | same harness |
+| Chain shortfall it removes | `r * CHAIN_SLACK_FRACTION` = 5.0e-5 mm at `r = 0.5` | sagitta `s^2/(4r)`, `test_annulus_removes_the_slivers_the_disk_chain_retains` |
+| Toolpath produced | **unchanged**: 49 cuts / 441.8 length / 5 over cap (12x8), 112 / 595.3 / 7 (L-shape) | replay against `_stock_2.engagement_at`, 12 positions per loop |
+
+!!! note "The disk chain is not a subset of the annulus, and that is the chain's doing"
+
+    The chain's centres are `cx + guide_r*cos(a)` evaluated in double arithmetic, so they land up to
+    **7.0e-16 mm off** the guide circle and the chain removes a sub-femtometre crescent *outside* the
+    true swept region. Exact set inclusion of the annulus result in the chain result is therefore
+    false — for a reason that belongs to the chain's sampling, not to the annulus. The inclusion
+    **does** hold exactly against `subtract_exact_full_circle`, whose centres are exact rational
+    points on the guide circle; that is the form the test asserts. The chain's meaningful error is
+    its 5.0e-5 mm shortfall, eleven orders of magnitude larger.
+
+The guide radius itself stays a double surrogate. `sqrt(rx^2 + ry^2)` is irrational in general, so
+`(rho +- r)^2` is not a rational squared radius and the exact annulus about the *true* guide circle is
+not representable at all. That surrogate is a pre-existing property of this double-valued API — the
+chain samples the very same approximate circle — and it is injected exactly, with no snapping and no
+correction constant.
+
 ## Chain entries are over the cap by construction
 
 The first machining circle of a chain meets virgin stock: it is a full slot whatever the advance, and
@@ -115,8 +161,8 @@ A helical or ramped entry would remove them. That is not implemented here.
   non-decreasing in advance distance. Under that assumption it returns the largest admissible
   station; without it, it still returns an admissible one — every accepted station's evaluated
   positions passed the exact predicate regardless.
-- **Generation is ~1000x slower** than the unregulated generator, dominated by `engagement_at`
-  queries and exact stock depletion.
+- **Generation is ~78x slower** than the unregulated generator (was ~1000x before full-turn
+  depletion became exact), still dominated by exact stock depletion and `engagement_at` queries.
 - **Guide tangency is G1 on straight guide segments only**, approximate through turns — the same
   model the existing generator uses.
 - **Coverage is measured, not certified.** The advance bound keeps consecutive annuli overlapping;
