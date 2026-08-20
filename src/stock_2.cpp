@@ -4,8 +4,10 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstddef>
 #include <memory>
 #include <numbers>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <tuple>
@@ -468,6 +470,86 @@ bool exact_full_circle_induction_holds(
     return exact_induction_holds(initial, oracle);
 }
 
+// --- Instrumentation --------------------------------------------------------
+// Read-only probes on the arrangement the boolean engine maintains. They exist to
+// measure how the exact representation GROWS across a run of subtractions; nothing
+// they return feeds a geometric decision, so exact-kernel discipline is untouched.
+
+Stock2::ArrangementStats Stock2::arrangement_stats() const
+{
+    // General_polygon_set_2 exposes a CONST arrangement accessor (vendored CGAL
+    // 6.0.1, General_polygon_set_2.h:105 declares `const Arrangement_2&
+    // arrangement() const` alongside the mutable overload), so unlike
+    // engagement_2.cpp::engaged_arcs_zone -- which needs a non-const handle for
+    // Arrangement_zone_2 and therefore documents a read-only const_cast -- this
+    // probe needs no cast at all. These are plain counters: no exact evaluation is
+    // triggered, so reading them does not perturb a timed run.
+    const Gps::Arrangement_2& arr = set_->arrangement();
+    return { arr.number_of_vertices(), arr.number_of_halfedges(), arr.number_of_faces() };
+}
+
+namespace {
+
+// Printed decimal length of one exact rational, measured by streaming it.
+// Backend-agnostic on purpose: the repo rule is to use kernel/number-type
+// abstractions rather than naming a concrete rational backend (this build is
+// CGAL_DISABLE_GMP + CGAL_USE_BOOST_MP), and operator<< is guaranteed by the
+// number type's concept. The printed length -- numerator, '/', denominator and
+// any sign -- is a proxy for bit length (bits ~ digits * log2(10)); only its
+// GROWTH across successive operations is ever interpreted, never its absolute
+// magnitude.
+std::size_t decimal_digits(const Epeck::FT& value)
+{
+    std::ostringstream stream;
+    stream << value.exact();
+    return stream.str().size();
+}
+
+// Running max/mean over the printed lengths of the exact parts sampled so far.
+struct DigitAccumulator {
+    std::size_t max_digits = 0;
+    double sum = 0.0;
+    std::size_t count = 0;
+
+    void add_rational(const Epeck::FT& part)
+    {
+        const std::size_t digits = decimal_digits(part);
+        max_digits = std::max(max_digits, digits);
+        sum += static_cast<double>(digits);
+        ++count;
+    }
+
+    // a1() and root() are ONLY defined on an EXTENDED Sqrt_extension -- a rational
+    // coordinate carries a0() alone, and reading the extension parts
+    // unconditionally is undefined behaviour. Same guard as
+    // engagement_2.cpp::as_radpoint and exact_stock_region_2.cpp::lift_coordinate.
+    void add_coordinate(const GpsPoint::CoordNT& coordinate)
+    {
+        add_rational(coordinate.a0());
+        if (!coordinate.is_extended()) {
+            return;
+        }
+        add_rational(coordinate.a1());
+        add_rational(coordinate.root());
+    }
+};
+
+} // namespace
+
+Stock2::CoordinateDigits Stock2::coordinate_digits() const
+{
+    const Gps::Arrangement_2& arr = set_->arrangement();
+    DigitAccumulator accumulator;
+    for (auto vertex = arr.vertices_begin(); vertex != arr.vertices_end(); ++vertex) {
+        accumulator.add_coordinate(vertex->point().x());
+        accumulator.add_coordinate(vertex->point().y());
+    }
+    const double mean = (accumulator.count == 0)
+        ? 0.0
+        : accumulator.sum / static_cast<double>(accumulator.count);
+    return { accumulator.max_digits, mean, accumulator.count };
+}
+
 NB_MODULE(_stock_2, m)
 {
     nb::exception<ExactDepletionConstructionError> construction_error(
@@ -581,7 +663,19 @@ NB_MODULE(_stock_2, m)
             "tool_radius"_a,
             "max_chord"_a,
             "center_count_limit"_a)
-        .def("subtract_disk", &Stock2::subtract_disk, "cx"_a, "cy"_a, "radius"_a);
+        .def("subtract_disk", &Stock2::subtract_disk, "cx"_a, "cy"_a, "radius"_a)
+        .def(
+            "arrangement_stats",
+            [](const Stock2& stock) {
+                const Stock2::ArrangementStats stats = stock.arrangement_stats();
+                return std::make_tuple(stats.vertices, stats.halfedges, stats.faces);
+            })
+        .def(
+            "coordinate_digits",
+            [](const Stock2& stock) {
+                const Stock2::CoordinateDigits digits = stock.coordinate_digits();
+                return std::make_tuple(digits.max_digits, digits.mean_digits, digits.sampled);
+            });
 
     m.def(
         "exact_segment_point_is_incident",
