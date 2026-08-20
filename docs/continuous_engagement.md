@@ -709,6 +709,56 @@ digest, authority inclusion, verdict agreement, and strategy identity.
 `MotionWitness.__post_init__` repeats the kind/motion and cap-order invariants,
 so direct construction or `dataclasses.replace` cannot bypass them.
 
+### Memoized native dispatch
+
+`certify` does not call the native oracle directly. It delegates to
+`compas_cgal.adaptive.motion_oracle_cache.audit_motion_tea_event_exact`, a
+module-level memo over the native `(verdict, trace)` pair. Nothing else is
+memoized: every returned `MotionWitness` is rebuilt from the caller's own
+arguments on every call.
+
+A route-retrace measurement on 2026-08-20 showed why. Four segment
+certifications cost `4.96 s`, `5.06 s`, `6.68 s`, `6.97 s` and four circle
+certifications cost `0.002 s`, `0.002 s`, `0.54 s`, `0.52 s`. Calls three and
+four certified the same segment, and calls five and seven certified a
+byte-identical segment against a stock with identical arrangement statistics —
+roughly `12 s` of `24 s` spent re-deriving results already computed. The
+duplicate calls came from *different* `MotionCertifier` instances that shared
+stock content, so the memo is module-level and content-keyed; a per-instance
+memo would miss exactly the duplicates that matter.
+
+The key is the complete `motion-oracle-audit-key-v1` CCAN record, not a hash of
+it, so distinct inputs cannot collide at all:
+
+| Key component | Source | Why it is in the key |
+| --- | --- | --- |
+| `stock-lineage-digest` | `MotionCertifier.stock_lineage_digest` | Identifies the observed depletion lineage |
+| `canonical-boundary-digest` | `MotionCertifier.canonical_boundary_digest` | Identifies the exact native stock boundary the oracle reads |
+| `motion` | `canonical_task1_bytes(motion)` | Exact binary64 endpoints, or centre, phase vector, and orientation |
+| `tool-radius` | `MotionCertifier.tool_radius` | Native argument |
+| `effective-cap` | `EngagementCap.chord_ratio_bytes` | Native argument, as the exact binary64 surrogate |
+| `native-oracle` | Dispatch tag | Segment and full-circle entry points never share an entry |
+
+Two things are deliberately absent. `operation_index` never reaches the native
+oracle, and it binds into `MotionWitness` content identity — memoizing it would
+either never hit or hand one operation the wrong ordinal. `user_cap` never
+reaches the native oracle either; `certify` proves `effective_cap <= user_cap`
+before dispatch and writes the user cap into the witness afterwards.
+
+Three properties keep the memo semantically invisible:
+
+- Every entry belongs to the exact oracle object that produced it. Substituting
+  the native entry point yields a fresh key, so a substitute oracle is always
+  consulted rather than answered from an earlier real result.
+- Raised native exceptions are never stored. A failing request re-runs the
+  oracle and keeps its own traceback and cause chain.
+- Trace verification is unchanged and repeats on every call, including hits.
+
+`MOTION_ORACLE_CACHE_CAPACITY` bounds retained native traces at `512` entries
+with least-recently-used eviction, so a long generation run cannot grow without
+limit. `certify_swept_prefix_segment` is deliberately not memoized; its native
+theorem was not part of the measured duplication.
+
 ### Canonical motion and replay handoff
 
 `MotionWitness.canonical_bytes` is the single serialization authority for a
@@ -757,6 +807,7 @@ pixi run pytest --testmon -n auto -q \
   tests/adaptive/test_segment_oracle.py \
   tests/adaptive/test_circle_oracle.py \
   tests/adaptive/test_motion_certificate.py \
+  tests/adaptive/test_motion_oracle_cache.py \
   tests/adaptive/test_replay.py \
   tests/adaptive/test_identity.py \
   tests/adaptive/test_transaction.py \

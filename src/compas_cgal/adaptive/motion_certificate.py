@@ -3,7 +3,6 @@ import struct
 from dataclasses import dataclass
 from typing import Final
 from typing import Literal
-from typing import cast
 
 from compas_cgal import _continuous_tea_2
 from compas_cgal import _stock_2
@@ -21,6 +20,7 @@ from compas_cgal.adaptive.identity import IdentityDigest
 from compas_cgal.adaptive.motion import EngagementCap
 from compas_cgal.adaptive.motion import ExactCircleMotion
 from compas_cgal.adaptive.motion import ExactSegmentMotion
+from compas_cgal.adaptive.motion_oracle_cache import audit_motion_tea_event_exact
 from compas_cgal.adaptive.stock_area import Stock2Area
 from compas_cgal.adaptive.units import ToolRadius
 from compas_cgal.toolpath import OperationType
@@ -450,28 +450,14 @@ class MotionCertifier:
         if operation_kind is OperationType.CUT and type(motion) is not ExactCircleMotion:
             raise InvalidMotionCertificateError("operation kind and motion are incompatible.")
         try:
-            if type(motion) is ExactSegmentMotion:
-                verdict, trace = _continuous_tea_2.audit_segment_tea_event_exact(
-                    self._stock,
-                    motion.start.x,
-                    motion.start.y,
-                    motion.end.x,
-                    motion.end.y,
-                    self.tool_radius.value,
-                    effective_cap.chord_ratio,
-                )
-            else:
-                circle = cast(ExactCircleMotion, motion)
-                verdict, trace = _continuous_tea_2.audit_full_circle_tea_event_exact(
-                    self._stock,
-                    circle.center.x,
-                    circle.center.y,
-                    circle.phase_vector.x,
-                    circle.phase_vector.y,
-                    circle.clockwise,
-                    self.tool_radius.value,
-                    effective_cap.chord_ratio,
-                )
+            verdict, trace = audit_motion_tea_event_exact(
+                stock=self._stock,
+                motion=motion,
+                tool_radius=self.tool_radius,
+                effective_cap=effective_cap,
+                stock_lineage_digest=self.stock_lineage_digest,
+                canonical_boundary_digest=self.canonical_boundary_digest,
+            )
         except (
             _continuous_tea_2.EventPartitionVerificationError,
             _continuous_tea_2.EventTraceVerificationError,
