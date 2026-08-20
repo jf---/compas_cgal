@@ -63,6 +63,12 @@ doctest_optionflags = [
 
 [tool.scikit-build]
 minimum-version = "build-system.requires"
+# pixi injects a `pixi-conda-environment` build fingerprint into --config-settings on every
+# PyPI source build; scikit-build-core's default strict-config rejects it as an unrecognized
+# option and the build aborts. There is no per-key allowlist, so strict-config is the only
+# knob. Cost is low: no other build frontend here passes --config-settings (cibuildwheel
+# drives pip with none), so this only downgrades unknown-key errors to warnings.
+strict-config = false
 build-dir = "build/{wheel_tag}"
 wheel.py-api = "cp312"                    # Build all Python currently supported versions.
 cmake.version = ">=3.15"
@@ -139,3 +145,70 @@ max-doc-length = 179
 [tool.ruff.format]
 docstring-code-format = true
 docstring-code-line-length = "dynamic"
+
+# ============================================================================
+# pixi
+# ============================================================================
+
+[tool.pixi.workspace]
+channels = ["conda-forge"]
+platforms = ["osx-arm64", "linux-64"]
+
+[tool.pixi.dependencies]
+python = "3.12.*"
+cmake = ">=3.15"
+ninja = "*"
+# The build backend MUST be a conda dependency, not a PyPI one. `compas-cgal` has a dynamic
+# version, so uv runs prepare_metadata_for_build_wheel at SOLVE time; with no-build-isolation
+# there is no ephemeral build env, and the PyPI set is not installed yet at that point. pixi
+# installs conda packages first, so only this table is populated in time. Moving these two
+# back to [tool.pixi.pypi-dependencies] reintroduces `No module named 'scikit_build_core'`.
+nanobind = ">=1.3.2"
+scikit-build-core = ">=0.10"
+compas = "*"
+numpy = "*"
+scipy = "*"
+
+[tool.pixi.pypi-dependencies]
+compas-cgal = { path = ".", editable = true }
+build = "*"
+pytest = ">=7"
+pytest-xdist = "*"
+pytest-testmon = "*"
+hypothesis = "*"
+ruff = "*"
+
+[tool.pixi.pypi-options]
+no-build-isolation = ["compas-cgal"]
+
+[tool.pixi.target.osx-arm64.activation.env]
+# Wheel-tag ceiling, not a preference. conda-forge's CPython reports
+# `sysconfig.get_platform() == macosx-11.0-arm64`, so uv accepts wheels tagged at most
+# macosx_11_0_arm64. CMakeLists sets no CMAKE_OSX_DEPLOYMENT_TARGET, so an unpinned build
+# inherits the HOST macOS (15.x) and produces macosx_15_0_arm64, which the interpreter then
+# rejects as incompatible. 11.0 matches the target [tool.cibuildwheel] already declares.
+MACOSX_DEPLOYMENT_TARGET = "11.0"
+
+[tool.pixi.feature.docs.dependencies]
+python = "3.12.*"
+compas = "*"
+
+[tool.pixi.feature.docs.pypi-dependencies]
+markdown-callouts = ">=0.4"
+mkdocs-material = ">=9.5"
+mkdocstrings = { version = "*", extras = ["python"] }
+
+[tool.pixi.feature.docs.tasks]
+docs = "mkdocs build --strict"
+
+[tool.pixi.environments]
+docs = { features = ["docs"], no-default-feature = true }
+
+[tool.pixi.tasks]
+# Import probe: forces scikit-build-core's editable hook to rebuild the extensions
+# before any test runs. Lists only the modules THIS branch builds.
+_editable-rebuild = '''python -c "from compas_cgal import _stock_2, _toolpath"'''
+pytest = { cmd = '''editable_build_dir="$(python -c 'import sys; print(next(f.path for f in sys.meta_path if hasattr(f, "known_wheel_files") and "compas_cgal._stock_2" in f.known_wheel_files))')" && SKBUILD_EDITABLE_SKIP="$editable_build_dir" pytest''', depends-on = ["_editable-rebuild"] }
+baseline = { cmd = '''editable_build_dir="$(python -c 'import sys; print(next(f.path for f in sys.meta_path if hasattr(f, "known_wheel_files") and "compas_cgal._stock_2" in f.known_wheel_files))')" && SKBUILD_EDITABLE_SKIP="$editable_build_dir" pytest tests -n auto -q''', depends-on = ["_editable-rebuild"] }
+affected = { cmd = '''editable_build_dir="$(python -c 'import sys; print(next(f.path for f in sys.meta_path if hasattr(f, "known_wheel_files") and "compas_cgal._stock_2" in f.known_wheel_files))')" && SKBUILD_EDITABLE_SKIP="$editable_build_dir" pytest tests -n auto --testmon -q''', depends-on = ["_editable-rebuild"] }
+lint = "ruff check src/compas_cgal tests benchmarks"
