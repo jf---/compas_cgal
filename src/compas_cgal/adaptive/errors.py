@@ -26,6 +26,10 @@ class InvalidMotionCertificateError(ValueError):
     """A motion-certifier request violates its typed local contract."""
 
 
+class InvalidMotionOracleCacheKeyError(ValueError):
+    """A native motion-audit memo key input is not an exact content identity."""
+
+
 class EngagementCapExceededError(RuntimeError):
     """An exact motion oracle proves that the effective cap is exceeded."""
 
