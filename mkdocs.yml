@@ -167,6 +167,7 @@ nav:
       - Exact Segment-Site MAT: segment_site_mat.md
       - Exact Continuous Engagement: continuous_engagement.md
       - Refutation Soundness Cross-Check: refutation_soundness_crosscheck.md
+      - Engagement-Controlled Toolpath: engagement_controlled_toolpath.md
       - Trochoid Chain Stitching: toolpath_trochoid_chain_design.md
       - Tangent Continuity: toolpath_tangent_continuity.md
       - CGAL Primitives Critique: critique_toolpath_cgal_primitives.md
