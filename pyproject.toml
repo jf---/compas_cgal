@@ -231,6 +231,13 @@ baseline = { cmd = "python scripts/pytest_editable.py tests -n auto -q", depends
 affected = { cmd = "python scripts/pytest_editable.py tests -n auto --testmon -q", depends-on = ["_editable-rebuild"] }
 # CLAUDE.md requires ruff formatting before every commit, so the gate checks formatting as
 # well as lint rules. Split into two private tasks so a failure names which one failed.
-_ruff-check = "ruff check src/compas_cgal tests benchmarks docs/examples scripts"
-_ruff-format-check = "ruff format --check src/compas_cgal tests benchmarks docs/examples scripts"
+# `docs/examples` is deliberately EXCLUDED from both, for two independent reasons:
+#   1. Its .md pages wrap the mkdocs-material snippet directive in a ```python fence, e.g.
+#      ---8<--- "docs/examples/example_booleans.py". ruff formats Python fences inside
+#      Markdown, and `---8<--- "..."` is syntactically valid Python (a unary-minus chain, a
+#      comparison, a string), so ruff silently rewrites it to `---8 < ---"..."` and breaks the
+#      code include on every example page. Formatting can never make these files compliant.
+#   2. The directory holds in-flight work this plan must not touch.
+_ruff-check = "ruff check src/compas_cgal tests benchmarks scripts"
+_ruff-format-check = "ruff format --check src/compas_cgal tests benchmarks scripts"
 lint = { depends-on = ["_ruff-check", "_ruff-format-check"] }

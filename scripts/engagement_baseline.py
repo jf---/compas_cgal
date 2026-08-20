@@ -36,6 +36,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from compas.geometry import Polygon
+
 from compas_cgal.engagement import audit_toolpath_engagement
 from compas_cgal.toolpath import trochoidal_mat_toolpath_circular
 
@@ -211,11 +212,9 @@ def render_markdown(data: dict) -> str:
         "| --- | ---: | ---: | ---: | ---: | ---: |",
     ]
     for r in data["pockets"]:
-        lines.append(f"| {r['name']} | {r['tool_diameter']:.1f} | {r['max_tea_deg']:.1f} | " f"{r['cap_violations']} | {r['stations']} | {r['wall_clock_s']:.1f} |")
+        lines.append(f"| {r['name']} | {r['tool_diameter']:.1f} | {r['max_tea_deg']:.1f} | {r['cap_violations']} | {r['stations']} | {r['wall_clock_s']:.1f} |")
     lines.append(
-        f"| **total** | | **{data['worst_tea_deg']:.1f}** (worst) | "
-        f"**{data['total_cap_violations']}** | **{data['total_stations']}** | "
-        f"**{data['total_wall_clock_s']:.1f}** |"
+        f"| **total** | | **{data['worst_tea_deg']:.1f}** (worst) | **{data['total_cap_violations']}** | **{data['total_stations']}** | **{data['total_wall_clock_s']:.1f}** |"
     )
     lines += [
         "",
