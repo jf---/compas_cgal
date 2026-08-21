@@ -39,3 +39,15 @@ class InvalidSideCountError(BenchmarkError):
 
 class InvalidArcRatioError(BenchmarkError):
     """An arc fraction fell outside the closed unit interval it is defined on."""
+
+
+class ImpassableNeckError(BenchmarkError):
+    """A neck was narrower than the tool, so no toolpath can reach through it."""
+
+
+class UnpinchedChannelError(BenchmarkError):
+    """A neck was as wide as the pocket it pinches, so the instance carries no neck."""
+
+
+class MissingSweepParameterError(BenchmarkError):
+    """A record handed to a sweep analysis does not carry that sweep's parameter."""
