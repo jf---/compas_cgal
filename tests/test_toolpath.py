@@ -945,10 +945,38 @@ def test_unlinked_paths_still_certify_the_implied_traverse():
 def test_unlinked_paths_with_clearance_plane_do_not_raise():
     """Supplying clearance_z suppresses the flat-traverse certification.
 
-    The caller has declared a safe Z plane, so the check is skipped and the call
-    returns instead of raising. This does NOT yet mean the traverse is lifted:
-    with link_paths=False only the entry plunge and the final retract are emitted,
-    so the inter-path move still sits at cut_z in the concatenated polyline.
+    The traverse is lifted to the clearance plane rather than certified against
+    the walls, so the call returns instead of raising.
+    `test_unlinked_paths_with_clearance_plane_lift_every_traverse` pins the lift
+    that makes skipping the check sound.
     """
     result = trochoidal_mat_toolpath_circular(_dumbbell(1.2), tool_diameter=1.0, pitch=0.75, link_paths=False, clearance_z=3.0)
     assert len(result.operations) > 0
+
+
+def test_unlinked_paths_with_clearance_plane_lift_every_traverse():
+    """With clearance_z no inter-path move stays at cut height, even unlinked.
+
+    link_paths=False suppresses the LINK primitive, not the safe-Z motion. Every
+    path boundary is bridged by a retract to the clearance plane and a plunge back
+    down, so the XY traverse between them runs above the material and the
+    exemption from flat-link certification is a true statement rather than a hole.
+    Before this was fixed the stream held one entry plunge and one final retract,
+    and every boundary was a cut -> cut move straight through the wall.
+    """
+    clearance_z = 3.0
+    result = trochoidal_mat_toolpath_circular(_dumbbell(1.2), tool_diameter=1.0, pitch=0.75, link_paths=False, clearance_z=clearance_z, optimize_order=False)
+    ops = result.operations
+    # The trailing retract_at_end carries a path_index one past the last cut path;
+    # exclude it so only genuine inter-path boundaries are checked.
+    path_count = 1 + max(op.path_index for op in ops if op.operation == OperationType.CUT)
+    boundaries = [i for i in range(1, len(ops)) if ops[i].path_index != ops[i - 1].path_index and ops[i].path_index < path_count]
+    assert len(boundaries) >= 2, f"need several path boundaries for this to mean anything, got {len(boundaries)}"
+
+    for i in boundaries:
+        assert ops[i].operation == OperationType.RETRACT, f"boundary at op {i} is {ops[i].operation}, not a retract: the traverse stays at cut height"
+        assert ops[i + 1].operation == OperationType.PLUNGE, f"boundary at op {i} retracts but never plunges back to cut depth"
+        # The XY move happens between the retract's end and the plunge's start, so
+        # both must sit on the clearance plane for the traverse to clear the stock.
+        assert pytest.approx(_op_end_xy(ops[i])[2], abs=1e-9) == clearance_z
+        assert pytest.approx(_op_start_xy(ops[i + 1])[2], abs=1e-9) == clearance_z

@@ -397,12 +397,12 @@ def trochoidal_mat_toolpath_circular(
     """Generate linked circular arc toolpath operations.
 
     Leads are certified against the boundary and shrink (or drop) to stay
-    gouge-free. The cut-height traverse between consecutive paths is certified
-    whether or not *link_paths* records a link primitive: without *clearance_z*
-    one that would cross a wall raises instead of being emitted. Links also
-    assume the corridor between paths has already been cleared of stock —
-    provide *clearance_z* for stock-safe linking. Path ordering is a greedy
-    nearest-neighbour heuristic.
+    gouge-free. The traverse between consecutive paths is made safe whether or
+    not *link_paths* records a link primitive: with *clearance_z* it is lifted to
+    the clearance plane, and without one it is certified against the walls and
+    raises rather than cross one. Links assume the corridor between paths has
+    already been cleared of stock — provide *clearance_z* for stock-safe linking.
+    Path ordering is a greedy nearest-neighbour heuristic.
 
     Parameters
     ----------
@@ -444,9 +444,10 @@ def trochoidal_mat_toolpath_circular(
     link_paths
         If ``True``, connect consecutive paths with linear link moves. This
         governs whether a link primitive is *recorded*, never whether the
-        traverse is *checked*: with ``False`` the emitted polyline still runs
-        continuously from one path to the next, and that implied move is
-        certified the same way.
+        traverse is *safe*: with ``False`` the emitted polyline still runs
+        continuously from one path to the next, so that implied move is lifted to
+        *clearance_z* by a retract/plunge pair when one is given, and certified
+        against the walls when one is not.
     optimize_order
         If ``True``, greedily reorder paths by nearest entry.
     cut_z

@@ -1091,12 +1091,22 @@ pmp_trochoidal_mat_toolpath_circular(
         } else {
             // link_paths == false: no LINK primitive is recorded, but the emitted
             // polyline still runs continuously from the previous path's end to this
-            // path's entry.  That implied traverse is a cut-height motion and gets the
-            // SAME certification as an explicit flat link — link_paths governs what is
-            // RECORDED, never what is CHECKED.  Without a clearance plane there is no
-            // safe fallback, so fail loud.
-            if (cur_xy != lead_in_pt && !use_clearance &&
-                !boundary.segment_clear(Segment_2(cur_xy, lead_in_pt), tool_radius)) {
+            // path's entry.  link_paths governs what is RECORDED, never what is
+            // CHECKED — and what it suppresses is the LINK primitive, not the safe-Z
+            // motion, so the traverse is still lifted whenever a clearance plane
+            // exists.
+            if (use_clearance) {
+                // The linked sequence minus the LINK primitive.  The XY move falls
+                // between the retract's end and the plunge's start, so it rides the
+                // clearance plane and never touches the material.
+                operations.push_back(make_tp_line(cur_xy, cur_z, cur_xy, safe_z, 4 /*retract*/, pidx));
+                cur_z = safe_z;
+                operations.push_back(make_tp_line(lead_in_pt, safe_z, lead_in_pt, cut_z, 5 /*plunge*/, pidx));
+            } else if (cur_xy != lead_in_pt &&
+                       !boundary.segment_clear(Segment_2(cur_xy, lead_in_pt), tool_radius)) {
+                // No clearance plane: the traverse stays at cut height, so it gets the
+                // SAME certification as an explicit flat link.  There is no safe
+                // fallback here, so fail loud.
                 throw std::invalid_argument(
                     "Implied traverse between unlinked paths would gouge the boundary; "
                     "provide clearance_z for safe Z-linking.");
