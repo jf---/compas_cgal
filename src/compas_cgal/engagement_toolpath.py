@@ -188,6 +188,104 @@ class UnavoidableEngagementWarning(UserWarning):
 
 
 @dataclass(frozen=True)
+class _Regulation:
+    """Validated, unit-resolved parameters shared by the engagement-regulated generators.
+
+    Built only through `build`, which owns the whole error model of the parameter
+    seam: every raw constructor field is already validated and already in absolute
+    units, so a walk that holds one of these never re-checks a caller's numbers and
+    never re-derives a default. The two generators in this package
+    (`engagement_controlled_toolpath` and
+    `compas_cgal.engagement_radial_toolpath.radius_regulated_toolpath`) share it so
+    that a parameter can only ever mean the same thing to both.
+
+    Attributes:
+        cap_ratio: The exact rational cap surrogate ``4*sin^2(theta/2)`` from
+            `_cap_surrogate` -- the only form of the cap that reaches a predicate.
+        tool_radius: Tool radius in model units.
+        guide_step: Guide station spacing in model units.
+        radial_clearance: Safety clearance subtracted from each available radius.
+        clearance_z: Rapid-travel plane height.
+        window: Largest advance the search may consider, in whole guide stations.
+    """
+
+    cap_ratio: float
+    tool_radius: float
+    guide_step: float
+    radial_clearance: float
+    clearance_z: float
+    window: int
+
+    @classmethod
+    def build(
+        cls,
+        *,
+        tool_diameter: float,
+        tea_cap_deg: float,
+        guide_step_tool_diameters: float,
+        max_advance_tool_diameters: float,
+        radial_clearance: float | None,
+        cut_z: float,
+        clearance_z: float | None,
+    ) -> "_Regulation":
+        """Validate the caller's parameters once and resolve them to absolute units.
+
+        Args:
+            tool_diameter: Tool diameter; the tool radius is half of this.
+            tea_cap_deg: Engagement-angle cap in degrees, in ``(0, 180]``.
+            guide_step_tool_diameters: Guide station spacing in tool diameters.
+            max_advance_tool_diameters: Largest advance considered, in tool diameters.
+            radial_clearance: Safety clearance, or ``None`` for
+                ``RADIAL_CLEARANCE_FRACTION * tool_diameter``.
+            cut_z: Z-height of the cutting plane.
+            clearance_z: Rapid-travel height, or ``None`` for
+                ``cut_z + CLEARANCE_RISE_TOOL_DIAMETERS * tool_diameter``.
+
+        Returns:
+            The validated parameters.
+
+        Raises:
+            InvalidEngagementCapDegreesError: If *tea_cap_deg* is not in ``(0, 180]``.
+            NonPositiveToolDiameterError: If *tool_diameter* is not strictly positive.
+            InvalidGuideResolutionError: If the guide step or advance bound leaves
+                the advance search no integer bracket to bisect.
+            InvalidClearanceHeightError: If *clearance_z* is not above *cut_z*.
+        """
+        cap_ratio = _cap_surrogate(tea_cap_deg)
+
+        if not tool_diameter > 0.0:
+            raise NonPositiveToolDiameterError(f"tool_diameter must be strictly positive; got {tool_diameter!r}.")
+        if not guide_step_tool_diameters > 0.0:
+            raise InvalidGuideResolutionError(f"guide_step_tool_diameters must be strictly positive; got {guide_step_tool_diameters!r}.")
+        if not max_advance_tool_diameters > 0.0:
+            raise InvalidGuideResolutionError(f"max_advance_tool_diameters must be strictly positive; got {max_advance_tool_diameters!r}.")
+
+        window = int(max_advance_tool_diameters // guide_step_tool_diameters)
+        if window < 2 * ADVANCE_SEARCH_INDEX_FLOOR:
+            raise InvalidGuideResolutionError(
+                f"guide_step_tool_diameters={guide_step_tool_diameters!r} against max_advance_tool_diameters="
+                f"{max_advance_tool_diameters!r} gives an advance window of {window} station(s); at least "
+                f"{2 * ADVANCE_SEARCH_INDEX_FLOOR} are needed for the bisection to have a bracket. Use a finer guide step."
+            )
+
+        if radial_clearance is None:
+            radial_clearance = RADIAL_CLEARANCE_FRACTION * tool_diameter
+        if clearance_z is None:
+            clearance_z = cut_z + CLEARANCE_RISE_TOOL_DIAMETERS * tool_diameter
+        if not clearance_z > cut_z:
+            raise InvalidClearanceHeightError(f"clearance_z must be strictly above cut_z; got clearance_z={clearance_z!r}, cut_z={cut_z!r}.")
+
+        return cls(
+            cap_ratio=cap_ratio,
+            tool_radius=0.5 * tool_diameter,
+            guide_step=guide_step_tool_diameters * tool_diameter,
+            radial_clearance=radial_clearance,
+            clearance_z=clearance_z,
+            window=window,
+        )
+
+
+@dataclass(frozen=True)
 class _GuideStation:
     """One ordered station on a skeleton-chain guide.
 
@@ -714,36 +812,24 @@ def engagement_controlled_toolpath(
         UnavoidableEngagementWarning: When machining circles had to be emitted at
             positions the exact cap predicate refuses (never silently).
     """
-    cap_ratio = _cap_surrogate(tea_cap_deg)
-
-    if not tool_diameter > 0.0:
-        raise NonPositiveToolDiameterError(f"tool_diameter must be strictly positive; got {tool_diameter!r}.")
-    if not guide_step_tool_diameters > 0.0:
-        raise InvalidGuideResolutionError(f"guide_step_tool_diameters must be strictly positive; got {guide_step_tool_diameters!r}.")
-    if not max_advance_tool_diameters > 0.0:
-        raise InvalidGuideResolutionError(f"max_advance_tool_diameters must be strictly positive; got {max_advance_tool_diameters!r}.")
-
-    window = int(max_advance_tool_diameters // guide_step_tool_diameters)
-    if window < 2 * ADVANCE_SEARCH_INDEX_FLOOR:
-        raise InvalidGuideResolutionError(
-            f"guide_step_tool_diameters={guide_step_tool_diameters!r} against max_advance_tool_diameters="
-            f"{max_advance_tool_diameters!r} gives an advance window of {window} station(s); at least "
-            f"{2 * ADVANCE_SEARCH_INDEX_FLOOR} are needed for the bisection to have a bracket. Use a finer guide step."
-        )
-
-    if radial_clearance is None:
-        radial_clearance = RADIAL_CLEARANCE_FRACTION * tool_diameter
-    if clearance_z is None:
-        clearance_z = cut_z + CLEARANCE_RISE_TOOL_DIAMETERS * tool_diameter
-    if not clearance_z > cut_z:
-        raise InvalidClearanceHeightError(f"clearance_z must be strictly above cut_z; got clearance_z={clearance_z!r}, cut_z={cut_z!r}.")
-
-    tool_radius = 0.5 * tool_diameter
+    regulation = _Regulation.build(
+        tool_diameter=tool_diameter,
+        tea_cap_deg=tea_cap_deg,
+        guide_step_tool_diameters=guide_step_tool_diameters,
+        max_advance_tool_diameters=max_advance_tool_diameters,
+        radial_clearance=radial_clearance,
+        cut_z=cut_z,
+        clearance_z=clearance_z,
+    )
+    cap_ratio = regulation.cap_ratio
+    window = regulation.window
+    clearance_z = regulation.clearance_z
+    tool_radius = regulation.tool_radius
     chains = _guide_chains(
         polygon,
         tool_diameter,
-        guide_step_tool_diameters * tool_diameter,
-        radial_clearance,
+        regulation.guide_step,
+        regulation.radial_clearance,
         climb,
         max_passes,
         holes,
