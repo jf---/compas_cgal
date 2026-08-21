@@ -1,14 +1,24 @@
 #include "toolpath.h"
+#include "exact_boundary.h"
 
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <limits>
 #include <numbers>
-#include <sstream>
 #include <stdexcept>
+#include <string>
 #include <tuple>
 #include <vector>
+
+// Borrowed from the exact-kernel seam header purely as a FORMATTER -- none of the
+// exact-boundary semantics travel with it, and this translation unit stays Epick.
+// `std::ostringstream` defaults to 6 significant digits, which renders a rejected
+// mat_scale of 1.0000001 as "got 1": a message that contradicts itself at exactly
+// the boundary where the caller has to trust it. `format_double` prints at
+// binary64 round-trip precision, so a rejection always shows the caller the exact
+// double they passed.
+using exact_boundary::format_double;
 
 typedef CGAL::Exact_predicates_inexact_constructions_kernel K;
 typedef K::Point_2 Point_2;
@@ -599,6 +609,15 @@ build_skeleton(const Polygon_with_holes& domain)
     return skeleton;
 }
 
+// Uniform shape for every parameter rejection: "<name> should be <admissible> (got <value>)."
+// Uniform on purpose -- a validator whose messages disagree about how they print
+// numbers is worse than one that is uniformly terse.
+std::string
+param_error(const char* name, const char* admissible, const std::string& got)
+{
+    return std::string(name) + " should be " + admissible + " (got " + got + ").";
+}
+
 void
 validate_toolpath_params(
     double tool_diameter, double stepover, double pitch,
@@ -606,11 +625,16 @@ validate_toolpath_params(
     double mat_scale, double radial_clearance,
     int samples_per_cycle, int max_passes)
 {
-    if (tool_diameter <= 0.0) throw std::invalid_argument("tool_diameter should be positive.");
-    if (stepover <= 0.0) throw std::invalid_argument("stepover should be positive.");
-    if (pitch <= 0.0) throw std::invalid_argument("pitch should be positive.");
-    if (min_trochoid_radius < 0.0) throw std::invalid_argument("min_trochoid_radius should be >= 0.");
-    if (max_trochoid_radius < 0.0) throw std::invalid_argument("max_trochoid_radius should be >= 0.");
+    if (tool_diameter <= 0.0)
+        throw std::invalid_argument(param_error("tool_diameter", "positive", format_double(tool_diameter)));
+    if (stepover <= 0.0)
+        throw std::invalid_argument(param_error("stepover", "positive", format_double(stepover)));
+    if (pitch <= 0.0)
+        throw std::invalid_argument(param_error("pitch", "positive", format_double(pitch)));
+    if (min_trochoid_radius < 0.0)
+        throw std::invalid_argument(param_error("min_trochoid_radius", ">= 0", format_double(min_trochoid_radius)));
+    if (max_trochoid_radius < 0.0)
+        throw std::invalid_argument(param_error("max_trochoid_radius", ">= 0", format_double(max_trochoid_radius)));
     // GOUGE-FREEDOM PRECONDITION. radius_from_clearance yields
     // r = mat_scale * (clearance - R - radial_clearance), R = tool_radius; a trochoid
     // circle reaches r + R from its centre. The circles are NOT certified against the
@@ -618,16 +642,42 @@ validate_toolpath_params(
     // ONLY while mat_scale <= 1. Enforced here, at the one seam, rather than assumed.
     // Negated form on purpose: it also rejects NaN, which no ordered comparison would.
     if (!(mat_scale > 0.0 && mat_scale <= 1.0)) {
-        std::ostringstream message;
-        message << "mat_scale should be in (0, 1], got " << mat_scale
-                << ": values <= 0 leave no trochoid radius, and values > 1 scale the trochoid "
-                   "radius past the certified clearance.";
-        throw std::invalid_argument(message.str());
+        throw std::invalid_argument(
+            param_error("mat_scale", "in (0, 1]", format_double(mat_scale))
+            + " Values <= 0 leave no trochoid radius, and values > 1 scale the trochoid"
+              " radius past the certified clearance.");
     }
-    // radial_clearance is accepted here but deliberately not range-checked yet; its
-    // admissible range lands together with the validation that enforces it.
-    if (samples_per_cycle < 4) throw std::invalid_argument("samples_per_cycle should be at least 4.");
-    if (max_passes <= 0) throw std::invalid_argument("max_passes should be positive.");
+    // THE OTHER HALF OF THAT SAME DOOR. radial_clearance enters the expression above
+    // as an extra subtraction, so at mat_scale == 1 a circle reaches to within
+    // clearance - radial_clearance of the wall: the parameter IS the wall margin. A
+    // negative value is therefore not a smaller margin but a licence to cut
+    // |radial_clearance| PAST the wall, through the same uncertified circles.
+    // Negated form on purpose: it also rejects NaN.
+    if (!(radial_clearance >= 0.0)) {
+        throw std::invalid_argument(
+            param_error("radial_clearance", ">= 0", format_double(radial_clearance))
+            + " It is a safety margin subtracted from the available radius, so a negative"
+              " value places the trochoid circle past the wall.");
+    }
+    // radius_from_clearance applies the pair as
+    //   r = min(available, max(min(max_trochoid_radius, available), min_trochoid_radius)),
+    // so an inverted pair does not clamp to an empty interval -- min_trochoid_radius
+    // silently WINS and the cap is discarded. That holds for any smaller cap, zero
+    // included, so the check carries no exemption for max_trochoid_radius == 0.
+    // Negated form on purpose: !(a <= b) also rejects a NaN in either bound, which no
+    // ordered comparison would, and a NaN max_trochoid_radius otherwise propagates
+    // straight through std::min into the emitted radius.
+    if (!(min_trochoid_radius <= max_trochoid_radius)) {
+        throw std::invalid_argument(
+            std::string("min_trochoid_radius should not exceed max_trochoid_radius (got min_trochoid_radius=")
+            + format_double(min_trochoid_radius) + ", max_trochoid_radius=" + format_double(max_trochoid_radius)
+            + "). An inverted or unorderable pair silently discards the cap instead of"
+              " clamping to an empty interval.");
+    }
+    if (samples_per_cycle < 4)
+        throw std::invalid_argument(param_error("samples_per_cycle", "at least 4", std::to_string(samples_per_cycle)));
+    if (max_passes <= 0)
+        throw std::invalid_argument(param_error("max_passes", "positive", std::to_string(max_passes)));
 }
 
 // Walk the straight skeleton and return certified trochoid chains per edge,
@@ -980,6 +1030,20 @@ pmp_trochoidal_mat_toolpath_circular(
     validate_toolpath_params(tool_diameter, stepover, pitch,
         min_trochoid_radius, max_trochoid_radius, mat_scale, radial_clearance,
         samples_per_cycle, max_passes);
+    // A clearance plane must be ABOVE the cutting plane to lift a traverse out of
+    // material. Accepting one at or below it and silently reverting to flat linking
+    // would give the caller a different, less safe strategy than they asked for.
+    // The contract is RELATIVE: a pocket cut at z = -1 is safely traversed at
+    // z = -0.5. Checked here, beside the other parameter contracts and before any
+    // skeleton work, rather than at the use site further down. Negated form on
+    // purpose: it also rejects a NaN in either plane.
+    if (has_clearance_z && !(clearance_z > cut_z)) {
+        throw std::invalid_argument(
+            std::string("clearance_z should be strictly greater than cut_z (got clearance_z=")
+            + format_double(clearance_z) + ", cut_z=" + format_double(cut_z)
+            + "). A clearance plane at or below the cut plane cannot lift a traverse out"
+              " of material.");
+    }
 
     auto [domain, boundary] = assemble_domain(vertices, holes);
     SsPtr skeleton = build_skeleton(domain);
@@ -1042,8 +1106,11 @@ pmp_trochoidal_mat_toolpath_circular(
         paths.swap(ordered);
     }
 
-    // Build linked operation stream using ToolpathPrimitive
-    const bool use_clearance = has_clearance_z && (clearance_z > cut_z);
+    // Build linked operation stream using ToolpathPrimitive.
+    // `clearance_z > cut_z` is a PRECONDITION established at entry, so a clearance
+    // plane that was supplied is always usable. It used to be re-tested here, and a
+    // plane that failed the test silently downgraded Z-linking to flat linking.
+    const bool use_clearance = has_clearance_z;
     const double safe_z = has_clearance_z ? clearance_z : cut_z;
 
     std::vector<ToolpathPrimitive> operations;

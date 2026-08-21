@@ -1125,3 +1125,136 @@ def test_both_entry_points_honour_output_dedup_granularity():
             failures.append(f"{label}: {(steps <= OUTPUT_DEDUP_TOL).sum()} of {len(steps)} steps <= {OUTPUT_DEDUP_TOL:g}, smallest {steps.min():.3e}")
 
     assert not failures, "output carries points closer than the declared granularity:\n" + "\n".join(failures)
+
+
+# ---------------------------------------------------------------------------
+# ETH audit remediation (2026-08-19), Task 4: generator parameter contracts.
+#
+# Three parameters used to accept values that silently changed what the call
+# meant: a negative `radial_clearance` (a safety margin turned into a licence to
+# cut past the wall), an inverted trochoid-radius pair (the cap silently
+# discarded), and a clearance plane at or below the cut plane (Z-linking
+# silently downgraded to flat linking).
+# ---------------------------------------------------------------------------
+
+
+def test_negative_radial_clearance_is_rejected():
+    """radial_clearance is a safety margin; a negative one silently eats into the tool radius."""
+    with pytest.raises(ValueError, match="radial_clearance"):
+        trochoidal_mat_toolpath(SQUARE, tool_diameter=1.0, radial_clearance=-0.01)
+
+
+def test_inverted_trochoid_radius_bounds_are_rejected():
+    with pytest.raises(ValueError, match="min_trochoid_radius"):
+        trochoidal_mat_toolpath(SQUARE, tool_diameter=1.0, min_trochoid_radius=2.0, max_trochoid_radius=1.0)
+
+
+def test_zero_max_trochoid_radius_with_positive_min_is_rejected():
+    """A cap of zero is still a cap, and a positive floor still overrides it.
+
+    `radius_from_clearance` applies the pair as
+    ``r = min(available, max(min(max_trochoid_radius, available), min_trochoid_radius))``,
+    so `min_trochoid_radius` wins over *any* smaller cap -- zero included. Exempting
+    ``max_trochoid_radius == 0`` from the ordering check would leave the same silent
+    override open under a different spelling.
+    """
+    with pytest.raises(ValueError, match="min_trochoid_radius"):
+        trochoidal_mat_toolpath(SQUARE, tool_diameter=1.0, min_trochoid_radius=0.5, max_trochoid_radius=0.0)
+
+
+def test_equal_trochoid_radius_bounds_are_accepted():
+    """min == max pins the radius; it is a degenerate interval, not an inverted one.
+
+    Positive control for the ordering check: the contract is ``min <= max``, not
+    ``min < max``.
+    """
+    paths = trochoidal_mat_toolpath(SQUARE, tool_diameter=1.0, min_trochoid_radius=0.3, max_trochoid_radius=0.3)
+    assert len(paths) > 0
+
+
+@pytest.mark.parametrize("clearance_z", [0.0, -1.0])
+def test_clearance_plane_at_or_below_cut_plane_is_rejected(clearance_z):
+    """A clearance plane that is not above the cut plane cannot lift a traverse.
+
+    Previously this silently fell back to flat linking, which is a different and
+    less safe machining strategy than the caller asked for.
+    """
+    with pytest.raises(ValueError, match="clearance_z"):
+        trochoidal_mat_toolpath_circular(SQUARE, tool_diameter=1.0, cut_z=0.0, clearance_z=clearance_z)
+
+
+def test_clearance_plane_contract_is_relative_to_the_cut_plane():
+    """The contract is ``clearance_z > cut_z``, never ``clearance_z > 0``.
+
+    A pocket cut at z = -1 is safely traversed at z = -0.5, which is below the
+    origin and above the cut. Rejecting it would be as wrong as accepting a
+    clearance plane buried in the stock.
+    """
+    with pytest.raises(ValueError, match="clearance_z"):
+        trochoidal_mat_toolpath_circular(SQUARE, tool_diameter=1.0, cut_z=-1.0, clearance_z=-1.5)
+    result = trochoidal_mat_toolpath_circular(SQUARE, tool_diameter=1.0, cut_z=-1.0, clearance_z=-0.5)
+    assert len(result.operations) > 0
+
+
+@pytest.mark.parametrize("radial_clearance", [0.0, 0.05, 0.25])
+def test_admissible_radial_clearance_is_the_wall_margin_it_promises(radial_clearance):
+    """Every emitted circle clears the wall by at least *radial_clearance*.
+
+    This is the identity that makes a negative value a gouge rather than a smaller
+    margin. `radius_from_clearance` yields ``r <= mat_scale * (clearance - R - radial_clearance)``,
+    so at the default ``mat_scale == 1`` a circle of radius r about a station centre
+    reaches to within ``clearance - r - R >= radial_clearance`` of the boundary. The
+    trochoid circles are gouge-free *by construction* -- unlike bridges and leads they
+    are never certified -- so ``radial_clearance = -2`` puts the cutter 2.0 past the
+    wall by exactly the same arithmetic that puts it 0.25 short of it here.
+
+    The second assertion keeps the first from going vacuous: somewhere on this pocket
+    the parameter must be the *binding* constraint, not a bound the geometry clears by
+    a mile. Measured slack of the tightest circle over *radial_clearance*, all three
+    cases: below 2e-15. The 10%-of-tool-radius bound asserted here is deliberately far
+    looser than that, so a change in station placement does not fail the test while a
+    change in what `radial_clearance` MEANS does.
+    """
+    tool_radius = 0.5
+    polygon = _dumbbell(2.4)
+    poly_xy = [list(pt[:2]) for pt in polygon.points]
+    result = trochoidal_mat_toolpath_circular(polygon, tool_diameter=1.0, pitch=0.75, clearance_z=3.0, radial_clearance=radial_clearance)
+    cut_arcs = [op for op in result.operations if op.operation == "cut" and isinstance(op.geometry, (Arc, Circle))]
+    assert len(cut_arcs) > 0
+    margins = []
+    for op in cut_arcs:
+        c = op.geometry.frame.point
+        clearance = _distance_to_polygon_boundary_xy([float(c[0]), float(c[1])], poly_xy)
+        margins.append(clearance - op.geometry.radius - tool_radius)
+    tightest = min(margins)
+    assert tightest + GOUGE_TOL >= radial_clearance, f"tightest circle clears the wall by {tightest}, under radial_clearance={radial_clearance}"
+    assert tightest <= radial_clearance + 0.1 * tool_radius, f"tightest circle clears the wall by {tightest}; radial_clearance={radial_clearance} never binds"
+
+
+@pytest.mark.parametrize(
+    ("call", "expected"),
+    [
+        (lambda: trochoidal_mat_toolpath(SQUARE, tool_diameter=1.0, mat_scale=1.0000001), r"mat_scale should be in \(0, 1\] \(got 1\.0000001"),
+        (lambda: trochoidal_mat_toolpath(SQUARE, tool_diameter=1.0, radial_clearance=-0.01), r"radial_clearance should be >= 0 \(got -0\.01"),
+        (
+            lambda: trochoidal_mat_toolpath(SQUARE, tool_diameter=1.0, min_trochoid_radius=2.0, max_trochoid_radius=1.0),
+            r"min_trochoid_radius should not exceed max_trochoid_radius \(got min_trochoid_radius=2, max_trochoid_radius=1\)",
+        ),
+        (
+            lambda: trochoidal_mat_toolpath_circular(SQUARE, tool_diameter=1.0, cut_z=0.0, clearance_z=0.0),
+            r"clearance_z should be strictly greater than cut_z \(got clearance_z=0, cut_z=0\)",
+        ),
+    ],
+    ids=["mat_scale", "radial_clearance", "trochoid_radius_bounds", "clearance_z"],
+)
+def test_rejection_messages_print_the_exact_value_received(call, expected):
+    """A rejection must not round the value it rejects.
+
+    `std::ostringstream` defaults to 6 significant digits, so ``mat_scale = 1.0000001``
+    was reported as ``got 1`` -- a message contradicting itself at exactly the boundary
+    where the caller has to trust it. Every message in `validate_toolpath_params` now
+    prints at binary64 round-trip precision, and names the parameter and its
+    admissible range alongside the value.
+    """
+    with pytest.raises(ValueError, match=expected):
+        call()

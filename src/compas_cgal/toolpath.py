@@ -306,9 +306,11 @@ def trochoidal_mat_toolpath(
         Desired trochoid advance per cycle; the effective advance is capped by
         *stepover*. Defaults to ``0.75 * tool_diameter``.
     min_trochoid_radius
-        Minimum desired trochoid radius.
+        Minimum desired trochoid radius. Must be ``>= 0`` and must not exceed
+        *max_trochoid_radius*; an inverted pair raises `ValueError` rather than
+        silently discarding the cap.
     max_trochoid_radius
-        Maximum trochoid radius. Defaults to no cap.
+        Maximum trochoid radius. Defaults to no cap. Must be ``>= 0``.
     mat_scale
         Scale factor applied to the clearance-derived available radius, in
         ``(0, 1]``. The trochoid circles are gouge-free by construction rather
@@ -316,7 +318,10 @@ def trochoidal_mat_toolpath(
         ``mat_scale <= 1``; larger values raise `ValueError`.
     radial_clearance
         Safety clearance subtracted from the available radius. Defaults to
-        ``RADIAL_CLEARANCE_FRACTION * tool_diameter`` (scale-free).
+        ``RADIAL_CLEARANCE_FRACTION * tool_diameter`` (scale-free). Must be
+        ``>= 0``: it is the wall margin every trochoid circle keeps, so a
+        negative value would place the circle past the wall and raises
+        `ValueError`.
     samples_per_cycle
         Polyline samples per arc primitive.
     max_passes
@@ -337,6 +342,12 @@ def trochoidal_mat_toolpath(
     ------
     InvalidPolygonError
         If any polygon is non-planar, degenerate, or self-intersecting.
+    ValueError
+        If a generator parameter is outside its contract: non-positive
+        *tool_diameter*, *stepover* or *pitch*; negative *min_trochoid_radius*,
+        *max_trochoid_radius* or *radial_clearance*; *min_trochoid_radius*
+        exceeding *max_trochoid_radius*; *mat_scale* outside ``(0, 1]``;
+        *samples_per_cycle* below 4; or non-positive *max_passes*.
 
     Warns
     -----
@@ -417,9 +428,11 @@ def trochoidal_mat_toolpath_circular(
         Desired trochoid advance per cycle; capped by *stepover*. Defaults to
         ``0.75 * tool_diameter``.
     min_trochoid_radius
-        Minimum desired trochoid radius.
+        Minimum desired trochoid radius. Must be ``>= 0`` and must not exceed
+        *max_trochoid_radius*; an inverted pair raises `ValueError` rather than
+        silently discarding the cap.
     max_trochoid_radius
-        Maximum trochoid radius. Defaults to no cap.
+        Maximum trochoid radius. Defaults to no cap. Must be ``>= 0``.
     mat_scale
         Scale factor applied to the clearance-derived available radius, in
         ``(0, 1]``. The trochoid circles are gouge-free by construction rather
@@ -427,7 +440,10 @@ def trochoidal_mat_toolpath_circular(
         ``mat_scale <= 1``; larger values raise `ValueError`.
     radial_clearance
         Safety clearance subtracted from the available radius. Defaults to
-        ``RADIAL_CLEARANCE_FRACTION * tool_diameter`` (scale-free).
+        ``RADIAL_CLEARANCE_FRACTION * tool_diameter`` (scale-free). Must be
+        ``>= 0``: it is the wall margin every trochoid circle keeps, so a
+        negative value would place the circle past the wall and raises
+        `ValueError`.
     samples_per_cycle
         Polyline samples per arc primitive.
     max_passes
@@ -453,7 +469,11 @@ def trochoidal_mat_toolpath_circular(
     cut_z
         Z-height of cutting motions.
     clearance_z
-        Safe Z-height for inter-path travel.
+        Safe Z-height for inter-path travel. Must be strictly greater than
+        *cut_z* — a plane at or below the cut plane cannot lift a traverse out of
+        material, and is refused rather than silently downgraded to flat linking.
+        Leave it ``None`` to link at cut height, which is then certified against
+        the walls.
     retract_at_end
         If ``True``, add a final retract after the last path.
     samples_per_radian
@@ -469,7 +489,13 @@ def trochoidal_mat_toolpath_circular(
     InvalidPolygonError
         If any polygon is non-planar, degenerate, or self-intersecting.
     ValueError
-        If a cut-height traverse between paths would gouge the boundary
+        If a generator parameter is outside its contract: non-positive
+        *tool_diameter*, *stepover* or *pitch*; negative *min_trochoid_radius*,
+        *max_trochoid_radius* or *radial_clearance*; *min_trochoid_radius*
+        exceeding *max_trochoid_radius*; *mat_scale* outside ``(0, 1]``;
+        *samples_per_cycle* below 4; non-positive *max_passes*; or a
+        *clearance_z* that is not strictly greater than *cut_z*.
+        Also if a cut-height traverse between paths would gouge the boundary
         (provide *clearance_z*), whether or not *link_paths* records it.
 
     Warns
