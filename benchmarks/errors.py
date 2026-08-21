@@ -31,3 +31,11 @@ class UnsampleableMotionError(BenchmarkError):
 
 class MalformedRecordError(BenchmarkError):
     """A serialised measurement does not carry exactly the columns the schema declares."""
+
+
+class InvalidSideCountError(BenchmarkError):
+    """A family was asked for a polygon with fewer than three sides."""
+
+
+class InvalidArcRatioError(BenchmarkError):
+    """An arc fraction fell outside the closed unit interval it is defined on."""
