@@ -546,18 +546,27 @@ def _pin_rib(stock: Stock, half_spacing: float) -> None:
 
 
 def test_certified_short_motion_has_no_cap_violating_centre():
-    """A motion the certifier certifies WITHOUT refining at all, whose middle is fully immersed.
+    """A motion whose middle is fully immersed, and which the certifier once certified WITHOUT refining at all.
 
-    The minimal witness: the segment is already short enough for a positive guarded
-    cap, so `certify_segment_tea` visits exactly ONE station pair (``stations == 1``)
-    and returns immediately. No refinement, no bisection, nothing adaptive -- the
-    verdict is the two endpoint measurements and the analytic guard, which is the
-    certificate in its purest form.
+    The minimal witness. The segment is short enough for a positive guarded cap, so
+    the pre-repair certifier had everything it needed at the root: no refinement, no
+    bisection, nothing adaptive -- the verdict was the two endpoint measurements and
+    the analytic guard, which is that certificate in its purest form.
 
-    Measured: stations at x = -/+0.0125 read max_run_tea 0.32190 against a guarded
-    cap of 0.57449, so both pass; the centre reads a FULL TURN and `cap_exceeded`
-    is exactly true across |x| <= 0.002823, 22.6% of the motion. The certifier
-    returns ``cap_certified = True`` with ``max_tea = 0.32190``.
+    HOW SEVERE THE DEFECT WAS, recorded here because it is the measurement that
+    sizes it. Before the swept-annulus guard this motion was certified at
+    ``stations == 1`` -- a SINGLE station pair, no refinement whatsoever. Stations at
+    x = -/+0.0125 read max_run_tea 0.32190 against a guarded cap of 0.57449, so both
+    passed; the centre reads a FULL TURN and `cap_exceeded` is exactly true across
+    |x| <= 0.002823, 22.6% of the motion. ``cap_certified`` came back True with
+    ``max_tea = 0.32190``, twenty times under the truth.
+
+    That station count is HISTORY, not a property of this stock, and it is not
+    asserted: a sound certifier must REFUSE here, `certify_recursive` implements
+    refusal as bisection to the spacing floor, and this motion is far above that
+    floor -- so ``stations > 1`` is forced for any correct verdict. Pinning it would
+    pin the defect. What the stock guarantees is pinned by `_pin_rib` and the
+    liveness probe below; the verdict is pinned by the final assertion.
     """
     stock = _rib_stock()
     half = 0.5 * SHORT_MOTION
@@ -571,11 +580,6 @@ def test_certified_short_motion_has_no_cap_violating_centre():
 
     # 2. VERDICT -- what the repair must change.
     max_tea, certified, stations = _certify(stock, start, end)
-
-    # Configuration pin: this is the un-refined regime the docstring describes. If
-    # the certifier ever starts bisecting here, the test is measuring a different
-    # thing and must be re-derived rather than believed.
-    assert stations == 1, f"expected a single un-refined station pair, got {stations}"
 
     assert not certified, (
         f"certified a motion whose interior reaches {peak:.6f} rad, with {len(_violating_centres(stock, start, end))} of {SCAN_SAMPLES + 1} "
@@ -747,7 +751,8 @@ def test_certified_spiral_rib_motion_has_no_cap_violating_centre():
     which is why a thin leftover along any spiral or ramped contour pass carries
     this failure, whatever the cutter's radius.
 
-    Measured, on the 0.025-long motion through `SPIRAL_PROBE_CENTRE`:
+    Measured on the 0.025-long motion through `SPIRAL_PROBE_CENTRE`, the last row
+    being the PRE-REPAIR certifier -- kept because it is what sizes the defect:
 
     | quantity | value |
     | --- | --- |
@@ -755,8 +760,16 @@ def test_certified_spiral_rib_motion_has_no_cap_violating_centre():
     | station at x = +0.0125 | ``max_run_tea`` 0.462523, `cap_exceeded` False |
     | guarded cap | 0.574493 -- both stations 19% under it |
     | motion peak | 1.910381 rad at x = 6.25e-05, i.e. 1.22x the cap |
-    | `certify_segment_tea` | ``max_tea`` 0.462523, `cap_certified` **True**, ``stations`` 1 |
+    | `certify_segment_tea`, before the swept-annulus guard | ``max_tea`` 0.462523, `cap_certified` **True**, ``stations`` **1** |
     | exact oracle | 44 of 401 probed centres over the cap |
+
+    ``stations == 1`` there means a SINGLE station pair defeated the certificate --
+    no refinement at all -- which is the sharpest statement of how severe this was.
+    It is HISTORY, not a property of this stock, and it is deliberately not asserted:
+    a sound certifier must refuse here, refusal is implemented as bisection to the
+    spacing floor, and this motion is far above that floor, so ``stations > 1`` is
+    forced for any correct verdict. What the stock guarantees is pinned by the
+    station probes and the liveness call below.
 
     Cross-checked against the independent `Stock.contains` rim oracle, which shares
     no code with the engagement harvest: 1.899093 rad at the centre against
@@ -788,10 +801,6 @@ def test_certified_spiral_rib_motion_has_no_cap_violating_centre():
 
     # 2. VERDICT.
     max_tea, certified, stations = _certify(stock, start, end)
-
-    # Configuration pin: still the un-refined regime, so the verdict is two exact
-    # measurements plus the analytic guard and nothing adaptive.
-    assert stations == 1, f"expected a single un-refined station pair, got {stations}"
 
     assert not certified, (
         f"certified a motion over a SPIRAL rib -- no radius coincidence -- whose interior reaches {peak:.6f} rad, with "
