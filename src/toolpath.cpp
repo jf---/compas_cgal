@@ -855,17 +855,26 @@ tessellate_operations(const std::vector<ToolpathPrimitive>& ops, double samples_
     // into the plunge itself, producing one diagonal that descended from the
     // clearance plane while crossing a wall — geometry no operation described.
     //
-    // The test is exact identity, NOT a tolerance, so no threshold has to be
-    // justified and a gap of any size survives.  The price is that a junction
-    // agreeing only to within an ulp — an arc's end and the following bridge
-    // line's start are computed independently — now materialises a ~1e-16
-    // segment instead of being absorbed into the next one.  Measured on the
-    // pinched-dumbbell pocket: 131 such segments among 23,666, zero-length to
-    // visualisation and to every consumer in the suite.  Faithful, and cheaper
-    // than an epsilon nobody can derive.
+    // "Differs" is OUTPUT_DEDUP_TOL, the granularity this file already declares
+    // for tessellated output — pmp_trochoidal_mat_toolpath runs
+    // deduplicate_consecutive_points(pts, OUTPUT_DEDUP_TOL) for the same reason,
+    // so both entry points now honour one documented rule.  Exact identity was
+    // the alternative and is worse here: an arc's end and the following bridge
+    // line's start are computed independently and can disagree in the last ulp,
+    // which would materialise ~1e-16 segments carrying no geometry (measured:
+    // 131 of them in a 23.7k-point pocket).  The two populations are twelve
+    // orders apart — spurious at <=1e-12, real gaps at >=1.25 model units — so
+    // 1e-9 is nowhere near a knife edge.  Distance is 3D: a retract shares its
+    // XY with the previous point and differs only in z.
+    constexpr double dedup_tol_sq = OUTPUT_DEDUP_TOL * OUTPUT_DEDUP_TOL;
     auto push_if_new = [&pts](double x, double y, double z) {
-        const std::array<double, 3> p{x, y, z};
-        if (pts.empty() || pts.back() != p) pts.push_back(p);
+        if (!pts.empty()) {
+            const double dx = pts.back()[0] - x;
+            const double dy = pts.back()[1] - y;
+            const double dz = pts.back()[2] - z;
+            if (dx * dx + dy * dy + dz * dz <= dedup_tol_sq) return;
+        }
+        pts.push_back({x, y, z});
     };
 
     for (std::size_t oi = 0; oi < ops.size(); ++oi) {

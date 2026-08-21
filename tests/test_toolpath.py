@@ -1082,3 +1082,46 @@ def test_polyline_never_moves_through_material_below_clearance():
             )
 
     assert not failures, "polyline drives the tool through a wall:\n" + "\n".join(failures)
+
+
+# Mirrors OUTPUT_DEDUP_TOL in src/toolpath.cpp (absolute, model units): consecutive
+# tessellated output points closer than this are merged. Duplicated here rather than
+# bound through nanobind because the C++ constant is internal to that translation
+# unit; if it ever moves, this test fails loudly instead of drifting.
+OUTPUT_DEDUP_TOL = 1e-9
+
+
+def test_both_entry_points_honour_output_dedup_granularity():
+    """Tessellated output carries no consecutive points closer than OUTPUT_DEDUP_TOL.
+
+    `trochoidal_mat_toolpath` has always run the C++
+    `deduplicate_consecutive_points(pts, OUTPUT_DEDUP_TOL)` over its output;
+    `trochoidal_mat_toolpath_circular` did not, so its polyline could carry
+    consecutive points a fraction of a nanometre apart -- junctions where an arc's
+    end and the following bridge line's start are computed independently and
+    disagree in the last ulp. Such points carry no geometry and are a trap for any
+    consumer that normalises a direction between two polyline points.
+
+    Both entry points are pinned here so the granularity is one rule rather than
+    an accident of which function you called.
+    """
+    dumbbell = _dumbbell(1.2)
+    cases = {
+        "circular/unlinked+clearance": trochoidal_mat_toolpath_circular(dumbbell, tool_diameter=1.0, pitch=0.75, link_paths=False, clearance_z=3.0, optimize_order=False).polyline,
+        "circular/linked+clearance": trochoidal_mat_toolpath_circular(dumbbell, tool_diameter=1.0, pitch=0.75, link_paths=True, clearance_z=3.0, optimize_order=False).polyline,
+        "circular/leads+links": trochoidal_mat_toolpath_circular(
+            SQUARE, tool_diameter=2.0, pitch=1.0, max_passes=20, lead_in=0.2, lead_out=0.2, cut_z=-1.0, clearance_z=2.0
+        ).polyline,
+        "circular/irregular": trochoidal_mat_toolpath_circular(IRREGULAR, tool_diameter=0.5, pitch=0.4, lead_in=0.15, lead_out=0.15, clearance_z=2.0).polyline,
+    }
+    for index, path in enumerate(trochoidal_mat_toolpath(dumbbell, tool_diameter=1.0, pitch=0.75)):
+        cases[f"polyline entry point/path {index}"] = path
+
+    failures = []
+    for label, points in cases.items():
+        assert len(points) >= 2, f"{label}: fewer than 2 points, the check would be vacuous"
+        steps = np.linalg.norm(np.diff(np.asarray(points, dtype=np.float64), axis=0), axis=1)
+        if steps.min() <= OUTPUT_DEDUP_TOL:
+            failures.append(f"{label}: {(steps <= OUTPUT_DEDUP_TOL).sum()} of {len(steps)} steps <= {OUTPUT_DEDUP_TOL:g}, smallest {steps.min():.3e}")
+
+    assert not failures, "output carries points closer than the declared granularity:\n" + "\n".join(failures)
