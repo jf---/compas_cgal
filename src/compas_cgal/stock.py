@@ -219,6 +219,90 @@ class Stock:
             float(tool_radius),
         )
 
+    def subtract_disk_local(self, cx: float, cy: float, radius: float) -> None:
+        """Remove the same disk as `subtract_disk`, by local arrangement surgery.
+
+        Identical result -- exact point set and canonical representation alike --
+        reached by editing the arrangement around the disk instead of overlaying
+        the whole stock. The cost then grows with the removed neighbourhood
+        rather than with the whole stock, which pays off once the stock has been
+        cut up; on a barely-cut stock the two are within noise of each other. See
+        `docs/local_depletion.md` for the measured crossover.
+
+        Args:
+            cx: X coordinate of the disk center (tool center).
+            cy: Y coordinate of the disk center (tool center).
+            radius: Tool radius (disk radius).
+        """
+        self._raw.subtract_disk_local(float(cx), float(cy), float(radius))
+
+    def subtract_annulus_local(self, cx: float, cy: float, inner_radius: float, outer_radius: float) -> None:
+        """Remove the same annulus as `subtract_annulus`, by local arrangement surgery.
+
+        Args:
+            cx: X coordinate of the annulus center (the guide center).
+            cy: Y coordinate of the annulus center (the guide center).
+            inner_radius: Inner bound of the band; ``0.0`` removes a full disk.
+            outer_radius: Outer bound of the band; must exceed *inner_radius*.
+
+        Raises:
+            InvalidAnnulusRadiiError: If the radii do not satisfy
+                ``outer_radius > inner_radius >= 0``.
+            NonFiniteAnnulusInputError: If any coordinate or radius is not finite.
+        """
+        self._raw.subtract_annulus_local(float(cx), float(cy), float(inner_radius), float(outer_radius))
+
+    def subtract_arc_sweep_local(
+        self,
+        cx: float,
+        cy: float,
+        sx: float,
+        sy: float,
+        ex: float,
+        ey: float,
+        cw: bool,
+        tool_radius: float,
+    ) -> None:
+        """Remove the same arc sweep as `subtract_arc_sweep`, locally where possible.
+
+        A FULL turn takes the local annulus path. A PARTIAL arc is a disk-chain
+        union, whose boundary the local update cannot identify exactly, so it
+        falls through to `subtract_arc_sweep` unchanged -- same result, same cost.
+
+        Args:
+            cx: X coordinate of the arc center.
+            cy: Y coordinate of the arc center.
+            sx: X coordinate of the arc start (tool center).
+            sy: Y coordinate of the arc start (tool center).
+            ex: X coordinate of the arc end (tool center).
+            ey: Y coordinate of the arc end (tool center).
+            cw: ``True`` if the arc runs clockwise from start to end.
+            tool_radius: Tool radius (half-width of the swept annulus).
+        """
+        self._raw.subtract_arc_sweep_local(
+            float(cx),
+            float(cy),
+            float(sx),
+            float(sy),
+            float(ex),
+            float(ey),
+            bool(cw),
+            float(tool_radius),
+        )
+
+    def representation_is_valid(self) -> bool:
+        """Does the backing boolean set still satisfy its representation invariant?
+
+        Every edge must separate faces of DIFFERENT containment and must carry the
+        contained side on its left. This is orthogonal to point-set equality: a
+        set can be exactly the right region and still be stored non-canonically,
+        which would silently degrade every later query.
+
+        Returns:
+            ``True`` if the underlying `General_polygon_set_2` is canonical.
+        """
+        return self._raw.representation_is_valid()
+
     def arrangement_stats(self) -> tuple[int, int, int]:
         """Feature counts of the underlying exact arrangement.
 

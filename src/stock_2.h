@@ -91,6 +91,25 @@ public:
                                 const Epeck::FT& inner_radius,
                                 const Epeck::FT& outer_radius);
 
+    // --- Local depletion ------------------------------------------------------
+    // Same point set, same canonical Gps representation, computed by editing the
+    // arrangement around the removed region instead of overlaying the whole
+    // stock (stock_local_2.h, docs/local_depletion.md). Added ALONGSIDE the
+    // global path above, which stays the reference the equivalence test decides
+    // against; neither implementation shares a line with the other.
+
+    void subtract_disk_local(double cx, double cy, double radius);
+    void subtract_annulus_local(double cx, double cy, double inner_radius, double outer_radius);
+    void subtract_annulus_exact_local(const EPoint& center,
+                                      const Epeck::FT& inner_radius,
+                                      const Epeck::FT& outer_radius);
+
+    // Full turn -> the exact annulus, removed locally. A PARTIAL arc is still a
+    // disk chain and still goes through the global path: its removed region is
+    // a many-arc union that the local update has not been proved out for.
+    void subtract_arc_sweep_local(double cx, double cy, double sx, double sy,
+                                  double ex, double ey, bool cw, double tool_radius);
+
     // Remove the tool sweep along segment (x0,y0)->(x1,y1) as a certified
     // under-covering disk chain (the exact oriented capsule has irrational
     // side lines, so it is not representable in the circle-segment traits).
@@ -131,6 +150,13 @@ public:
         std::size_t faces;
     };
     ArrangementStats arrangement_stats() const;
+
+    // Does the underlying set still satisfy General_polygon_set_2's own
+    // representation invariant -- every edge separating faces of DIFFERENT
+    // containment, oriented with the contained side on its left? A structural
+    // gate for the local depletion path, orthogonal to point-set equality:
+    // exactly_equals can pass on a set whose arrangement is no longer canonical.
+    bool representation_is_valid() const;
 
     // Printed decimal length of the exact coordinates carried by the
     // arrangement's vertices. WARNING: this calls .exact() on every sampled
