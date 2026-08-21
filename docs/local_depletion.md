@@ -150,10 +150,23 @@ It would also only reach part of the prize. Splitting the chain cost further:
 | L-shape | 79.9 ms (27%) | **209.1 ms (72%)** | 1350 |
 
 On the rectangle the dominant cost is *building the ~58-disk union per capsule*, which no
-depletion-side change can touch — the fix there is an exact swept region for a straight segment, and
-an oriented capsule's side lines are irrational and therefore not representable in
-`Gps_circle_segment_traits_2`. That is the same wall the full-turn annulus went around by being
-exactly representable.
+**local**-update change can touch. An oriented capsule's side lines are irrational and therefore not
+representable in `Gps_circle_segment_traits_2`, so unlike the full turn there is no exact swept
+region to reach for.
+
+!!! success "Superseded on the cost, not on the reasoning — `subtract_capsule_quad`"
+
+    The chain's cost went away without an exact capsule and without touching this machinery: the
+    side lines never had to be *met*, only **under-cut**, which two exact end disks plus a rational
+    rectangle at half-width `h` with `(1 - f)*r <= h <= r` do in six curves. Bridge depletion on the
+    12x8 pocket fell from **4.389 ms/call to 0.337 ms/call** and the emitted toolpath is
+    bit-identical. See
+    [Depleting a bridge is six curves, not a chain](engagement_controlled_toolpath.md#depleting-a-bridge-is-six-curves-not-a-chain).
+
+    The paragraph above still stands as written for the **local** path: the quad region goes through
+    the global `difference`, because its boundary cannot be flooded from a provably complete seed
+    set. The lesson worth keeping is that "not exactly representable" bounded the wrong thing — the
+    representable *under*-approximation had a much cheaper shape available all along.
 
 ## Rejected: pick the path by arrangement size
 

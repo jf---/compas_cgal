@@ -4,7 +4,8 @@
 machining circles on the measured engagement instead of a dialled-in stepover, and on the pockets
 measured so far it holds every machining circle except the unavoidable chain-entry loops at or below
 the requested cap, while cutting **55% less travel** than the unregulated generator aimed at the same
-cap. The price is generation time: **2.7-3.4 s on a 12x8 pocket against 2.9 ms**, a factor of ~1000.
+cap. The price is generation time: **72 ms on a 12x8 pocket against 2.6 ms**, a factor of ~27 (it was
+~1000x before full-turn depletion became exact and bridge depletion stopped being a disk chain).
 
 The guarantee is narrow and stated exactly, because it is easy to overclaim here:
 
@@ -40,7 +41,7 @@ flowchart TD
     E -->|"any exceeded"| C
     E -->|"all pass"| C
     C -->|"largest passing index"| F["emit machining circle + bridge"]
-    F --> G["deplete exact stock:<br/>subtract_arc_sweep + subtract_capsule"]
+    F --> G["deplete exact stock:<br/>subtract_arc_sweep_local + subtract_capsule_quad"]
     G --> C
 ```
 
@@ -62,7 +63,7 @@ anywhere in the accept/reject path.
 | Unregulated circles, same cap via `stepover=0.5` | 136.4 deg | `audit_toolpath_engagement` |
 | Motions measured above cap, 12x8 | 5 regulated vs 14 unregulated | `audit_toolpath_engagement` |
 | Cut travel, 12x8 | 411.6 vs 914.3 | sum of circle circumferences and bridge lengths |
-| Generation, 12x8, 2 mm tool | 0.226 s, vs 2.9 ms | `time.perf_counter` around each generator; was 2.70-3.43 s before exact-annulus depletion |
+| Generation, 12x8, 2 mm tool | 72.4 ms, vs 2.6 ms | `time.perf_counter` around each generator; was 0.226 s before the quad capsule and 2.70-3.43 s before exact-annulus depletion |
 | Residual stock, 10x6 | 2.35% vs 2.57%, none further than 0.28 mm from a wall | 200x120 `Stock.contains` grid |
 
 ### Why those four probe positions
@@ -137,6 +138,83 @@ not representable at all. That surrogate is a pre-existing property of this doub
 chain samples the very same approximate circle — and it is injected exactly, with no snapping and no
 correction constant.
 
+## Depleting a bridge is six curves, not a chain
+
+The bridge between two machining circles sweeps a **capsule**, and unlike the full turn's annulus the
+capsule really is not representable in `Gps_circle_segment_traits_2`: its side lines stand off the
+segment by `r/sqrt(dx^2 + dy^2) * (dy, -dx)`, and that offset is irrational while the traits class
+holds lines as rational triples. So the bridge depletion stays an **under**-approximation. What
+changed is the *shape* of that under-approximation:
+
+```
+region  =  disk(A, r)  U  disk(B, r)  U  rect(A, B, h)
+```
+
+The two end disks are exact and cover the capsule's semicircular caps exactly. The rectangle runs
+along the segment at half-width `h`, a **rational** slightly under `r`, so it sits strictly inside the
+capsule's straight part. Six curves per bridge — two circles and four segments — where the chain
+needed `len / (2*r*sqrt(f))` disks, which is **601 disks** for a 6 mm bridge at `r = 0.5`.
+
+The side lines never had to be *met*, only **under-cut**, and the chain was already paying
+`CHAIN_SLACK_FRACTION * r` for exactly that. The quad spends the same budget in a better shape.
+
+!!! note "The certificate is two exact comparisons, not a rounding argument"
+
+    `h` is *chosen* in doubles — it is a construction parameter, the quad twin of the chain's
+    spacing, aimed at the middle of the admissible band. It is then **checked**, exactly:
+    `(1 - f)*r <= h <= r` as a comparison of squared rational lengths, plus an exact
+    `CGAL::orientation` on the four corners. A failure throws `CapsuleQuadCertificateError` rather
+    than removing a region the certificate does not cover. Nothing here compares a `to_double`, and
+    no square root is taken.
+
+    The band leaves `f/2 = 5e-5` of relative headroom on each side against a double rounding of
+    `~2e-16` — eleven orders of magnitude — so the checks are structural guards, not a filter the
+    construction is expected to trip.
+
+Both halves of the contract are exact consequences of that band. A point of the rectangle is
+`A + t*d + s*h_vec` with `|s| <= 1` and `h_vec` perpendicular to `d`, so its distance to the segment
+is exactly `|s|*h <= r`: **nothing outside the true swept capsule is ever removed**. And anything
+within `(1 - f)*r` of the segment is either inside a full-radius end disk or has its perpendicular
+foot in the segment's interior at offset `<= h`: **the under-coverage stays inside the documented
+budget**.
+
+| Claim | Value | Source |
+| --- | --- | --- |
+| Arrangement vertices after one capsule | **10** via the quad vs 1206 via the chain at `r = 0.5` (120x); 10 vs 306 at `r = 2.0` (30x) | `test_capsule_quad_arrangement_stays_orders_below_the_chain` |
+| Growth per bridge vs bridge length | **constant** (10 vertices for a 0.5 mm and an 8 mm bridge) | `test_capsule_quad_growth_is_independent_of_segment_length` |
+| Bridge depletion, 12x8, 2 mm tool | **0.337 ms/call** vs 4.389 ms/call, 22 calls | wrapped `Stock.subtract_*`, A/B on one machine |
+| `engagement_at`, same run | **0.061 ms/call** vs 0.158 ms/call, 427 calls | same harness — every later query walks a smaller arrangement |
+| Full-turn depletion, same run | **0.356 ms/call** vs 1.078 ms/call, 27 calls | same harness, same reason |
+| Total generation, 12x8 | **72.4 ms** vs 222.5 ms — 3.1x | same harness |
+| Total generation, L shape | **173.7 ms** vs 743.4 ms — 4.3x | same harness |
+| Toolpath produced | **bit-identical** operation stream on both pockets: 49 cuts / 441.8 / 5 over cap (12x8), 112 / 595.3 / 7 (L-shape) | float-exact signature comparison; exceedances by 12-position `engagement_at` replay, counted under *both* replay depletions |
+| Under-coverage | **unchanged**: `r * CHAIN_SLACK_FRACTION`, 1e-4 mm at `r = 1.0` | the certified band, `test_capsule_quad_covers_the_documented_slack_band` |
+
+!!! warning "Neither approximation contains the other, and the quad is not the exact capsule"
+
+    The chain covers the full radius `r` at each disk centre and dips to `r*sqrt(1 - f)` midway
+    between centres; the quad covers a flat `h` along the whole rectangle and the full `r` only at
+    the caps. So the two removed regions are **incomparable as sets** — asserting inclusion either
+    way would be false. What both satisfy, and what the tests assert, is the same pair of exact
+    bounds: contained in the true capsule, containing the `(1 - f)*r` band.
+
+    `subtract_capsule` is **not** removed. It stays the reference the quad is measured against, and
+    `tests/test_stock_capsule_quad.py` decides both paths' properties against the same exact
+    rational oracle.
+
+!!! note "No local variant: the flood cannot start where it would have to"
+
+    `subtract_disk_local` / `subtract_annulus_local` (see [Local Depletion](local_depletion.md)) do
+    not extend to this region, for a reason distinct from the disk chain's. Recognising a *linear*
+    boundary edge is mechanically possible — `_X_monotone_circle_segment_2::supporting_line()` gives
+    the same rational-identity test that `supporting_circle()` gives for arcs. The blocker is the
+    **seeds**: the local update inserts whole supporting curves and blocks the flood on every
+    sub-curve of them, so the two end-cap lines and the rectangle's sides partition the region's
+    interior into cells whose number and shape depend on the configuration (how the disks overlap,
+    whether a corner falls inside the other disk). A seed set that is provably complete for every
+    configuration is real work, and a missing seed leaves material silently marked present. Not
+    attempted; the global path costs 0.337 ms/call, which is no longer the dominant term.
+
 ## Chain entries are over the cap by construction
 
 The first machining circle of a chain meets virgin stock: it is a full slot whatever the advance, and
@@ -152,7 +230,7 @@ A helical or ramped entry would remove them. That is not implemented here.
 | --- | --- | --- |
 | Held's trochoidal engagement control (float bisection to `eps = 1e-3`) | **stronger per evaluated position** — each verdict is an exact predicate on the exact arrangement, no tolerance in the accept/reject path | `_stock_2.engagement_at` returns `cap_exceeded` decided exactly; the surrogate crossing is `4*sin^2(theta/2)` at one declared boundary |
 | Continuous partition of each motion (`compas_cgal.adaptive`) | **weaker** — a partition bounds every centre on the motion; this bounds only the positions it evaluated | this module deliberately does not import `compas_cgal.adaptive`, and returns no witness type |
-| `trochoidal_mat_toolpath_circular` (stepover proxy) | **stronger on measured engagement, far weaker on speed** | 119.5 deg vs 136.4 deg at a 120 deg target; 2.7-3.4 s vs 2.9 ms on 12x8 |
+| `trochoidal_mat_toolpath_circular` (stepover proxy) | **stronger on measured engagement, weaker on speed** | 119.5 deg vs 136.4 deg at a 120 deg target; 72.4 ms vs 2.6 ms on 12x8 |
 
 ## Known limitations
 
@@ -161,8 +239,9 @@ A helical or ramped entry would remove them. That is not implemented here.
   non-decreasing in advance distance. Under that assumption it returns the largest admissible
   station; without it, it still returns an admissible one — every accepted station's evaluated
   positions passed the exact predicate regardless.
-- **Generation is ~78x slower** than the unregulated generator (was ~1000x before full-turn
-  depletion became exact), still dominated by exact stock depletion and `engagement_at` queries.
+- **Generation is ~27x slower** than the unregulated generator (was ~78x before the quad capsule and
+  ~1000x before full-turn depletion became exact). `engagement_at` is now the largest single term
+  (34% of a 12x8 run) and depletion is 22%.
 - **Guide tangency is G1 on straight guide segments only**, approximate through turns — the same
   model the existing generator uses.
 - **Coverage is measured, not certified.** The advance bound keeps consecutive annuli overlapping;

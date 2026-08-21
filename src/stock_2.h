@@ -45,6 +45,20 @@ public:
     using std::runtime_error::runtime_error;
 };
 
+// Same split for the quad capsule: a non-finite coordinate or radius is an
+// argument fault at the double boundary (ValueError), whereas a quad whose exact
+// half-width falls outside its certified band is a broken INTERNAL invariant of
+// the construction (RuntimeError) and must never be caught alongside one.
+class NonFiniteCapsuleInputError : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
+
+class CapsuleQuadCertificateError : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
+
 // Full disk of the given radius centred at `center`, as a two-arc CCW general
 // polygon (split at its x-extreme vertical-tangency points). Shared by the
 // stock-subtraction paths and the engagement query (which intersects the stock
@@ -114,6 +128,23 @@ public:
     // under-covering disk chain (the exact oriented capsule has irrational
     // side lines, so it is not representable in the circle-segment traits).
     void subtract_capsule(double x0, double y0, double x1, double y1, double radius);
+
+    // Same swept region, same UNDER-covering contract, in SIX curves instead of
+    // a chain of hundreds: the two end disks (exact) unioned with the rectangle
+    // along the segment at a slightly reduced half-width.
+    //
+    // The capsule's true side lines stand off at r*sqrt(dx^2+dy^2), which is
+    // irrational and therefore not representable here -- but they do not have to
+    // be MET, only under-cut. The rectangle is built from the EXACT perpendicular
+    // (dx, dy) rotated a quarter turn, scaled by a rational chosen so its exact
+    // length h satisfies (1 - CHAIN_SLACK_FRACTION)*r <= h <= r, which is checked
+    // as an exact rational comparison, not assumed. So:
+    //   * every removed point is within r of the segment (SUBSET of the true
+    //     capsule -- the safety direction, never over-cutting), and
+    //   * every point within (1 - CHAIN_SLACK_FRACTION)*r of the segment IS
+    //     removed -- the same slack budget the disk chain documents.
+    // Added ALONGSIDE subtract_capsule, which stays the reference.
+    void subtract_capsule_quad(double x0, double y0, double x1, double y1, double radius);
 
     // Remove the tool sweep along the circular guide arc from (sx,sy) to
     // (ex,ey) about (cx,cy) — cw selects the sweep direction, start == end

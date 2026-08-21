@@ -388,6 +388,132 @@ void Stock2::subtract_capsule(double x0, double y0, double x1, double y1, double
     subtract_point_chain(centers, radius);
 }
 
+// The same swept region as the chain above, under-covered the same way, but in
+// six curves rather than in hundreds of disks.
+//
+// WHY A CHAIN WAS USED AT ALL. The capsule's two side lines stand off from the
+// segment by r/sqrt(dx^2+dy^2) * (dy, -dx) -- an irrational offset that
+// Gps_circle_segment_traits_2 cannot hold, since a line there is a rational
+// triple (a, b, c). The chain sidesteps that by never building the sides.
+//
+// WHAT REPLACES IT. The side lines do not have to be MET, only UNDER-CUT: the
+// chain is already an under-approximation, budgeted at CHAIN_SLACK_FRACTION * r.
+// So take the EXACT perpendicular (-dy, dx) -- exact because each double is a
+// rational and the arrangement holds rationals -- and scale it by a rational
+// `scale` whose length h = scale * ||(-dy, dx)|| lands inside the admissible band
+//
+//     (1 - CHAIN_SLACK_FRACTION) * r  <=  h  <=  r.
+//
+// Then region = disk(A, r) U disk(B, r) U rect(A, B, h), where the rectangle has
+// corners A -+ h_vec and B -+ h_vec, all four EXACT rational points.
+//
+// Both halves of the contract are exact consequences, not estimates:
+//   SUBSET   a point of the rectangle is A + t*d + s*h_vec with t in [0,1],
+//            |s| <= 1, and h_vec is perpendicular to d, so its distance to the
+//            segment is exactly |s| * h <= h <= r. The end disks are the exact
+//            caps. So the removed region is contained in the true capsule --
+//            the safety direction: this never over-cuts.
+//   COVERAGE anything within (1 - CHAIN_SLACK_FRACTION)*r of the segment is
+//            either within that distance of an endpoint (inside an end disk,
+//            which has the FULL radius r) or has a perpendicular foot in the
+//            interior of the segment at offset <= (1 - f)*r <= h, hence inside
+//            the rectangle.
+//
+// `scale` is a CONSTRUCTION parameter -- the quad twin of the chain's spacing --
+// so computing it in doubles is legitimate; what is NOT legitimate is trusting
+// it. It is aimed at the MIDDLE of the band (half-width (1 - f/2)*r), which
+// leaves f/2 = 5e-5 of relative headroom on each side against a double rounding
+// of ~2e-16: eleven orders of magnitude of margin. The band is then CHECKED, as
+// an exact rational comparison of squares, and a failure throws rather than
+// silently removing a region the certificate does not cover.
+void Stock2::subtract_capsule_quad(double x0, double y0, double x1, double y1, double radius)
+{
+    if (radius <= 0.0) throw std::invalid_argument("radius should be positive.");
+    // Finiteness is a DOUBLE concept, checked here at the boundary before
+    // anything is injected: Epeck::FT(NaN) has no meaning to build on.
+    if (!std::isfinite(x0) || !std::isfinite(y0)
+        || !std::isfinite(x1) || !std::isfinite(y1) || !std::isfinite(radius)) {
+        throw NonFiniteCapsuleInputError(
+            "subtract_capsule_quad requires finite endpoints and radius; got "
+            "x0=" + std::to_string(x0) + ", y0=" + std::to_string(y0)
+            + ", x1=" + std::to_string(x1) + ", y1=" + std::to_string(y1)
+            + ", radius=" + std::to_string(radius) + ".");
+    }
+
+    // Each double is injected as itself -- no snapping, no tolerance at the seam.
+    const EPoint start(x0, y0);
+    const EPoint end(x1, y1);
+    // A zero-length motion sweeps the plain disk. Exact point equality decides
+    // it, on the injected points; there is no short-segment threshold anywhere
+    // below, because the rectangle stays an exact rectangle at every length.
+    if (start == end) {
+        subtract_disk(x0, y0, radius);
+        return;
+    }
+
+    const Epeck::FT tool_radius(radius);
+    const EVector along = end - start;
+    const EVector normal = along.perpendicular(CGAL::COUNTERCLOCKWISE);
+
+    // Construction parameter, not a decision: the rational scale that puts the
+    // half-width in the middle of the band. Endpoint differences in double are
+    // exact when the endpoints are close (Sterbenz) and relatively accurate
+    // otherwise, and any inaccuracy at all is answered by the exact band check.
+    const double length = std::hypot(x1 - x0, y1 - y0);
+    const double scale_value = (1.0 - 0.5 * CHAIN_SLACK_FRACTION) * radius / length;
+    if (!std::isfinite(scale_value) || scale_value <= 0.0) {
+        throw CapsuleQuadCertificateError(
+            "capsule quad half-width scale is not a positive finite number "
+            "(radius=" + std::to_string(radius) + ", length=" + std::to_string(length)
+            + "); the radius-to-length ratio is outside the representable range.");
+    }
+
+    const EVector half_width_vector = Epeck::FT(scale_value) * normal;
+    const Epeck::FT half_width_squared = half_width_vector.squared_length();
+    const Epeck::FT slack_half_width =
+        tool_radius * (Epeck::FT(1) - Epeck::FT(CHAIN_SLACK_FRACTION));
+
+    // The certificate. Two exact rational comparisons of SQUARED lengths -- no
+    // square root is taken, so nothing here is inexact.
+    if (CGAL::compare(half_width_squared, tool_radius * tool_radius) == CGAL::LARGER) {
+        throw CapsuleQuadCertificateError(
+            "capsule quad half-width exceeds the tool radius; the removed region "
+            "would not be contained in the swept capsule.");
+    }
+    if (CGAL::compare(half_width_squared, slack_half_width * slack_half_width) == CGAL::SMALLER) {
+        throw CapsuleQuadCertificateError(
+            "capsule quad half-width falls below the documented slack budget "
+            "(1 - CHAIN_SLACK_FRACTION) * radius.");
+    }
+
+    // Counterclockwise by construction: the first edge is `along` and the second
+    // is 2 * half_width_vector, whose cross product is scale * ||along||^2 > 0.
+    // Checked exactly all the same -- a silently clockwise or degenerate general
+    // polygon would corrupt the boolean set with no error of its own.
+    const std::vector<EPoint> corners = {
+        start - half_width_vector,
+        end - half_width_vector,
+        end + half_width_vector,
+        start + half_width_vector,
+    };
+    if (CGAL::orientation(corners[0], corners[1], corners[2]) != CGAL::LEFT_TURN) {
+        throw CapsuleQuadCertificateError(
+            "capsule quad corners are not counterclockwise; the rectangle is "
+            "degenerate.");
+    }
+
+    // AGGREGATED union of the three parts, then ONE difference -- the same
+    // single-sweep discipline subtract_point_chain follows.
+    std::vector<GpsPolygon> parts;
+    parts.reserve(3);
+    parts.push_back(disk_polygon(start, tool_radius));
+    parts.push_back(disk_polygon(end, tool_radius));
+    parts.push_back(exact_linear_polygon(corners));
+    Gps region;
+    region.join(parts.begin(), parts.end());
+    set_->difference(region);
+}
+
 void Stock2::subtract_arc_sweep(double cx, double cy, double sx, double sy,
                                 double ex, double ey, bool cw, double tool_radius)
 {
@@ -746,6 +872,13 @@ NB_MODULE(_stock_2, m)
     // same way as every other malformed-input rejection in this module.
     nb::exception<InvalidAnnulusRadiiError>(m, "InvalidAnnulusRadiiError", PyExc_ValueError);
     nb::exception<NonFiniteAnnulusInputError>(m, "NonFiniteAnnulusInputError", PyExc_ValueError);
+    nb::exception<NonFiniteCapsuleInputError>(m, "NonFiniteCapsuleInputError", PyExc_ValueError);
+
+    // Not an argument fault: the quad capsule's exact half-width certificate did
+    // not hold. Registered explicitly under RuntimeError -- nanobind's default
+    // base is Exception, which would leave "broken invariant" and "malformed
+    // input" with no common ancestor a caller could tell apart.
+    nb::exception<CapsuleQuadCertificateError>(m, "CapsuleQuadCertificateError", PyExc_RuntimeError);
 
     // Not an argument fault: a broken internal invariant of the local depletion
     // path, surfaced as a RuntimeError so it can never be confused with -- or
@@ -804,6 +937,8 @@ NB_MODULE(_stock_2, m)
         .def("is_subset_of", &Stock2::is_subset_of, "other"_a)
         .def("exactly_equals", &Stock2::exactly_equals, "other"_a)
         .def("subtract_capsule", &Stock2::subtract_capsule,
+             "x0"_a, "y0"_a, "x1"_a, "y1"_a, "radius"_a)
+        .def("subtract_capsule_quad", &Stock2::subtract_capsule_quad,
              "x0"_a, "y0"_a, "x1"_a, "y1"_a, "radius"_a)
         .def("subtract_arc_sweep", &Stock2::subtract_arc_sweep,
              "cx"_a, "cy"_a, "sx"_a, "sy"_a, "ex"_a, "ey"_a, "cw"_a, "tool_radius"_a)

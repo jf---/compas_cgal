@@ -149,6 +149,39 @@ class Stock:
         """
         self._raw.subtract_capsule(float(x0), float(y0), float(x1), float(y1), float(radius))
 
+    def subtract_capsule_quad(self, x0: float, y0: float, x1: float, y1: float, radius: float) -> None:
+        """Remove the same capsule as `subtract_capsule`, as two disks and a rectangle.
+
+        The capsule's true side lines stand off the segment by an irrational
+        distance that the circle-segment traits cannot hold, so the region is
+        under-covered -- exactly as the disk chain is. The difference is the
+        SHAPE of the under-approximation: the two end disks (exact) unioned with
+        the rectangle along the segment at a marginally reduced half-width, six
+        curves instead of the chain's hundreds of arcs.
+
+        Both halves of the contract are checked as exact rational comparisons in
+        the backend, not estimated:
+
+        - nothing outside the true swept capsule is ever removed, and
+        - everything within ``radius * (1 - 1e-4)`` of the segment IS removed,
+          which is the same slack budget the disk chain documents.
+
+        Args:
+            x0: X coordinate of the segment start (tool center).
+            y0: Y coordinate of the segment start (tool center).
+            x1: X coordinate of the segment end (tool center).
+            y1: Y coordinate of the segment end (tool center).
+            radius: Tool radius (capsule half-width).
+
+        Raises:
+            NonFiniteCapsuleInputError: If any endpoint coordinate or the radius
+                is not finite.
+            CapsuleQuadCertificateError: If the constructed rectangle's exact
+                half-width falls outside its certified band -- a broken internal
+                invariant, never a malformed input.
+        """
+        self._raw.subtract_capsule_quad(float(x0), float(y0), float(x1), float(y1), float(radius))
+
     def subtract_disk(self, cx: float, cy: float, radius: float) -> None:
         """Remove the disk swept by a tool of *radius* plunging at ``(cx, cy)``.
 

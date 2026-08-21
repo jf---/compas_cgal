@@ -619,7 +619,12 @@ def _machine_chain(
         forced_advances += int(forced)
         nx, ny = stations[next_index].entry
         operations.append(_line_operation((ex, ey), (nx, ny), cut_z, cut_z, OperationType.CUT, path_index))
-        stock.subtract_capsule(ex, ey, nx, ny, tool_radius)
+        # The bridge's swept capsule, removed as two exact end disks plus the
+        # rectangle between them rather than as a chain of hundreds of disks.
+        # Same under-covering contract, same slack budget -- but a bounded number
+        # of curves per bridge, so neither the bridge's length nor the arrangement
+        # it has already accumulated drives the cost.
+        stock.subtract_capsule_quad(ex, ey, nx, ny, tool_radius)
         index = next_index
 
     exit_x, exit_y = stations[last].entry
