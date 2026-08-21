@@ -55,3 +55,11 @@ class MissingSweepParameterError(BenchmarkError):
 
 class InvalidDecimalsError(BenchmarkError):
     """A coordinate precision was negative, so it names no rounding."""
+
+
+class InvalidIslandCountError(BenchmarkError):
+    """An island grid was asked for a non-positive number of rows or columns."""
+
+
+class CrowdedIslandGridError(BenchmarkError):
+    """An island grid leaves channels too narrow for the tool to machine."""
