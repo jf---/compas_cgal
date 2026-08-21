@@ -1,5 +1,6 @@
 #include "stock_2.h"
 #include "engagement_2.h"
+#include "stock_local_2.h"
 
 #include <algorithm>
 #include <array>
@@ -132,6 +133,25 @@ bool exact_set_is_subset(const Gps& subset, const Gps& superset)
     return difference.is_empty();
 }
 
+// Exact bounds of the annulus a tool of radius `tool_radius` sweeps over a FULL
+// turn about a guide of radius `guide_r`: [max(rho - r, 0), rho + r]. Both
+// arrive as doubles, hence as exact rationals, and the bounds are formed
+// EXACTLY -- forming them in double arithmetic first would round rho +/- r to
+// the nearest double and put the swept region about an ulp off the sweep oracle
+// the depletion certificates are proved against. The rho <= r case (a guide no
+// wider than the tool sweeps a filled disk) is an exact comparison, not a
+// tolerance. Shared verbatim by the global and local arc-sweep paths, so the two
+// remove the SAME region by construction rather than by assertion.
+std::pair<Epeck::FT, Epeck::FT> full_turn_annulus_bounds(double guide_r, double tool_radius)
+{
+    const Epeck::FT guide(guide_r);
+    const Epeck::FT tool(tool_radius);
+    const Epeck::FT inner = (CGAL::compare(guide, tool) == CGAL::LARGER)
+        ? Epeck::FT(guide - tool)
+        : Epeck::FT(0);
+    return {inner, guide + tool};
+}
+
 } // namespace
 
 // Full disk as a two-arc general polygon (counterclockwise). Split at the two
@@ -256,6 +276,69 @@ void Stock2::subtract_annulus_exact(
     set_->difference(region);
 }
 
+// --- Local depletion ---------------------------------------------------------
+// Same argument validation, same exact region, different removal mechanism: the
+// arrangement is edited around the region instead of being rebuilt by an overlay
+// against the whole stock. See stock_local_2.cpp for the invariants.
+
+void Stock2::subtract_disk_local(double cx, double cy, double radius)
+{
+    if (radius <= 0.0) throw std::invalid_argument("radius should be positive.");
+    subtract_region_local(*set_, local_disk_region(EPoint(cx, cy), Epeck::FT(radius)));
+}
+
+void Stock2::subtract_annulus_local(double cx, double cy,
+                                    double inner_radius, double outer_radius)
+{
+    // Finiteness is a DOUBLE concept, checked at the boundary before anything is
+    // injected -- the same seam contract subtract_annulus states.
+    if (!std::isfinite(cx) || !std::isfinite(cy)
+        || !std::isfinite(inner_radius) || !std::isfinite(outer_radius)) {
+        throw NonFiniteAnnulusInputError(
+            "subtract_annulus requires finite center coordinates and radii; got "
+            "cx=" + std::to_string(cx) + ", cy=" + std::to_string(cy)
+            + ", inner_radius=" + std::to_string(inner_radius)
+            + ", outer_radius=" + std::to_string(outer_radius) + ".");
+    }
+    subtract_annulus_exact_local(
+        EPoint(cx, cy),
+        Epeck::FT(inner_radius),
+        Epeck::FT(outer_radius));
+}
+
+void Stock2::subtract_annulus_exact_local(
+    const EPoint& center,
+    const Epeck::FT& inner_radius,
+    const Epeck::FT& outer_radius)
+{
+    if (CGAL::sign(inner_radius) == CGAL::NEGATIVE) {
+        throw InvalidAnnulusRadiiError(
+            "subtract_annulus requires inner_radius >= 0.");
+    }
+    if (CGAL::compare(outer_radius, inner_radius) != CGAL::LARGER) {
+        throw InvalidAnnulusRadiiError(
+            "subtract_annulus requires outer_radius > inner_radius.");
+    }
+    subtract_region_local(*set_, local_annulus_region(center, inner_radius, outer_radius));
+}
+
+void Stock2::subtract_arc_sweep_local(double cx, double cy, double sx, double sy,
+                                      double ex, double ey, bool cw, double tool_radius)
+{
+    if (tool_radius <= 0.0) throw std::invalid_argument("tool_radius should be positive.");
+    const double guide_r = std::hypot(sx - cx, sy - cy);
+    if (guide_r == 0.0) { subtract_disk_local(cx, cy, tool_radius); return; }
+    if (sx == ex && sy == ey) {
+        const auto [inner, outer] = full_turn_annulus_bounds(guide_r, tool_radius);
+        subtract_annulus_exact_local(EPoint(cx, cy), inner, outer);
+        return;
+    }
+    // Partial arc: the removed region is a disk-chain union, whose boundary the
+    // local update cannot identify exactly (a chain circle carries both boundary
+    // and interior arcs), so this defers to the global path rather than guessing.
+    subtract_arc_sweep(cx, cy, sx, sy, ex, ey, cw, tool_radius);
+}
+
 // Subtract the union of exact tool disks centered at the given points. One
 // chain implementation shared by the capsule (Task 2) and arc (Task 3) paths:
 // callers only choose where the centers sit; exact predicates still decide
@@ -331,19 +414,8 @@ void Stock2::subtract_arc_sweep(double cx, double cy, double sx, double sy,
     // double-valued API -- the chain samples the very same approximate circle --
     // and it is injected exactly, with no snapping and no correction constant.
     if (sx == ex && sy == ey) {
-        // guide_r and tool_radius are injected as themselves and the two bounds
-        // are formed EXACTLY. Forming them in double arithmetic first would round
-        // rho +/- r to the nearest double and put the swept region about an ulp
-        // off the sweep oracle exact_full_circle_sweep_oracle certifies against --
-        // a snap at a seam where exactness costs nothing.
-        const Epeck::FT guide(guide_r);
-        const Epeck::FT tool(tool_radius);
-        // A guide no wider than the tool sweeps a filled disk, not a ring; the
-        // test is an exact comparison, not a tolerance.
-        const Epeck::FT inner = (CGAL::compare(guide, tool) == CGAL::LARGER)
-            ? Epeck::FT(guide - tool)
-            : Epeck::FT(0);
-        subtract_annulus_exact(EPoint(cx, cy), inner, guide + tool);
+        const auto [inner, outer] = full_turn_annulus_bounds(guide_r, tool_radius);
+        subtract_annulus_exact(EPoint(cx, cy), inner, outer);
         return;
     }
 
@@ -589,6 +661,15 @@ Stock2::ArrangementStats Stock2::arrangement_stats() const
     return { arr.number_of_vertices(), arr.number_of_halfedges(), arr.number_of_faces() };
 }
 
+bool Stock2::representation_is_valid() const
+{
+    // Gps_on_surface_base_2::is_valid is non-const because it hands the
+    // arrangement to CGAL::is_valid by mutable reference; the set itself is only
+    // read. unique_ptr does not propagate constness to its pointee, so this
+    // const probe needs no cast.
+    return set_->is_valid();
+}
+
 namespace {
 
 // Printed decimal length of one exact rational, measured by streaming it.
@@ -665,6 +746,11 @@ NB_MODULE(_stock_2, m)
     // same way as every other malformed-input rejection in this module.
     nb::exception<InvalidAnnulusRadiiError>(m, "InvalidAnnulusRadiiError", PyExc_ValueError);
     nb::exception<NonFiniteAnnulusInputError>(m, "NonFiniteAnnulusInputError", PyExc_ValueError);
+
+    // Not an argument fault: a broken internal invariant of the local depletion
+    // path, surfaced as a RuntimeError so it can never be confused with -- or
+    // caught alongside -- a malformed-input rejection.
+    nb::exception<LocalDepletionEscapedError>(m, "LocalDepletionEscapedError");
 
     nb::class_<DepletionTrace>(m, "DepletionTrace")
         .def_prop_ro("center_count", [](const DepletionTrace& trace) {
@@ -772,6 +858,13 @@ NB_MODULE(_stock_2, m)
         .def("subtract_disk", &Stock2::subtract_disk, "cx"_a, "cy"_a, "radius"_a)
         .def("subtract_annulus", &Stock2::subtract_annulus,
              "cx"_a, "cy"_a, "inner_radius"_a, "outer_radius"_a)
+        .def("subtract_disk_local", &Stock2::subtract_disk_local,
+             "cx"_a, "cy"_a, "radius"_a)
+        .def("subtract_annulus_local", &Stock2::subtract_annulus_local,
+             "cx"_a, "cy"_a, "inner_radius"_a, "outer_radius"_a)
+        .def("subtract_arc_sweep_local", &Stock2::subtract_arc_sweep_local,
+             "cx"_a, "cy"_a, "sx"_a, "sy"_a, "ex"_a, "ey"_a, "cw"_a, "tool_radius"_a)
+        .def("representation_is_valid", &Stock2::representation_is_valid)
         .def(
             "arrangement_stats",
             [](const Stock2& stock) {
