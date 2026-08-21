@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 
 from compas_cgal import _stock_2
+from compas_cgal._stock_2 import Stock2
 
 getcontext().prec = 80
 
@@ -597,3 +598,156 @@ def test_certify_segment_tea_rejects_non_finite_endpoint():
     stock = _stock_2.Stock2(SQUARE, [])
     with pytest.raises(ValueError, match="finite"):
         _stock_2.certify_segment_tea(stock, 1.0, 1.0, float("nan"), 2.0, 0.5, math.pi / 2)
+
+
+# --------------------------------------------------------------------------- #
+# Exact-kernel seam: every public Stock2 entry point refuses non-representable  #
+# input with a named error, before anything is injected into Epeck.            #
+# --------------------------------------------------------------------------- #
+#
+# Every `match=` below PINS THE PARAMETER NAME and anchors it at the start of the
+# message, so a guard that fires for the wrong parameter -- the second coordinate
+# of a pair copy-pasted from the first, say -- fails the test instead of passing
+# it on the word "finite". The coordinate index is parametrised for the same
+# reason: an omitted guard is only ever visible on the coordinate it was omitted
+# from.
+
+_NON_FINITE = [float("nan"), float("inf"), float("-inf")]
+
+
+def _assert_untouched(stock, before):
+    """A guard that fires after the model has already been mutated is not a guard.
+
+    `arrangement_stats` is the strongest cheap witness available: the vertex,
+    halfedge and face counts of the underlying arrangement. Equal counts before
+    and after a refused call mean the refusal happened before any exact
+    construction reached the set.
+    """
+    assert stock.arrangement_stats() == before, "a refused call must not touch the arrangement"
+    assert stock.contains(2.0, 2.0), "stock must be untouched by a refused subtraction"
+    assert not stock.is_empty()
+
+
+@pytest.mark.parametrize("bad_radius", _NON_FINITE)
+def test_subtract_disk_refuses_non_finite_radius(bad_radius):
+    """An infinite radius silently emptied the whole stock: no exception, no material left.
+
+    Its two siblings raised on the same input, so three methods disagreed about
+    one value. Worse than a wrong answer -- it mutates the model, and every later
+    query then answers truthfully about nothing.
+    """
+    stock = Stock2(SQUARE, [])
+    before = stock.arrangement_stats()
+    with pytest.raises(ValueError, match="^radius must be"):
+        stock.subtract_disk(5.0, 5.0, bad_radius)
+    _assert_untouched(stock, before)
+
+
+@pytest.mark.parametrize("bad", _NON_FINITE)
+@pytest.mark.parametrize("index,name", [(0, "cx"), (1, "cy")])
+def test_subtract_disk_refuses_non_finite_centre(index, name, bad):
+    stock = Stock2(SQUARE, [])
+    before = stock.arrangement_stats()
+    args = [5.0, 5.0]
+    args[index] = bad
+    with pytest.raises(ValueError, match=rf"^{name} must be"):
+        stock.subtract_disk(args[0], args[1], 1.0)
+    _assert_untouched(stock, before)
+
+
+@pytest.mark.parametrize("bad", _NON_FINITE)
+@pytest.mark.parametrize("index,name", [(0, "x0"), (1, "y0"), (2, "x1"), (3, "y1")])
+def test_subtract_capsule_refuses_non_finite_coordinate(index, name, bad):
+    """`subtract_capsule(1, +Inf, 2, 2, 0.5)` used to fill the disk chain until the OS
+    killed the interpreter -- the chain count is a length/spacing quotient."""
+    stock = Stock2(SQUARE, [])
+    before = stock.arrangement_stats()
+    args = [1.0, 1.0, 2.0, 2.0]
+    args[index] = bad
+    with pytest.raises(ValueError, match=rf"^{name} must be"):
+        stock.subtract_capsule(args[0], args[1], args[2], args[3], 0.5)
+    _assert_untouched(stock, before)
+
+
+@pytest.mark.parametrize("bad", _NON_FINITE)
+def test_subtract_capsule_refuses_non_finite_radius(bad):
+    stock = Stock2(SQUARE, [])
+    before = stock.arrangement_stats()
+    with pytest.raises(ValueError, match="^radius must be"):
+        stock.subtract_capsule(1.0, 1.0, 2.0, 2.0, bad)
+    _assert_untouched(stock, before)
+
+
+@pytest.mark.parametrize("bad", _NON_FINITE)
+@pytest.mark.parametrize("index,name", list(enumerate(["cx", "cy", "sx", "sy", "ex", "ey"])))
+def test_subtract_arc_sweep_refuses_non_finite_coordinate(index, name, bad):
+    stock = Stock2(SQUARE, [])
+    before = stock.arrangement_stats()
+    args = [5.0, 5.0, 6.0, 5.0, 4.0, 5.0]
+    args[index] = bad
+    with pytest.raises(ValueError, match=rf"^{name} must be"):
+        stock.subtract_arc_sweep(args[0], args[1], args[2], args[3], args[4], args[5], True, 0.5)
+    _assert_untouched(stock, before)
+
+
+@pytest.mark.parametrize("bad", _NON_FINITE)
+def test_subtract_arc_sweep_refuses_non_finite_tool_radius(bad):
+    stock = Stock2(SQUARE, [])
+    before = stock.arrangement_stats()
+    with pytest.raises(ValueError, match="^tool_radius must be"):
+        stock.subtract_arc_sweep(5.0, 5.0, 6.0, 5.0, 4.0, 5.0, True, bad)
+    _assert_untouched(stock, before)
+
+
+@pytest.mark.parametrize("bad", _NON_FINITE)
+@pytest.mark.parametrize("index,name", [(0, "x"), (1, "y")])
+def test_contains_refuses_non_finite_query_point(index, name, bad):
+    """`contains` had no validation of any kind."""
+    stock = Stock2(SQUARE, [])
+    args = [5.0, 5.0]
+    args[index] = bad
+    with pytest.raises(ValueError, match=rf"^{name} must be"):
+        stock.contains(args[0], args[1])
+
+
+@pytest.mark.parametrize("bad", _NON_FINITE)
+@pytest.mark.parametrize("row,col,axis", [(0, 0, "x"), (1, 1, "y"), (2, 0, "x"), (3, 1, "y")])
+def test_construction_refuses_a_non_finite_boundary_vertex(row, col, axis, bad):
+    """A boundary with an infinite vertex passed `is_simple()` and built a usable object."""
+    boundary = SQUARE.copy()
+    boundary[row, col] = bad
+    with pytest.raises(ValueError, match=rf"^boundary vertex {row} {axis} must be"):
+        Stock2(boundary, [])
+
+
+@pytest.mark.parametrize("bad", _NON_FINITE)
+def test_construction_refuses_a_non_finite_hole_vertex(bad):
+    """The same guard, reached through the hole path: the message names the hole, not the boundary."""
+    hole = ISLAND.copy()
+    hole[1, 1] = bad
+    with pytest.raises(ValueError, match=r"^hole 0 vertex 1 y must be"):
+        Stock2(SQUARE, [hole])
+
+
+@pytest.mark.parametrize("bad_root", [-1.0, float("nan"), float("inf"), float("-inf")])
+@pytest.mark.parametrize("index,name", [(4, "alpha"), (5, "beta")])
+def test_sign_mixed_radical_refuses_a_negative_or_non_finite_root(index, name, bad_root):
+    """The binding documents `alpha, beta >= 0` and did not enforce it.
+
+    `_sign_mixed_radical(0, 1, 0, 0, alpha=-1, beta=0)` returned 1 -- a confident
+    sign for sqrt(-1).
+    """
+    args = [0.0, 1.0, 0.0, 0.0, 2.0, 3.0]
+    args[index] = bad_root
+    with pytest.raises(ValueError, match=rf"^{name} must be"):
+        _stock_2._sign_mixed_radical(*args)
+
+
+@pytest.mark.parametrize("bad", _NON_FINITE)
+@pytest.mark.parametrize("index,name", [(0, "a"), (1, "b"), (2, "c"), (3, "d")])
+def test_sign_mixed_radical_refuses_a_non_finite_coefficient(index, name, bad):
+    """The coefficients cross the same seam as the roots: each is injected as FT(x)."""
+    args = [0.0, 1.0, 0.0, 0.0, 2.0, 3.0]
+    args[index] = bad
+    with pytest.raises(ValueError, match=rf"^{name} must be"):
+        _stock_2._sign_mixed_radical(*args)

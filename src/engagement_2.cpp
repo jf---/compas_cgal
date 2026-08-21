@@ -1,10 +1,10 @@
 #include "engagement_2.h"
+#include "exact_boundary.h"
 #include "stock_2.h"
 
 #include <algorithm>
 #include <cmath>
 #include <numbers>
-#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <tuple>
@@ -24,48 +24,30 @@ using FT = Epeck::FT;
 using CoordNT = GpsPoint::CoordNT;   // Sqrt_extension<FT, FT>: a0 + a1*sqrt(root)
 
 // ----------------------------------------------------------------------------
-// Boundary guards for the geometry parameters (docs/exactness.md, "The boundary
-// doctrine"). Doubles cross into exact-land ONCE, at this seam, by exact
-// injection -- which PRESUPPOSES they are rationals. NaN and +/-Inf are not
-// rationals at all, and a non-positive radius is not a cutter.
-//
-// These are emphatically NOT epsilons smuggled into an exact pipeline: they run
-// strictly BEFORE any Epeck::FT is constructed, and they ask a representability
-// and physicality question about a raw double -- never a geometric one. Every
-// geometric decision downstream remains an exact predicate on exact quantities.
-// Refusing both classes here keeps every downstream FT construction total, and
-// replaces two defects with named domain errors. An impossible radius used to
-// return a confident answer: tool_radius = -1 reported full 2*pi immersion, and
-// tool_radius = +Inf reported zero engagement with the cap NOT exceeded -- a
-// false pass. A non-finite coordinate used to leak nanobind's internal
-// "Cannot convert a non-finite number to an integer" RuntimeError.
+// Boundary guards for the geometry parameters live in exact_boundary.h, shared
+// verbatim with stock_2.cpp so the two halves of the seam cannot drift (the
+// doctrine, and what the guards do and do not add, are documented there).
+// Refusing both classes at this seam keeps every downstream FT construction
+// total, and replaced two defects with named domain errors. An impossible radius
+// used to return a confident answer: tool_radius = -1 reported full 2*pi
+// immersion, and tool_radius = +Inf reported zero engagement with the cap NOT
+// exceeded -- a false pass. A non-finite coordinate used to leak the exact number
+// type's internal "Cannot convert a non-finite number to an integer" RuntimeError.
 // ----------------------------------------------------------------------------
 
-// The offending value, formatted for the exception message. binary64 round-trips
-// at 17 significant digits, so the caller is shown the EXACT double they passed
-// (and "nan"/"inf" verbatim), never a rounded paraphrase of it.
-std::string format_double(double value)
-{
-    std::ostringstream os;
-    os.precision(17);
-    os << value;
-    return os.str();
-}
+using exact_boundary::format_double;
+using exact_boundary::require_finite;
+using exact_boundary::require_positive_radius;
 
-void require_finite(double value, const char* name)
+// The mixed-radical primitive's roots are RADICANDS: sqrt(alpha) is real only for
+// alpha >= 0, and sign_mixed_radical's contract presumes it. Zero is legal -- it
+// is the degenerate "not extended" branch. Spelled `!(v >= 0.0)` to stay NaN-safe
+// independently of the finiteness check, matching the ratio guards below.
+void require_radicand(double value, const char* name)
 {
-    if (!std::isfinite(value))
-        throw std::invalid_argument(std::string(name) + " must be finite (got " + format_double(value) + ").");
-}
-
-// Shared by every entry point taking a cutter radius. Spelled `!(r > 0.0)`
-// rather than `r <= 0.0` so the rejection stays NaN-safe independently of the
-// finiteness check above, matching this file's existing ratio guards.
-void require_positive_tool_radius(double tool_radius)
-{
-    require_finite(tool_radius, "tool_radius");
-    if (!(tool_radius > 0.0))
-        throw std::invalid_argument("tool_radius must be strictly positive (got " + format_double(tool_radius) + ").");
+    require_finite(value, name);
+    if (!(value >= 0.0))
+        throw std::invalid_argument(std::string(name) + " must be a non-negative radicand (got " + format_double(value) + ").");
 }
 
 // ----------------------------------------------------------------------------
@@ -613,7 +595,7 @@ EngagementSample engagement_at(const Stock2& stock, double cx, double cy,
     // downstream of here.
     require_finite(cx, "cx");
     require_finite(cy, "cy");
-    require_positive_tool_radius(tool_radius);
+    require_positive_radius(tool_radius, "tool_radius");
 
     // API-boundary contract: cap_chord_ratio = 4*sin^2(cap/2) with 0 < cap <= pi
     // lies in (0, 4]. Validate the raw double before exact injection (NaN fails).
@@ -655,7 +637,7 @@ CertifiedTea certify_segment_tea(const Stock2& stock, double x0, double y0,
     require_finite(y0, "y0");
     require_finite(x1, "x1");
     require_finite(y1, "y1");
-    require_positive_tool_radius(tool_radius);
+    require_positive_radius(tool_radius, "tool_radius");
     // Diagnostic refinement only: the range test below already rejects non-finite
     // cap_radians (NaN fails `> 0.0`, +Inf fails `<= pi`). Naming the actual
     // defect beats reporting NaN as "outside a range", and keeps every double
@@ -716,6 +698,16 @@ void register_engagement(nanobind::module_& m)
     // directly against high-precision references.
     m.def("_sign_mixed_radical",
           [](double a, double b, double c, double d, double alpha, double beta) {
+              // Same seam, same order as the signature: six doubles, each injected
+              // as FT(x). The roots additionally carry the primitive's documented
+              // precondition alpha, beta >= 0 -- unenforced, it returned a
+              // confident sign for sqrt(-1) (_sign_mixed_radical(0,1,0,0,-1,0) -> 1).
+              require_finite(a, "a");
+              require_finite(b, "b");
+              require_finite(c, "c");
+              require_finite(d, "d");
+              require_radicand(alpha, "alpha");
+              require_radicand(beta, "beta");
               return static_cast<int>(
                   sign_mixed_radical(FT(a), FT(b), FT(c), FT(d), FT(alpha), FT(beta)));
           },

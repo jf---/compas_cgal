@@ -42,25 +42,40 @@ GpsPolygon disk_polygon(const EPoint& center, const Epeck::FT& radius);
 // Exact 2D stock model: the remaining material as a general polygon set of
 // linear (this task) and circular (later tasks) boundary arcs. Later tasks
 // subtract tool sweeps and query engagement; this task owns init + point-in.
+//
+// SEAM CONTRACT (exact_boundary.h, docs/exactness.md "boundary doctrine"): this
+// class IS the declared boundary where doubles cross into exact-land by exact
+// injection, so every entry point below refuses a non-finite coordinate and a
+// non-positive radius with a named std::invalid_argument that reports the
+// parameter and the offending value. The check runs before any Epeck::FT is
+// constructed and before any mutation of the set, so a refused call leaves the
+// stock bit-for-bit untouched.
 class Stock2 {
 public:
+    // Throws std::invalid_argument naming the ring, vertex index and axis
+    // ("hole 0 vertex 1 y") if any boundary or hole coordinate is not finite.
     Stock2(Eigen::Ref<const compas::RowMatrixXd> boundary,
            const std::vector<compas::RowMatrixXd>& holes);
 
+    // Throws std::invalid_argument ("x", "y") on a non-finite query point.
     bool contains(double x, double y) const;
     bool is_empty() const;
 
     // Remove the exact disk of the given radius centred at (cx, cy).
+    // Throws std::invalid_argument ("cx", "cy", "radius").
     void subtract_disk(double cx, double cy, double radius);
 
     // Remove the tool sweep along segment (x0,y0)->(x1,y1) as a certified
     // under-covering disk chain (the exact oriented capsule has irrational
     // side lines, so it is not representable in the circle-segment traits).
+    // Throws std::invalid_argument ("x0", "y0", "x1", "y1", "radius").
     void subtract_capsule(double x0, double y0, double x1, double y1, double radius);
 
     // Remove the tool sweep along the circular guide arc from (sx,sy) to
     // (ex,ey) about (cx,cy) — cw selects the sweep direction, start == end
     // means the full circle — as a certified under-covering disk chain.
+    // Throws std::invalid_argument ("cx", "cy", "sx", "sy", "ex", "ey",
+    // "tool_radius").
     void subtract_arc_sweep(double cx, double cy, double sx, double sy,
                             double ex, double ey, bool cw, double tool_radius);
 

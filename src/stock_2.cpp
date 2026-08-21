@@ -1,5 +1,6 @@
 #include "stock_2.h"
 #include "engagement_2.h"
+#include "exact_boundary.h"
 
 #include <algorithm>
 #include <cmath>
@@ -7,22 +8,50 @@
 #include <numbers>
 #include <sstream>
 #include <stdexcept>
+#include <string>
 #include <tuple>
 #include <utility>
 #include <vector>
 
+// The seam guards, shared verbatim with engagement_2.cpp (rationale in
+// exact_boundary.h). Every public entry point below runs them BEFORE any exact
+// construction and before any mutation of set_.
+using exact_boundary::require_finite;
+using exact_boundary::require_positive_radius;
+
 namespace {
 
+// Guard both coordinates of one polygon vertex. The parameter NAME identifies the
+// offending coordinate ("boundary vertex 3 x", "hole 0 vertex 1 y"), and is built
+// ONLY when a guard fires: the success path pays two isfinite tests and allocates
+// nothing. The `prefix + axis` temporaries live to the end of the full-expression,
+// so the pointer handed to require_finite stays valid for that call.
+void require_finite_vertex(double x, double y, const char* role, int index)
+{
+    if (std::isfinite(x) && std::isfinite(y)) return;
+    const std::string prefix = std::string(role) + " vertex " + std::to_string(index) + " ";
+    require_finite(x, (prefix + "x").c_str());
+    require_finite(y, (prefix + "y").c_str());
+}
+
 // Convert an Nx3 double matrix (rationals by construction) to a linear
-// circle-segment general polygon, validating simplicity via Polygon_2.
-GpsPolygon data_to_gps_polygon(Eigen::Ref<const compas::RowMatrixXd> vertices)
+// circle-segment general polygon, validating simplicity via Polygon_2. `role`
+// names the ring in guard messages ("boundary", "hole 0"), since both the outer
+// boundary and every hole arrive here. A non-finite vertex must be refused BEFORE
+// is_simple(): +/-Inf coordinates passed that test and produced a usable object
+// whose exact state was meaningless, while NaN ones were misdiagnosed as a
+// self-intersection ("Polygon boundary must be simple").
+GpsPolygon data_to_gps_polygon(Eigen::Ref<const compas::RowMatrixXd> vertices, const char* role)
 {
     if (vertices.rows() < 3) {
         throw std::invalid_argument("Expected at least three polygon vertices.");
     }
     CGAL::Polygon_2<Epeck> simple_check;
     for (int i = 0; i < vertices.rows(); ++i) {
-        simple_check.push_back(EPoint(vertices(i, 0), vertices(i, 1)));
+        const double x = vertices(i, 0);
+        const double y = vertices(i, 1);
+        require_finite_vertex(x, y, role, i);
+        simple_check.push_back(EPoint(x, y));
     }
     if (!simple_check.is_simple()) {
         throw std::invalid_argument("Polygon boundary must be simple (no self-intersections).");
@@ -70,16 +99,21 @@ GpsPolygon disk_polygon(const EPoint& center, const Epeck::FT& radius)
 Stock2::Stock2(Eigen::Ref<const compas::RowMatrixXd> boundary,
                const std::vector<compas::RowMatrixXd>& holes)
 {
-    set_.insert(data_to_gps_polygon(boundary));
-    for (const auto& hole : holes) {
+    set_.insert(data_to_gps_polygon(boundary, "boundary"));
+    for (std::size_t i = 0; i < holes.size(); ++i) {
+        const std::string role = "hole " + std::to_string(i);
         Gps hole_set;
-        hole_set.insert(data_to_gps_polygon(hole));
+        hole_set.insert(data_to_gps_polygon(holes[i], role.c_str()));
         set_.difference(hole_set);
     }
 }
 
 bool Stock2::contains(double x, double y) const
 {
+    // The query point is injected exactly (FT(x), FT(y)) on the next line, so it
+    // must be a real point first. This entry point had no validation of any kind.
+    require_finite(x, "x");
+    require_finite(y, "y");
     return set_.oriented_side(GpsPoint(Epeck::FT(x), Epeck::FT(y))) == CGAL::ON_POSITIVE_SIDE;
 }
 
@@ -94,7 +128,14 @@ constexpr double CHAIN_SLACK_FRACTION = 1e-4;
 
 void Stock2::subtract_disk(double cx, double cy, double radius)
 {
-    if (radius <= 0.0) throw std::invalid_argument("radius should be positive.");
+    // Guarded BEFORE the difference below: a guard that fires after the model has
+    // been mutated is not a guard. The old `radius <= 0.0` test let +Inf through
+    // (Inf <= 0 is false), and the resulting cutter disk silently emptied the
+    // ENTIRE stock -- while subtract_capsule and subtract_arc_sweep raised on the
+    // same value, so three siblings disagreed about one input.
+    require_finite(cx, "cx");
+    require_finite(cy, "cy");
+    require_positive_radius(radius, "radius");
     Gps region;
     region.insert(disk_polygon(EPoint(cx, cy), Epeck::FT(radius)));
     set_.difference(region);
@@ -125,7 +166,19 @@ void Stock2::subtract_point_chain(const std::vector<std::pair<double, double>>& 
 
 void Stock2::subtract_capsule(double x0, double y0, double x1, double y1, double radius)
 {
-    if (radius <= 0.0) throw std::invalid_argument("radius should be positive.");
+    // Finiteness here is not only about exact injection: the chain SIZING below
+    // divides the segment length by the spacing, so a non-finite endpoint leaves
+    // the chain count `n` an int cast of a non-finite quotient -- meaningless, and
+    // unbounded in the wrong direction. Measured pre-guard, this was the WORST of
+    // the six unguarded doors and wore two faces: subtract_capsule(1, +Inf, 2, 2,
+    // 0.5) filled `centers` until the OS killed the interpreter (SIGKILL; the
+    // pytest process died with exit 137), while subtract_capsule(+Inf, 1, 2, 2,
+    // 0.5) merely leaked the exact number type's RuntimeError.
+    require_finite(x0, "x0");
+    require_finite(y0, "y0");
+    require_finite(x1, "x1");
+    require_finite(y1, "y1");
+    require_positive_radius(radius, "radius");
     const double dx = x1 - x0;
     const double dy = y1 - y0;
     const double len_sq = dx * dx + dy * dy;
@@ -152,7 +205,16 @@ void Stock2::subtract_capsule(double x0, double y0, double x1, double y1, double
 void Stock2::subtract_arc_sweep(double cx, double cy, double sx, double sy,
                                 double ex, double ey, bool cw, double tool_radius)
 {
-    if (tool_radius <= 0.0) throw std::invalid_argument("tool_radius should be positive.");
+    // Same contract as subtract_capsule, over the six arc coordinates: exact
+    // injection downstream, and a finite guide radius so the arc-length / spacing
+    // chain count stays bounded.
+    require_finite(cx, "cx");
+    require_finite(cy, "cy");
+    require_finite(sx, "sx");
+    require_finite(sy, "sy");
+    require_finite(ex, "ex");
+    require_finite(ey, "ey");
+    require_positive_radius(tool_radius, "tool_radius");
     const double rx = sx - cx, ry = sy - cy;
     const double guide_r = std::hypot(rx, ry);
     if (guide_r == 0.0) { subtract_disk(cx, cy, tool_radius); return; }
