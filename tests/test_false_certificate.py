@@ -21,9 +21,11 @@ leaving a thin annular RIB of thickness ``tau`` whose centreline is a circle of
 the TOOL's own radius. This is what two concentric passes leave behind when the
 step-over overshoots by ``tau`` -- `test_machined_stock_certified_motion_has_no_cap_violating_centre`
 builds exactly that, with `subtract_disk` + `subtract_arc_sweep` and nothing else.
-The rib is built three independent ways below -- through `Stock`'s boundary/hole
-constructor, by material removal alone, and as one plain simple polygon -- so no
-verdict here can be blamed on a constructor.
+The rib is built below in three different TOPOLOGIES over two API paths -- a
+boundary with a hole, a boolean difference, and one plain simple polygon; the
+first and third both enter through `Stock.__init__` -- so no verdict here rests on
+a single construction route. The removal-only route is the one that answers
+"could a toolpath produce this", and it does.
 
 With the cutter concentric with the rib its whole rim lies in material, so
 TEA = 2*pi. Move the centre off by ``a`` and the rim cuts across the rib instead,
@@ -48,9 +50,21 @@ certifier's claim is UNIVERSAL over the segment, so ONE exactly-violating centre
 refutes it outright. Sampling density therefore governs only whether a violation
 is FOUND, never whether a found one is real: refining the sample grid can turn a
 green into a red, never a red into a false alarm. ``max_run_tea`` appears below
-only to say HOW BADLY, never as evidence -- it is a REPORTING double subject to
-the known one-full-turn harvest defect
-(`test_growth_bound.py::test_reported_engagement_never_exceeds_a_full_turn`).
+to say HOW BADLY and as a CONFIGURATION PIN alongside the exact predicate, never
+as a verdict -- it is a REPORTING double subject to the known one-full-turn
+harvest defect
+(`test_growth_bound.py::test_reported_engagement_never_exceeds_a_full_turn`),
+which does fire elsewhere in this very geometry (9.23669 rad at a tangency
+configuration one ulp from a clean reading). Every pin that reads it is paired
+with the exact `cap_exceeded` and sits far from that tangency.
+
+A THIRD ORACLE agrees. Dense `Stock.contains` sampling of the cutter rim shares no
+code with the engagement harvest -- it is a point-in-region query on the
+arrangement, not an arc harvest -- and it reproduces every reading quoted here to
+within its own sampling resolution: at the spiral witness 1.899093 rad against
+`engagement_at`'s 1.899052 (20,000 rim samples, 3.1e-4 rad resolution), and 0 of
+20,011 rim points outside material at the annular rib's centre, confirming the 2*pi
+is genuine full immersion rather than the harvest defect.
 
 HOW FAR IT GOES. Open the rib into a 135 deg sector and the flanking stations stop
 touching it at all: the certifier then returns ``max_tea = 0.0`` -- "the cutter
@@ -59,6 +73,20 @@ at one point, 135 deg engaged. A guard added to a growth bound cannot repair a
 verdict drawn from two measurements that are both identically zero, which is why
 `test_certified_motion_whose_stations_report_no_contact_at_all_has_no_cap_violating_centre`
 constrains the repair more tightly than the rest.
+
+IT IS NOT A COINCIDENCE, AND THIS IS THE POINT THAT SIZES THE REPAIR. A rib of
+CONSTANT radius has to match the tool radius to within about 2.5 * tau (2% of r
+here) for any of this to happen, which invites the reading that the failure is a
+codimension-1 accident. It is not. Put the rib on a SPIRAL -- centreline
+``rho(theta) = r + k*theta``, so its radius SWEEPS THROUGH the tool radius instead
+of matching it -- and no coincidence is engineered anywhere: a spiral necessarily
+contains a point where its local curvature radius equals the cutter's, whatever
+that cutter's radius is. The result is a REGION of falsely-certified motions of
+positive area (measured: 12 of 33 probe centres on a 3x11 grid) and every motion
+direction through the witness centre is certified at ``stations = 1`` (6 of 6
+tried). So a thin leftover sliver along ANY spiral or ramped contour pass carries
+this failure. The repair must be sized against "whenever a thin leftover curves
+with the tool", not against a 1% radius match.
 
 TWO GREEN CONTROLS keep the reds from being vacuous: the certifier is SOUND on a
 motion of this same stock that never violates, and it correctly REFUSES a motion
@@ -105,6 +133,15 @@ GAP_CLOSE_NONE = 0.0
 # ceiling -- an ~1.8x margin, so the witness is a region of the parameter space
 # and not a knife edge. Measured: reds over tau/r in [0.001, 0.008] against
 # motion lengths from 0.0125 r to 0.1 r.
+#
+# TOLERANCE ON THE RIB'S RADIUS. A rib of CONSTANT radius must match the tool
+# radius for any of this to bite, but the window is 2.5 * tau wide (2% of r), not
+# tau/2: measured red at every mismatch from 0 to 2.5 tau with the motion held at
+# the origin, sound from 3 tau. Its SHAPE depends on where the motion sits -- with
+# the motion recentred on the mismatch there is a REFUSAL GAP at 1.25-1.5 tau,
+# with red resuming at 2.0-2.5 tau. That gap is placement luck, not detection: the
+# bisection happens to land a station on the violation there. `_spiral_rib_stock`
+# removes the question entirely by letting the radius sweep.
 RIB_THICKNESS = 0.004
 
 # Sides of the regular polygons approximating the rib walls. The faceting error
@@ -125,10 +162,15 @@ SECTOR_FACETS = round(RIB_FACETS * SECTOR_EXTENT / (2.0 * math.pi))
 
 # Short motion, in model units (0.05 r), centred on the rib centre. Two bounds fix
 # it: it must be SHORT enough that the certifier can certify without refining at
-# all (the guarded cap is positive only below 0.0561 = 0.112 r at this cap), and
-# LONG enough that the cap-violating window -- measured at |x| <= 0.002823, i.e.
-# 22.6% of this motion -- falls strictly between the two stations. 0.025 is 45% of
-# the certifiable ceiling, comfortably inside both.
+# all, and LONG enough that the cap-violating window -- measured at
+# |x| <= 0.002823, i.e. 22.6% of this motion -- falls strictly between the two
+# stations. The upper bound is where the guarded cap `cap - tea_guard(L/2, r)`
+# reaches zero, obtained by BISECTING that condition: 0.056111 = 0.112 r at
+# cap = pi/2, and 0.178464 at cap = pi. Do NOT substitute the small-`d`
+# asymptotic `r * (cap/4)^2` for it -- that drops the endpoint-drift term
+# `4*asin(d/2r)`, which is not negligible at these spacings, and over-estimates
+# the certifiable range by 37% at cap = pi/2 and 73% at cap = pi. 0.025 is 45% of
+# the bisected ceiling, comfortably inside both bounds.
 SHORT_MOTION = 0.025
 
 # A long, obliquely-oriented motion through the rib centre, 0.75 units = 1.5 tool
@@ -153,6 +195,52 @@ SWEEP_OFFSET_SPAN = 0.15
 # chosen for a legible count (91 hits) rather than for detection, and the oracle's
 # exactness means a denser grid could only ever raise that count.
 SCAN_SAMPLES = 400
+
+# --- The spiral rib: the same failure with NO radius coincidence -------------
+#
+# Centreline `rho(theta) = TOOL_RADIUS + SPIRAL_GROWTH * theta`, walls at
+# +/- RIB_THICKNESS/2. SPIRAL_GROWTH = 0.005 makes the radius sweep 0.488 -> 0.512
+# over the arc below, i.e. +/-2.4% of r: the tool radius is crossed on the way
+# past rather than matched. Larger growth rates were measured too -- 0.01 (+/-4.8%)
+# and 0.02 (+/-9.6%) are both still falsely certified at `stations = 1`; 0.04
+# (+/-19%) is where the rib stops tracking the rim long enough and the certifier
+# starts refusing. So the failure needs the sliver to curve WITH the tool, not to
+# match it.
+SPIRAL_GROWTH = 0.005
+
+# Half the spiral's angular extent (radians). 2.4 rad each way spans 4.8 rad of
+# arc -- long enough to carry the engaged run of 1.9 rad found below with room to
+# spare, short enough that the two turns never approach each other.
+SPIRAL_HALF_TURN = 2.4
+
+# Vertices per spiral wall, set so the angular step matches the closed ring's
+# 2*pi / RIB_FACETS: the measured sagitta is 3.75e-5, 0.94% of RIB_THICKNESS,
+# identical to the ring's.
+SPIRAL_STEPS = round(RIB_FACETS * 2.0 * SPIRAL_HALF_TURN / (2.0 * math.pi))
+
+# Centre of the spiral witness motion, in model units. It is where the cutter rim
+# best osculates the spiral rib, LOCATED BY SEARCH over the centre plane and
+# stated here so the test is deterministic. It is deliberately NOT the closed-form
+# osculating centre of the centreline -- that point, (2.4998e-05, 4.9997e-03), is
+# correctly REFUSED (stations = 10), because the certifier's stations happen to see
+# enough there. Nothing here is fine-tuned: `test_no_spiral_probe_centre_is_falsely_certified`
+# shows the falsely-certified set has positive area, and this centre is picked from
+# it for its MARGINS rather than for its peak -- both stations sit 19% under the
+# guarded cap while the interior runs 21% over the cap.
+SPIRAL_PROBE_CENTRE = (0.0, 0.0034)
+
+# Probe-centre region sweep for the spiral: a 3 x 11 grid deliberately spanning
+# sound, refused AND falsely-certified centres (y from 0 to 0.010 crosses the whole
+# osculating band), so the count it reports is an honest fraction and not a window
+# chosen to be red. Measured: 12 red, 12 soundly certified, 9 refused.
+SPIRAL_SWEEP_X = (-0.004, 0.0, 0.004)
+SPIRAL_SWEEP_ROWS = 11
+SPIRAL_SWEEP_Y_STEP = 0.001
+
+# Directions probed through SPIRAL_PROBE_CENTRE, in radians. Chosen to include the
+# axis-aligned pair and three obliques, none of them aligned with the spiral's
+# tangent at the witness. Measured: all six certified at `stations = 1`.
+SPIRAL_DIRECTIONS = (0.0, math.pi / 6.0, math.pi / 4.0, math.pi / 3.0, math.pi / 2.0, 2.0 * math.pi / 3.0)
 
 # Ambient block half-width for the machined build, in model units (12 r): the
 # block's straight walls stay >= 5 units clear of the rib, so they never reach the
@@ -260,6 +348,35 @@ def _sector_rib_stock(extent: float = SECTOR_EXTENT, thickness: float = RIB_THIC
     return Stock(Polygon(points))
 
 
+def _spiral_rib_stock(growth: float = SPIRAL_GROWTH, thickness: float = RIB_THICKNESS) -> Stock:
+    """A rib whose radius SWEEPS THROUGH the tool radius instead of matching it.
+
+    The walls are two Archimedean spirals ``rho(theta) = TOOL_RADIUS + growth *
+    theta +/- thickness / 2``. Because the centreline radius varies monotonically,
+    the rib necessarily contains a point where its local curvature radius equals
+    the cutter's, whatever the cutter's radius is -- so this construction removes
+    the "the rib has to match the tool" objection to `_rib_stock` entirely, and
+    with it the reading that the failure is a codimension-1 accident.
+
+    Args:
+        growth: Radius gained per radian of the centreline spiral.
+        thickness: Radial thickness of the rib in model units.
+
+    Returns:
+        A `Stock` whose material is the spiral sliver, traced outer wall then
+        inner wall as one simple polygon.
+    """
+    angles = [-SPIRAL_HALF_TURN + 2.0 * SPIRAL_HALF_TURN * i / SPIRAL_STEPS for i in range(SPIRAL_STEPS + 1)]
+
+    def wall(theta: float, offset: float) -> tuple[float, float, float]:
+        rho = TOOL_RADIUS + growth * theta + offset
+        return (rho * math.cos(theta), rho * math.sin(theta), 0.0)
+
+    points = [wall(theta, 0.5 * thickness) for theta in angles]
+    points += [wall(theta, -0.5 * thickness) for theta in reversed(angles)]
+    return Stock(Polygon(points))
+
+
 def _sample(stock: Stock, x: float, y: float) -> tuple[float, bool]:
     """Reported largest engaged run and the EXACT cap verdict at one cutter centre.
 
@@ -329,8 +446,12 @@ def _pin_rib(stock: Stock, half_spacing: float) -> None:
 
     Args:
         stock: The rib stock under test.
-        half_spacing: Distance from the rib centre at which the flanking stations
-            of the motion under test sit.
+        half_spacing: Distance from the rib centre at which the rib is probed for
+            the straddling regime. For the un-refined witnesses this is also the
+            motion's own half-spacing; for the refined ones the certifier's leaf
+            half-spacing differs (0.0234 and 0.0187), and the pin's job there is
+            only to establish that the rib is built and that the origin -- which
+            lies on every red motion -- genuinely violates.
 
     Raises:
         AssertionError: If the cutter is not fully immersed at the rib centre, or
@@ -508,6 +629,112 @@ def test_certified_motion_whose_stations_report_no_contact_at_all_has_no_cap_vio
         f"certified a motion reporting NO contact (max_tea={max_tea:.6f}) with {len(violations)} of {SCAN_SAMPLES + 1} probed centres exactly over the cap: "
         f"{start} -> {end}, r={TOOL_RADIUS}, cap={CAP_RADIANS:.6f}, stations={stations}; "
         f"true engagement at the sector centre {centre_run:.6f} rad"
+    )
+
+
+def test_certified_spiral_rib_motion_has_no_cap_violating_centre():
+    """No radius coincidence at all: the rib's radius sweeps past the tool's, and the certificate is still false.
+
+    `_rib_stock` needs its constant radius to match the tool's within ~2.5 tau,
+    which invites the reading that this whole failure is a codimension-1 accident.
+    A spiral rib settles that: its centreline radius runs 0.488 -> 0.512 across the
+    sliver, so it CROSSES the tool radius on the way past. Every spiral does --
+    which is why a thin leftover along any spiral or ramped contour pass carries
+    this failure, whatever the cutter's radius.
+
+    Measured, on the 0.025-long motion through `SPIRAL_PROBE_CENTRE`:
+
+    | quantity | value |
+    | --- | --- |
+    | station at x = -0.0125 | ``max_run_tea`` 0.447584, `cap_exceeded` False |
+    | station at x = +0.0125 | ``max_run_tea`` 0.462523, `cap_exceeded` False |
+    | guarded cap | 0.574493 -- both stations 19% under it |
+    | motion peak | 1.910381 rad at x = 6.25e-05, i.e. 1.22x the cap |
+    | `certify_segment_tea` | ``max_tea`` 0.462523, `cap_certified` **True**, ``stations`` 1 |
+    | exact oracle | 44 of 401 probed centres over the cap |
+
+    Cross-checked against the independent `Stock.contains` rim oracle, which shares
+    no code with the engagement harvest: 1.899093 rad at the centre against
+    `engagement_at`'s 1.899052, and 0.447677 / 0.462757 at the two stations against
+    0.447584 / 0.462523 -- agreement to within the 3.1e-4 rad resolution of 20,000
+    rim samples.
+
+    Note this is a HARDER case for the repair than the annular rib, not an easier
+    one: the stations here read 0.45-0.46 rather than 0.32, so simply tightening
+    the guard would not catch it either.
+    """
+    stock = _spiral_rib_stock()
+    px, py = SPIRAL_PROBE_CENTRE
+    half = 0.5 * SHORT_MOTION
+    start, end = (px - half, py), (px + half, py)
+
+    # Configuration pins: both stations really are in contact and really do pass
+    # the guarded cap, and the interior really does violate -- so this is a genuine
+    # blind-spot verdict, not an out-of-contact one (that form is pinned separately
+    # by the sector test) and not a scan that happened to miss.
+    for probe in (start, end):
+        run, exceeded = _sample(stock, *probe)
+        assert 0.0 < run < CAP_RADIANS, f"station {probe} should be engaged but under the cap, got max_run_tea {run!r}"
+        assert not exceeded, f"station {probe} should be under the cap, got max_run_tea {run!r}"
+    centre_run, centre_exceeded = _sample(stock, px, py)
+    assert centre_exceeded, f"the spiral witness centre should exceed the cap; max_run_tea {centre_run!r}"
+
+    max_tea, certified, stations = _certify(stock, start, end)
+
+    # Configuration pin: still the un-refined regime, so the verdict is two exact
+    # measurements plus the analytic guard and nothing adaptive.
+    assert stations == 1, f"expected a single un-refined station pair, got {stations}"
+
+    violations = _violating_centres(stock, start, end)
+    assert not (certified and violations), (
+        f"certified a motion over a SPIRAL rib -- no radius coincidence -- with {len(violations)} of {SCAN_SAMPLES + 1} probed centres exactly over the cap: "
+        f"{start} -> {end}, r={TOOL_RADIUS}, cap={CAP_RADIANS:.6f}, stations={stations}, reported max_tea={max_tea:.6f} "
+        f"against a true {centre_run:.6f} rad at the witness centre"
+    )
+
+
+def test_no_spiral_probe_centre_is_falsely_certified():
+    """The falsely-certified set on a spiral rib has positive AREA, and every direction through it fails.
+
+    `SPIRAL_PROBE_CENTRE` was located by search, which invites the objection that a
+    searched point proves nothing about ordinary geometry. This test answers it in
+    two directions at once.
+
+    ACROSS THE PLANE: a 3x11 grid of probe centres spanning y = 0 to 0.010 -- the
+    whole osculating band, deliberately including centres that are soundly
+    certified and centres that are refused -- yields 12 false certificates, 12
+    sound certificates and 9 refusals. A measure-zero coincidence cannot occupy a
+    third of a grid laid across it.
+
+    ACROSS DIRECTION: all six directions probed through the witness centre (0, 30,
+    45, 60, 90, 120 deg) are certified at ``stations = 1``. The failure does not
+    need the motion to be aligned with anything.
+    """
+    stock = _spiral_rib_stock()
+    half = 0.5 * SHORT_MOTION
+    falsely_certified = []
+
+    for px in SPIRAL_SWEEP_X:
+        for row in range(SPIRAL_SWEEP_ROWS):
+            py = row * SPIRAL_SWEEP_Y_STEP
+            start, end = (px - half, py), (px + half, py)
+            _max_tea, certified, stations = _certify(stock, start, end)
+            if certified and _violating_centres(stock, start, end, samples=100):
+                falsely_certified.append((round(px, 4), round(py, 4), stations))
+
+    px, py = SPIRAL_PROBE_CENTRE
+    for angle in SPIRAL_DIRECTIONS:
+        dx, dy = half * math.cos(angle), half * math.sin(angle)
+        start, end = (px - dx, py - dy), (px + dx, py + dy)
+        _max_tea, certified, stations = _certify(stock, start, end)
+        if certified and _violating_centres(stock, start, end, samples=100):
+            falsely_certified.append((f"dir {math.degrees(angle):.0f}deg", stations))
+
+    grid_size = len(SPIRAL_SWEEP_X) * SPIRAL_SWEEP_ROWS
+    assert not falsely_certified, (
+        f"{len(falsely_certified)} false certificates over a spiral rib: a {len(SPIRAL_SWEEP_X)}x{SPIRAL_SWEEP_ROWS} "
+        f"probe-centre grid ({grid_size} motions) plus {len(SPIRAL_DIRECTIONS)} directions through {SPIRAL_PROBE_CENTRE}; "
+        f"first {falsely_certified[0]}"
     )
 
 
