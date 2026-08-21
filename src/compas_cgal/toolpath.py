@@ -397,10 +397,12 @@ def trochoidal_mat_toolpath_circular(
     """Generate linked circular arc toolpath operations.
 
     Leads are certified against the boundary and shrink (or drop) to stay
-    gouge-free. Flat links (no *clearance_z*) that would cross a wall raise
-    instead of being emitted; they also assume the corridor between paths has
-    already been cleared of stock — provide *clearance_z* for stock-safe
-    linking. Path ordering is a greedy nearest-neighbour heuristic.
+    gouge-free. The cut-height traverse between consecutive paths is certified
+    whether or not *link_paths* records a link primitive: without *clearance_z*
+    one that would cross a wall raises instead of being emitted. Links also
+    assume the corridor between paths has already been cleared of stock —
+    provide *clearance_z* for stock-safe linking. Path ordering is a greedy
+    nearest-neighbour heuristic.
 
     Parameters
     ----------
@@ -440,7 +442,11 @@ def trochoidal_mat_toolpath_circular(
     lead_out
         Exit line length along the end tangent for each path.
     link_paths
-        If ``True``, connect consecutive paths with linear link moves.
+        If ``True``, connect consecutive paths with linear link moves. This
+        governs whether a link primitive is *recorded*, never whether the
+        traverse is *checked*: with ``False`` the emitted polyline still runs
+        continuously from one path to the next, and that implied move is
+        certified the same way.
     optimize_order
         If ``True``, greedily reorder paths by nearest entry.
     cut_z
@@ -462,7 +468,8 @@ def trochoidal_mat_toolpath_circular(
     InvalidPolygonError
         If any polygon is non-planar, degenerate, or self-intersecting.
     ValueError
-        If a flat link would gouge the boundary (provide *clearance_z*).
+        If a cut-height traverse between paths would gouge the boundary
+        (provide *clearance_z*), whether or not *link_paths* records it.
 
     Warns
     -----

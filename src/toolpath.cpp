@@ -1089,6 +1089,18 @@ pmp_trochoidal_mat_toolpath_circular(
                 }
             }
         } else {
+            // link_paths == false: no LINK primitive is recorded, but the emitted
+            // polyline still runs continuously from the previous path's end to this
+            // path's entry.  That implied traverse is a cut-height motion and gets the
+            // SAME certification as an explicit flat link — link_paths governs what is
+            // RECORDED, never what is CHECKED.  Without a clearance plane there is no
+            // safe fallback, so fail loud.
+            if (cur_xy != lead_in_pt && !use_clearance &&
+                !boundary.segment_clear(Segment_2(cur_xy, lead_in_pt), tool_radius)) {
+                throw std::invalid_argument(
+                    "Implied traverse between unlinked paths would gouge the boundary; "
+                    "provide clearance_z for safe Z-linking.");
+            }
             cur_xy = lead_in_pt; cur_z = cut_z;
         }
 

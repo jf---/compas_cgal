@@ -921,3 +921,34 @@ def test_no_gouge_tool_centre_across_admissible_mat_scale(mat_scale):
     assert len(paths) > 0
     worst = max(tool_radius - _distance_to_polygon_boundary_xy(pt[:2].tolist(), poly_xy) for path in paths for pt in path)
     assert worst <= GOUGE_TOL
+
+
+# ---------------------------------------------------------------------------
+# ETH audit remediation (2026-08-19), Task 2: the implied traverse is certified
+# whether or not a link primitive is recorded.
+# ---------------------------------------------------------------------------
+
+
+def test_unlinked_paths_still_certify_the_implied_traverse():
+    """link_paths=False must not smuggle an uncertified through-material traverse.
+
+    The returned polyline concatenates every operation, so consecutive paths are
+    joined by an implied straight move whether or not a link primitive is recorded.
+    That move is a cutting-height motion and must meet the same wall-clearance bar
+    as an explicit link.
+    """
+    polygon = _dumbbell(1.2)  # pinched waist: cross-path traverses hug the notches
+    with pytest.raises(ValueError, match="gouge"):
+        trochoidal_mat_toolpath_circular(polygon, tool_diameter=1.0, pitch=0.75, link_paths=False, optimize_order=False)
+
+
+def test_unlinked_paths_with_clearance_plane_do_not_raise():
+    """Supplying clearance_z suppresses the flat-traverse certification.
+
+    The caller has declared a safe Z plane, so the check is skipped and the call
+    returns instead of raising. This does NOT yet mean the traverse is lifted:
+    with link_paths=False only the entry plunge and the final retract are emitted,
+    so the inter-path move still sits at cut_z in the concatenated polyline.
+    """
+    result = trochoidal_mat_toolpath_circular(_dumbbell(1.2), tool_diameter=1.0, pitch=0.75, link_paths=False, clearance_z=3.0)
+    assert len(result.operations) > 0

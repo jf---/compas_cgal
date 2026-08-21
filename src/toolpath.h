@@ -75,8 +75,9 @@ pmp_trochoidal_mat_toolpath(
  * Operation codes: 0=cut, 1=lead_in, 2=lead_out, 3=link, 4=retract, 5=plunge
  *
  * Leads are certified against the boundary and shrink (or drop) to stay
- * gouge-free.  Flat links (no clearance_z) that would gouge raise instead of
- * being emitted.
+ * gouge-free.  The cut-height traverse between consecutive paths is certified
+ * whether or not link_paths records a link primitive; without clearance_z one
+ * that would gouge raises instead of being emitted.
  *
  * @return std::tuple of (meta Nx4, starts Nx3, ends Nx3, centers Nx3, radii Nx1,
  *         polyline Mx3, start_tangents Nx3, end_tangents Nx3,
