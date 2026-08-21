@@ -30,6 +30,11 @@ struct EngagementSample {
 // no whole-stock overlay (see engagement_2.cpp; the earlier overlay was validated
 // to reproduce this exactly before it was removed).
 //
+// (cx, cy) must be finite and tool_radius finite and strictly positive; all are
+// checked BEFORE any exact injection and raise std::invalid_argument otherwise.
+// A non-finite double is not a rational, so it has no exact image at this seam,
+// and a non-positive radius is not a cutter.
+//
 // cap_chord_ratio is the dimensionless squared-chord surrogate for the angular
 // cap: cap_chord_ratio = 4*sin^2(cap/2), which the CALLER computes as a double
 // and which is injected exactly (Epeck::FT(double)). Contractually the cap is
@@ -88,7 +93,11 @@ struct CertifiedTea {
 // BOUNDARY (docs/exactness.md, boundary doctrine): cap_radians is validated to
 // (0, pi] and converted to exact chord surrogates here, at the one declared
 // seam; every value crossing into the exact station test is injected exactly.
-// Raises std::invalid_argument if cap_radians lies outside (0, pi].
+// Raises std::invalid_argument if any endpoint coordinate is non-finite, if
+// tool_radius is not finite and strictly positive, or if cap_radians lies
+// outside (0, pi]. tool_radius additionally sets the refinement's spacing floor
+// (STATION_FLOOR_FRACTION * tool_radius), so a non-physical radius would leave
+// the bisection with no reachable floor.
 CertifiedTea certify_segment_tea(const Stock2& stock, double x0, double y0,
                                  double x1, double y1, double tool_radius,
                                  double cap_radians);

@@ -4,7 +4,9 @@
 #include <algorithm>
 #include <cmath>
 #include <numbers>
+#include <sstream>
 #include <stdexcept>
+#include <string>
 #include <tuple>
 #include <utility>
 #include <vector>
@@ -20,6 +22,51 @@ namespace {
 
 using FT = Epeck::FT;
 using CoordNT = GpsPoint::CoordNT;   // Sqrt_extension<FT, FT>: a0 + a1*sqrt(root)
+
+// ----------------------------------------------------------------------------
+// Boundary guards for the geometry parameters (docs/exactness.md, "The boundary
+// doctrine"). Doubles cross into exact-land ONCE, at this seam, by exact
+// injection -- which PRESUPPOSES they are rationals. NaN and +/-Inf are not
+// rationals at all, and a non-positive radius is not a cutter.
+//
+// These are emphatically NOT epsilons smuggled into an exact pipeline: they run
+// strictly BEFORE any Epeck::FT is constructed, and they ask a representability
+// and physicality question about a raw double -- never a geometric one. Every
+// geometric decision downstream remains an exact predicate on exact quantities.
+// Refusing both classes here keeps every downstream FT construction total, and
+// replaces two defects with named domain errors. An impossible radius used to
+// return a confident answer: tool_radius = -1 reported full 2*pi immersion, and
+// tool_radius = +Inf reported zero engagement with the cap NOT exceeded -- a
+// false pass. A non-finite coordinate used to leak nanobind's internal
+// "Cannot convert a non-finite number to an integer" RuntimeError.
+// ----------------------------------------------------------------------------
+
+// The offending value, formatted for the exception message. binary64 round-trips
+// at 17 significant digits, so the caller is shown the EXACT double they passed
+// (and "nan"/"inf" verbatim), never a rounded paraphrase of it.
+std::string format_double(double value)
+{
+    std::ostringstream os;
+    os.precision(17);
+    os << value;
+    return os.str();
+}
+
+void require_finite(double value, const char* name)
+{
+    if (!std::isfinite(value))
+        throw std::invalid_argument(std::string(name) + " must be finite (got " + format_double(value) + ").");
+}
+
+// Shared by every entry point taking a cutter radius. Spelled `!(r > 0.0)`
+// rather than `r <= 0.0` so the rejection stays NaN-safe independently of the
+// finiteness check above, matching this file's existing ratio guards.
+void require_positive_tool_radius(double tool_radius)
+{
+    require_finite(tool_radius, "tool_radius");
+    if (!(tool_radius > 0.0))
+        throw std::invalid_argument("tool_radius must be strictly positive (got " + format_double(tool_radius) + ").");
+}
 
 // ----------------------------------------------------------------------------
 // Exact sign of a mixed two-radical form   A + B*sqrt(alpha) + C*sqrt(beta)
@@ -560,6 +607,14 @@ EngagementSample engagement_at(const Stock2& stock, double cx, double cy,
                                double tool_radius, double cap_chord_ratio,
                                double gap_close_ratio)
 {
+    // Station geometry, in signature order. The centre must be a real point and
+    // the cutter must exist before either enters exact-land (see the boundary
+    // guards above): FT(cx), FT(cy) and FT(tool_radius)^2 are all constructed
+    // downstream of here.
+    require_finite(cx, "cx");
+    require_finite(cy, "cy");
+    require_positive_tool_radius(tool_radius);
+
     // API-boundary contract: cap_chord_ratio = 4*sin^2(cap/2) with 0 < cap <= pi
     // lies in (0, 4]. Validate the raw double before exact injection (NaN fails).
     if (!(cap_chord_ratio > 0.0 && cap_chord_ratio <= 4.0))
@@ -590,6 +645,24 @@ CertifiedTea certify_segment_tea(const Stock2& stock, double x0, double y0,
                                  double x1, double y1, double tool_radius,
                                  double cap_radians)
 {
+    // Motion geometry, in signature order. Beyond the same station contract
+    // engagement_at enforces, a non-physical radius here also broke the
+    // REFINEMENT: the recursion's spacing floor is STATION_FLOOR_FRACTION * r,
+    // and for r <= 0 or NaN no segment length can ever fall below it, so the
+    // bisection descended to CERTIFY_MAX_DEPTH only to report a merely
+    // "uncertified" verdict for a tool that cannot exist.
+    require_finite(x0, "x0");
+    require_finite(y0, "y0");
+    require_finite(x1, "x1");
+    require_finite(y1, "y1");
+    require_positive_tool_radius(tool_radius);
+    // Diagnostic refinement only: the range test below already rejects non-finite
+    // cap_radians (NaN fails `> 0.0`, +Inf fails `<= pi`). Naming the actual
+    // defect beats reporting NaN as "outside a range", and keeps every double
+    // parameter's finiteness stated explicitly rather than implied by a
+    // comparison a later edit could relax.
+    require_finite(cap_radians, "cap_radians");
+
     // BOUNDARY (docs/exactness.md, boundary doctrine): validate the ergonomic
     // angular cap and convert it to its exact chord surrogate here, at the one
     // declared seam. Contract 0 < cap <= pi: a single engaged run subtends at

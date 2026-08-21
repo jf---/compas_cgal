@@ -555,3 +555,45 @@ def test_certifier_gap_wiring_regression_guard():
     # the guard: with the gamma-wiring the anchored merge is seen at every level -> refused
     _, certified, _ = _stock_2.certify_segment_tea(stock, x0, y, x1, y, r, cap)
     assert certified is False
+
+
+# --------------------------------------------------------------------------- #
+# boundary validation: the GEOMETRY half of the exact-seam contract            #
+# --------------------------------------------------------------------------- #
+#
+# The ANGLE half is covered above (test_engagement_rejects_bad_cap_ratio,
+# test_gap_close_ratio_rejects_out_of_range). These cover the geometry half, which
+# was previously unvalidated: a tool radius must be a physical cutter, and every
+# coordinate must be a real number. Doubles cross into exact-land exactly once, at
+# this seam, by exact injection -- which presupposes they ARE rationals. NaN and
+# +/-Inf are not, so they must be refused here rather than leaking nanobind's
+# internal "Cannot convert a non-finite number to an integer" RuntimeError.
+
+
+@pytest.mark.parametrize("bad_radius", [0.0, -1.0, float("nan"), float("inf")])
+def test_engagement_at_rejects_non_physical_tool_radius(bad_radius):
+    """A tool radius must be positive and finite; -1.0 previously returned a 2*pi answer."""
+    stock = _stock_2.Stock2(SQUARE, [])
+    with pytest.raises(ValueError, match="tool_radius"):
+        _stock_2.engagement_at(stock, 5.0, 5.0, bad_radius, cap_ratio(math.pi / 2.0), 0.0)
+
+
+@pytest.mark.parametrize("bad_coord", [float("nan"), float("inf"), float("-inf")])
+def test_engagement_at_rejects_non_finite_centre(bad_coord):
+    """Non-finite station coordinates must be a named domain error, not a nanobind cast error."""
+    stock = _stock_2.Stock2(SQUARE, [])
+    with pytest.raises(ValueError, match="finite"):
+        _stock_2.engagement_at(stock, bad_coord, 5.0, 0.5, cap_ratio(math.pi / 2.0), 0.0)
+
+
+@pytest.mark.parametrize("bad_radius", [0.0, -1.0, float("nan")])
+def test_certify_segment_tea_rejects_non_physical_tool_radius(bad_radius):
+    stock = _stock_2.Stock2(SQUARE, [])
+    with pytest.raises(ValueError, match="tool_radius"):
+        _stock_2.certify_segment_tea(stock, 1.0, 1.0, 2.0, 2.0, bad_radius, math.pi / 2)
+
+
+def test_certify_segment_tea_rejects_non_finite_endpoint():
+    stock = _stock_2.Stock2(SQUARE, [])
+    with pytest.raises(ValueError, match="finite"):
+        _stock_2.certify_segment_tea(stock, 1.0, 1.0, float("nan"), 2.0, 0.5, math.pi / 2)
