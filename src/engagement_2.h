@@ -75,6 +75,13 @@ struct CertifiedTea {
     int stations;
 };
 
+// Analytic TEA-growth bound and the guard derived from it, exposed so the Python
+// audit layer CALLS the certifier's guard instead of mirroring it. A mirrored
+// safety constant that drifts turns a conservative certifier unsound in silence.
+// REFINEMENT bound only, never a geometric decision (docs/exactness.md).
+double tea_growth_bound(double d, double r);
+double tea_guard(double d, double r);
+
 // Certify TEA(P) <= cap_radians for EVERY cutter center P on the segment
 // (x0,y0)->(x1,y1) with tool radius tool_radius, against the frozen stock.
 //

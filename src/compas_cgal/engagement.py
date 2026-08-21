@@ -13,10 +13,13 @@ silently flattered. Every geometric decision is delegated to the exact-kernel
 backend (`_stock_2.engagement_at`, `certify_segment_tea`); this module owns only
 the replay bookkeeping, the cut-plane classification, and -- for circular
 motions, which the C++ certifier does not cover -- a fixed-density mirror of the
-C++ guarded-station method. Per the boundary doctrine (docs/exactness.md) the
-sole transcendental-to-rational conversion on the Python side is isolated in
-`_cap_chord_ratio`; the analytic TEA-growth guard is a refinement bound only,
-never a geometric truth.
+C++ guarded-station method. That mirror is of the METHOD only: the analytic
+TEA-growth guard it stations against is not reimplemented here but forwarded
+from the compiled certifier (`_stock_2.tea_growth_bound` / `tea_guard`), so the
+audit and the certificate cannot drift apart. Per the boundary doctrine
+(docs/exactness.md) the sole transcendental-to-rational conversion on the Python
+side is isolated in `_cap_chord_ratio`; the TEA-growth guard is a refinement
+bound only, never a geometric truth.
 """
 
 import math
@@ -51,11 +54,6 @@ AUDIT_ENGAGED = frozenset(
         OperationType.LINK,
     }
 )
-
-# Explicit integer safety factor on the analytic TEA-growth bound, mirroring
-# TEA_GUARD_SAFETY_FACTOR in src/engagement_2.cpp. Too large a guard only forces
-# a conservative "uncertified" verdict; it can never certify a violating motion.
-TEA_GUARD_SAFETY_FACTOR = 2
 
 
 class InvalidEngagementCapError(ValueError):
@@ -119,31 +117,23 @@ class EngagementReport:
 def _tea_growth_bound(d: float, r: float) -> float:
     """Conservative bound on how far a run's TEA can grow over center travel *d*.
 
-    Four-line Python mirror of ``tea_growth_bound`` in ``src/engagement_2.cpp``
-    (the factor-1 analytic lemma): endpoint drift ``4*asin(min(1, d/2r))`` across
-    a run's two ends, plus newborn-contact ``2*acos(max(-1, 1 - d/r))`` for a
-    feature first biting the rim. Monotone non-decreasing in *d*, saturating at
-    ``d = 2r``. Evaluated in doubles purely as a REFINEMENT bound -- it selects
-    how much to shrink the cap that the exact station predicate then tests, and
-    its safe failure direction (too large -> conservative "uncertified") never
-    manufactures a false certificate (docs/exactness.md, "Analytic bounds are
-    not precision handling").
+    Forwards to the compiled certifier's own bound (`src/engagement_2.cpp`) so the
+    audit and the certificate cannot drift apart. See that function's derivation
+    comment for the lemma, its safe failure direction, and its known limits.
 
     Args:
-        d: Euclidean center-travel distance (upper bound suffices).
+        d: Euclidean center-travel distance (an upper bound suffices).
         r: Tool radius.
 
     Returns:
         Upper bound on the run's angular growth (radians).
     """
-    a = 4.0 * math.asin(min(1.0, d / (2.0 * r)))
-    b = 2.0 * math.acos(max(-1.0, 1.0 - d / r))
-    return a + b
+    return float(_stock_2.tea_growth_bound(d, r))
 
 
 def _tea_guard(d: float, r: float) -> float:
-    """Safety-scaled TEA-growth guard: ``TEA_GUARD_SAFETY_FACTOR * _tea_growth_bound``."""
-    return TEA_GUARD_SAFETY_FACTOR * _tea_growth_bound(d, r)
+    """Safety-scaled TEA-growth guard, as the compiled certifier computes it."""
+    return float(_stock_2.tea_guard(d, r))
 
 
 def _cap_chord_ratio(cap_radians: float) -> float:
@@ -282,8 +272,9 @@ def _certify_arc_engagement(stock: Stock, geometry: Arc | Circle, tool_radius: f
     n_stations = len(params)
 
     # Uniform spacing -> a single guard for every interior center on the motion.
-    # gamma_guard == 2*GROWTH(hs): TEA_GUARD_SAFETY_FACTOR == 2, so _tea_guard already
-    # IS 2*GROWTH -- the merge-closure angle is the SAME quantity subtracted from the cap.
+    # gamma_guard == 2*GROWTH(hs): the compiled TEA_GUARD_SAFETY_FACTOR (== 2,
+    # src/engagement_2.cpp) makes _tea_guard already BE 2*GROWTH -- the merge-closure
+    # angle is the SAME quantity subtracted from the cap.
     gamma_guard = _tea_guard(0.5 * spacing, tool_radius)
     cap_guarded = tea_cap - gamma_guard
     if cap_guarded > 0.0:

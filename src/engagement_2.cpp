@@ -433,82 +433,6 @@ void engaged_arcs_zone(const Stock2& stock, double cx, double cy,
 // Task 5: exact-station TEA cap certificate along a linear cutter motion.
 // ----------------------------------------------------------------------------
 
-// Conservative bound on how far a single run's TEA can grow over a center travel
-// `d` (tool radius r, stock frozen): the factor-1 analytic lemma. Two mechanisms
-// move an existing run's angular extent between two nearby stations.
-//
-//   (a) ENDPOINT DRIFT. Each end of an existing engaged run sits where the rim
-//       crosses a material boundary. Translating the center by d slides such a
-//       crossing along the rim by at most the arc subtended by a chord of length
-//       d on the radius-r circle, 2*asin(min(1, d/(2r))). A run has two ends, so
-//       its extent can grow by up to 4*asin(min(1, d/(2r))).
-//   (b) NEWBORN CONTACT. A contact absent at a station can appear in between when
-//       a feature first bites the rim. Over travel d the deepest first bite
-//       reaches radial depth d into the disk; the rim chord it cuts spans a full
-//       angle 2*acos(max(-1, 1 - d/r)).
-//
-// GROWTH(d, r) = (a) + (b). Both terms are monotone non-decreasing in d and
-// saturate at d = 2r, so GROWTH is monotone -- required so that growth over the
-// (variable) nearest-station distance is bounded by growth over the half-spacing.
-// Evaluated in doubles: an analytic REFINEMENT bound, never a geometric decision
-// (docs/exactness.md, "Analytic bounds are not precision handling").
-//
-//   (c) RUN MERGE -- and why (a)+(b) suffice with NO merge term. A third event
-//       changes the LARGEST run: two runs separated by a thin void gap on the rim
-//       fuse into one when that gap closes as the cutter advances. This is an O(1)
-//       jump in max_run (by min(|A|, |B|) of the two fused runs) reachable within
-//       an arbitrarily small step -- unbounded by GROWTH, which is O(sqrt d). A
-//       merge term is therefore impossible; the certificate instead removes the
-//       event at the source with GAP-CLOSURE PESSIMISM (see pessimistic_runs):
-//       each station is measured with every void gap of span <= gamma_guard
-//       pre-absorbed, gamma_guard = 2*GROWTH(hs) at half-spacing hs.
-//
-//       CLAIM: with that pre-closure at both stations, no merge completing within
-//       the step is invisible, so max_run at any interior center P is bounded by
-//       the PESSIMISTIC max-run at the nearer station S plus the ordinary (a)+(b)
-//       growth -- the same shape the single-run lemma already certifies.
-//       ARGUMENT (contradiction): suppose the true run through P is the fusion of
-//       runs that were SEPARATE at S, across a gap G still open at S. |P - S| <= hs,
-//       so G closes from its span sigma(S) > 0 to 0 over travel <= hs. G's two ends
-//       are run endpoints; each drifts along the rim by <= 2*asin(min(1, hs/(2r)))
-//       (mechanism a, per end) and a newborn bridging G spans <= 2*acos(max(-1,
-//       1 - hs/r)) (mechanism b), so the most G can shrink over hs is
-//       4*asin(min(1, hs/(2r))) + 2*acos(max(-1, 1 - hs/r)) = GROWTH(hs). Hence
-//       sigma(S) <= GROWTH(hs) <= 2*GROWTH(hs) = gamma_guard -- but a gap of span
-//       <= gamma_guard is ABSORBED in S's pessimistic measurement, i.e. those runs
-//       were ALREADY counted as one at S. That contradicts "separate at S". So the
-//       pessimistic run at S already spans the fused arc, and P differs from it by
-//       (a)+(b) only. The guarded cap subtracts 2*GROWTH(hs) while this accounting
-//       needs only GROWTH(hs): span(run at P) <= pess_max_run(S) + GROWTH(hs) <=
-//       (cap - 2*GROWTH(hs)) + GROWTH(hs) = cap - GROWTH(hs) <= cap. QED.
-//
-//       SAFE FAILURE DIRECTION. gamma_guard = 2*GROWTH(hs) over-closes (only
-//       GROWTH(hs) is strictly required), and closing MORE gaps only enlarges the
-//       pessimistic runs, making the exact station test STRICTER -- forcing extra
-//       refinement or a conservative "uncertified" verdict, never a false pass.
-//       Reported total_tea/max_run_tea stay the TRUE (unclosed) measures, so the
-//       pessimism inflates only the decision, never the numbers shown to humans.
-double tea_growth_bound(double d, double r)
-{
-    const double a = 4.0 * std::asin(std::min(1.0, d / (2.0 * r)));
-    const double b = 2.0 * std::acos(std::max(-1.0, 1.0 - d / r));
-    return a + b;
-}
-
-// Explicit integer safety factor applied to GROWTH to form the certificate's
-// guard. The guard need only bound the TRUE growth; multiplying by 2 buries both
-// any looseness in the lemma and the ~1e-15 relative error of asin/acos under
-// proof-level slack (CLAUDE.md analytic-bounds clause). SAFE FAILURE DIRECTION:
-// too LARGE a guard only forces extra refinement or a conservative "uncertified"
-// verdict -- it can NEVER certify a motion that violates the cap. (Too small a
-// guard could hide a violation; the factor exists precisely to forbid that.)
-constexpr int TEA_GUARD_SAFETY_FACTOR = 2;
-
-double tea_guard(double d, double r)
-{
-    return TEA_GUARD_SAFETY_FACTOR * tea_growth_bound(d, r);
-}
-
 // Refinement stops when a segment is shorter than this fraction of the tool
 // radius. At r-scale that leaves a residual guard on the order of 1e-1 rad;
 // below it the newborn-contact term (which falls off like sqrt(d)) shrinks so
@@ -584,6 +508,87 @@ void certify_recursive(const Stock2& stock, double x0, double y0, double x1,
 }
 
 } // namespace
+
+// Exported at file scope (declared in engagement_2.h) so the Python audit layer
+// CALLS this guard rather than mirroring it: the bound below is the only thing
+// between the guarded-station method and an unsound certificate, so it has
+// exactly one definition.
+//
+// Conservative bound on how far a single run's TEA can grow over a center travel
+// `d` (tool radius r, stock frozen): the factor-1 analytic lemma. Two mechanisms
+// move an existing run's angular extent between two nearby stations.
+//
+//   (a) ENDPOINT DRIFT. Each end of an existing engaged run sits where the rim
+//       crosses a material boundary. Translating the center by d slides such a
+//       crossing along the rim by at most the arc subtended by a chord of length
+//       d on the radius-r circle, 2*asin(min(1, d/(2r))). A run has two ends, so
+//       its extent can grow by up to 4*asin(min(1, d/(2r))).
+//   (b) NEWBORN CONTACT. A contact absent at a station can appear in between when
+//       a feature first bites the rim. Over travel d the deepest first bite
+//       reaches radial depth d into the disk; the rim chord it cuts spans a full
+//       angle 2*acos(max(-1, 1 - d/r)).
+//
+// GROWTH(d, r) = (a) + (b). Both terms are monotone non-decreasing in d and
+// saturate at d = 2r, so GROWTH is monotone -- required so that growth over the
+// (variable) nearest-station distance is bounded by growth over the half-spacing.
+// Evaluated in doubles: an analytic REFINEMENT bound, never a geometric decision
+// (docs/exactness.md, "Analytic bounds are not precision handling").
+//
+//   (c) RUN MERGE -- and why (a)+(b) suffice with NO merge term. A third event
+//       changes the LARGEST run: two runs separated by a thin void gap on the rim
+//       fuse into one when that gap closes as the cutter advances. This is an O(1)
+//       jump in max_run (by min(|A|, |B|) of the two fused runs) reachable within
+//       an arbitrarily small step -- unbounded by GROWTH, which is O(sqrt d). A
+//       merge term is therefore impossible; the certificate instead removes the
+//       event at the source with GAP-CLOSURE PESSIMISM (see pessimistic_runs):
+//       each station is measured with every void gap of span <= gamma_guard
+//       pre-absorbed, gamma_guard = 2*GROWTH(hs) at half-spacing hs.
+//
+//       CLAIM: with that pre-closure at both stations, no merge completing within
+//       the step is invisible, so max_run at any interior center P is bounded by
+//       the PESSIMISTIC max-run at the nearer station S plus the ordinary (a)+(b)
+//       growth -- the same shape the single-run lemma already certifies.
+//       ARGUMENT (contradiction): suppose the true run through P is the fusion of
+//       runs that were SEPARATE at S, across a gap G still open at S. |P - S| <= hs,
+//       so G closes from its span sigma(S) > 0 to 0 over travel <= hs. G's two ends
+//       are run endpoints; each drifts along the rim by <= 2*asin(min(1, hs/(2r)))
+//       (mechanism a, per end) and a newborn bridging G spans <= 2*acos(max(-1,
+//       1 - hs/r)) (mechanism b), so the most G can shrink over hs is
+//       4*asin(min(1, hs/(2r))) + 2*acos(max(-1, 1 - hs/r)) = GROWTH(hs). Hence
+//       sigma(S) <= GROWTH(hs) <= 2*GROWTH(hs) = gamma_guard -- but a gap of span
+//       <= gamma_guard is ABSORBED in S's pessimistic measurement, i.e. those runs
+//       were ALREADY counted as one at S. That contradicts "separate at S". So the
+//       pessimistic run at S already spans the fused arc, and P differs from it by
+//       (a)+(b) only. The guarded cap subtracts 2*GROWTH(hs) while this accounting
+//       needs only GROWTH(hs): span(run at P) <= pess_max_run(S) + GROWTH(hs) <=
+//       (cap - 2*GROWTH(hs)) + GROWTH(hs) = cap - GROWTH(hs) <= cap. QED.
+//
+//       SAFE FAILURE DIRECTION. gamma_guard = 2*GROWTH(hs) over-closes (only
+//       GROWTH(hs) is strictly required), and closing MORE gaps only enlarges the
+//       pessimistic runs, making the exact station test STRICTER -- forcing extra
+//       refinement or a conservative "uncertified" verdict, never a false pass.
+//       Reported total_tea/max_run_tea stay the TRUE (unclosed) measures, so the
+//       pessimism inflates only the decision, never the numbers shown to humans.
+double tea_growth_bound(double d, double r)
+{
+    const double a = 4.0 * std::asin(std::min(1.0, d / (2.0 * r)));
+    const double b = 2.0 * std::acos(std::max(-1.0, 1.0 - d / r));
+    return a + b;
+}
+
+// Explicit integer safety factor applied to GROWTH to form the certificate's
+// guard. The guard need only bound the TRUE growth; multiplying by 2 buries both
+// any looseness in the lemma and the ~1e-15 relative error of asin/acos under
+// proof-level slack (CLAUDE.md analytic-bounds clause). SAFE FAILURE DIRECTION:
+// too LARGE a guard only forces extra refinement or a conservative "uncertified"
+// verdict -- it can NEVER certify a motion that violates the cap. (Too small a
+// guard could hide a violation; the factor exists precisely to forbid that.)
+constexpr int TEA_GUARD_SAFETY_FACTOR = 2;
+
+double tea_guard(double d, double r)
+{
+    return TEA_GUARD_SAFETY_FACTOR * tea_growth_bound(d, r);
+}
 
 EngagementSample engagement_at(const Stock2& stock, double cx, double cy,
                                double tool_radius, double cap_chord_ratio,
@@ -692,6 +697,13 @@ void register_engagement(nanobind::module_& m)
               return std::make_tuple(c.max_tea, c.cap_certified, c.stations);
           },
           "stock"_a, "x0"_a, "y0"_a, "x1"_a, "y1"_a, "tool_radius"_a, "cap_radians"_a);
+
+    // Refinement-bound accessors: the Python audit calls these rather than mirroring
+    // them, so the guard has exactly one definition (docs/exactness.md). No exact
+    // seam here -- these are pure double arithmetic that selects how far to shrink
+    // the cap the exact station predicate then tests, never a geometric decision.
+    m.def("tea_growth_bound", &tea_growth_bound, "d"_a, "r"_a);
+    m.def("tea_guard", &tea_guard, "d"_a, "r"_a);
 
     // Test-only: exact sign of A + B*sqrt(alpha) + C*sqrt(beta) + D*sqrt(alpha*beta)
     // (returns -1/0/+1) so the cap predicate's core primitive is unit-tested

@@ -242,3 +242,51 @@ def test_baseline_script_generates_report(tmp_path):
     for key in ("name", "tool_diameter", "max_tea_deg", "cap_violations", "stations", "wall_clock_s"):
         assert key in first, f"missing per-op field {key!r}"
     assert "total_wall_clock_s" in data
+
+
+# --------------------------------------------------------------------------- #
+# Growth-guard single-source-of-truth contract                                 #
+# --------------------------------------------------------------------------- #
+
+
+def test_python_guard_is_the_compiled_guard_not_a_copy():
+    """The audit's guard must BE the certifier's guard, not a hand-kept mirror of it.
+
+    A mirrored safety constant that drifts turns a conservative certifier into an
+    unsound one silently, so the equality is asserted rather than commented.
+
+    The station pairs walk the whole SHAPE of GROWTH(d, r), not just its smooth
+    interior, because a mirror can agree there and still diverge at the knee where
+    both terms saturate (d == 2r). Two drift modes escape a smooth-interior-only
+    sample and are caught only by the pairs added past the brief's list: a knee
+    that fires at the wrong travel, and a saturation threshold hard-coded to one
+    tool radius instead of tracking 2r.
+    """
+    from compas_cgal import _stock_2
+    from compas_cgal.engagement import _tea_growth_bound, _tea_guard
+
+    pairs = [
+        # From the task brief, verbatim: smooth interior at two radii, then the
+        # exact saturation point d == 2r (r = 0.5), then past it.
+        (1e-1, 0.5),
+        (1e-2, 0.5),
+        (1e-3, 2.0),
+        (1.0, 0.5),
+        (5.0, 0.5),
+        # Degenerate bottom of the domain: asin(0) + acos(1) == 0, no growth.
+        (0.0, 0.5),
+        # The knee bracketed: the last unsaturated travel just below d == 2r, and
+        # just above it. Catches a knee that fires early or late while agreeing on
+        # both the smooth part and the saturated value.
+        (0.999, 0.5),
+        (1.001, 0.5),
+        # Saturation tracks 2r, it is not a constant: the exact knee at r = 1.5,
+        # and an unsaturated interior point whose travel (2.0) already lies past
+        # the r = 0.5 knee -- the only regime that separates GROWTH from a bound
+        # that saturates at a hard-coded travel.
+        (3.0, 1.5),
+        (2.0, 1.5),
+    ]
+    for d, r in pairs:
+        assert _tea_growth_bound(d, r) == _stock_2.tea_growth_bound(d, r)
+        assert _tea_guard(d, r) == _stock_2.tea_guard(d, r)
