@@ -25,5 +25,9 @@ class UnreplayableOperationError(BenchmarkError):
     """A toolpath operation lies outside the cut-plane depletion model (e.g. a 3D ramp)."""
 
 
+class UnsampleableMotionError(BenchmarkError):
+    """A cut motion's geometry carries no cutter-centre path to sample positions from."""
+
+
 class MalformedRecordError(BenchmarkError):
     """A serialised measurement does not carry exactly the columns the schema declares."""

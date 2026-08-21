@@ -52,6 +52,12 @@ Generation output is unchanged on both paths, as it must be for a bit-identical 
 12 positions around the loop — *not* `EngagementReport.cap_violations`, which counts operations that
 could not be **certified** and is a different quantity.)
 
+That measurement is `benchmarks.exceedance.count_truly_exceeding`, and the corpus now records it
+beside the certifier's count as two separate columns: `truly_exceeding`, a sampled **lower bound** on
+how many motions are over the cap, and `uncertified`, the sound **upper bound** of motions whose cap
+could not be proved. Reporting either one under the other's name is how a generator that had improved
+2.4x came to read as a regression.
+
 ## Where the time goes
 
 Phase timing over the same replayed sequences, from a temporary instrumented build:

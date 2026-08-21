@@ -9,6 +9,12 @@ combined number hides exactly the fact that matters.
 refuses any payload whose columns are not exactly the schema's, so a renamed or
 dropped field fails at the seam instead of silently producing a record whose
 missing measurement reads as a zero.
+
+The cap is recorded as TWO columns because "over the cap" and "not proved under
+the cap" are different measurements pointing in opposite directions, and a single
+column named after either one misreports the other. `uncertified` over-counts by
+construction, `truly_exceeding` under-counts by construction; see
+`benchmarks.exceedance` for why neither substitutes for the other.
 """
 
 from __future__ import annotations
@@ -39,7 +45,15 @@ class MeasurementRecord:
         cut_operations: Operations that engaged material.
         stations: Total certifier stations, the refinement-depth cost proxy.
         max_tea_deg: Worst observed engagement angle in degrees.
-        cap_violations: Operations whose cap could not be certified.
+        uncertified: Operations whose cap could NOT BE PROVED. Sound and
+            conservative: an operation counts here whenever the certificate does
+            not close, including when it was never measured because the growth
+            guard could not close at that station density. It over-counts genuine
+            violations and must never be reported as a violation count.
+        truly_exceeding: Cut motions with at least one sampled cutter position
+            where the exact predicate reports the cap exceeded. A sampled LOWER
+            BOUND on true exceedance, never a certificate
+            (`benchmarks.exceedance`).
         unresolved: Operations the certifier could not decide either way.
         arrangement_vertices_final: Arrangement vertices after the toolpath has
             been replayed onto a fresh stock.
@@ -59,7 +73,8 @@ class MeasurementRecord:
     cut_operations: int
     stations: int
     max_tea_deg: float
-    cap_violations: int
+    uncertified: int
+    truly_exceeding: int
     unresolved: int
     arrangement_vertices_final: int
     max_coordinate_digits: int
@@ -124,7 +139,8 @@ class MeasurementRecord:
             cut_operations=0,
             stations=0,
             max_tea_deg=0.0,
-            cap_violations=0,
+            uncertified=0,
+            truly_exceeding=0,
             unresolved=0,
             arrangement_vertices_final=0,
             max_coordinate_digits=0,
