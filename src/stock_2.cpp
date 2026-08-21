@@ -16,6 +16,7 @@
 // The seam guards, shared verbatim with engagement_2.cpp (rationale in
 // exact_boundary.h). Every public entry point below runs them BEFORE any exact
 // construction and before any mutation of set_.
+using exact_boundary::format_double;
 using exact_boundary::require_finite;
 using exact_boundary::require_positive_radius;
 
@@ -126,6 +127,63 @@ bool Stock2::is_empty() const
 // generator's radial_clearance margin (1e-3 * D = 2e-3 * r) dominates it.
 constexpr double CHAIN_SLACK_FRACTION = 1e-4;
 
+namespace {
+
+// Upper bound on the disk-chain interval count.
+//
+// WHY A COUNT NEEDS A BOUND AT ALL. `n` is an allocation size in machine terms,
+// not a quality knob: the chain is materialised as n+1 centre pairs (16 B each)
+// and then as n+1 exact two-arc disk polygons, all live at once for the
+// aggregated join. `static_cast<int>` of a quotient above INT_MAX does not raise,
+// it SATURATES to 2147483647 (measured on this toolchain, ARM64 fcvtzs), so
+// `centers.reserve(n + 1)` then asks for 34.4 GB and the fill loop runs 2^31
+// times until the OS kills the process.
+//
+// FINITENESS DOES NOT CLOSE THIS DOOR, which is why the bound exists on top of
+// the seam guards: measured, a fully FINITE 1e6-long move with r = 0.02 gives
+// ceil(len/spacing) = 2.5e9 and saturates exactly as +/-Inf does.
+//
+// THE VALUE. spacing = 2*r*sqrt(CHAIN_SLACK_FRACTION) = 0.02*r, so n = 50*len/r
+// and this bound admits 2e5 tool radii of travel. For scale: the heaviest chain
+// in this repo's suite is n = 600 (1571 for a full arc sweep), and a demanding
+// real move -- 1 m of travel with a 1 mm tool radius -- is n = 50000, still 200x
+// under the bound. At the bound itself the centres alone are 160 MB and the disk
+// polygons above them are orders of magnitude more, so this is a RUNAWAY
+// DETECTOR, not a machining policy: it cannot refuse a toolpath anyone meant.
+//
+// Being well below INT_MAX also makes the cast TOTAL rather than merely survivable:
+// every value that passes the bound converts exactly (no saturation, no undefined
+// conversion) and `n + 1` cannot overflow.
+constexpr double MAX_CHAIN_INTERVALS = 1e7;
+
+// Chain interval count for a sweep of `path_length` at `spacing`, validated
+// BEFORE the otherwise-saturating cast to int. `what` names the quantity in the
+// refusal so the caller can act on it.
+//
+// REFUSED, NEVER CLAMPED. Clamping to MAX_CHAIN_INTERVALS would widen the
+// spacing s, and the chain's certified under-coverage delta <= s^2/(4r) =
+// CHAIN_SLACK_FRACTION * r is exactly the property the generator's
+// radial_clearance margin is sized against. Silently exceeding it would leave the
+// stock model believing material remains where the tool has already cut: a wrong
+// answer in place of a refusal, which is the one outcome this module may not
+// produce.
+//
+// Spelled `!(intervals <= MAX)` so a NaN quotient is refused too, keeping the
+// helper total independently of the finiteness guards its callers already ran.
+int chain_intervals(double path_length, double spacing, int minimum, const char* what)
+{
+    const double intervals = std::ceil(path_length / spacing);
+    if (!(intervals <= MAX_CHAIN_INTERVALS)) {
+        throw std::invalid_argument(
+            std::string(what) + " / chain spacing = " + format_double(intervals)
+            + " disk-chain intervals, above the limit of " + format_double(MAX_CHAIN_INTERVALS)
+            + " (shorten the motion or use a larger tool radius).");
+    }
+    return std::max(minimum, static_cast<int>(intervals));
+}
+
+} // namespace
+
 void Stock2::subtract_disk(double cx, double cy, double radius)
 {
     // Guarded BEFORE the difference below: a guard that fires after the model has
@@ -167,13 +225,14 @@ void Stock2::subtract_point_chain(const std::vector<std::pair<double, double>>& 
 void Stock2::subtract_capsule(double x0, double y0, double x1, double y1, double radius)
 {
     // Finiteness here is not only about exact injection: the chain SIZING below
-    // divides the segment length by the spacing, so a non-finite endpoint leaves
-    // the chain count `n` an int cast of a non-finite quotient -- meaningless, and
-    // unbounded in the wrong direction. Measured pre-guard, this was the WORST of
-    // the six unguarded doors and wore two faces: subtract_capsule(1, +Inf, 2, 2,
-    // 0.5) filled `centers` until the OS killed the interpreter (SIGKILL; the
-    // pytest process died with exit 137), while subtract_capsule(+Inf, 1, 2, 2,
-    // 0.5) merely leaked the exact number type's RuntimeError.
+    // divides the segment length by the spacing, and the cast of that quotient to
+    // int saturates rather than raising. Measured, the split is by VALUE CLASS and
+    // is symmetric in the four coordinates: a NaN endpoint makes the quotient NaN
+    // and the cast 0, so n = 1 and the FT injection raises promptly; a +/-Inf
+    // endpoint makes the quotient infinite and the cast INT_MAX, so the chain fill
+    // asks for 34.4 GB and the process is SIGKILLed (the pytest process died with
+    // exit 137). Finiteness alone does NOT close the second door -- a large FINITE
+    // ratio saturates identically -- which is what chain_intervals is for.
     require_finite(x0, "x0");
     require_finite(y0, "y0");
     require_finite(x1, "x1");
@@ -192,7 +251,7 @@ void Stock2::subtract_capsule(double x0, double y0, double x1, double y1, double
     // sets the (certified, under-covering) construction density.
     const double len = std::sqrt(len_sq);
     const double spacing = 2.0 * radius * std::sqrt(CHAIN_SLACK_FRACTION);
-    const int n = std::max(1, static_cast<int>(std::ceil(len / spacing)));
+    const int n = chain_intervals(len, spacing, 1, "capsule length");
     std::vector<std::pair<double, double>> centers;
     centers.reserve(n + 1);
     for (int i = 0; i <= n; ++i) {
@@ -206,8 +265,8 @@ void Stock2::subtract_arc_sweep(double cx, double cy, double sx, double sy,
                                 double ex, double ey, bool cw, double tool_radius)
 {
     // Same contract as subtract_capsule, over the six arc coordinates: exact
-    // injection downstream, and a finite guide radius so the arc-length / spacing
-    // chain count stays bounded.
+    // injection downstream, and a real guide circle. Finiteness does NOT bound the
+    // chain count -- chain_intervals does that, separately, below.
     require_finite(cx, "cx");
     require_finite(cy, "cy");
     require_finite(sx, "sx");
@@ -232,7 +291,7 @@ void Stock2::subtract_arc_sweep(double cx, double cy, double sx, double sy,
     // because consecutive centers are closer along the chord than the arc).
     const double spacing = 2.0 * tool_radius * std::sqrt(CHAIN_SLACK_FRACTION);
     const double arc_len = guide_r * sweep;
-    const int n = std::max(4, static_cast<int>(std::ceil(arc_len / spacing)));
+    const int n = chain_intervals(arc_len, spacing, 4, "arc length");
 
     std::vector<std::pair<double, double>> centers;
     centers.reserve(n + 1);

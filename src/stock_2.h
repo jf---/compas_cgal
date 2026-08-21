@@ -50,6 +50,12 @@ GpsPolygon disk_polygon(const EPoint& center, const Epeck::FT& radius);
 // parameter and the offending value. The check runs before any Epeck::FT is
 // constructed and before any mutation of the set, so a refused call leaves the
 // stock bit-for-bit untouched.
+//
+// The two sweep methods carry a THIRD refusal, independent of the seam: a motion
+// whose disk chain would not be buildable (see MAX_CHAIN_INTERVALS in stock_2.cpp).
+// Finiteness does not bound that count -- a large finite length-to-radius ratio
+// saturates the same cast an infinite one does -- so it is guarded separately and
+// refused, never clamped.
 class Stock2 {
 public:
     // Throws std::invalid_argument naming the ring, vertex index and axis
@@ -68,14 +74,16 @@ public:
     // Remove the tool sweep along segment (x0,y0)->(x1,y1) as a certified
     // under-covering disk chain (the exact oriented capsule has irrational
     // side lines, so it is not representable in the circle-segment traits).
-    // Throws std::invalid_argument ("x0", "y0", "x1", "y1", "radius").
+    // Throws std::invalid_argument ("x0", "y0", "x1", "y1", "radius"), or on a
+    // length-to-radius ratio whose chain exceeds MAX_CHAIN_INTERVALS.
     void subtract_capsule(double x0, double y0, double x1, double y1, double radius);
 
     // Remove the tool sweep along the circular guide arc from (sx,sy) to
     // (ex,ey) about (cx,cy) — cw selects the sweep direction, start == end
     // means the full circle — as a certified under-covering disk chain.
     // Throws std::invalid_argument ("cx", "cy", "sx", "sy", "ex", "ey",
-    // "tool_radius").
+    // "tool_radius"), or on an arc-length-to-radius ratio whose chain exceeds
+    // MAX_CHAIN_INTERVALS.
     void subtract_arc_sweep(double cx, double cy, double sx, double sy,
                             double ex, double ey, bool cw, double tool_radius);
 

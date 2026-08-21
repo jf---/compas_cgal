@@ -751,3 +751,78 @@ def test_sign_mixed_radical_refuses_a_non_finite_coefficient(index, name, bad):
     args[index] = bad
     with pytest.raises(ValueError, match=rf"^{name} must be"):
         _stock_2._sign_mixed_radical(*args)
+
+
+@pytest.mark.parametrize("bad_radius", [0.0, -1.0])
+def test_subtract_disk_refuses_a_finite_non_positive_radius(bad_radius):
+    """The finite half of the radius contract -- the branch whose message this seam changed."""
+    stock = Stock2(SQUARE, [])
+    before = stock.arrangement_stats()
+    with pytest.raises(ValueError, match="^radius must be strictly positive"):
+        stock.subtract_disk(5.0, 5.0, bad_radius)
+    _assert_untouched(stock, before)
+
+
+@pytest.mark.parametrize("bad_radius", [0.0, -1.0])
+def test_subtract_capsule_refuses_a_finite_non_positive_radius(bad_radius):
+    stock = Stock2(SQUARE, [])
+    before = stock.arrangement_stats()
+    with pytest.raises(ValueError, match="^radius must be strictly positive"):
+        stock.subtract_capsule(1.0, 1.0, 2.0, 2.0, bad_radius)
+    _assert_untouched(stock, before)
+
+
+@pytest.mark.parametrize("bad_radius", [0.0, -1.0])
+def test_subtract_arc_sweep_refuses_a_finite_non_positive_tool_radius(bad_radius):
+    stock = Stock2(SQUARE, [])
+    before = stock.arrangement_stats()
+    with pytest.raises(ValueError, match="^tool_radius must be strictly positive"):
+        stock.subtract_arc_sweep(5.0, 5.0, 6.0, 5.0, 4.0, 5.0, True, bad_radius)
+    _assert_untouched(stock, before)
+
+
+# --------------------------------------------------------------------------- #
+# Chain count: finiteness is NECESSARY but not SUFFICIENT                      #
+# --------------------------------------------------------------------------- #
+#
+# The disk-chain count is `static_cast<int>(ceil(path / spacing))`, and that cast
+# SATURATES at INT_MAX instead of raising. A large FINITE ratio therefore reaches
+# the identical runaway the +/-Inf coordinates did -- ~34 GB reserved and a 2^31
+# fill loop -- without a single non-finite value crossing the seam. Both cases
+# below were measured RED as a HANG rather than a failure (bounded in a killable
+# subprocess; the details are in the task's fix report), so a regression here
+# presents as a hung suite, exactly as the non-finite cases already do.
+
+
+def test_subtract_capsule_refuses_an_unbuildable_chain():
+    """A 1e6-long move with r = 0.02: ceil(len/spacing) = 2.5e9, above the limit."""
+    stock = Stock2(SQUARE, [])
+    before = stock.arrangement_stats()
+    with pytest.raises(ValueError, match=r"^capsule length .* disk-chain intervals") as excinfo:
+        stock.subtract_capsule(0.0, 0.0, 1e6, 0.0, 0.02)
+    message = str(excinfo.value)
+    assert "2500000000" in message, message  # the ACTUAL ratio, from this test's own inputs
+    assert "above the limit of" in message, message
+    _assert_untouched(stock, before)
+
+
+def test_subtract_arc_sweep_refuses_an_unbuildable_chain():
+    """A half turn of a 1e5 guide circle with a 0.02 tool: same saturation, same refusal."""
+    stock = Stock2(SQUARE, [])
+    before = stock.arrangement_stats()
+    with pytest.raises(ValueError, match=r"^arc length .* disk-chain intervals") as excinfo:
+        stock.subtract_arc_sweep(0.0, 0.0, 1e5, 0.0, -1e5, 0.0, False, 0.02)
+    assert "above the limit of" in str(excinfo.value)
+    _assert_untouched(stock, before)
+
+
+def test_ordinary_sweeps_are_far_under_the_chain_limit():
+    """The limit is a runaway detector, not a machining policy: the suite's own
+    heaviest chains (n = 600 for this capsule, 1571 for a full arc sweep) are
+    orders of magnitude below it, and both still cut."""
+    stock = Stock2(SQUARE, [])
+    stock.subtract_capsule(2.0, 5.0, 8.0, 5.0, 0.5)  # n = 600
+    stock.subtract_arc_sweep(5.0, 5.0, 7.0, 5.0, 7.0, 5.0, True, 0.4)  # n = 1571
+    assert not stock.contains(5.0, 5.0)  # capsule axis cleared
+    assert not stock.contains(7.0, 5.0)  # guide circle cleared
+    assert stock.contains(1.0, 1.0)  # untouched corner survives
