@@ -13,6 +13,7 @@ import time
 from typing import Iterable
 
 from benchmarks.depletion import replay_depletion
+from benchmarks.exceedance import count_truly_exceeding
 from benchmarks.instrument import probe_digits
 from benchmarks.instrument import probe_size
 from benchmarks.measurement import MeasurementRecord
@@ -55,7 +56,10 @@ def run_spec(spec: PocketSpec, collect_digits: bool = True) -> MeasurementRecord
     The kernel diagnostics come from a SEPARATE untimed pass that replays the
     generated toolpath onto a fresh stock. The audit depletes a stock internally
     but discards it, and reading exact coordinates collapses the lazy filter, so
-    neither probe may run on the audit's own path.
+    neither probe may run on the audit's own path. The sampled exceedance count
+    replays a third time, also untimed and also on its own stock, for the same
+    reason: it must never be charged to `certify_seconds`, which is a measurement
+    of the certifier and not of this corpus's bookkeeping.
 
     Args:
         spec: The instance to measure.
@@ -89,6 +93,11 @@ def run_spec(spec: PocketSpec, collect_digits: bool = True) -> MeasurementRecord
     # margin could not be closed either. This is the number that decides whether
     # the certifier is usable on geometry it did not author.
     unresolved = sum(1 for op in report.operations if op.stations > 0 and not op.cap_certified and op.max_tea <= spec.tea_cap_rad)
+    # The other side of the cap question, measured OUTSIDE the timed region: the
+    # audit's `cap_violations` says how many operations could not be PROVED under
+    # the cap, which is not how many exceed it. Recording only that number is what
+    # made an improved generator read as a regression.
+    truly_exceeding = count_truly_exceeding(spec, result)
 
     final_vertices, max_digits = _diagnostic_pass(spec, result, collect_digits)
 
@@ -104,7 +113,8 @@ def run_spec(spec: PocketSpec, collect_digits: bool = True) -> MeasurementRecord
         cut_operations=report.engaged_ops,
         stations=stations,
         max_tea_deg=math.degrees(report.max_tea),
-        cap_violations=report.cap_violations,
+        uncertified=report.cap_violations,
+        truly_exceeding=truly_exceeding,
         unresolved=unresolved,
         arrangement_vertices_final=final_vertices,
         max_coordinate_digits=max_digits,

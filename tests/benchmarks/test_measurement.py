@@ -22,7 +22,8 @@ def _record() -> MeasurementRecord:
         cut_operations=90,
         stations=1200,
         max_tea_deg=187.5,
-        cap_violations=4,
+        uncertified=4,
+        truly_exceeding=1,
         unresolved=0,
         arrangement_vertices_final=900,
         max_coordinate_digits=64,
@@ -40,7 +41,8 @@ def test_failed_record_carries_the_error_and_zero_timings() -> None:
     record = MeasurementRecord.failed(name="bad", family="necks", params={"pinch": 1.0}, tool_diameter=1.0, tea_cap_deg=120.0, error="DegeneratePocketError: too narrow")
     assert record.error is not None
     assert record.certify_seconds == 0.0
-    assert record.cap_violations == 0
+    assert record.uncertified == 0
+    assert record.truly_exceeding == 0
 
 
 def test_failed_record_round_trips_through_json() -> None:
@@ -66,3 +68,17 @@ def test_from_dict_accepts_an_omitted_error_column() -> None:
     payload = _record().to_dict()
     del payload["error"]
     assert MeasurementRecord.from_dict(payload).error is None
+
+
+def test_from_dict_rejects_the_retired_conflated_column() -> None:
+    """`cap_violations` conflated "could not be certified" with "exceeds the cap".
+
+    A payload written before the split must fail at the seam rather than load with
+    both replacement columns silently reading zero -- which would restate the very
+    ambiguity the split removed, in a record that looks well formed.
+    """
+    payload = _record().to_dict()
+    payload["cap_violations"] = payload.pop("uncertified")
+    del payload["truly_exceeding"]
+    with pytest.raises(MalformedRecordError):
+        MeasurementRecord.from_dict(payload)

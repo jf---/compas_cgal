@@ -63,3 +63,16 @@ def test_run_corpus_records_a_failure_without_aborting_the_sweep() -> None:
     assert records[0].certify_seconds == 0.0
     assert records[1].error is None
     assert records[1].operations > 0
+
+
+def test_run_spec_records_both_cap_columns() -> None:
+    """The runner fills both cap columns, and they are not each other.
+
+    `uncertified` is the audit's could-not-prove count; `truly_exceeding` is the
+    sampled demonstration that the exact predicate fired. The soundness relation
+    between them holds in one direction only, which is exactly why recording a
+    single column under either name misreports the other.
+    """
+    record = run_spec(_pocket(), collect_digits=False)
+    assert record.truly_exceeding > 0
+    assert record.truly_exceeding <= record.uncertified
