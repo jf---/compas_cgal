@@ -151,13 +151,50 @@ _HALF_PLANE = Polygon(
 WALL_PROBE_HEIGHTS = (0.0, 0.1, 0.25, 0.5, 0.75)
 
 # Wall heights at which the bound is pinned from ABOVE against the closed form.
-# 0.0 is excluded on purpose and NOT as an inconvenience: a centre exactly on the
-# wall has material on the station's own row, so the swept material's bounding box
-# straddles the station and the bound saturates by construction (engagement_2.cpp,
-# component_angular_bound). That configuration is already pi-engaged, which no cap
-# in (0, pi] can certify anyway, so the saturation costs nothing -- but it is not
-# a tightness measurement and must not be read as one.
+# 0.0 is excluded because a centre exactly ON the wall is pi-engaged, which no cap
+# in (0, pi] can certify anyway -- it is not a tightness measurement and must not
+# be read as one.
 WALL_TIGHTNESS_HEIGHTS = (0.1, 0.25, 0.5, 0.75)
+
+# Orientations of the wall, in radians: 24 angles at 15 deg, including the four
+# axis-aligned ones. THE POINT OF SAMPLING 24 RATHER THAN 1 is a defect that
+# shipped and was caught in review: an earlier bound read a component's angular
+# extent off an AXIS-ALIGNED bounding box, which saturates whenever the box
+# straddles the station in both axes -- a condition that depends on where the
+# feature sits relative to the world X axis and on nothing else. Measured then:
+# the same wall at h = 0.25 was bounded tightly at the four axis-aligned
+# orientations and saturated to a full turn at 12 of 24, and the certifier refused
+# a genuinely safe 120 deg pass against a 150 deg cap purely because the wall lay
+# at 30 deg. The physics is rotation-invariant; the bound must be, and only a test
+# that varies the orientation can say so.
+WALL_ORIENTATIONS = tuple(2.0 * math.pi * k / 24 for k in range(24))
+
+# Spread the bound may show across `WALL_ORIENTATIONS` for one fixed geometry, in
+# radians. The bound is assembled from atan2 of station-relative coordinates, and
+# rotating the stock perturbs those by the rotation's own round-off (~1e-16
+# relative on coordinates of magnitude <= BLOCK_HALF_WIDTH), so a few 1e-15 rad is
+# the floor. Measured maximum over the whole (h, d) grid below: 7.1e-15. 1e-9 rad
+# leaves five decades over that while sitting six decades under the 0.18 rad
+# artefact -- and eight under the 4.18 rad saturation -- that this pin exists to
+# catch.
+ROTATION_SPREAD_TOLERANCE = 1e-9
+
+# The certifier-level wall-following pass: one tool diameter of travel alongside a
+# straight wall, at 120 deg of engagement against a 150 deg cap. The height is
+# derived, not chosen: h = r*cos(cap_engagement/2) puts the engagement at exactly
+# 120 deg. Orientations include the four that were measured REFUSED under the
+# axis-aligned bound (30, 45, 60 deg) as well as those that were not.
+WALL_PASS_LENGTH = 2.0 * TOOL_RADIUS
+WALL_PASS_CAP = math.radians(150.0)
+WALL_PASS_HEIGHT = TOOL_RADIUS * math.cos(math.radians(60.0))  # engagement 2*60 = 120 deg
+WALL_PASS_ORIENTATIONS_DEG = (0.0, 15.0, 30.0, 45.0, 60.0, 90.0, 105.0, 150.0)
+WALL_PASS_PROBES = 200
+
+# Floor on how much of the cap the wall pass must actually use before its verdict
+# means anything: 0.75 of it (the pass sits at 120 deg of 150 deg = 0.8). Without
+# it this control would degenerate into another near-zero-engagement motion, which
+# is exactly the blind spot that let a frame-dependent bound ship.
+WALL_PASS_ENGAGEMENT_FRACTION = 0.75
 
 # Clearance past a tangency, in model units (0.2r): far enough that the feature is
 # unambiguously out of contact, near enough to stay a local probe.
@@ -307,6 +344,36 @@ def _worst_run_within(stock: Stock, x0: float, y0: float, d: float, samples: int
         a = 2.0 * math.pi * i / samples
         worst = max(worst, _max_run_tea(stock, x0 + d * math.cos(a), y0 + d * math.sin(a)))
     return worst
+
+
+def _rotated_half_plane(phi: float) -> Polygon:
+    """`_HALF_PLANE` turned by *phi* about the origin.
+
+    The wall becomes the line through the origin at angle *phi* and the material
+    keeps the same side of it, so every closed form below is unchanged and the
+    only thing that varies is the feature's orientation in the world frame.
+
+    Args:
+        phi: Rotation angle in radians.
+
+    Returns:
+        A `Polygon` whose straight edge through the origin lies at angle *phi*.
+    """
+    c, s = math.cos(phi), math.sin(phi)
+    return Polygon([(c * x - s * y, s * x + c * y, 0.0) for x, y, _z in _HALF_PLANE])
+
+
+def _wall_station(phi: float, h: float) -> tuple[float, float]:
+    """Cutter centre *h* clear of the rotated wall, on the material-free side.
+
+    Args:
+        phi: Wall orientation in radians.
+        h: Distance from the wall in model units.
+
+    Returns:
+        The ``(x, y)`` cutter centre.
+    """
+    return (-h * math.sin(phi), h * math.cos(phi))
 
 
 def _half_plane_worst_run(h: float, d: float) -> float:
@@ -487,6 +554,85 @@ def test_bound_tracks_the_half_plane_closed_form(h, d):
     assert bound <= truth + HALF_PLANE_SLACK_PER_TRAVEL * d, (
         f"h={h}, d={d}: bound {bound:.6f} exceeds the closed form {truth:.6f} by {bound - truth:.6f} rad, "
         f"more than {HALF_PLANE_SLACK_PER_TRAVEL} rad per unit travel -- the bound has gone slack"
+    )
+
+
+@pytest.mark.parametrize("d", [1e-1, 1e-2, 1e-3])
+@pytest.mark.parametrize("h", WALL_TIGHTNESS_HEIGHTS)
+def test_bound_is_the_same_at_every_wall_orientation(h, d):
+    """THE FRAME PIN: turn the wall and nothing about the bound may move.
+
+    `test_bound_tracks_the_half_plane_closed_form` measures a single orientation,
+    and a bound can be tight there while being useless elsewhere -- an earlier
+    revision of `swept_run_bound` was exactly that, tight at the four axis-aligned
+    orientations and saturated at half of the rest (see `WALL_ORIENTATIONS`). The
+    geometry is identical at every angle, so the bound must be too, and the same
+    two-sided squeeze must hold at every one of them.
+
+    Measured spread across the 24 orientations: <= 7.1e-15 rad, i.e. pure double
+    round-off -- the bound reads nothing from the coordinate axes.
+    """
+    truth = _half_plane_worst_run(h, d)
+    bounds = [_swept_bound(Stock(_rotated_half_plane(phi)), *_wall_station(phi, h), d) for phi in WALL_ORIENTATIONS]
+
+    # Configuration pin: rotating really does preserve the geometry, so a spread of
+    # zero below is invariance and not a stock that failed to rotate.
+    for phi in (WALL_ORIENTATIONS[1], WALL_ORIENTATIONS[7]):
+        deepest = _wall_station(phi, h - d)
+        assert _max_run_tea(Stock(_rotated_half_plane(phi)), *deepest) == pytest.approx(truth, abs=TEA_REPORTING_SLACK)
+
+    spread = max(bounds) - min(bounds)
+    assert spread <= ROTATION_SPREAD_TOLERANCE, (
+        f"h={h}, d={d}: the bound varies by {spread:.3e} rad over 24 wall orientations ({min(bounds):.6f} .. {max(bounds):.6f}) -- it is reading the world frame, not the geometry"
+    )
+    assert min(bounds) >= truth, f"h={h}, d={d}: bound {min(bounds):.6f} is BELOW the reachable run {truth:.6f} at some orientation"
+    assert max(bounds) <= truth + HALF_PLANE_SLACK_PER_TRAVEL * d, (
+        f"h={h}, d={d}: bound {max(bounds):.6f} exceeds the closed form {truth:.6f} by {max(bounds) - truth:.6f} rad at some orientation"
+    )
+
+
+@pytest.mark.parametrize("phi_deg", WALL_PASS_ORIENTATIONS_DEG)
+def test_certifier_passes_a_wall_following_motion_at_every_orientation(phi_deg):
+    """CERTIFIER-LEVEL ANTI-CAPITULATION PIN: an ordinary wall-following pass certifies.
+
+    The bound's tightness pins measure the bound; this measures what the bound is
+    FOR. A cutter running one tool diameter alongside a straight wall at 120 deg of
+    engagement, against a 150 deg cap, with the exact oracle confirming NO centre on
+    the motion violates: `certify_segment_tea` must say yes. It is the most ordinary
+    cutting motion there is, it sits at 80% of the permitted engagement rather than
+    the 1% the two green controls elsewhere in the suite sit at, and it is the
+    motion an over-conservative repair loses first.
+
+    Parametrised over orientation for the reason `WALL_ORIENTATIONS` records: this
+    exact motion was measured refused at 30, 45 and 60 deg while certifying at 0, 5,
+    15 and 90 deg, because the bound was reading an axis-aligned box. A single
+    orientation cannot see that, and the suite's other certifying motions -- zero
+    and 0.02 rad of engagement -- are too far from the cap to see it either.
+    """
+    phi = math.radians(phi_deg)
+    stock = Stock(_rotated_half_plane(phi))
+    sx, sy = _wall_station(phi, WALL_PASS_HEIGHT)
+    dx, dy = 0.5 * WALL_PASS_LENGTH * math.cos(phi), 0.5 * WALL_PASS_LENGTH * math.sin(phi)
+    start, end = (sx - dx, sy - dy), (sx + dx, sy + dy)
+
+    # 1. LIVENESS -- exact oracle only. The cutter is substantially engaged all along
+    #    the motion and NO centre on it violates, so `True` below is the right answer
+    #    and this is not a control that passes because nothing is being cut.
+    cap_ratio = 4.0 * math.sin(0.5 * WALL_PASS_CAP) ** 2
+    engaged = _half_plane_worst_run(WALL_PASS_HEIGHT, 0.0)
+    assert engaged > WALL_PASS_ENGAGEMENT_FRACTION * WALL_PASS_CAP, f"control is vacuous: {engaged:.6f} rad is not a meaningful fraction of the {WALL_PASS_CAP:.6f} rad cap"
+    for i in range(WALL_PASS_PROBES + 1):
+        t = i / WALL_PASS_PROBES
+        x, y = start[0] + t * (end[0] - start[0]), start[1] + t * (end[1] - start[1])
+        _total, run, exceeded = _stock_2.engagement_at(stock.raw, x, y, TOOL_RADIUS, cap_ratio, GAP_CLOSE_NONE)
+        assert not exceeded, f"phi={phi_deg} deg: the oracle finds the cap exceeded at ({x!r}, {y!r}) (run {run!r}) -- this motion is not a sound-certificate case"
+
+    # 2. VERDICT.
+    max_tea, certified, stations = _stock_2.certify_segment_tea(stock.raw, *start, *end, TOOL_RADIUS, WALL_PASS_CAP)
+    assert certified, (
+        f"phi={phi_deg} deg: refused a {WALL_PASS_LENGTH}-long pass alongside a straight wall at "
+        f"{math.degrees(engaged):.0f} deg engagement against a {math.degrees(WALL_PASS_CAP):.0f} deg cap, "
+        f"with 0 of {WALL_PASS_PROBES + 1} probed centres over the cap (stations={stations}, max_tea={max_tea:.6f})"
     )
 
 

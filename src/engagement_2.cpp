@@ -448,29 +448,40 @@ void engaged_arcs_zone(const Stock2& stock, double cx, double cy,
 // cannot bound the swept region below a full turn.
 constexpr double FULL_TURN = 2.0 * std::numbers::pi;
 
-// Relative slack applied wherever a double is compared or divided rather than
-// merely reported: the transfer term's travel (inflated UP) and annulus inner
-// radius (deflated DOWN), and -- scaled by r + travel -- the margin at which two
-// component boxes count as touching. Every quantity it covers comes from a
-// to_double (<= 1 ulp, 1.1e-16 relative), so 1e-12 clears the round-off by four
-// decades while costing a part in 1e12. SAFE FAILURE DIRECTION: each use enlarges
-// the bound (a bigger transfer angle, a more eager fuse), which can only force
-// extra refinement or a conservative refusal -- never a false certificate.
+// Relative slack applied wherever a double is compared, divided, or used to size
+// exact geometry rather than merely reported: the half-spacing the annulus is
+// built from (widened UP), the transfer term's numerator (UP) and denominator
+// (DOWN), and -- scaled by r + travel -- both the tangency-membership margin and
+// the margin at which two components count as touching. Every quantity it covers
+// comes from a to_double or a hypot (<= 1 ulp, 1.1e-16 relative), so 1e-12 clears
+// the round-off by four decades while costing a part in 1e12. SAFE FAILURE
+// DIRECTION: each use enlarges the bound (a wider annulus, a bigger transfer
+// angle, a more eager group, a tangency admitted rather than dropped), which can
+// only force extra refinement or a conservative refusal -- never a false
+// certificate.
 constexpr double SWEPT_BOUND_REL_SLACK = 1e-12;
 
-// Absolute angular inflation (radians) added to the assembled bound. The
-// component extent is read from atan2 of station-relative coordinates whose
-// magnitude is at most r + travel, so each corner direction carries at most a few
-// ulps of that -- under 1e-15 rad -- and the transfer term's asin adds as little
-// again. 1e-9 rad = 5.7e-8 deg clears the total by six decades and costs a part
-// in 1e9 of the cap. SAFE FAILURE DIRECTION as above.
+// Absolute angular inflation (radians), applied both to each direction span
+// before the gaps between them are measured and to the assembled bound. Every
+// direction is an atan2 of station-relative coordinates of magnitude at most
+// r + travel, so it carries a few ulps of that -- under 1e-15 rad -- and the
+// transfer term's asin adds as little again. 1e-9 rad = 5.7e-8 deg clears the
+// total by six decades and costs a part in 1e9 of the cap. SAFE FAILURE DIRECTION
+// as above: widening the spans can only shrink a gap, and a shrunken gap can only
+// enlarge the extent.
 constexpr double SWEPT_BOUND_ANGULAR_SLACK = 1e-9;
 
-// Axis-aligned box accumulated over a component's outer boundary, in coordinates
-// RELATIVE TO THE STATION. Station-relative is not cosmetic: the box is read out
-// in doubles and then turned into angles, so keeping every coordinate O(r) rather
-// than O(world position) keeps a corner direction accurate to a few ulps of the
-// tool radius no matter where in the model the stock sits.
+// Axis-aligned box over a component, in coordinates RELATIVE TO THE STATION. Used
+// ONLY to decide which components must be bounded TOGETHER (see group_touching) --
+// never to measure an angle. An earlier revision read the angular extent off this
+// box and was measurably frame-dependent: a box straddles the station in x iff the
+// component's direction range covers 90 or 270 deg and in y iff it covers 0 or
+// 180 deg, so above 90 deg of span the answer turned on where the feature happened
+// to sit relative to the world X axis. Measured: the same wall at h = 0.25 was
+// bounded tightly at the four axis-aligned orientations and saturated to a full
+// turn at 12 of 24, and the certifier refused a 120 deg pass against a 150 deg cap
+// for no reason but the wall's angle. The physics is rotation-invariant; the bound
+// now is too (component_direction_spans).
 struct Aabb {
     double xmin = std::numeric_limits<double>::infinity();
     double ymin = std::numeric_limits<double>::infinity();
@@ -485,160 +496,259 @@ struct Aabb {
         ymax = std::max(ymax, y);
     }
 
-    // Nothing was ever added -- an outer boundary with no sub-curves, which is how
-    // an unbounded component presents itself. Never a real box.
-    bool empty() const { return xmin > xmax; }
-
-    // The station (the origin of this frame) lies in the closed box. Spelled with
-    // <= on both sides so a coordinate that lands exactly on the station -- a
-    // cutter riding along a straight wall does exactly that -- saturates rather
-    // than being read as clearance.
-    bool holds_origin() const
-    {
-        return xmin <= 0.0 && 0.0 <= xmax && ymin <= 0.0 && 0.0 <= ymax;
-    }
-
-    // The two boxes come within `margin` of each other in BOTH axes -- the test
-    // that decides whether two components must be bounded together (see
-    // merge_touching_boxes).
+    // The two boxes come within `margin` of each other in BOTH axes.
     bool near(const Aabb& other, double margin) const
     {
         return xmin - margin <= other.xmax && other.xmin - margin <= xmax
                && ymin - margin <= other.ymax && other.ymin - margin <= ymax;
     }
-
-    void absorb(const Aabb& other)
-    {
-        add(other.xmin, other.ymin);
-        add(other.xmax, other.ymax);
-    }
 };
 
-// Shortest angular distance between two directions, in [0, pi].
-double angular_distance(double u, double v)
+// A closed arc of DIRECTIONS seen from the station: `extent` radians counter-
+// clockwise from `start`. One is produced per boundary sub-curve; their union over
+// a component is that component's direction range.
+struct DirSpan {
+    double start;
+    double extent;
+};
+
+// Into (-pi, pi].
+double wrap_to_pi(double a)
 {
-    const double d = std::fabs(u - v);
-    return d > std::numbers::pi ? FULL_TURN - d : d;
+    a = std::fmod(a + std::numbers::pi, FULL_TURN);
+    if (a <= 0.0) a += FULL_TURN;
+    return a - std::numbers::pi;
 }
 
-// Grow `box` to contain one boundary sub-curve, in the frame centred on
-// (station_x, station_y). The two exact coordinates are subtracted EXACTLY before
-// any to_double: the station is rational (root 0), so the CoordNT subtraction
-// meets the Sqrt_extension same-root precondition trivially and loses nothing.
-//
-// A TIGHT arc box, deliberately not CGAL's own X_monotone_curve_2::bbox(): that
-// one extends an upper arc's y_max to the whole supporting circle's top whether
-// or not the top is on the arc, which for a stock arc of the tool's own radius
-// inflates a thin annular sliver's box by up to r -- enough to swamp the bound.
-// Here the extremum is admitted only when it is actually on the arc, and THAT is
-// decided EXACTLY: an x-monotone circle sub-arc lies wholly in one half of its
-// supporting circle, so its only y-extremum beyond the endpoints is that circle's
-// top (upper arc) or bottom (lower arc), which lies on the arc iff the arc's
-// x-range spans the circle's centre -- one exact CoordNT comparison per side.
-void grow_box_with_curve(Aabb& box, const GpsXCurve& cv, const CoordNT& station_x,
-                         const CoordNT& station_y)
+// Counter-clockwise sweep from `from` to `to`, in [0, 2*pi).
+double ccw_delta(double from, double to)
 {
-    for (const GpsPoint* pt : {&cv.left(), &cv.right()})
-        box.add(CGAL::to_double(pt->x() - station_x), CGAL::to_double(pt->y() - station_y));
-    if (!cv.is_circular()) return;   // a segment's extrema ARE its endpoints
+    const double d = std::fmod(to - from, FULL_TURN);
+    return d < 0.0 ? d + FULL_TURN : d;
+}
+
+// Direction of an exact boundary point seen from the station, in (-pi, pi]. The
+// station is subtracted EXACTLY first -- it is rational (root 0), so the
+// Sqrt_extension same-root precondition holds trivially -- which keeps both
+// operands O(r) and the direction accurate to a few ulps of the tool radius
+// however far from the origin the stock sits.
+double direction_from_station(const GpsPoint& p, const CoordNT& sx, const CoordNT& sy)
+{
+    return std::atan2(CGAL::to_double(p.y() - sy), CGAL::to_double(p.x() - sx));
+}
+
+// The direction range of ONE boundary sub-curve, appended to `spans`.
+//
+// Every point of a component's boundary lies in the closed annulus, so it is at
+// least (r - travel) > 0 from the station: no sub-curve contains the station and
+// no direction below is undefined.
+//
+// THREE CASES, selected by an EXACT predicate, because the direction genuinely
+// behaves differently in each:
+//
+//   * SEGMENT. The direction is monotone along it, and the angle it subtends is
+//     strictly below pi (the whole segment stays outside the disk of radius
+//     r - travel, which caps the subtended angle at 2*acos((r-travel)/(r+travel))).
+//     So the span is the SHORT arc between the endpoint directions, unambiguously.
+//   * ARC whose supporting circle CONTAINS the station (|c - S| <= rho). The
+//     direction then winds MONOTONICALLY with travel around that circle, by an
+//     amount that can exceed pi -- the annulus's own two circles are exactly this
+//     case, with c == S. What disambiguates the span is therefore the sub-curve's
+//     ORIENTATION, not a shorter-arc rule.
+//   * ARC whose supporting circle EXCLUDES the station. Every point of that circle
+//     is seen within alpha = asin(rho / |c - S|) of the direction to its centre, so
+//     the span lies in a cone of extent 2*alpha < pi. Along the arc the direction
+//     is monotone except at the two TANGENCY points (where the line of sight
+//     touches the circle), so the span is the smallest arc containing the endpoint
+//     directions plus whichever tangency directions lie ON the arc.
+//
+// `|c - S| <= rho` is decided EXACTLY on FT: squared distance against squared
+// radius, no tolerance. Tangency MEMBERSHIP is decided in doubles with an
+// INCLUSIVE margin -- admitting a tangency that is not on the arc only widens the
+// span, while dropping one that is would narrow it, so the bias is the safe one.
+void append_curve_span(std::vector<DirSpan>& spans, const GpsXCurve& cv,
+                       const CoordNT& sx, const CoordNT& sy, double margin_scale)
+{
+    if (cv.is_linear()) {
+        const double a = direction_from_station(cv.left(), sx, sy);
+        const double b = direction_from_station(cv.right(), sx, sy);
+        const double delta = wrap_to_pi(b - a);
+        spans.push_back(delta >= 0.0 ? DirSpan{a, delta} : DirSpan{b, -delta});
+        return;
+    }
 
     const ECircle circle = cv.supporting_circle();
-    const CoordNT ox{circle.center().x()};
-    if (CGAL::compare(cv.left().x(), ox) == CGAL::LARGER) return;    // arc left of centre
-    if (CGAL::compare(cv.right().x(), ox) == CGAL::SMALLER) return;  // arc right of centre
+    const FT dx_ft = circle.center().x() - sx.a0();
+    const FT dy_ft = circle.center().y() - sy.a0();
+    const double src = direction_from_station(cv.source(), sx, sy);
+    const double dst = direction_from_station(cv.target(), sx, sy);
 
-    // Same predicate CGAL's own _is_upper() uses, spelled from the two public
-    // accessors: CCW travelling leftwards, or CW travelling rightwards, is the
-    // upper half.
-    const bool upper = (cv.orientation() == CGAL::COUNTERCLOCKWISE) != cv.is_directed_right();
-    const FT dx = circle.center().x() - station_x.a0();
-    const FT dy = circle.center().y() - station_y.a0();
+    if (CGAL::compare(dx_ft * dx_ft + dy_ft * dy_ft, circle.squared_radius()) != CGAL::LARGER) {
+        const bool ccw = cv.orientation() == CGAL::COUNTERCLOCKWISE;
+        const double from = ccw ? src : dst;
+        const double to = ccw ? dst : src;
+        spans.push_back({from, ccw_delta(from, to)});
+        return;
+    }
+
+    const double cx = CGAL::to_double(dx_ft);
+    const double cy = CGAL::to_double(dy_ft);
     const double rho = std::sqrt(CGAL::to_double(circle.squared_radius()));
-    const double dyd = CGAL::to_double(dy);
-    box.add(CGAL::to_double(dx), upper ? dyd + rho : dyd - rho);
+    const double dist = std::hypot(cx, cy);
+    const double axis = std::atan2(cy, cx);
+    const double sin_alpha = std::min(1.0, rho / dist);
+
+    double lo = wrap_to_pi(src - axis);
+    double hi = lo;
+    const double other = wrap_to_pi(dst - axis);
+    lo = std::min(lo, other);
+    hi = std::max(hi, other);
+
+    // An x-monotone circle sub-arc lies wholly in the upper or lower half of its
+    // supporting circle (CGAL's own _is_upper(), spelled from the two public
+    // accessors), and spans the x-range of its two endpoints. A tangency point is
+    // on the arc iff it satisfies both.
+    const bool upper = (cv.orientation() == CGAL::COUNTERCLOCKWISE) != cv.is_directed_right();
+    const double x_lo = CGAL::to_double(cv.left().x() - sx);
+    const double x_hi = CGAL::to_double(cv.right().x() - sx);
+    const double margin = SWEPT_BOUND_REL_SLACK * margin_scale;
+    // Tangency points sit at circle-parameter axis +/- (pi - acos(rho/|c-S|)); the
+    // matching line of sight is at axis +/- asin(rho/|c-S|).
+    const double psi = std::numbers::pi - std::acos(sin_alpha);
+    const double alpha = std::asin(sin_alpha);
+    for (const double sign : {-1.0, 1.0}) {
+        const double tx = cx + rho * std::cos(axis + sign * psi);
+        const double ty = cy + rho * std::sin(axis + sign * psi);
+        const bool on_half = upper ? (ty >= cy - margin) : (ty <= cy + margin);
+        if (!on_half || tx < x_lo - margin || tx > x_hi + margin) continue;
+        lo = std::min(lo, sign * alpha);
+        hi = std::max(hi, sign * alpha);
+    }
+    spans.push_back({axis + lo, hi - lo});
 }
 
-// Upper bound on the angular extent, seen from the station, of everything inside
-// one station-frame box -- step (4) of the derivation at swept_run_bound.
+// Angular extent of the UNION of a component group's direction spans: a full turn
+// minus its largest uncovered gap.
 //
-// A box is convex, so if the station is outside it the directions from the station
-// to the box form an arc spanned by its four CORNERS, and an extent is monotone
-// under inclusion. Hence extent(anything inside the box) <= that corner spread.
+// This is where the wrap case is settled numerically as well as topologically --
+// spans that leave no gap mean the group reaches every direction from the station,
+// and a full turn is the honest answer. It is also where the bound becomes
+// rotation-invariant: nothing here refers to a coordinate axis.
 //
-// THE WRAP CASE, decided by an inclusion rather than by topology. A component
-// that wraps the station reaches every direction from it, so it holds points on
-// opposite sides in both axes and its box MUST contain the station. Saturating
-// whenever the box holds the station therefore cannot miss a wrap -- and the
-// converse over-estimate it admits (a non-wrapping component whose box straddles
-// the station in both axes) costs nothing: such a component spans nearly a half
-// turn or more, which no cap in (0, pi] can accept once the transfer term is
-// added anyway. An empty box means the outer boundary carried no sub-curves --
-// an unbounded component -- and saturates for the same reason: nothing below a
-// full turn has been established.
-double box_angular_bound(const Aabb& box)
+// ROUNDING. Each span is widened by `slack` on both sides before the gaps are
+// measured, so every gap is UNDER-estimated and the returned extent OVER-estimated
+// -- the safe direction. A gap narrower than 2*slack is closed, which can only
+// merge two genuinely-adjacent runs into one larger claim.
+double union_extent(const std::vector<DirSpan>& spans, double slack)
 {
-    if (box.empty() || box.holds_origin()) return FULL_TURN;
+    if (spans.empty()) return 0.0;
 
-    const double corner[4] = {
-        std::atan2(box.ymin, box.xmin), std::atan2(box.ymin, box.xmax),
-        std::atan2(box.ymax, box.xmin), std::atan2(box.ymax, box.xmax),
-    };
-    double widest = 0.0;
-    for (int i = 0; i < 4; ++i)
-        for (int j = i + 1; j < 4; ++j)
-            widest = std::max(widest, angular_distance(corner[i], corner[j]));
-    return widest;
+    std::vector<std::pair<double, double>> arcs;
+    arcs.reserve(2 * spans.size());
+    for (const DirSpan& span : spans) {
+        const double extent = span.extent + 2.0 * slack;
+        if (extent >= FULL_TURN) return FULL_TURN;
+        double lo = span.start - slack;
+        lo -= FULL_TURN * std::floor(lo / FULL_TURN);   // into [0, 2*pi)
+        const double hi = lo + extent;
+        if (hi <= FULL_TURN) {
+            arcs.emplace_back(lo, hi);
+        } else {
+            arcs.emplace_back(lo, FULL_TURN);
+            arcs.emplace_back(0.0, hi - FULL_TURN);
+        }
+    }
+
+    std::sort(arcs.begin(), arcs.end());
+    double covered_to = arcs.front().second;
+    double largest_gap = 0.0;
+    for (std::size_t i = 1; i < arcs.size(); ++i) {
+        largest_gap = std::max(largest_gap, arcs[i].first - covered_to);
+        covered_to = std::max(covered_to, arcs[i].second);
+    }
+    // The seam: from the far end of the covered set back round to the first arc.
+    largest_gap = std::max(largest_gap, arcs.front().first + FULL_TURN - covered_to);
+    return largest_gap <= 0.0 ? FULL_TURN : FULL_TURN - largest_gap;
 }
 
-// Fuse every group of boxes that come within `margin` of one another, to a
-// fixpoint, and report how many independent boxes remain (compacted to the front
-// of `boxes`).
+// One connected component of the swept material, reduced to what the bound needs.
+struct SweptComponent {
+    Aabb box;                    // adjacency only -- never an angle
+    std::vector<DirSpan> spans;  // its direction range, as a union of arcs
+    bool encloses_station;       // EXACT: the station lies inside its outer boundary
+};
+
+// Read one component: its station-frame box, its boundary's direction spans, and
+// the EXACT answer to whether it encloses the station.
+//
+// THE WRAP DECISION IS A POINT-IN-REGION QUERY, not a numeric proxy. A component
+// lies inside the annulus, so it never contains the station; the station can only
+// be inside its OUTER boundary by sitting in one of its holes. Only a component
+// that HAS a hole can therefore enclose it, and for those the question is settled
+// by the same exact `Gps::oriented_side` that `Stock2::contains` uses -- the
+// annular rib, whose component is a ring around the station, lands here.
+//
+// Reading only the outer boundary is sufficient for the extent as well: with the
+// station outside that boundary every ray from it that reaches the component
+// crosses the outer boundary first, so the component's direction range is
+// contained in the boundary's; and when the station is inside it, the wrap test
+// above has already returned.
+SweptComponent read_component(const GpsPolygonWithHoles& component, const CoordNT& sx,
+                              const CoordNT& sy, double margin_scale)
+{
+    SweptComponent out;
+    out.encloses_station = false;
+    if (component.holes_begin() != component.holes_end()) {
+        Gps outline;
+        outline.insert(component.outer_boundary());
+        out.encloses_station =
+            outline.oriented_side(GpsPoint(sx.a0(), sy.a0())) == CGAL::ON_POSITIVE_SIDE;
+        if (out.encloses_station) return out;
+    }
+
+    const GpsPolygon& outer = component.outer_boundary();
+    for (auto it = outer.curves_begin(); it != outer.curves_end(); ++it) {
+        append_curve_span(out.spans, *it, sx, sy, margin_scale);
+        out.box.add(CGAL::to_double(it->left().x() - sx), CGAL::to_double(it->left().y() - sy));
+        out.box.add(CGAL::to_double(it->right().x() - sx), CGAL::to_double(it->right().y() - sy));
+    }
+    return out;
+}
+
+// Label components so that any two whose boxes come within `margin` share a label,
+// transitively (union-find).
 //
 // WHY THIS IS NOT OPTIONAL. Step (2) of the derivation needs the CONNECTED
 // components of the swept material as a POINT SET, but polygons_with_holes
 // decomposes by EDGE adjacency: two material lobes meeting at a single point --
 // two exactly tangent subtraction disks leave exactly that -- come back as two
 // polygons, while a cutter rim can pass straight through the pinch and hold ONE
-// engaged run spanning both. Taking the max over the two lobes separately would
-// then UNDER-estimate, which is the one direction this bound may never fail in.
-// Lobes that touch necessarily have overlapping boxes, so fusing on box proximity
-// cannot miss such a pair.
+// engaged run spanning both. Bounding the two lobes separately would then
+// UNDER-estimate, the one direction this bound may never fail in. The same
+// argument covers the regularization of the Gps boolean, which drops the
+// lower-dimensional contact where a run leaves the annulus. Lobes that touch
+// necessarily have overlapping boxes, so grouping on box proximity cannot miss
+// such a pair.
 //
-// The converse -- fusing two genuinely separate components whose boxes happen to
+// The converse -- grouping two genuinely separate components whose boxes happen to
 // overlap -- only enlarges the bound, and it does not arise for the shape that
-// matters: the two banks of a slot, or the two crossings of a rib, sit on
-// opposite sides of the station and their boxes are disjoint. Measured: fusing
-// changed no verdict anywhere in the suite.
-//
-// `margin` absorbs the read-out round-off so an exact touch is never missed by an
-// ulp; it is a few decades above the coordinate round-off and its direction is
-// safe, since a spurious fuse can only over-estimate.
-std::size_t merge_touching_boxes(std::vector<Aabb>& boxes, double margin)
+// matters: the two banks of a slot, or the two crossings of a rib, sit on opposite
+// sides of the station and their boxes are disjoint. Measured: grouping changed no
+// verdict anywhere in the suite.
+std::vector<std::size_t> group_touching(const std::vector<SweptComponent>& parts, double margin)
 {
-    std::size_t count = boxes.size();
-    for (std::size_t i = 0; i < count; ++i) {
-        for (std::size_t j = i + 1; j < count;) {
-            if (boxes[i].near(boxes[j], margin)) {
-                boxes[i].absorb(boxes[j]);
-                boxes[j] = boxes[--count];
-                j = i + 1;   // the grown box may now reach boxes already passed
-            } else {
-                ++j;
-            }
-        }
-    }
-    return count;
-}
-
-// Station-frame box of one connected component, read off its OUTER boundary
-// alone: the component (holes and all) lies inside that boundary.
-Aabb component_box(const GpsPolygon& outer, const CoordNT& station_x,
-                   const CoordNT& station_y)
-{
-    Aabb box;
-    for (auto it = outer.curves_begin(); it != outer.curves_end(); ++it)
-        grow_box_with_curve(box, *it, station_x, station_y);
-    return box;
+    std::vector<std::size_t> parent(parts.size());
+    for (std::size_t i = 0; i < parent.size(); ++i) parent[i] = i;
+    const auto root = [&parent](std::size_t i) {
+        while (parent[i] != i) { parent[i] = parent[parent[i]]; i = parent[i]; }
+        return i;
+    };
+    for (std::size_t i = 0; i < parts.size(); ++i)
+        for (std::size_t j = i + 1; j < parts.size(); ++j)
+            if (parts[i].box.near(parts[j].box, margin)) parent[root(j)] = root(i);
+    std::vector<std::size_t> label(parts.size());
+    for (std::size_t i = 0; i < parts.size(); ++i) label[i] = root(i);
+    return label;
 }
 
 // ----------------------------------------------------------------------------
@@ -878,28 +988,40 @@ double tea_guard(double d, double r)
 //       where ang(K) is K's angular extent seen from C. (Formally: dir_C'(run)
 //       lies inside the asin-neighbourhood of dir_C(run)  dir_C(K), and an arc
 //       contained in an arc has no greater extent.)
-//   (4) ang(K) FROM AN INCLUSION. K lies inside the axis-aligned box of its own
-//       outer boundary, taken in the station's frame, and extent is monotone
-//       under inclusion -- so the box's corner spread bounds ang(K)
-//       (component_angular_bound). The WRAP case falls out of the same inclusion:
-//       a component wrapping the station reaches every direction and so straddles
-//       it in both axes, which is exactly when the box test saturates. The
-//       annular rib (a ring around the station) and the 4.8-rad spiral rib both
-//       land there; a component clear of the station never does.
+//   (4) ang(K) FROM ITS BOUNDARY. With the station outside K's outer boundary,
+//       every ray from the station that reaches K crosses that boundary first, so
+//       dir(K) is contained in the boundary's own direction range. That range is
+//       assembled sub-curve by sub-curve (append_curve_span, three cases selected
+//       by an exact predicate) and unioned; ang(K) is a full turn minus the
+//       union's largest gap (union_extent). Nothing in it refers to a coordinate
+//       axis, so the bound is ROTATION-INVARIANT, as the geometry it measures is.
+//       The WRAP case -- the station inside K's outer boundary, i.e. in one of its
+//       holes, which is the annular rib -- is settled first and EXACTLY by
+//       Gps::oriented_side (read_component).
 //
 // EXACTNESS (docs/exactness.md). Every geometric TRUTH consumed here is exact:
 // the annulus is built from two exact circles about the exactly-injected centre,
 // `material  annulus` is an exact boolean on the stock's own Gps, the connected
 // components are that set's own polygons_with_holes decomposition, the station is
-// subtracted from every boundary coordinate EXACTLY before it is read out, and
-// the comparisons inside grow_box_with_curve are exact CoordNT predicates. What
-// is read out in doubles is a QUANTITY, not a truth -- a box and two angles -- and
-// every read-out is inflated (SWEPT_BOUND_REL_SLACK, SWEPT_BOUND_ANGULAR_SLACK),
-// by six decades over the accumulated round-off. This is the "analytic bounds are
-// not precision handling" clause, and unlike tea_growth_bound this bound IS
+// subtracted from every boundary coordinate EXACTLY before it is read out, WHETHER
+// A COMPONENT ENCLOSES THE STATION is an exact Gps::oriented_side query (the one
+// topological fact in the construction), and the case split inside
+// append_curve_span is an exact FT predicate. What is read out in doubles is a
+// QUANTITY, not a truth -- directions and two angles -- and every read-out is
+// inflated (SWEPT_BOUND_REL_SLACK, SWEPT_BOUND_ANGULAR_SLACK), by four to six
+// decades over the accumulated round-off. This is the "analytic bounds are not
+// precision handling" clause, and unlike tea_growth_bound this bound IS
 // load-bearing, so the slack is not optional decoration: it is what makes "the
 // computed number is an upper bound on the exact one" true rather than
 // approximately true.
+//
+// TWO REPRESENTATIONS OF THE SAME CAP now coexist, deliberately. The station
+// predicate enforces the cap through its exact rational chord surrogate
+// 4*sin^2(cap/2); this bound is compared against cap in RADIANS
+// (interior_run_within_cap). The two thresholds differ by ~1e-16 rad and the bound
+// carries 1e-9 rad of inflation, so the interior gate is the stricter of the two --
+// but do NOT "harmonise" them by relaxing the radian comparison toward the
+// surrogate. The safe direction is to tighten the bound, never the threshold.
 //
 // SAFE FAILURE DIRECTION, stated once for all of it: every approximation here
 // enlarges the returned bound. A bound too large forces extra refinement or a
@@ -930,11 +1052,17 @@ double swept_run_bound(const Stock2& stock, double cx, double cy,
     if (!(travel > 0.0)) return FULL_TURN;
     if (!(travel < 0.5 * tool_radius)) return FULL_TURN;
 
-    // Exact annulus about the exactly-injected station. r +/- travel are formed in
-    // FT, so the annulus radii are the exact rationals the containment argument
-    // names -- not doubles re-rounded at the seam.
+    // `travel` is itself a rounded quantity where it matters most -- certify_recursive
+    // derives it from a hypot of two coordinate differences -- so it can land a
+    // couple of ulps BELOW the half-spacing it stands for. Widen it ONCE, here, and
+    // use the widened value for both the annulus and the transfer term. That keeps
+    // the function's invariant ("every approximation enlarges the returned bound")
+    // true of the CONTAINMENT step too, where a too-narrow annulus would hide
+    // reachable material instead of over-reporting it. Everything downstream is
+    // then exact in FT: the annulus radii are the exact rationals step (1) names,
+    // not doubles re-rounded at the seam.
     const FT r_ft(tool_radius);
-    const FT hs_ft(travel);
+    const FT hs_ft = FT(travel) * FT(1.0 + SWEPT_BOUND_REL_SLACK);
     const EPoint centre(cx, cy);
     Gps annulus;
     annulus.insert(disk_polygon(centre, r_ft + hs_ft));
@@ -955,36 +1083,43 @@ double swept_run_bound(const Stock2& stock, double cx, double cy,
     if (components.empty()) return 0.0;
 
     // Step (4): the widest connected group, seen from the station. Components that
-    // touch are fused first -- polygons_with_holes splits at a point pinch that a
-    // single engaged run can cross (merge_touching_boxes).
+    // touch are grouped first -- polygons_with_holes splits at a point pinch that a
+    // single engaged run can cross (group_touching).
     const CoordNT station_x{FT(cx)};
     const CoordNT station_y{FT(cy)};
-    std::vector<Aabb> boxes;
-    boxes.reserve(components.size());
+    const double scale = tool_radius + travel;   // every station-frame coordinate is at most this
+    std::vector<SweptComponent> parts;
+    parts.reserve(components.size());
     for (const GpsPolygonWithHoles& component : components) {
-        // An unbounded component cannot be bounded by a box; it also cannot occur
-        // for a bounded stock intersected with a bounded annulus, so it is a
-        // contract breach rather than a case -- saturate rather than read a box
-        // that does not describe it.
-        if (component.is_unbounded()) return FULL_TURN;
-        boxes.push_back(component_box(component.outer_boundary(), station_x, station_y));
+        // A bounded stock intersected with a bounded annulus cannot produce an
+        // unbounded component: this is an invariant breach, not a case, so it fails
+        // loudly rather than returning the most conservative answer and hiding a
+        // real bug behind a conservative verdict.
+        if (component.is_unbounded())
+            throw std::logic_error("swept_run_bound: material ^ annulus produced an unbounded component.");
+        parts.push_back(read_component(component, station_x, station_y, scale));
+        if (parts.back().encloses_station) return FULL_TURN;   // exact wrap
     }
-    const double touch_margin = SWEPT_BOUND_REL_SLACK * (tool_radius + travel);
-    const std::size_t groups = merge_touching_boxes(boxes, touch_margin);
 
+    const std::vector<std::size_t> label = group_touching(parts, SWEPT_BOUND_REL_SLACK * scale);
     double widest = 0.0;
-    for (std::size_t i = 0; i < groups; ++i) {
-        widest = std::max(widest, box_angular_bound(boxes[i]));
+    for (std::size_t g = 0; g < parts.size(); ++g) {
+        if (label[g] != g) continue;   // not a group representative
+        std::vector<DirSpan> group;
+        for (std::size_t i = 0; i < parts.size(); ++i)
+            if (label[i] == g) group.insert(group.end(), parts[i].spans.begin(), parts[i].spans.end());
+        widest = std::max(widest, union_extent(group, SWEPT_BOUND_ANGULAR_SLACK));
         if (widest >= FULL_TURN) return FULL_TURN;   // saturated: nothing tighter to learn
     }
 
-    // Step (3)'s transfer term, 2*asin(hs / (r - hs)). travel < r/2 was
-    // established above, so the ratio is below 1 and the asin is real. The
-    // numerator is inflated and the denominator deflated, so the quotient is a
-    // certain upper bound on the exact ratio; min against 1.0 keeps asin in
-    // domain regardless.
+    // Step (3)'s transfer term, 2*asin(hs / (r - hs)), on the SAME widened half-
+    // spacing the annulus was built from. travel < r/2 was established above, so
+    // the ratio is below 1 up to that widening; the numerator is inflated and the
+    // denominator deflated, so the quotient is a certain upper bound on the exact
+    // ratio, and min against 1.0 keeps asin in domain regardless.
     const double r_inner = CGAL::to_double(r_ft - hs_ft) * (1.0 - SWEPT_BOUND_REL_SLACK);
-    const double transfer = 2.0 * std::asin(std::min(1.0, travel * (1.0 + SWEPT_BOUND_REL_SLACK) / r_inner));
+    const double hs_up = CGAL::to_double(hs_ft) * (1.0 + SWEPT_BOUND_REL_SLACK);
+    const double transfer = 2.0 * std::asin(std::min(1.0, hs_up / r_inner));
     return std::min(FULL_TURN, widest + transfer + SWEPT_BOUND_ANGULAR_SLACK);
 }
 
