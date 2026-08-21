@@ -220,9 +220,28 @@ docs = "mkdocs build --strict"
 docs = { features = ["docs"], no-default-feature = true }
 
 [tool.pixi.tasks]
-# Import probe: forces scikit-build-core's editable hook to rebuild the extensions
-# before any test runs. Lists only the modules THIS branch builds.
-_editable-rebuild = '''python -c "from compas_cgal import _stock_2, _toolpath"'''
+# Rebuilds the compiled extensions before any test runs, so no suite is ever verified
+# against a stale binary.
+#
+# The IMPORT ALONE DOES NOT REBUILD, despite the obvious reading. scikit-build-core's
+# editable finder only rebuilds on import when it was installed with `editable.rebuild`
+# on; this project does not set it and the default is off, so the generated
+# `_editable_skbc_compas_cgal.py` calls `install(..., rebuild=False, ...)` and
+# `ScikitBuildRedirectingFinder.find_spec`'s `if self.rebuild_flag and not self.rebuilt`
+# guard never fires. Measured: after `touch src/toolpath.cpp`, an import-only probe left
+# the built extension's mtime untouched and the suite ran green against the old code.
+#
+# `__loader__.rebuild()` is scikit-build-core's supported manual entry point for exactly
+# this case (see `_ScikitBuildLoaderWrapper.rebuild`, which the finder installs on every
+# redirected module): it takes the build directory's file lock and runs `cmake --build .`
+# then `cmake --install .`. That covers EVERY extension in one CMake pass, so calling it
+# on a single module is enough — the imports here just have to name modules THIS branch
+# builds, so a rename fails loudly instead of silently skipping the rebuild.
+#
+# The rebuild happens HERE, once, and not inside pytest: scripts/pytest_editable.py sets
+# SKBUILD_EDITABLE_SKIP in the pytest process, so no xdist worker can start a competing
+# CMake run.
+_editable-rebuild = '''python -c "from compas_cgal import _stock_2, _toolpath; _toolpath.__loader__.rebuild()"'''
 # scripts/pytest_editable.py sets SKBUILD_EDITABLE_SKIP and execs pytest. It is a script, not
 # inline shell, because pixi's task shell does NOT propagate a command substitution's exit
 # status to the enclosing assignment — `dir="$(failing)" && pytest` was measured to run pytest
