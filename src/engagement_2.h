@@ -79,23 +79,65 @@ struct CertifiedTea {
 // audit layer CALLS the certifier's guard instead of mirroring it. A mirrored
 // safety constant that drifts turns a conservative certifier unsound in silence.
 // REFINEMENT bound only, never a geometric decision (docs/exactness.md).
+//
+// NOT LOAD-BEARING FOR THE CERTIFICATE ANY MORE. tea_growth_bound is measurably
+// NOT an upper bound on TEA growth (tests/test_growth_bound.py falsifies it by up
+// to 24x on concave features), and the false certificates that follow are
+// committed as tests/test_false_certificate.py. The certificate's interior
+// guarantee is now swept_run_bound below; these two survive as the retired
+// lemma's record and as the certifier's retained (strictly conservative) station
+// filter -- see certify_segment_tea and engagement_2.cpp.
 double tea_growth_bound(double d, double r);
 double tea_guard(double d, double r);
+
+// EXACT SWEPT-ANNULUS BOUND -- the certificate's interior guarantee.
+//
+// Upper bound, in radians, on the largest contiguous engaged run ANY cutter
+// centre P with |P - (cx, cy)| <= travel can see against the frozen stock. Unlike
+// tea_growth_bound this bounds the run ITSELF, not its growth, so it needs no
+// premise about what an existing run does between two stations -- the premise the
+// rib witnesses break.
+//
+// The bound is `max_K ang(K) + 2*asin(travel / (tool_radius - travel))`, where K
+// ranges over the CONNECTED COMPONENTS of the material inside the annulus
+// A((cx,cy), r - travel, r + travel) and ang(K) is K's angular extent seen from
+// (cx, cy). Derivation, the exact component/wrap decision, and the safe failure
+// direction are in engagement_2.cpp.
+//
+// Returns 2*pi -- the saturated value, which forces refinement or a refusal
+// against any cap in (0, pi] -- whenever the construction cannot see the swept
+// rim (travel == 0, a degenerate annulus) or cannot bound a component below a
+// full turn (travel >= tool_radius/2, or a component wide enough to wrap the
+// centre). Returns 0.0 when no material lies in the annulus at all, which is
+// exact: no reachable centre touches anything.
+//
+// (cx, cy) must be finite, tool_radius finite and strictly positive, and travel
+// finite and non-negative; all are checked BEFORE any exact injection and raise
+// std::invalid_argument otherwise (same seam contract as engagement_at).
+double swept_run_bound(const Stock2& stock, double cx, double cy,
+                       double tool_radius, double travel);
 
 // Certify TEA(P) <= cap_radians for EVERY cutter center P on the segment
 // (x0,y0)->(x1,y1) with tool radius tool_radius, against the frozen stock.
 //
-// Method -- adaptive station sampling with a guarded exact test. Each station is
-// measured by the EXACT engagement_at cap predicate, but against a GUARDED cap:
-// at half-station-spacing d the station threshold is cap - guard(d), where guard
-// is a conservative analytic TEA-growth bound carrying an explicit integer
-// safety factor (derivation in engagement_2.cpp). Every center lies within its
-// half-spacing of the nearer measured station, so two stations both under the
-// guarded cap certify the whole span at TEA <= cap. If the guarded cap is
-// exceeded -- or is non-positive, the spacing being too coarse to admit any
-// guard -- the span is bisected; on reaching the spacing floor with the margin
-// still open the motion is reported uncertified. The verdict is thus EXACT
-// station predicates + the analytic guard ONLY; max_tea is reporting.
+// Method -- adaptive station sampling with an exact station test and an exact
+// SWEPT-ANNULUS interior bound. A span is certified iff BOTH hold at
+// half-station-spacing d:
+//
+//   (i)  INTERIOR (the soundness argument). swept_run_bound(station, r, d) <= cap
+//        at both stations. Every center on the span lies within d of the nearer
+//        station, so this bounds the largest engaged run at EVERY center, not
+//        merely at the two measured ones. This alone proves the claim.
+//   (ii) STATIONS (retained conservative filter). Each station is measured by the
+//        EXACT engagement_at cap predicate against the guarded cap cap - guard(d)
+//        with gap-closure pessimism, exactly as before.
+//
+// (ii) is NOT part of the proof -- guard() rests on tea_growth_bound, which is
+// measurably not an upper bound -- and is retained only because it can solely
+// REFUSE, never certify: it is the pre-existing path, kept alongside the new one
+// until its removal is decided separately. If either test fails the span is
+// bisected; on reaching the spacing floor with the margin still open the motion
+// is reported uncertified. max_tea stays reporting.
 //
 // BOUNDARY (docs/exactness.md, boundary doctrine): cap_radians is validated to
 // (0, pi] and converted to exact chord surrogates here, at the one declared

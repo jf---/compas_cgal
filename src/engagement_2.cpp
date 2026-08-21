@@ -4,6 +4,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
+#include <iterator>
+#include <limits>
 #include <numbers>
 #include <stdexcept>
 #include <string>
@@ -430,6 +433,215 @@ void engaged_arcs_zone(const Stock2& stock, double cx, double cy,
 }
 
 // ----------------------------------------------------------------------------
+// Task 7b: swept-annulus geometry -- the certificate's interior guarantee.
+//
+// The helpers below turn "what can the material inside an annulus subtend at its
+// centre" into a double. They are the only place in this file where a geometric
+// QUANTITY (never a geometric TRUTH) is read out in doubles for the certificate;
+// every one of them is written to over-estimate. The derivation lives at
+// swept_run_bound.
+// ----------------------------------------------------------------------------
+
+// A full turn of engaged rim (radians). Also the bound's SATURATED value: with
+// the cap contractually in (0, pi], returning this always forces refinement or a
+// conservative refusal, so it is the safe answer whenever the construction
+// cannot bound the swept region below a full turn.
+constexpr double FULL_TURN = 2.0 * std::numbers::pi;
+
+// Relative slack applied wherever a double is compared or divided rather than
+// merely reported: the transfer term's travel (inflated UP) and annulus inner
+// radius (deflated DOWN), and -- scaled by r + travel -- the margin at which two
+// component boxes count as touching. Every quantity it covers comes from a
+// to_double (<= 1 ulp, 1.1e-16 relative), so 1e-12 clears the round-off by four
+// decades while costing a part in 1e12. SAFE FAILURE DIRECTION: each use enlarges
+// the bound (a bigger transfer angle, a more eager fuse), which can only force
+// extra refinement or a conservative refusal -- never a false certificate.
+constexpr double SWEPT_BOUND_REL_SLACK = 1e-12;
+
+// Absolute angular inflation (radians) added to the assembled bound. The
+// component extent is read from atan2 of station-relative coordinates whose
+// magnitude is at most r + travel, so each corner direction carries at most a few
+// ulps of that -- under 1e-15 rad -- and the transfer term's asin adds as little
+// again. 1e-9 rad = 5.7e-8 deg clears the total by six decades and costs a part
+// in 1e9 of the cap. SAFE FAILURE DIRECTION as above.
+constexpr double SWEPT_BOUND_ANGULAR_SLACK = 1e-9;
+
+// Axis-aligned box accumulated over a component's outer boundary, in coordinates
+// RELATIVE TO THE STATION. Station-relative is not cosmetic: the box is read out
+// in doubles and then turned into angles, so keeping every coordinate O(r) rather
+// than O(world position) keeps a corner direction accurate to a few ulps of the
+// tool radius no matter where in the model the stock sits.
+struct Aabb {
+    double xmin = std::numeric_limits<double>::infinity();
+    double ymin = std::numeric_limits<double>::infinity();
+    double xmax = -std::numeric_limits<double>::infinity();
+    double ymax = -std::numeric_limits<double>::infinity();
+
+    void add(double x, double y)
+    {
+        xmin = std::min(xmin, x);
+        xmax = std::max(xmax, x);
+        ymin = std::min(ymin, y);
+        ymax = std::max(ymax, y);
+    }
+
+    // Nothing was ever added -- an outer boundary with no sub-curves, which is how
+    // an unbounded component presents itself. Never a real box.
+    bool empty() const { return xmin > xmax; }
+
+    // The station (the origin of this frame) lies in the closed box. Spelled with
+    // <= on both sides so a coordinate that lands exactly on the station -- a
+    // cutter riding along a straight wall does exactly that -- saturates rather
+    // than being read as clearance.
+    bool holds_origin() const
+    {
+        return xmin <= 0.0 && 0.0 <= xmax && ymin <= 0.0 && 0.0 <= ymax;
+    }
+
+    // The two boxes come within `margin` of each other in BOTH axes -- the test
+    // that decides whether two components must be bounded together (see
+    // merge_touching_boxes).
+    bool near(const Aabb& other, double margin) const
+    {
+        return xmin - margin <= other.xmax && other.xmin - margin <= xmax
+               && ymin - margin <= other.ymax && other.ymin - margin <= ymax;
+    }
+
+    void absorb(const Aabb& other)
+    {
+        add(other.xmin, other.ymin);
+        add(other.xmax, other.ymax);
+    }
+};
+
+// Shortest angular distance between two directions, in [0, pi].
+double angular_distance(double u, double v)
+{
+    const double d = std::fabs(u - v);
+    return d > std::numbers::pi ? FULL_TURN - d : d;
+}
+
+// Grow `box` to contain one boundary sub-curve, in the frame centred on
+// (station_x, station_y). The two exact coordinates are subtracted EXACTLY before
+// any to_double: the station is rational (root 0), so the CoordNT subtraction
+// meets the Sqrt_extension same-root precondition trivially and loses nothing.
+//
+// A TIGHT arc box, deliberately not CGAL's own X_monotone_curve_2::bbox(): that
+// one extends an upper arc's y_max to the whole supporting circle's top whether
+// or not the top is on the arc, which for a stock arc of the tool's own radius
+// inflates a thin annular sliver's box by up to r -- enough to swamp the bound.
+// Here the extremum is admitted only when it is actually on the arc, and THAT is
+// decided EXACTLY: an x-monotone circle sub-arc lies wholly in one half of its
+// supporting circle, so its only y-extremum beyond the endpoints is that circle's
+// top (upper arc) or bottom (lower arc), which lies on the arc iff the arc's
+// x-range spans the circle's centre -- one exact CoordNT comparison per side.
+void grow_box_with_curve(Aabb& box, const GpsXCurve& cv, const CoordNT& station_x,
+                         const CoordNT& station_y)
+{
+    for (const GpsPoint* pt : {&cv.left(), &cv.right()})
+        box.add(CGAL::to_double(pt->x() - station_x), CGAL::to_double(pt->y() - station_y));
+    if (!cv.is_circular()) return;   // a segment's extrema ARE its endpoints
+
+    const ECircle circle = cv.supporting_circle();
+    const CoordNT ox{circle.center().x()};
+    if (CGAL::compare(cv.left().x(), ox) == CGAL::LARGER) return;    // arc left of centre
+    if (CGAL::compare(cv.right().x(), ox) == CGAL::SMALLER) return;  // arc right of centre
+
+    // Same predicate CGAL's own _is_upper() uses, spelled from the two public
+    // accessors: CCW travelling leftwards, or CW travelling rightwards, is the
+    // upper half.
+    const bool upper = (cv.orientation() == CGAL::COUNTERCLOCKWISE) != cv.is_directed_right();
+    const FT dx = circle.center().x() - station_x.a0();
+    const FT dy = circle.center().y() - station_y.a0();
+    const double rho = std::sqrt(CGAL::to_double(circle.squared_radius()));
+    const double dyd = CGAL::to_double(dy);
+    box.add(CGAL::to_double(dx), upper ? dyd + rho : dyd - rho);
+}
+
+// Upper bound on the angular extent, seen from the station, of everything inside
+// one station-frame box -- step (4) of the derivation at swept_run_bound.
+//
+// A box is convex, so if the station is outside it the directions from the station
+// to the box form an arc spanned by its four CORNERS, and an extent is monotone
+// under inclusion. Hence extent(anything inside the box) <= that corner spread.
+//
+// THE WRAP CASE, decided by an inclusion rather than by topology. A component
+// that wraps the station reaches every direction from it, so it holds points on
+// opposite sides in both axes and its box MUST contain the station. Saturating
+// whenever the box holds the station therefore cannot miss a wrap -- and the
+// converse over-estimate it admits (a non-wrapping component whose box straddles
+// the station in both axes) costs nothing: such a component spans nearly a half
+// turn or more, which no cap in (0, pi] can accept once the transfer term is
+// added anyway. An empty box means the outer boundary carried no sub-curves --
+// an unbounded component -- and saturates for the same reason: nothing below a
+// full turn has been established.
+double box_angular_bound(const Aabb& box)
+{
+    if (box.empty() || box.holds_origin()) return FULL_TURN;
+
+    const double corner[4] = {
+        std::atan2(box.ymin, box.xmin), std::atan2(box.ymin, box.xmax),
+        std::atan2(box.ymax, box.xmin), std::atan2(box.ymax, box.xmax),
+    };
+    double widest = 0.0;
+    for (int i = 0; i < 4; ++i)
+        for (int j = i + 1; j < 4; ++j)
+            widest = std::max(widest, angular_distance(corner[i], corner[j]));
+    return widest;
+}
+
+// Fuse every group of boxes that come within `margin` of one another, to a
+// fixpoint, and report how many independent boxes remain (compacted to the front
+// of `boxes`).
+//
+// WHY THIS IS NOT OPTIONAL. Step (2) of the derivation needs the CONNECTED
+// components of the swept material as a POINT SET, but polygons_with_holes
+// decomposes by EDGE adjacency: two material lobes meeting at a single point --
+// two exactly tangent subtraction disks leave exactly that -- come back as two
+// polygons, while a cutter rim can pass straight through the pinch and hold ONE
+// engaged run spanning both. Taking the max over the two lobes separately would
+// then UNDER-estimate, which is the one direction this bound may never fail in.
+// Lobes that touch necessarily have overlapping boxes, so fusing on box proximity
+// cannot miss such a pair.
+//
+// The converse -- fusing two genuinely separate components whose boxes happen to
+// overlap -- only enlarges the bound, and it does not arise for the shape that
+// matters: the two banks of a slot, or the two crossings of a rib, sit on
+// opposite sides of the station and their boxes are disjoint. Measured: fusing
+// changed no verdict anywhere in the suite.
+//
+// `margin` absorbs the read-out round-off so an exact touch is never missed by an
+// ulp; it is a few decades above the coordinate round-off and its direction is
+// safe, since a spurious fuse can only over-estimate.
+std::size_t merge_touching_boxes(std::vector<Aabb>& boxes, double margin)
+{
+    std::size_t count = boxes.size();
+    for (std::size_t i = 0; i < count; ++i) {
+        for (std::size_t j = i + 1; j < count;) {
+            if (boxes[i].near(boxes[j], margin)) {
+                boxes[i].absorb(boxes[j]);
+                boxes[j] = boxes[--count];
+                j = i + 1;   // the grown box may now reach boxes already passed
+            } else {
+                ++j;
+            }
+        }
+    }
+    return count;
+}
+
+// Station-frame box of one connected component, read off its OUTER boundary
+// alone: the component (holes and all) lies inside that boundary.
+Aabb component_box(const GpsPolygon& outer, const CoordNT& station_x,
+                   const CoordNT& station_y)
+{
+    Aabb box;
+    for (auto it = outer.curves_begin(); it != outer.curves_end(); ++it)
+        grow_box_with_curve(box, *it, station_x, station_y);
+    return box;
+}
+
+// ----------------------------------------------------------------------------
 // Task 5: exact-station TEA cap certificate along a linear cutter motion.
 // ----------------------------------------------------------------------------
 
@@ -444,6 +656,28 @@ constexpr double STATION_FLOOR_FRACTION = 1e-3;
 // Belt-and-braces recursion bound, redundant with the spacing floor for any
 // non-degenerate segment but guaranteeing termination regardless of scale.
 constexpr int CERTIFY_MAX_DEPTH = 24;
+
+// THE INTERIOR CERTIFICATE. True only when no cutter centre on the span
+// [(x0,y0),(x1,y1)] can hold an engaged run over `cap`.
+//
+// Every centre on the span lies within `half_spacing` of the NEARER endpoint, so
+// swept_run_bound at both endpoints bounds the largest run at every centre. This
+// is the whole soundness argument, and it is a statement about the region the
+// cutter actually sweeps -- not about how a run measured at a station grows, the
+// premise a rib wrapping the rim breaks (tests/test_false_certificate.py).
+//
+// half_spacing == 0 is not a degenerate case to guard against but a complete
+// certificate on its own: the span IS the single centre (x0,y0) == (x1,y1), which
+// the caller's EXACT station predicate decides outright, with no interior to
+// bound. (swept_run_bound saturates to a full turn there -- its annulus has empty
+// interior -- so it must not be consulted.)
+bool interior_run_within_cap(const Stock2& stock, double x0, double y0, double x1,
+                             double y1, double r, double half_spacing, double cap)
+{
+    if (!(half_spacing > 0.0)) return true;
+    return swept_run_bound(stock, x0, y0, r, half_spacing) <= cap
+           && swept_run_bound(stock, x1, y1, r, half_spacing) <= cap;
+}
 
 // Certify TEA <= cap for every center on segment [(x0,y0),(x1,y1)], accumulating
 // into `acc`. INVARIANT: acc.cap_certified stays true until counter-evidence is
@@ -483,8 +717,15 @@ void certify_recursive(const Stock2& stock, double x0, double y0, double x1,
         const EngagementSample e0 = engagement_at(stock, x0, y0, r, guarded_ratio, gap_close_ratio);
         const EngagementSample e1 = engagement_at(stock, x1, y1, r, guarded_ratio, gap_close_ratio);
         acc.max_tea = std::max({acc.max_tea, e0.max_run_tea, e1.max_run_tea});
-        if (!e0.cap_exceeded && !e1.cap_exceeded)
-            return;   // both stations under the guarded cap => whole span certified
+        // The stations are the CHEAP test (a local zone query each) and the swept
+        // bound the expensive one (a boolean against the stock), so the stations
+        // are asked first: the interior bound is only ever computed for a span the
+        // pre-repair certifier would have passed. Both must hold -- (i) the
+        // interior bound IS the proof, (ii) the guarded station test is the
+        // retained conservative filter (see certify_segment_tea in the header).
+        if (!e0.cap_exceeded && !e1.cap_exceeded
+            && interior_run_within_cap(stock, x0, y0, x1, y1, r, half_spacing, cap))
+            return;   // whole span certified
     } else {
         // guard >= cap: no positive guarded cap exists at this spacing, so no
         // certification is possible here. Measure only to report max_tea (a
@@ -510,9 +751,26 @@ void certify_recursive(const Stock2& stock, double x0, double y0, double x1,
 } // namespace
 
 // Exported at file scope (declared in engagement_2.h) so the Python audit layer
-// CALLS this guard rather than mirroring it: the bound below is the only thing
-// between the guarded-station method and an unsound certificate, so it has
-// exactly one definition.
+// CALLS this guard rather than mirroring it: it has exactly one definition.
+//
+// RETIRED AS A SOUNDNESS ARGUMENT (Task 7b). This lemma is measurably NOT an
+// upper bound on TEA growth: tests/test_growth_bound.py exhibits 18
+// certificate-critical violations, by ratios up to 24x, on concave features
+// (rho > r) and on the tool sitting in its own hole (rho == r). The false
+// certificates that follow are committed as tests/test_false_certificate.py --
+// an annular RIB of the tool's own radius, the same rib opened to a 135 deg
+// sector (both stations then report NO contact at all, max_tea == 0.0, over stock
+// the cutter is 135 deg engaged in), and a SPIRAL rib whose radius merely sweeps
+// THROUGH the tool radius rather than matching it, falsely certified in 3 of 3
+// directions at stations == 1.
+//
+// The failure is not looseness. Clauses (a) and (b) below bound how an EXISTING
+// engaged run moves; a rib wrapping the rim creates engagement that grows from
+// nothing either station can see, so the premise itself does not hold and no
+// choice of safety factor repairs it. The certificate's interior guarantee is now
+// swept_run_bound, which bounds what the swept REGION can contain and needs no
+// such premise. This function and tea_guard survive as that record and as the
+// certifier's retained station filter, which can only refuse.
 //
 // Conservative bound on how far a single run's TEA can grow over a center travel
 // `d` (tool radius r, stock frozen): the factor-1 analytic lemma. Two mechanisms
@@ -588,6 +846,146 @@ constexpr int TEA_GUARD_SAFETY_FACTOR = 2;
 double tea_guard(double d, double r)
 {
     return TEA_GUARD_SAFETY_FACTOR * tea_growth_bound(d, r);
+}
+
+// ----------------------------------------------------------------------------
+// EXACT SWEPT-ANNULUS RUN BOUND -- the certificate's interior guarantee.
+//
+// Bounds the largest contiguous engaged run that ANY cutter centre C' within
+// `travel` (hs below) of the station C = (cx, cy) can see. Where the retired
+// growth lemma asked how an EXISTING run moves between two measurements, this
+// asks what the region the cutter actually sweeps is even CAPABLE of holding --
+// so it has nothing to be blind to.
+//
+//   (1) CONTAINMENT. For |C' - C| <= hs, every point x of the rim d B(C', r)
+//       obeys r - hs <= |x - C| <= r + hs by the triangle inequality. So the rim
+//       of EVERY reachable centre lies in the annulus A(C, r - hs, r + hs).
+//   (2) CONNECTIVITY. A maximal engaged run of C' is a CONNECTED arc of
+//       d B(C', r) lying in material, hence (with 1) a connected subset of
+//       material  A -- so it lies inside a single CONNECTED COMPONENT K of it.
+//       This is what keeps ordinary cutting certifiable: two banks of a slot are
+//       separate components, and no run can span both.
+//   (3) ANGULAR TRANSFER. For x on d B(C', r), the directions to x from C' and
+//       from C differ by the angle at x in triangle (C, C', x). The side opposite
+//       it is |C - C'| <= hs, the other two are r and >= r - hs (by 1), so with
+//       hs < r/2 it is the strictly shortest side and its angle the strictly
+//       smallest -- below pi/3, so certainly in [0, pi/2] where the law of sines
+//       inverts: the deviation is at most asin(hs / (r - hs)). Applying it at
+//       both ends of the run,
+//
+//         max_run(C')  <=  max_K ang(K)  +  2 * asin(hs / (r - hs))
+//
+//       where ang(K) is K's angular extent seen from C. (Formally: dir_C'(run)
+//       lies inside the asin-neighbourhood of dir_C(run)  dir_C(K), and an arc
+//       contained in an arc has no greater extent.)
+//   (4) ang(K) FROM AN INCLUSION. K lies inside the axis-aligned box of its own
+//       outer boundary, taken in the station's frame, and extent is monotone
+//       under inclusion -- so the box's corner spread bounds ang(K)
+//       (component_angular_bound). The WRAP case falls out of the same inclusion:
+//       a component wrapping the station reaches every direction and so straddles
+//       it in both axes, which is exactly when the box test saturates. The
+//       annular rib (a ring around the station) and the 4.8-rad spiral rib both
+//       land there; a component clear of the station never does.
+//
+// EXACTNESS (docs/exactness.md). Every geometric TRUTH consumed here is exact:
+// the annulus is built from two exact circles about the exactly-injected centre,
+// `material  annulus` is an exact boolean on the stock's own Gps, the connected
+// components are that set's own polygons_with_holes decomposition, the station is
+// subtracted from every boundary coordinate EXACTLY before it is read out, and
+// the comparisons inside grow_box_with_curve are exact CoordNT predicates. What
+// is read out in doubles is a QUANTITY, not a truth -- a box and two angles -- and
+// every read-out is inflated (SWEPT_BOUND_REL_SLACK, SWEPT_BOUND_ANGULAR_SLACK),
+// by six decades over the accumulated round-off. This is the "analytic bounds are
+// not precision handling" clause, and unlike tea_growth_bound this bound IS
+// load-bearing, so the slack is not optional decoration: it is what makes "the
+// computed number is an upper bound on the exact one" true rather than
+// approximately true.
+//
+// SAFE FAILURE DIRECTION, stated once for all of it: every approximation here
+// enlarges the returned bound. A bound too large forces extra refinement or a
+// conservative "uncertified" verdict. A bound too small would be a false
+// certificate -- which is precisely what the inflations forbid.
+//
+// COST. One exact boolean against the stock per call, versus the O(cutter-
+// crossings) zone query a station costs. certify_recursive therefore asks the
+// stations FIRST and reaches this only for a span that would otherwise certify.
+// ----------------------------------------------------------------------------
+double swept_run_bound(const Stock2& stock, double cx, double cy,
+                       double tool_radius, double travel)
+{
+    // Station geometry, in signature order: the same seam contract engagement_at
+    // enforces, plus `travel` -- a displacement magnitude, so negative is not a
+    // shorter motion but a nonsensical one, and it is refused rather than folded.
+    require_finite(cx, "cx");
+    require_finite(cy, "cy");
+    require_positive_radius(tool_radius, "tool_radius");
+    require_finite(travel, "travel");
+    if (!(travel >= 0.0))
+        throw std::invalid_argument("travel must be non-negative (got " + format_double(travel) + ").");
+
+    // travel == 0: the annulus has empty interior, so the construction cannot see
+    // the rim at all and 0.0 would be a lie. travel >= r/2: step (3)'s transfer
+    // term needs hs < r - hs, and step (4)'s R0 = r - hs must stay positive. Both
+    // saturate -- the honest answer for a step this construction cannot bound.
+    if (!(travel > 0.0)) return FULL_TURN;
+    if (!(travel < 0.5 * tool_radius)) return FULL_TURN;
+
+    // Exact annulus about the exactly-injected station. r +/- travel are formed in
+    // FT, so the annulus radii are the exact rationals the containment argument
+    // names -- not doubles re-rounded at the seam.
+    const FT r_ft(tool_radius);
+    const FT hs_ft(travel);
+    const EPoint centre(cx, cy);
+    Gps annulus;
+    annulus.insert(disk_polygon(centre, r_ft + hs_ft));
+    Gps inner;
+    inner.insert(disk_polygon(centre, r_ft - hs_ft));
+    annulus.difference(inner);
+
+    // The swept region's material, and its CONNECTED COMPONENTS: exactly what
+    // polygons_with_holes decomposes an exact Gps into.
+    Gps swept;
+    swept.intersection(stock.set(), annulus);
+    std::vector<GpsPolygonWithHoles> components;
+    components.reserve(swept.number_of_polygons_with_holes());
+    swept.polygons_with_holes(std::back_inserter(components));
+    // No material in the annulus: by (1) no reachable centre's rim touches
+    // anything, so the bound is exactly zero -- not the transfer term, which
+    // measures the spread of a run that does not exist.
+    if (components.empty()) return 0.0;
+
+    // Step (4): the widest connected group, seen from the station. Components that
+    // touch are fused first -- polygons_with_holes splits at a point pinch that a
+    // single engaged run can cross (merge_touching_boxes).
+    const CoordNT station_x{FT(cx)};
+    const CoordNT station_y{FT(cy)};
+    std::vector<Aabb> boxes;
+    boxes.reserve(components.size());
+    for (const GpsPolygonWithHoles& component : components) {
+        // An unbounded component cannot be bounded by a box; it also cannot occur
+        // for a bounded stock intersected with a bounded annulus, so it is a
+        // contract breach rather than a case -- saturate rather than read a box
+        // that does not describe it.
+        if (component.is_unbounded()) return FULL_TURN;
+        boxes.push_back(component_box(component.outer_boundary(), station_x, station_y));
+    }
+    const double touch_margin = SWEPT_BOUND_REL_SLACK * (tool_radius + travel);
+    const std::size_t groups = merge_touching_boxes(boxes, touch_margin);
+
+    double widest = 0.0;
+    for (std::size_t i = 0; i < groups; ++i) {
+        widest = std::max(widest, box_angular_bound(boxes[i]));
+        if (widest >= FULL_TURN) return FULL_TURN;   // saturated: nothing tighter to learn
+    }
+
+    // Step (3)'s transfer term, 2*asin(hs / (r - hs)). travel < r/2 was
+    // established above, so the ratio is below 1 and the asin is real. The
+    // numerator is inflated and the denominator deflated, so the quotient is a
+    // certain upper bound on the exact ratio; min against 1.0 keeps asin in
+    // domain regardless.
+    const double r_inner = CGAL::to_double(r_ft - hs_ft) * (1.0 - SWEPT_BOUND_REL_SLACK);
+    const double transfer = 2.0 * std::asin(std::min(1.0, travel * (1.0 + SWEPT_BOUND_REL_SLACK) / r_inner));
+    return std::min(FULL_TURN, widest + transfer + SWEPT_BOUND_ANGULAR_SLACK);
 }
 
 EngagementSample engagement_at(const Stock2& stock, double cx, double cy,
@@ -704,6 +1102,24 @@ void register_engagement(nanobind::module_& m)
     // the cap the exact station predicate then tests, never a geometric decision.
     m.def("tea_growth_bound", &tea_growth_bound, "d"_a, "r"_a);
     m.def("tea_guard", &tea_guard, "d"_a, "r"_a);
+
+    // The certificate's interior guarantee, bound through a VALIDATING lambda
+    // rather than handed to nanobind raw: cx, cy, tool_radius and travel all reach
+    // exact injection (FT) or a domain assumption (travel >= 0, checked before the
+    // annulus is built) inside swept_run_bound, and the sibling _sign_mixed_radical
+    // binding records what a binding that trusts its caller returns -- a confident
+    // answer for sqrt(-1). Exposed so the falsification harness measures the
+    // SHIPPED bound rather than a Python re-derivation of it, exactly as
+    // tea_growth_bound is.
+    m.def("swept_run_bound",
+          [](const Stock2& stock, double cx, double cy, double tool_radius, double travel) {
+              require_finite(cx, "cx");
+              require_finite(cy, "cy");
+              require_positive_radius(tool_radius, "tool_radius");
+              require_finite(travel, "travel");
+              return swept_run_bound(stock, cx, cy, tool_radius, travel);
+          },
+          "stock"_a, "cx"_a, "cy"_a, "tool_radius"_a, "travel"_a);
 
     // Test-only: exact sign of A + B*sqrt(alpha) + C*sqrt(beta) + D*sqrt(alpha*beta)
     // (returns -1/0/+1) so the cap predicate's core primitive is unit-tested
