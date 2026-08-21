@@ -164,6 +164,7 @@ nav:
       - Triangulation: examples/example_triangulation.md
   - Design Notes:
       - Exact-Kernel Discipline: exactness.md
+      - Benchmark Corpus: benchmarks.md
       - Exact Segment-Site MAT: segment_site_mat.md
       - Exact Continuous Engagement: continuous_engagement.md
       - Refutation Soundness Cross-Check: refutation_soundness_crosscheck.md
