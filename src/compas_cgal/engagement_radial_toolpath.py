@@ -4,9 +4,19 @@
 ADVANCE only. Its loop radius is whatever the straight-skeleton guide derived from
 the clearance at that station -- the largest gouge-free circle -- so where no
 advance is admissible it emits that maximal circle anyway and reports it. Measured
-on a 20x12 pocket with a 2 mm tool, that makes the worst loop engagement away from
-the chain entries nearly independent of the requested cap: 125.0 deg at a 40, a
-60, and an 80 deg cap alike.
+on a 20x12 pocket with a 2 mm tool, that pins the worst loop engagement away from
+the chain entries at 125.8 deg for a 40, a 60 and an 80 deg cap alike.
+
+READ THAT NUMBER PRECISELY: it is the worst over ALL circles away from the chain
+entries, and every circle carrying it is one the advance-only generator already
+FORCED -- refused by its own predicate and emitted with a warning because no
+shorter advance exists there. Over the circles it ACCEPTS, the same walk finds
+43.4 / 62.5 / 81.7 deg at those three caps. So the radius knob is not what stops a
+generator from claiming a cap it does not hold; that is the probe ring's job
+(`LOOP_PROBE_COUNT`). What the radius knob buys is a smaller circle where a
+maximal one is genuinely inadmissible, which converts forced circles into cutting
+ones: at a 40 deg cap it takes the forced count from 88 to 44 and the accepted
+count from 272 to 316.
 
 This module adds the missing knob. At each station the loop radius is chosen by a
 LADDER SEARCH over the same exact `cap_exceeded` predicate: the candidate radii
@@ -16,14 +26,18 @@ maximum, and the search takes the LARGEST ADMISSIBLE one.
 WHY A LADDER AND NEVER A BISECTION
 ----------------------------------
 ENGAGEMENT IS NOT MONOTONE IN THE LOOP RADIUS. Measured at one mid-path station of
-a 20x12 pocket (centre 14.0, 6.0, tool 2 mm, stock depleted as the generator would
-leave it), the peak engagement over the loop runs 36.4 deg at radius 3.499, 22.7
-deg at 4.248, and 114.5 deg at 4.998: shrinking the loop can RAISE the engagement.
-The admissible set is therefore not an up-set in the rung index, and a bisection --
-which is only correct on one -- would converge on a rung that is not the largest
-admissible one while still looking like it worked. `_largest_admissible_radius`
-consequently SCANS the ladder from the top and returns the first rung that passes,
-which is the largest admissible radius under any pass/fail pattern whatsoever.
+a 20x12 pocket (centre 14.0, 6.0, tool 2 mm, eight maximal loops swept behind it at
+a half-tool-diameter advance), the peak engagement over the loop falls to 69.2 deg
+at radius 4.148 and then RISES again as the circle shrinks further -- 72.4 deg at
+4.098, 77.0 deg at 4.048, 85.0 deg at 3.998 -- so one guide step of extra retreat
+carries the loop back over a 70 deg cap it had just met. The admissible set is
+therefore not an up-set in the rung index, and a bisection -- which is only correct
+on one -- would converge on a rung that is not the largest admissible one while
+still looking like it worked: on that state the scan returns rung 17 (radius 4.148)
+and a bisection returns rung 36 (radius 3.198), a circle nearly a millimetre
+smaller. `_largest_admissible_radius` consequently SCANS the ladder from the top
+and returns the first rung that passes, which is the largest admissible radius
+under any pass/fail pattern whatsoever.
 
 This is the second instance of the same structure in this repository: `spacing`
 does not order engagement either (`benchmarks.figure6`, "Spacing does not order
@@ -283,19 +297,18 @@ def _largest_admissible_radius(
     emission FINISHES a station, so when it complies it is taken whether or not
     there is anything left there to cut.
 
-    EVERY rung is decided at `LOOP_PROBE_ANGLES_DEG`, the advance-relative triple
-    the advance-only generator uses, and that is a MEASURED choice rather than a
-    derived one. The triple's derivation covers the maximal circle in the steady
-    regime, where the uncut material is a crescent about the advance direction; a
-    reduced circle sits inside its station's clearance disk, where material can lie
-    on any side, so the derivation does not reach it. Deciding reduced rungs on a
-    uniform 12-position ring instead was implemented and measured: on 6x4 and 10x6
-    pockets at a 40 deg cap it changed neither the emitted path nor the audited
-    over-cap count by a single circle, while generation cost rose 7x (419 ms to
-    2924 ms on a 12x8 pocket at a 40 deg cap). It was removed on that evidence. The
-    derivation gap is real and unclosed; what is measured is that on these pockets
-    it does not bind, because every circle the audit finds over the cap is one the
-    generator already reports as forced.
+    EVERY rung is decided at `LOOP_PROBE_ANGLES_DEG`, the uniform advance-phased
+    ring the advance-only generator uses. That the SAME probe set serves both the
+    maximal circle and a reduced one is now a property of the set rather than an
+    assumption about it: a reduced circle sits inside its station's clearance disk
+    where material can lie on any side, and a uniform ring makes no assumption
+    about which side that is. The triple this ring replaced did -- it looked only
+    at the advance-facing half -- and the constant's comment in
+    `compas_cgal.engagement_toolpath` records the measurement that falsified it.
+
+    Density is bounded by cost, not by belief: `LOOP_PROBE_COUNT` positions are
+    evaluated per rung, and a rung that fails is abandoned at the first refusing
+    probe, so only a rung that PASSES pays for the whole ring.
 
     The scan is also the cheap order for the common case. A cap loose enough that
     the maximal circle already complies costs one rung -- the same evaluation the
@@ -571,16 +584,17 @@ def radius_regulated_toolpath(
     function leaves untouched.
 
     The ladder is SCANNED, never bisected. Engagement is not monotone in the loop
-    radius -- measured at one mid-path station of a 20x12 pocket, the peak runs
-    36.4 deg at radius 3.499, 22.7 deg at 4.248 and 114.5 deg at 4.998 -- so the
-    admissible rungs are not an up-set and a bisection would silently return a rung
-    that is not the largest admissible one.
+    radius -- measured at one mid-path station of a 20x12 pocket, the peak falls to
+    69.2 deg at radius 4.148 and rises again to 72.4 deg at 4.098 and 85.0 deg at
+    3.998 -- so the admissible rungs are not an up-set and a bisection would
+    silently return a rung that is not the largest admissible one.
 
     WHAT THIS GUARANTEES, EXACTLY: engagement <= *tea_cap_deg*, decided by an exact
     predicate, at each EVALUATED tool position -- the loop entry point and the
-    `LOOP_PROBE_ANGLES_DEG` probes on each accepted machining circle. It is NOT a
-    continuous guarantee between evaluated positions, and it says nothing about the
-    bridge cuts, which neither generator regulates. No certificate is produced or
+    `LOOP_PROBE_ANGLES_DEG` ring on each accepted machining circle. It is NOT a
+    continuous guarantee between evaluated positions -- raising `LOOP_PROBE_COUNT`
+    narrows that gap and does not close it -- and it says nothing about the bridge
+    cuts, which neither generator regulates. No certificate is produced or
     returned.
 
     A smaller loop leaves the outer band of its station uncut, so the chain is

@@ -11,10 +11,12 @@ WHAT THIS GUARANTEES, EXACTLY
 -----------------------------
 Engagement <= `tea_cap_deg`, decided by an exact predicate, **at each evaluated
 tool position**. That is the whole claim. It is NOT a continuous guarantee
-between evaluated positions: the tool centre traverses a full circle and a bridge
-segment between one evaluated position and the next, and nothing here bounds what
-happens in between. No certificate is produced, none is returned, and no
-`MotionWitness` / `CapRefutation` object exists on this path.
+between evaluated positions: the tool centre traverses the arc between one
+evaluated position and the next, and a whole bridge segment between loops, and
+nothing here bounds what happens in between. Raising `LOOP_PROBE_COUNT` narrows
+that gap; it does not close it, and the residue is measurable rather than
+hypothetical -- see the constant's comment. No certificate is produced, none is
+returned, and no `MotionWitness` / `CapRefutation` object exists on this path.
 
 Two honest comparisons:
 
@@ -41,8 +43,8 @@ DESIGN
    integer station window for the largest admissible advance, emit the machining
    circle, deplete the stock, and continue to the chain's last station.
 3. Candidate acceptance is decided at `LOOP_PROBE_ANGLES_DEG` positions on the
-   candidate loop plus the loop's entry point (K = 4 evaluated positions), each
-   decided by the exact `cap_exceeded` boolean.
+   candidate loop plus the loop's entry point (K = ``LOOP_PROBE_COUNT + 1``
+   evaluated positions), each decided by the exact `cap_exceeded` boolean.
 
 Coverage is not part of the accept/reject rule and is not certified here: the
 advance bound `MAX_ADVANCE_TOOL_DIAMETERS` keeps consecutive machining circles
@@ -104,23 +106,64 @@ GUIDE_STEP_TOOL_DIAMETERS = 0.025
 # the unregulated generator leaves at a comparable stepover.
 MAX_ADVANCE_TOOL_DIAMETERS = 1.0
 
-# Probe angles on a candidate machining circle, in degrees, measured from the
-# ADVANCE direction (previous accepted centre -> candidate centre). With the loop
-# entry point these are the K = 4 evaluated positions per candidate.
+# Tool-centre positions evaluated on a candidate machining circle, spaced
+# uniformly around the loop from the ADVANCE direction (previous accepted centre
+# -> candidate centre). With the loop's entry point these are the
+# K = LOOP_PROBE_COUNT + 1 evaluated positions per candidate.
 #
-# Why these and not a uniform sweep: in the steady regime the material a new loop
-# meets is a crescent at its outer rim whose radial thickness varies like
-# a*cos(phi), phi measured from the advance direction. Engagement therefore peaks
-# at phi = 0 -- that is where the loop bites deepest into uncut material -- and
-# the backward half (cos phi < 0) lies inside the union of the preceding loops'
-# swept annuli. The 0 deg probe catches the peak. The +/-60 deg flanks sit on the
-# half-depth contour (cos 60 deg = 1/2): far enough off-axis to catch the two
-# regimes the idealisation misses -- guide curvature rotating the crescent off
-# the nominal advance direction, and clearance growing along the guide (corner
-# spokes) lifting fresh material onto the flanks -- while staying out of the
-# provably-swept backward half. Sampling 16+ positions per candidate would make
-# generation cost dominate without testing a materially different regime.
-LOOP_PROBE_ANGLES_DEG = (-60.0, 0.0, 60.0)
+# THE DERIVATION THIS REPLACES WAS FALSIFIED, and the falsification is recorded
+# here rather than quietly dropped. Until 2026-08-21 the probes were the triple
+# (-60, 0, +60) deg, justified by the steady-regime idealisation in which the
+# material a new loop meets is a crescent at its forward rim of radial thickness
+# ~a*cos(phi): engagement peaks at phi = 0, and "the backward half lies inside
+# the union of the preceding loops' swept annuli". The second half of that claim
+# is FALSE. Measured on a 20x12 pocket, 2 mm tool, by walking every machining
+# circle the generator ACCEPTED at 32 tool-centre positions on the same depleting
+# stock: at an 80 deg cap all 120 over-cap positions lie between -30 and -150 deg
+# from the advance direction and NONE lies at 0, +30, +60, +90 or +120; at a
+# 100 deg cap all 24 do. On the worst accepted circle at an 80 deg cap the peak is
+# 101.7 deg at -135 deg from the advance -- and re-measuring the OLD three probes
+# against that same stock returns 39.1 deg, so the gap was probe PLACEMENT, not a
+# difference between the generation and audit depletion models. The forward peak
+# is real (54 of 90 circles peak at phi = 0); it is simply not where the cap is
+# broken.
+#
+# WHY UNIFORM AND NEVER ONE-SIDED. The loaded quadrant is the TRAILING-lateral
+# one, on the side fixed by the loop's turn direction, and it mirrors exactly with
+# the milling direction: the same pocket and cap that puts 4/16/52/36/12 over-cap
+# positions in the (-30,-60,-90,-120,-150) bins under climb milling puts
+# 12/36/52/16/4 in the (+150,+120,+90,+60,+30) bins under conventional. Any
+# placement biased to one side is therefore tuned to one winding and blind on the
+# other, which is a worse failure than the one being fixed. A uniform ring is the
+# only winding-agnostic placement, and it needs no empirical tuning to stay
+# correct when the guide curves or the clearance grows.
+#
+# WHY THIS COUNT: MEASURED CONVERGENCE, NOT A DERIVATION. There is a geometric
+# floor -- consecutive evaluated positions are a chord 2*R*sin(pi/K) apart, so
+# their tool disks only overlap at all while that chord stays under 2*r, which on
+# the largest loops in this corpus (R = 4.998, r = 1.0) needs K >= 16 -- but the
+# measurement says the floor is not enough, so the shipped value is the measured
+# one. Worst engagement an INDEPENDENT 60-position walk (phase-offset by half a
+# step, so it shares no grid with the probes) finds on ACCEPTED circles, 20x12,
+# 2 mm tool:
+#
+#   K       3(old)   8     12    16    24    32    40    48
+#   cap 40   86.7  71.7  55.3  57.8  49.3  43.4  43.4  43.7
+#   cap 80  101.7  99.2  87.3  88.6  82.8  81.7  82.2  82.4
+#
+# The last count at which either column moves is 32; 40 and 48 buy nothing and
+# cost 24% more. Generation on that pocket goes 1.35 s -> 5.54 s at a 40 deg cap
+# and 0.19 s -> 0.39 s at a 120 deg cap.
+#
+# WHAT THIS DOES NOT DO. Raising the density NARROWS the sampling gap; it does
+# not close it. Nothing here bounds engagement between two evaluated positions,
+# and the residue is measurable: at a 40 deg cap on that pocket the independent
+# walk still finds 43.4 deg on a circle every probe accepted.
+LOOP_PROBE_COUNT = 32
+
+# The probe angles themselves, in degrees from the advance direction. Derived
+# from the count rather than written out so the two can never disagree.
+LOOP_PROBE_ANGLES_DEG = tuple(360.0 * index / LOOP_PROBE_COUNT for index in range(LOOP_PROBE_COUNT))
 
 # Rise of the rapid-travel plane above the cutting plane, in tool diameters, used
 # when the caller supplies no explicit clearance height. Scale-free rather than an
@@ -459,18 +502,25 @@ def _guide_chains(
 def _probe_positions(station: _GuideStation, advance: tuple[float, float]) -> list[tuple[float, float]]:
     """Tool-centre positions at which a machining circle is decided.
 
-    `LOOP_PROBE_ANGLES_DEG` rotates the *advance* direction around the loop. The
-    station's entry point is appended because it is the terminus of the bridge cut
-    that immediately precedes the loop, and it is evaluated against the stock
+    `LOOP_PROBE_ANGLES_DEG` rotates the *advance* direction around the loop, so
+    the returned ring is uniform and its phase is the direction of travel. The
+    station's entry point is prepended because it is the terminus of the bridge
+    cut that immediately precedes the loop, and it is evaluated against the stock
     BEFORE the bridge is removed -- so that probe measures the material the linking
     cut itself runs into.
+
+    SAMPLED, NOT BOUNDED. These positions are where the loop is ASKED about; the
+    answer at each of them is exact. The constant's comment carries what the
+    density buys and what it does not: a denser ring narrows the gap between two
+    evaluated positions, and nothing here closes it.
 
     Args:
         station: The station whose machining circle is being decided.
         advance: Unit direction of travel into this station.
 
     Returns:
-        The evaluated tool-centre positions, entry point first.
+        The evaluated tool-centre positions, entry point first, then the ring in
+        increasing angle from the advance direction.
     """
     dx, dy = advance
     positions = [station.entry]
@@ -754,15 +804,18 @@ def engagement_controlled_toolpath(
 
     WHAT THIS GUARANTEES, EXACTLY: engagement <= *tea_cap_deg*, decided by an exact
     predicate, at each EVALUATED tool position -- the loop entry point and the
-    `LOOP_PROBE_ANGLES_DEG` probes on each accepted machining circle. It is NOT a
+    `LOOP_PROBE_ANGLES_DEG` ring on each accepted machining circle. It is NOT a
     continuous guarantee between evaluated positions: nothing here bounds
     engagement at the tool centres that lie between two probes, along the rest of a
-    machining circle, or in the interior of a bridge cut. No certificate is
-    produced or returned. Held's trochoidal engagement control bisects a
-    floating-point engagement expression to a 1e-3 tolerance; per evaluated
-    position this is stronger, because each verdict is exact with no tolerance
-    anywhere in the accept/reject path. It is weaker than a continuous partition of
-    each motion, which is not used here.
+    machining circle, or in the interior of a bridge cut. Raising
+    `LOOP_PROBE_COUNT` NARROWS that gap and does not close it -- on a 20x12 pocket
+    with a 2 mm tool at a 40 deg cap, an independent 60-position walk still finds
+    43.4 deg on a circle every probe accepted. No certificate is produced or
+    returned. Held's trochoidal engagement control bisects a floating-point
+    engagement expression to a 1e-3 tolerance; per evaluated position this is
+    stronger, because each verdict is exact with no tolerance anywhere in the
+    accept/reject path. It is weaker than a continuous partition of each motion,
+    which is not used here.
 
     Every emitted machining circle has its evaluated positions decided, including
     each chain's entry loop, which has no advance to search. Where the predicate

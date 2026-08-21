@@ -14,9 +14,15 @@ from compas.geometry import Circle, Line, Polygon
 
 from compas_cgal.engagement import _subtract_operation, audit_toolpath_engagement
 from compas_cgal.engagement_toolpath import (
+    LOOP_PROBE_ANGLES_DEG,
+    LOOP_PROBE_COUNT,
     InvalidEngagementCapDegreesError,
     InvalidGuideResolutionError,
     NonPositiveToolDiameterError,
+    _cap_surrogate,
+    _GuideStation,
+    _probe_positions,
+    _station_is_admissible,
     engagement_controlled_toolpath,
 )
 from compas_cgal.stock import Stock
@@ -160,6 +166,128 @@ def test_only_chain_entry_loops_are_measured_above_the_cap():
 
     above_cap = {e.op_index: math.degrees(e.max_tea) for e in report.operations if e.max_tea > cap_rad}
     assert set(above_cap) == entry_indices, f"above cap {above_cap}, chain-entry loops at {sorted(entry_indices)}"
+
+
+# The pocket and station the probe-placement tests are read on: a 20x12 rectangle
+# with a 2 mm tool is the geometry the trailing-quadrant finding was measured in,
+# and a station at its centre has room for a loop on every side.
+PROBE_POCKET = Polygon([[0, 0, 0], [20, 0, 0], [20, 12, 0], [0, 12, 0]])
+PROBE_STATION_X = 10.0
+PROBE_STATION_Y = 6.0
+PROBE_LOOP_RADIUS = 4.0
+PROBE_ADVANCE = (1.0, 0.0)
+
+# The advance-relative sector left uncleared. -135 deg is where the worst accepted
+# circle's peak was measured on this pocket; the sector spans the two probes on
+# either side of it so the finding does not hang on one exact angle.
+PROBE_LOADED_SECTOR_DEG = (-150.0, -120.0)
+
+# The probe set this placement replaced: the loop entry point plus (-60, 0, +60)
+# deg from the advance direction. Kept here, and nowhere else, as the thing the
+# regression test compares against.
+SUPERSEDED_PROBE_ANGLES_DEG = (-60.0, 0.0, 60.0)
+
+
+def _probe_station():
+    """The station the probe-placement tests decide, and its unit advance."""
+    return _GuideStation(cx=PROBE_STATION_X, cy=PROBE_STATION_Y, radius=PROBE_LOOP_RADIUS, clockwise=True, tx=PROBE_ADVANCE[0], ty=PROBE_ADVANCE[1])
+
+
+def _in_loaded_sector(x: float, y: float) -> bool:
+    """Is this tool-centre position inside the sector deliberately left in material?"""
+    station = _probe_station()
+    base = math.degrees(math.atan2(PROBE_ADVANCE[1], PROBE_ADVANCE[0]))
+    relative = (math.degrees(math.atan2(y - station.cy, x - station.cx)) - base + 180.0) % 360.0 - 180.0
+    return PROBE_LOADED_SECTOR_DEG[0] <= relative <= PROBE_LOADED_SECTOR_DEG[1]
+
+
+def _stock_loaded_only_in_the_trailing_sector():
+    """Stock cleared at every evaluated position except those in the trailing sector.
+
+    Built by subtracting the tool disk AT each probe position that is to be clear,
+    which is exact: the tool centred there then sees precisely the disk that was
+    removed, so its engagement is zero and cannot depend on how finely anything was
+    sampled. The positions inside `PROBE_LOADED_SECTOR_DEG` are left untouched, so a
+    tool centred on one of them is still buried in the pocket's own material.
+    """
+    stock = Stock(PROBE_POCKET)
+    station = _probe_station()
+    for x, y in _probe_positions(station, PROBE_ADVANCE):
+        if not _in_loaded_sector(x, y):
+            stock.subtract_disk(x, y, 0.5 * TOOL_DIAMETER)
+    return stock
+
+
+def test_probe_ring_is_uniform_and_leaves_no_sector_unwatched():
+    """The placement contract: a uniform ring, phased on the advance direction.
+
+    Guards the property the trailing-quadrant finding depends on -- that no
+    direction around the loop is unwatched. A one-sided set would satisfy every
+    other test in this file and still be blind exactly where the cap is broken.
+    """
+    assert len(LOOP_PROBE_ANGLES_DEG) == LOOP_PROBE_COUNT
+    assert LOOP_PROBE_ANGLES_DEG[0] == 0.0, "the ring's phase is the advance direction"
+
+    step = 360.0 / LOOP_PROBE_COUNT
+    gaps = [LOOP_PROBE_ANGLES_DEG[i + 1] - LOOP_PROBE_ANGLES_DEG[i] for i in range(LOOP_PROBE_COUNT - 1)]
+    assert all(gap == step for gap in gaps), f"ring is not uniform: {sorted(set(gaps))}"
+    assert 360.0 - LOOP_PROBE_ANGLES_DEG[-1] == step, "the wrap-around gap must match the others"
+
+    # Every one of the eight 45 deg sectors of the loop carries at least one probe,
+    # so neither turn direction has an unwatched side. The superseded triple
+    # occupies three sectors of the eight, all of them forward of the advance.
+    watched = {int(angle // 45.0) for angle in LOOP_PROBE_ANGLES_DEG}
+    assert watched == set(range(8)), f"sectors watched: {sorted(watched)}"
+    superseded = {int(angle % 360.0 // 45.0) for angle in SUPERSEDED_PROBE_ANGLES_DEG}
+    assert len(superseded) < len(watched), f"the superseded triple was supposed to leave sectors unwatched, but covers {sorted(superseded)}"
+
+
+def test_every_probe_lies_on_the_loop_and_the_entry_comes_first():
+    station = _probe_station()
+    positions = _probe_positions(station, PROBE_ADVANCE)
+
+    assert len(positions) == LOOP_PROBE_COUNT + 1, "entry point plus the ring"
+    assert positions[0] == station.entry, "the bridge terminus is evaluated first"
+    for x, y in positions:
+        assert math.isclose(math.hypot(x - station.cx, y - station.cy), station.radius, rel_tol=1e-12)
+
+
+def test_a_trailing_quadrant_load_is_refused_where_the_superseded_triple_accepted_it():
+    """THE PIN: material behind the advance direction breaks the cap, and is seen.
+
+    The placement this replaced looked only at the loop's entry point and
+    (-60, 0, +60) deg from the advance, on the reasoning that the backward half of
+    a loop lies inside the swept annuli of the circles before it. Measured on this
+    pocket, that is false: every position an independent walk finds over an 80 deg
+    cap sits between -30 and -150 deg from the advance, and none at 0, +30, +60,
+    +90 or +120.
+
+    This encodes the finding rather than the constant. The stock is cleared at
+    every evaluated position except a sector around -135 deg. A tool centred there
+    is fully buried, so the cap is genuinely broken on this circle -- and the
+    superseded probe set, which never looks there, reports it clean.
+    """
+    station = _probe_station()
+    stock = _stock_loaded_only_in_the_trailing_sector()
+    tool_radius = 0.5 * TOOL_DIAMETER
+    cap_ratio = _cap_surrogate(CAP_DEG)
+
+    loaded = [(x, y) for x, y in _probe_positions(station, PROBE_ADVANCE) if _in_loaded_sector(x, y)]
+    assert loaded, "the fixture pins nothing unless some evaluated position is left in material"
+
+    assert not _station_is_admissible(stock, station, PROBE_ADVANCE, tool_radius, cap_ratio), "the shipped ring must refuse a circle whose trailing side is buried"
+
+    # The same stock, the same circle, decided by the probe set this replaced.
+    superseded = [station.entry]
+    for degrees in SUPERSEDED_PROBE_ANGLES_DEG:
+        angle = math.radians(degrees)
+        ux = PROBE_ADVANCE[0] * math.cos(angle) - PROBE_ADVANCE[1] * math.sin(angle)
+        uy = PROBE_ADVANCE[0] * math.sin(angle) + PROBE_ADVANCE[1] * math.cos(angle)
+        superseded.append((station.cx + station.radius * ux, station.cy + station.radius * uy))
+    from compas_cgal import _stock_2
+
+    verdicts = [_stock_2.engagement_at(stock.raw, x, y, tool_radius, cap_ratio, 0.0)[2] for x, y in superseded]
+    assert not any(verdicts), f"the superseded triple was supposed to miss this load, but fired: {verdicts}"
 
 
 def test_regulated_path_clears_everything_the_tool_can_reach():

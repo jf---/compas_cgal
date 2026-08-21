@@ -3,17 +3,23 @@
 `compas_cgal.engagement_radial_toolpath.radius_regulated_toolpath` adds a second regulated knob to
 the advance regulation of [`engagement_controlled_toolpath`](engagement_controlled_toolpath.md): the
 loop radius, chosen at each station by a **ladder search** over the same exact `cap_exceeded`
-predicate. Measured on the 20x12 reference pocket with a 2 mm tool it **cuts the number of cut
-motions demonstrated to exceed the cap by 1.9x to 3.0x** at every cap the advance regulation alone
-cannot meet, at a **10% generation cost at a loose cap** and reproducing the advance-only
-generator's operation stream byte-for-byte when the cap is loose enough that the ladder never leaves
-its top rung.
+predicate. Measured on the 20x12 reference pocket with a 2 mm tool it **cuts the number of machining
+circles shown to exceed the cap by 1.6x to 2.7x** at every cap the advance regulation alone cannot
+meet, at a **21% generation cost at a loose cap** and reproducing the advance-only generator's
+operation stream byte-for-byte when the cap is loose enough that the ladder never leaves its top
+rung.
 
 It does **not** deliver the headline the knob was expected to buy. The worst loop engagement away
-from the chain entries stays pinned at 125.0 deg for caps of 40 and 60 deg and 123.7 deg at 80 —
-the same saturation the advance-only generator shows. The section
+from the chain entries stays pinned at 125.8 deg for caps of 40, 60 and 80 deg — the same saturation
+the advance-only generator shows. The section
 [below](#the-negative-result-the-worst-loop-does-not-track-the-cap) says exactly why, with the
 decomposition that proves it, because that finding is worth more than the improvement.
+
+Over the circles the generator **accepts**, the picture is different, and it changed on 2026-08-21
+when `LOOP_PROBE_COUNT` replaced the advance-facing probe triple with a uniform ring: the worst
+accepted circle now sits within **3.4 deg of the requested cap** at every cap from 40 to 100, against
+up to 46.7 deg before. Cap tracking on accepted circles is a probe-placement result, not a radius
+result — both generators land on the same accepted-circle maximum.
 
 !!! warning "What is guaranteed, and what is not"
 
@@ -28,19 +34,27 @@ decomposition that proves it, because that finding is worth more than the improv
 ## Engagement is not monotone in the loop radius
 
 This is the finding that determines the algorithm. Measured at one mid-path station of the 20x12
-pocket (centre 14.0, 6.0; 2 mm tool; stock depleted by three maximal loops one guide step apart
-immediately behind it), the peak engagement over the loop as the radius shrinks:
+pocket (centre 14.0, 6.0; 2 mm tool; stock depleted by eight maximal loops a half tool diameter apart
+behind it), the peak engagement over the loop as the radius shrinks:
 
-| rung | 0 | 1 | 2 | ... | 7 | **8** | 9 | 10 | ... | 15 | ... | 23 |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| radius | 4.998 | 4.948 | 4.898 | | 4.648 | **4.598** | 4.548 | 4.498 | | 4.248 | | 3.848 |
-| peak TEA (deg) | 128.8 | 121.8 | 114.5 | | 69.2 | **59.3** | 67.8 | 75.5 | | 107.8 | | 150.9 |
+| rung | 0 | ... | 15 | 16 | **17** | 18 | 19 | 20 | ... | 35 | 36 | ... | 39 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| radius | 4.998 | | 4.248 | 4.198 | **4.148** | 4.098 | 4.048 | 3.998 | | 3.248 | 3.198 | | 3.048 |
+| peak TEA (deg) | 189.6 | | 89.8 | 80.1 | **69.2** | 72.4 | 77.0 | 85.0 | | 73.9 | 65.5 | | 31.2 |
 
-Engagement falls to a minimum in the middle of the ladder and **rises again below it**. At a 60 deg
-cap the admissible rungs are therefore a narrow band with refusals on both sides: the admissible set
-is **not an up-set in the rung index**, and a bisection — which is correct only on an up-set —
-reports no admissible rung at all, forcing the maximal circle at 128.8 deg where the scan finds one
-at 59.3 deg.
+Engagement falls to a local minimum at rung 17 and **rises again below it** — one guide step of extra
+retreat carries the loop back over a 70 deg cap it had just met. At that cap the admissible rungs are
+`{17}` and then `{36, 37, 38, 39}`, with rungs 18 through 35 refused **between** them: the admissible
+set is **not an up-set in the rung index**, and a bisection — which is correct only on an up-set —
+returns rung 36 (radius 3.198) where the scan returns rung 17 (radius 4.148), a circle nearly a
+millimetre larger that is equally admissible.
+
+!!! note "Re-pinned when the probe ring replaced the triple"
+
+    The state this table is measured on was rebuilt on 2026-08-21. The previous one — three loops at
+    0.5 spacing, read at a 60 deg cap — had **no** admissible rung left once the probes could see the
+    loop's trailing side, so it demonstrated nothing rather than demonstrating something false. The
+    phenomenon is unchanged and so is the conclusion; only the state exhibiting it moved.
 
 !!! danger "Never bisect the radius ladder"
 
@@ -61,7 +75,7 @@ flowchart TD
     A["guide station<br/>centre + maximal clearance radius<br/><i>statically determined</i>"] --> B{"rung 0:<br/>the maximal circle"}
     B -->|"cap not exceeded"| E["emit; station FINISHED<br/><i>identical to the advance-only generator</i>"]
     B -->|"cap exceeded"| C["scan rungs 1..39<br/><b>never bisect</b>"]
-    C --> D{"exact cap_exceeded<br/>at 4 evaluated positions<br/><i>runtime, depleting stock</i>"}
+    C --> D{"exact cap_exceeded<br/>at 33 evaluated positions<br/><i>runtime, depleting stock</i>"}
     D -->|"exceeded"| C
     D -->|"passes"| F{"Stock.contains at the<br/>loop's deepest reach<br/><i>does it still cut?</i>"}
     F -->|"cuts nothing"| C
@@ -74,7 +88,7 @@ flowchart TD
 A rung is admissible on **two** exact conditions, and both are load-bearing:
 
 1. **no evaluated position exceeds the cap** — the same `_stock_2.engagement_at` verdict, at the same
-   four positions, that the advance-only generator uses; and
+   33 positions (entry point plus a uniform 32-ring), that the advance-only generator uses; and
 2. **some evaluated position still reaches uncut stock** — `Stock.contains` at the loop's deepest
    reach, the tool centre pushed one tool radius outward along the ray from the station centre.
 
@@ -107,16 +121,34 @@ The hypothesis under test was that the worst loop engagement away from the chain
 towards the requested cap once the radius became a regulated variable. **It does not.** On the 20x12
 reference pocket, 2 mm tool, engagement measured after each chain's virgin-stock entry cut:
 
-| cap (deg) | max loop TEA, advance-only | max loop TEA, radius-regulated | exceeding cut motions, advance-only | exceeding cut motions, radius-regulated | length, advance-only | length, radius-regulated |
+| cap (deg) | max loop TEA, advance-only | max loop TEA, radius-regulated | over-cap circles, advance-only | over-cap circles, radius-regulated | length, advance-only | length, radius-regulated |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 40 | 125.01 | 125.01 | 152 | **80** | 5768.1 | 5810.7 |
-| 60 | 125.01 | 125.01 | 84 | **32** | 3106.0 | 3243.4 |
-| 80 | 125.01 | 123.68 | 48 | **16** | 2155.7 | 2343.2 |
-| 100 | 108.73 | 108.73 | 8 | 8 | 1294.5 | 1294.5 |
-| 120 | 114.53 | 114.53 | 0 | 0 | 1077.3 | 1077.3 |
+| 40 | 125.8 | 125.8 | 112 | **68** | 6519.2 | 6527.5 |
+| 60 | 125.8 | 125.8 | 52 | **24** | 3335.9 | 3348.9 |
+| 80 | 125.8 | 125.8 | 32 | **12** | 2222.9 | 2325.6 |
+| 100 | 125.8 | **100.2** | 8 | **4** | 1348.7 | 1409.7 |
+| 120 | 114.5 | 114.5 | 0 | 0 | 1057.3 | 1057.3 |
 
-"Exceeding cut motions" is `benchmarks.exceedance` — motions where the exact predicate actually
-fired, a sampled **lower bound**, never a certificate.
+Measured by replaying each path against a depleting exact stock and walking every non-entry machining
+circle at 60 tool-centre positions, phase-offset by half a step so the walk shares no grid with the
+generator's probes. "Over-cap circles" counts circles with at least one position over the cap: a
+sampled **lower bound** on exceedance, never a certificate.
+
+Restricted to the circles each generator **accepts** — dropping the ones it refused and emitted
+anyway with a warning — the same walk reads:
+
+| cap (deg) | accepted max, advance-only | accepted max, radius-regulated | *before the probe ring*, advance-only |
+| ---: | ---: | ---: | ---: |
+| 40 | 43.4 | 43.4 | 86.7 |
+| 60 | 62.5 | 62.5 | 95.1 |
+| 80 | 81.7 | 81.7 | 101.7 |
+| 100 | 99.9 | 100.2 | 108.9 |
+| 120 | 114.5 | 114.5 | 114.5 |
+
+Two things follow. The cap **is** tracked on accepted circles, to within 3.4 deg — and that came from
+the probe ring, not from the radius knob, because the two generators agree column for column. And the
+125.8 deg in the first table is entirely the **forced** regime: circles the generator refused and had
+to emit anyway.
 
 ### Why it does not track — the decomposition
 
@@ -124,30 +156,43 @@ Grouping the same paths' loops by radius shows where the 125 deg lives. At a 60 
 
 | loop radius | count | max TEA (deg) | what this is |
 | ---: | ---: | ---: | --- |
-| 4.998 | 84 | 56.39 | central chain at full clearance — **already under the cap in both generators** |
-| 2.139 | 4 | 87.43 | corner spoke, mid-clearance |
-| 0.124 | 4 | 60.62 | corner spoke, near the apex |
-| **0.057** | 4 | **125.01** | corner spoke **at the apex** — clearance barely exceeds the tool radius |
+| **0.057** | 4 | **126.0** | corner spoke **at the apex** — clearance barely exceeds the tool radius |
+| 0.516 | 4 | 107.7 | corner spoke, near the apex |
+| 1.327 | 4 | 64.7 | corner spoke, mid-clearance |
+| 2.033 | 4 | 63.9 | corner spoke, mid-clearance |
+| every other radius, 4.998 included | — | < 61.7 | central chain at full clearance and the rest of the spokes |
 
 The pinned maximum is a corner-spoke station whose clearance-derived radius is 0.057 mm against a
 1.0 mm tool radius. The loop is a near-point; the tool is wedged into the corner apex with material
 on every side. Its ladder has **one rung** — rung 1 would be negative — so there is no radius to
-choose. This is geometry, not a control failure: no loop radius exists there that engages less.
+choose. This is geometry, not a control failure: no loop radius exists there that engages less. It is
+also not a sampling artefact: a near-point loop is smaller than the probe spacing at any density, so
+no probe count reaches it either.
 
-The same decomposition shows the improvement is real where a radius choice exists: the radial
-generator emits 4.574, 3.198 and 1.822 on the corner spokes at an 80 deg cap where the advance-only
-generator emits 3.833, 2.457 and 1.080, and the exceedance count drops 48 to 16.
+The improvement is real where a radius choice does exist — the over-cap circle count drops 32 to 12
+at an 80 deg cap and 52 to 24 at 60 — it simply never touches the apex stations that set the maximum.
 
-### The residual over-cap circles are all forced ones
+### The residual over-cap circles are forced ones, or marginal
 
-Every machining circle the audit measures over the cap sits at a station's **maximal** radius — never
-at a reduced one the ladder chose. On a 6x4 pocket at a 40 deg cap the generator reports 34 forced
-circles and the audit measures exactly 34 over the cap, all at radius 0.998. On 10x6 it reports 68
-forced and the audit measures 72, all at radius 1.398 or 1.998; the four-circle gap is the audit's
-twenty stations per circle finding what the generator's four did not, which is a property the
-advance-only generator shares and which the radius knob cannot touch.
-`test_tight_cap_regulates_the_radius_and_leaves_fewer_circles_over_the_cap` asserts that no *reduced*
-circle is ever measured over the cap.
+On the small pockets every over-cap circle is a forced one. Attributing each over-cap circle to how
+the ladder chose it — forced, accepted at the maximal radius, or accepted at a reduced rung — with a
+60-position walk:
+
+| pocket, cap | forced | accepted, maximal | accepted, reduced |
+| --- | ---: | ---: | ---: |
+| 6x4, 40 deg | **34** | 0 | 0 |
+| 10x6, 40 deg | **61** | 0 | 0 |
+| 20x12, 40 deg | 44 | **20** | 0 |
+| 20x12, 60 deg | 8 | **20** | **4** |
+
+`test_tight_cap_regulates_the_radius_and_leaves_fewer_circles_over_the_cap` asserts on 6x4 that no
+*reduced* circle is measured over the cap.
+
+The 20x12 rows are the residual sampling gap, and they are **marginal**, not gross: the accepted
+circles on those rows peak at 43.4 deg against a 40 deg cap and 62.5 against 60. That is the gap
+between 33 evaluated positions and a 60-position walk, and it is what
+[`LOOP_PROBE_COUNT`](engagement_controlled_toolpath.md#why-a-uniform-ring-and-why-32-of-them)
+narrows rather than closes. Before the probe ring the same rows peaked at 86.7 and 95.1.
 
 The consequence for anyone extending this: **the radius knob is spent.** The binding constraints are
 now the guide's own clearance profile at corner apexes and the unregulated bridge cuts, whose worst
@@ -159,8 +204,8 @@ A loop smaller than its station's maximum sweeps a narrower annulus, leaving tha
 band uncut. The chain is therefore walked **repeatedly**, and a station is finished only once its
 **maximal** circle has been emitted — which is exactly what the unregulated walk does on its first
 and only pass. Tighter caps force smaller first loops, hence more passes, hence longer paths. On the
-20x12 pocket that shows as 9 plunges over 5 chains at caps of 40 to 80 against 5 at 100 and 120, and
-as the length column rising 1077 → 5811 as the cap tightens.
+20x12 pocket that shows as 9 plunges over 5 chains at caps of 40 to 100 against 5 at 120, and as the
+length column rising 1057 → 6528 as the cap tightens.
 
 Termination is **structural, not budgeted**: `_radius_ladder` offers a station only radii strictly
 above the largest it has already emitted, so each emission climbs at least one rung of a 40-rung
@@ -183,26 +228,34 @@ advances a single station and marks nothing finished.
 | Ladder spacing | `D/40 = r/20`, the advance grid's own step | `RADIUS_LADDER_STEP_TOOL_DIAMETERS` |
 | Ladder span | one tool diameter (TEA saturates at `ae = 2r`) | `RADIUS_LADDER_SPAN_TOOL_DIAMETERS` |
 | Rungs | 40 | `RADIUS_LADDER_RUNGS` |
-| Non-monotone in radius | 128.8 → 59.3 → 150.9 deg down one ladder | `test_engagement_is_not_monotone_in_the_loop_radius` |
-| Bisection is unsound here | returns no rung where the scan returns rung 8 | same test, `_bisect_rung` beside the scan |
+| Non-monotone in radius | 80.1 → 69.2 → 72.4 → 85.0 deg down four consecutive rungs | `test_engagement_is_not_monotone_in_the_loop_radius` |
+| Bisection is unsound here | returns rung 36 where the scan returns rung 17 | same test, `_bisect_rung` beside the scan |
 | Loose cap reproduces the advance-only stream | byte-identical operation signature, 6x4 at 120 deg | `test_loose_cap_reproduces_the_advance_only_generator` |
-| Exceeding cut motions, 20x12 | 152→80, 84→32, 48→16 at caps 40/60/80 | `benchmarks.exceedance.exceedance_positions` |
-| Max loop TEA, 20x12 | unchanged at 125.01 deg for caps 40 and 60 | `audit_toolpath_engagement` at 20 stations per circle |
-| Generation, 12x8, cap 120 | 77.9 ms against 70.6 ms (best of five) | `time.perf_counter` around each generator |
-| Generation, 12x8, cap 40 | 691.6 ms against 414.2 ms | same |
+| Over-cap circles, 20x12 | 112→68, 52→24, 32→12 at caps 40/60/80 | 60-position replay walk, entry cuts excluded |
+| Max loop TEA, 20x12 | unchanged at 125.8 deg for caps 40, 60 and 80 — all of it forced circles | same walk |
+| Max loop TEA over ACCEPTED circles, 20x12 | 43.4 / 62.5 / 81.7 deg at caps 40/60/80, both generators | same walk, split by the generator's own verdict |
+| Generation, 12x8, cap 120 | 271.6 ms against 223.7 ms (best of five) | `time.perf_counter` around each generator |
+| Generation, 12x8, cap 40 | 7784 ms against 1676 ms | same |
 | Coverage, 6x4 and 10x6, caps 40/60/120 | zero uncleared grid points, both generators | `Stock.contains` grid, wall distance > tool radius |
 
 ## Rejected alternatives
 
-**Uniform-ring probing for reduced circles.** The `LOOP_PROBE_ANGLES_DEG` triple is derived for a
-*maximal* circle in the steady regime, where material is a crescent about the advance direction; a
-reduced circle sits inside its station's clearance disk where material can lie on any side, so the
-derivation does not reach it. Deciding reduced rungs on a uniform 12-position ring instead was
-implemented and measured: on 6x4 and 10x6 pockets at a 40 deg cap it changed **neither the emitted
-path nor the audited over-cap count by a single circle**, while generation cost rose 7x (419 ms to
-2924 ms on a 12x8 pocket at a 40 deg cap). Removed on that evidence. The derivation gap is real and
-unclosed; what is measured is that on these pockets it does not bind, because every circle the audit
-finds over the cap is one the generator already reports as forced.
+**Uniform-ring probing for reduced circles only.** *Superseded 2026-08-21 — recorded because the
+reasoning that rejected it was sound and the conclusion was still wrong.* The argument was that the
+`(-60, 0, +60)` triple is derived for a *maximal* circle in the steady regime, so only a **reduced**
+circle — sitting inside its station's clearance disk, where material can lie on any side — needs a
+ring. Probing reduced rungs on a uniform 12-ring while maximal circles kept the triple was
+implemented and measured: on 6x4 and 10x6 pockets at a 40 deg cap it changed neither the emitted path
+nor the over-cap count by a single circle, at 7x the generation cost, and it was removed on that
+evidence.
+
+What that experiment could not see is that **the triple was wrong for the maximal circle too** — the
+half it was trusted for. On a 20x12 pocket every position over an 80 deg cap lies between -30 and
+-150 deg from the advance direction, which the triple never evaluates, so ringing only the reduced
+rungs left the blind spot exactly where the engagement was. The ring is now used for **every**
+circle; see
+[`LOOP_PROBE_COUNT`](engagement_controlled_toolpath.md#why-a-uniform-ring-and-why-32-of-them). The
+cost estimate from the old experiment held: generation on 12x8 at a 40 deg cap went 692 ms to 7784 ms.
 
 **A flag on `engagement_controlled_toolpath`.** The two generators do not differ by a parameter: this
 one emits several passes per skeleton chain and plunges and retracts once per pass. A boolean that
