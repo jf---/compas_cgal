@@ -219,3 +219,39 @@ _task9-mat-configure = "cmake -S . -B build/task9-mat -G Ninja -Dnanobind_DIR=$(
 _task9-mat-build = "cmake --build build/task9-mat --target task9_mat_compile_gate"
 _task9-mat-run = "build/task9-mat/task9_mat_compile_gate"
 task9-mat-compile-gate = { depends-on = ["_task9-mat-configure", "_task9-mat-build", "_task9-mat-run"], description = "Compile exact segment-site MAT primitives" }
+
+# ============================================================================
+# mypy — strict typing gate for the benchmark corpus
+# ============================================================================
+
+# `benchmarks` is a top-level source package deliberately excluded from the
+# wheel, and it is the one tree in this repository held to `strict` end to end.
+# `files` names it so a bare `mypy` gates exactly that; the adaptive gate passes
+# its own paths explicitly and is unaffected.
+#
+# NO python_version IS SET, and that is a gap rather than a choice: the corpus
+# targets a 3.9 runtime (`from __future__ import annotations` everywhere, no
+# runtime PEP 604 unions or PEP 585 generics), but mypy 2.x refuses any
+# --python-version below 3.10, so no type checker in this environment can hold
+# that floor. `tests/benchmarks/test_package_contract.py` holds the part that is
+# mechanically checkable -- every module defers its annotations -- and the rest
+# rests on review.
+[tool.mypy]
+strict = true
+files = ["benchmarks"]
+warn_unused_configs = true
+
+# compas ships no py.typed marker, so its symbols are untyped here. Following its
+# sources instead would be better, but its transitive imports do not check clean
+# under this configuration; the consequence is that compas geometry reads as Any
+# inside `benchmarks`, and that is a real limit of this gate, not a formality.
+[[tool.mypy.overrides]]
+module = ["compas.*"]
+ignore_missing_imports = true
+
+# compas_cgal is this repository's own source and ships no py.typed marker
+# either, but its sources ARE here, so they are followed rather than erased to
+# Any -- the benchmark corpus's use of the kernel API is genuinely checked.
+[[tool.mypy.overrides]]
+module = ["compas_cgal.*"]
+ignore_missing_imports = true

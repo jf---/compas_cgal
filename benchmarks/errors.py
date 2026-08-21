@@ -67,3 +67,11 @@ class CrowdedIslandGridError(BenchmarkError):
 
 class UnmeasurableOperationLengthError(BenchmarkError):
     """A toolpath operation's geometry is not a primitive whose length is defined."""
+
+
+class UnknownCorpusError(BenchmarkError):
+    """A corpus was requested by a name no family answers to."""
+
+
+class MissingExternalDirectoryError(BenchmarkError):
+    """The external corpus was requested without the operator-supplied profile directory."""
