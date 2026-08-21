@@ -50,6 +50,37 @@ horizontal line through the cutter centre and is therefore sensitive to precisel
 
 ## Findings this corpus produced
 
+### Figure 6 reproduced
+
+Held & Pfeiffer's Figure 6 plots path length against the engagement cap. It is the only directly
+reproducible published result in the paper, and reproducing it turns a performance claim into a
+comparison a reader can check.
+
+![Path length against engagement cap, this project's reproduction](assets/images/fig6_ours.svg){ width="100%" }
+
+/// caption
+Our reproduction on `rect_20x12`, tool ⌀2. The engagement-controlled generator's path is shorter
+everywhere the comparison exists — **0.31× at a 120° cap**. Constant spacing has no compliant
+result below a 100° cap, so those rows are marked rather than dropped.
+///
+
+### The shape diff against Held
+
+Held's absolute lengths are in his own pocket's units, so overlaying them on ours would compare
+nothing. Dividing each curve by its own length at a 160° cap removes the units and leaves the
+comparable quantity: **how steeply the path has to grow as the cap tightens.**
+
+![Normalised path-length growth, ours against Held's digitised curves](assets/images/fig6_diff_vs_held.svg){ width="100%" }
+
+/// caption
+Held's curves are **digitised by eye** from the paper's log-scale plot — no values are tabulated
+there — so they are usable for shape, not for absolute length. His paths grow **40–60×** as the cap
+tightens from 160° to 20°. Ours grows **6.8×**, and that flatness is not an advantage: it is the
+saturation above, seen from a second direction. A generator that genuinely honoured a 20° cap would
+have to work much harder, and its curve would climb like Held's.
+///
+
+
 !!! success "Engagement control shortens the path 2–5×"
 
     Figure 6 reproduction, `rect_20x12`, tool ⌀2: the engagement-controlled generator's path is
