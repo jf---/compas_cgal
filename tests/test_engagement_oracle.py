@@ -187,9 +187,11 @@ def test_growth_bound_sound() -> None:
     """The Task 5 growth-bound lemma is empirically sound at safety factor 1.
 
     As the probe centre moves by ``d``, TEA cannot change by more than the raw
-    lemma bound ``4*asin(min(1, d/2r)) + 2*acos(max(-1, 1 - d/r))``. This asserts
-    the *lemma itself* -- the certifier's own factor-2 safety margin is
-    deliberately NOT applied here (Task 5 amendment): the net verifies the bound
+    lemma bound, taken from the SHIPPED certifier (``_stock_2.tea_growth_bound``,
+    defined in ``src/engagement_2.cpp``) rather than restated here: a copy would
+    verify itself and stay green through a change that unsounds the certificate.
+    This asserts the *lemma itself* -- the certifier's own factor-2 safety margin
+    is deliberately NOT applied here (Task 5 amendment): the net verifies the bound
     is sound before any margin, so that a regression eroding the margin still
     leaves a live, un-padded bound for this test to catch. 200 random
     (centre, displacement) pairs on a cut-up stock; ``d`` in (1e-4, 0.2) keeps
@@ -207,7 +209,7 @@ def test_growth_bound_sound() -> None:
         theta = float(rng.uniform(0, 2 * math.pi))
         t0, _, _ = _stock_2.engagement_at(exact.raw, cx, cy, r, CAP_CHORD_RATIO)
         t1, _, _ = _stock_2.engagement_at(exact.raw, cx + d * math.cos(theta), cy + d * math.sin(theta), r, CAP_CHORD_RATIO)
-        bound = 4 * math.asin(min(1.0, d / (2 * r))) + 2 * math.acos(max(-1.0, 1.0 - d / r))
+        bound = _stock_2.tea_growth_bound(d, r)
         assert abs(t1 - t0) <= bound + _FLOAT_SLACK
 
 
@@ -235,11 +237,6 @@ def _merge_stock():
 def _cap_ratio(cap: float) -> float:
     """Caller-side exact squared-chord surrogate 4*sin^2(cap/2) for an angular cap/gamma."""
     return 4.0 * math.sin(cap / 2.0) ** 2
-
-
-def _growth_bound(d: float, r: float) -> float:
-    """Raw factor-1 TEA-growth lemma (mirrors tea_growth_bound in engagement_2.cpp)."""
-    return 4.0 * math.asin(min(1.0, d / (2.0 * r))) + 2.0 * math.acos(max(-1.0, 1.0 - d / r))
 
 
 def _pess_max_run(stock, cx: float, r: float, gamma_ratio: float, iters: int = 34) -> float:
@@ -271,7 +268,7 @@ def test_merge_jump_exceeds_growth_lemma() -> None:
     centre across the merge locus with raw engagement (``gap_close_ratio = 0``), the
     largest step-to-step change in ``max_run`` is an O(1) jump (~pi/2 rad: two ~pi/2
     runs fusing into one ~pi run) even though the step ``d`` is tiny. The raw lemma
-    bound ``4*asin(min(1,d/2r)) + 2*acos(max(-1,1-d/r))`` is O(sqrt d) and cannot cover
+    bound (``_stock_2.tea_growth_bound``, the shipped one) is O(sqrt d) and cannot cover
     it, so a certificate bridging stations by that lemma alone (the pre-repair Task-5
     design) is unsound across merges. The repair removes the event at the station
     (test_pessimistic_max_run_growth_is_sound;
@@ -287,7 +284,7 @@ def test_merge_jump_exceeds_growth_lemma() -> None:
     xs = [4.700 + i * step for i in range(6)]  # 4.700 .. 4.725, straddling the merge ~4.7125
     runs = [_stock_2.engagement_at(stock, cx, 5.0, r, CAP_CHORD_RATIO)[1] for cx in xs]
     max_jump = max(abs(runs[i + 1] - runs[i]) for i in range(len(runs) - 1))
-    bound = _growth_bound(step, r)
+    bound = _stock_2.tea_growth_bound(step, r)
     assert max_jump > bound  # ~1.04 rad jump dwarfs the ~0.30 rad O(sqrt d) lemma bound
     assert max_jump > math.radians(45.0)  # a genuine O(1) merge, not boundary quantisation
 
@@ -311,12 +308,12 @@ def test_pessimistic_max_run_growth_is_sound() -> None:
     stock = _merge_stock()
     r, m = _MERGE_R, _MERGE_LOCUS_X
     for d in (0.01, 0.02, 0.04):
-        gamma = min(2.0 * _growth_bound(0.5 * d, r), math.pi)  # certifier's guard for hs = d/2
+        gamma = min(_stock_2.tea_guard(0.5 * d, r), math.pi)  # certifier's guard for hs = d/2
         gr = _cap_ratio(gamma)
         a, b = m - 0.5 * d, m + 0.5 * d
         pa = _pess_max_run(stock, a, r, gr)
         pb = _pess_max_run(stock, b, r, gr)
-        bound = _growth_bound(d, r)
+        bound = _stock_2.tea_growth_bound(d, r)
         assert abs(pa - pb) <= bound + _FLOAT_SLACK  # pessimism keeps the growth lemma-bounded
         # nonvacuous: the TRUE max_run across the SAME pair exceeds the lemma (the jump absorbed)
         ta = _stock_2.engagement_at(stock, a, 5.0, r, CAP_CHORD_RATIO)[1]

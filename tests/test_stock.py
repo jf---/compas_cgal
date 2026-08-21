@@ -405,11 +405,6 @@ def _slotted_lower_half():
     return stock
 
 
-def _growth_bound(d, r):
-    """Raw factor-1 TEA-growth lemma (mirrors tea_growth_bound in engagement_2.cpp)."""
-    return 4.0 * math.asin(min(1.0, d / (2.0 * r))) + 2.0 * math.acos(max(-1.0, 1.0 - d / r))
-
-
 def test_gap_closure_flips_cap_decision():
     """Pessimism unit test: absorbing a thin void gap between two engaged runs flips
     the exact cap decision.
@@ -543,12 +538,12 @@ def test_certifier_gap_wiring_regression_guard():
     # the certifier's guarded cap lands strictly between the single-run and merged spans, so
     # gamma = 0 clears the station while gamma > 0 (gap absorbed) does not
     hs = 0.5 * (x1 - x0)
-    cap_guarded = cap - 2.0 * _growth_bound(hs, r)
+    cap_guarded = cap - _stock_2.tea_guard(hs, r)
     assert max_run < cap_guarded < math.pi
 
     # discrimination probe (no production edit): at the anchored midpoint the exact station
     # verdict flips False -> True between gap_close_ratio 0 and the certifier's guard surrogate
-    guard_ratio = cap_ratio(min(2.0 * _growth_bound(hs, r), math.pi))
+    guard_ratio = cap_ratio(min(_stock_2.tea_guard(hs, r), math.pi))
     _, _, exceeded_unwired = _stock_2.engagement_at(stock, 5.0, y, r, cap_ratio(cap_guarded), 0.0)
     _, _, exceeded_wired = _stock_2.engagement_at(stock, 5.0, y, r, cap_ratio(cap_guarded), guard_ratio)
     assert not exceeded_unwired and exceeded_wired  # only the pessimism makes the station exceed
