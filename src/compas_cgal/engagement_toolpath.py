@@ -611,7 +611,7 @@ def _machine_chain(
         station = stations[index]
         ex, ey = station.entry
         operations.append(_loop_operation(station, cut_z, path_index))
-        stock.subtract_arc_sweep(station.cx, station.cy, ex, ey, ex, ey, station.clockwise, tool_radius)
+        stock.subtract_arc_sweep_local(station.cx, station.cy, ex, ey, ex, ey, station.clockwise, tool_radius)
         if index == last:
             break
 
