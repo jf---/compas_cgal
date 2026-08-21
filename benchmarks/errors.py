@@ -51,3 +51,7 @@ class UnpinchedChannelError(BenchmarkError):
 
 class MissingSweepParameterError(BenchmarkError):
     """A record handed to a sweep analysis does not carry that sweep's parameter."""
+
+
+class InvalidDecimalsError(BenchmarkError):
+    """A coordinate precision was negative, so it names no rounding."""
