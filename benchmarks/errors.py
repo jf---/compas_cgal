@@ -63,3 +63,7 @@ class InvalidIslandCountError(BenchmarkError):
 
 class CrowdedIslandGridError(BenchmarkError):
     """An island grid leaves channels too narrow for the tool to machine."""
+
+
+class UnmeasurableOperationLengthError(BenchmarkError):
+    """A toolpath operation's geometry is not a primitive whose length is defined."""
