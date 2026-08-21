@@ -4,8 +4,10 @@
 machining circles on the measured engagement instead of a dialled-in stepover, and on the pockets
 measured so far it holds every machining circle except the unavoidable chain-entry loops at or below
 the requested cap, while cutting **55% less travel** than the unregulated generator aimed at the same
-cap. The price is generation time: **72 ms on a 12x8 pocket against 2.6 ms**, a factor of ~27 (it was
-~1000x before full-turn depletion became exact and bridge depletion stopped being a disk chain).
+cap. The price is generation time: **224 ms on a 12x8 pocket against 2.6 ms**, a factor of ~86 (it was
+~1000x before full-turn depletion became exact and bridge depletion stopped being a disk chain, and
+70.6 ms while the probe set was a 3-position triple that measurably could not see the loop's trailing
+side).
 
 The guarantee is narrow and stated exactly, because it is easy to overclaim here:
 
@@ -36,7 +38,7 @@ measuring instead of assuming.
 flowchart TD
     A["trochoidal_mat_toolpath_circular<br/>at a fine uniform pitch<br/><i>statically determined guide</i>"] --> B["ordered skeleton-chain stations<br/>centre + exact clearance radius"]
     B --> C{"bisect the integer<br/>station window"}
-    C -->|"candidate station j"| D["4 evaluated positions:<br/>entry point + 0 deg, ±60 deg"]
+    C -->|"candidate station j"| D["33 evaluated positions:<br/>entry point + a uniform 32-ring<br/>phased on the advance direction"]
     D --> E["_stock_2.engagement_at<br/><b>exact cap_exceeded</b><br/><i>decided at runtime on the depleting stock</i>"]
     E -->|"any exceeded"| C
     E -->|"all pass"| C
@@ -58,39 +60,82 @@ anywhere in the accept/reject path.
 | --- | --- | --- |
 | Advance resolution | `D/40 = r/20`, worth `<= ~7 deg` of TEA | `GUIDE_STEP_TOOL_DIAMETERS`, derivation in the constant's comment |
 | Advance bound | one tool diameter (engagement saturation **and** annulus overlap) | `MAX_ADVANCE_TOOL_DIAMETERS` |
-| Evaluated positions per circle | K = 4 (entry point, 0 deg, ±60 deg from advance) | `LOOP_PROBE_ANGLES_DEG` |
+| Evaluated positions per circle | K = 33 (entry point + a uniform 32-position ring phased on the advance) | `LOOP_PROBE_COUNT`, `LOOP_PROBE_ANGLES_DEG` |
 | Regulated circles, 10x6, cap 120 deg | max 119.5 deg outside entry loops | `audit_toolpath_engagement` |
 | Unregulated circles, same cap via `stepover=0.5` | 136.4 deg | `audit_toolpath_engagement` |
 | Motions measured above cap, 12x8 | 5 regulated vs 14 unregulated | `audit_toolpath_engagement` |
 | Cut travel, 12x8 | 411.6 vs 914.3 | sum of circle circumferences and bridge lengths |
-| Generation, 12x8, 2 mm tool | 72.4 ms, vs 2.6 ms | `time.perf_counter` around each generator; was 0.226 s before the quad capsule and 2.70-3.43 s before exact-annulus depletion |
+| Generation, 12x8, 2 mm tool, cap 120 deg | 223.7 ms, vs 2.6 ms | `time.perf_counter` around each generator, best of five; was 70.6 ms with the superseded 3-probe triple, 0.226 s before the quad capsule and 2.70-3.43 s before exact-annulus depletion |
 | Residual stock, 10x6 | 2.35% vs 2.57%, none further than 0.28 mm from a wall | 200x120 `Stock.contains` grid |
 
-### Why those four probe positions
+### Why a uniform ring, and why 32 of them
 
-In the steady regime the material a new circle meets is a crescent at its outer rim whose radial
-thickness varies like `a*cos(phi)`, with `phi` measured from the advance direction. Engagement peaks at
-`phi = 0` — that is where the circle bites deepest — and the backward half lies inside the union of the
-preceding circles' swept annuli. So:
+The probes were `(-60, 0, +60)` deg from the advance direction until 2026-08-21, on this reasoning: in
+the steady regime the material a new circle meets is a crescent at its outer rim of radial thickness
+`~a*cos(phi)`, so engagement peaks at `phi = 0` and *the backward half lies inside the union of the
+preceding circles' swept annuli*. **The second half of that is false**, and the cap was being broken
+precisely where the triple never looked.
 
-- **0 deg** catches the peak.
-- **±60 deg** sit on the half-depth contour (`cos 60 deg = 1/2`), far enough off-axis to catch the two
-  regimes the idealisation misses — guide curvature rotating the crescent off the nominal advance
-  direction, and clearance growing along the guide (corner spokes) lifting fresh material onto the
-  flanks — while staying out of the provably-swept backward half.
-- **The entry point** is the terminus of the bridge cut that precedes the circle, and it is evaluated
-  *before* the bridge is removed, so that probe measures what the linking cut itself runs into.
+Measured on a 20x12 pocket with a 2 mm tool, by walking every circle the generator **accepted** at 32
+tool-centre positions on the same depleting stock:
 
-Sampling sixteen or more positions per candidate would make generation cost dominate without probing a
-materially different regime.
+| Claim | Value | Source |
+| --- | --- | --- |
+| Over-cap positions in the advance-facing half, 80 deg cap | **0** at `0, +30, +60, +90, +120` deg | replay at 32 positions/loop, entry cuts excluded |
+| Over-cap positions in the trailing half, same run | **all 120**, between `-30` and `-150` deg | same |
+| Same, 100 deg cap | **all 24**, between `-90` and `-150` deg | same |
+| Worst accepted circle, 80 deg cap | **101.7 deg**, peaking at `-135` deg from the advance | same |
+| What the superseded triple read on that same circle | **39.1 deg** | its three probe positions re-measured against the identical stock |
+| The forward peak is still real | **54 of 90** circles peak at `phi = 0` | peak-angle histogram |
 
-!!! note "Under verification: four probes versus twenty"
+The last two rows are the point: the forward crescent is real, it is simply not where the cap breaks,
+and the gap was probe **placement** — not a difference between the generation and audit depletion
+models, which read the same stock the same way.
+
+**Why uniform and never one-sided.** The loaded quadrant is the *trailing-lateral* one, on the side
+fixed by the loop's turn direction, and it mirrors exactly with the milling direction: the same pocket
+and cap that puts `4/16/52/36/12` over-cap positions in the `(-30,-60,-90,-120,-150)` bins under climb
+milling puts `12/36/52/16/4` in the `(+150,+120,+90,+60,+30)` bins under conventional. Any placement
+biased to one side is tuned to one winding and blind on the other. Measured at equal count on climb —
+the winding it would be tuned for — a trailing-biased set still **loses** to uniform: at 12 probes it
+reads 128.8 deg where uniform reads 87.3 (80 deg cap), because refusing different candidates changes
+the path and the peak migrates. A forward-biased set at 24 probes reproduces the superseded triple's
+path **byte for byte**: all 24 of its probes sit in the region that is never over the cap.
+
+**Why 32 — measured convergence, not a derivation.** There is a geometric floor: consecutive evaluated
+positions are a chord `2*R*sin(pi/K)` apart, so their tool disks overlap at all only while that chord
+stays under `2*r`, which on the largest loops here (`R = 4.998`, `r = 1.0`) needs `K >= 16`. The
+measurement says the floor is not enough. Worst engagement an **independent** 60-position walk
+(phase-offset by half a step, so it shares no grid with the probes) finds on accepted circles:
+
+| K | 3 (old) | 8 | 12 | 16 | 24 | **32** | 40 | 48 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| cap 40 deg | 86.7 | 71.7 | 55.3 | 57.8 | 49.3 | **43.4** | 43.4 | 43.7 |
+| cap 80 deg | 101.7 | 99.2 | 87.3 | 88.6 | 82.8 | **81.7** | 82.2 | 82.4 |
+
+The last count at which either row moves is 32; 40 and 48 buy nothing and cost 24% more. Neither row is
+monotone in `K` — a denser probe set refuses different candidates, which changes the whole path — so
+this is a convergence measurement, not a trend to extrapolate.
+
+**The entry point** is evaluated in addition to the ring: it is the terminus of the bridge cut that
+precedes the circle, and it is read *before* the bridge is removed, so that probe measures what the
+linking cut itself runs into. That makes `K = 33` evaluated positions per candidate.
+
+!!! warning "A denser ring narrows the sampling gap; it does not close it"
+
+    Nothing here bounds engagement between two evaluated positions, and the residue is measured rather
+    than hypothetical: at a 40 deg cap on the 20x12 pocket the independent 60-position walk still finds
+    **43.4 deg** on a circle every probe accepted. The soundness of each individual verdict is
+    unchanged and exact; what changed is how many places the question is asked.
+
+!!! note "Under verification: the ring versus the audit"
 
     `tests/test_engagement_toolpath.py::test_only_chain_entry_loops_are_measured_above_the_cap` pins
-    the gap between the generator's four probes and the audit's twenty stations per circle: on a 6x4
-    pocket the only motions the audit finds above the cap are the chain-entry loops the generator
-    already refuses and reports. That is a **measurement on one pocket**, not a proof that four probes
-    suffice in general.
+    the gap between the generator's ring and the audit's twenty stations per circle: on a 6x4 pocket
+    the only motions the audit finds above the cap are the chain-entry loops the generator already
+    refuses and reports. That is a **measurement on one pocket**, not a proof that 32 probes suffice in
+    general. `test_a_trailing_quadrant_load_is_refused_where_the_superseded_triple_accepted_it` pins
+    the finding itself, on a hand-built stock state rather than on a generated path.
 
 ## Depleting a full turn is exact, not sampled
 

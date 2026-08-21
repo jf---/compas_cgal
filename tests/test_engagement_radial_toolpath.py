@@ -65,15 +65,24 @@ PIN_POCKET = Polygon([[0, 0, 0], [20, 0, 0], [20, 12, 0], [0, 12, 0]])
 PIN_STATION_X = 14.0
 PIN_STATION_Y = 6.0
 PIN_FULL_RADIUS = 4.998
-# Three maximal loops immediately behind the station, at the guide's own step, is
-# the smallest depletion that reproduces the measured pattern: enough swept
-# annulus for the middle of the ladder to fall into void, not so much that the
+# Eight maximal loops behind the station at a half-tool-diameter advance: enough
+# swept annulus for parts of the ladder to fall into void, not so much that the
 # whole ladder does.
-PIN_PRECEDING_CENTRES = (12.5, 13.0, 13.5)
-# The cap at which the pattern bites. Chosen because the ladder's engagement dips
-# to ~59 deg around rung 8 and rises again below it, so only a narrow band of
-# rungs complies and the admissible set is provably not an up-set.
-PIN_CAP_DEG = 60.0
+#
+# RE-PINNED 2026-08-21 when `LOOP_PROBE_COUNT` replaced the advance-facing probe
+# triple with a uniform ring. The previous state -- three loops at 0.5 spacing,
+# cap 60 deg -- pinned nothing once the probes could see the loop's trailing side:
+# every rung has SOME position over that cap there, so the admissible set went
+# empty and the fixture became vacuous rather than wrong. It was replaced with a
+# state that still exhibits the phenomenon under the ring, and the phenomenon
+# itself is unchanged: shrinking a machining circle does not monotonically lighten
+# it.
+PIN_PRECEDING_CENTRES = (6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0)
+# The cap at which the pattern bites. Down this ladder the probe peak falls to
+# 69.2 deg at radius 4.148 -- the one rung in the upper half that complies -- and
+# then RISES again to 72.4 deg at 4.098, 77.0 at 4.048 and 85.0 at 3.998, so the
+# admissible set is provably not an up-set and a bisection lands elsewhere.
+PIN_CAP_DEG = 70.0
 
 
 def _regulation(cap_deg):
