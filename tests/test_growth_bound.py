@@ -15,7 +15,10 @@ What a verdict means here, precisely:
 
 * A **red** is unconditional evidence: a measured cutter displacement of exactly
   ``d`` grew the largest engaged run by more than the bound permits, so the bound
-  is not an upper bound and any certificate resting on it is unsound.
+  is not an upper bound and the certificate's PROOF does not close -- the
+  inequality ``certify_recursive`` relies on is broken at that configuration.
+  Whether any VERDICT is thereby wrong is a separate question, answered by the
+  certificate-level search in `tests/test_false_certificate.py`.
 * A **green** is bounded evidence: no violation was found among the probed
   centres and the sampled displacement directions. Sampling can only ever be a
   LOWER bound on the worst growth, so each green test additionally pins the
