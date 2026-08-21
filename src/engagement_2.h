@@ -2,7 +2,23 @@
 
 #include "compas.h"
 
+#include <stdexcept>
+
 class Stock2;
+
+// The engaged rim sub-arcs PARTITION the cutter circle, so their reported spans
+// sum to at most one full turn and no assembled run can report more. engagement_at
+// raises this when one does, which means a sub-arc span was normalized wrong.
+//
+// The invariant lives entirely on the REPORTING doubles -- no verdict consults
+// them (see EngagementSample) -- but it is RAISED rather than CGAL_asserted
+// because this project ships CMAKE_BUILD_TYPE Release, where CGAL_assertion
+// compiles out and would leave the shipped build unguarded. The number it guards
+// is the headline of every engagement report, and the failure mode it exists to
+// catch is silent inflation, not a crash.
+struct RimSpanNormalizationError : std::logic_error {
+    using std::logic_error::logic_error;
+};
 
 // Convert the ergonomic angle cap exactly once at the native boundary. The
 // returned binary64 value is subsequently injected into Epeck as a rational.
@@ -62,6 +78,9 @@ struct EngagementSample {
 // one-root endpoints -- no angle sums. The default 0.0 (gamma = 0) closes no gap:
 // pessimistic runs == true runs, and every result is the pre-pessimism value
 // bit-for-bit. Reported total_tea/max_run_tea always describe the TRUE runs.
+//
+// Raises RimSpanNormalizationError if the assembled runs report more engagement
+// than a full turn, which the cutter circle cannot offer.
 EngagementSample engagement_at(const Stock2& stock, double cx, double cy,
                                double tool_radius, double cap_chord_ratio,
                                double gap_close_ratio = 0.0);

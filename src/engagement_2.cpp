@@ -5,6 +5,7 @@
 #include <cmath>
 #include <numbers>
 #include <stdexcept>
+#include <string>
 #include <tuple>
 #include <utility>
 #include <vector>
@@ -140,12 +141,61 @@ bool run_exceeds_cap(const GpsPoint& p, const GpsPoint& q, const FT& cx,
 
 // One rim arc, CCW-normalized: the CCW sweep runs ccw_start -> ccw_end on the
 // cutter circle. `span` is the arc's angular extent in radians, a REPORTING
-// double (atan2) that never feeds a decision.
+// double that never feeds a decision.
 struct Arc {
     GpsPoint ccw_start;
     GpsPoint ccw_end;
     double span;
 };
+
+// One full turn, the reported span of a rim entirely buried in material.
+constexpr double FULL_TURN = 2.0 * std::numbers::pi;
+
+// Reporting-only slack on the "a run cannot exceed a full turn" invariant checked
+// in finish_engagement. The engaged sub-arcs partition the cutter circle, so their
+// spans sum to at most FULL_TURN EXACTLY; the only error in the comparison is the
+// rounding of each rim_sub_arc_span evaluation and of their summation, a handful
+// of ulps of 2*pi (ulp(2*pi) ~ 8.9e-16). 1e-12 rad (~6e-11 deg) is ~1000x that --
+// far too loose for any correct build to trip, and still 12 orders of magnitude
+// below the failure it exists to catch, which mis-reports by a WHOLE TURN (6.28).
+//
+// NOT A DECISION TOLERANCE (docs/exactness.md, deciding/reporting split). It never
+// appears in the cap verdict, which run_exceeds_cap decides exactly on one-root
+// endpoints; it bounds the rounding of a human-facing number only.
+constexpr double FULL_TURN_REPORTING_SLACK = 1e-12;
+
+// Angular span of ONE x-monotone rim sub-arc, in radians -- a REPORTING double
+// that never feeds a decision.
+//
+// The cutter circle enters make_x_monotone_2 split at its two x-extreme points and
+// the zone only subdivides further, so EVERY sub-arc reaching here subtends at
+// most a half turn. That bound is what makes the endpoints alone sufficient: with
+// a, b the endpoints taken relative to the centre (|a| == |b| == r), the chord
+// half-length is r*sin(theta/2) and the chord midpoint's distance to the centre is
+// r*cos(theta/2), so
+//
+//     theta = 2 * atan2(|b - a|, |a + b|)                             (Kahan)
+//
+// Both arguments are lengths, hence non-negative, so atan2 lands in [0, pi/2] and
+// theta lands in [0, pi] BY CONSTRUCTION: there is no branch cut to normalize
+// across, and a whole-turn promotion is unrepresentable rather than merely
+// unlikely. The formula is also uniformly well conditioned -- theta -> 0 shrinks
+// the first argument, theta -> pi shrinks the second, and neither limit is a
+// subtractive cancellation.
+//
+// WHAT THIS REPLACES. The span used to be a difference of two ABSOLUTE atan2
+// angles, wrapped by "+= 2*pi when non-positive". That wrap is correct for a
+// genuine half-turn sub-arc, whose endpoints straddle the atan2 branch cut at the
+// -x extreme and whose difference is exactly -pi. But it could not tell that case
+// apart from a sub-arc of true span ~1e-16 whose angle difference merely ROUNDED
+// non-positive -- and it promoted the latter by a whole turn, inflating the
+// reported max_run_tea/total_tea of every run the degenerate arc merged into.
+double rim_sub_arc_span(const GpsPoint& s, const GpsPoint& t, double cx, double cy)
+{
+    const double ax = CGAL::to_double(s.x()) - cx, ay = CGAL::to_double(s.y()) - cy;
+    const double bx = CGAL::to_double(t.x()) - cx, by = CGAL::to_double(t.y()) - cy;
+    return 2.0 * std::atan2(std::hypot(bx - ax, by - ay), std::hypot(ax + bx, ay + by));
+}
 
 // Gap-closure pessimism: absorb every VOID gap between consecutive engaged runs
 // whose angular span does NOT exceed the gap-closure angle gamma (surrogate
@@ -288,6 +338,18 @@ EngagementSample finish_engagement(std::vector<Arc>& arcs, double cx, double cy,
         out.max_run_tea = std::max(out.max_run_tea, run.span);
     }
 
+    // INVARIANT. The engaged sub-arcs partition the cutter circle, so the runs
+    // assembled from them cover it at most once: total_tea <= FULL_TURN, and
+    // max_run_tea <= total_tea, so this one comparison covers both. Checked HERE
+    // because this is the single choke point every reported engagement number
+    // passes through, and because a mis-normalized sub-arc span is invisible until
+    // it lands in one of these two fields. Costs one double compare per station.
+    if (out.total_tea > FULL_TURN + FULL_TURN_REPORTING_SLACK)
+        throw RimSpanNormalizationError(
+            "Engaged rim runs sum to " + std::to_string(out.total_tea) +
+            " rad, beyond the full turn the cutter circle can offer: a rim sub-arc "
+            "span was normalized wrong (" + std::to_string(runs.size()) + " runs).");
+
     // 4b. DECISION (exact) over the PESSIMISTIC runs. Void gaps <= gamma are
     //     absorbed (default gamma == 0 closes none => pessimistic == true runs, so
     //     the verdict is bit-for-bit the pre-pessimism result). The cap predicate
@@ -385,18 +447,14 @@ void engaged_arcs_zone(const Stock2& stock, double cx, double cy,
 
     // Extract Arc{ccw_start, ccw_end, span} from each engaged rim sub-arc, with
     // the SAME normalization as the overlay harvest (docs: engagement_at):
-    // CCW-normalize by orientation, drop tangent-touch degeneracies, report the
-    // span as a REPORTING double (atan2) that never feeds a decision.
+    // CCW-normalize by orientation, drop tangent-touch degeneracies, and report
+    // the span as a REPORTING double that never feeds a decision.
     for (const GpsXCurve& xc : vis.engaged) {
         GpsPoint s = xc.source();
         GpsPoint t = xc.target();
         if (s == t) continue;   // tangent-touch degeneracy: zero-measure contact
         if (xc.orientation() == CGAL::CLOCKWISE) std::swap(s, t);
-        const double sx = CGAL::to_double(s.x()), sy = CGAL::to_double(s.y());
-        const double tx = CGAL::to_double(t.x()), ty = CGAL::to_double(t.y());
-        double span = std::atan2(ty - cy, tx - cx) - std::atan2(sy - cy, sx - cx);
-        if (span <= 0.0) span += 2.0 * std::numbers::pi;
-        arcs.push_back({s, t, span});
+        arcs.push_back({s, t, rim_sub_arc_span(s, t, cx, cy)});
     }
 }
 

@@ -8,17 +8,23 @@ import math
 
 import numpy as np
 import pytest
-from compas.geometry import Arc, Frame, Point, Polygon
+from compas.geometry import Arc, Circle, Frame, Line, Point, Polygon
+from compas.tolerance import TOL
 
+from compas_cgal import _stock_2
 from compas_cgal.engagement import (
+    AUDIT_ENGAGED,
     EngagementReport,
     InvalidEngagementCapError,
     InvalidToolDiameterError,
+    _cap_chord_ratio,
     _certify_arc_engagement,
+    _infer_cut_height,
+    _subtract_operation,
     audit_toolpath_engagement,
 )
 from compas_cgal.stock import Stock
-from compas_cgal.toolpath import ToolpathResult, trochoidal_mat_toolpath_circular
+from compas_cgal.toolpath import OperationType, ToolpathResult, trochoidal_mat_toolpath_circular
 
 SQUARE = Polygon([[0, 0, 0], [10, 0, 0], [10, 10, 0], [0, 10, 0]])
 
@@ -196,6 +202,176 @@ def test_arc_certifier_certifies_non_engaged_arc():
 
     assert cap_certified is True
     assert max_tea == pytest.approx(0.0, abs=1e-9)
+
+
+# --------------------------------------------------------------------------- #
+# Rim-span normalisation: no run may report more engagement than a full turn   #
+# --------------------------------------------------------------------------- #
+
+# The 12x8 reference pocket, driven by the UNREGULATED generator at tool 2.0 --
+# the instance on which the rim-span defect was measured. Its 99 cutting motions
+# graze the depleting stock often enough that a rim sub-arc of ~1e-15 rad occurs.
+SPAN_POCKET = Polygon([[0, 0, 0], [12, 0, 0], [12, 8, 0], [0, 8, 0]])
+SPAN_TOOL_DIAMETER = 2.0
+SPAN_CLEARANCE_Z = 2.0
+
+FULL_TURN = 2.0 * math.pi
+
+# Mirror of FULL_TURN_REPORTING_SLACK in src/engagement_2.cpp: the engaged rim
+# sub-arcs partition the cutter circle, so their reported spans sum to at most a
+# full turn EXACTLY, and the only error is the rounding of each span evaluation
+# and of their summation -- a few ulps of 2*pi (~8.9e-16). 1e-12 rad is ~1000x
+# that and still 12 orders of magnitude below the failure it guards, which
+# over-reports by a WHOLE TURN. Reporting only; no verdict consults it.
+FULL_TURN_REPORTING_SLACK = 1e-12
+
+# A station reporting within this much of a full turn is claiming the ENTIRE rim
+# sits in material. 1e-3 rad (0.057 deg) is far below any real feature at this
+# scale and far above the ~1e-15 rad summation noise, so the classification is
+# unambiguous in both directions.
+BURIED_RIM_TOLERANCE_RAD = 1e-3
+
+# Rim sample points used to refute a "whole rim is buried" claim. Eight is ample:
+# the claim asserts EVERY rim point is in material, so one counter-example
+# suffices, and a spurious full turn comes from a near-zero contact arc whose
+# cutter sits almost entirely in cleared void.
+BURIED_RIM_SAMPLES = 8
+
+# Sample radius as a fraction of the tool radius: just inside the rim, so a
+# genuinely buried rim's samples are strictly interior points and `contains` is
+# never asked about a boundary point (where membership is a measure-zero coin
+# flip rather than a fact about the engagement).
+BURIED_RIM_PROBE_FRACTION = 0.999
+
+# Stations per motion for the replay scan. The endpoints are always included, and
+# the defect's witness station is a motion START, so a coarse walk finds it.
+SPAN_SCAN_STATIONS = 12
+
+
+def _span_pocket_toolpath() -> ToolpathResult:
+    return trochoidal_mat_toolpath_circular(SPAN_POCKET, tool_diameter=SPAN_TOOL_DIAMETER, clearance_z=SPAN_CLEARANCE_Z)
+
+
+def _motion_stations(op) -> list:
+    """Cutter-centre stations along one motion, endpoints included."""
+    g = op.geometry
+    if isinstance(g, (Arc, Circle)):
+        return [g.point_at(i / SPAN_SCAN_STATIONS) for i in range(SPAN_SCAN_STATIONS)]
+    return [
+        (
+            float(g.start[0]) + (float(g.end[0]) - float(g.start[0])) * i / SPAN_SCAN_STATIONS,
+            float(g.start[1]) + (float(g.end[1]) - float(g.start[1])) * i / SPAN_SCAN_STATIONS,
+        )
+        for i in range(SPAN_SCAN_STATIONS + 1)
+    ]
+
+
+def _rim_outside_material(stock: Stock, px: float, py: float, tool_radius: float) -> list:
+    """Rim sample points at ``(px, py)`` that are NOT in *stock*'s material.
+
+    Sampled just inside the rim so a genuinely buried cutter yields strictly
+    interior points and membership is never asked about a boundary point. Must be
+    read while *stock* still holds the state the station was measured against.
+    """
+    probe_radius = BURIED_RIM_PROBE_FRACTION * tool_radius
+    outside = []
+    for k in range(BURIED_RIM_SAMPLES):
+        angle = 2.0 * math.pi * k / BURIED_RIM_SAMPLES
+        sx = px + probe_radius * math.cos(angle)
+        sy = py + probe_radius * math.sin(angle)
+        if not stock.contains(sx, sy):
+            outside.append((sx, sy))
+    return outside
+
+
+def _scan_engagement(result: ToolpathResult) -> list:
+    """Replay *result*, reading the engagement at every station of every cut motion.
+
+    Mirrors the audit's replay (measure against the CURRENT stock, then subtract)
+    but keeps ``total_tea``, which the audit discards -- and which is where a
+    mis-normalised rim sub-arc shows up first. A station claiming a buried rim has
+    its rim sampled HERE, against the stock the measurement actually saw; the
+    stock is destroyed by the very next subtraction, so the check cannot be
+    deferred to the caller.
+
+    Returns:
+        One ``(op_index, x, y, total_tea, buried_claim, rim_outside)`` row per
+        station, where ``rim_outside`` lists the rim samples found in void and is
+        empty for every station that made no buried-rim claim.
+    """
+    tool_radius = 0.5 * SPAN_TOOL_DIAMETER
+    ratio = _cap_chord_ratio(math.radians(120.0))
+    stock = Stock(SPAN_POCKET)
+    cut_z = _infer_cut_height(result.operations)
+    rows = []
+    for index, op in enumerate(result.operations):
+        if op.operation == OperationType.RETRACT:
+            continue
+        g = op.geometry
+        if isinstance(g, Line):
+            z0, z1 = float(g.start[2]), float(g.end[2])
+            if abs(z0 - z1) > TOL.absolute:
+                if z1 < z0:
+                    stock.subtract_disk(float(g.end[0]), float(g.end[1]), tool_radius)
+                continue
+            if z0 > cut_z + TOL.absolute:
+                continue
+        if op.operation not in AUDIT_ENGAGED:
+            continue
+        for p in _motion_stations(op):
+            px, py = float(p[0]), float(p[1])
+            total, _max_run, _exceeded = _stock_2.engagement_at(stock.raw, px, py, tool_radius, ratio, 0.0)
+            buried_claim = total >= FULL_TURN - BURIED_RIM_TOLERANCE_RAD
+            outside = _rim_outside_material(stock, px, py, tool_radius) if buried_claim else []
+            rows.append((index, px, py, total, buried_claim, outside))
+        _subtract_operation(stock, op, tool_radius)
+    return rows
+
+
+def test_no_operation_reports_more_than_a_full_turn():
+    """No audited operation may report engagement beyond one full turn of the rim.
+
+    The engaged sub-arcs PARTITION the cutter circle, so an assembled run covers
+    it at most once. Before the rim-span repair this pocket reported
+    ``report.max_tea == 6.28318530717959`` -- above ``2*pi``, with operation 32
+    claiming a whole buried rim where the true contact was ``5.7e-15`` rad. It now
+    reports exactly ``2*pi``, from operation 1's genuinely buried virgin-stock cut.
+
+    Asserted against the named reporting slack rather than a bare ``<= 2*pi``
+    because the reported number is a SUM of rounded spans: a run assembled from
+    several sub-arcs may legitimately overshoot by an ulp. The slack is 12 orders
+    of magnitude below the whole-turn error it exists to catch;
+    ``test_a_full_turn_report_means_a_buried_rim`` is the discriminating half of
+    this pair.
+    """
+    result = _span_pocket_toolpath()
+    report = audit_toolpath_engagement(SPAN_POCKET, result, tool_diameter=SPAN_TOOL_DIAMETER, tea_cap=math.radians(120.0))
+
+    assert report.engaged_ops > 0  # a vacuous pass would satisfy the bound trivially
+    over = [(e.op_index, e.max_tea) for e in report.operations if e.max_tea > FULL_TURN + FULL_TURN_REPORTING_SLACK]
+    assert over == [], f"operations reporting beyond a full turn: {over}"
+    assert report.max_tea <= FULL_TURN + FULL_TURN_REPORTING_SLACK
+
+
+def test_a_full_turn_report_means_a_buried_rim():
+    """A station reporting a full turn must actually have its whole rim in material.
+
+    The physical cross-check behind the reported angle, and the discriminating
+    regression for the rim-span defect: a degenerate sub-arc promoted to a full
+    turn claims a buried rim at a station whose cutter sits in cleared void, which
+    a handful of rim samples refutes outright. Both branches are exercised on this
+    pocket -- operation 1 cuts virgin stock with a genuinely buried rim (the claim
+    holds), operation 32 grazes at ``5.7e-15`` rad (the claim must not be made).
+    """
+    rows = _scan_engagement(_span_pocket_toolpath())
+
+    for index, px, py, total, _buried_claim, _outside in rows:
+        assert total <= FULL_TURN + FULL_TURN_REPORTING_SLACK, f"op {index} at ({px}, {py}) reports total_tea {total!r} beyond a full turn"
+
+    claims = [row for row in rows if row[4]]
+    assert claims, "no station claimed a buried rim, so the check never ran"
+    broken = [(index, px, py, total, outside) for index, px, py, total, _claim, outside in claims if outside]
+    assert broken == [], f"stations claiming a buried rim whose rim is in void: {broken}"
 
 
 # --------------------------------------------------------------------------- #
