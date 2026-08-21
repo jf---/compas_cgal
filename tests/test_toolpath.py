@@ -45,6 +45,45 @@ def _distance_to_polygon_boundary_xy(point, polygon_xy):
     return float(distance)
 
 
+def _segment_distances_to_polygon_boundary_xy(starts, ends, polygon_xy):
+    """Exact XY distance from each segment ``(starts[i], ends[i])`` to the polygon boundary.
+
+    Vectorised segment-to-segment distance: zero where the segments cross,
+    otherwise the smallest of the four endpoint-to-opposite-segment distances.
+    That is exact in 2D, so unlike sampling along the segment it cannot step over
+    a thin excursion through a wall.
+
+    Returns one distance per input segment.
+    """
+    a = np.asarray(starts, dtype=np.float64)[:, None, :]  # (M, 1, 2)
+    b = np.asarray(ends, dtype=np.float64)[:, None, :]
+    poly = np.asarray(polygon_xy, dtype=np.float64)
+    c = poly[None, :, :]  # (1, E, 2)
+    d = np.roll(poly, -1, axis=0)[None, :, :]
+
+    def _point_to_segment(q, s, e):
+        se = e - s
+        denom = np.einsum("...i,...i->...", se, se)
+        # Exact zero-length guard, not a tolerance: a degenerate segment reduces
+        # to its endpoint, so the projection parameter is pinned to 0.
+        safe = np.where(denom > 0.0, denom, 1.0)
+        t = np.clip(np.where(denom > 0.0, np.einsum("...i,...i->...", q - s, se) / safe, 0.0), 0.0, 1.0)
+        return np.linalg.norm(q - (s + t[..., None] * se), axis=-1)
+
+    def _cross(u, v):
+        return u[..., 0] * v[..., 1] - u[..., 1] * v[..., 0]
+
+    closest = np.minimum(
+        np.minimum(_point_to_segment(a, c, d), _point_to_segment(b, c, d)),
+        np.minimum(_point_to_segment(c, a, b), _point_to_segment(d, a, b)),
+    )
+    # Crossing segments are at distance zero whatever their endpoints say.
+    o1, o2 = _cross(d - c, a - c), _cross(d - c, b - c)
+    o3, o4 = _cross(b - a, c - a), _cross(b - a, d - a)
+    crossing = ((o1 > 0) != (o2 > 0)) & ((o3 > 0) != (o4 > 0))
+    return np.min(np.where(crossing, 0.0, closest), axis=1)
+
+
 def _op_start_xy(op: ToolpathOperation) -> np.ndarray:
     g = op.geometry
     if isinstance(g, Line):
@@ -957,12 +996,18 @@ def test_unlinked_paths_with_clearance_plane_do_not_raise():
 def test_unlinked_paths_with_clearance_plane_lift_every_traverse():
     """With clearance_z no inter-path move stays at cut height, even unlinked.
 
-    link_paths=False suppresses the LINK primitive, not the safe-Z motion. Every
-    path boundary is bridged by a retract to the clearance plane and a plunge back
-    down, so the XY traverse between them runs above the material and the
-    exemption from flat-link certification is a true statement rather than a hole.
-    Before this was fixed the stream held one entry plunge and one final retract,
-    and every boundary was a cut -> cut move straight through the wall.
+    link_paths=False suppresses the LINK primitive, not the safe-Z motion, so
+    every path boundary is bridged by a retract to the clearance plane and a
+    plunge back down. Before this was fixed the stream held one entry plunge and
+    one final retract, and every boundary was a cut -> cut move straight through
+    the wall.
+
+    Scope: this is an OPERATION-STREAM test. It establishes that the two
+    primitives exist and carry the right z, which is what makes the traverse
+    describable; it does not by itself establish anything about
+    `ToolpathResult.polyline`, where the move actually has to appear.
+    `test_polyline_never_moves_through_material_below_clearance` is the check
+    that certifies the emitted artefact.
     """
     clearance_z = 3.0
     result = trochoidal_mat_toolpath_circular(_dumbbell(1.2), tool_diameter=1.0, pitch=0.75, link_paths=False, clearance_z=clearance_z, optimize_order=False)
@@ -976,7 +1021,64 @@ def test_unlinked_paths_with_clearance_plane_lift_every_traverse():
     for i in boundaries:
         assert ops[i].operation == OperationType.RETRACT, f"boundary at op {i} is {ops[i].operation}, not a retract: the traverse stays at cut height"
         assert ops[i + 1].operation == OperationType.PLUNGE, f"boundary at op {i} retracts but never plunges back to cut depth"
-        # The XY move happens between the retract's end and the plunge's start, so
-        # both must sit on the clearance plane for the traverse to clear the stock.
+        # Rules out a mislabelled pair: the retract must actually reach the
+        # clearance plane and the plunge must actually start from it. Whether the
+        # XY move between those two endpoints reaches the polyline is a separate
+        # question, settled by the polyline test named in the docstring.
         assert pytest.approx(_op_end_xy(ops[i])[2], abs=1e-9) == clearance_z
         assert pytest.approx(_op_start_xy(ops[i + 1])[2], abs=1e-9) == clearance_z
+
+
+def test_polyline_never_moves_through_material_below_clearance():
+    """No polyline motion below the clearance plane comes within a tool radius of a wall.
+
+    This is the whole-artefact check on `ToolpathResult.polyline`: EVERY
+    consecutive point pair, with no filtering by operation type and no filtering
+    by z equality. Cuts, leads, plunges, retracts, traverses and any diagonal the
+    tessellator produces between operations are all in scope.
+
+    Exactly one exemption: a segment lying entirely at or above `clearance_z`.
+    That is the caller-declared safe height, so a motion that never descends
+    below it is out of the material by contract, and it is the same exemption the
+    C++ makes when it skips flat-link certification. The exemption cannot hide a
+    defect here, because it is keyed on the segment's *lower* endpoint — a move
+    that dips below the plane by any amount is checked over its whole XY extent,
+    and a ramp descending from `clearance_z` to `cut_z` is caught immediately.
+
+    Written for the ramp defect: suppressing the LINK primitive left the XY move
+    to the tessellator, which spliced it into the plunge as a single descending
+    diagonal that cut the corner through a wall.
+    """
+    tool_diameter = 1.0
+    tool_radius = 0.5 * tool_diameter
+    clearance_z = 3.0
+    polygon = _dumbbell(1.2)
+    poly_xy = [list(pt[:2]) for pt in polygon.points]
+
+    failures = []
+    for link_paths in (False, True):
+        result = trochoidal_mat_toolpath_circular(
+            polygon,
+            tool_diameter=tool_diameter,
+            pitch=0.75,
+            link_paths=link_paths,
+            clearance_z=clearance_z,
+            optimize_order=False,
+        )
+        pts = result.polyline
+        starts, ends = pts[:-1], pts[1:]
+        below = np.minimum(starts[:, 2], ends[:, 2]) < clearance_z
+        assert below.any(), f"link_paths={link_paths}: nothing below the clearance plane, the check would be vacuous"
+
+        clearances = _segment_distances_to_polygon_boundary_xy(starts[below][:, :2], ends[below][:, :2], poly_xy)
+        worst = float(clearances.min())
+        if worst < tool_radius - GOUGE_TOL:
+            i = int(np.argmin(clearances))
+            s, e = starts[below][i], ends[below][i]
+            failures.append(
+                f"link_paths={link_paths}: worst clearance {worst:.6f} < R={tool_radius} "
+                f"over {below.sum()} segments below z={clearance_z}; "
+                f"({s[0]:.4f}, {s[1]:.4f}) z{s[2]:.4f} -> ({e[0]:.4f}, {e[1]:.4f}) z{e[2]:.4f}"
+            )
+
+    assert not failures, "polyline drives the tool through a wall:\n" + "\n".join(failures)

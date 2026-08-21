@@ -847,16 +847,34 @@ tessellate_operations(const std::vector<ToolpathPrimitive>& ops, double samples_
     std::vector<std::array<double, 3>> pts;
     pts.reserve(ops.size() * 32);
 
+    // Emit an operation's start point unless it exactly duplicates the point
+    // already emitted.  The rule this replaces — skip the start of every op but
+    // the very first — assumed the stream is C0-continuous.  link_paths == false
+    // breaks that by design: with the LINK primitive suppressed nothing records
+    // the XY move between paths, so skipping the plunge's start spliced that move
+    // into the plunge itself, producing one diagonal that descended from the
+    // clearance plane while crossing a wall — geometry no operation described.
+    //
+    // The test is exact identity, NOT a tolerance, so no threshold has to be
+    // justified and a gap of any size survives.  The price is that a junction
+    // agreeing only to within an ulp — an arc's end and the following bridge
+    // line's start are computed independently — now materialises a ~1e-16
+    // segment instead of being absorbed into the next one.  Measured on the
+    // pinched-dumbbell pocket: 131 such segments among 23,666, zero-length to
+    // visualisation and to every consumer in the suite.  Faithful, and cheaper
+    // than an epsilon nobody can derive.
+    auto push_if_new = [&pts](double x, double y, double z) {
+        const std::array<double, 3> p{x, y, z};
+        if (pts.empty() || pts.back() != p) pts.push_back(p);
+    };
+
     for (std::size_t oi = 0; oi < ops.size(); ++oi) {
         const auto& op = ops[oi];
-        const bool first = pts.empty();
 
         if (op.arc.is_line()) {
-            if (first) {
-                pts.push_back({CGAL::to_double(op.arc.start.x()),
-                               CGAL::to_double(op.arc.start.y()),
-                               op.z_start});
-            }
+            push_if_new(CGAL::to_double(op.arc.start.x()),
+                        CGAL::to_double(op.arc.start.y()),
+                        op.z_start);
             pts.push_back({CGAL::to_double(op.arc.end.x()),
                            CGAL::to_double(op.arc.end.y()),
                            op.z_end});
@@ -872,9 +890,13 @@ tessellate_operations(const std::vector<ToolpathPrimitive>& ops, double samples_
             const double signed_sweep = op.arc.is_clockwise() ? -sw : sw;
             const int n = std::max(2, static_cast<int>(std::ceil(sw * samples_per_radian)));
 
-            // Skip first sample (junction duplicate) unless first operation
-            const int i0 = first ? 0 : 1;
-            for (int i = i0; i < n - 1; ++i) {
+            // Exact start, for the same reason the endpoint below is exact: the
+            // i == 0 sample is only cos/sin's approximation of it.  Sampling then
+            // resumes at i == 1 so the junction is never duplicated.
+            push_if_new(CGAL::to_double(op.arc.start.x()),
+                        CGAL::to_double(op.arc.start.y()),
+                        op.z_start);
+            for (int i = 1; i < n - 1; ++i) {
                 const double t = static_cast<double>(i) / static_cast<double>(n - 1);
                 const double theta = start_angle + signed_sweep * t;
                 const double z = op.z_start + t * (op.z_end - op.z_start);
@@ -1098,9 +1120,11 @@ pmp_trochoidal_mat_toolpath_circular(
             if (use_clearance) {
                 // The linked sequence minus the LINK primitive.  The XY move falls
                 // between the retract's end and the plunge's start, so it rides the
-                // clearance plane and never touches the material.
+                // caller-declared clearance plane; tessellate_operations emits both
+                // endpoints, so the polyline carries that L-shape rather than
+                // splicing the move into the plunge as a descending diagonal.
                 operations.push_back(make_tp_line(cur_xy, cur_z, cur_xy, safe_z, 4 /*retract*/, pidx));
-                cur_z = safe_z;
+                cur_z = safe_z;  // keeps the running z honest; the plunge below reads safe_z directly
                 operations.push_back(make_tp_line(lead_in_pt, safe_z, lead_in_pt, cut_z, 5 /*plunge*/, pidx));
             } else if (cur_xy != lead_in_pt &&
                        !boundary.segment_clear(Segment_2(cur_xy, lead_in_pt), tool_radius)) {
