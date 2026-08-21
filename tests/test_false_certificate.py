@@ -190,11 +190,23 @@ SWEEP_MOTION = 0.6
 SWEEP_OFFSETS = 33
 SWEEP_OFFSET_SPAN = 0.15
 
-# Probes along a motion for the exact oracle. The violating window spans 22.6% of
-# SHORT_MOTION, so any grid of a handful of points already lands in it; 400 is
-# chosen for a legible count (91 hits) rather than for detection, and the oracle's
-# exactness means a denser grid could only ever raise that count.
+# Probes along a motion for the exact oracle, used for the COUNT in failure
+# messages. Detection does not depend on it: liveness is established by probing the
+# segment's closest point to the rib centre, which is derived rather than searched
+# for (`_closest_point_on`) and so cannot be stepped over by a sample grid.
 SCAN_SAMPLES = 400
+
+# Centre of curvature the closed and open ribs are built around. Every TEA peak on
+# a motion past those ribs sits at the motion's closest approach to this point.
+RIB_CENTRE = (0.0, 0.0)
+
+# Fraction of the closed-form engaged run a probe must reach before the green
+# control will believe the cutter is in contact. A cutter centred `s` from the rib
+# centre (s >> tau) crosses the rib in two arcs of tau / s radians each -- measured
+# within 2% to 4.5% of that closed form over s in [0.15, 0.3]. Half of it is the
+# floor: a 2x margin over the closed form, and eight decades above the 1.6e-07 a
+# hairline rib returns, which is what a bare `run > 0` would have accepted.
+CONTACT_FLOOR_FRACTION = 0.5
 
 # --- The spiral rib: the same failure with NO radius coincidence -------------
 #
@@ -220,13 +232,22 @@ SPIRAL_STEPS = round(RIB_FACETS * 2.0 * SPIRAL_HALF_TURN / (2.0 * math.pi))
 
 # Centre of the spiral witness motion, in model units. It is where the cutter rim
 # best osculates the spiral rib, LOCATED BY SEARCH over the centre plane and
-# stated here so the test is deterministic. It is deliberately NOT the closed-form
-# osculating centre of the centreline -- that point, (2.4998e-05, 4.9997e-03), is
-# correctly REFUSED (stations = 10), because the certifier's stations happen to see
-# enough there. Nothing here is fine-tuned: `test_no_spiral_probe_centre_is_falsely_certified`
-# shows the falsely-certified set has positive area, and this centre is picked from
-# it for its MARGINS rather than for its peak -- both stations sit 19% under the
-# guarded cap while the interior runs 21% over the cap.
+# stated here so the test is deterministic. Nothing about it is fine-tuned:
+# `test_no_spiral_probe_centre_is_falsely_certified` shows the falsely-certified
+# set has positive area, and this centre is picked from it for its MARGINS rather
+# than its peak -- both stations sit 19% under the guarded cap while the interior
+# runs 21% over the cap.
+#
+# NOT the closed-form osculating centre of the centreline. Bisecting
+# `Rc(theta) = (rho^2 + k^2)^(3/2) / (rho^2 + 2*k^2)` to `Rc = r` gives
+# theta* = 0.0049984 and the centre (2.49976e-05, 4.99969e-03), where the same
+# centred 0.025 motion is REFUSED at 10 stations. That refusal is a property of
+# THAT PLACEMENT, not of the curvature-matching point, and it is NOT detection: its
+# two endpoint stations read 0.708505 and 0.712094, both ABOVE the guarded cap of
+# 0.574493, so no certificate is available at that spacing and refinement is forced
+# until a station happens to land on the violation. A repair may NOT infer from it
+# that the curvature-matching region is handled -- move the motion 0.0016 in y and
+# the same region certifies.
 SPIRAL_PROBE_CENTRE = (0.0, 0.0034)
 
 # Probe-centre region sweep for the spiral: a 3 x 11 grid deliberately spanning
@@ -241,6 +262,14 @@ SPIRAL_SWEEP_Y_STEP = 0.001
 # axis-aligned pair and three obliques, none of them aligned with the spiral's
 # tangent at the witness. Measured: all six certified at `stations = 1`.
 SPIRAL_DIRECTIONS = (0.0, math.pi / 6.0, math.pi / 4.0, math.pi / 3.0, math.pi / 2.0, 2.0 * math.pi / 3.0)
+
+# Liveness floor for the spiral probe-centre grid: how many of its motions must
+# carry a real cap violation before the sweep's verdict means anything. The grid
+# deliberately spans dead centres as well as live ones, so an exact count would be
+# brittle; measured 21 of 33 live, and 15 leaves 29% of slack for faceting or
+# kernel drift while still catching total degeneration -- a rib thinned to a
+# hairline and a spiral grown to 0.04 both measure 0 of 33.
+SPIRAL_SWEEP_LIVE_FLOOR = 15
 
 # Ambient block half-width for the machined build, in model units (12 r): the
 # block's straight walls stay >= 5 units clear of the rib, so they never reach the
@@ -422,6 +451,56 @@ def _violating_centres(stock: Stock, start: tuple[float, float], end: tuple[floa
     return hits
 
 
+def _closest_point_on(start: tuple[float, float], end: tuple[float, float], target: tuple[float, float]) -> tuple[float, float]:
+    """The point of a motion nearest *target*, computed by projection and clamped to the segment.
+
+    For every rib here TEA decreases with the distance to the rib's centre of
+    curvature, so this is where the motion's TEA peaks -- the interior minimum of a
+    convex distance, which is exactly the point endpoint attainment does not reach.
+    Deriving it beats scanning for it: it needs one oracle call instead of a grid,
+    and it cannot be missed by a sample grid stepping over a narrow window.
+
+    Args:
+        start: ``(x, y)`` of the motion start.
+        end: ``(x, y)`` of the motion end.
+        target: ``(x, y)`` the rib is centred on.
+
+    Returns:
+        The ``(x, y)`` on the segment closest to *target*.
+    """
+    dx, dy = end[0] - start[0], end[1] - start[1]
+    length_sq = dx * dx + dy * dy
+    t = ((target[0] - start[0]) * dx + (target[1] - start[1]) * dy) / length_sq
+    t = min(1.0, max(0.0, t))
+    return (start[0] + t * dx, start[1] + t * dy)
+
+
+def _pin_cap_violation_at(stock: Stock, point: tuple[float, float], what: str) -> float:
+    """LIVENESS: assert the EXACT oracle finds the cap exceeded at *point*.
+
+    Decided by `engagement_at`'s ``cap_exceeded`` alone -- the certifier is not
+    consulted, so this cannot be satisfied by the verdict the test is about to
+    challenge. Its job is to fail LOUDLY, naming the construction, when a witness
+    stops being a witness: a rib thinned to nothing or a spiral growing too fast
+    both leave the certifier with nothing to be wrong about, and a red that goes
+    green that way would read as a repair.
+
+    Args:
+        stock: The stock region to measure against.
+        point: ``(x, y)`` cutter centre that must violate.
+        what: Name of the construction, for the failure message.
+
+    Returns:
+        The reported largest engaged run at *point* (for failure messages only).
+
+    Raises:
+        AssertionError: If the exact oracle does not report the cap exceeded there.
+    """
+    run, exceeded = _sample(stock, *point)
+    assert exceeded, f"{what}: the exact oracle finds NO cap violation at {point} (max_run_tea {run!r}) -- the construction is dead, so nothing here tests the certifier"
+    return run
+
+
 def _certify(stock: Stock, start: tuple[float, float], end: tuple[float, float]) -> tuple[float, bool, int]:
     """Run the shipped certificate over a motion.
 
@@ -485,6 +564,12 @@ def test_certified_short_motion_has_no_cap_violating_centre():
     start, end = (-half, 0.0), (half, 0.0)
     _pin_rib(stock, half)
 
+    # 1. LIVENESS -- exact oracle only, the certifier is not consulted. The motion's
+    #    closest approach to the rib centre genuinely exceeds the cap, so there IS
+    #    something for the certificate to be wrong about.
+    peak = _pin_cap_violation_at(stock, _closest_point_on(start, end, RIB_CENTRE), "annular rib, short motion")
+
+    # 2. VERDICT -- what the repair must change.
     max_tea, certified, stations = _certify(stock, start, end)
 
     # Configuration pin: this is the un-refined regime the docstring describes. If
@@ -492,11 +577,10 @@ def test_certified_short_motion_has_no_cap_violating_centre():
     # thing and must be re-derived rather than believed.
     assert stations == 1, f"expected a single un-refined station pair, got {stations}"
 
-    violations = _violating_centres(stock, start, end)
-    assert not (certified and violations), (
-        f"certified a motion with {len(violations)} of {SCAN_SAMPLES + 1} probed centres exactly over the cap: "
-        f"{start} -> {end}, r={TOOL_RADIUS}, cap={CAP_RADIANS:.6f}, stations={stations}, reported max_tea={max_tea:.6f}; "
-        f"first violating centre {violations[0] if violations else None}, worst reading {_sample(stock, 0.0, 0.0)[0]:.6f} rad at the rib centre"
+    assert not certified, (
+        f"certified a motion whose interior reaches {peak:.6f} rad, with {len(_violating_centres(stock, start, end))} of {SCAN_SAMPLES + 1} "
+        f"probed centres exactly over the cap: {start} -> {end}, r={TOOL_RADIUS}, cap={CAP_RADIANS:.6f}, "
+        f"stations={stations}, reported max_tea={max_tea:.6f}"
     )
 
 
@@ -517,17 +601,22 @@ def test_certified_long_motion_has_no_cap_violating_centre():
     stock = _rib_stock()
     _pin_rib(stock, 0.5 * SHORT_MOTION)
 
+    # 1. LIVENESS -- exact oracle only. Derived rather than scanned for, which
+    #    matters here: the violating window is 0.75% of this motion's length, so a
+    #    sample grid is a poor instrument for establishing that it exists at all.
+    peak = _pin_cap_violation_at(stock, _closest_point_on(LONG_MOTION_START, LONG_MOTION_END, RIB_CENTRE), "annular rib, long oblique motion")
+
+    # 2. VERDICT.
     max_tea, certified, stations = _certify(stock, LONG_MOTION_START, LONG_MOTION_END)
 
     # Configuration pin: the certifier really did refine, so this is not the
     # single-station-pair case re-tested under another name.
     assert stations > 1, f"expected adaptive refinement on a long motion, got {stations} station(s)"
 
-    violations = _violating_centres(stock, LONG_MOTION_START, LONG_MOTION_END)
-    assert not (certified and violations), (
-        f"certified a REFINED motion with {len(violations)} of {SCAN_SAMPLES + 1} probed centres exactly over the cap: "
-        f"{LONG_MOTION_START} -> {LONG_MOTION_END}, r={TOOL_RADIUS}, cap={CAP_RADIANS:.6f}, stations={stations}, "
-        f"reported max_tea={max_tea:.6f} against a true {_sample(stock, 0.0, 0.0)[0]:.6f} rad at the rib centre"
+    assert not certified, (
+        f"certified a REFINED motion whose interior reaches {peak:.6f} rad, with "
+        f"{len(_violating_centres(stock, LONG_MOTION_START, LONG_MOTION_END))} of {SCAN_SAMPLES + 1} probed centres exactly over the cap: "
+        f"{LONG_MOTION_START} -> {LONG_MOTION_END}, r={TOOL_RADIUS}, cap={CAP_RADIANS:.6f}, stations={stations}, reported max_tea={max_tea:.6f}"
     )
 
 
@@ -550,9 +639,16 @@ def test_no_alignment_of_a_crossing_motion_is_falsely_certified():
         offset = -SWEEP_OFFSET_SPAN + 2.0 * SWEEP_OFFSET_SPAN * i / (SWEEP_OFFSETS - 1)
         start = (-0.5 * SWEEP_MOTION + offset, 0.0)
         end = (0.5 * SWEEP_MOTION + offset, 0.0)
-        # Configuration pin: the motion really does pass over the violating window,
-        # so a "certified" verdict here is a claim about geometry it crosses.
-        assert start[0] < 0.0 < end[0], f"offset {offset!r} moves the motion off the rib centre"
+
+        # 1. LIVENESS, per motion, exact oracle only. Both endpoints lie at y = 0
+        #    and straddle x = 0, so the rib centre is EXACTLY on this segment -- no
+        #    projection, no rounding -- and the oracle says it violates. One cheap
+        #    call per motion establishes that every "certified" below is a claim
+        #    about geometry that genuinely breaks the cap.
+        assert start[0] < 0.0 < end[0] and start[1] == end[1] == RIB_CENTRE[1], f"offset {offset!r} moves the motion off the rib centre"
+        _pin_cap_violation_at(stock, RIB_CENTRE, f"annular rib, alignment offset {offset!r}")
+
+        # 2. VERDICT.
         _max_tea, certified, stations = _certify(stock, start, end)
         if certified:
             falsely_certified.append((offset, stations))
@@ -582,11 +678,17 @@ def test_machined_stock_certified_motion_has_no_cap_violating_centre():
     start, end = (-half, 0.0), (half, 0.0)
     _pin_rib(stock, half)
 
+    # 1. LIVENESS -- exact oracle only. Independent of `_rib_stock`: if the two
+    #    removals ever stop leaving a rib, this fails naming the machined build
+    #    rather than passing as a repair.
+    peak = _pin_cap_violation_at(stock, _closest_point_on(start, end, RIB_CENTRE), "machined rib (bore + contour pass)")
+
+    # 2. VERDICT.
     max_tea, certified, stations = _certify(stock, start, end)
 
-    violations = _violating_centres(stock, start, end)
-    assert not (certified and violations), (
-        f"certified a motion over a rib built by removal only, with {len(violations)} of {SCAN_SAMPLES + 1} probed centres exactly over the cap: "
+    assert not certified, (
+        f"certified a motion over a rib built by removal only, whose interior reaches {peak:.6f} rad, with "
+        f"{len(_violating_centres(stock, start, end))} of {SCAN_SAMPLES + 1} probed centres exactly over the cap: "
         f"{start} -> {end}, r={TOOL_RADIUS}, cap={CAP_RADIANS:.6f}, stations={stations}, reported max_tea={max_tea:.6f}"
     )
 
@@ -612,23 +714,26 @@ def test_certified_motion_whose_stations_report_no_contact_at_all_has_no_cap_vio
     half = 0.5 * SHORT_MOTION
     start, end = (-half, 0.0), (half, 0.0)
 
-    # Configuration pins: the stations really are out of contact, and the sector's
-    # centre really is engaged over its whole extent (a closed-form value, so a
-    # mis-built sector cannot masquerade as a violation).
+    # Configuration pin: the stations really are out of contact, which is the whole
+    # point of this witness and is what makes it un-repairable by a guard.
     for sign in (-1.0, 1.0):
         run, exceeded = _sample(stock, sign * half, 0.0)
         assert run == 0.0 and not exceeded, f"station at x={sign * half!r} should be clear of the sector, got max_run_tea {run!r}"
-    centre_run, centre_exceeded = _sample(stock, 0.0, 0.0)
-    assert abs(centre_run - SECTOR_EXTENT) <= TEA_REPORTING_SLACK, f"sector centre should engage exactly its own extent {SECTOR_EXTENT!r}, got {centre_run!r}"
-    assert centre_exceeded, "sector centre should exceed the 90 deg cap -- the exact oracle disagrees, so the sector is not built"
 
+    # 1. LIVENESS -- exact oracle only, plus a closed-form shape pin: the sector's
+    #    engaged run at its centre must be exactly its own angular extent, so a
+    #    sector that degenerated to a hairline (or closed into a ring) fails here
+    #    naming the construction instead of passing as a repair.
+    peak = _pin_cap_violation_at(stock, _closest_point_on(start, end, RIB_CENTRE), f"{math.degrees(SECTOR_EXTENT):.1f} deg sector rib")
+    assert abs(peak - SECTOR_EXTENT) <= TEA_REPORTING_SLACK, f"sector centre should engage exactly its own extent {SECTOR_EXTENT!r}, got {peak!r}"
+
+    # 2. VERDICT.
     max_tea, certified, stations = _certify(stock, start, end)
 
-    violations = _violating_centres(stock, start, end)
-    assert not (certified and violations), (
-        f"certified a motion reporting NO contact (max_tea={max_tea:.6f}) with {len(violations)} of {SCAN_SAMPLES + 1} probed centres exactly over the cap: "
-        f"{start} -> {end}, r={TOOL_RADIUS}, cap={CAP_RADIANS:.6f}, stations={stations}; "
-        f"true engagement at the sector centre {centre_run:.6f} rad"
+    assert not certified, (
+        f"certified a motion reporting NO contact (max_tea={max_tea:.6f}) whose interior reaches {peak:.6f} rad, with "
+        f"{len(_violating_centres(stock, start, end))} of {SCAN_SAMPLES + 1} probed centres exactly over the cap: "
+        f"{start} -> {end}, r={TOOL_RADIUS}, cap={CAP_RADIANS:.6f}, stations={stations}"
     )
 
 
@@ -668,28 +773,30 @@ def test_certified_spiral_rib_motion_has_no_cap_violating_centre():
     half = 0.5 * SHORT_MOTION
     start, end = (px - half, py), (px + half, py)
 
-    # Configuration pins: both stations really are in contact and really do pass
-    # the guarded cap, and the interior really does violate -- so this is a genuine
-    # blind-spot verdict, not an out-of-contact one (that form is pinned separately
-    # by the sector test) and not a scan that happened to miss.
+    # Configuration pin: both stations really are in contact and really do pass the
+    # guarded cap, so this is a genuine blind-spot verdict, not an out-of-contact
+    # one (that form is pinned separately by the sector test).
     for probe in (start, end):
         run, exceeded = _sample(stock, *probe)
         assert 0.0 < run < CAP_RADIANS, f"station {probe} should be engaged but under the cap, got max_run_tea {run!r}"
         assert not exceeded, f"station {probe} should be under the cap, got max_run_tea {run!r}"
-    centre_run, centre_exceeded = _sample(stock, px, py)
-    assert centre_exceeded, f"the spiral witness centre should exceed the cap; max_run_tea {centre_run!r}"
 
+    # 1. LIVENESS -- exact oracle only. A rib thinned to a hairline or a spiral
+    #    grown too fast leaves the certifier nothing to be wrong about; both fail
+    #    HERE, naming the spiral, rather than turning this red green.
+    peak = _pin_cap_violation_at(stock, _closest_point_on(start, end, SPIRAL_PROBE_CENTRE), f"spiral rib (growth {SPIRAL_GROWTH!r})")
+
+    # 2. VERDICT.
     max_tea, certified, stations = _certify(stock, start, end)
 
     # Configuration pin: still the un-refined regime, so the verdict is two exact
     # measurements plus the analytic guard and nothing adaptive.
     assert stations == 1, f"expected a single un-refined station pair, got {stations}"
 
-    violations = _violating_centres(stock, start, end)
-    assert not (certified and violations), (
-        f"certified a motion over a SPIRAL rib -- no radius coincidence -- with {len(violations)} of {SCAN_SAMPLES + 1} probed centres exactly over the cap: "
-        f"{start} -> {end}, r={TOOL_RADIUS}, cap={CAP_RADIANS:.6f}, stations={stations}, reported max_tea={max_tea:.6f} "
-        f"against a true {centre_run:.6f} rad at the witness centre"
+    assert not certified, (
+        f"certified a motion over a SPIRAL rib -- no radius coincidence -- whose interior reaches {peak:.6f} rad, with "
+        f"{len(_violating_centres(stock, start, end))} of {SCAN_SAMPLES + 1} probed centres exactly over the cap: "
+        f"{start} -> {end}, r={TOOL_RADIUS}, cap={CAP_RADIANS:.6f}, stations={stations}, reported max_tea={max_tea:.6f}"
     )
 
 
@@ -709,32 +816,49 @@ def test_no_spiral_probe_centre_is_falsely_certified():
     ACROSS DIRECTION: all six directions probed through the witness centre (0, 30,
     45, 60, 90, 120 deg) are certified at ``stations = 1``. The failure does not
     need the motion to be aligned with anything.
+
+    LIVENESS IS SEPARATE FROM THE VERDICT here, and deliberately so. This sweep's
+    only claim would otherwise be "nothing was certified", which a DEAD
+    construction satisfies perfectly: measured, a rib thinned to 1e-9 and a spiral
+    grown at 0.04 each yield 0 of 33 live motions and 0 false certificates, so the
+    test would pass while the certifier remained exactly as unsound. The live count
+    below is taken from the exact oracle alone and floored, so degeneration fails
+    the test instead of silencing it.
     """
     stock = _spiral_rib_stock()
     half = 0.5 * SHORT_MOTION
-    falsely_certified = []
+    motions = [((px - half, py), (px + half, py)) for px in SPIRAL_SWEEP_X for py in (row * SPIRAL_SWEEP_Y_STEP for row in range(SPIRAL_SWEEP_ROWS))]
 
-    for px in SPIRAL_SWEEP_X:
-        for row in range(SPIRAL_SWEEP_ROWS):
-            py = row * SPIRAL_SWEEP_Y_STEP
-            start, end = (px - half, py), (px + half, py)
-            _max_tea, certified, stations = _certify(stock, start, end)
-            if certified and _violating_centres(stock, start, end, samples=100):
-                falsely_certified.append((round(px, 4), round(py, 4), stations))
+    # 1. LIVENESS -- exact oracle only. The grid deliberately spans dead centres as
+    #    well as live ones, so this is a floor rather than a count.
+    live_grid = [motion for motion in motions if _violating_centres(stock, *motion, samples=100)]
+    assert len(live_grid) >= SPIRAL_SWEEP_LIVE_FLOOR, (
+        f"only {len(live_grid)} of {len(motions)} grid motions carry a real cap violation (floor {SPIRAL_SWEEP_LIVE_FLOOR}) -- "
+        f"the spiral rib is degenerate, so a clean sweep below would mean nothing"
+    )
+    _pin_cap_violation_at(stock, SPIRAL_PROBE_CENTRE, f"spiral rib (growth {SPIRAL_GROWTH!r})")
+
+    # 2. VERDICT, over the same grid plus a fan of directions through the witness.
+    falsely_certified = []
+    for start, end in live_grid:
+        _max_tea, certified, stations = _certify(stock, start, end)
+        if certified:
+            falsely_certified.append((round(start[0] + half, 4), round(start[1], 4), stations))
 
     px, py = SPIRAL_PROBE_CENTRE
     for angle in SPIRAL_DIRECTIONS:
         dx, dy = half * math.cos(angle), half * math.sin(angle)
-        start, end = (px - dx, py - dy), (px + dx, py + dy)
-        _max_tea, certified, stations = _certify(stock, start, end)
-        if certified and _violating_centres(stock, start, end, samples=100):
+        motion = ((px - dx, py - dy), (px + dx, py + dy))
+        # Every direction passes through the witness centre, which liveness above
+        # already showed violates -- so each is a live motion by construction.
+        _max_tea, certified, stations = _certify(stock, *motion)
+        if certified:
             falsely_certified.append((f"dir {math.degrees(angle):.0f}deg", stations))
 
-    grid_size = len(SPIRAL_SWEEP_X) * SPIRAL_SWEEP_ROWS
     assert not falsely_certified, (
-        f"{len(falsely_certified)} false certificates over a spiral rib: a {len(SPIRAL_SWEEP_X)}x{SPIRAL_SWEEP_ROWS} "
-        f"probe-centre grid ({grid_size} motions) plus {len(SPIRAL_DIRECTIONS)} directions through {SPIRAL_PROBE_CENTRE}; "
-        f"first {falsely_certified[0]}"
+        f"{len(falsely_certified)} false certificates over a spiral rib: {len(live_grid)} live motions of a "
+        f"{len(SPIRAL_SWEEP_X)}x{SPIRAL_SWEEP_ROWS} probe-centre grid plus {len(SPIRAL_DIRECTIONS)} directions "
+        f"through {SPIRAL_PROBE_CENTRE}; first {falsely_certified[0]}"
     )
 
 
@@ -745,18 +869,32 @@ def test_a_motion_clear_of_the_rib_centre_is_soundly_certified():
     crosses the rib twice and reads about 0.02 rad -- and the certifier certifies
     it. Without this control the reds above would be consistent with a harness that
     calls every certificate false.
+
+    Its liveness check is the mirror image of theirs, and asked of the exact oracle
+    rather than of ``max_tea``: the cutter must be genuinely IN CONTACT along the
+    motion. A control that went green because its stock had vanished would prove
+    nothing, and reading contact off the certifier's own report would make the
+    check circular.
     """
     stock = _rib_stock()
     start, end = (0.2, 0.0), (0.25, 0.0)
 
-    max_tea, certified, stations = _certify(stock, start, end)
+    # 1. LIVENESS -- exact oracle only, mirrored: the cutter is in contact all along
+    #    this motion, and NO centre on it violates. "In contact" is measured against
+    #    the closed form, not against zero: a hairline rib still returns a non-zero
+    #    reading (1.6e-07 at thickness 1e-9), so `run > 0` would let this control
+    #    go green on a stock that had effectively vanished.
+    for probe in (start, _closest_point_on(start, end, RIB_CENTRE), end):
+        run, exceeded = _sample(stock, *probe)
+        floor = CONTACT_FLOOR_FRACTION * RIB_THICKNESS / math.hypot(probe[0] - RIB_CENTRE[0], probe[1] - RIB_CENTRE[1])
+        assert run >= floor, f"control is vacuous: cutter barely in contact at {probe} (max_run_tea {run!r} < {floor!r}) -- the rib is not built"
+        assert not exceeded, f"control is mis-stated: {probe} exceeds the cap (max_run_tea {run!r}), so this motion is not a sound-certificate case"
     violations = _violating_centres(stock, start, end)
-
-    # Configuration pin: the cutter really is in contact along this motion, so the
-    # sound verdict is about a measured engagement and not about an empty rim.
-    assert 0.0 < max_tea < CAP_RADIANS, f"expected a small but non-zero engagement along {start} -> {end}, got max_tea={max_tea!r}"
-    assert certified, f"expected a sound certificate for {start} -> {end} (stations={stations}), got cap_certified=False"
     assert not violations, f"the oracle found {len(violations)} violating centres on a motion that should never violate: first {violations[0]}"
+
+    # 2. VERDICT -- and here the certifier is RIGHT.
+    max_tea, certified, stations = _certify(stock, start, end)
+    assert certified, f"expected a sound certificate for {start} -> {end} (stations={stations}, max_tea={max_tea:.6f}), got cap_certified=False"
 
 
 def test_a_motion_whose_station_lands_on_the_violation_is_refused():
@@ -771,9 +909,11 @@ def test_a_motion_whose_station_lands_on_the_violation_is_refused():
     stock = _rib_stock()
     start, end = (-0.05, 0.0), (0.05, 0.0)
 
-    max_tea, certified, stations = _certify(stock, start, end)
-    violations = _violating_centres(stock, start, end)
+    # 1. LIVENESS -- exact oracle only: there really is something to refuse. Without
+    #    it, a stock that had degenerated to nothing would still be "refused" for
+    #    entirely the wrong reason and this control would read as evidence.
+    peak = _pin_cap_violation_at(stock, _closest_point_on(start, end, RIB_CENTRE), "annular rib, station-on-violation control")
 
-    # Configuration pin: there really is something to refuse.
-    assert violations, "control is vacuous: the oracle found no violating centre on this motion"
-    assert not certified, f"expected refusal for {start} -> {end} (stations={stations}, max_tea={max_tea:.6f}), got cap_certified=True"
+    # 2. VERDICT -- and here the certifier is RIGHT.
+    max_tea, certified, stations = _certify(stock, start, end)
+    assert not certified, f"expected refusal for {start} -> {end} over an interior reaching {peak:.6f} rad (stations={stations}, max_tea={max_tea:.6f}), got cap_certified=True"
