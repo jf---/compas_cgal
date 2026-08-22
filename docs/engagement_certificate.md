@@ -448,18 +448,23 @@ repair and is not reproducible by running the suite.
       it, so no implementation of step (4), however tight, can certify that
       motion. The fix is to carry the motion direction into the interface so the
       reachable set is the half-segment it actually is.
-    - **A separate kernel defect is untouched.** `engagement_at` can report a
-      `max_run_tea` **larger than a full turn** — geometrically impossible — at
-      configurations where a boundary crossing coincides with the rim's
-      `x`-extreme, the point `make_x_monotone_2` splits the cutter circle at. It
-      is pinned by
+    - **The pins for a separate kernel defect are now stale.** Surfaced while
+      measuring engagement, `engagement_at` could report a `max_run_tea` **larger
+      than a full turn** — geometrically impossible — where a boundary crossing
+      lands within an ulp of the rim's `x`-extreme, the point `make_x_monotone_2`
+      splits the cutter circle at. Its two exactly-distinct endpoints share a
+      `to_double` heading, so the raw difference is `0.0` and the old
+      `if (span <= 0) span += 2π` normalisation lifted a sub-ulp sliver to a full
+      turn — additively, so a station harvesting two slivers reported `4π`. It
+      was always a *reporting* defect: the cap decision runs on exact predicates
+      over run endpoints, never on these doubles. It is repaired at `3db92d6`,
+      which computes a span as the unsigned angle between the radius vectors,
+      `atan2(|u × v|, u · v)`, whose codomain is `[0, π]` by construction, and
+      adds the `span ≤ 2π` and `total ≤ 2π` invariant the reporting path lacked.
+      That fix landed after the measurements on this page were taken, and
       `tests/test_growth_bound.py::test_reported_engagement_never_exceeds_a_full_turn`
-      and those reds are still red. It is a *reporting* defect: the cap decision
-      runs on exact predicates over run endpoints, never on these doubles. But a
-      harvest that mis-assembles a span is not thereby shown to assemble its
-      endpoints correctly, and nothing here establishes that it does. A variant
-      also exists in which the misreport is *exactly* `2π` rather than greater
-      than it, which the current pins do not catch.
+      still carries a docstring describing the defect as live. Re-point it before
+      trusting it as a regression pin.
 
 ## References
 
