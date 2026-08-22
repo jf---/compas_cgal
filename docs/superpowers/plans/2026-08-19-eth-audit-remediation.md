@@ -52,6 +52,115 @@ Every task's requirements implicitly include this section.
 - **Never modify a reference test to make it pass.** Never `xfail`, never `skip`.
 - Python floor for new code: the repo declares `>=3.9`; Task 12 decides and enforces the real floor.
   Until Task 12 lands, add `from __future__ import annotations` to any Python file you create.
+- **THE CONFLICT-ZONE RULE (added 2026-08-23, see Re-plan below).** `src/engagement_2.{cpp,h}` and
+  `src/stock_2.{cpp,h}` are the only files where this branch and
+  `codex/exact-certified-adaptive-phase1-t9-zero-guide` both made substantial changes, and a rebase
+  onto codex is pending. **Every additional commit to those four files widens a merge that must be
+  resolved by hand.** Tasks 8 and 10 finish because they are already inside that zone; after them, no
+  task may touch those files until the rebase lands. Every other file this plan edits is untouched on
+  codex and costs the same before or after.
+
+---
+
+## Re-plan — 2026-08-23
+
+Fourteen tasks are complete (0, 1, 2, 3, 22, 4, 5, 6, 7a, 7b, 8, 23, 9, and the spec/plan commit).
+Execution then paused on a scope challenge: this branch is **not** the project's trunk.
+
+`codex/exact-certified-adaptive-phase1-t9-zero-guide` is a sibling — the branches diverged at
+`1860167` with **33 commits here and 244 there** — and it carries three toolpath generators that
+machine whole pockets, against this branch's none. The decision recorded in `INTEGRATECODEX.md` is to
+**rebase this branch onto codex**, because codex still ships every defect this plan repaired: the
+`mat_scale` gouge, the `Stock2` seam, and the unsound engagement-audit certifier that
+`benchmarks/`, `scripts/engagement_baseline.py` and `docs/exactness.md` all exercise.
+
+Three facts from that investigation change this plan's ordering:
+
+1. **The rib witness does not falsify codex's newer `continuous_tea_2` certifier** — its event
+   partition closes the two-station blind spot by construction. But that certifier sits *beside* the
+   audit path rather than replacing it, so the repairs here remain the only fix for what ships.
+2. **Codex has no independent falsifier for circle certification.** Segments have one; circles verify
+   only the implementation's own output. Task 10 builds exactly that, so its value rose.
+3. **Codex never touched `toolpath.cpp`, `toolpath.py`, `engagement.py` or `tests/test_toolpath.py`.**
+   Every task against those files ports cleanly and can run before or after the rebase.
+
+The re-ordering and the five new tasks below follow from those. Task 11 in particular rose sharply:
+codex's own `docs/benchmarks.md` records that conflating `uncertified` with `truly_exceeding` once
+made a generator that had improved 2.4× look like a regression — which is precisely the distinction
+Task 11 puts into the type system.
+
+**Revised execution order.** Tasks 29–35 were added independently against codex trunk; none touches
+the conflict zone, so all are post-rebase by construction. Two of them reorder everything else:
+
+- **32 goes first.** The full suite has never been observed green — it timed out at ten minutes — and
+  four tests fail on trunk. Nothing downstream is trustworthy until that is resolved, including any
+  claim this plan's own tasks make about not breaking anything.
+- **34 gates 35, and is larger than it looks.** `SegmentSiteMedialAxis.build` accepts **exactly one
+  polygon** — a hole-free six-vertex ring whose vertices must be exactly
+  `(0,0) (6,0) (6,2) (2,2) (2,6) (0,6)`; every other polygon raises
+  `UnsupportedCanonicalMatLShapeGraphError`. Held's examples are arbitrary contours, so 35 cannot
+  start until 34 lands.
+
+| when | tasks | rationale |
+| --- | --- | --- |
+| Before the rebase (conflict zone) | **8** (fix round 2), **10** | already inside the two conflicting files; finishing costs less than leaving them half-done |
+| Post-rebase — foundation | **32** | observe the suite green before trusting any later measurement |
+| Post-rebase — soundness | **24** | the circle falsifier, using the witnesses the rebase carries |
+| Post-rebase — gate | **30**, **29**, **25** | register the generators, add the second cap so a defect can be attributed, then pin the four quoted numbers |
+| Post-rebase — reporting | **11** | the `uncertified` / `truly_exceeding` distinction the gate depends on, in the type system |
+| Post-rebase — generator hygiene | **14**, **13**, **16**, **17**, **19**, **26** | all on `toolpath.cpp` / the engagement generators; untouched on codex, so they port free |
+| Post-rebase — capability | **34**, **31**, **33** | generalise the MAT beyond one polygon; then corner clearing for the residue; then the missing physics KPIs |
+| Post-rebase — platform and docs | **12**, **15**, **18**, **27**, **21**, **20**, **28** | lower stakes; **12** is worse on codex, where `adaptive/` imports `typing.Self` (3.11+) against `requires-python = ">=3.9"` |
+| Capstone | **35** | reproduce Held's published examples with a per-example KPI delta — the strongest external validation available, and blocked on **34** |
+| Re-scope, not rewrite | **23** | `docs/engagement_certificate.md` says the arc certifier is unrepaired, which Task 10 fixes, and it must be reconciled with codex's `docs/continuous_engagement.md` |
+
+!!! warning "Two Held-parity items still have no task"
+
+    `INTEGRATECODEX.md` ranks **breaking the ~141.8° cap saturation** first and **helical or ramped
+    entry** second on the critical path. Neither is a task in this plan.
+
+    Saturation is the item that decides whether this is engagement control or a guardrail — asking
+    for 20° yields the same measured maximum as asking for 140°. Its cause is named in codex's own
+    `docs/benchmarks.md`: the generator regulates advance but not trochoid radius, so once
+    medial-axis clearance fixes the radius no advance reaches a tight cap. `radius_regulated_toolpath`
+    was built for exactly this and is inert at a 120° cap, which points at the guide's station set —
+    and therefore at **Task 34**, since a MAT restricted to one polygon cannot offer a different
+    station set to choose from.
+
+    Entry is cheaper and clears two of the six failing gate criteria on its own: every cap exceedance
+    on all three gate pockets is a chain-entry cut, verified by set equality.
+
+    Both need briefs before the capability phase, or 35 will reproduce Held's contours at a cap that
+    does not bind.
+| Machining-quality track (Tasks 29-35) | **32** (nothing is trustworthy without a green run), **29**, **30**, **31**, **33**, **35**, **34** |
+
+The machining-quality track runs beside the certifier track and shares no files with it. Its ordering
+is forced in two places only: **29 before 30**, so the new generators land on a gate axis that can
+attribute; and **30 before 31**, so the uncut regression is measured by the gate before it is
+repaired. **34** is ranked last deliberately — it is the largest task in the plan and its usual
+justification is falsified; read its warning box before starting it.
+
+### Landed on codex trunk — 2026-08-23
+
+Four commits, `d9d0e8a` `7af7a24` `8d9adc6` `b62c00a`. Two findings worth carrying forward, both of
+them defects in the *instrument* rather than in a generator:
+
+1. **`max_loop_radius_step` compared radii across a retract** — a jump the cutter performs at
+   clearance height. Scoped to runs bounded by a rapid *or* a `path_index` change; both boundaries are
+   needed, because a chain-ordering generator links chains at cutting depth and has no rapid to split
+   on. `rect_20x12` went `3.988` -> `1.024`. The criterion had never been failed by a real defect.
+2. **The engagement angle is the RIM ARC, twice the textbook milling angle** — measured against the
+   kernel at ratio exactly `2.000` over every radial depth. `a_e = r(1 - cos(theta/2))` was correct
+   all along; a confident "correction" to the textbook relation would have reported a plunge as
+   **zero** immersion and halved every load figure on the page. The conversion is now explicit in
+   `textbook_engagement_deg` and anchored by
+   `test_the_kernel_anchors_the_rim_arc_to_radial_depth_relation`, which reads the live kernel — so it
+   cannot be "corrected" back on algebra alone, because it already was once.
+
+Both were caught the same way, and neither by reading code: **name the physical event the comparison
+corresponds to, then measure which quantity the inputs actually carry.** Anchoring a formula at its
+endpoints is the weakest available evidence — it is exactly what a wrong-but-plausible formula is
+most likely to satisfy. `docs/machining_metric_validity.md` records all three cases.
 
 ---
 
@@ -2682,6 +2791,646 @@ Expected: all green.
 ```bash
 git add -A
 git commit -m "docs: API pages for stock and engagement, internal plans out of the site"
+```
+
+---
+
+# Phase 5 — Post-rebase, on codex trunk
+
+Every task in this phase assumes the rebase in `INTEGRATECODEX.md` has landed, so paths are the
+**codex** layout. None of them touches `src/engagement_2.*` or `src/stock_2.*`.
+
+---
+
+### Task 24: an independent falsifier for circle certification
+
+Codex's suite is disciplined — 1,022 test functions, zero `skip`/`xfail`, zero `pytest.approx` — with
+one hole: segment certification has a real false-certificate hunter and **circle certification has
+none**. The three tests asserting a certified circle verify only the implementation's own output,
+including `_continuous_tea_2.verify_event_partition(trace.partition)`, which is the same module
+verifying its own record.
+
+This branch already built the missing instrument. Wire it up.
+
+**Files:**
+- Modify: `tests/adaptive/test_circle_oracle.py`
+- Reference: `tests/adaptive/test_segment_oracle.py:97-140` (the pattern to mirror),
+  `tests/test_false_certificate.py` (the rib constructions this branch carries)
+
+**Interfaces:**
+- Consumes: `_stock_2.engagement_at(stock, cx, cy, r, cap_chord_ratio, gap_close_ratio)` — the
+  independent implementation; the rib and spiral-rib stock builders from
+  `tests/test_false_certificate.py`.
+- Produces: `_assert_no_confirmed_arc_violation(...)`, the circle analogue of
+  `_assert_no_confirmed_dyadic_violation`.
+
+- [ ] **Step 1: Read the segment falsifier and copy its shape, not its code**
+
+`tests/adaptive/test_segment_oracle.py:97-140` walks `2**DYADIC_FALSIFIER_DEPTH` stations along a
+certified motion and calls `_stock_2.engagement_at` — a *different* implementation from the one under
+test — failing if any station's exact predicate fires. Mirror that over the arc parameter.
+
+- [ ] **Step 2: Write the falsifier**
+
+```python
+def _assert_no_confirmed_arc_violation(stock, centre, radius, sweep, cw, tool_radius, cap_chord_ratio):
+    """Fail if a certified circular motion has an exact violation at a dyadic station.
+
+    Independence is the whole point: `engagement_at` shares no code with the event
+    partition being checked, so agreement is evidence rather than tautology.
+    """
+    denominator = 2**DYADIC_FALSIFIER_DEPTH
+    for numerator in range(denominator + 1):
+        theta = start_angle + (-sweep if cw else sweep) * numerator / denominator
+        cx = centre[0] + radius * math.cos(theta)
+        cy = centre[1] + radius * math.sin(theta)
+        exceeded = _stock_2.engagement_at(stock, cx, cy, tool_radius, cap_chord_ratio, 0.0)[2]
+        if exceeded:
+            pytest.fail(f"certified circle has an exact violation at {numerator}/{denominator}")
+```
+
+- [ ] **Step 3: Invoke it from every test that asserts a certified circle**
+
+`test_circle_oracle.py:54`, `:83`, `:113`. Each currently asserts only
+`trace.exact_verdict == "certified"` plus structural counts.
+
+- [ ] **Step 4: Add the rib as a fixture, and pin liveness independently of the verdict**
+
+Port the annular and spiral rib builders. Each rib test asserts two independent things: the exact
+oracle finds a violating centre on the motion (liveness, established without the certifier), and the
+certifier's verdict. A witness that can pass by its own construction degenerating is worthless — this
+branch learned that the hard way; see `tests/test_false_certificate.py`'s liveness pins.
+
+- [ ] **Step 5: Verify the falsifier can fail**
+
+Inject a false certificate — force `exact_verdict = "certified"` on a rib motion — and confirm the
+falsifier fires. A hunter never observed hunting is decoration.
+
+- [ ] **Step 6: Run and commit**
+
+```bash
+pixi run baseline
+git add tests/adaptive/test_circle_oracle.py
+git commit -m "test(adaptive): independent falsifier for circle certification"
+```
+
+---
+
+### Task 25: put the four quotable numbers behind the gate
+
+`docs/engagement_controlled_toolpath.md` carries the project's strongest public claims. Four of them
+have **zero occurrences** across `src/`, `tests/` and `benchmarks/` — they exist only in prose:
+`136.4°` vs `119.5°`, `914.3`, `224 ms` vs `2.6 ms`, and `125.8°` radial saturation.
+
+The *comparisons* are tested — `COMPARABLE_STEPOVER` derives the textbook stepover and asserts the
+regulated path wins by ≥2× on exceedance — but the figures are unpinned, and the timing claim is
+contradicted internally because no harness times the regulated generators at all.
+
+**Files:**
+- Modify: `benchmarks/quality.py` or `benchmarks/gate.py` (add the metrics)
+- Modify: `benchmarks/runner.py` (time the regulated generators)
+- Modify: `docs/engagement_controlled_toolpath.md`, `docs/radius_regulated_toolpath.md`
+
+**Interfaces:**
+- Consumes: `GATE_GENERATORS`, `MeasurementRecord`, the existing gate metric plumbing.
+- Produces: gate metrics for peak measured engagement under a dialled stepover, the unregulated
+  cutting length, and wall-clock for both engagement generators.
+
+- [ ] **Step 1: Add the unregulated generator to `GATE_GENERATORS`**
+
+`914.3` has no code behind it because the unregulated generator is not a gate generator, so nothing
+recomputes it. Adding it also makes the 0.152% residue figure live.
+
+- [ ] **Step 2: Add a stepover-comparison metric**
+
+Emit the peak measured engagement for the textbook-derived stepover alongside the regulated peak, on
+the same pocket, so `136.4` and `119.5` become computed values rather than recalled ones.
+
+- [ ] **Step 3: Time the regulated generators**
+
+`perf_counter` currently appears only in `benchmarks/runner.py` (timing the *unregulated* generator)
+and `scripts/engagement_baseline.py` (also unregulated). Time both engagement generators on the gate
+pockets and record the result.
+
+- [ ] **Step 4: Replace the prose figures with the computed ones**
+
+Every number in those two docs either cites a gate metric by name or is removed. Fix the stale
+`72.4 ms` prior-art row while the file is open.
+
+- [ ] **Step 5: Run and commit**
+
+```bash
+pixi run python -m benchmarks.cli --corpus all --out docs/benchmarks
+pixi run baseline
+git add benchmarks/ docs/engagement_controlled_toolpath.md docs/radius_regulated_toolpath.md
+git commit -m "bench: gate the four quoted engagement numbers"
+```
+
+---
+
+### Task 26: exercise holes on an engagement generator
+
+`holes` is accepted by the engagement generators, passed through, and never exercised. The only holes
+test in the repository is against the legacy `trochoidal_mat_toolpath_circular`. Islands change
+medial-axis topology, so an untested path here is a real gap rather than a coverage statistic.
+
+**Files:**
+- Modify: `tests/test_engagement_toolpath.py`, `tests/test_engagement_radial_toolpath.py`
+
+**Interfaces:** consumes the existing pocket fixtures and `engagement_controlled_toolpath`; produces
+no new API.
+
+- [ ] **Step 1: Add a pocket with one island** and assert the emitted programme keeps tool clearance
+  from **both** boundaries, reusing the existing clearance assertion.
+- [ ] **Step 2: Add a pocket with two disjoint islands**, which forces more than one guide component.
+- [ ] **Step 3: Assert the cap still holds away from chain entries** — the property the no-holes
+  fixtures already pin, on the harder topology.
+- [ ] **Step 4: Run and commit**
+
+```bash
+pixi run baseline
+git add tests/test_engagement_toolpath.py tests/test_engagement_radial_toolpath.py
+git commit -m "test(engagement): exercise island pockets on both engagement generators"
+```
+
+---
+
+### Task 27: one clause per figure caption
+
+Panel labels read *"engagement-controlled, 120° cap"* and `docs/toolpath_drawing.md`'s caption is
+*"Two trochoidal tool paths over the same pocket"*. A reader arriving from
+`docs/continuous_engagement.md` may take "engagement-controlled" for the exact-certified pipeline. It
+is not — the disclaimer currently lives only in a module docstring and one prior-art table row.
+
+**Files:** `benchmarks/figures.py`, `benchmarks/qualityfigures.py`, `docs/toolpath_drawing.md`
+
+- [ ] **Step 1: Add one clause to each caption** naming the guarantee's scope — per evaluated
+  position, no certificate produced.
+- [ ] **Step 2: Regenerate and confirm byte-stability**
+
+```bash
+pixi run python -m benchmarks.cli figures
+git diff --stat docs/
+```
+
+Only caption text should move; `e0ae116` pinned the SVG hashsalt so redrawing identical paths rewrites
+identical bytes, and any geometry change in that diff is a finding.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add benchmarks/figures.py benchmarks/qualityfigures.py docs/toolpath_drawing.md
+git commit -m "docs: figure captions state the guarantee's scope"
+```
+
+---
+
+### Task 28: close the `adaptive/` producer–verifier divergence
+
+`replay_certificate()` ends in an unconditional `raise` (`src/compas_cgal/adaptive/replay.py:1276`),
+and independently its operation grammar rejects `RetraceSegmentOperation` (`replay.py:245-261`) — an
+operation the generator emits by design (`generator.py:1448-1458`) and exercises in its own reference
+fixture. Downstream, `coverage.require_complete()` (`replay.py:1164`) is unreachable, so the
+guarantee *"a shipped programme leaves no reachable material"* has no test.
+
+All 17 tests in `tests/adaptive/test_replay.py` are `pytest.raises`, and the helper discards the
+return value — so the certificate of record is never observed being produced.
+
+Ranked last in this phase because nothing ships through this path yet.
+
+**Files:** `src/compas_cgal/adaptive/replay.py`, `tests/adaptive/test_replay.py`
+
+- [ ] **Step 1: Decide the intent first, and record it.** Is `replay_certificate` unfinished, or
+  deliberately disabled pending the retrace grammar? The unconditional `raise` reads as the latter.
+  Do not remove it before answering — ask if the answer is not in the commit history.
+- [ ] **Step 2: Admit `RetraceSegmentOperation` into the grammar**, or state in the docstring why the
+  generator emits an operation the verifier will not accept.
+- [ ] **Step 3: Write the first positive-path test** — bind the return value and assert on it, so a
+  regression that made `replay_certificate` raise unconditionally would fail rather than pass.
+- [ ] **Step 4: Reach `coverage.require_complete()`** with a fixture that gets past the terminality
+  guard, giving `IncompletePocketCoverageError` its first pipeline-level exercise.
+- [ ] **Step 5: Run and commit**
+
+```bash
+pixi run baseline
+git add src/compas_cgal/adaptive/replay.py tests/adaptive/test_replay.py
+git commit -m "fix(adaptive): replay verifier accepts the operations the generator emits"
+```
+
+---
+
+### Task 29: a second cap, so the gate can attribute a defect again
+
+`benchmarks/gate.py`'s own docstring states the design: *"Three pockets across two generators is the
+smallest product in which a defect can be attributed: a finding on every pocket is the generator's, a
+finding on every generator is the pocket's, and a finding on one cell is neither."*
+
+**That attribution is currently void.** At `GATE_CAP_DEG = 120` the two gate generators emit
+identical paths on all three pockets — cutting length `411.566` / `1018.665` / `565.311`, cut blocks
+`49` / `77` / `90`, and the same failing criteria, to six figures. The wiring is correct
+(`GATE_GENERATORS` holds two distinct functions); the radius ladder simply never fires at that cap,
+which the earlier saturation sweep already showed — at cap 120 the advance-only and radius-regulated
+columns agreed exactly, and diverged at 40, 60, 80 and 100. Six cells are measuring three paths.
+
+The plumbing exists. `gate_pocket(name, tool_diameter=..., tea_cap_deg=...)` already takes the cap;
+only the call site hard-codes it.
+
+**Files:**
+- Modify: `benchmarks/gate.py`, `tests/benchmarks/test_quality.py`
+
+**Interfaces:**
+- Consumes: `gate_pocket`, `GATE_POCKET_NAMES`, `GATE_GENERATOR_NAMES`.
+- Produces: `GATE_CAP_DEGS: Tuple[float, ...]`, and a gate parametrised over pockets x generators x
+  caps.
+
+- [ ] **Step 1: Prove the divergence before relying on it.** Run both generators at each candidate
+  cap and record cutting length and cut count. Pick the second cap from measurement, not from the
+  old sweep — that sweep predates the rho work and the run-scoped metric.
+- [ ] **Step 2: Add `GATE_CAP_DEGS`** with a comment giving each cap's job: 120 is the commissioned
+  load a real roughing pass runs at, the second is the cap at which the ladder demonstrably engages.
+- [ ] **Step 3: Parametrise the gate over the third axis** and confirm the cell count triples.
+- [ ] **Step 4: Assert the axis is load-bearing.** A test that fails if the two generators produce
+  identical output at *every* gate cap — otherwise this regresses silently the next time the ladder
+  goes inert.
+- [ ] **Step 5: Run and commit**
+
+```bash
+pixi run pytest tests/benchmarks -q -n auto
+git add benchmarks/gate.py tests/benchmarks/test_quality.py
+git commit -m "bench: a second cap, so the gate can attribute a defect to a generator"
+```
+
+---
+
+### Task 30: register the three new generators in the gate
+
+`rho_regulated_toolpath`, `chain_ordered_toolpath` and `spiral_entry_toolpath` ship
+(`7af7a24`) with 19+ tests each, and **none is in `GATE_GENERATORS`** — so the machining-quality gate
+never sees them. Their measured wins are recorded only in commit messages and module docstrings,
+which is exactly the unpinned-number problem Task 25 exists to fix.
+
+What they claim, on `rect_12x8` at cap 120: degenerate loops `4 -> 0` and tangent breaks `24 -> 0`
+(rho regulation); material entries `5 -> 1` (chain ordering); worst chain entry `243.20` degrees
+against a proven floor of `240` (spiral entry). Each is a gate criterion or one line from being one.
+
+Ordered after Task 29 so the new cells land on the corrected axis rather than being re-parametrised
+twice.
+
+**Files:**
+- Modify: `benchmarks/gate.py`, `tests/benchmarks/test_quality.py`
+
+- [ ] **Step 1: Add the three to `GATE_GENERATORS` and `GATE_GENERATOR_NAMES`.** Expect the gate to
+  go redder, not greener — the point is measurement, not a green board.
+- [ ] **Step 2: Record the new failure profile per cell** before changing anything, so the trade each
+  generator makes is documented rather than discovered later.
+- [ ] **Step 3: Reconcile the uncut regression with Task 31.** rho regulation raises uncut fraction
+  `0.0080 -> 0.0295` on `rect_12x8`; that is a real defect against a reachable-region denominator and
+  must not be normalised as the new baseline.
+- [ ] **Step 4: Run and commit**
+
+```bash
+pixi run pytest tests/benchmarks -q -n auto
+git add benchmarks/gate.py tests/benchmarks/test_quality.py
+git commit -m "bench: gate the rho-regulated, chain-ordered and spiral-entry generators"
+```
+
+---
+
+### Task 31: consume `declined_regions` — the corner the roughing pass cannot reach
+
+`RhoToolpathResult.declined_regions` and `OrderedToolpathResult.declined_regions` name the guide runs
+below the degeneracy floor — on `rect_12x8`, 116 guide stations across 4 runs, whose gouge-free radius
+is at or under the tool radius. The generators correctly refuse to bore them and correctly report
+them. **Nothing downstream consumes the field.**
+
+The consequence is measured: uncut fraction `0.0080 -> 0.0295` on `rect_12x8`, `0.0028 -> 0.0117` on
+`rect_20x12`, `0.0069 -> 0.0352` on `L_shape`. Because `uncut_fraction`'s denominator is *what the
+tool can reach* — pinned by
+`test_the_uncut_denominator_is_what_the_tool_can_reach_and_not_the_pocket` — this is reachable
+material left standing, not an artefact of the metric.
+
+`docs/loop_radius_degeneracy.md` proves why no guide radius rescues it: `rho_max = (d - r) / 2`, so
+`rho_max <= r` exactly when `d <= 3r`. A corner narrower than three tool radii cannot carry a
+trochoid at any radius. The answer is a different operation, not a different radius.
+
+**Files:**
+- Create: a corner-clearing pass, beside the generators, never inside them
+- Modify: `benchmarks/quality.py` (distinguish declined from silently-missed)
+
+**Interfaces:**
+- Consumes: `declined_regions`, the exact stock, `DEGENERATE_LOOP_RATIO`.
+- Produces: motions clearing the declined runs, or a typed refusal naming the tool that could.
+
+- [ ] **Step 1: Decide the contract first.** Either the roughing programme clears these corners with a
+  non-trochoidal motion, or it declares them for a second operation with a smaller tool. Both are
+  defensible; shipping neither is not.
+- [ ] **Step 2: Split the metric.** `uncut_fraction` must separate material that was *declined and
+  named* from material *silently missed*. A generator that reports what it left is categorically
+  better than one that does not, and one number currently conflates them.
+- [ ] **Step 3: Implement the chosen contract** as a new path; do not modify either generator.
+- [ ] **Step 4: Show the uncut fraction returns to or below the `engagement_controlled` baseline**, or
+  state precisely which part is structurally unreachable by this tool and why.
+- [ ] **Step 5: Run and commit**
+
+---
+
+### Task 32: a green full suite, and the four adaptive reds
+
+The full suite has not been observed green. It timed out at ten minutes in the session that landed
+`d9d0e8a`, and the commits there went in on the targeted benchmark tests alone. Separately, four
+tests fail on trunk, all in the candidate-family work and unrelated to anything above:
+
+```
+tests/adaptive/test_generator.py::test_task13f_full_continuation
+tests/adaptive/test_generator.py::test_real_active_family_stops_at_unresolved_exact_event
+tests/adaptive/test_route_retrace_generator.py::test_continuation_rejects_missing_retrace_commit
+tests/adaptive/test_route_retrace_generator.py::test_route_retrace_derivation_rejects_unsupported_source_scope[terminal]
+```
+
+Sample divergence: expected `cap=0; gouge=56`, actual `cap=10; gouge=46`. Two of the four are
+`DID NOT RAISE` — a guard that no longer fires, which is the more serious shape.
+
+- [ ] **Step 1: Establish whether each red is a stale expectation or a live defect.** Do not touch a
+  test until that question is answered per failure; the project rule is to fix the code, never the
+  reference test.
+- [ ] **Step 2: Fix, and record which of the two it was** in the commit message.
+- [ ] **Step 3: Get one observed green full run** and record its wall-clock, so the CI timeout is set
+  from measurement.
+- [ ] **Step 4: Raise the benchmarks workflow timeout** to that measurement plus headroom, or split
+  the suite so no single job exceeds it.
+
+---
+
+### Task 33: the physics KPI families still missing
+
+`d9d0e8a` wired the orphaned `MaterialOutcome` / `MachineOutcome` / `ToolLifeOutcome` and added the
+program-feasibility group, immersion stationarity, and load-at-design. Three families a machining
+audience would expect are still absent, and all three are computable from the existing survey:
+
+1. **Cutting force.** Engagement is a *proxy* for force. The mechanistic model gives the quantity
+   itself — peak and RMS resultant force, its rate of change, and the deflection that force implies
+   at the wall. Two paths with identical peak engagement can carry very different peak force.
+   Requires one new coefficient (specific cutting pressure) in `MaterialModel`, so it is a
+   *calibrated* outcome and belongs in `CalibratedOutcome`, never in `PathQuality`.
+2. **Exit impact.** Climb versus conventional, and the count of exits taken at high engagement —
+   which is what chips a carbide edge. Pure geometry plus engagement; **no calibration**, so it stays
+   in `PathQuality`.
+3. **Controller starvation.** The program group reports block-length distribution but not the
+   starvation verdict, which needs a feed and an interpolation period. `MachineModel` already has the
+   feed; add the interpolation period and emit the fraction of cut length in blocks the control
+   cannot consume at commanded feed. A trochoidal path is the shape that provokes this — an early
+   radius sweep produced 862 cuts at one cap.
+
+Keep the calibration boundary that `benchmarks/models.py` establishes: a metric needing a material or
+a machine takes it as an argument and raises a **named** error when absent, rather than substituting
+a coefficient.
+
+- [ ] **Step 1: Exit impact first** — it needs no new calibration and no new model field.
+- [ ] **Step 2: Add specific cutting pressure to `MaterialModel`** with a cited default and a range
+  check, then the force metrics into `CalibratedOutcome`.
+- [ ] **Step 3: Add the interpolation period to `MachineModel`** and the starvation fraction.
+- [ ] **Step 4: One anchored test per family**, in the style of
+  `test_the_kernel_anchors_the_rim_arc_to_radial_depth_relation` — assert against a physical anchor,
+  not against the implementation's own output.
+
+---
+
+### Task 34: generalise the native segment-site MAT
+
+`SegmentSiteMedialAxis.build` accepts **exactly one polygon**. The chain
+`src/segment_site_mat_bundle.cpp:39` -> `segment_site_catalog_sampling.cpp:283` ->
+`segment_site_catalog_neck.cpp:230` -> `segment_site_catalog_graph.cpp:1220` reaches
+`require_l_shape_input`, which demands a hole-free six-vertex ring whose vertices are exactly
+`(0,0) (6,0) (6,2) (2,2) (2,6) (0,6)`. Measured: every other polygon raises
+`UnsupportedCanonicalMatLShapeGraphError`, and at `max_refinement_depth=6` with `r=0.25` even the
+fixture raises `ConicSamplingLimitError`. It is one polygon inside a parameter window.
+
+A `canonical_rectangle_mat_graph` / `require_rectangle_input` pair exists
+(`segment_site_catalog_graph.cpp:125,905`) but is reached only from `tests/native/task9_*.cpp` — no
+Python path calls it, which is itself the evidence that shape-by-shape does not scale.
+
+**This blocks the middle-curve construction entirely** and nothing else can use the true MAT until it
+lands.
+
+!!! warning "Do not justify this with the middle curve's smoothness"
+
+    Measured head to head on the fixture, the middle curve is **not** gentler than the straight
+    skeleton: guide-radius CoV `0.5719` against `0.5752`, statistically indistinguishable, because
+    `rho = (d - r) / 2` is affine in the same clearance and inherits the same relative swing.
+    Degenerate loops are *worse* — 24.5% against 13.0% — for the reason
+    `docs/loop_radius_degeneracy.md` derives: the middle curve degenerates at `d <= 3r` where the
+    MAT-centred construction degenerates at `d <= 2r + c`, a strictly wider band. The honest case for
+    this task is **structural** — two wall-hugging strands per axis edge, parabolic arcs at reflex
+    vertices, the tool grazing the wall by construction — and it is *untested*, because the only
+    polygon that builds has no wide channel to show it on.
+
+- [ ] **Step 1: Route `SegmentSiteMatBundle2::build` through a real segment-site Voronoi
+  construction** rather than a canonical fixture graph.
+- [ ] **Step 2: Keep the fixture graph as a regression oracle** — the new construction must reproduce
+  it exactly on the L, or the difference must be explained.
+- [ ] **Step 3: Fix the refinement floor** so the fixture builds at the depths its own tests use.
+- [ ] **Step 4: Only then** revisit whether a middle-curve generator earns its place, on a pocket wide
+  enough to test the structural claim.
+
+---
+
+### Task 35: reproduce Held's published examples
+
+The project's algorithmic claims trace to Held & Pfeiffer 2025, and Figure 6 is reproduced
+(`docs/assets/images/fig6_*.svg`). **The rest of the paper's examples are not.** Reproducing all of
+them, with a per-example KPI delta against the published figures, is the strongest external
+validation available and needs no new machinery beyond what the corpus already has.
+
+- [ ] **Step 1: Locate or digitise the contours.** They were reported as already extracted from the
+  paper and in the repository; an exhaustive search of all local branches, both checkouts including
+  ignored files, and the Zotero storage folder beside the PDF did not find them. **Resolve this
+  before anything else** — if they are not extracted, digitise from the figures and label the result
+  as digitised, as was done for Figure 6.
+- [ ] **Step 2: Add each as a corpus family** under `benchmarks/families/`, with provenance in the
+  docstring: paper figure number, and measured-versus-digitised.
+- [ ] **Step 3: Generate ours beside the published figure** using the existing `draw_comparison`.
+- [ ] **Step 4: Tabulate the KPI delta per example** and, where we differ, say whether it is a
+  difference in the algorithm, in the parameters, or a defect.
+- [ ] **Step 5: Publish to mkdocs** with the deltas, and state plainly which examples we do worse on.
+
+---
+
+# Phase 6 — Held parity
+
+The two items `INTEGRATECODEX.md` ranks first and second on the critical path. Both are post-rebase,
+neither touches the conflict zone, and **35 should not run before them** — reproducing Held's contours
+at a cap that does not bind would look like validation and would not be.
+
+---
+
+### Task 36: helical or ramped entry
+
+Entry into virgin stock is currently a full slot at 360°: the tool plunges, then cuts a complete
+annulus with no cleared side. It is warned about in both module docstrings and never hidden, which is
+honest — but it is also the single largest source of failing gate criteria.
+
+Measured on codex trunk: **every** cap exceedance on all three gate pockets is a chain-entry cut,
+verified by set equality (`test_only_chain_entry_loops_are_measured_above_the_cap`), as is the 329°
+engagement step. Away from entries the worst motion measures 119.19° against a 120° cap. So the cap
+already holds everywhere the entry does not reach, and this task clears **two of the six** failing
+gate criteria on its own.
+
+**Files:**
+- Modify: `src/compas_cgal/engagement_toolpath.py`, `src/compas_cgal/engagement_radial_toolpath.py`
+- Modify: `tests/test_engagement_toolpath.py`, `tests/test_engagement_radial_toolpath.py`
+- Modify: `benchmarks/gate.py` (the entry-exemption in the cap criterion, once it is no longer needed)
+
+**Interfaces:**
+- Consumes: the operation stream's per-operation `z_start` / `z_end`, which already carries plunge and
+  retract as differing-z lines.
+- Produces: no signature change to `engagement_controlled_toolpath`. The entry becomes a sequence of
+  operations rather than a single plunge, so `ToolpathResult.operations` grows a new shape that
+  downstream consumers — the audit's `_replay_line`, the benchmark metrics, the figure drawing — must
+  all accept.
+
+- [ ] **Step 1: Choose the entry strategy and record why**
+
+Three candidates, and I do not have enough information to pick for you — read the operation stream
+first, then decide and justify in the report:
+
+| strategy | what it needs | cost |
+| --- | --- | --- |
+| **Helical** — descend on a helix inside the first loop | Z motion during an arc; the op stream carries per-op z, so this is a ramped arc sequence | changes the cut-plane assumption the engagement audit makes (`_infer_cut_height` takes the minimum motion z) |
+| **Ramped** — descend along the first bridge segment | same z machinery, simpler geometry | a ramp is a 3D cutting move the audit explicitly refuses (`UnexpectedToolpathGeometryError`, "ramped 3D cutting is outside the engagement audit's cut-plane model") |
+| **Pre-bored / entry from cleared stock** — start the chain where material is already gone | no Z machinery at all; needs the guide to admit an entry point adjacent to cleared region | pushes the problem to the caller unless the generator can find such a point itself |
+
+Whichever you choose, **the audit must still be able to replay the result.** Both of the first two
+break `_infer_cut_height`'s single-plane assumption, and the audit currently raises on a differing-z
+line with nonzero XY travel. Say in your report what the audit needs in order to accept your entry.
+
+- [ ] **Step 2: Write the failing test first**
+
+The property is not "the entry looks helical" — it is that **no motion exceeds the cap**:
+
+```python
+def test_no_motion_exceeds_the_cap_including_the_entry():
+    """The entry cut is the last place the cap is violated; after helical/ramped entry, nothing is.
+
+    Before this task every cap exceedance on every gate pocket was a chain-entry cut,
+    verified by set equality. This asserts the set is now empty rather than merely
+    equal to the entry set.
+    """
+    result = engagement_controlled_toolpath(POCKET_12X8, tool_diameter=2.0, tea_cap_deg=120.0)
+    over = _measured_over_cap(result, tea_cap_deg=120.0)
+    assert over == set(), f"motions above the cap: {sorted(over)}"
+```
+
+Reuse whatever `test_only_chain_entry_loops_are_measured_above_the_cap` uses to build its measured
+set, so the two tests are comparable and the older one can be rewritten to assert the stronger
+property rather than deleted.
+
+- [ ] **Step 3: Implement**
+
+- [ ] **Step 4: Verify the two gate criteria clear**
+
+Run the gate and report the before/after criteria table. The cap criterion and the engagement-step
+criterion are the two expected to move; if a third moves, say which and why.
+
+- [ ] **Step 5: Confirm the audit still replays the result**
+
+`audit_toolpath_engagement` must accept the new operation stream. If it raises
+`UnexpectedToolpathGeometryError`, that is this task's problem, not a pre-existing limitation to
+route around.
+
+- [ ] **Step 6: Commit**
+
+```bash
+pixi run baseline
+git add src/compas_cgal/engagement_toolpath.py src/compas_cgal/engagement_radial_toolpath.py \
+        tests/test_engagement_toolpath.py tests/test_engagement_radial_toolpath.py benchmarks/gate.py
+git commit -m "feat(engagement): non-slotting entry, so the cap holds at chain entry too"
+```
+
+---
+
+### Task 37: break the ~141.8° cap saturation
+
+**The item that decides whether this is engagement control or a guardrail.** Asking for a 20° cap
+yields the same measured maximum engagement as asking for 140°, with 264 forced advances at 20°. A
+cap that does not bind below ~141.8° is not control of the engagement angle; it is a limiter.
+
+The cause is diagnosed in codex's own `docs/benchmarks.md`, and it is not a bug in the regulator:
+
+> It regulates **advance** but not **trochoid radius**, so once the radius is fixed by the
+> medial-axis clearance no advance can reach a tight cap. Held regulates spacing **and** takes
+> smaller circles from the MAT.
+
+`radius_regulated_toolpath` was built precisely to answer that and **did not move it** — it is inert
+at a 120° cap. That failure is the most informative fact available and Step 1 is to understand it
+before writing any code.
+
+**Depends on Task 34.** If the guide's station set is the constraint, a medial axis that accepts
+exactly one hardcoded polygon cannot offer a different set to choose from.
+
+**Files:**
+- Modify: `src/compas_cgal/engagement_radial_toolpath.py` (most likely), possibly the guide
+  construction it consumes
+- Modify: `tests/test_engagement_radial_toolpath.py`
+- Modify: `benchmarks/` — the cap sweep that demonstrates the result
+
+**Interfaces:** consumes the medial-axis guide and its station set; produces no new public API unless
+Step 1 concludes the guide itself must change shape, in which case report before implementing.
+
+- [ ] **Step 1: Establish why radius regulation did not move the saturation**
+
+This is the whole task's leverage. Candidate explanations, to be distinguished by measurement rather
+than argued:
+
+1. **The radii offered are already minimal** — MAT clearance at each station bounds the loop radius
+   from below, and the regulator is choosing the smallest available. Then the station *set* is the
+   constraint, not the regulator, and the fix is upstream in the guide.
+2. **The regulator's acceptance rule saturates** — it stops reducing once some other predicate is
+   satisfied, so smaller radii are available and never taken.
+3. **Engagement is not monotone in the loop radius** — this is already known and pinned by
+   `test_engagement_is_not_monotone_in_the_loop_radius`, so a regulator that assumes monotonicity
+   would stall at a local optimum rather than the global one.
+
+Measure which. For a station where the cap is missed, enumerate the radii actually available and the
+engagement each would produce, and say whether a feasible radius existed that the regulator declined.
+
+**If the answer is (1), stop and report** — the fix is in the guide, likely behind Task 34, and it is
+a different task from this one.
+
+- [ ] **Step 2: Write the failing test — a cap sweep, not a single cap**
+
+```python
+@pytest.mark.parametrize("cap_deg", [40.0, 60.0, 90.0, 120.0])
+def test_measured_engagement_tracks_the_requested_cap(cap_deg):
+    """A cap that does not bind is not engagement control.
+
+    Before this task the measured maximum saturated near 141.8 deg: asking for 20 deg
+    produced the same maximum as asking for 140 deg, with 264 forced advances at 20 deg.
+    """
+    result = radius_regulated_toolpath(POCKET_12X8, tool_diameter=2.0, tea_cap_deg=cap_deg)
+    peak = _measured_peak_engagement_deg(result)
+    assert peak <= cap_deg + CAP_MEASUREMENT_SLACK_DEG, f"asked {cap_deg}, measured {peak}"
+```
+
+`CAP_MEASUREMENT_SLACK_DEG` is a named constant with a derivation — it covers the sampling density of
+`_measured_peak_engagement_deg`, nothing else. It is **not** a tuning knob: if it needs to grow to
+make a case pass, the case has not passed.
+
+- [ ] **Step 3: Implement whatever Step 1 identified**
+
+- [ ] **Step 4: Report the sweep, including the cost**
+
+Held's length grows 40–60× from a 160° cap to a 20° cap; this generator's grows 6.8×, and codex's own
+`docs/benchmarks.md` correctly reads that flatness as the saturation seen from a second direction. So
+**a successful fix should make the length curve steeper.** Report the growth factor before and after;
+if it is still flat, the saturation is not broken no matter what the peak-engagement test says.
+
+- [ ] **Step 5: Commit**
+
+```bash
+pixi run baseline
+pixi run python -m benchmarks.cli --corpus all --out docs/benchmarks
+git add src/compas_cgal/engagement_radial_toolpath.py tests/test_engagement_radial_toolpath.py benchmarks/
+git commit -m "fix(engagement): the cap binds below 141 deg"
 ```
 
 ---

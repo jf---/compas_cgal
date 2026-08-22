@@ -109,12 +109,43 @@ floating-point precision handling is a defect, always.
   `has_smaller_distance_to_point`, traits functors — before writing any
   coordinate arithmetic of your own.
 
-## Build & Test
+## Build & Test — PIXI EXCLUSIVELY. Read this before running anything.
+
+**Never `pip install`. Never `conda`. Never a bare `python` or `pytest`.**
 
 ```bash
-pip install --no-build-isolation -ve .
-pytest tests/ -v
+pixi run baseline          # pytest tests -n auto -q  (rebuilds the editable ext first)
+pixi run pytest            # full suite
+pixi run affected          # pytest --testmon, only affected tests
+pixi run lint              # ruff check src/compas_cgal tests
+pixi run types-adaptive    # mypy --strict on the adaptive subpackage
 ```
+
+### Where the pixi manifest lives — the trap that costs an hour
+
+The `[tool.pixi.*]` tables and `pixi.lock` live on the **`codex/exact-certified-adaptive-phase1-t9-zero-guide`** branch, checked out in the worktree:
+
+```
+/Users/jelle/Code/CADCAM/worktrees/compas_cgal_prs-exact-certified-adaptive-phase1-t9-zero-guide
+```
+
+That worktree is where active development happens. **The main checkout on
+`jf/toolpath-redesign` has no pixi manifest**, so `pixi run` fails there and it
+is tempting to reach for some other interpreter. Do not.
+
+- Default `python` on PATH is a **stale non-dev install** with **no `_stock_2`
+  extension** — every exact-kernel test errors on import with
+  `ImportError: cannot import name '_stock_2'`. That is an environment
+  artifact, never a statement about the code.
+- The pixi `pytest`/`baseline` tasks resolve the editable build directory and
+  set `SKBUILD_EDITABLE_SKIP` so the compiled extension is rebuilt and matched
+  to the interpreter. Hand-rolled invocations skip that and silently test the
+  wrong binary.
+
+**If you are in a checkout without a pixi manifest, the correct move is to work
+in the worktree above — not to find another Python.** Respect the worktree
+safety rules: stay inside the worktree for all git operations, and never commit
+from the main checkout while worktrees exist.
 
 ## Stack
 - C++20, CGAL 6.0.1 (Epick kernel), nanobind, Eigen, scikit-build-core
