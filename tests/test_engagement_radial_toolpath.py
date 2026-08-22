@@ -24,11 +24,13 @@ from compas.geometry import Circle, Line, Polygon
 from compas_cgal.engagement import _subtract_operation, audit_toolpath_engagement
 from compas_cgal.engagement_radial_toolpath import (
     FULL_RADIUS_RUNG,
+    NO_RADIUS_FLOOR,
     RADIUS_LADDER_RUNGS,
     _largest_admissible_radius,
     _least_bad_rung,
     _loop_reaches_material,
     _radius_ladder,
+    _refined_radius_ladder,
     radius_regulated_toolpath,
 )
 from compas_cgal.engagement_toolpath import (
@@ -115,6 +117,11 @@ FALLBACK_CAP_DEG = 90.0
 FALLBACK_IDLE_VOID_RADIUS = 1.53
 
 
+def _coarse_ladder(full_radius, emitted_radius, ladder_step):
+    """The unrefined ladder, as `_largest_admissible_radius` builds it for its first scan."""
+    return _radius_ladder(full_radius, emitted_radius, ladder_step, rungs=RADIUS_LADDER_RUNGS, floor_radius=NO_RADIUS_FLOOR)
+
+
 def _regulation(cap_deg):
     """The validated parameter object the search helpers take."""
     return _Regulation.build(
@@ -140,7 +147,7 @@ def _pin_state():
 def _rung_flags(stock, station, advance, regulation):
     """Per rung, whether the cap predicate accepts that radius. Descending radius."""
     flags = []
-    for radius in _radius_ladder(station.radius, 0.0, regulation.guide_step):
+    for radius in _coarse_ladder(station.radius, 0.0, regulation.guide_step):
         candidate = _GuideStation(cx=station.cx, cy=station.cy, radius=radius, clockwise=station.clockwise, tx=station.tx, ty=station.ty)
         flags.append(_station_is_admissible(stock, candidate, advance, regulation.tool_radius, regulation.cap_ratio))
     return flags
@@ -226,7 +233,7 @@ def _replay(result: ToolpathResult, polygon: Polygon) -> Stock:
 
 
 def test_radius_ladder_descends_from_the_maximal_radius():
-    ladder = _radius_ladder(PIN_FULL_RADIUS, 0.0, GUIDE_STEP_TOOL_DIAMETERS * TOOL_DIAMETER)
+    ladder = _coarse_ladder(PIN_FULL_RADIUS, 0.0, GUIDE_STEP_TOOL_DIAMETERS * TOOL_DIAMETER)
 
     assert ladder[FULL_RADIUS_RUNG] == PIN_FULL_RADIUS, "rung 0 must be the station's own maximal circle"
     assert len(ladder) == RADIUS_LADDER_RUNGS
@@ -237,13 +244,13 @@ def test_radius_ladder_stops_at_what_the_station_already_cut():
     step = GUIDE_STEP_TOOL_DIAMETERS * TOOL_DIAMETER
     already = PIN_FULL_RADIUS - 3.5 * step
 
-    ladder = _radius_ladder(PIN_FULL_RADIUS, already, step)
+    ladder = _coarse_ladder(PIN_FULL_RADIUS, already, step)
 
     # Only radii that reach beyond what this station already swept are offered:
     # anything at or below removes nothing, and offering it would let a pass
     # "progress" without cutting, which is what makes the sweep loop terminate.
     assert ladder == [PIN_FULL_RADIUS, PIN_FULL_RADIUS - step, PIN_FULL_RADIUS - 2.0 * step, PIN_FULL_RADIUS - 3.0 * step]
-    assert _radius_ladder(PIN_FULL_RADIUS, PIN_FULL_RADIUS, step) == [], "a finished station must offer no rung at all"
+    assert _coarse_ladder(PIN_FULL_RADIUS, PIN_FULL_RADIUS, step) == [], "a finished station must offer no rung at all"
 
 
 def test_engagement_is_not_monotone_in_the_loop_radius():
@@ -271,12 +278,13 @@ def test_engagement_is_not_monotone_in_the_loop_radius():
     refused_below = [rung for rung in range(largest + 1, len(flags)) if not flags[rung]]
     assert refused_below, f"admissible rungs {accepting} form an up-set here -- this state no longer pins non-monotonicity"
 
-    rung, forced = _largest_admissible_radius(stock, station, 0.0, advance, regulation)
-    assert not forced
-    assert rung == largest, "the scan must return the LARGEST admissible radius, i.e. the smallest accepting rung"
-    assert rung > FULL_RADIUS_RUNG, "the pin is vacuous unless the maximal circle itself is refused"
+    ladder = _coarse_ladder(station.radius, 0.0, regulation.guide_step)
+    choice = _largest_admissible_radius(stock, station, 0.0, advance, regulation)
+    assert not choice.forced
+    assert choice.radius == ladder[largest], "the scan must return the LARGEST admissible radius, i.e. the smallest accepting rung"
+    assert not choice.finishes, "the pin is vacuous unless the maximal circle itself is refused"
 
-    assert _bisect_rung(flags) != rung, "a bisection agreed with the scan here, so this state no longer distinguishes them"
+    assert ladder[_bisect_rung(flags)] != choice.radius, "a bisection agreed with the scan here, so this state no longer distinguishes them"
 
 
 def test_a_rung_is_only_admissible_if_it_still_cuts():
@@ -332,7 +340,9 @@ def test_no_admissible_rung_takes_the_gentlest_measured_circle_not_the_maximal_o
     """
     regulation = _regulation(FALLBACK_CAP_DEG)
     stock, station, advance = _fallback_state()
-    ladder = _radius_ladder(station.radius, 0.0, regulation.guide_step)
+    # The ranking runs on the REFINED ladder, which is what the search reaches
+    # once both scans have come back empty.
+    ladder = _refined_radius_ladder(station.radius, 0.0, regulation.guide_step)
 
     admissible = [
         rung for rung, radius in enumerate(ladder) if _station_is_admissible(stock, replace(station, radius=radius), advance, regulation.tool_radius, regulation.cap_ratio)
@@ -345,10 +355,10 @@ def test_no_admissible_rung_takes_the_gentlest_measured_circle_not_the_maximal_o
     assert peaks[gentlest] < peaks[FULL_RADIUS_RUNG], "the maximal circle is already the gentlest here, so the pin is vacuous"
     assert peaks[gentlest] < peaks[-1], "the smallest circle is already the gentlest here, so the pin is vacuous"
 
-    rung, forced = _largest_admissible_radius(stock, station, 0.0, advance, regulation)
+    choice = _largest_admissible_radius(stock, station, 0.0, advance, regulation)
 
-    assert forced, "no rung complies here, so the emission must be reported as forced"
-    assert rung == gentlest, f"forced emission took rung {rung} ({math.degrees(peaks[rung]):.1f} deg) over rung {gentlest} ({math.degrees(peaks[gentlest]):.1f} deg)"
+    assert choice.forced, "no rung complies here, so the emission must be reported as forced"
+    assert choice.radius == ladder[gentlest], f"forced emission took radius {choice.radius:.4f} over {ladder[gentlest]:.4f} ({math.degrees(peaks[gentlest]):.1f} deg)"
 
 
 def test_the_forced_ranking_never_prefers_a_circle_that_cuts_nothing():
@@ -362,7 +372,8 @@ def test_the_forced_ranking_never_prefers_a_circle_that_cuts_nothing():
     emission finishes a station).
 
     Read on `_least_bad_rung` directly rather than through the scan, because the
-    claim is about the RANKING itself.
+    claim is about the RANKING and must hold however the scan above it is
+    resolved.
     """
     regulation = _regulation(FALLBACK_CAP_DEG)
     advance = (1.0, 0.0)
@@ -371,14 +382,14 @@ def test_the_forced_ranking_never_prefers_a_circle_that_cuts_nothing():
     stock = Stock(PIN_POCKET)
     stock.subtract_annulus(PIN_STATION_X, PIN_STATION_Y, 0.0, FALLBACK_IDLE_VOID_RADIUS)
     station = _GuideStation(cx=PIN_STATION_X, cy=PIN_STATION_Y, radius=FALLBACK_FULL_RADIUS, clockwise=True, tx=1.0, ty=0.0)
-    ladder = _radius_ladder(station.radius, 0.0, regulation.guide_step)
+    ladder = _coarse_ladder(station.radius, 0.0, regulation.guide_step)
 
     idle = [rung for rung, radius in enumerate(ladder) if not _loop_reaches_material(stock, replace(station, radius=radius), advance, regulation.tool_radius)]
     peaks = [_measured_peak_engagement(stock, replace(station, radius=radius), advance, regulation.tool_radius, regulation.cap_ratio) for radius in ladder]
     assert idle, "no idle rung on this state, so it does not pin the cutting filter"
     assert min(peaks[rung] for rung in idle) == 0.0, "the idle rungs are not measuring zero, so nothing tempts the ranking here"
 
-    rung = _least_bad_rung(stock, ladder, station, advance, regulation)
+    rung = _least_bad_rung(stock, ladder, station, advance, regulation).rung
 
     assert rung not in idle, f"the ranking took idle rung {rung}, which removes nothing"
     assert _loop_reaches_material(stock, replace(station, radius=ladder[rung]), advance, regulation.tool_radius)
@@ -398,15 +409,16 @@ def test_a_full_slot_entry_still_finishes_on_the_maximal_circle():
     stock = Stock(PIN_POCKET)
     station = _GuideStation(cx=PIN_STATION_X, cy=PIN_STATION_Y, radius=FALLBACK_FULL_RADIUS, clockwise=True, tx=1.0, ty=0.0)
     advance = (1.0, 0.0)
-    ladder = _radius_ladder(station.radius, 0.0, regulation.guide_step)
+    ladder = _coarse_ladder(station.radius, 0.0, regulation.guide_step)
 
     peaks = {_measured_peak_engagement(stock, replace(station, radius=radius), advance, regulation.tool_radius, regulation.cap_ratio) for radius in ladder}
     assert peaks == {2.0 * math.pi}, f"virgin stock did not read as a full turn at every rung: {sorted(peaks)}"
 
-    rung, forced = _largest_admissible_radius(stock, station, 0.0, advance, regulation)
+    choice = _largest_admissible_radius(stock, station, 0.0, advance, regulation)
 
-    assert forced
-    assert rung == FULL_RADIUS_RUNG, "a tied ranking must land on the maximal circle, which is the one that finishes the station"
+    assert choice.forced
+    assert choice.finishes, "a tied ranking must land on the maximal circle, which is the one that finishes the station"
+    assert choice.radius == station.radius
 
 
 def test_loose_cap_reproduces_the_advance_only_generator():

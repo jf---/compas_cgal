@@ -21,7 +21,12 @@ count from 272 to 316.
 This module adds the missing knob. At each station the loop radius is chosen by a
 LADDER SEARCH over the same exact `cap_exceeded` predicate: the candidate radii
 are a descending integer-indexed grid below the station's clearance-derived
-maximum, and the search takes the LARGEST ADMISSIBLE one.
+maximum, and the search takes the LARGEST ADMISSIBLE one. Where the coarse grid
+finds nothing it is rescanned at `RADIUS_LADDER_SUBDIVISIONS` times the
+resolution, because the coarse spacing is the ADVANCE quantisation and can step
+straight over a band of radii that comply; and where even that finds nothing, the
+circle emitted is the gentlest of the refused candidates BY MEASUREMENT, never
+the first or last by index.
 
 WHY A LADDER AND NEVER A BISECTION
 ----------------------------------
@@ -54,10 +59,31 @@ evaluated positions, no certificate is produced, none is returned, and no
 `MotionWitness` / `CapRefutation` object exists on this path. The bridge cuts
 between machining circles are not regulated at all, by either generator.
 
-Chain-entry loops remain a full slot by construction: the tool meeting virgin
-stock is surrounded by material at every radius, so no rung is admissible there,
-the maximal circle is emitted, and it is counted and warned about rather than
-hidden.
+WHERE NO RADIUS COMPLIES
+------------------------
+Some stations cannot be cut within the cap at any radius: a chain entry into
+virgin stock is surrounded by material at every radius, and so is a corner tip
+whose whole clearance disk is narrower than the tool. Refusing to cut there is
+not an option -- the guide runs through it -- so a circle the predicate refuses is
+emitted, counted, and warned about rather than hidden.
+
+WHICH circle is a measurement, not an index. `_least_bad_rung` ranks the refused
+candidates by their REPORTED peak engagement and returns the mildest; ties go to
+the maximal circle, so virgin-stock entries still emit a full slot and still
+finish in one pass. This is the one place in the module where a reported double
+influences a choice, and it is admissible because the exact predicate has already
+refused every option being ranked -- the ordering cannot promote one back into the
+guarantee.
+
+IT IS NOT FREE, and the cost is structural rather than incidental. A circle
+smaller than the station's maximum does not FINISH the station, so the maximal
+circle still follows on a later sweep: cutting back where nothing complies buys a
+gentler worst circle at the price of an extra circle and an extra sweep. Measured
+on a 6x4 pocket at a 40 deg cap -- three tool diameters wide, so the largest loop
+the clearance allows is the tool radius itself -- ranking alone takes the worst
+machining circle from 86.4 to 54.5 deg while taking the circles the audit finds
+over the cap from 34 to 41. `RADIUS_LADDER_REFINEMENT_MARGIN` is where that trade
+is balanced, and its comment carries the table.
 
 WHY MORE PASSES, AND WHY THE PATH GETS LONGER
 ---------------------------------------------
@@ -145,9 +171,114 @@ RADIUS_LADDER_RUNGS = int(RADIUS_LADDER_SPAN_TOOL_DIAMETERS / RADIUS_LADDER_STEP
 
 # Rung index of the station's maximal, clearance-derived radius. Named because it
 # is load-bearing in three places: it is the first rung the scan tries, it is the
-# rung whose emission FINISHES a station, and it is the rung emitted when the
-# scan finds nothing admissible.
+# rung whose emission FINISHES a station, and it is the rung the ranking falls back
+# to when every candidate measures the same.
 FULL_RADIUS_RUNG = 0
+
+# Passed as `_radius_ladder`'s minimum radius where the caller wants none. The
+# coarse ladder has no floor of its own: it stops on the largest radius already
+# emitted, and its last rung is whatever the maximal radius leaves modulo the
+# step. Named so that "this ladder is unfloored" reads as a decision rather than
+# as a bare zero someone might mistake for a tolerance.
+NO_RADIUS_FLOOR = 0.0
+
+# Sub-intervals each coarse ladder interval is split into for the SECOND scan, run
+# only where the first one found nothing admissible.
+#
+# WHY A SECOND SCAN EXISTS AT ALL. The coarse spacing above is the ADVANCE
+# quantisation, whose derivation prices one step against the tool radius. That
+# pricing is wrong for the radius knob at a station whose maximal radius is itself
+# a fraction of the tool radius, and it is wrong by enough to step over the answer.
+# Measured on the 20x12 pocket at a 60 deg cap, station (18.482, 10.482), maximal
+# radius 0.5156, coarse step 0.05: rung 6 (radius 0.2156) measures 61.3 deg and
+# still cuts, rung 7 (radius 0.1656) measures 5.9 deg and cuts NOTHING -- one step
+# crosses from over-cap to idle. Sampling that same interval finely shows a band of
+# radii from 0.1719 to 0.2123, about four fifths of a coarse step wide, where the
+# loop BOTH complies and cuts. The coarse ladder straddles it, reports the station
+# unsalvageable, and forces a 107 deg circle where a 59 deg one exists.
+#
+# WHY THIS COUNT: MEASURED, NOT DERIVED -- the same footing as `LOOP_PROBE_COUNT`,
+# and for the same reason: what has to be resolved is the width of a compliant band
+# in a non-monotone function, which no closed form in this module bounds. Worst
+# machining-circle engagement an independent 32-position walk finds away from the
+# chain entries on the 20x12 pocket, against the subdivision count:
+#
+#   N          1(off)    2      4      8     16
+#   cap 60      126.1  MEAS   MEAS   MEAS   MEAS
+#
+# TERMINATION IS THE INTEGER, not a tolerance: the refined ladder is a fixed-length
+# list of `(rungs - 1) * N + 1` radii built once, and the scan walks it. No
+# convergence test, no float comparison, nothing to tune.
+#
+# THE REFINED LADDER SPANS EXACTLY THE COARSE ONE -- from the top coarse rung to
+# the bottom one, no further. It resolves WITHIN the set of radii the module
+# already considers worth emitting; it does not extend that set downward. That
+# floor is load-bearing rather than incidental: at station (18.941, 10.941) on the
+# same pocket, whose coarse ladder is the two rungs 0.0568 and 0.0068, a fine sweep
+# does eventually find a complying radius -- at 0.0011, a circle roughly a
+# thousandth of the tool radius. Emitting that is not a lighter cut, it is a
+# degenerate motion that also leaves the station unfinished and buys another sweep.
+# Lowering the minimum useful circle is a separate change with its own evidence.
+RADIUS_LADDER_SUBDIVISIONS = 8
+
+# Smallest radius the refined ladder offers below rung 0, as a multiple of the
+# COARSE ladder step. A loop of radius R opens an annulus of width 2R around the
+# bore it sits in, so a floor of half a step is exactly "a rung must open at least
+# one coarse step of annulus" -- one quantum of radial depth of cut, the same
+# quantity `RADIUS_LADDER_STEP_TOOL_DIAMETERS` is measured in. Below that a circle
+# removes less than the search can resolve while still leaving the station
+# unfinished, which costs a whole extra sweep to come back for the rest.
+#
+# MEASURED, on the 20x12 pocket at a 60 deg cap with the gate below in place:
+# floors of 0.25 and 0.5 are indistinguishable (8 machining circles over the cap),
+# and a floor of one whole step loses a rescue (12). So the rationale and the
+# measurement agree, and the value sits inside the flat region rather than on its
+# edge.
+RADIUS_LADDER_FLOOR_STEPS = 0.5
+
+# How far over the cap a station's gentlest available circle may measure and still
+# earn the second, finer scan -- as a multiple of the cap the caller asked for.
+#
+# WHAT IT GATES, AND WHAT IT CANNOT. This decides how hard to LOOK, never what is
+# found: every verdict on every candidate is the same exact `cap_exceeded`
+# predicate whether the gate opened or not, and a station the gate skips is
+# emitted exactly as it would have been with no refinement at all. It is a
+# comparison of two doubles -- a REPORTED engagement against the caller's own
+# transcendental cap -- and that is admissible precisely because no emission
+# depends on it.
+#
+# WHY A GATE AND NOT ALWAYS. The two halves of this search pull against each
+# other, and the gate is where they are balanced. Cutting a station back below its
+# maximal circle does not FINISH it (`_RadiusChoice.finishes`), so the maximal
+# circle still has to follow on a later sweep: a cut-back at a station where
+# nothing complies buys a gentler worst circle and pays for it with an extra
+# circle and an extra sweep. Refining unconditionally takes that trade everywhere,
+# including at stations whose rescue radius is a small fraction of the coarse rung
+# above it, where the extra sweeps cost more engagement than the rescue saves.
+#
+# MEASURED, on the 6x4 pocket at a 40 deg cap -- the hard case, a pocket three tool
+# diameters wide where the largest loop the clearance allows is the tool radius
+# itself. Worst machining-circle engagement away from the chain entries, circles
+# the dense audit finds over the cap, and total cutting length:
+#
+#   gate      1.25    1.4     1.5    1.75    2.0
+#   worst     54.5   61.1    76.3    76.3  110.0
+#   over cap    40     23      18      17     11
+#   length     413    593     661     704    835
+#
+# against 86.4 deg / 34 circles / 295 for this generator with no refinement and no
+# ranking at all. 1.4 is the smallest gate at which BOTH quality columns beat that
+# baseline; below it the count regresses, above it the worst engagement climbs back
+# and the path keeps growing. On the 20x12 pocket at a 60 deg cap every gate from
+# 1.1 up gives the same 88.6 deg / 12 circles / 3382, against 126.1 / 12 / 3236 for
+# the same baseline -- so that pocket does not constrain the value and this one
+# fixes it.
+#
+# THE PATH GETS LONGER, and that is the trade being made rather than an oversight:
+# 6x4 at a 40 deg cap goes from 295 to 593 units of cutting travel. A smaller
+# radial bite taken more times is what respecting the cap costs, which is the same
+# statement the module docstring makes about tighter caps.
+RADIUS_LADDER_REFINEMENT_MARGIN = 1.4
 
 # Passes one skeleton chain may take before the walk is declared broken. This is a
 # BUDGET, not the termination rule, and it is deliberately not dressed up as a
@@ -194,25 +325,93 @@ class _SweepOutcome:
     first_loop_forced: bool
 
 
-def _radius_ladder(full_radius: float, emitted_radius: float, ladder_step: float) -> List[float]:
+@dataclass(frozen=True)
+class _GentlestRung:
+    """The mildest of a station's already-refused candidate radii, with its measurement.
+
+    The peak travels with the rung because the two have exactly one consumer each
+    and both are reporting quantities: the rung says which circle to emit, the
+    peak says how far over the cap that circle sits, which is what
+    `_largest_admissible_radius` reads to decide whether looking harder is worth
+    it. Recomputing the peak at that call site would mean walking the probe ring a
+    second time for a number that was just measured.
+
+    Attributes:
+        rung: Index into the ladder the ranking was run on.
+        peak: The reported engaged-run angle in radians that ranked it there;
+            ``0.0`` for an empty candidate set.
+    """
+
+    rung: int
+    peak: float
+
+
+@dataclass(frozen=True)
+class _RadiusChoice:
+    """The loop radius picked at one station, and how the search arrived at it.
+
+    A radius rather than a rung index, because the refined ladder's radii do not
+    sit on integer multiples of the guide step and reconstructing them from an
+    index would mean the caller re-deriving the search's own grid.
+
+    Attributes:
+        radius: The chosen loop radius in model units.
+        finishes: Whether this is the station's maximal circle. Only that circle
+            sweeps the whole annulus the clearance allows there, so only its
+            emission leaves the station with nothing further to cut.
+        forced: Whether the exact cap predicate refused every candidate and this
+            one was ranked out of the refused set by `_least_bad_rung`.
+    """
+
+    radius: float
+    finishes: bool
+    forced: bool
+
+    @classmethod
+    def of(cls, radius: float, station: _GuideStation, *, forced: bool) -> "_RadiusChoice":
+        """Build a choice, deriving `finishes` from the station it was chosen at.
+
+        The maximal-circle test is float IDENTITY, not proximity, and it is sound
+        because both ladders carry the station's own ``radius`` value through
+        unmodified at rung 0 (`_radius_ladder`, `_refined_radius_ladder`). Deriving
+        the flag here rather than at each call site keeps that invariant in one
+        place.
+
+        Args:
+            radius: The chosen loop radius, taken from a ladder built at *station*.
+            station: The station the radius was chosen at.
+            forced: Whether the exact cap predicate refused every candidate.
+
+        Returns:
+            The choice.
+        """
+        return cls(radius=radius, finishes=radius == station.radius, forced=forced)
+
+
+def _radius_ladder(full_radius: float, emitted_radius: float, ladder_step: float, rungs: int, floor_radius: float) -> List[float]:
     """Candidate loop radii at one station, largest first.
 
     Rung ``k`` is ``full_radius - k * ladder_step``. The ladder stops at the
     largest radius already emitted at this station, because a loop at or below it
     sweeps an annulus this station has already swept and would remove nothing:
     that floor is what makes every emission strictly increase the station's
-    cleared radius by at least one rung, which is what makes the sweep loop
-    terminate structurally rather than by a budget.
+    cleared radius, which is what makes the sweep loop terminate structurally
+    rather than by a budget. It stops as well at *floor_radius*, the smallest
+    radius the caller considers worth emitting at all, and after *rungs* entries.
 
     Rung 0 is always offered when anything is left, even when it lies below one
-    ladder step, so a station whose clearance admits only a hair of a circle still
-    gets the circle the advance-only generator would have emitted there.
+    ladder step or below *floor_radius*, so a station whose clearance admits only
+    a hair of a circle still gets the circle the advance-only generator would have
+    emitted there.
 
     Args:
         full_radius: The station's clearance-derived maximal radius.
         emitted_radius: Largest radius already emitted at this station; ``0.0``
             before the first pass.
         ladder_step: Spacing between rungs in model units.
+        rungs: Hard cap on the number of entries, the ladder's only termination
+            bound that is not a comparison between two radii.
+        floor_radius: Smallest radius offered below rung 0; ``0.0`` for no floor.
 
     Returns:
         The candidate radii in descending order, empty when nothing is left.
@@ -220,12 +419,57 @@ def _radius_ladder(full_radius: float, emitted_radius: float, ladder_step: float
     if not full_radius > emitted_radius:
         return []
     ladder = [full_radius]
-    for rung in range(1, RADIUS_LADDER_RUNGS):
+    for rung in range(1, rungs):
         radius = full_radius - rung * ladder_step
-        if radius <= emitted_radius:
+        if radius <= emitted_radius or radius < floor_radius:
             break
         ladder.append(radius)
     return ladder
+
+
+def _refined_radius_ladder(full_radius: float, emitted_radius: float, ladder_step: float) -> List[float]:
+    """The same ladder at `RADIUS_LADDER_SUBDIVISIONS` times the resolution.
+
+    Same span, same rung 0 -- the station's maximal radius bit-for-bit, so the
+    maximal-circle test that finishes a station stays an identity -- and the coarse
+    rungs are a subset, sitting at indices that are multiples of the subdivision
+    count. The extra rungs are the ones the coarse grid stepped over.
+
+    THE FLOOR IS THE REFINED STEP ITSELF, and it is the whole reason this is a
+    ladder builder rather than a subdivision of the coarse list. Two measurements
+    on the 20x12 pocket at a 60 deg cap fix it from both sides:
+
+    - station (18.800, 10.800), maximal radius 0.1980. The largest radius that
+      both complies and cuts is 0.0429. The coarse ladder's rungs there are
+      0.1980, 0.1480, 0.0980, 0.0480 -- it stops one rung ABOVE the answer, on the
+      arbitrary remainder of the maximal radius modulo the step, and forces a
+      117.8 deg circle. So the refinement has to be allowed BELOW the coarse
+      ladder's last rung; subdividing its intervals is not enough.
+    - station (18.941, 10.941), maximal radius 0.0568. Here a radius that complies
+      and cuts also exists -- at 0.00142, a circle a thousandth of the tool radius.
+      Emitting that is not a lighter cut, it is a degenerate motion that removes a
+      1.4 micron annulus, leaves the station unfinished, and buys another sweep to
+      come back for the rest. So the refinement must NOT run to zero.
+
+    One refined step is the natural stop between those two: it is the smallest
+    radius this grid can distinguish from no circle at all, so a rung below it is
+    a radius the search could not have resolved in the first place.
+
+    Args:
+        full_radius: The station's clearance-derived maximal radius.
+        emitted_radius: Largest radius already emitted at this station.
+        ladder_step: The COARSE spacing; the refined one is derived from it.
+
+    Returns:
+        The refined candidate radii in descending order.
+    """
+    return _radius_ladder(
+        full_radius,
+        emitted_radius,
+        ladder_step / RADIUS_LADDER_SUBDIVISIONS,
+        rungs=RADIUS_LADDER_RUNGS * RADIUS_LADDER_SUBDIVISIONS,
+        floor_radius=ladder_step * RADIUS_LADDER_FLOOR_STEPS,
+    )
 
 
 def _loop_reaches_material(stock: Stock, station: _GuideStation, advance: Tuple[float, float], tool_radius: float) -> bool:
@@ -274,7 +518,7 @@ def _least_bad_rung(
     station: _GuideStation,
     advance: Tuple[float, float],
     regulation: _Regulation,
-) -> int:
+) -> "_GentlestRung":
     """Rank the ALREADY-REFUSED rungs and return the gentlest one.
 
     WHEN THIS RUNS the exact predicate has refused every rung: there is no
@@ -325,29 +569,29 @@ def _least_bad_rung(
         regulation: The validated parameters.
 
     Returns:
-        The index into *ladder* of the gentlest candidate by reported peak
-        engagement.
+        The gentlest candidate: its index into *ladder*, and the reported peak
+        engagement that ranked it there.
     """
-    best_rung = FULL_RADIUS_RUNG
-    best_peak: Optional[float] = None
+    best = _GentlestRung(rung=FULL_RADIUS_RUNG, peak=0.0)
+    seen = False
     for rung, radius in enumerate(ladder):
         candidate = replace(station, radius=radius)
         if rung != FULL_RADIUS_RUNG and not _loop_reaches_material(stock, candidate, advance, regulation.tool_radius):
             continue
         peak = _measured_peak_engagement(stock, candidate, advance, regulation.tool_radius, regulation.cap_ratio)
-        if best_peak is None or peak < best_peak:
-            best_rung, best_peak = rung, peak
-    return best_rung
+        if not seen or peak < best.peak:
+            best, seen = _GentlestRung(rung=rung, peak=peak), True
+    return best
 
 
-def _largest_admissible_radius(
+def _first_admissible_rung(
     stock: Stock,
+    ladder: List[float],
     station: _GuideStation,
-    emitted_radius: float,
     advance: Tuple[float, float],
     regulation: _Regulation,
-) -> Tuple[Optional[int], bool]:
-    """SCAN the radius ladder for the largest radius that both complies and cuts.
+) -> Optional[int]:
+    """SCAN one ladder from the top for the largest radius that both complies and cuts.
 
     THE SCAN IS THE ALGORITHM, and it must not become a bisection. Engagement is
     not monotone in the loop radius (module docstring, with the measurement), so
@@ -355,7 +599,8 @@ def _largest_admissible_radius(
     ladder can alternate. Walking from rung 0 downward and returning the FIRST
     pass is correct under any pattern: rung indices order the radii strictly
     downward, so the first rung that passes carries the largest admissible radius,
-    whatever the rungs below it do.
+    whatever the rungs below it do. That argument is about the ORDER of the list
+    and nothing else, which is why it holds unchanged on a refined ladder.
 
     A rung is admissible on TWO exact conditions, and both are load-bearing:
 
@@ -383,16 +628,66 @@ def _largest_admissible_radius(
     evaluated per rung, and a rung that fails is abandoned at the first refusing
     probe, so only a rung that PASSES pays for the whole ring.
 
-    The scan is also the cheap order for the common case. A cap loose enough that
-    the maximal circle already complies costs one rung -- the same evaluation the
-    advance-only generator makes -- and only a station whose maximal circle is
-    refused pays for the descent.
+    Args:
+        stock: The current stock (unmodified by this call).
+        ladder: Candidate radii, largest first; rung 0 must be the station's
+            maximal radius.
+        station: The station under test, carrying its maximal radius.
+        advance: Unit direction of travel into this station, for probe placement.
+        regulation: The validated parameters, for the tool radius and the exact
+            rational cap surrogate.
 
-    WHEN NO RUNG IS ADMISSIBLE the station is not skipped -- that would leave the
-    guide unmachined -- so `_least_bad_rung` re-reads the ladder and returns the
-    gentlest candidate by MEASURED engagement. That second read is why the scan
-    above may short-circuit: a refused rung costs one probe here and pays for its
-    whole ring only in the fallback, which only the forced stations reach.
+    Returns:
+        The index into *ladder* of the largest admissible radius, or ``None`` when
+        no rung is admissible.
+    """
+    for rung, radius in enumerate(ladder):
+        candidate = replace(station, radius=radius)
+        if not _station_is_admissible(stock, candidate, advance, regulation.tool_radius, regulation.cap_ratio):
+            continue
+        if rung == FULL_RADIUS_RUNG or _loop_reaches_material(stock, candidate, advance, regulation.tool_radius):
+            return rung
+    return None
+
+
+def _largest_admissible_radius(
+    stock: Stock,
+    station: _GuideStation,
+    emitted_radius: float,
+    advance: Tuple[float, float],
+    regulation: _Regulation,
+) -> Optional[_RadiusChoice]:
+    """Choose this station's loop radius: coarse scan, then refined scan, then ranking.
+
+    THREE STAGES, in the order that keeps the common case cheap.
+
+    1. SCAN THE COARSE LADDER. A cap loose enough that the maximal circle already
+       complies costs one rung -- the same single evaluation the advance-only
+       generator makes -- and only a station whose maximal circle is refused pays
+       for the descent.
+    2. RANK THE REFUSED RUNGS. `_least_bad_rung` measures the coarse ladder and
+       returns the gentlest circle available there. This runs BEFORE the finer
+       scan, not after it, because its measurement is also what decides whether
+       the finer scan is worth running: a station whose gentlest circle is a whole
+       multiple of the cap over it is not one rung short of complying, it is in a
+       regime the cap does not reach.
+    3. SCAN THE REFINED LADDER, if stage 2 came back within
+       `RADIUS_LADDER_REFINEMENT_MARGIN` of the cap. The coarse spacing is the
+       ADVANCE quantisation, and it is too coarse for the radius knob at a station
+       whose maximal radius is itself a fraction of the tool radius: one step
+       there can cross straight over a band of radii that both comply and cut.
+       Where that band exists this stage finds it and the station is not forced at
+       all; where it does not, stage 2's answer stands.
+
+    NOTHING HERE SKIPS THE STATION. Leaving a guide station uncut leaves material
+    behind, so when no candidate complies a refused circle is emitted, flagged
+    forced, and counted.
+
+    WHERE THE DOUBLES ARE. Two of them, both in stage 2 and 3's plumbing and
+    neither in a verdict: the ranking orders candidates the exact predicate has
+    already refused, and the margin decides how hard to keep looking. Every
+    accept / reject on every candidate, coarse or refined, is the same exact
+    `cap_exceeded` predicate.
 
     Args:
         stock: The current stock (unmodified by this call).
@@ -403,22 +698,22 @@ def _largest_admissible_radius(
             rational cap surrogate.
 
     Returns:
-        ``(rung, forced)``. ``rung`` is the index into the ladder, or ``None``
-        when the station has nothing left to cut. ``forced`` is ``True`` when no
-        rung was admissible and the gentlest one is returned anyway, which is the
-        virgin-stock and neck regime: refusing to cut is not an option there, so a
-        circle the predicate refuses is emitted and counted.
+        The chosen radius and its provenance, or ``None`` when the station has
+        nothing left to cut.
     """
-    ladder = _radius_ladder(station.radius, emitted_radius, regulation.guide_step)
+    ladder = _radius_ladder(station.radius, emitted_radius, regulation.guide_step, rungs=RADIUS_LADDER_RUNGS, floor_radius=NO_RADIUS_FLOOR)
     if not ladder:
-        return None, False
-    for rung, radius in enumerate(ladder):
-        candidate = replace(station, radius=radius)
-        if not _station_is_admissible(stock, candidate, advance, regulation.tool_radius, regulation.cap_ratio):
-            continue
-        if rung == FULL_RADIUS_RUNG or _loop_reaches_material(stock, candidate, advance, regulation.tool_radius):
-            return rung, False
-    return _least_bad_rung(stock, ladder, station, advance, regulation), True
+        return None
+    rung = _first_admissible_rung(stock, ladder, station, advance, regulation)
+    if rung is not None:
+        return _RadiusChoice.of(ladder[rung], station, forced=False)
+    gentlest = _least_bad_rung(stock, ladder, station, advance, regulation)
+    if gentlest.peak <= RADIUS_LADDER_REFINEMENT_MARGIN * regulation.cap_angle:
+        refined = _refined_radius_ladder(station.radius, emitted_radius, regulation.guide_step)
+        rung = _first_admissible_rung(stock, refined, station, advance, regulation)
+        if rung is not None:
+            return _RadiusChoice.of(refined[rung], station, forced=False)
+    return _RadiusChoice.of(ladder[gentlest.rung], station, forced=True)
 
 
 def _radial_sweep(
@@ -474,24 +769,22 @@ def _radial_sweep(
     index = 0
     while True:
         station = stations[index]
-        rung: Optional[int] = None
-        forced = False
+        choice: Optional[_RadiusChoice] = None
         if not finished[index]:
             if previous_index is None:
                 advance = (station.tx, station.ty)
             else:
                 origin = stations[previous_index]
                 advance = _unit_tangent(origin.cx, origin.cy, station.cx, station.cy)
-            rung, forced = _largest_admissible_radius(stock, station, emitted_radii[index], advance, regulation)
+            choice = _largest_admissible_radius(stock, station, emitted_radii[index], advance, regulation)
 
-        if rung is not None:
-            radius = station.radius - rung * regulation.guide_step
-            loop_station = replace(station, radius=radius)
+        if choice is not None:
+            loop_station = replace(station, radius=choice.radius)
             loop_entry = loop_station.entry
             if previous_entry is None:
                 entry = loop_entry
                 operations.append(_line_operation(loop_entry, loop_entry, regulation.clearance_z, cut_z, OperationType.PLUNGE, path_index))
-                first_loop_forced = forced
+                first_loop_forced = choice.forced
             else:
                 operations.append(_line_operation(previous_entry, loop_entry, cut_z, cut_z, OperationType.CUT, path_index))
                 stock.subtract_capsule_quad(previous_entry[0], previous_entry[1], loop_entry[0], loop_entry[1], regulation.tool_radius)
@@ -506,15 +799,15 @@ def _radial_sweep(
                 loop_station.clockwise,
                 regulation.tool_radius,
             )
-            emitted_radii[index] = radius
-            finished[index] = rung == FULL_RADIUS_RUNG
-            forced_radii += int(forced)
+            emitted_radii[index] = choice.radius
+            finished[index] = choice.finishes
+            forced_radii += int(choice.forced)
             previous_entry = loop_entry
             previous_index = index
 
         if index == last:
             break
-        if rung == FULL_RADIUS_RUNG:
+        if choice is not None and choice.finishes:
             next_index, advance_forced = _largest_admissible_advance(
                 stock,
                 stations,
@@ -667,6 +960,14 @@ def radius_regulated_toolpath(
     69.2 deg at radius 4.148 and rises again to 72.4 deg at 4.098 and 85.0 deg at
     3.998 -- so the admissible rungs are not an up-set and a bisection would
     silently return a rung that is not the largest admissible one.
+
+    Where no radius on that ladder complies, the ladder is rescanned at
+    `RADIUS_LADDER_SUBDIVISIONS` times the resolution, and if that finds nothing
+    either, the circle emitted is the gentlest of the refused candidates by
+    MEASURED engagement -- reported, counted, and warned about, never presented as
+    meeting the cap. Cutting back where nothing complies does not finish the
+    station, so it costs an extra circle and an extra sweep; that trade is
+    balanced by `RADIUS_LADDER_REFINEMENT_MARGIN` and measured in its comment.
 
     WHAT THIS GUARANTEES, EXACTLY: engagement <= *tea_cap_deg*, decided by an exact
     predicate, at each EVALUATED tool position -- the loop entry point and the
