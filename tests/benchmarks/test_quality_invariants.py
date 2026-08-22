@@ -32,7 +32,6 @@ file says what the numbers ARE; this one says what they must always OBEY.
 
 from __future__ import annotations
 
-import math
 from typing import List
 from typing import Sequence
 from typing import Tuple
@@ -140,12 +139,12 @@ def chained_paths(draw: st.DrawFn) -> List[Tuple[int, float, float, float]]:
     return stations
 
 
-def _spec(scale: float, angle: float, shift: Tuple[float, float]) -> PocketSpec:
+def _spec(scale: float, quarter_turns: int, shift: Tuple[float, float]) -> PocketSpec:
     """The reference pocket, scaled then rigidly moved.
 
     Args:
         scale: Uniform scale factor applied to the pocket and the tool.
-        angle: Rotation about the origin, in radians.
+        quarter_turns: Whole 90-degree turns about the origin.
         shift: Translation applied after rotation.
 
     Returns:
@@ -153,9 +152,9 @@ def _spec(scale: float, angle: float, shift: Tuple[float, float]) -> PocketSpec:
     """
     half_w, half_h = 0.5 * BASE_WIDTH * scale, 0.5 * BASE_HEIGHT * scale
     corners = ((-half_w, -half_h), (half_w, -half_h), (half_w, half_h), (-half_w, half_h))
-    points = [_place(x, y, angle, shift) for x, y in corners]
+    points = [_place(x, y, quarter_turns, shift) for x, y in corners]
     return PocketSpec.build(
-        name=f"invariant_{scale}_{angle}",
+        name=f"invariant_{scale}_{quarter_turns}",
         family="analytic",
         polygon=Polygon([[x, y, 0.0] for x, y in points]),
         tool_diameter=BASE_TOOL_DIAMETER * scale,
@@ -163,27 +162,67 @@ def _spec(scale: float, angle: float, shift: Tuple[float, float]) -> PocketSpec:
     )
 
 
-def _place(x: float, y: float, angle: float, shift: Tuple[float, float]) -> Tuple[float, float]:
-    """Rotate ``(x, y)`` about the origin, then translate.
+def _place(x: float, y: float, quarter_turns: int, shift: Tuple[float, float]) -> Tuple[float, float]:
+    """Rotate ``(x, y)`` by whole quarter turns, then translate.
+
+    QUARTER TURNS RATHER THAN AN ARBITRARY ANGLE, AND NOT FOR CONVENIENCE. A
+    quarter turn is a coordinate swap and a sign flip, so it is exact in binary
+    and maps an axis-aligned pocket to an axis-aligned pocket. Any other angle
+    makes the pocket OBLIQUE, and an oblique pocket cannot be measured here in
+    reasonable time: `_coverage_2.ReachableDomain2(...).center_domain()` takes
+    5 ms on an axis-aligned rectangle with integer vertices and 17.5 SECONDS on
+    an oblique quadrilateral with equally plain integer vertices, rising past a
+    minute once the vertices carry decimals.
+
+    So this file cannot assert rotation invariance in general, and says so
+    rather than quietly testing the easy case. What it does assert -- that a
+    quarter turn changes nothing -- still catches a metric that reads an axis,
+    which is the defect class the property exists for. See
+    `docs/machining_metric_validity.md` for the measurement.
 
     Args:
         x: Abscissa.
         y: Ordinate.
-        angle: Rotation in radians.
+        quarter_turns: Number of 90-degree turns, counter-clockwise.
         shift: Translation applied after the rotation.
 
     Returns:
         The transformed point.
     """
-    cos, sin = math.cos(angle), math.sin(angle)
-    return (x * cos - y * sin + shift[0], x * sin + y * cos + shift[1])
+    for _ in range(quarter_turns % 4):
+        x, y = -y, x
+    return (x + shift[0], y + shift[1])
+
+
+def _frame(x: float, y: float, quarter_turns: int) -> Frame:
+    """A circle frame whose AXES are turned with the pocket, not just its origin.
+
+    `Circle.point_at(0)` is ``centre + radius * frame.xaxis``, and that point is
+    where the survey reads a loop's entry and therefore its tangents. Turning
+    only the origin leaves the seam on the +x side while everything else turns,
+    which is not a rotation of the path -- it is a different path, with the loop
+    entered at a different place. An earlier draft did exactly that and the
+    rotation property duly failed on `tangent_breaks`, correctly reporting that
+    the two paths were not the same.
+
+    Args:
+        x: Centre abscissa.
+        y: Centre ordinate.
+        quarter_turns: Whole 90-degree turns, matching `_place`.
+
+    Returns:
+        The frame.
+    """
+    axis_x = _place(1.0, 0.0, quarter_turns, (0.0, 0.0))
+    axis_y = _place(0.0, 1.0, quarter_turns, (0.0, 0.0))
+    return Frame([x, y, 0.0], [axis_x[0], axis_x[1], 0.0], [axis_y[0], axis_y[1], 0.0])
 
 
 def _result(
     stations: Sequence[Tuple[int, float, float, float]],
     *,
     scale: float = 1.0,
-    angle: float = 0.0,
+    quarter_turns: int = 0,
     shift: Tuple[float, float] = (0.0, 0.0),
     merge_chains: bool = False,
     retract_between_chains: bool = True,
@@ -193,7 +232,7 @@ def _result(
     Args:
         stations: ``(chain, x, y, radius)`` in toolpath order.
         scale: Uniform scale applied to every coordinate and radius.
-        angle: Rotation about the origin, in radians.
+        quarter_turns: Whole 90-degree turns about the origin.
         shift: Translation applied after rotation.
         merge_chains: Label every operation with one ``path_index``, collapsing
             the chain boundaries without moving any geometry.
@@ -207,7 +246,7 @@ def _result(
     previous_chain: int | None = None
     previous_point: Tuple[float, float] | None = None
     for chain, raw_x, raw_y, raw_radius in stations:
-        x, y = _place(raw_x * scale, raw_y * scale, angle, shift)
+        x, y = _place(raw_x * scale, raw_y * scale, quarter_turns, shift)
         radius = raw_radius * scale
         index = 0 if merge_chains else chain
         if previous_chain is None:
@@ -223,7 +262,7 @@ def _result(
         else:
             assert previous_point is not None
             operations.append(_op(Line([*previous_point, 0.0], [x, y, 0.0]), OperationType.LINK, index))
-        operations.append(_op(Circle(radius, frame=Frame([x, y, 0.0])), OperationType.CUT, index))
+        operations.append(_op(Circle(radius, frame=_frame(x, y, quarter_turns)), OperationType.CUT, index))
         previous_chain, previous_point = chain, (x, y)
     return ToolpathResult(operations=operations, polyline=np.zeros((0, 3), dtype=float))
 
@@ -324,8 +363,8 @@ def test_moving_the_pocket_across_the_table_changes_no_metric(stations: List[Tup
     Any metric that moves under translation is reading an absolute coordinate,
     which nothing about cutting metal depends on.
     """
-    here = _measure(_spec(1.0, 0.0, (0.0, 0.0)), _result(stations))
-    there = _measure(_spec(1.0, 0.0, shift), _result(stations, shift=shift))
+    here = _measure(_spec(1.0, 0, (0.0, 0.0)), _result(stations))
+    there = _measure(_spec(1.0, 0, shift), _result(stations, shift=shift))
     for group, name in DIMENSIONLESS + LENGTHS:
         assert _field(here, group, name) == pytest.approx(_field(there, group, name), rel=REWORK_TOL, abs=REWORK_TOL), f"{group}.{name} moved with the pocket"
     for group, name in COUNTS:
@@ -342,8 +381,8 @@ def test_turning_the_pocket_a_quarter_turn_changes_no_metric(stations: List[Tupl
     measurements identically. A metric that survives translation but not
     rotation is reading an axis.
     """
-    upright = _measure(_spec(1.0, 0.0, (0.0, 0.0)), _result(stations))
-    turned = _measure(_spec(1.0, 0.5 * math.pi, (0.0, 0.0)), _result(stations, angle=0.5 * math.pi))
+    upright = _measure(_spec(1.0, 0, (0.0, 0.0)), _result(stations))
+    turned = _measure(_spec(1.0, 1, (0.0, 0.0)), _result(stations, quarter_turns=1))
     for group, name in DIMENSIONLESS + LENGTHS:
         assert _field(upright, group, name) == pytest.approx(_field(turned, group, name), rel=1e-6, abs=1e-6), f"{group}.{name} turned with the pocket"
     for group, name in COUNTS:
@@ -360,8 +399,8 @@ def test_a_bigger_pocket_and_a_bigger_cutter_is_the_same_cut(stations: List[Tupl
     rotation and fails here -- because only a scale change separates a ratio
     that is genuinely dimensionless from one that merely looked it.
     """
-    unit = _measure(_spec(1.0, 0.0, (0.0, 0.0)), _result(stations))
-    scaled = _measure(_spec(scale, 0.0, (0.0, 0.0)), _result(stations, scale=scale))
+    unit = _measure(_spec(1.0, 0, (0.0, 0.0)), _result(stations))
+    scaled = _measure(_spec(scale, 0, (0.0, 0.0)), _result(stations, scale=scale))
     for group, name in DIMENSIONLESS:
         assert _field(unit, group, name) == pytest.approx(_field(scaled, group, name), rel=1e-6, abs=1e-6), f"{group}.{name} is not dimensionless"
     for group, name in LENGTHS:
@@ -380,8 +419,8 @@ def test_merging_chains_can_only_raise_the_reported_radius_step(stations: List[T
     the reported maximum can rise or hold but never fall. A rule that splits on
     the wrong thing breaks this in one direction or the other.
     """
-    split = _measure(_spec(1.0, 0.0, (0.0, 0.0)), _result(stations, retract_between_chains=False))
-    merged = _measure(_spec(1.0, 0.0, (0.0, 0.0)), _result(stations, retract_between_chains=False, merge_chains=True))
+    split = _measure(_spec(1.0, 0, (0.0, 0.0)), _result(stations, retract_between_chains=False))
+    merged = _measure(_spec(1.0, 0, (0.0, 0.0)), _result(stations, retract_between_chains=False, merge_chains=True))
     assert _field(merged, "cut", "max_loop_radius_step") >= _field(split, "cut", "max_loop_radius_step") - REWORK_TOL
 
 
@@ -395,8 +434,8 @@ def test_retracting_between_chains_can_only_lower_the_reported_radius_step(stati
     comparable pairs. Together with the merge property this pins the run rule
     from both sides without naming a single expected value.
     """
-    linked = _measure(_spec(1.0, 0.0, (0.0, 0.0)), _result(stations, retract_between_chains=False))
-    lifted = _measure(_spec(1.0, 0.0, (0.0, 0.0)), _result(stations, retract_between_chains=True))
+    linked = _measure(_spec(1.0, 0, (0.0, 0.0)), _result(stations, retract_between_chains=False))
+    lifted = _measure(_spec(1.0, 0, (0.0, 0.0)), _result(stations, retract_between_chains=True))
     assert _field(lifted, "cut", "max_loop_radius_step") <= _field(linked, "cut", "max_loop_radius_step") + REWORK_TOL
 
 
