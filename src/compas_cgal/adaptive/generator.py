@@ -40,8 +40,8 @@ from compas_cgal.adaptive.generation_state import TraversalCursorState
 from compas_cgal.adaptive.identity import IdentityDigest
 from compas_cgal.adaptive.medial_axis import MatSample
 from compas_cgal.adaptive.medial_axis import MatZeroGuideRun
-from compas_cgal.adaptive.operation import CanonicalOperation
 from compas_cgal.adaptive.operation import AdvanceSegmentOperation
+from compas_cgal.adaptive.operation import CanonicalOperation
 from compas_cgal.adaptive.operation import EffectiveCapDecision
 from compas_cgal.adaptive.operation import FullCapDecision
 from compas_cgal.adaptive.operation import NoNeckScope
