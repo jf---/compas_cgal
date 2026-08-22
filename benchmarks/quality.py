@@ -54,6 +54,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from typing import List
+from typing import Mapping
 from typing import Optional
 from typing import Sequence
 from typing import Tuple
@@ -506,7 +507,7 @@ def measure_quality(
     entries = entry_cut_indices(result)
     return PathQuality(
         elementary=_elementary(spec, survey, coverage.uncut_fraction, coverage.remaining_area),
-        cut=_cut(spec, survey, coverage.wall_scallop_height),
+        cut=_cut(spec, survey, coverage.wall_scallop_height, {index: operation.path_index for index, operation in enumerate(result.operations)}),
         speed=_speed(survey),
         longevity=_longevity(survey, len(entries)),
         program=_program(survey),
@@ -550,20 +551,22 @@ def _elementary(spec: PocketSpec, survey: PathSurvey, uncut_fraction: float, rem
     )
 
 
-def _cut(spec: PocketSpec, survey: PathSurvey, wall_scallop_height: float) -> CutQuality:
+def _cut(spec: PocketSpec, survey: PathSurvey, wall_scallop_height: float, chain_of: Mapping[int, int]) -> CutQuality:
     """Reduce a survey to the cut-mechanics group.
 
     Args:
         spec: The instance, for the tool radius.
         survey: The replay's findings.
         wall_scallop_height: From the coverage grid.
+        chain_of: Operation index to the generator's chain identity, for
+            `_loop_runs`.
 
     Returns:
         The cut-mechanics group.
     """
     weighted = _weighted_engagement(survey.motions)
     radii = _loop_radii(survey.motions)
-    runs = _loop_runs(survey.motions, survey.rapids)
+    runs = _loop_runs(survey.motions, survey.rapids, chain_of)
     engaged = [(value, weight) for value, weight in weighted if value > 0.0]
     immersions = [(radial_immersion(value), weight) for value, weight in weighted]
     depths = [(spec.tool_diameter * value, weight) for value, weight in immersions]
@@ -1186,36 +1189,54 @@ def _loop_radii(motions: Sequence[MotionQuality]) -> List[float]:
     return [motion.loop_radius for motion in motions if motion.kind is MotionKind.LOOP and motion.loop_radius is not None]
 
 
-def _loop_runs(motions: Sequence[MotionQuality], rapids: Sequence[RapidMotion]) -> List[List[float]]:
-    """Guide radii grouped into runs the tool performs without leaving material.
+def _loop_runs(motions: Sequence[MotionQuality], rapids: Sequence[RapidMotion], chain_of: Mapping[int, int]) -> List[List[float]]:
+    """Guide radii grouped into runs over which a radius step is meaningful.
 
-    A radius STEP is a load change the cutter actually passes through, so two
-    loops may only be compared when the tool stayed down between them. A retract
-    and its following plunge end a run: the cutter climbs to clearance height,
-    rapids across, and re-enters somewhere else, and the difference in guide
-    radius across that gap is not a step the machine ever performs.
+    A run ends at EITHER boundary, because each defeats the comparison for its
+    own reason:
 
-    Splitting on rapid indices is what `_max_engagement_step` achieves with its
-    ``index + 1`` test. That test cannot be reused here because loops within one
-    chain are separated by the bridge motions between them and so are never
-    index-adjacent; the run boundary, not adjacency, is the right notion.
+    * A RAPID. The cutter climbs to clearance height, traverses and re-enters, so
+      the difference in guide radius across the gap is not a step the machine
+      ever performs under load.
+    * A CHANGE OF ``path_index``, which is the generator's own chain identity --
+      its operations are emitted grouped by it, one group per skeleton chain.
+      Two loops on different chains lie on DIFFERENT GUIDES, and "the guide
+      radius should vary smoothly" is a statement about one guide. The radius did
+      not jump along a guide; the generator moved elsewhere on the skeleton.
+
+    Neither boundary implies the other, which is why both are tested. A generator
+    that orders its chains so the tool never lifts links them at cutting depth,
+    so a chain change arrives with no rapid to mark it; conversely a retract can
+    occur inside a single chain. Splitting on rapids alone reported 3.988 tool
+    radii on `rect_20x12` for a corner chain's tip loop against the NEXT chain's
+    spine-end loop, separated by a long low-load transit -- which is a real cut,
+    and not the abrupt load change this criterion is aimed at.
 
     Args:
         motions: The cut motions, in toolpath order.
-        rapids: The non-cutting motions, whose indices mark the breaks.
+        rapids: The non-cutting motions, whose indices mark one kind of break.
+        chain_of: Operation index to the generator's ``path_index``, which marks
+            the other. A motion whose index is absent is treated as continuing
+            the chain it follows.
 
     Returns:
-        One list of radii per continuous run; runs of fewer than two loops are
-        kept so a caller can count them.
+        One list of radii per run, in toolpath order; empty runs are dropped.
     """
     breaks = sorted(rapid.index for rapid in rapids)
     runs: List[List[float]] = [[]]
     position = 0
+    chain: Optional[int] = None
     for motion in motions:
+        boundary = False
         while position < len(breaks) and breaks[position] < motion.index:
             position += 1
-            if runs[-1]:
-                runs.append([])
+            boundary = True
+        current = chain_of.get(motion.index, chain)
+        if chain is not None and current != chain:
+            boundary = True
+        chain = current
+        if boundary and runs[-1]:
+            runs.append([])
         if motion.kind is MotionKind.LOOP and motion.loop_radius is not None:
             runs[-1].append(motion.loop_radius)
     return [run for run in runs if run]
