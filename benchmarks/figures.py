@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Dict
 from typing import List
 from typing import Optional
+from typing import Protocol
 from typing import Sequence
 from typing import Tuple
 
@@ -29,6 +30,7 @@ from benchmarks.pathmetrics import path_length
 from benchmarks.plotting import ColourBy
 from benchmarks.plotting import ToolpathDrawing
 from benchmarks.plotting import draw_comparison
+from benchmarks.plotting import save_drawing
 from benchmarks.spec import PocketSpec
 from compas_cgal.toolpath import ToolpathResult
 
@@ -58,6 +60,25 @@ UNREGULATED_LABEL = f"unregulated, constant {UNREGULATED_SPACING_TOOL_DIAMETERS:
 CONTROLLED_LABEL = f"engagement-controlled, {CONTROLLED_CAP_DEG:.0f}° cap"
 
 TOOLPATHS_TITLE = "Trochoidal tool paths on the same pocket"
+
+
+class FigureWriter(Protocol):
+    """What every published figure's writer looks like from `regenerate_all`.
+
+    Spelled as a protocol rather than a bare `Callable` so that a writer added to
+    `_PUBLISHED_FIGURES` with a different keyword contract is a type error here
+    rather than a `TypeError` in the middle of a regeneration run.
+    """
+
+    def __call__(
+        self,
+        out_dir: Path = ...,
+        *,
+        spec: Optional[PocketSpec] = ...,
+        formats: Sequence[str] = ...,
+        theme: Theme = ...,
+    ) -> Tuple[Path, ...]:
+        """Draw one published figure and write it, once per format."""
 
 
 @dataclass(frozen=True)
@@ -181,15 +202,12 @@ def save_figure(drawing: ToolpathDrawing, out_dir: Path, name: str, formats: Seq
         formats: File extensions to write, one file each.
 
     Returns:
-        The paths written, in the order the formats were given.
+        The paths written, in the order the formats were given. Each is written
+        by `benchmarks.plotting.save_drawing`, so redrawing the same paths
+        rewrites the same bytes.
     """
     out_dir.mkdir(parents=True, exist_ok=True)
-    written: List[Path] = []
-    for suffix in formats:
-        path = out_dir / f"{name}.{suffix}"
-        drawing.figure.savefig(path, format=suffix, facecolor=drawing.figure.get_facecolor())
-        written.append(path)
-    return tuple(written)
+    return tuple(save_drawing(drawing, out_dir / f"{name}.{suffix}") for suffix in formats)
 
 
 def write_toolpath_figure(
@@ -216,3 +234,44 @@ def write_toolpath_figure(
     """
     panels = toolpath_panels(reference_pocket() if spec is None else spec)
     return save_figure(draw_toolpath_figure(panels, theme=theme), out_dir, themed_name(TOOLPATHS_FIGURE_NAME, theme), formats)
+
+
+# Every figure `regenerate_all` is responsible for. A new drawing is published by
+# adding its writer here and nowhere else, so a figure cannot exist in the docs
+# without being regenerable.
+_PUBLISHED_FIGURES: Tuple[FigureWriter, ...] = (write_toolpath_figure,)
+
+
+def regenerate_all(
+    out_dir: Path = DEFAULT_FIGURES_OUT,
+    *,
+    spec: Optional[PocketSpec] = None,
+    formats: Sequence[str] = DEFAULT_FIGURE_FORMATS,
+    theme: Theme = Theme.LIGHT,
+) -> Tuple[Path, ...]:
+    """Redraw every figure this module publishes, in one call.
+
+    ONE entry point, so that "regenerate the figures" is a thing a person can do
+    without knowing which figures exist. Everything drawn through
+    `benchmarks.plotting` is listed in `_PUBLISHED_FIGURES` and is redrawn here;
+    the line charts in `docs/benchmarks.md` come from elsewhere and are not this
+    function's to touch, which is why it says `regenerate_all` and not
+    "regenerate every figure in the docs".
+
+    Args:
+        out_dir: Directory the figures are written to; created if absent.
+        spec: The pocket and tool; defaults to the Figure 6 reference pocket.
+        formats: File extensions to write, one file each per figure.
+        theme: Which surface the figures are drawn for.
+
+    Returns:
+        Every path written, figure by figure in publication order.
+
+    Warns:
+        UnavoidableEngagementWarning: Raised through from the controlled
+            generator where the cap could not be honoured.
+    """
+    written: List[Path] = []
+    for write in _PUBLISHED_FIGURES:
+        written.extend(write(out_dir, spec=spec, formats=formats, theme=theme))
+    return tuple(written)

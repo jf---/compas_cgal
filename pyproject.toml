@@ -206,6 +206,10 @@ pytest = { cmd = '''editable_build_dir="$(python -c 'import sys; print(next(f.pa
 baseline = { cmd = '''editable_build_dir="$(python -c 'import sys; print(next(f.path for f in sys.meta_path if hasattr(f, "known_wheel_files") and "compas_cgal._stock_2" in f.known_wheel_files))')" && SKBUILD_EDITABLE_SKIP="$editable_build_dir" pytest tests -n auto -q''', depends-on = ["_editable-rebuild"] }
 affected = { cmd = '''editable_build_dir="$(python -c 'import sys; print(next(f.path for f in sys.meta_path if hasattr(f, "known_wheel_files") and "compas_cgal._stock_2" in f.known_wheel_files))')" && SKBUILD_EDITABLE_SKIP="$editable_build_dir" pytest tests -n auto --testmon -q''', depends-on = ["_editable-rebuild"] }
 lint = "ruff check src/compas_cgal tests"
+# Figures are regenerated through the same editable-extension dance the test
+# tasks use: the recipe generates real tool paths, so it needs the built kernel
+# matched to this interpreter, not whatever `python` happens to resolve to.
+figures = { cmd = '''editable_build_dir="$(python -c 'import sys; print(next(f.path for f in sys.meta_path if hasattr(f, "known_wheel_files") and "compas_cgal._stock_2" in f.known_wheel_files))')" && SKBUILD_EDITABLE_SKIP="$editable_build_dir" python -m benchmarks.cli figures''', depends-on = ["_editable-rebuild"], description = "Redraw every published tool-path figure" }
 format-adaptive = "ruff format src/compas_cgal/adaptive tests/adaptive"
 types-adaptive = "mypy --strict --warn-unused-ignores src/compas_cgal/adaptive tests/adaptive/typecheck/consumer_contract.py"
 schema = { cmd = '''editable_build_dir="$(python -c 'import sys; print(next(f.path for f in sys.meta_path if hasattr(f, "known_wheel_files") and "compas_cgal._stock_2" in f.known_wheel_files))')" && SKBUILD_EDITABLE_SKIP="$editable_build_dir" pytest tests/adaptive/test_schema.py -n auto -q''', depends-on = ["_editable-rebuild"] }

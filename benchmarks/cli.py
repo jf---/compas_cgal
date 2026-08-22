@@ -60,7 +60,7 @@ from benchmarks.figure6 import run_figure6
 from benchmarks.figure6 import write_figure6
 from benchmarks.figures import DEFAULT_FIGURE_FORMATS
 from benchmarks.figures import DEFAULT_FIGURES_OUT
-from benchmarks.figures import write_toolpath_figure
+from benchmarks.figures import regenerate_all
 from benchmarks.mathsm import SPACING_SWEEP_TOOL_DIAMETERS
 from benchmarks.palette import Theme
 from benchmarks.report import write_report
@@ -256,7 +256,7 @@ def _run_figure6_command(args: argparse.Namespace) -> int:
 
 
 def _run_figures_command(args: argparse.Namespace) -> int:
-    """Regenerate the published tool-path figure.
+    """Redraw every figure `benchmarks.figures` publishes.
 
     Args:
         args: Parsed `figures` arguments.
@@ -264,7 +264,7 @@ def _run_figures_command(args: argparse.Namespace) -> int:
     Returns:
         `EXIT_OK`.
     """
-    written = write_toolpath_figure(args.out, formats=tuple(args.formats), theme=Theme(args.theme))
+    written = regenerate_all(args.out, formats=tuple(args.formats), theme=Theme(args.theme))
     for path in written:
         print(f"wrote {path}")
     return EXIT_OK
@@ -294,7 +294,7 @@ def build_parser() -> argparse.ArgumentParser:
     figure6.add_argument("--spacings", type=float, nargs="+", default=list(SPACING_SWEEP_TOOL_DIAMETERS), help="Baseline trial spacings, in tool diameters.")
     figure6.set_defaults(handler=_run_figure6_command)
 
-    figures = commands.add_parser("figures", help="Regenerate the published tool-path figure (seconds: it generates both paths, it does not audit them).")
+    figures = commands.add_parser("figures", help="Redraw every published tool-path figure (seconds: it generates the paths, it does not audit them).")
     figures.add_argument("--out", type=Path, default=DEFAULT_FIGURES_OUT, help="Directory for the figure files.")
     figures.add_argument("--formats", nargs="+", default=list(DEFAULT_FIGURE_FORMATS), help="File formats to write, one file each.")
     figures.add_argument("--theme", choices=[theme.value for theme in Theme], default=Theme.LIGHT.value, help="Which surface the figure is drawn for.")

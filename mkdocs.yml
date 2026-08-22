@@ -165,7 +165,7 @@ nav:
   - Design Notes:
       - Exact-Kernel Discipline: exactness.md
       - Benchmark Corpus: benchmarks.md
-      - Drawing Tool Paths: toolpath_figures.md
+      - Drawing Tool Paths: toolpath_drawing.md
       - Exact Segment-Site MAT: segment_site_mat.md
       - Exact Continuous Engagement: continuous_engagement.md
       - Refutation Soundness Cross-Check: refutation_soundness_crosscheck.md
