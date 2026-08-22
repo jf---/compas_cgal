@@ -16,9 +16,14 @@ stale, because there is no caption to forget to update.
 ## Running it
 
 ```bash
-pixi run python -m benchmarks.cli figures                 # regenerate docs/assets/images/fig6_toolpaths.svg
+pixi run figures                                          # redraw every published figure
 pixi run python -m benchmarks.cli figures --theme dark    # the dark variant, from the dark steps
 ```
+
+`benchmarks.figures.regenerate_all` is the single entry point behind that task, and it walks a
+registry: a drawing is published by adding its writer to `_PUBLISHED_FIGURES` and nowhere else, so
+a figure cannot end up in the docs without being regenerable. The dark variant writes
+`fig6_toolpaths_dark.svg` rather than landing on the published light file.
 
 ```python
 from benchmarks.plotting import ColourBy, draw_comparison, draw_toolpath

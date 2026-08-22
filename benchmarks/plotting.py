@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 from typing import Dict
 from typing import List
@@ -31,6 +32,7 @@ from typing import Optional
 from typing import Sequence
 from typing import Tuple
 
+from matplotlib import rc_context
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
@@ -104,6 +106,10 @@ LABEL_HALO_ALPHA = 0.85
 # Points per inch, for converting a width in data units into a stroke weight.
 POINTS_PER_INCH = 72.0
 
+# The metadata key each format writes a wall-clock date into, and which
+# `save_drawing` omits so the file does not change when only the clock has.
+_OMITTED_DATE_KEY = {"svg": "Date", "pdf": "CreationDate"}
+
 # Draw order. The swept envelope is a footprint under everything; the pocket
 # boundary sits above it; travel below cutting; point events and labels on top.
 Z_ENVELOPE = 1
@@ -144,6 +150,37 @@ class ToolpathDrawing:
         if len(self.axes) != 1:
             raise AmbiguousPanelError(f"This drawing has {len(self.axes)} panels; read `.axes` and say which one.")
         return self.axes[0]
+
+
+def save_drawing(drawing: ToolpathDrawing, path: Path) -> Path:
+    """Write a drawing to *path*, reproducibly, in the format its suffix names.
+
+    THE BYTES ARE THE POINT. A published figure is a tracked artifact, and one
+    that changes on every regeneration cannot be compared against the version
+    before it -- the diff is noise, so nobody reads it, so a real change to the
+    geometry goes unnoticed. Two matplotlib defaults break byte reproducibility:
+    a wall-clock timestamp written into the file's metadata, and element ids
+    salted per process. Both are pinned here -- the salt to the file's own stem,
+    scoped to this call rather than set as a global rcParam -- so redrawing the
+    same paths produces the same file.
+
+    Args:
+        drawing: The drawing to write.
+        path: Destination; its suffix chooses the format.
+
+    Returns:
+        The path written.
+    """
+    suffix = path.suffix.lstrip(".").lower()
+    date_key = _OMITTED_DATE_KEY.get(suffix)
+    with rc_context({"svg.hashsalt": path.stem}):
+        drawing.figure.savefig(
+            path,
+            format=suffix,
+            facecolor=drawing.figure.get_facecolor(),
+            metadata=None if date_key is None else {date_key: None},
+        )
+    return path
 
 
 def draw_toolpath(

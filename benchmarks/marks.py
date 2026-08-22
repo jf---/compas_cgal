@@ -14,6 +14,24 @@ therefore take a shaped marker -- plunge down, retract up -- in secondary ink, i
 every colour mode. A link whose two ends coincide gets the same treatment,
 because that is what it is.
 
+DO NOT "FIX" EITHER OF THE TWO CHOICES BELOW BACK TO CATEGORICAL HUES. Both were
+arrived at by running the palette validator BEFORE any of this was written, and
+both say something true that hues would hide:
+
+* `ColourBy.TRAVERSAL` is an ORDINAL RAMP, not one hue per chain. A traversal
+  index carries an inherent order -- it IS the machining sequence -- so a ramp
+  states the order, while arbitrary categorical hues would conceal it. The
+  validator independently forbids the alternative: on the `--pairs all` pairlist
+  a plan view needs, no ordering of eight hues clears the floors.
+* A plunge and a retract carry a MARK SHAPE, not a hue. In plan view they have
+  zero extent, so shape is the only encoding that is not a lie about their
+  geometry -- and, again independently, no four-hue categorical set passes.
+
+Two obligations come with the ramp and must survive any edit: direct labels
+(`annotate_traversals`) carry exact identity, because a ramp cannot be read back
+to an index; and the fold NAMES what it folded, `other (N chains)`, because a
+silent truncation is a claim the reader cannot check.
+
 Nothing here imports matplotlib: a mark is a description, and
 `benchmarks.plotting` is what draws one.
 """

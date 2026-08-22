@@ -24,6 +24,9 @@ from benchmarks.figures import FigurePanels  # noqa: E402
 from benchmarks.figures import draw_toolpath_figure  # noqa: E402
 from benchmarks.figures import figure_subtitle  # noqa: E402
 from benchmarks.figures import panel_subtitle  # noqa: E402
+from benchmarks.figures import DEFAULT_FIGURE_FORMATS  # noqa: E402
+from benchmarks.figures import _PUBLISHED_FIGURES  # noqa: E402
+from benchmarks.figures import regenerate_all  # noqa: E402
 from benchmarks.figures import save_figure  # noqa: E402
 from benchmarks.figures import themed_name  # noqa: E402
 from benchmarks.palette import Theme  # noqa: E402
@@ -38,6 +41,12 @@ CAP_DEG = 120.0
 # A machining circle whose length is exactly 2*pi: one radius unit, so the
 # expected subtitle can be written down rather than recomputed by the test.
 UNIT_RADIUS = 1.0
+
+# The end-to-end regeneration runs the real generators, so it runs them on the
+# smoke pocket rather than the published one: what is under test is that the
+# registry is walked and files land, not the size of the pocket.
+SMOKE_WIDTH = 8.0
+SMOKE_HEIGHT = 6.0
 
 
 @dataclass(frozen=True)
@@ -120,3 +129,26 @@ def test_the_dark_variant_gets_its_own_file_rather_than_overwriting_the_publishe
     """The docs link the light figure by path; a dark redraw must not land on it."""
     assert themed_name(TOOLPATHS_FIGURE_NAME, Theme.LIGHT) == TOOLPATHS_FIGURE_NAME
     assert themed_name(TOOLPATHS_FIGURE_NAME, Theme.DARK) == f"{TOOLPATHS_FIGURE_NAME}_dark"
+
+
+def test_regenerating_everything_walks_the_registry_and_writes_real_files(tmp_path: Path) -> None:
+    """One entry point: a figure absent from the registry cannot be regenerated at all."""
+    smoke = rectangle(width=SMOKE_WIDTH, height=SMOKE_HEIGHT, tool_diameter=TOOL_DIAMETER, tea_cap_deg=CAP_DEG)
+    written = regenerate_all(tmp_path, spec=smoke)
+    assert len(written) == len(_PUBLISHED_FIGURES) * len(DEFAULT_FIGURE_FORMATS)
+    assert {path.name for path in written} == {f"{TOOLPATHS_FIGURE_NAME}.{suffix}" for suffix in DEFAULT_FIGURE_FORMATS}
+    for path in written:
+        assert path.read_bytes().startswith(b"<?xml")
+
+
+def test_the_registry_is_not_empty() -> None:
+    """An empty registry would make `regenerate_all` a silent no-op."""
+    assert _PUBLISHED_FIGURES
+
+
+def test_redrawing_the_same_paths_rewrites_the_same_bytes(tmp_path: Path) -> None:
+    """A published figure is tracked; if its bytes churn, nobody reads its diff."""
+    first = save_figure(draw_toolpath_figure(_panels()), tmp_path / "a", TOOLPATHS_FIGURE_NAME, ("svg", "pdf"))
+    second = save_figure(draw_toolpath_figure(_panels()), tmp_path / "b", TOOLPATHS_FIGURE_NAME, ("svg", "pdf"))
+    for one, two in zip(first, second):
+        assert one.read_bytes() == two.read_bytes(), one.suffix
