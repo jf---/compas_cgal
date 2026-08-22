@@ -200,17 +200,44 @@ constexpr double FULL_TURN = 2.0 * std::numbers::pi;
 
 // Slack on that reporting ceiling, in radians. NOT a geometric tolerance: no
 // decision reads it, no geometry is sized by it, and nothing is clamped to it. It
-// exists only so that a floating-point SUM of individually-accurate angles is not
-// mistaken for the logic error the ceiling check hunts.
+// exists only so that a floating-point SUM of angles is not mistaken for the logic
+// error the ceiling check hunts.
 //
-// FLOOR -- what it must stay above. One arc span is atan2(|u x v|, u . v) over
-// station-relative doubles; the products carry a handful of ulps, so a span is
-// accurate to a few ulps of pi (ulp(pi) = 4.4e-16 rad), call it 1e-15 rad. A run
-// is the sum of the spans of the sub-arcs it was assembled from, and those
-// sub-arcs are disjoint pieces of one rim, so a run built from N of them lands
-// within N * 1e-15 rad of its true measure. 1e-6 rad absorbs N up to 1e9 sub-arcs
-// on a single cutter rim -- nine decades past anything the zone can hand back,
-// since every sub-arc costs one rim/boundary crossing in the arrangement.
+// FIRST, what this slack is NOT sized against. A single span is NOT accurate to a
+// few ulps of pi. The vectors are (to_double(endpoint) - station)/r, so rounding
+// the endpoint coordinate costs ulp(|station|) of a quantity whose magnitude is r:
+// the per-span accuracy is governed by the STATION-COORDINATE-TO-RADIUS RATIO,
+// ~ulp(|station|)/r, and it degrades without limit as the ratio grows. Measured
+// against the closed form pi + 2*asin(h/r) for a wall at depth h, station on the
+// unit scale, r shrunk to sweep the ratio:
+//
+//     |station|/r    2e0       1e3       1e6       1e9       1e12
+//     ulp/r model    4.4e-16   2.2e-13   2.2e-10   2.2e-7    2.2e-4
+//     worst measured 4.4e-16   5.4e-14   4.9e-11   5.6e-8    6.3e-5
+//
+// So one span's error passes 1e-6 at a ratio near 5e9 -- this constant is NOT nine
+// decades above the per-span error, and any headroom claim of that shape is false.
+//
+// FLOOR -- what it IS sized against, and why the ceiling survives anyway. The
+// per-span errors TELESCOPE out of the sum. Consecutive sub-arcs of a run share
+// their split vertex as the same exact arrangement point, hence as the SAME
+// rounded double vector, appearing as v of one term and u of the next. Because
+// every piece spans at most pi (see engaged_arcs_zone), each unsigned angle IS the
+// CCW angle, so the terms add as directed rotations and every interior vertex
+// cancels against its neighbour: the sum collapses to the CCW angle from the run's
+// first rounded vertex to its last, whose complement is the void gap -- itself a
+// non-negative angle. That, not per-span accuracy, is what holds a run at or below
+// a full turn, and it does not depend on the station scale at all. What survives
+// the cancellation is only the evaluation error of the atan2 calls and the
+// additions themselves, a few ulps of pi per term (ulp(pi) = 4.4e-16), so a run
+// assembled from N sub-arcs lands within ~N * 1e-15 of the telescoped value. 1e-6
+// rad absorbs N up to 1e9 sub-arcs on one rim -- nine decades past anything the
+// zone can hand back, since every sub-arc costs one rim/boundary crossing.
+//
+// Measured, and this is the claim that matters: at ratio 1e12, where a single span
+// carries 6.3e-5 rad of error, the maximum total_tea over 6500 stations (fully
+// engaged rims, and rims bitten by six voids so the run carries many sub-arcs) is
+// exactly 6.283185307179586 -- 2*pi, with zero excess, never one ulp above.
 //
 // CEILING -- what it must stay below. The cheapest impossibility this can catch
 // is worth a whole turn: a double-counted run, or the wrap normalisation the span
@@ -474,6 +501,33 @@ void engaged_arcs_zone(const Stock2& stock, double cx, double cy,
     std::vector<boost::variant<GpsPoint, GpsXCurve>> xmono;
     traits.make_x_monotone_2_object()(cutter, std::back_inserter(xmono));
 
+    // PRECONDITION, stated where it is made. The span formula below reports the
+    // UNSIGNED angle between the endpoint radius vectors, which equals the arc's
+    // CCW extent only while that extent is at most pi -- and the telescoping that
+    // holds a run at or below a full turn (FULL_TURN_REPORT_SLACK) rests on the
+    // same property. Both come from here: Arr_circle_segment_traits_2's
+    // Make_x_monotone_2 takes the `cv.is_full()` branch for a whole circle and
+    // splits it at the two vertical tangency points into exactly an upper and a
+    // lower half (external/cgal/include/CGAL/Arr_circle_segment_traits_2.h), and
+    // Arrangement_zone_2 only ever hands found_subcurve sub-curves of the piece it
+    // was initialised with. So every harvested arc is a sub-arc of an exact
+    // semicircle.
+    //
+    // Checked rather than assumed because breaking it fails SILENTLY and in the
+    // unsafe direction: a piece truly spanning theta > pi measures 2*pi - theta,
+    // so the report falls BELOW the truth and below a full turn, and
+    // finish_engagement's ceiling -- which only ever looks upward -- is
+    // structurally blind to it. Nothing downstream would notice.
+    std::size_t n_pieces = 0;
+    for (const auto& piece : xmono)
+        if (boost::get<GpsXCurve>(&piece) != nullptr) ++n_pieces;
+    if (n_pieces != 2 || xmono.size() != 2)
+        throw std::logic_error("make_x_monotone_2 split the cutter circle into "
+                               + std::to_string(xmono.size()) + " pieces, "
+                               + std::to_string(n_pieces) + " of them curves, not the two "
+                               "semicircles the reported span depends on: an arc wider than a "
+                               "half circle reports 2*pi minus its true extent, silently and low.");
+
     EngagementVisitor vis;
     for (const auto& piece : xmono) {
         if (const GpsXCurve* xc = boost::get<GpsXCurve>(&piece)) {
@@ -520,32 +574,39 @@ void engaged_arcs_zone(const Stock2& stock, double cx, double cy,
     //     ux*vy - uy*vx == -0.0, and atan2(-0.0, negative) is -pi where
     //     atan2(+0.0, negative) is +pi.
     //
-    // The [0, pi] codomain is the CORRECT range, not a truncation of it: an
-    // x-monotone circular arc never turns back in x, so it lies wholly in one
-    // half-disk about the centre and its angular extent cannot exceed pi. Should a
-    // future traits change break that, the reporting invariant in
-    // finish_engagement is the loud failure.
+    // The [0, pi] codomain is the CORRECT range, not a truncation of it -- but only
+    // because every harvested arc is a sub-arc of a semicircle, which is a
+    // PRECONDITION supplied by make_x_monotone_2 and CHECKED above, not a property
+    // of this expression. Nothing here or downstream would catch its violation: a
+    // piece spanning theta > pi reports 2*pi - theta, i.e. LOW, and
+    // finish_engagement's ceiling only looks upward. That is why the check sits at
+    // the split rather than at the sum.
     //
     // The radius vectors are divided by the tool radius before the products are
     // formed. atan2 is invariant under a positive common scaling of both arguments,
     // so this changes no answer, but it keeps every component O(1) and both products
-    // in range for ANY radius the seam admits (require_positive_radius takes any
-    // finite positive double, and tool_radius is an independent argument at the
-    // binding -- an ordinary stock really can be queried with r = 1e-200). Formed
-    // raw, the products of such a cutter underflow to zero and those of an
-    // r = 1e+200 cutter overflow to infinity -- a scale regression against the
-    // heading difference this replaces, which was scale-free.
+    // in range across the whole radius domain the seam admits (require_positive_radius
+    // takes any finite positive double, and tool_radius is an independent argument at
+    // the binding, so an ordinary stock really can be queried with r = 1e-200). Formed
+    // raw, such a cutter's products underflow to zero -- measured, and the reason this
+    // division is here. The overflow end (raw products exceed the double range above
+    // r ~ 1e154) is defensive rather than reachable: a stock big enough for such a
+    // cutter to engage cannot be built, since Stock.__init__ refuses the polygon on
+    // signed-area overflow first.
     //
     // What NO normalisation rescues is the read-out itself: once r falls below an
     // ulp of the station coordinate, to_double lands both endpoints exactly on the
-    // centre, u and v are both zero, and no formula can recover an angle from
-    // that. Measured at (5, 5) buried in material, r <= 1e-100: this reports
-    // total_tea = 0 where the truth is 2*pi. The heading difference reported 2*pi
+    // centre and no formula can recover an angle from a pair of zero vectors. A rim
+    // point cannot coincide with the centre for any r > 0, so a zero vector is never
+    // geometry -- it is proof the read-out has collapsed, and it is raised rather
+    // than returned. Measured at (5, 5) buried in material: correct to r = 1e-8,
+    // collapsed at r <= 1e-16, where this now throws instead of quietly reporting
+    // total_tea = 0 against a truth of 2*pi. (The heading difference reported 2*pi
     // PER ARC there, i.e. 4*pi -- the same defect in its purest form, since a
-    // collapsed difference is exactly the zero its wrap lifted. Both readings are
-    // wrong and neither moves a verdict: cap_exceeded is decided on the exact
-    // one-root endpoints and stays correct (True buried, False clear) to r = 1e-300.
-    // That is the deciding/reporting split doing precisely its job.
+    // collapsed difference is exactly the zero its wrap lifted. It failed loudly only
+    // by accident, and only once the ceiling check existed.) Partial collapse -- one
+    // coordinate surviving -- is not an error but a loss of accuracy, bounded by the
+    // ulp(|station|)/r term derived at FULL_TURN_REPORT_SLACK.
     for (const GpsXCurve& xc : vis.engaged) {
         GpsPoint s = xc.source();
         GpsPoint t = xc.target();
@@ -555,6 +616,14 @@ void engaged_arcs_zone(const Stock2& stock, double cx, double cy,
         const double uy = (CGAL::to_double(s.y()) - cy) / tool_radius;
         const double vx = (CGAL::to_double(t.x()) - cx) / tool_radius;
         const double vy = (CGAL::to_double(t.y()) - cy) / tool_radius;
+        if ((ux == 0.0 && uy == 0.0) || (vx == 0.0 && vy == 0.0))
+            throw std::logic_error("engagement read-out collapsed at station ("
+                                   + format_double(cx) + ", " + format_double(cy)
+                                   + "): tool_radius " + format_double(tool_radius)
+                                   + " is below an ulp of the station coordinate, so a rim endpoint "
+                                     "rounds onto the centre and no engagement angle can be read. "
+                                     "The exact cap decision is unaffected; the reported angle is not "
+                                     "recoverable at this scale.");
         const double span = std::atan2(std::fabs(ux * vy - uy * vx), ux * vx + uy * vy);
         arcs.push_back({s, t, span});
     }

@@ -102,13 +102,26 @@ PROBE_DIRECTIONS = 360
 FULL_TURN = 2.0 * math.pi
 
 # Slack for comparing a measured TEA against its closed-form value. Reported spans
-# are doubles assembled by atan2 from exact one-root arc endpoints; the kernel's
-# own zone-vs-overlay study bounds that representation artefact at <= 1e-15 rad
-# (docs/superpowers/state/engagement-zone-divergence.md). 1e-12 rad == 6e-11 deg
-# keeps three decades of headroom over the artefact while still catching any real
-# geometric error, which is orders of magnitude larger. Used ONLY on the
-# configuration pins, never on the bound comparison -- that one is measurement
-# against the shipped bound and takes no tolerance.
+# are doubles assembled by atan2 from exact one-root arc endpoints, and that
+# representation artefact is NOT a fixed number of ulps: the kernel reads each rim
+# endpoint back through `to_double` and divides by the tool radius, so rounding a
+# coordinate costs `ulp(|station|)` of a quantity whose magnitude is `r`, and the
+# per-span error scales as `ulp(|station|)/r` (derived and measured at
+# `FULL_TURN_REPORT_SLACK`, engagement_2.cpp). The <= 1e-15 rad the zone-vs-overlay
+# study reports (docs/superpowers/state/engagement-zone-divergence.md) is the value
+# of that expression in THIS module's regime and not a general bound: the farthest
+# probe here stands under 3 units from the origin against `TOOL_RADIUS = 0.5`, so
+# `|station|/r` stays below ~6 and `ulp(|station|)/r` is a few times 1e-16 across
+# every probe the module makes. It would be
+# far larger for a station far from the origin or a much smaller tool -- the module
+# docstring's scale invariance is a statement about the GEOMETRY, which is similar
+# under scaling, not about the read-out, which is not.
+#
+# 1e-12 rad == 6e-11 deg keeps three decades of headroom over the artefact at this
+# module's scale while still catching any real geometric error, which is orders of
+# magnitude larger. Used ONLY on the configuration pins, never on the bound
+# comparison -- that one is measurement against the shipped bound and takes no
+# tolerance.
 TEA_REPORTING_SLACK = 1e-12
 
 # Ceiling on how far `swept_run_bound` may exceed the closed-form worst reachable
