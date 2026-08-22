@@ -281,3 +281,49 @@ code:
     and that attribution is void while both cells hold the same path. A second
     cap in the range 40-100, where the two demonstrably diverge, is the pending
     repair.
+
+## Case 4 — engagement is not translation-invariant at exact tangency
+
+Found by the property suite the moment it ran with a larger example budget, and
+**still failing**: `test_moving_the_pocket_across_the_table_changes_no_metric`
+is red, deliberately, because the statement it makes is true and the code does
+not satisfy it.
+
+A pocket and a path translated together by an exact amount report different
+engagement:
+
+```
+loop of radius 0.875 centred at (0.875, 0), tool radius 1.0, sample at t = 0.5
+
+  shift (0, 0.0)  ->  90.5697 deg        shift (0, 1.0)  ->  0.0 deg
+  shift (0, 0.5)  ->  90.5697 deg        shift (0, 2.0)  ->  0.0 deg
+```
+
+Every coordinate is dyadic and every shift is exact in binary, so the two inputs
+are bit-exactly congruent. Each answer is fully deterministic on repeat; it is
+the FRAME that changes the verdict, not noise. All other samples, and every
+motion length, agree exactly.
+
+### Why that sample
+
+`Circle.point_at(0.5)` on a loop of radius 0.875 centred at `(0.875, 0)` puts
+the cutter centre exactly on the origin — which is exactly where the chain
+plunged, clearing a disk of radius exactly 1.0 against a tool of radius exactly
+1.0. **The cutter's rim coincides with the cleared boundary.** The contact has
+measure zero, and whether the arrangement registers it as an engaged run or as
+nothing at all is decided differently in different places in the plane.
+
+### Why it matters more than its size suggests
+
+An exact kernel's whole claim is that a geometric decision is a function of the
+geometry and nothing else. A verdict that depends on absolute position is that
+claim failing on its own terms, and a certificate over such a verdict inherits
+the dependence. The magnitude here is small and the trigger is rare, but the
+property is not "usually true": it is either true or the guarantee is qualified.
+
+### Not yet established
+
+Which layer decides it. The candidates are the arrangement's representation of a
+zero-measure contact, the run-extraction in `engagement_at`, and the boundary
+convention for a cutter rim lying on a stock edge. This page will not guess; the
+measurement above is reproducible and that is what it records.
