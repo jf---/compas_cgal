@@ -116,6 +116,15 @@ FALLBACK_CAP_DEG = 90.0
 # containment of the probe point is a coin toss rather than a property of the state.
 FALLBACK_IDLE_VOID_RADIUS = 1.53
 
+# A third void, wide enough that the station's MAXIMAL circle complies while still
+# reaching material -- the "there was a way out" half of the forced-flag pin, and
+# the only thing that differs between the two states it is read on. From the same
+# relation, the maximal circle meets the cap once
+# v >= sqrt(R^2 + t^2 + 2*R*t*cos(cap/2)) = 2.318 for R = 1.5, t = 1.0, cap 90 deg,
+# and it still cuts while v < R + t = 2.5. This value sits inside that window with
+# room on both sides: the maximal circle measures 66.4 deg against the 90 deg cap.
+FALLBACK_FREED_VOID_RADIUS = 2.4
+
 
 def _coarse_ladder(full_radius, emitted_radius, ladder_step):
     """The unrefined ladder, as `_largest_admissible_radius` builds it for its first scan."""
@@ -445,19 +454,19 @@ def _guide_maximal_radii(polygon: Polygon):
 
 
 def _over_cap_circles(polygon: Polygon, result: ToolpathResult, cap_deg: float):
-    """Radii of the machining circles the audit measures over *cap_deg*, entries aside.
+    """Indices of the machining circles the audit measures over *cap_deg*, entries aside.
 
     The audit walks twenty stations per circle against the generator's four, so
     this is a genuinely independent read of what the generator accepted.
+
+    Indices rather than radii, because a radius identifies a SIZE and the question
+    downstream is about a particular CIRCLE: two circles of the same radius at two
+    stations can differ in whether the generator had a choice about them.
     """
     cap_rad = math.radians(cap_deg)
     report = audit_toolpath_engagement(polygon, result, TOOL_DIAMETER, cap_rad)
     entries = _chain_entry_indices(result)
-    return [
-        float(result.operations[e.op_index].geometry.radius)
-        for e in report.operations
-        if e.op_index not in entries and e.max_tea > cap_rad and isinstance(result.operations[e.op_index].geometry, Circle)
-    ]
+    return {e.op_index for e in report.operations if e.op_index not in entries and e.max_tea > cap_rad and isinstance(result.operations[e.op_index].geometry, Circle)}
 
 
 def test_tight_cap_regulates_the_radius_and_leaves_fewer_circles_over_the_cap():
@@ -466,9 +475,25 @@ def test_tight_cap_regulates_the_radius_and_leaves_fewer_circles_over_the_cap():
     Three claims, because none of them alone rules out a degenerate path: radii
     BELOW the guide's maximal ones are emitted (the knob is used); the audit finds
     strictly fewer machining circles over the cap than the advance-only generator
-    leaves there; and every circle it still finds over the cap is at a station's
-    MAXIMAL radius -- that is, one the ladder could not improve on because no rung
-    was admissible there, never a reduced circle the ladder chose badly.
+    leaves there; and no circle it finds over the cap is one the generator had a
+    choice about.
+
+    THE THIRD CLAIM WAS REWRITTEN, and the old form is recorded here because the
+    reason it went is the point. It used to read "every over-cap circle is at a
+    station's MAXIMAL radius, never a reduced circle the ladder chose badly" --
+    which conflated two different things, HAD NO CHOICE and CHOSE BADLY, on the
+    grounds that a reduced circle could only ever be one the predicate had
+    accepted. That stopped being true when the search began emitting the gentlest
+    REFUSED radius where nothing complies: such a circle is reduced and over the
+    cap and is not a mistake. `forced_loops` now names those circles, so the two
+    can be told apart and the assertion says the thing the old one was reaching
+    for:
+
+        {circles measured over the cap} SUBSET-OF {circles the generator forced}
+
+    A subset, deliberately, and not a count bound. `len(over) <= len(forced)`
+    would pass while one genuinely badly-chosen circle hid behind one forced
+    circle it happened to offset, which is exactly the confusion this replaces.
     """
     radial = radius_regulated_toolpath(POCKET, TOOL_DIAMETER, TIGHT_CAP_DEG)
     advance_only = engagement_controlled_toolpath(POCKET, TOOL_DIAMETER, TIGHT_CAP_DEG)
@@ -482,8 +507,45 @@ def test_tight_cap_regulates_the_radius_and_leaves_fewer_circles_over_the_cap():
     assert advance_over, "baseline is unexpectedly already under the cap, so there is nothing to improve"
     assert len(radial_over) < len(advance_over), f"radial {len(radial_over)} vs advance-only {len(advance_over)} machining circles measured over the cap"
 
-    reduced_over = sorted(radius for radius in radial_over if radius not in maximal)
-    assert not reduced_over, f"reduced circles measured over the cap: {reduced_over}"
+    chosen_over = sorted(radial_over - radial.forced_loops)
+    detail = [(index, float(radial.operations[index].geometry.radius)) for index in chosen_over]
+    assert not chosen_over, f"circles measured over the cap that the generator was NOT forced into, as (op index, radius): {detail}"
+
+
+def test_forced_is_not_a_label_anything_can_wear():
+    """The converse of the subset claim: a station with a way out is never flagged forced.
+
+    `forced_loops` is only worth asserting a subset against if the flag is earned.
+    Read on the search directly, on two states that differ in exactly one thing --
+    whether any candidate radius escapes the cap -- so the flag is shown to follow
+    the geometry rather than the code path.
+
+    The path-level subset check above and this one divide the work: that one says
+    nothing outside `forced_loops` is over the cap, this one says nothing gets
+    into `forced_loops` that had an alternative.
+    """
+    regulation = _regulation(FALLBACK_CAP_DEG)
+    advance = (1.0, 0.0)
+    station = _GuideStation(cx=PIN_STATION_X, cy=PIN_STATION_Y, radius=FALLBACK_FULL_RADIUS, clockwise=True, tx=1.0, ty=0.0)
+
+    # No way out: the swept void is narrower than the tool, so every radius leaves
+    # the tool buried and the exact predicate refuses the whole ladder.
+    trapped = Stock(PIN_POCKET)
+    trapped.subtract_annulus(PIN_STATION_X, PIN_STATION_Y, 0.0, FALLBACK_VOID_RADIUS)
+    trapped_choice = _largest_admissible_radius(trapped, station, 0.0, advance, regulation)
+    assert trapped_choice.forced
+
+    # A way out: widen that same void until the maximal circle itself complies,
+    # while it still reaches material. Nothing else about the state changes.
+    freed = Stock(PIN_POCKET)
+    freed.subtract_annulus(PIN_STATION_X, PIN_STATION_Y, 0.0, FALLBACK_FREED_VOID_RADIUS)
+    assert _station_is_admissible(freed, station, advance, regulation.tool_radius, regulation.cap_ratio), "the freed state has no admissible radius either, so it pins nothing"
+    assert _loop_reaches_material(freed, station, advance, regulation.tool_radius), "the freed state's way out is an idle circle, which is not a way out"
+
+    freed_choice = _largest_admissible_radius(freed, station, 0.0, advance, regulation)
+
+    assert not freed_choice.forced, "a station whose maximal circle complies was still flagged forced"
+    assert freed_choice.finishes
 
 
 def test_no_machining_circle_away_from_a_chain_entry_is_a_full_slot():

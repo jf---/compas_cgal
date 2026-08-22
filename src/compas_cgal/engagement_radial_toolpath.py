@@ -115,6 +115,7 @@ from __future__ import annotations
 import warnings
 from dataclasses import dataclass
 from dataclasses import replace
+from typing import FrozenSet
 from typing import List
 from typing import Optional
 from typing import Tuple
@@ -299,6 +300,37 @@ class RadialSweepBudgetExceededError(RuntimeError):
     """A skeleton chain did not finish within `MAX_RADIAL_SWEEPS_PER_CHAIN` sweeps."""
 
 
+@dataclass
+class RadialToolpathResult(ToolpathResult):
+    """A `ToolpathResult` that also says WHICH of its circles the cap predicate refused.
+
+    Every consumer of a `ToolpathResult` keeps working on one of these unchanged;
+    the extra field is additive, and a caller that does not care about it never
+    sees it.
+
+    WHY IT IS ON THE RESULT AND NOT ONLY IN THE WARNING. `UnavoidableEngagementWarning`
+    reports HOW MANY circles were emitted over the cap, and until now that was the
+    only way to find out. A count cannot answer the question that actually matters
+    once the search picks a reduced radius where nothing complies: is a given
+    over-cap circle one the search HAD NO CHOICE about, or one it chose badly?
+    Those two were indistinguishable while every forced emission was the station's
+    maximal circle, and they are not any more. Recovering the answer by parsing a
+    warning string would be a worse API than a field, and re-deriving it by
+    replaying the path would be a second implementation of the search.
+
+    Attributes:
+        forced_loops: Indices into `operations` of the machining circles emitted
+            at positions the exact cap predicate REFUSES at every candidate radius
+            -- chain entries into virgin stock included. These are the circles the
+            accompanying `UnavoidableEngagementWarning` counts. An over-cap circle
+            outside this set is a search defect; one inside it is the least-bad
+            available cut, and `_least_bad_rung` carries how "least bad" is
+            decided.
+    """
+
+    forced_loops: FrozenSet[int] = frozenset()
+
+
 @dataclass(frozen=True)
 class _SweepOutcome:
     """What one pass over a skeleton chain emitted and how hard it had to work.
@@ -308,8 +340,12 @@ class _SweepOutcome:
             bridges, retract -- or empty when the pass found nothing left to cut.
         entry: Tool-centre point the pass plunged at, or ``None`` when empty.
         exit: Tool-centre point the pass retracted from, or ``None`` when empty.
-        forced_radii: Machining circles emitted at the station's maximal radius
-            because NO rung of the ladder was admissible.
+        forced_radii: Machining circles emitted over the cap because NO candidate
+            radius was admissible at their station.
+        forced_loops: WHERE those circles are -- indices into `operations`. The
+            count alone cannot distinguish a circle the search had no choice about
+            from one it chose badly, and that distinction is the whole content of
+            the ranking, so it is carried rather than recomputed.
         forced_advances: Advances taken past a refusing predicate, as counted by
             `_largest_admissible_advance`.
         first_loop_forced: Whether the pass's FIRST machining circle was one of
@@ -321,6 +357,7 @@ class _SweepOutcome:
     entry: Optional[Tuple[float, float]]
     exit: Optional[Tuple[float, float]]
     forced_radii: int
+    forced_loops: Tuple[int, ...]
     forced_advances: int
     first_loop_forced: bool
 
@@ -763,6 +800,7 @@ def _radial_sweep(
     previous_entry: Optional[Tuple[float, float]] = None
     previous_index: Optional[int] = None
     forced_radii = 0
+    forced_loops: List[int] = []
     forced_advances = 0
     first_loop_forced = False
 
@@ -788,6 +826,8 @@ def _radial_sweep(
             else:
                 operations.append(_line_operation(previous_entry, loop_entry, cut_z, cut_z, OperationType.CUT, path_index))
                 stock.subtract_capsule_quad(previous_entry[0], previous_entry[1], loop_entry[0], loop_entry[1], regulation.tool_radius)
+            if choice.forced:
+                forced_loops.append(len(operations))
             operations.append(_loop_operation(loop_station, cut_z, path_index))
             stock.subtract_arc_sweep_local(
                 loop_station.cx,
@@ -832,6 +872,7 @@ def _radial_sweep(
         entry=entry,
         exit=previous_entry,
         forced_radii=forced_radii,
+        forced_loops=tuple(forced_loops),
         forced_advances=forced_advances,
         first_loop_forced=first_loop_forced,
     )
@@ -846,7 +887,10 @@ class _ChainOutcome:
         entry_forced: Whether the chain's first machining circle -- the tool
             meeting virgin stock -- had to be emitted over the cap.
         forced_radii: Machining circles other than that entry emitted over the cap
-            because no rung of the ladder was admissible.
+            because no candidate radius was admissible.
+        forced_loops: Where every one of this chain's forced circles is, the entry
+            included, as indices into the WHOLE path's operation stream rather
+            than into one pass's.
         forced_advances: Advances taken past a refusing predicate.
         exit: Tool-centre point the chain's last pass retracted from, or ``None``.
     """
@@ -854,6 +898,7 @@ class _ChainOutcome:
     sweeps: int
     entry_forced: bool
     forced_radii: int
+    forced_loops: Tuple[int, ...]
     forced_advances: int
     exit: Optional[Tuple[float, float]]
 
@@ -903,6 +948,7 @@ def _machine_chain_radially(
     sweeps = 0
     entry_forced = False
     forced_radii = 0
+    forced_loops: List[int] = []
     forced_advances = 0
 
     for _ in range(MAX_RADIAL_SWEEPS_PER_CHAIN):
@@ -917,6 +963,10 @@ def _machine_chain_radially(
             forced_radii += outcome.forced_radii
         if last_exit is not None:
             operations.append(_line_operation(last_exit, outcome.entry, regulation.clearance_z, regulation.clearance_z, OperationType.LINK, path_index))
+        # Rebase the pass's own indices onto the path stream, AFTER the link is in
+        # place: the pass numbered its operations from its own plunge.
+        base = len(operations)
+        forced_loops.extend(base + local for local in outcome.forced_loops)
         operations.extend(outcome.operations)
         last_exit = outcome.exit
         sweeps += 1
@@ -927,7 +977,14 @@ def _machine_chain_radially(
             f"{RADIUS_LADDER_RUNGS}-rung ladder, so this means a station is re-climbing rungs it already emitted."
         )
 
-    return _ChainOutcome(sweeps=sweeps, entry_forced=entry_forced, forced_radii=forced_radii, forced_advances=forced_advances, exit=last_exit)
+    return _ChainOutcome(
+        sweeps=sweeps,
+        entry_forced=entry_forced,
+        forced_radii=forced_radii,
+        forced_loops=tuple(forced_loops),
+        forced_advances=forced_advances,
+        exit=last_exit,
+    )
 
 
 def radius_regulated_toolpath(
@@ -1005,12 +1062,14 @@ def radius_regulated_toolpath(
         samples_per_radian: Tessellation density of the returned polyline.
 
     Returns:
-        ToolpathResult: The typed operation stream -- `PLUNGE`, `CUT` machining
-        circles and bridge lines, `RETRACT`, and clearance-height `LINK` moves
-        between passes -- plus the tessellated visualisation polyline. The same
-        types the other generators emit, so `audit_toolpath_engagement` and every
-        downstream consumer work unchanged. Note that a chain contributes one
-        plunge/retract pair PER PASS, not one in total.
+        RadialToolpathResult: The typed operation stream -- `PLUNGE`, `CUT`
+        machining circles and bridge lines, `RETRACT`, and clearance-height `LINK`
+        moves between passes -- plus the tessellated visualisation polyline, and
+        `forced_loops`, the indices of the circles no candidate radius could bring
+        under the cap. A `ToolpathResult` in every other respect, so
+        `audit_toolpath_engagement` and every downstream consumer work unchanged.
+        Note that a chain contributes one plunge/retract pair PER PASS, not one in
+        total.
 
     Raises:
         InvalidEngagementCapDegreesError: If *tea_cap_deg* is not in ``(0, 180]``.
@@ -1052,12 +1111,14 @@ def radius_regulated_toolpath(
     last_exit: Optional[Tuple[float, float]] = None
     entry_slots = 0
     forced_radii = 0
+    forced_loops: List[int] = []
     forced_advances = 0
     sweeps = 0
     for path_index, stations in enumerate(chains):
         outcome = _machine_chain_radially(stock, stations, path_index, regulation, cut_z, last_exit, operations)
         entry_slots += int(outcome.entry_forced)
         forced_radii += outcome.forced_radii
+        forced_loops.extend(outcome.forced_loops)
         forced_advances += outcome.forced_advances
         sweeps += outcome.sweeps
         last_exit = outcome.exit
@@ -1075,4 +1136,8 @@ def radius_regulated_toolpath(
             stacklevel=2,
         )
 
-    return ToolpathResult(operations=operations, polyline=_tessellate(operations, samples_per_radian))
+    return RadialToolpathResult(
+        operations=operations,
+        polyline=_tessellate(operations, samples_per_radian),
+        forced_loops=frozenset(forced_loops),
+    )
