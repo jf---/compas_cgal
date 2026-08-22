@@ -60,7 +60,7 @@ from benchmarks.figure6 import run_figure6
 from benchmarks.figure6 import write_figure6
 from benchmarks.figures import DEFAULT_FIGURE_FORMATS
 from benchmarks.figures import DEFAULT_FIGURES_OUT
-from benchmarks.figures import regenerate_all
+from benchmarks.figures import regenerate_every_figure
 from benchmarks.mathsm import SPACING_SWEEP_TOOL_DIAMETERS
 from benchmarks.palette import Theme
 from benchmarks.report import write_report
@@ -256,7 +256,7 @@ def _run_figure6_command(args: argparse.Namespace) -> int:
 
 
 def _run_figures_command(args: argparse.Namespace) -> int:
-    """Redraw every figure `benchmarks.figures` publishes.
+    """Redraw every published figure -- the tool-path comparison and the quality set.
 
     Args:
         args: Parsed `figures` arguments.
@@ -264,7 +264,7 @@ def _run_figures_command(args: argparse.Namespace) -> int:
     Returns:
         `EXIT_OK`.
     """
-    written = regenerate_all(args.out, formats=tuple(args.formats), theme=Theme(args.theme))
+    written = regenerate_every_figure(args.out, formats=tuple(args.formats), themes=(Theme(args.theme),))
     for path in written:
         print(f"wrote {path}")
     return EXIT_OK

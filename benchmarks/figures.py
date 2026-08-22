@@ -275,3 +275,40 @@ def regenerate_all(
     for write in _PUBLISHED_FIGURES:
         written.extend(write(out_dir, spec=spec, formats=formats, theme=theme))
     return tuple(written)
+
+
+def regenerate_every_figure(
+    out_dir: Path = DEFAULT_FIGURES_OUT,
+    *,
+    formats: Sequence[str] = DEFAULT_FIGURE_FORMATS,
+    themes: Sequence[Theme] = (Theme.LIGHT, Theme.DARK),
+) -> Tuple[Path, ...]:
+    """Redraw EVERY published figure -- the tool-path comparison and the quality set.
+
+    `regenerate_all` above walks `_PUBLISHED_FIGURES`, whose writers all take the
+    same caller-supplied pocket. The machining-quality figures cannot: each one
+    annotates specific motions on a specific instance, and one of them is a pure
+    physics curve with no pocket at all. They therefore keep their own registry
+    in `benchmarks.qualityfigures`, and this function is the single entry point
+    over both -- so "regenerate the figures" stays one command even though the
+    two families are parameterised differently.
+
+    Args:
+        out_dir: Directory the figures are written to; created if absent.
+        formats: File extensions to write, one file each per figure.
+        themes: Which surfaces to draw for.
+
+    Returns:
+        Every path written, tool-path comparison first.
+
+    Warns:
+        UnavoidableEngagementWarning: Raised through from the generators where
+            the cap could not be honoured.
+    """
+    from benchmarks.qualityfigures import write_all_quality_figures
+
+    written: List[Path] = []
+    for theme in themes:
+        written.extend(regenerate_all(out_dir, formats=formats, theme=theme))
+    written.extend(write_all_quality_figures(out_dir, formats=formats, themes=themes))
+    return tuple(written)
