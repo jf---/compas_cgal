@@ -170,6 +170,36 @@ bool run_exceeds_cap(const GpsPoint& p, const GpsPoint& q, const FT& cx,
     return sign_mixed_radical(A2 - T, B2, C2, D2, P.root, Q.root) == CGAL::POSITIVE;
 }
 
+// A full turn of engaged rim (radians). Both the reporting CEILING -- the rim is a
+// closed curve of that angular measure, so no engaged run can measure more -- and
+// the swept bound's SATURATED value: with the cap contractually in (0, pi],
+// returning this always forces refinement or a conservative refusal, so it is the
+// safe answer whenever the construction cannot bound the swept region below a
+// full turn.
+constexpr double FULL_TURN = 2.0 * std::numbers::pi;
+
+// Slack on that reporting ceiling, in radians. NOT a geometric tolerance: no
+// decision reads it, no geometry is sized by it, and nothing is clamped to it. It
+// exists only so that a floating-point SUM of individually-accurate angles is not
+// mistaken for the logic error the ceiling check hunts.
+//
+// FLOOR -- what it must stay above. One arc span is atan2(|u x v|, u . v) over
+// station-relative doubles; the products carry a handful of ulps, so a span is
+// accurate to a few ulps of pi (ulp(pi) = 4.4e-16 rad), call it 1e-15 rad. A run
+// is the sum of the spans of the sub-arcs it was assembled from, and those
+// sub-arcs are disjoint pieces of one rim, so a run built from N of them lands
+// within N * 1e-15 rad of its true measure. 1e-6 rad absorbs N up to 1e9 sub-arcs
+// on a single cutter rim -- nine decades past anything the zone can hand back,
+// since every sub-arc costs one rim/boundary crossing in the arrangement.
+//
+// CEILING -- what it must stay below. The cheapest impossibility this can catch
+// is worth a whole turn: a double-counted run, or the wrap normalisation the span
+// formula replaced firing on a sub-ulp arc, each add exactly 2*pi = 6.28 rad.
+// 1e-6 rad is 6.3 million times smaller, so no real double-count can hide beneath
+// it -- measured on the pre-fix build, the three witness stations in
+// tests/test_growth_bound.py overshoot this check by 6.28 rad, not by ulps.
+constexpr double FULL_TURN_REPORT_SLACK = 1e-6;
+
 // One rim arc, CCW-normalized: the CCW sweep runs ccw_start -> ccw_end on the
 // cutter circle. `span` is the arc's angular extent in radians, a REPORTING
 // double (atan2) that never feeds a decision.
@@ -315,10 +345,27 @@ EngagementSample finish_engagement(std::vector<Arc>& arcs, double cx, double cy,
 
     // 4a. REPORTING (doubles) over the TRUE runs -- never gap-closed. total_tea and
     //     max_run_tea describe the material actually engaged at this station.
+    //
+    //     INVARIANT, checked because the reporting path had none. The rim is a
+    //     closed curve of angular measure 2*pi and the runs are DISJOINT arcs of
+    //     it, so neither a single run nor their sum can measure more than a full
+    //     turn -- whatever the stock looks like. A larger reading is a logic error
+    //     in the harvest or the assembly, never a tolerance question, so it is
+    //     raised rather than clamped: clamping would ship the wrong number quietly,
+    //     and this number is the audit's headline engagement metric.
     for (const Arc& run : runs) {
+        if (run.span > FULL_TURN + FULL_TURN_REPORT_SLACK)
+            throw std::logic_error("engagement run span " + format_double(run.span)
+                                   + " rad exceeds a full turn at station ("
+                                   + format_double(cx) + ", " + format_double(cy) + ").");
         out.total_tea += run.span;
         out.max_run_tea = std::max(out.max_run_tea, run.span);
     }
+    if (out.total_tea > FULL_TURN + FULL_TURN_REPORT_SLACK)
+        throw std::logic_error("engagement total_tea " + format_double(out.total_tea)
+                               + " rad over " + std::to_string(runs.size())
+                               + " disjoint runs exceeds a full turn at station ("
+                               + format_double(cx) + ", " + format_double(cy) + ").");
 
     // 4b. DECISION (exact) over the PESSIMISTIC runs. Void gaps <= gamma are
     //     absorbed (default gamma == 0 closes none => pessimistic == true runs, so
@@ -380,11 +427,12 @@ struct EngagementVisitor {
 
 // Harvest the rim arcs of the cutter of radius `tool_radius` centred at (cx, cy)
 // by zoning the cutter circle in the stock's own arrangement. Fills the SAME
-// Arc{ccw_start, ccw_end, span} vector the overlay harvest produces, with the
-// IDENTICAL per-arc normalization, so finish_engagement yields the identical
-// result (the split points coincide: disk_polygon and make_x_monotone_2 both
-// split at the x-extreme rational points (cx +/- r, cy), the remaining splits
-// are the same exact cutter/stock crossings).
+// Arc{ccw_start, ccw_end, span} vector the earlier whole-stock overlay produced,
+// off the SAME split points -- disk_polygon and make_x_monotone_2 both split at
+// the x-extreme rational points (cx +/- r, cy), and the remaining splits are the
+// same exact cutter/stock crossings -- so finish_engagement DECIDES identically.
+// (The per-arc span normalisation is no longer the overlay's; see the span formula
+// below. It is a reporting double, so it moves no verdict.)
 //
 // const_cast: engagement_at holds a const Stock2&, but Arrangement_zone_2 and
 // the point-location structure want a non-const Arrangement_2 handle. The zone
@@ -415,19 +463,79 @@ void engaged_arcs_zone(const Stock2& stock, double cx, double cy,
         }
     }
 
-    // Extract Arc{ccw_start, ccw_end, span} from each engaged rim sub-arc, with
-    // the SAME normalization as the overlay harvest (docs: engagement_at):
+    // Extract Arc{ccw_start, ccw_end, span} from each engaged rim sub-arc:
     // CCW-normalize by orientation, drop tangent-touch degeneracies, report the
-    // span as a REPORTING double (atan2) that never feeds a decision.
+    // span as a REPORTING double that never feeds a decision.
+    //
+    // SPAN FORMULA. The span is the UNSIGNED angle between the two station-relative
+    // radius vectors, atan2(|u x v|, u . v) -- never a difference of two atan2
+    // headings. Three properties earn it that shape:
+    //
+    //   * ITS CODOMAIN IS [0, pi] BY CONSTRUCTION, because the first argument is
+    //     non-negative. So it needs no wrap normalisation, and none can misfire.
+    //     A heading difference does need one: every harvested arc is a sub-arc of
+    //     an x-monotone piece, make_x_monotone_2 splits the cutter circle at its
+    //     x-extremes (cx +/- r, cy), and the CCW-start of any lower-half arc sits
+    //     at heading +pi while its CCW-end sits at a NEGATIVE heading -- so the
+    //     honest difference is negative and has to be lifted by 2*pi.
+    //     `if (span <= 0) span += 2*pi` did that lift, and could not tell a
+    //     genuine wrap from a difference that merely ROUNDED to zero.
+    //
+    //   * THAT ROUNDING IS REACHABLE, and was the defect. When the stock boundary
+    //     crosses the rim within an ulp of an x-extreme split point, the zone hands
+    //     back a real sub-arc of ~1e-16 rad whose endpoints are exactly DISTINCT
+    //     (so the s == t skip above does not fire) but whose to_double headings are
+    //     the identical double. The difference was then exactly 0.0, the lift fired,
+    //     and a sliver of material was reported as a FULL TURN of engagement --
+    //     folded into the abutting run by the exact endpoint merge, so
+    //     total_tea/max_run_tea came out one whole turn too large. The three
+    //     witness stations in tests/test_growth_bound.py are that configuration.
+    //
+    //   * IT IS UNIFORMLY ACCURATE where a heading difference is not. Cancellation
+    //     in the cross product costs at most a few ulps of |u||v|, i.e. a few ulps
+    //     of angle ABSOLUTE, at any span -- including the two ends. Near 0 the
+    //     cross product is the small quantity and atan2 resolves it directly; near
+    //     pi the dot product carries the answer. Taking |cross| rather than trusting
+    //     its sign is what makes the pi end safe: the exact semicircle gives
+    //     ux*vy - uy*vx == -0.0, and atan2(-0.0, negative) is -pi where
+    //     atan2(+0.0, negative) is +pi.
+    //
+    // The [0, pi] codomain is the CORRECT range, not a truncation of it: an
+    // x-monotone circular arc never turns back in x, so it lies wholly in one
+    // half-disk about the centre and its angular extent cannot exceed pi. Should a
+    // future traits change break that, the reporting invariant in
+    // finish_engagement is the loud failure.
+    //
+    // The radius vectors are divided by the tool radius before the products are
+    // formed. atan2 is invariant under a positive common scaling of both arguments,
+    // so this changes no answer, but it keeps every component O(1) and both products
+    // in range for ANY radius the seam admits (require_positive_radius takes any
+    // finite positive double, and tool_radius is an independent argument at the
+    // binding -- an ordinary stock really can be queried with r = 1e-200). Formed
+    // raw, the products of such a cutter underflow to zero and those of an
+    // r = 1e+200 cutter overflow to infinity -- a scale regression against the
+    // heading difference this replaces, which was scale-free.
+    //
+    // What NO normalisation rescues is the read-out itself: once r falls below an
+    // ulp of the station coordinate, to_double lands both endpoints exactly on the
+    // centre, u and v are both zero, and no formula can recover an angle from
+    // that. Measured at (5, 5) buried in material, r <= 1e-100: this reports
+    // total_tea = 0 where the truth is 2*pi. The heading difference reported 2*pi
+    // PER ARC there, i.e. 4*pi -- the same defect in its purest form, since a
+    // collapsed difference is exactly the zero its wrap lifted. Both readings are
+    // wrong and neither moves a verdict: cap_exceeded is decided on the exact
+    // one-root endpoints and stays correct (True buried, False clear) to r = 1e-300.
+    // That is the deciding/reporting split doing precisely its job.
     for (const GpsXCurve& xc : vis.engaged) {
         GpsPoint s = xc.source();
         GpsPoint t = xc.target();
         if (s == t) continue;   // tangent-touch degeneracy: zero-measure contact
         if (xc.orientation() == CGAL::CLOCKWISE) std::swap(s, t);
-        const double sx = CGAL::to_double(s.x()), sy = CGAL::to_double(s.y());
-        const double tx = CGAL::to_double(t.x()), ty = CGAL::to_double(t.y());
-        double span = std::atan2(ty - cy, tx - cx) - std::atan2(sy - cy, sx - cx);
-        if (span <= 0.0) span += 2.0 * std::numbers::pi;
+        const double ux = (CGAL::to_double(s.x()) - cx) / tool_radius;
+        const double uy = (CGAL::to_double(s.y()) - cy) / tool_radius;
+        const double vx = (CGAL::to_double(t.x()) - cx) / tool_radius;
+        const double vy = (CGAL::to_double(t.y()) - cy) / tool_radius;
+        const double span = std::atan2(std::fabs(ux * vy - uy * vx), ux * vx + uy * vy);
         arcs.push_back({s, t, span});
     }
 }
@@ -441,12 +549,6 @@ void engaged_arcs_zone(const Stock2& stock, double cx, double cy,
 // every one of them is written to over-estimate. The derivation lives at
 // swept_run_bound.
 // ----------------------------------------------------------------------------
-
-// A full turn of engaged rim (radians). Also the bound's SATURATED value: with
-// the cap contractually in (0, pi], returning this always forces refinement or a
-// conservative refusal, so it is the safe answer whenever the construction
-// cannot bound the swept region below a full turn.
-constexpr double FULL_TURN = 2.0 * std::numbers::pi;
 
 // Relative slack applied wherever a double is compared, divided, or used to size
 // exact geometry rather than merely reported: the half-spacing the annulus is
