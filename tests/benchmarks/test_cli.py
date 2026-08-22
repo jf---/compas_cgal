@@ -9,9 +9,13 @@ from benchmarks.cli import CORPUS_NAMES
 from benchmarks.cli import EXIT_CORPUS_ERROR
 from benchmarks.cli import EXIT_OK
 from benchmarks.cli import build_corpus
+from benchmarks.cli import build_parser
 from benchmarks.cli import main
 from benchmarks.errors import MissingExternalDirectoryError
 from benchmarks.errors import UnknownCorpusError
+from benchmarks.figures import DEFAULT_FIGURE_FORMATS
+from benchmarks.figures import DEFAULT_FIGURES_OUT
+from benchmarks.palette import Theme
 
 TEST_TOOL_DIAMETER = 1.0
 TEST_CAP_DEG = 120.0
@@ -105,3 +109,17 @@ def test_a_figure6_run_writes_both_figure_artifacts(tmp_path) -> None:
     # than short-circuiting on an empty trial set.
     assert payload["points"][0]["mathsm_length"] is not None
     assert payload["points"][0]["length_ratio"] is not None
+
+
+def test_every_command_is_wired_to_a_handler() -> None:
+    """A subcommand that parses but dispatches nowhere fails only in production."""
+    for command in ("corpus", "figure6", "figures"):
+        assert getattr(build_parser().parse_args([command]), "handler", None) is not None, command
+
+
+def test_the_figures_command_defaults_to_the_published_location_and_format() -> None:
+    """The docs link the figure by path, so its default output is part of the interface."""
+    args = build_parser().parse_args(["figures"])
+    assert args.out == DEFAULT_FIGURES_OUT
+    assert tuple(args.formats) == DEFAULT_FIGURE_FORMATS
+    assert args.theme == Theme.LIGHT.value

@@ -178,6 +178,9 @@ hypothesis = "*"
 ruff = "*"
 mypy = "*"
 jsonschema = "*"
+# Figures only. `benchmarks.plotting` is the one importer; nothing under `src`
+# depends on it, so the wheel never sees it.
+matplotlib = ">=3.8"
 
 [tool.pixi.pypi-options]
 no-build-isolation = ["compas-cgal"]

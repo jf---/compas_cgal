@@ -75,3 +75,47 @@ class UnknownCorpusError(BenchmarkError):
 
 class MissingExternalDirectoryError(BenchmarkError):
     """The external corpus was requested without the operator-supplied profile directory."""
+
+
+class UnplottableGeometryError(BenchmarkError):
+    """A toolpath operation carries a primitive with no drawable path."""
+
+
+class UnplottableBoundaryError(BenchmarkError):
+    """A pocket boundary has too few points to close into a ring."""
+
+
+class UnknownOperationClassError(BenchmarkError):
+    """A toolpath operation names an operation class the drawing has no mark for."""
+
+
+class UnknownColourModeError(BenchmarkError):
+    """A drawing was asked for a colour mode no encoder answers to."""
+
+
+class EmptyToolpathError(BenchmarkError):
+    """A toolpath carries no operations, so there is nothing to draw."""
+
+
+class EmptyComparisonError(BenchmarkError):
+    """A figure comparing toolpaths was given no panels to compare."""
+
+
+class MissingEngagementDataError(BenchmarkError):
+    """Engagement colouring was asked for without the measurements it draws."""
+
+
+class EngagementLengthMismatchError(BenchmarkError):
+    """A drawing was given a number of engagement measurements other than one per operation."""
+
+
+class MissingToolDiameterError(BenchmarkError):
+    """A swept-tool envelope was asked for without a tool diameter to sweep."""
+
+
+class InvalidBandCountError(BenchmarkError):
+    """A colour ramp was asked to split a range into fewer than one band."""
+
+
+class AmbiguousPanelError(BenchmarkError):
+    """A drawing with several panels was asked for its single panel."""
