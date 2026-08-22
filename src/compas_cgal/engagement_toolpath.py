@@ -245,6 +245,13 @@ class _Regulation:
     Attributes:
         cap_ratio: The exact rational cap surrogate ``4*sin^2(theta/2)`` from
             `_cap_surrogate` -- the only form of the cap that reaches a predicate.
+        cap_angle: The caller's cap in radians. REPORTING ONLY, and named apart
+            from `cap_ratio` so the two can never be confused: no predicate takes
+            it and no emission is gated on it. It exists so that a REPORTED
+            engagement can be described relative to the cap the caller asked for
+            -- in a message, or where a search decides how hard to keep looking --
+            which is a comparison between two doubles and must never be mistaken
+            for the exact verdict `cap_ratio` carries.
         tool_radius: Tool radius in model units.
         guide_step: Guide station spacing in model units.
         radial_clearance: Safety clearance subtracted from each available radius.
@@ -253,6 +260,7 @@ class _Regulation:
     """
 
     cap_ratio: float
+    cap_angle: float
     tool_radius: float
     guide_step: float
     radial_clearance: float
@@ -320,6 +328,7 @@ class _Regulation:
 
         return cls(
             cap_ratio=cap_ratio,
+            cap_angle=math.radians(tea_cap_deg),
             tool_radius=0.5 * tool_diameter,
             guide_step=guide_step_tool_diameters * tool_diameter,
             radial_clearance=radial_clearance,
