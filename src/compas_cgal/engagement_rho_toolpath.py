@@ -380,9 +380,25 @@ class DeclinedRegion:
     that runs out at both ends yields two of these rather than one span hiding a
     machined middle.
 
+    NOT THE SAME THING AS
+    `compas_cgal.engagement_ordered_toolpath.ForcedEntry`, AND THE DIFFERENCE IS
+    POLARITY. A declined region is material NOT cut; a forced entry is material
+    that IS cut, merely reached at the cost of a plunge. Unioning them and handing
+    the result to a corner-clearing pass would re-machine finished stock. One
+    chain can carry both -- on the gate's `L_shape`, chain 6 has a sub-threshold
+    run at its narrow end AND no orientation with an admissible link -- and those
+    are two independent facts about one chain, not a duplicate. Unlike a forced
+    entry, a declined region is fixed by the geometry and the tool radius before
+    any machining happens, so it is the same set whatever order the chains are cut
+    in, and an EMPTY tuple genuinely means the whole guide was machined.
+
     Attributes:
-        path_index: Index of the chain this run belongs to, matching the
-            `path_index` stamped on that chain's operations.
+        path_index: Index of the chain this run belongs to, within the emitting
+            path's own chain sequence. For a chain that was machined this is the
+            `path_index` stamped on that chain's operations. A chain that carried
+            no trochoidal station anywhere emits no operations and is numbered
+            AFTER every machined chain, so this field names exactly one chain
+            either way and a consumer may join on it safely.
         first_center: Centre of the run's first station, in world XY.
         last_center: Centre of the run's last station, in world XY.
         station_count: How many consecutive guide stations the run covers.
