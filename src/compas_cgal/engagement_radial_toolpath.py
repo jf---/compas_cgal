@@ -104,6 +104,7 @@ from compas_cgal.engagement_toolpath import _GuideStation
 from compas_cgal.engagement_toolpath import _largest_admissible_advance
 from compas_cgal.engagement_toolpath import _line_operation
 from compas_cgal.engagement_toolpath import _loop_operation
+from compas_cgal.engagement_toolpath import _measured_peak_engagement
 from compas_cgal.engagement_toolpath import _probe_positions
 from compas_cgal.engagement_toolpath import _Regulation
 from compas_cgal.engagement_toolpath import _station_is_admissible
@@ -267,6 +268,78 @@ def _loop_reaches_material(stock: Stock, station: _GuideStation, advance: Tuple[
     return False
 
 
+def _least_bad_rung(
+    stock: Stock,
+    ladder: List[float],
+    station: _GuideStation,
+    advance: Tuple[float, float],
+    regulation: _Regulation,
+) -> int:
+    """Rank the ALREADY-REFUSED rungs and return the gentlest one.
+
+    WHEN THIS RUNS the exact predicate has refused every rung: there is no
+    admissible radius at this station, and refusing to cut is not one of the
+    options -- the material is in the way of a guide the walk has to get past. The
+    only question left is WHICH inadmissible circle to emit, and it has to be
+    answered by measurement, because no index rule answers it.
+
+    WHY NOT RUNG 0 (what this replaces). Returning the station's maximal circle
+    was returning the WORST candidate wherever the load falls off with the radius.
+    Measured on the 20x12 pocket at a 60 deg cap, station (18.482, 10.482),
+    maximal radius 0.5156: the ladder's reported peaks descend 107.0, 99.0, 91.2,
+    82.8, 75.2, 68.6, 61.3 deg over rungs 0 to 6, so rung 0 was emitted at 107 deg
+    where rung 6 was available at 61.3.
+
+    WHY NOT THE SMALLEST RADIUS EITHER, and why not any index rule. Engagement is
+    not monotone in the radius -- the property this whole module is built around --
+    so the gentlest rung is generally INTERIOR. On a station whose swept void is
+    NARROWER THAN THE TOOL, where no radius gets the tool clear of the material
+    (2 mm tool, void radius 0.8, maximal radius 1.5), the reported peak falls from
+    300.9 deg at rung 0 to 253.7 deg at rung 18 and RISES back to a full 360 deg by
+    rung 26: first, last, smallest and largest all miss it.
+    `tests/test_engagement_radial_toolpath.py` pins that state.
+
+    WHY A DOUBLE MAY DECIDE THIS ONE THING. Everything the cap governs is settled
+    before this function is called, by the exact `cap_exceeded` predicate, and it
+    said NO to every candidate here. This ranking cannot promote a refused
+    candidate to an accepted one -- the caller flags whatever comes back as forced
+    either way -- so the reported `max_run_tea` doubles are ordering options that
+    are already outside the guarantee. That is the deciding/reporting split of
+    `docs/exactness.md` used exactly as written, and it is the ONE place in this
+    module where a reported number influences a choice.
+
+    CANDIDATES are the rungs that still reach uncut stock, plus rung 0
+    unconditionally: a rung that cuts nothing is not a lesser evil, it is a wasted
+    motion that also leaves the station unfinished, and rung 0 is the rung whose
+    emission FINISHES the station (`_radial_sweep`), so it must always be
+    reachable. Ties go to the LOWEST rung index -- the largest radius -- so a
+    chain entry into virgin stock, where every rung measures a full turn, still
+    emits the maximal circle and still finishes in one pass, exactly as before.
+
+    Args:
+        stock: The current stock (unmodified by this call).
+        ladder: The station's candidate radii, largest first, as built by
+            `_radius_ladder`; must be non-empty.
+        station: The station under test, carrying its maximal radius.
+        advance: Unit direction of travel into this station, for probe placement.
+        regulation: The validated parameters.
+
+    Returns:
+        The index into *ladder* of the gentlest candidate by reported peak
+        engagement.
+    """
+    best_rung = FULL_RADIUS_RUNG
+    best_peak: Optional[float] = None
+    for rung, radius in enumerate(ladder):
+        candidate = replace(station, radius=radius)
+        if rung != FULL_RADIUS_RUNG and not _loop_reaches_material(stock, candidate, advance, regulation.tool_radius):
+            continue
+        peak = _measured_peak_engagement(stock, candidate, advance, regulation.tool_radius, regulation.cap_ratio)
+        if best_peak is None or peak < best_peak:
+            best_rung, best_peak = rung, peak
+    return best_rung
+
+
 def _largest_admissible_radius(
     stock: Stock,
     station: _GuideStation,
@@ -315,6 +388,12 @@ def _largest_admissible_radius(
     advance-only generator makes -- and only a station whose maximal circle is
     refused pays for the descent.
 
+    WHEN NO RUNG IS ADMISSIBLE the station is not skipped -- that would leave the
+    guide unmachined -- so `_least_bad_rung` re-reads the ladder and returns the
+    gentlest candidate by MEASURED engagement. That second read is why the scan
+    above may short-circuit: a refused rung costs one probe here and pays for its
+    whole ring only in the fallback, which only the forced stations reach.
+
     Args:
         stock: The current stock (unmodified by this call).
         station: The station under test, carrying its maximal radius.
@@ -326,9 +405,9 @@ def _largest_admissible_radius(
     Returns:
         ``(rung, forced)``. ``rung`` is the index into the ladder, or ``None``
         when the station has nothing left to cut. ``forced`` is ``True`` when no
-        rung was admissible and `FULL_RADIUS_RUNG` is returned anyway, which is
-        the virgin-stock and neck regime: refusing to cut is not an option there,
-        so the maximal circle is emitted and counted.
+        rung was admissible and the gentlest one is returned anyway, which is the
+        virgin-stock and neck regime: refusing to cut is not an option there, so a
+        circle the predicate refuses is emitted and counted.
     """
     ladder = _radius_ladder(station.radius, emitted_radius, regulation.guide_step)
     if not ladder:
@@ -339,7 +418,7 @@ def _largest_admissible_radius(
             continue
         if rung == FULL_RADIUS_RUNG or _loop_reaches_material(stock, candidate, advance, regulation.tool_radius):
             return rung, False
-    return FULL_RADIUS_RUNG, True
+    return _least_bad_rung(stock, ladder, station, advance, regulation), True
 
 
 def _radial_sweep(

@@ -16,6 +16,7 @@ replays every motion against a depleting exact stock, which dominates the cost.
 """
 
 import math
+from dataclasses import replace
 
 import pytest
 from compas.geometry import Circle, Line, Polygon
@@ -25,6 +26,7 @@ from compas_cgal.engagement_radial_toolpath import (
     FULL_RADIUS_RUNG,
     RADIUS_LADDER_RUNGS,
     _largest_admissible_radius,
+    _least_bad_rung,
     _loop_reaches_material,
     _radius_ladder,
     radius_regulated_toolpath,
@@ -37,6 +39,7 @@ from compas_cgal.engagement_toolpath import (
     _cap_surrogate,
     _guide_chains,
     _GuideStation,
+    _measured_peak_engagement,
     _Regulation,
     _station_is_admissible,
     engagement_controlled_toolpath,
@@ -83,6 +86,33 @@ PIN_PRECEDING_CENTRES = (6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0)
 # then RISES again to 72.4 deg at 4.098, 77.0 at 4.048 and 85.0 at 3.998, so the
 # admissible set is provably not an up-set and a bisection lands elsewhere.
 PIN_CAP_DEG = 70.0
+
+# The state the no-admissible-rung fallback is pinned on, and why it is built this
+# way rather than lifted from a real path. A swept void NARROWER THAN THE TOOL
+# around the station means no loop radius at all gets the tool clear of the
+# material: every rung is refused by the exact predicate at any legal cap, so the
+# fallback is entered, and -- unlike a station whose ladder merely straddles a
+# compliant window -- no amount of ladder refinement can ever rescue it. The pin
+# therefore survives changes to the ladder's resolution.
+#
+# What makes it a pin on the SELECTION RULE is where the gentlest rung sits.
+# Around a void of radius v with a tool of radius t, the engaged run on a loop of
+# radius R spans 2*acos((v^2 - R^2 - t^2)/(2*R*t)); with v < t the argument is
+# negative for every R, and it is LEAST negative -- i.e. the loop is gentlest -- at
+# R = v, with the engagement rising again on both sides and saturating at a full
+# turn once the tool clears the void entirely (R < t - v). The minimum is therefore
+# strictly INTERIOR to the ladder, and no rule that picks by index -- first, last,
+# largest radius, smallest radius -- can land on it.
+FALLBACK_VOID_RADIUS = 0.8
+FALLBACK_FULL_RADIUS = 1.5
+FALLBACK_CAP_DEG = 90.0
+
+# A second void, this one WIDER than the tool, for the idle-rung filter. A loop of
+# radius R spins entirely inside a void of radius v when R + t <= v, so this value
+# puts the ladder's cut-off between rungs 19 (0.55, still reaching material) and 20
+# (0.50, idle) and keeps both a ladder step clear of the R + t == v boundary, where
+# containment of the probe point is a coin toss rather than a property of the state.
+FALLBACK_IDLE_VOID_RADIUS = 1.53
 
 
 def _regulation(cap_deg):
@@ -274,6 +304,109 @@ def test_a_rung_is_only_admissible_if_it_still_cuts():
     # void, does still cut -- so the condition rejects idleness, not smallness.
     biting = _GuideStation(cx=PIN_STATION_X, cy=PIN_STATION_Y, radius=PIN_FULL_RADIUS, clockwise=True, tx=1.0, ty=0.0)
     assert _loop_reaches_material(stock, biting, advance, regulation.tool_radius)
+
+
+def _fallback_state():
+    """The stock, station and travel direction the no-admissible-rung pin is read on."""
+    stock = Stock(PIN_POCKET)
+    stock.subtract_annulus(PIN_STATION_X, PIN_STATION_Y, 0.0, FALLBACK_VOID_RADIUS)
+    station = _GuideStation(cx=PIN_STATION_X, cy=PIN_STATION_Y, radius=FALLBACK_FULL_RADIUS, clockwise=True, tx=1.0, ty=0.0)
+    return stock, station, (1.0, 0.0)
+
+
+def test_no_admissible_rung_takes_the_gentlest_measured_circle_not_the_maximal_one():
+    """THE PIN: where nothing complies, the choice is made by measurement, not by index.
+
+    A station with no admissible rung still has to be cut -- the guide runs through
+    it -- so the only question is which refused circle to emit. Returning the
+    station's MAXIMAL circle (what this replaced) is returning the worst candidate
+    wherever the load falls off with the radius, and returning the smallest is the
+    worst wherever it does not. Here the gentlest rung is strictly interior, so
+    both index rules miss it and only a ranking on the measured engagement finds
+    it.
+
+    The ranking is a comparison of reported doubles, which is legitimate here and
+    only here: the exact predicate has already refused every candidate, so the
+    ordering cannot promote one into the guarantee -- whatever it returns is
+    flagged forced and counted.
+    """
+    regulation = _regulation(FALLBACK_CAP_DEG)
+    stock, station, advance = _fallback_state()
+    ladder = _radius_ladder(station.radius, 0.0, regulation.guide_step)
+
+    admissible = [
+        rung for rung, radius in enumerate(ladder) if _station_is_admissible(stock, replace(station, radius=radius), advance, regulation.tool_radius, regulation.cap_ratio)
+    ]
+    assert not admissible, f"rungs {admissible} comply here, so this state no longer pins the fallback"
+
+    peaks = [_measured_peak_engagement(stock, replace(station, radius=r), advance, regulation.tool_radius, regulation.cap_ratio) for r in ladder]
+    gentlest = min(range(len(peaks)), key=lambda rung: peaks[rung])
+    assert FULL_RADIUS_RUNG < gentlest < len(ladder) - 1, f"gentlest rung {gentlest} is not interior, so an index rule could reach it by accident"
+    assert peaks[gentlest] < peaks[FULL_RADIUS_RUNG], "the maximal circle is already the gentlest here, so the pin is vacuous"
+    assert peaks[gentlest] < peaks[-1], "the smallest circle is already the gentlest here, so the pin is vacuous"
+
+    rung, forced = _largest_admissible_radius(stock, station, 0.0, advance, regulation)
+
+    assert forced, "no rung complies here, so the emission must be reported as forced"
+    assert rung == gentlest, f"forced emission took rung {rung} ({math.degrees(peaks[rung]):.1f} deg) over rung {gentlest} ({math.degrees(peaks[gentlest]):.1f} deg)"
+
+
+def test_the_forced_ranking_never_prefers_a_circle_that_cuts_nothing():
+    """The gentlest CUTTING circle, not the gentlest circle.
+
+    A loop drawn wholly inside already-swept void measures zero engagement, so an
+    unfiltered ranking would always return one: the gentlest conceivable circle is
+    the one that touches nothing. That is not a lesser evil, it is a wasted motion
+    that also leaves the station unfinished, so the ranking considers only rungs
+    that still reach uncut stock (plus the maximal circle, which is the rung whose
+    emission finishes a station).
+
+    Read on `_least_bad_rung` directly rather than through the scan, because the
+    claim is about the RANKING itself.
+    """
+    regulation = _regulation(FALLBACK_CAP_DEG)
+    advance = (1.0, 0.0)
+    # A void disk wider than the tool, so the bottom of the ladder spins inside it
+    # at zero engagement while the top still reaches the material beyond it.
+    stock = Stock(PIN_POCKET)
+    stock.subtract_annulus(PIN_STATION_X, PIN_STATION_Y, 0.0, FALLBACK_IDLE_VOID_RADIUS)
+    station = _GuideStation(cx=PIN_STATION_X, cy=PIN_STATION_Y, radius=FALLBACK_FULL_RADIUS, clockwise=True, tx=1.0, ty=0.0)
+    ladder = _radius_ladder(station.radius, 0.0, regulation.guide_step)
+
+    idle = [rung for rung, radius in enumerate(ladder) if not _loop_reaches_material(stock, replace(station, radius=radius), advance, regulation.tool_radius)]
+    peaks = [_measured_peak_engagement(stock, replace(station, radius=radius), advance, regulation.tool_radius, regulation.cap_ratio) for radius in ladder]
+    assert idle, "no idle rung on this state, so it does not pin the cutting filter"
+    assert min(peaks[rung] for rung in idle) == 0.0, "the idle rungs are not measuring zero, so nothing tempts the ranking here"
+
+    rung = _least_bad_rung(stock, ladder, station, advance, regulation)
+
+    assert rung not in idle, f"the ranking took idle rung {rung}, which removes nothing"
+    assert _loop_reaches_material(stock, replace(station, radius=ladder[rung]), advance, regulation.tool_radius)
+    assert peaks[rung] == min(peaks[k] for k in range(len(ladder)) if k not in idle), "not the gentlest of the rungs that do cut"
+
+
+def test_a_full_slot_entry_still_finishes_on_the_maximal_circle():
+    """Ties go to the largest radius, so virgin stock behaves exactly as before.
+
+    In virgin stock every rung is a full slot and every rung measures the same full
+    turn, so the ranking is entirely tied. Rung 0 must win that tie: it is the rung
+    whose emission finishes a station, and a chain entry that walked down the
+    ladder instead would emit a smaller circle, leave the entry unfinished, and buy
+    nothing measurable for the extra pass.
+    """
+    regulation = _regulation(FALLBACK_CAP_DEG)
+    stock = Stock(PIN_POCKET)
+    station = _GuideStation(cx=PIN_STATION_X, cy=PIN_STATION_Y, radius=FALLBACK_FULL_RADIUS, clockwise=True, tx=1.0, ty=0.0)
+    advance = (1.0, 0.0)
+    ladder = _radius_ladder(station.radius, 0.0, regulation.guide_step)
+
+    peaks = {_measured_peak_engagement(stock, replace(station, radius=radius), advance, regulation.tool_radius, regulation.cap_ratio) for radius in ladder}
+    assert peaks == {2.0 * math.pi}, f"virgin stock did not read as a full turn at every rung: {sorted(peaks)}"
+
+    rung, forced = _largest_admissible_radius(stock, station, 0.0, advance, regulation)
+
+    assert forced
+    assert rung == FULL_RADIUS_RUNG, "a tied ranking must land on the maximal circle, which is the one that finishes the station"
 
 
 def test_loose_cap_reproduces_the_advance_only_generator():

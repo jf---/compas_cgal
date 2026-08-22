@@ -565,6 +565,44 @@ def _station_is_admissible(stock: Stock, station: _GuideStation, advance: tuple[
     return True
 
 
+def _measured_peak_engagement(stock: Stock, station: _GuideStation, advance: tuple[float, float], tool_radius: float, cap_ratio: float) -> float:
+    """Largest engaged-run angle REPORTED over this machining circle's evaluated positions.
+
+    REPORTING, NOT DECIDING (`docs/exactness.md`, the deciding/reporting split).
+    `_station_is_admissible` is the decision -- an exact per-run predicate that
+    short-circuits at the first refusing position and never yields a number. This
+    function yields a NUMBER: the reported ``max_run_tea`` double, maximised over
+    the whole probe ring. It exists so that candidates the exact predicate has
+    ALREADY REFUSED can be ranked against one another, which is the only thing a
+    reported double is allowed to influence. It must never gate an emission, and
+    no caller may compare it against the cap.
+
+    The whole ring is evaluated -- no short circuit -- because a partial maximum is
+    a maximum over however many positions happened to be visited before the first
+    refusal, which is an artefact of probe ORDER, not a property of the circle.
+    Ranking on that would be the same class of defect the ranking exists to fix.
+
+    Args:
+        stock: The current stock (unmodified by this call).
+        station: The station under test, carrying the candidate radius.
+        advance: Unit direction of travel into this station.
+        tool_radius: Tool radius.
+        cap_ratio: The exact rational cap surrogate, passed through to
+            `engagement_at` because the call requires one; the returned verdict is
+            discarded here and only the reported angle is read.
+
+    Returns:
+        The largest reported engaged-run angle in radians over the evaluated
+        positions, ``0.0`` when the circle meets no material at any of them.
+    """
+    raw = stock.raw
+    peak = 0.0
+    for px, py in _probe_positions(station, advance):
+        _total_tea, max_run_tea, _cap_exceeded = _stock_2.engagement_at(raw, px, py, tool_radius, cap_ratio, 0.0)
+        peak = max(peak, max_run_tea)
+    return peak
+
+
 def _largest_admissible_advance(
     stock: Stock,
     stations: list[_GuideStation],
