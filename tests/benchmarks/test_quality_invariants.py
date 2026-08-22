@@ -112,6 +112,23 @@ COUNTS = (
 REWORK_TOL = 1e-9
 
 
+# Every drawn coordinate is a whole number of these, and every transform below
+# is a whole number of them too. DYADIC ON PURPOSE, and it is the difference
+# between a property and a coin toss: a translation by 1.0 applied to a
+# coordinate of 0.9 does NOT produce the exact translate, because 1.9 rounds
+# differently in binary than 0.9 does. The exact kernel then sees genuinely
+# different rationals, a cap decision sitting near its threshold flips, and the
+# property reports a metric defect that is really a rounding artifact -- which
+# it did, on `cap_exceedances`, before this grid was imposed.
+#
+# `benchmarks/congruence.py` states the same rule for rotations, and states it
+# better: "Irrational rotations would smear the test with representation noise
+# and could not distinguish a real bug from a rounding artifact." An eighth is
+# exact in binary, and every sum and product this file forms from eighths stays
+# far inside a double's mantissa, so congruence here is bit-exact.
+GRID_STEP = 0.125
+
+
 @st.composite
 def chained_paths(draw: st.DrawFn) -> List[Tuple[int, float, float, float]]:
     """A plausible trochoidal path as ``(chain, x, y, radius)`` stations.
@@ -120,6 +137,8 @@ def chained_paths(draw: st.DrawFn) -> List[Tuple[int, float, float, float]]:
     run of machining circles joined by bridges -- rather than arbitrary
     geometry, because a property is only useful if the paths it quantifies over
     are ones the metrics will really meet.
+
+    Coordinates are whole multiples of `GRID_STEP`; see its comment for why.
 
     Args:
         draw: Hypothesis' draw function.
@@ -131,11 +150,11 @@ def chained_paths(draw: st.DrawFn) -> List[Tuple[int, float, float, float]]:
     stations: List[Tuple[int, float, float, float]] = []
     for chain in range(chains):
         count = draw(st.integers(min_value=2, max_value=4))
-        y = draw(st.floats(min_value=-2.0, max_value=2.0, allow_nan=False, allow_infinity=False))
-        x0 = draw(st.floats(min_value=-4.0, max_value=0.0, allow_nan=False, allow_infinity=False))
+        y = draw(st.integers(min_value=-16, max_value=16)) * GRID_STEP
+        x0 = draw(st.integers(min_value=-32, max_value=0)) * GRID_STEP
         for step in range(count):
-            radius = draw(st.floats(min_value=0.3, max_value=2.5, allow_nan=False, allow_infinity=False))
-            stations.append((chain, x0 + 0.9 * step, y, radius))
+            radius = draw(st.integers(min_value=3, max_value=20)) * GRID_STEP
+            stations.append((chain, x0 + 7 * step * GRID_STEP, y, radius))
     return stations
 
 
@@ -352,11 +371,11 @@ def _measure(spec: PocketSpec, result: ToolpathResult) -> _Groups:
     return _Groups(spec, result)
 
 
-PROPERTY_SETTINGS = settings(max_examples=12, deadline=None, suppress_health_check=[HealthCheck.too_slow, HealthCheck.function_scoped_fixture])
+PROPERTY_SETTINGS = settings(max_examples=40, deadline=None, suppress_health_check=[HealthCheck.too_slow, HealthCheck.function_scoped_fixture])
 
 
 @PROPERTY_SETTINGS
-@given(stations=chained_paths(), shift=st.tuples(st.floats(-50.0, 50.0), st.floats(-50.0, 50.0)))
+@given(stations=chained_paths(), shift=st.tuples(st.integers(-400, 400).map(lambda n: n * GRID_STEP), st.integers(-400, 400).map(lambda n: n * GRID_STEP)))
 def test_moving_the_pocket_across_the_table_changes_no_metric(stations: List[Tuple[int, float, float, float]], shift: Tuple[float, float]) -> None:
     """A pocket machined somewhere else is the same machining problem.
 
@@ -390,7 +409,7 @@ def test_turning_the_pocket_a_quarter_turn_changes_no_metric(stations: List[Tupl
 
 
 @PROPERTY_SETTINGS
-@given(stations=chained_paths(), scale=st.floats(min_value=0.25, max_value=4.0))
+@given(stations=chained_paths(), scale=st.sampled_from([0.25, 0.5, 1.0, 2.0, 4.0]))
 def test_a_bigger_pocket_and_a_bigger_cutter_is_the_same_cut(stations: List[Tuple[int, float, float, float]], scale: float) -> None:
     """Every length scales, every ratio holds, every count is unchanged.
 
