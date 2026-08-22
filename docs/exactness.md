@@ -51,6 +51,12 @@ if (CGAL::compare_squared_distance(p, q, tolerance_sq) == CGAL::SMALLER) { ... }
 const double tea = std::atan2(CGAL::to_double(sy), CGAL::to_double(sx));
 ```
 
+[The TEA certificate](engagement_certificate.md) is this split held under
+pressure: a refinement guard that had to be evaluated in doubles, station
+verdicts that had to stay exact predicates, and one topological fact — does a
+material component wrap the station — that had to be an exact point-in-region
+query.
+
 ## Choosing a kernel
 
 ```mermaid
