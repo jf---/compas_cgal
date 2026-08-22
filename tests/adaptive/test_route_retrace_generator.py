@@ -14,7 +14,6 @@ from compas_cgal.adaptive.errors import UnsupportedRouteRetraceError
 from compas_cgal.adaptive.generation_state import GenerationState
 from compas_cgal.adaptive.generator import _derive_route_retrace_decision
 from compas_cgal.adaptive.generator import _route_retrace_required
-from compas_cgal.adaptive.generator import evaluate_traversal_candidate
 from compas_cgal.adaptive.generator import GenerationContinuation
 from compas_cgal.adaptive.generator import materialize_active_candidate_family
 from compas_cgal.adaptive.generator import TraversalCommit
