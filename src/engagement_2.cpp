@@ -117,8 +117,28 @@ RadPoint as_radpoint(const GpsPoint& p)
     FT root(0), x1(0), y1(0);
     if (X.is_extended()) { root = X.root(); x1 = X.a1(); }
     if (Y.is_extended()) {
-        // Both coordinates extended -> CGAL guarantees the shared root.
-        CGAL_assertion(!X.is_extended() || Y.root() == root);
+        // LOAD-BEARING PRECONDITION, checked at RUNTIME rather than asserted. It is
+        // CGAL's own contract for this number type -- Sqrt_extension::check_roots
+        // states it as `CGAL_precondition(a.root() == b.root())` -- and it holds here
+        // because CGAL builds every circle/line and circle/circle intersection point
+        // from a single shared discriminant. `CGAL_assertion` would state it for a
+        // debug build only: NDEBUG makes it `static_cast<void>(0)` (CGAL/assertions.h),
+        // and this project compiles Release (pyproject.toml `cmake.build-type`), so an
+        // asserted form does not exist in any shipped wheel.
+        //
+        // Were it ever false, the collapse below would keep the FIRST coordinate's a1
+        // while adopting the SECOND coordinate's root -- silently re-interpreting
+        // x1*sqrt(alpha) as x1*sqrt(beta). Every orientation and squared-chord sign in
+        // run_exceeds_cap is computed from these five rationals, so the cap certificate
+        // would come out confidently wrong rather than absent. An exception is the only
+        // outcome a caller can see; the exact comparison is on FT, not a tolerance.
+        if (X.is_extended() && Y.root() != root)
+            throw std::logic_error(
+                "as_radpoint: the two coordinates of one arrangement point carry different roots (radicands report as "
+                + format_double(CGAL::to_double(root)) + " and " + format_double(CGAL::to_double(Y.root()))
+                + "), so CGAL did not build this intersection point from a single shared discriminant. The exact cap "
+                  "predicate collapses both coordinates onto one root and cannot do so here; no engagement certificate "
+                  "computed from this point would be sound.");
         root = Y.root();
         y1 = Y.a1();
     }

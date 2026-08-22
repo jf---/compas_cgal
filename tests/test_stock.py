@@ -821,3 +821,76 @@ def test_ordinary_sweeps_are_far_under_the_chain_limit():
     assert not stock.contains(5.0, 5.0)  # capsule axis cleared
     assert not stock.contains(7.0, 5.0)  # guide circle cleared
     assert stock.contains(1.0, 1.0)  # untouched corner survives
+
+
+# ----------------------------------------------------------------------------
+# The shared-root precondition of the exact cap predicate
+# ----------------------------------------------------------------------------
+
+# Grid of cutter stations swept over a heavily depleted stock. 60 x 60 at 0.12
+# spacing covers [0.5, 7.58]^2 of the 8 x 8 blank -- from tangency with one edge
+# to within 0.42 of the opposite one -- so the sweep meets free rim, full
+# immersion, and every circle/circle and circle/line crossing kind the harvest
+# can produce. Measured 11.6 s single-process; it is one loop, not a parametrize,
+# because the claim is about the population, not about any one station.
+_SHARED_ROOT_GRID = 60
+_SHARED_ROOT_STEP = 0.12
+_SHARED_ROOT_ORIGIN = 0.5
+_SHARED_ROOT_TOOL_RADIUS = 0.5
+
+
+def test_release_build_still_enforces_the_shared_root_precondition():
+    """The exact cap predicate assumes both coordinates of a point share one root.
+
+    That assumption is load-bearing for every certificate, and CGAL_assertion is
+    compiled out of the Release wheels this project ships. The check must be a real
+    runtime check. Exercised indirectly: a heavily depleted stock generates every
+    circle/circle and circle/line crossing kind the harvest can meet, and none of
+    them may trip the guard.
+
+    A guard that never runs proves nothing, so the sweep also reports the station
+    classes it met. The classification is tolerance-free: a free station reports
+    exactly 0.0, a fully immersed one exactly the C++ FULL_TURN constant, and
+    anything between the two is a rim that genuinely crosses the boundary -- the
+    only stations whose run endpoints are one-root intersection points, and
+    therefore the only ones that reach the guard. Should FULL_TURN stop being
+    reported exactly, the coverage assertions fail loudly rather than quietly
+    reclassifying immersed stations as crossings.
+    """
+    from compas.geometry import Polygon
+
+    from compas_cgal.stock import Stock
+
+    stock = Stock(Polygon([(0, 0, 0), (8, 0, 0), (8, 8, 0), (0, 8, 0)]))
+    for k in range(12):
+        a = 2.0 * math.pi * k / 12.0
+        stock.subtract_capsule(4.0, 4.0, 4.0 + 3.0 * math.cos(a), 4.0 + 3.0 * math.sin(a), 0.4)
+
+    ratio = cap_ratio(math.pi / 2.0)
+    full_turn = 2.0 * math.pi
+    free = full = crossing = capped = 0
+    for i in range(_SHARED_ROOT_GRID):
+        for j in range(_SHARED_ROOT_GRID):
+            total_tea, _, cap_exceeded = _stock_2.engagement_at(
+                stock.raw,
+                _SHARED_ROOT_ORIGIN + i * _SHARED_ROOT_STEP,
+                _SHARED_ROOT_ORIGIN + j * _SHARED_ROOT_STEP,
+                _SHARED_ROOT_TOOL_RADIUS,
+                ratio,
+                0.0,
+            )
+            if total_tea == 0.0:
+                free += 1
+            elif total_tea == full_turn:
+                full += 1
+            else:
+                crossing += 1
+            capped += bool(cap_exceeded)
+
+    stations = _SHARED_ROOT_GRID * _SHARED_ROOT_GRID
+    # All three station classes are present, so the sweep is not vacuous.
+    assert free and full and crossing, (free, full, crossing)
+    # Crossings -- the stations that actually reach the guard -- dominate the grid.
+    assert crossing > stations // 2, (crossing, stations)
+    # Both cap verdicts occur, so neither branch of the certificate is untaken.
+    assert 0 < capped < stations, (capped, stations)
