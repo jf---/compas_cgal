@@ -21,7 +21,7 @@ exact `cap_exceeded` boolean against the depleting stock. "Already cleared" is
 therefore a measured property of this pocket at this moment, not an assumption
 about rectangles. Where no orientation of any remaining chain has an admissible
 link, the tool retracts and plunges exactly as before -- and the chain is named in
-`OrderedToolpathResult.isolated_chains` with the engagement that refused it, so
+`OrderedToolpathResult.forced_entries` with the engagement that refused it, so
 "this pocket needs five entries" is a reported measurement rather than a silent
 default.
 
@@ -128,13 +128,30 @@ STRAIGHT_MOVE_CAP_FRACTION = 0.5
 
 
 @dataclass(frozen=True)
-class IsolatedChain:
+class ForcedEntry:
     """A chain the tool had to retract and plunge into, and the measurement that forced it.
 
     A generator that quietly plunges wherever it likes hides the cost of its own
     ordering. This is the record that stops that: it names a chain the ordering
     could NOT reach through cleared stock, with the engagement that refused the
     best link on offer, so "this pocket needs N entries" is evidence.
+
+    NOT THE SAME THING AS `DeclinedRegion`, AND THE DIFFERENCE IS POLARITY. A
+    forced entry is material that IS cut, merely reached expensively; a declined
+    region is material that is NOT cut at all. Anything that unioned the two and
+    handed the result to a corner-clearing pass would re-machine finished stock.
+    They are also differently caused: a declined region is fixed by the geometry
+    and the tool radius before any machining happens, while a forced entry emerges
+    from the depleting stock and the order chosen, so a different sequence gives a
+    different set. And one chain can be BOTH -- on the gate's `L_shape`, chain 6
+    has a sub-threshold run at its narrow end AND no orientation with an
+    admissible link, which is two independent facts about one chain rather than a
+    duplicate.
+
+    This field is never empty: the first cut of any operation is into virgin
+    stock, so there is always at least one forced entry. That is why the name is
+    about the ENTRY being forced and not about the chain being isolated -- the
+    first entry is not isolated, it is merely first.
 
     Attributes:
         path_index: Index of the chain, matching its operations' `path_index`.
@@ -155,14 +172,14 @@ class OrderedToolpathResult(RhoToolpathResult):
     """A `RhoToolpathResult` that also says which chains could not be reached through cut stock.
 
     Attributes:
-        isolated_chains: Every chain the ordering had to enter with a fresh plunge.
+        forced_entries: Every chain the ordering had to enter with a fresh plunge.
             One of these is unavoidable -- the first cut of the operation is always
             into virgin stock -- so a path with exactly one is optimal on this
             criterion, and every further one is a measured claim that no admissible
-            link existed.
+            link existed. Distinct from `declined_regions`: see `ForcedEntry`.
     """
 
-    isolated_chains: Tuple[IsolatedChain, ...] = ()
+    forced_entries: Tuple[ForcedEntry, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -536,7 +553,7 @@ def chain_ordered_toolpath(
     Returns:
         OrderedToolpathResult: The operation stream, the visualisation polyline,
         `declined_regions` for the material below the degeneracy floor, and
-        `isolated_chains` for every chain that still needed its own plunge.
+        `forced_entries` for every chain that still needed its own plunge.
 
     Raises:
         InvalidEngagementCapDegreesError: If *tea_cap_deg* is not in ``(0, 180]``.
@@ -575,12 +592,17 @@ def chain_ordered_toolpath(
 
     pending: List[List[_OrientedChain]] = []
     declined: List[DeclinedRegion] = []
+    # Chains with no trochoidal station never enter the machining sequence, so
+    # they have no machining index to be stamped with. They are held back and
+    # numbered after every machined chain (below) rather than borrowing a guide
+    # index, which would make one `path_index` name two different chains.
+    fully_declined: List[List[_RhoStation]] = []
     for origin, guide_chain in enumerate(guide_chains):
         orientations = _orientations(guide_chain, origin, regulation.tool_radius)
         if orientations:
             pending.append(orientations)
         else:
-            declined.extend(_declined_regions(_rho_stations(guide_chain), origin, regulation.tool_radius))
+            fully_declined.append(_rho_stations(guide_chain))
     if not pending:
         raise EmptyRhoGuideError(
             f"The straight-skeleton guide produced {len(guide_chains)} chain(s) for tool_diameter={tool_diameter!r}, but no station on any of them "
@@ -597,7 +619,7 @@ def chain_ordered_toolpath(
 
     stock = Stock(polygon, holes=holes)
     operations: List[ToolpathOperation] = []
-    isolated: List[IsolatedChain] = []
+    forced: List[ForcedEntry] = []
     forced_advances = 0
     current_exit: Optional[Tuple[float, float]] = None
     path_index = 0
@@ -616,8 +638,8 @@ def chain_ordered_toolpath(
                 operations.append(_line_operation(current_exit, current_exit, cut_z, regulation.clearance_z, OperationType.RETRACT, path_index))
                 operations.append(_line_operation(current_exit, entry, regulation.clearance_z, regulation.clearance_z, OperationType.LINK, path_index))
             operations.append(_line_operation(entry, entry, regulation.clearance_z, cut_z, OperationType.PLUNGE, path_index))
-            isolated.append(
-                IsolatedChain(
+            forced.append(
+                ForcedEntry(
                     path_index=path_index,
                     entry=entry,
                     best_link_length=link_length,
@@ -636,12 +658,19 @@ def chain_ordered_toolpath(
 
     operations.append(_line_operation(current_exit, current_exit, cut_z, regulation.clearance_z, OperationType.RETRACT, path_index - 1))
 
-    if forced_advances or declined or len(isolated) > 1:
+    # Every machined chain now holds an index in [0, path_index). The chains that
+    # carried no trochoid at all continue that sequence, so their regions are
+    # reported under indices that stamp no operations and collide with nothing.
+    for stations in fully_declined:
+        declined.extend(_declined_regions(stations, path_index, regulation.tool_radius))
+        path_index += 1
+
+    if forced_advances or declined or len(forced) > 1:
         warnings.warn(
             f"{forced_advances} advance(s) were taken past a refusing exact cap predicate at "
-            f"tea_cap_deg={tea_cap_deg}. {len(isolated)} chain(s) needed their own plunge into virgin stock; one of "
+            f"tea_cap_deg={tea_cap_deg}. {len(forced)} chain(s) needed their own plunge into virgin stock; one of "
             "those is the operation's first cut and unavoidable, and any others are named in "
-            f"`OrderedToolpathResult.isolated_chains` with the link that was refused. {len(declined)} run(s) of guide "
+            f"`OrderedToolpathResult.forced_entries` with the link that was refused. {len(declined)} run(s) of guide "
             "were declined for being below the degeneracy floor and are named in "
             "`OrderedToolpathResult.declined_regions`.",
             UnavoidableEngagementWarning,
@@ -652,5 +681,5 @@ def chain_ordered_toolpath(
         operations=operations,
         polyline=_tessellate(operations, samples_per_radian),
         declined_regions=tuple(declined),
-        isolated_chains=tuple(isolated),
+        forced_entries=tuple(forced),
     )

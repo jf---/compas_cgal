@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import List
 
 import pytest
+from compas.geometry import Circle
 from compas.geometry import Polygon
 
 from compas_cgal import _coverage_2
@@ -185,8 +186,8 @@ def test_the_rectangle_is_entered_once_instead_of_once_per_chain() -> None:
 
 def test_the_one_unavoidable_entry_is_named_and_explained() -> None:
     result = _result()
-    assert len(result.isolated_chains) == 1
-    isolated = result.isolated_chains[0]
+    assert len(result.forced_entries) == 1
+    isolated = result.forced_entries[0]
     assert isolated.path_index == 0
     assert "first cut" in isolated.reason
     assert isolated.best_link_length == 0.0, "the first chain has nothing to link from"
@@ -198,8 +199,99 @@ def test_declined_regions_survive_the_reordering() -> None:
 
 
 def test_no_emitted_machining_circle_is_a_bore() -> None:
-    from compas.geometry import Circle
-
     result = _result()
     radii = [float(op.geometry.radius) for op in result.operations if isinstance(op.geometry, Circle)]
     assert radii and min(radii) > TOOL_RADIUS
+
+
+# ---------------------------------------------------------------------------
+# Chain numbering. A chain with no trochoidal station anywhere never enters the
+# machining sequence, so it has no machining index to borrow -- and borrowing one
+# makes `path_index` name two different chains at once.
+# ---------------------------------------------------------------------------
+
+# Body twelve by eight with a four-wide arm on top. The arm is narrower than a
+# trochoid needs at this tool -- its clearance is 2.0 against a floor of
+# 1.0 + r + radial clearance -- so the guide's two arm-spine chains carry no
+# machining circle at all, while the eight body chains do. That is the shape the
+# numbering bug needs and the corpus does not have. AXIS-ALIGNED deliberately:
+# `ReachableDomain2.center_domain()` is milliseconds on axis-parallel input and
+# seconds to minutes on oblique input (`docs/oblique_edge_cost.md`), and a test
+# is not the place to pay that.
+T_ARM4 = Polygon(
+    [
+        [0.0, 0.0, 0.0],
+        [12.0, 0.0, 0.0],
+        [12.0, 8.0, 0.0],
+        [8.0, 8.0, 0.0],
+        [8.0, 12.0, 0.0],
+        [4.0, 12.0, 0.0],
+        [4.0, 8.0, 0.0],
+        [0.0, 8.0, 0.0],
+    ]
+)
+
+# The narrow arm starts here. Every wholly declined run on `T_ARM4` lies above it
+# and every machined loop below it, so "which chain is this region on" needs no
+# tolerance to answer.
+T_ARM4_ARM_FLOOR_Y = 9.0
+
+# Chains of `T_ARM4` whose every station is below the degeneracy floor.
+T_ARM4_FULLY_DECLINED_CHAINS = 2
+
+
+def _arm_result():
+    with pytest.warns(UnavoidableEngagementWarning):
+        return chain_ordered_toolpath(T_ARM4, tool_diameter=TOOL_DIAMETER, tea_cap_deg=CAP_DEG)
+
+
+def test_a_chain_declined_in_full_is_numbered_after_every_machined_chain() -> None:
+    """`path_index` must name ONE chain.
+
+    A chain with no trochoidal station emits no operations, so it cannot be
+    stamped with a machining index without that index also naming a chain that
+    does. Numbering the fully declined chains after the machined ones keeps the
+    field meaning one thing.
+    """
+    result = _arm_result()
+    machined = {op.path_index for op in result.operations}
+    declined = {region.path_index for region in result.declined_regions}
+    declined_only = declined - machined
+    assert len(declined_only) == T_ARM4_FULLY_DECLINED_CHAINS, (
+        f"expected {T_ARM4_FULLY_DECLINED_CHAINS} chains numbered outside the machining sequence, got {sorted(declined_only)}"
+    )
+    assert min(declined_only) > max(machined), "a chain that emits no operations must not borrow a machined chain's index"
+
+
+def test_a_declined_region_lies_on_the_chain_its_index_names() -> None:
+    """The consequence a consumer would actually hit: joining regions to operations by index."""
+    result = _arm_result()
+    loops_by_index: dict = {}
+    for op in result.operations:
+        if isinstance(op.geometry, Circle):
+            loops_by_index.setdefault(op.path_index, []).append(float(op.geometry.frame.point[1]))
+    for region in result.declined_regions:
+        loop_ys = loops_by_index.get(region.path_index)
+        if loop_ys is None:
+            continue
+        in_arm = region.first_center[1] > T_ARM4_ARM_FLOOR_Y and region.last_center[1] > T_ARM4_ARM_FLOOR_Y
+        chain_in_arm = min(loop_ys) > T_ARM4_ARM_FLOOR_Y
+        assert in_arm == chain_in_arm, (
+            f"region at y={region.first_center[1]:.2f} is stamped path_index {region.path_index}, whose loops sit at y={min(loop_ys):.2f}..{max(loop_ys):.2f}"
+        )
+
+
+def test_the_fully_declined_arm_is_still_reported_not_dropped() -> None:
+    """Renumbering must not lose the regions -- the arm material is still declared."""
+    result = _arm_result()
+    arm = [region for region in result.declined_regions if region.first_center[1] > T_ARM4_ARM_FLOOR_Y]
+    assert len(arm) == T_ARM4_FULLY_DECLINED_CHAINS
+    assert all(region.largest_gouge_free_radius <= TOOL_RADIUS for region in arm)
+
+
+def test_a_pocket_with_no_fully_declined_chain_numbers_every_region_onto_a_machined_chain() -> None:
+    """The corpus case, pinned so the renumbering cannot start inventing indices."""
+    result = _result()
+    machined = {op.path_index for op in result.operations}
+    declined = {region.path_index for region in result.declined_regions}
+    assert declined <= machined, "with every chain machined, every declined run belongs to one of them"
