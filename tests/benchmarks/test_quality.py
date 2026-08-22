@@ -183,9 +183,9 @@ SYNTHETIC = PocketSpec.build(
 )
 
 
-def _op(geometry, operation: OperationType) -> ToolpathOperation:
-    """One operation with the metadata no metric under test reads."""
-    return ToolpathOperation(geometry=geometry, operation=operation, path_index=0)
+def _op(geometry, operation: OperationType, path_index: int = 0) -> ToolpathOperation:
+    """One operation, on chain *path_index* unless a test cares otherwise."""
+    return ToolpathOperation(geometry=geometry, operation=operation, path_index=path_index)
 
 
 def _plunge(x: float, y: float, z_top: float = 4.0) -> ToolpathOperation:
@@ -198,14 +198,14 @@ def _retract(x: float, y: float, z_top: float = 4.0) -> ToolpathOperation:
     return _op(Line([x, y, 0.0], [x, y, z_top]), OperationType.RETRACT)
 
 
-def _circle(x: float, y: float, radius: float) -> ToolpathOperation:
+def _circle(x: float, y: float, radius: float, path_index: int = 0) -> ToolpathOperation:
     """A closed machining circle at the cutting plane."""
-    return _op(Circle(radius, frame=Frame([x, y, 0.0])), OperationType.CUT)
+    return _op(Circle(radius, frame=Frame([x, y, 0.0])), OperationType.CUT, path_index)
 
 
-def _cut_line(x0: float, y0: float, x1: float, y1: float) -> ToolpathOperation:
+def _cut_line(x0: float, y0: float, x1: float, y1: float, path_index: int = 0) -> ToolpathOperation:
     """A straight cut at the cutting plane."""
-    return _op(Line([x0, y0, 0.0], [x1, y1, 0.0]), OperationType.CUT)
+    return _op(Line([x0, y0, 0.0], [x1, y1, 0.0]), OperationType.CUT, path_index)
 
 
 def _link_line(x0: float, y0: float, x1: float, y1: float) -> ToolpathOperation:
@@ -564,6 +564,33 @@ def test_a_radius_jump_the_cutter_performs_in_the_air_is_not_a_load_step() -> No
     across_the_gap = 2.9 / SYNTHETIC.tool_radius
     assert quality.cut.max_loop_radius_step == pytest.approx(within_run, abs=1e-6)
     assert quality.cut.max_loop_radius_step < across_the_gap
+
+
+def test_two_chains_linked_at_cutting_depth_are_still_two_guides() -> None:
+    """Regression: a run ends at a CHANGE OF CHAIN, not only at a retract.
+
+    A generator that orders its chains so the tool never lifts links them at
+    cutting depth. Splitting runs on rapids alone then puts the whole path in one
+    run, and the radius change from one chain's last loop to the next chain's
+    first is charged as a load step -- 3.988 tool radii on `rect_20x12`, against
+    1.024 once chains are honoured.
+
+    There is no rapid anywhere in this path. The two loops on chain 0 sit at
+    1.40 and 1.45; chain 1 opens at 4.40. Only the within-chain 0.05 may count.
+    """
+    path = [
+        _plunge(-3.0, 0.0),
+        _circle(-3.0, 0.0, 1.40, path_index=0),
+        _cut_line(-3.0, 0.0, -2.6, 0.0, path_index=0),
+        _circle(-2.6, 0.0, 1.45, path_index=0),
+        _cut_line(-2.6, 0.0, 3.0, 0.0, path_index=1),
+        _circle(3.0, 0.0, 4.40, path_index=1),
+        _cut_line(3.0, 0.0, 3.4, 0.0, path_index=1),
+        _circle(3.4, 0.0, 4.45, path_index=1),
+    ]
+    quality = measure_quality(SYNTHETIC, _result(path), samples_per_motion=FAST_SAMPLES, grid=SYNTHETIC_GRID)
+    assert quality.speed.retract_count == 0
+    assert quality.cut.max_loop_radius_step == pytest.approx(0.05 / SYNTHETIC.tool_radius, abs=1e-6)
 
 
 # ---------------------------------------------------------------------------

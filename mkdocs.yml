@@ -175,6 +175,9 @@ nav:
       - Local Depletion: local_depletion.md
       - Trochoid Chain Stitching: toolpath_trochoid_chain_design.md
       - Tangent Continuity: toolpath_tangent_continuity.md
+      - Loop Radius Degeneracy: loop_radius_degeneracy.md
+      - Machining Metric Validity: machining_metric_validity.md
+      - Continuous Engagement Cost: continuous_engagement_cost.md
       - CGAL Primitives Critique: critique_toolpath_cgal_primitives.md
   - API Reference:
       - compas_cgal.adaptive.motion_certificate: api/compas_cgal.adaptive.motion_certificate.md
