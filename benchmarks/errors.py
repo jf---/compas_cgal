@@ -119,3 +119,43 @@ class InvalidBandCountError(BenchmarkError):
 
 class AmbiguousPanelError(BenchmarkError):
     """A drawing with several panels was asked for its single panel."""
+
+
+class InvalidGridResolutionError(BenchmarkError):
+    """A coverage grid was requested with fewer than one sample along an axis."""
+
+
+class CoarseCoverageGridError(BenchmarkError):
+    """A coverage grid's cell is too coarse to resolve residue at the instance's tool size."""
+
+
+class InvalidMotionSampleCountError(BenchmarkError):
+    """A cut motion was to be probed at fewer than one cutter position."""
+
+
+class EmptyReachableRegionError(BenchmarkError):
+    """No coverage sample landed inside the tool-reachable region, so no coverage fraction is defined."""
+
+
+class ZeroLengthToolpathError(BenchmarkError):
+    """A toolpath's operations sum to zero length, so no length fraction is defined."""
+
+
+class MissingMaterialModelError(BenchmarkError):
+    """A metric that depends on material coefficients was asked for without a `MaterialModel`."""
+
+
+class MissingMachineModelError(BenchmarkError):
+    """A metric that depends on machine limits was asked for without a `MachineModel`."""
+
+
+class InvalidMaterialModelError(BenchmarkError):
+    """A material coefficient was NaN, non-positive, or outside the range its definition allows."""
+
+
+class InvalidMachineModelError(BenchmarkError):
+    """A machine limit was NaN, non-positive, or outside the range its definition allows."""
+
+
+class NoCornerDefectError(BenchmarkError):
+    """A figure that annotates the corner defect found no degenerate loop to annotate."""
