@@ -3,11 +3,15 @@
     python -m benchmarks.cli corpus --name all
     python -m benchmarks.cli corpus --name external --external-dir /path/to/profiles
     python -m benchmarks.cli figure6
+    python -m benchmarks.cli figures
 
-The two commands produce different artifacts and are deliberately not one flag:
+The corpus and Figure 6 commands produce different artifacts and are deliberately not one flag:
 a corpus run emits `MeasurementRecord` rows over many instances, while the
 Figure 6 reproduction emits a two-curve comparison over one pocket. Folding them
 into a single `--corpus figure6` would put two unrelated shapes behind one name.
+`figures` is a third shape again: it regenerates the published drawings of the
+paths themselves, and exists so that no figure in the docs comes from a script
+that is not in the repository.
 
 THEY ALSO DEFAULT TO DIFFERENT PLACES, on purpose. A corpus report is dominated
 by wall times, so it is a measurement OF A MACHINE and belongs in `build/`, never
@@ -54,7 +58,11 @@ from benchmarks.figure6 import FIGURE6_CAPS
 from benchmarks.figure6 import reference_pocket
 from benchmarks.figure6 import run_figure6
 from benchmarks.figure6 import write_figure6
+from benchmarks.figures import DEFAULT_FIGURE_FORMATS
+from benchmarks.figures import DEFAULT_FIGURES_OUT
+from benchmarks.figures import write_toolpath_figure
 from benchmarks.mathsm import SPACING_SWEEP_TOOL_DIAMETERS
+from benchmarks.palette import Theme
 from benchmarks.report import write_report
 from benchmarks.runner import run_corpus
 from benchmarks.spec import PocketSpec
@@ -247,6 +255,21 @@ def _run_figure6_command(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _run_figures_command(args: argparse.Namespace) -> int:
+    """Regenerate the published tool-path figure.
+
+    Args:
+        args: Parsed `figures` arguments.
+
+    Returns:
+        `EXIT_OK`.
+    """
+    written = write_toolpath_figure(args.out, formats=tuple(args.formats), theme=Theme(args.theme))
+    for path in written:
+        print(f"wrote {path}")
+    return EXIT_OK
+
+
 def build_parser() -> argparse.ArgumentParser:
     """The command-line interface.
 
@@ -270,6 +293,12 @@ def build_parser() -> argparse.ArgumentParser:
     figure6.add_argument("--caps", type=float, nargs="+", default=list(FIGURE6_CAPS), help="Engagement caps in degrees, in plotting order.")
     figure6.add_argument("--spacings", type=float, nargs="+", default=list(SPACING_SWEEP_TOOL_DIAMETERS), help="Baseline trial spacings, in tool diameters.")
     figure6.set_defaults(handler=_run_figure6_command)
+
+    figures = commands.add_parser("figures", help="Regenerate the published tool-path figure (seconds: it generates both paths, it does not audit them).")
+    figures.add_argument("--out", type=Path, default=DEFAULT_FIGURES_OUT, help="Directory for the figure files.")
+    figures.add_argument("--formats", nargs="+", default=list(DEFAULT_FIGURE_FORMATS), help="File formats to write, one file each.")
+    figures.add_argument("--theme", choices=[theme.value for theme in Theme], default=Theme.LIGHT.value, help="Which surface the figure is drawn for.")
+    figures.set_defaults(handler=_run_figures_command)
     return parser
 
 
