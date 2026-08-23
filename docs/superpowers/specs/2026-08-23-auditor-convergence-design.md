@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-23
 
-**Status:** proposed for review
+**Status:** approved 2026-08-23
 
 **Scope:** reconcile the exact-certified adaptive branch family and reach one
 truthful, replayable, CI-enforced engagement-audit milestone
@@ -280,6 +280,7 @@ Add a focused `compas_cgal.engagement_audit` package:
 
 | File | Responsibility |
 | --- | --- |
+| `identity.py` | validate content-addressed Python/native component inputs as `BuildIdentity` |
 | `input.py` | validate and content-address design, cut plane, tool, cap, operation stream, and build identity |
 | `classification.py` | derive supported motion role from geometry and the typed cut plane |
 | `records.py` | invariant-bearing measured and non-engaging operation records |
@@ -314,6 +315,12 @@ ordered operation-stream digest, audit schema version, motion-certifier
 versions, and native build identity. Empty operation streams raise
 `EmptyToolpathAuditError`. Multi-depth or unsupported 3D motion raises a named
 geometry error before stock mutation.
+
+Stage 1 defines `BuildIdentity` and requires complete component-version and
+32-byte source/lock digests at the audit boundary. Stage 4 replaces the
+caller-supplied construction site with the deterministic build-generated
+manifest and proves source mutation changes the digest. The type and audit
+schema do not change between those stages.
 
 The cut plane is never inferred. Every operation endpoint is classified
 against its exact declared `cut_z`/`clearance_z` contract at the input seam.
