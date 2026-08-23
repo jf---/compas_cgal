@@ -1,10 +1,10 @@
 # Auditor convergence progress
 
-**Plan:** P0 reconciliation
-**Task:** P1 Task 1 — truthful records GREEN
+**Plan:** P1 truthful audit
+**Task:** P1 Task 2 — authenticated input and CGAL-native classification GREEN
 **Branch:** `codex/auditor-convergence-sdd`
 **Worktree:** `/Users/jelle/Code/CADCAM/worktrees/compas_cgal_prs-auditor-convergence-sdd`
-**Current HEAD:** `233527a35bffccaf364ccc4a741a64241d1c8234`
+**Current HEAD:** `1e1dd528e22b30ae770c2b31e1f5c3e83f815057`
 **Integration source:** `073a0f7f833da440fe323a0a046ad31550579f82`
 **Certifier source:** `73d53729564851d69eb1c28d6c2f1e68350cd20f`
 
@@ -13,6 +13,7 @@
 - `993d4f8` — approved convergence design
 - `233527a` — reviewed auditor-convergence plans
 - `449b45b` — P0 reconciliation and baseline
+- `1e1dd52` — truthful audit identity and records
 
 ## Last verified commands
 
@@ -40,6 +41,19 @@
 - Task 1 affected GREEN — 8 passed under testmon
 - Task 1 strict mypy — 7 new source/test files clean
 - `types-adaptive` — unchanged P0 six-error baseline
+- Task 2 initial input RED — missing named error/API
+- rejected Python-owned classifier draft — excluded from accepted evidence
+- opaque native API RED — 8 missing native attributes
+- post-review authority RED — 9 failures and 2 import errors exposed label-only, mutable, and untyped seams
+- arc-phase identity RED — missing native strategy-version API
+- Task 2 native rebuild — passed
+- Task 2 focused native/Python GREEN — 90 passed
+- Task 2 affected testmon GREEN — 24 passed
+- Task 2 affected/legacy GREEN — 186 passed under `-n auto --testmon`
+- Task 2 strict mypy — 9 source/type-contract files clean
+- Task 2 lint — passed
+- Task 2 strict docs — passed
+- `types-adaptive` — unchanged P0 six-error baseline
 
 ## Open blockers
 
@@ -49,4 +63,4 @@
 
 ## Next exact command
 
-`pixi run pytest -- tests/engagement_audit/test_input.py -n auto -q`
+`git add <Task 2 paths> && git commit -m "feat(audit): authenticate motion input"`
