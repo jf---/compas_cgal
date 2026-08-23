@@ -1,7 +1,7 @@
 # Auditor convergence progress
 
 **Plan:** P0 reconciliation
-**Task:** 5 — P0 accepted
+**Task:** P1 Task 1 — truthful records GREEN
 **Branch:** `codex/auditor-convergence-sdd`
 **Worktree:** `/Users/jelle/Code/CADCAM/worktrees/compas_cgal_prs-auditor-convergence-sdd`
 **Current HEAD:** `233527a35bffccaf364ccc4a741a64241d1c8234`
@@ -12,6 +12,7 @@
 
 - `993d4f8` — approved convergence design
 - `233527a` — reviewed auditor-convergence plans
+- `449b45b` — P0 reconciliation and baseline
 
 ## Last verified commands
 
@@ -33,6 +34,12 @@
 - isolated quality gate — 36 passed; same 6 product-gate failures
 - full baseline — interrupted after 20:41; 1,315 passed, 10 known failures,
   38 warnings, one CPU-bound tail test outstanding at last summary
+- build-identity RED — missing `compas_cgal.engagement_audit`
+- build-identity GREEN — 9 passed
+- record RED — missing record error/API
+- Task 1 affected GREEN — 8 passed under testmon
+- Task 1 strict mypy — 7 new source/test files clean
+- `types-adaptive` — unchanged P0 six-error baseline
 
 ## Open blockers
 
@@ -42,4 +49,4 @@
 
 ## Next exact command
 
-`pixi run pytest -- tests/engagement_audit/test_identity.py -n auto -q`
+`pixi run pytest -- tests/engagement_audit/test_input.py -n auto -q`
