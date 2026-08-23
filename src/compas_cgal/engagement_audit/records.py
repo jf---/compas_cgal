@@ -1,0 +1,183 @@
+"""Immutable, disjoint records for measured and non-engaging operations."""
+
+from __future__ import annotations
+
+import hashlib
+import math
+from dataclasses import dataclass
+from typing import Final
+from typing import Literal
+from typing import NewType
+from typing import Self
+from typing import TypeAlias
+
+from compas_cgal.adaptive.canonical import encode_binary64
+from compas_cgal.adaptive.canonical import encode_component_map
+from compas_cgal.adaptive.canonical import encode_integer
+from compas_cgal.adaptive.canonical import encode_tagged_union
+from compas_cgal.adaptive.identity import IdentityDigest
+from compas_cgal.adaptive.motion_oracle_cache import NativeMotionVerdict
+from compas_cgal.adaptive.units import Radian
+from compas_cgal.engagement_audit.errors import InvalidMeasuredOperationAuditError
+from compas_cgal.engagement_audit.errors import InvalidMotionVerdictError
+from compas_cgal.engagement_audit.errors import InvalidNonEngagingOperationAuditError
+
+MEASURED_OPERATION_AUDIT_VERSION: Final[bytes] = b"measured-operation-audit-v1"
+NON_ENGAGING_OPERATION_AUDIT_VERSION: Final[bytes] = b"non-engaging-operation-audit-v1"
+
+OperationDigest = NewType("OperationDigest", bytes)
+StockLineageDigest = NewType("StockLineageDigest", bytes)
+MotionCertificateDigest = NewType("MotionCertificateDigest", bytes)
+NonEngagingReason: TypeAlias = Literal[
+    "vertical_plunge",
+    "vertical_retract",
+    "clearance_transport",
+]
+
+_NATIVE_VERDICTS: Final[frozenset[str]] = frozenset({"certified", "cap_exceeded", "unresolved"})
+_NON_ENGAGING_REASONS: Final[frozenset[str]] = frozenset({"vertical_plunge", "vertical_retract", "clearance_transport"})
+
+
+def _require_digest(value: object, name: str, error: type[ValueError]) -> bytes:
+    if type(value) is not bytes or len(value) != hashlib.sha256().digest_size:
+        raise error(f"{name} must be exactly one 32-byte SHA-256 digest.")
+    return value
+
+
+@dataclass(frozen=True)
+class MeasuredOperationAudit:
+    """Native evidence for one cut-height lateral operation."""
+
+    operation_index: int
+    operation_digest: OperationDigest
+    verdict: NativeMotionVerdict
+    max_tea: Radian
+    station_count: int
+    pre_motion_stock_lineage: StockLineageDigest
+    motion_certificate_digest: MotionCertificateDigest
+
+    def __post_init__(self) -> None:
+        if type(self.operation_index) is not int or self.operation_index < 0:
+            raise InvalidMeasuredOperationAuditError("operation index must be an exact non-negative integer.")
+        _require_digest(
+            self.operation_digest,
+            "operation digest",
+            InvalidMeasuredOperationAuditError,
+        )
+        if type(self.verdict) is not str or self.verdict not in _NATIVE_VERDICTS:
+            raise InvalidMotionVerdictError(f"native motion verdict {self.verdict!r} is foreign to the closed domain.")
+        if type(self.max_tea) is not float or not math.isfinite(self.max_tea) or self.max_tea < 0.0:
+            raise InvalidMeasuredOperationAuditError("maximum TEA must be a finite non-negative Radian.")
+        if type(self.station_count) is not int or self.station_count <= 0:
+            raise InvalidMeasuredOperationAuditError("station count must be an exact positive integer.")
+        _require_digest(
+            self.pre_motion_stock_lineage,
+            "pre-motion stock lineage",
+            InvalidMeasuredOperationAuditError,
+        )
+        _require_digest(
+            self.motion_certificate_digest,
+            "motion certificate digest",
+            InvalidMeasuredOperationAuditError,
+        )
+
+    @classmethod
+    def build(
+        cls,
+        *,
+        operation_index: int,
+        operation_digest: OperationDigest,
+        verdict: NativeMotionVerdict,
+        max_tea: Radian,
+        station_count: int,
+        pre_motion_stock_lineage: StockLineageDigest,
+        motion_certificate_digest: MotionCertificateDigest,
+    ) -> Self:
+        return cls(
+            operation_index=operation_index,
+            operation_digest=operation_digest,
+            verdict=verdict,
+            max_tea=max_tea,
+            station_count=station_count,
+            pre_motion_stock_lineage=pre_motion_stock_lineage,
+            motion_certificate_digest=motion_certificate_digest,
+        )
+
+    @property
+    def canonical_bytes(self) -> bytes:
+        if type(self) is not MeasuredOperationAudit:
+            raise InvalidMeasuredOperationAuditError("measured operation audit must be exact, not a subclass.")
+        return encode_tagged_union(
+            MEASURED_OPERATION_AUDIT_VERSION,
+            encode_component_map(
+                {
+                    b"max-tea-radian": encode_binary64(float(self.max_tea)),
+                    b"motion-certificate-digest": bytes(self.motion_certificate_digest),
+                    b"operation-digest": bytes(self.operation_digest),
+                    b"operation-index": encode_integer(self.operation_index),
+                    b"pre-motion-stock-lineage": bytes(self.pre_motion_stock_lineage),
+                    b"station-count": encode_integer(self.station_count),
+                    b"verdict": self.verdict.encode("ascii"),
+                }
+            ),
+        )
+
+    @property
+    def digest(self) -> IdentityDigest:
+        return IdentityDigest(hashlib.sha256(self.canonical_bytes).digest())
+
+
+@dataclass(frozen=True)
+class NonEngagingOperationAudit:
+    """Geometric proof that one operation cannot engage at the cut plane."""
+
+    operation_index: int
+    operation_digest: OperationDigest
+    reason: NonEngagingReason
+
+    def __post_init__(self) -> None:
+        if type(self.operation_index) is not int or self.operation_index < 0:
+            raise InvalidNonEngagingOperationAuditError("operation index must be an exact non-negative integer.")
+        _require_digest(
+            self.operation_digest,
+            "operation digest",
+            InvalidNonEngagingOperationAuditError,
+        )
+        if type(self.reason) is not str or self.reason not in _NON_ENGAGING_REASONS:
+            raise InvalidNonEngagingOperationAuditError(f"non-engaging reason {self.reason!r} is foreign to the closed domain.")
+
+    @classmethod
+    def build(
+        cls,
+        *,
+        operation_index: int,
+        operation_digest: OperationDigest,
+        reason: NonEngagingReason,
+    ) -> Self:
+        return cls(
+            operation_index=operation_index,
+            operation_digest=operation_digest,
+            reason=reason,
+        )
+
+    @property
+    def canonical_bytes(self) -> bytes:
+        if type(self) is not NonEngagingOperationAudit:
+            raise InvalidNonEngagingOperationAuditError("non-engaging operation audit must be exact, not a subclass.")
+        return encode_tagged_union(
+            NON_ENGAGING_OPERATION_AUDIT_VERSION,
+            encode_component_map(
+                {
+                    b"operation-digest": bytes(self.operation_digest),
+                    b"operation-index": encode_integer(self.operation_index),
+                    b"reason": self.reason.encode("ascii"),
+                }
+            ),
+        )
+
+    @property
+    def digest(self) -> IdentityDigest:
+        return IdentityDigest(hashlib.sha256(self.canonical_bytes).digest())
+
+
+OperationAudit: TypeAlias = MeasuredOperationAudit | NonEngagingOperationAudit
