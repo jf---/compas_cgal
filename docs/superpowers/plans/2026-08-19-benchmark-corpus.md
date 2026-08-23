@@ -3150,3 +3150,93 @@ These are **not** tasks — they are the measurements the corpus exists to produ
 - **Coverage.** Analytic families (Task 2) · congruence invariants (Task 3) · instrumentation for arrangement size *and* bit length (Task 4) · phase-separated timing (Task 5) · k-gon and arc-fraction sweeps (Task 6) · neck sweep and threshold (Task 7) · scale and digit sweeps (Task 8) · islands and degeneracies (Task 9) · conclusion-first reporting (Task 10) · MATHSM baseline (Task 11) · Figure 6 (Task 12) · external corpus (Task 13) · CLI, mypy, CI, docs (Task 14). Every recommendation is claimed by exactly one task.
 - **Type consistency.** `PocketSpec.build` keyword names are identical at all call sites; `params` is always `Mapping[str, float]`; `MeasurementRecord` field names in Task 5 match every use in Tasks 7, 10, and 14; `CLEARANCE_Z` is defined once in `runner.py` and re-imported by `mathsm.py` and `figure6.py` rather than redefined.
 - **Known gap, stated rather than hidden.** `run_spec`'s `unresolved` count is inferred from `OperationEngagement` (an operation that neither certified nor exceeded the cap), because the current `EngagementReport` has no dedicated three-valued field. On a branch where the certifier reports `unresolved` natively, replace that inference with the real field — the schema already has the column.
+
+---
+
+## Open after the plan landed (2026-08-22)
+
+Work that surfaced once the corpus was running, recorded here because it has no
+other home and would otherwise live only in a transcript.
+
+### A. Audit every comment that asserts a measurement
+
+**Why this is first.** `RADIUS_LADDER_SUBDIVISIONS` shipped under a heading
+reading `WHY THIS COUNT: MEASURED, NOT DERIVED` above a table that still said
+`MEAS` in four of five cells. A comment claiming a measurement it does not
+contain is worse than no comment, because it stops the next reader checking.
+Fixed in `29050b0` — but only because the agent that wrote it was asked, before
+standing down, whether it had measured anything it never reported.
+
+`grep` finds no remaining placeholder markers (`MEAS`, `TODO`, `FIXME`, `TBD`)
+anywhere under `src/compas_cgal` or `benchmarks`. What it does find is **34
+comments across 12 files asserting a measurement**, none of them verified:
+
+| file | claims |
+| --- | ---: |
+| `src/compas_cgal/engagement_radial_toolpath.py` | 15 |
+| `benchmarks/quality.py` | 5 |
+| `src/compas_cgal/engagement_toolpath.py` | 4 |
+| `engagement_spiral_entry_toolpath.py`, `engagement_rho_toolpath.py` | 3 each |
+| `benchmarks/mathsm.py`, `benchmarks/gate.py` | 2 each |
+| `engagement_ordered_toolpath.py`, `survey.py`, `runner.py`, `pathmetrics.py`, `palette.py` | 1 each |
+
+Two of these were checked on 2026-08-22. One was false. The other was correct
+but **mislabelled** in a way that made it unreproducible: its `1(off)` column
+could not be reached by setting the constant to 1, because nothing disables the
+rescan branch — so N=1 only collapses the resolution while the ranking stays
+live, and the honest "off" figure comes from deleting the branch. Two for two on
+finding a problem is a poor rate to extrapolate from and a good reason to audit
+the rest.
+
+For each claim: re-run it, then either fill in the number, or state the exact
+configuration that reproduces it, or delete the claim. **Name the knob that
+produces each column** — the mislabelling above cost an hour precisely because
+the column header implied a setting that does not exist.
+
+### B. Two findings measured but never recorded
+
+Both from the radius-ladder work, neither with an artifact of its own, because
+an ablation that rejects a change produces no file, no test and no commit.
+
+1. **Peak and count are provably opposed at a forced station.** Every candidate
+   there is over the cap by definition, and a sub-maximal circle does not finish
+   the station, so the maximal one still follows: lowering the peak always costs
+   a circle unless the later maximal circle becomes admissible. The only
+   count-preserving rule tried — an exact-predicate veto on a cloned stock —
+   collapses the design back to the old behaviour. A one-step lookahead confirmed
+   deferring genuinely lightens the later circle, 32 of 32 stations. **This is a
+   constraint, not a tuning parameter**, and it belongs in the module docstring
+   so nobody reopens it as a trade-off.
+2. **The four-way decomposition behind the gate**, as worst TEA / over-cap
+   circles / cutting length, on 6x4 at cap 40 and 20x12 at cap 60:
+
+   | configuration | 6x4 cap 40 | 20x12 cap 60 |
+   | --- | --- | --- |
+   | baseline | 86.4 / 34 / 295 | 126.1 / 8 / 3236 |
+   | ranking only | 54.5 / 41 / 389 | 88.6 / 12 / 3382 |
+   | refinement only | **213.6** / 1 / 357 | 126.1 / 4 / 3388 |
+   | both, ungated | 121.0 / 11 / 830 | 90.6 / 12 / 3379 |
+
+   Both together **ungated** is worse than ranking alone on both pockets, which
+   is the entire reason the gate exists — and the `213.6` is a slotting cut that
+   breaks tools. Belongs in `docs/` as an ablation table, not only as a comment.
+
+### C. Also open, one line each
+
+- **Which layer decides the tangency case.** Engagement is translation-variant
+  where the cutter rim lies exactly on a cleared boundary; the property test for
+  it is red on purpose. `docs/machining_metric_validity.md` case 4.
+- **The oblique-edge cliff.** `center_domain()` is 5 ms axis-aligned and 17.5 s
+  oblique with plain integer vertices. Every pocket in the corpus is
+  axis-parallel, so every timing here — parity included — needs that qualifier,
+  and `review.md` does not yet carry it. `docs/oblique_edge_cost.md`.
+- **A second cap in the gate.** At `GATE_CAP_DEG = 120` the two registered
+  generators emit identical paths, so three pockets times two generators cannot
+  attribute a defect to either. A cap in 40-100 separates them.
+- **The depletion model** refuses any move with both Z change and XY travel, so
+  a true helical entry cannot be scored — and the workaround encoding degrades
+  silently to a rapid that removes nothing. Until it lands, the entry criterion
+  is unsatisfiable; see the 240-degree floor in `docs/loop_radius_degeneracy.md`.
+- **Arc vocabulary.** Inter-chain links cannot be tangent-continuous while loops
+  are full circles; they would have to become arcs with distinct entry and exit
+  tangency points.
