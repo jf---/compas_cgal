@@ -334,10 +334,17 @@ remains opaque thereafter; no Python `point_at`, `atan2`, subtraction, or
 `abs` builds certifier geometry.
 
 A native-proved plunge is distinct from a non-mutating retract or clearance
-transport. `AuthenticatedPlungeOperation` retains the opaque plunge plus its
-typed cut-plane endpoint so replay can later apply depletion without rereading
-COMPAS. No depletion policy is chosen in Task 2. The explicit operation index
-is the ordered stream ordinal, never repeatable `ToolpathOperation.path_index`.
+transport. `AuthenticatedPlungeOperation` retains only the opaque native
+plunge; Task 3 passes that value directly to native depletion without exposing
+or reconstructing its endpoint in Python. Circle and arc values retain their
+exact-injected guide radius internally for the same reason. No depletion policy
+is chosen in Task 2. The explicit operation index is the ordered stream ordinal,
+never repeatable `ToolpathOperation.path_index`.
+
+Ingress uses a finite-only, millimetre-bearing radius observation. Native
+`CGAL::sign` owns the positive-radius decision. Each authenticated carrier has
+a distinct versioned canonical encoding and digest over operation index, source
+operation digest, and its closed native classification tag.
 
 - [ ] **Step 6: Run GREEN and commit**
 

@@ -30,7 +30,7 @@ class InvalidAuthenticatedLateralOperationError(EngagementAuditError):
 
 
 class InvalidAuthenticatedPlungeOperationError(EngagementAuditError):
-    """An authenticated plunge omits its exact native motion or typed endpoint."""
+    """An authenticated plunge omits its exact opaque native motion."""
 
 
 class InvalidAuthenticatedNonEngagingOperationError(EngagementAuditError):

@@ -7,11 +7,9 @@ from compas_cgal import _stock_2
 from compas_cgal.adaptive.identity import IdentityDigest
 from compas_cgal.adaptive.motion_oracle_cache import NativeMotionVerdict
 from compas_cgal.adaptive.units import Direction3
-from compas_cgal.adaptive.units import GuideRadius
-from compas_cgal.adaptive.units import Point2
+from compas_cgal.adaptive.units import ObservedRadius
 from compas_cgal.adaptive.units import Point3
 from compas_cgal.adaptive.units import Radian
-from compas_cgal.adaptive.units import WorldXY
 from compas_cgal.adaptive.units import WorldXYZ
 from compas_cgal.engagement_audit.identity import BuildIdentity
 from compas_cgal.engagement_audit.operation_identity import ArcOperationSnapshot
@@ -51,11 +49,12 @@ def consume_native_motion_request(motion: SupportedLateralMotion) -> None:
 
 
 def consume_authenticated_operation(operation: AuthenticatedOperation) -> None:
+    assert_type(operation.canonical_bytes, bytes)
+    assert_type(operation.digest, IdentityDigest)
     if isinstance(operation, AuthenticatedLateralOperation):
         consume_native_motion_request(operation.motion)
     elif isinstance(operation, AuthenticatedPlungeOperation):
         assert_type(operation.motion, _stock_2.AuditVerticalPlunge2)
-        assert_type(operation.endpoint, Point2[WorldXY])
     elif isinstance(operation, AuthenticatedNonEngagingOperation):
         assert_type(
             operation.motion,
@@ -69,6 +68,6 @@ def consume_arc_snapshot(snapshot: ArcOperationSnapshot) -> None:
     assert_type(snapshot.center, Point3[WorldXYZ])
     assert_type(snapshot.xaxis, Direction3[WorldXYZ])
     assert_type(snapshot.yaxis, Direction3[WorldXYZ])
-    assert_type(snapshot.radius, GuideRadius)
+    assert_type(snapshot.radius, ObservedRadius)
     assert_type(snapshot.start_angle, Radian)
     assert_type(snapshot.end_angle, Radian)

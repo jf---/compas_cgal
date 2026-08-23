@@ -16,6 +16,7 @@ from compas_cgal.adaptive.units import Direction3
 from compas_cgal.adaptive.units import EntryRadius
 from compas_cgal.adaptive.units import GuideRadius
 from compas_cgal.adaptive.units import Millimetre
+from compas_cgal.adaptive.units import ObservedRadius
 from compas_cgal.adaptive.units import Point2
 from compas_cgal.adaptive.units import Point3
 from compas_cgal.adaptive.units import Spacing
@@ -52,6 +53,14 @@ def test_world_xyz_factories_preserve_frame_and_dimension() -> None:
     assert_type(direction, Direction3[WorldXYZ])
 
 
+def test_observed_radius_preserves_finite_nonpositive_ingress() -> None:
+    zero = ObservedRadius.build(0.0)
+    negative = ObservedRadius.build(-1.0)
+
+    assert zero.value == Millimetre(0.0)
+    assert negative.value == Millimetre(-1.0)
+
+
 @pytest.mark.parametrize(
     ("factory", "value"),
     [
@@ -61,6 +70,7 @@ def test_world_xyz_factories_preserve_frame_and_dimension() -> None:
         (Spacing.build, 0.0),
         (ChordBound.build, -1.0),
         (GuideRadius.build, 0.0),
+        (ObservedRadius.build, math.nan),
         (Clearance.build, -1.0),
         (CutZ.build, math.inf),
         (ClearanceZ.build, math.nan),

@@ -12,8 +12,6 @@ from compas_cgal import _stock_2
 from compas_cgal.adaptive.units import ClearanceZ
 from compas_cgal.adaptive.units import CutPlane
 from compas_cgal.adaptive.units import CutZ
-from compas_cgal.adaptive.units import Point2
-from compas_cgal.adaptive.units import WorldXY
 from compas_cgal.engagement_audit.classification import classify_operation
 from compas_cgal.engagement_audit.errors import ContradictoryOperationRoleError
 from compas_cgal.engagement_audit.errors import ContradictoryOperationOrientationError
@@ -69,7 +67,7 @@ def test_geometry_proves_non_engaging_motion(
     assert result.operation_index == OPERATION_INDEX
 
 
-def test_native_classified_plunge_retains_cut_plane_endpoint() -> None:
+def test_native_classified_plunge_exposes_no_python_geometry() -> None:
     result = classify_operation(
         _line(
             (1.0, 2.0, CLEARANCE_Z),
@@ -81,7 +79,8 @@ def test_native_classified_plunge_retains_cut_plane_endpoint() -> None:
     )
 
     assert isinstance(result, AuthenticatedPlungeOperation)
-    assert result.endpoint == Point2[WorldXY].build(1.0, 2.0)
+    assert isinstance(result.motion, _stock_2.AuditVerticalPlunge2)
+    assert not hasattr(result, "endpoint")
     assert result.operation_index == OPERATION_INDEX
 
 
@@ -128,6 +127,17 @@ def test_cut_height_circle_is_supported_lateral_motion() -> None:
 
     assert isinstance(result, AuthenticatedLateralOperation)
     assert isinstance(result.motion, _stock_2.AuditCircleMotion2)
+
+
+def test_nonpositive_circle_radius_reaches_native_named_rejection() -> None:
+    operation = ToolpathOperation(
+        geometry=Circle(0.0, frame=Frame([1.0, 2.0, CUT_Z])),
+        operation=OperationType.CUT,
+        path_index=5,
+    )
+
+    with pytest.raises(UnsupportedAuditGeometryError, match="exact positive"):
+        classify_operation(operation, _cut_plane(), operation_index=OPERATION_INDEX)
 
 
 def test_compas_arc_direction_must_map_unambiguously_to_native_orientation() -> None:

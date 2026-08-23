@@ -1,10 +1,10 @@
 # Auditor convergence progress
 
 **Plan:** P1 truthful audit
-**Task:** P1 Task 2 — authenticated input and CGAL-native classification GREEN
+**Task:** P1 Task 2 fix round 1 GREEN — formal re-review pending
 **Branch:** `codex/auditor-convergence-sdd`
 **Worktree:** `/Users/jelle/Code/CADCAM/worktrees/compas_cgal_prs-auditor-convergence-sdd`
-**Current HEAD:** `1e1dd528e22b30ae770c2b31e1f5c3e83f815057`
+**Fix base HEAD:** `0b41ba7cbb5c2e628aa481b31eb33486ee5e64c1`
 **Integration source:** `073a0f7f833da440fe323a0a046ad31550579f82`
 **Certifier source:** `73d53729564851d69eb1c28d6c2f1e68350cd20f`
 
@@ -54,6 +54,19 @@
 - Task 2 lint — passed
 - Task 2 strict docs — passed
 - `types-adaptive` — unchanged P0 six-error baseline
+- Task 2 formal review — NEEDS FIXES on Python radius authority, parallel plunge geometry, carrier identity, and mutation coverage
+- fix round radius RED — zero-radius COMPAS circle raised Python `InvalidAuditOperationError`
+- fix round radius GREEN — finite typed observation reaches named native `UnsupportedAuditGeometryError`
+- fix round plunge RED — authenticated carrier exposed Python `endpoint`
+- fix round plunge GREEN — carrier retains only opaque native `AuditVerticalPlunge2`
+- fix round carrier identity RED — authenticated carriers had no `digest`
+- fix round carrier identity GREEN — distinct versioned canonical identities bind index, source digest, and closed native tag
+- fix round native carrier rebuild — circle and arc retain exact-injected guide radius; passed
+- fix round focused GREEN — 95 passed
+- fix round affected/legacy GREEN — 62 passed under `-n auto --testmon`
+- fix round `types-audit` — 9 source/type-contract files clean
+- fix round lint and strict docs — passed
+- `types-adaptive` — unchanged P0 six-error baseline
 
 ## Open blockers
 
@@ -63,4 +76,4 @@
 
 ## Next exact command
 
-`git add <Task 2 paths> && git commit -m "feat(audit): authenticate motion input"`
+formal re-review of the Task 2 fix commit

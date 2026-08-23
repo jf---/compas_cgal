@@ -240,6 +240,7 @@ AuditCircleClassification2 classify_audit_circle(
     if (plane == CurvePlane::Cut) {
         return AuditCircleMotion2 {
             ExactCircleMotion2 { exact_center, phase, clockwise },
+            exact_radius,
             Epeck::FT(cut_z),
         };
     }
@@ -297,6 +298,7 @@ AuditArcClassification2 classify_audit_arc(
         return AuditArcMotion2 {
             exact_center,
             start_phase,
+            exact_radius,
             CGAL::abs(signed_sweep),
             clockwise,
             Epeck::FT(cut_z),
