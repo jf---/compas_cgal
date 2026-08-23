@@ -208,6 +208,14 @@ Geometry-derived operation classification
 No label supplied by the toolpath author can bypass geometry classification.
 No reporting aggregate can turn `unresolved` into `certified`.
 
+CGAL owns the deciding geometry and proof semantics. COMPAS geometry exists
+only at the authenticated ingress adapter. One frozen, frame-and-unit-typed
+capture feeds both canonical identity and the native call. Successful
+classification returns opaque Epeck-backed nanobind values that later native
+certifiers consume directly; Python exposes no reconstructive scalar getters.
+Any ambiguous or contradictory adapter mapping fails before native execution.
+The native arc-phase strategy version is part of audit-input identity.
+
 ## Stage 0: branch reconciliation and baseline ledger
 
 ### Purpose
@@ -281,8 +289,9 @@ Add a focused `compas_cgal.engagement_audit` package:
 | File | Responsibility |
 | --- | --- |
 | `identity.py` | validate content-addressed Python/native component inputs as `BuildIdentity` |
-| `input.py` | validate and content-address design, cut plane, tool, cap, operation stream, and build identity |
-| `classification.py` | derive supported motion role from geometry and the typed cut plane |
+| `operation_identity.py` | snapshot and canonically encode mutable COMPAS operation ingress |
+| `input.py` | retain immutable classified operations and content-address the authoritative request |
+| `classification.py` | translate the closed native classifier result into typed Python motion records |
 | `records.py` | invariant-bearing measured and non-engaging operation records |
 | `replay.py` | ordered measure-before-deplete orchestration |
 | `report.py` | report construction, aggregates, certification assertion, canonical bytes |
@@ -324,8 +333,11 @@ schema do not change between those stages.
 
 The cut plane is never inferred. Every operation endpoint is classified
 against its exact declared `cut_z`/`clearance_z` contract at the input seam.
-Binary64 coordinates are injected exactly; tolerance does not decide whether a
-motion is cutting.
+Binary64 coordinates are injected into Epeck exactly; tolerance does not decide
+whether a motion is cutting. COMPAS objects are mutable one-shot ingress only.
+The factory retains immutable classified snapshots and their ordered source
+digest, never caller-owned `ToolpathOperation` instances. Replay therefore has
+no mutation window to reauthenticate.
 
 ### Operation result domain
 
@@ -342,6 +354,11 @@ station/event counts, pre-motion stock lineage, motion-certificate digest, and
 operation digest. `NonEngagingOperationAudit` binds a geometry-derived reason
 limited to vertical plunge, vertical retract, or clearance-plane transport.
 It has no certification verdict and cannot enter compliant-motion counts.
+
+A native-proved plunge remains a separate authenticated input operation because
+its terminal cut-plane disk mutates stock even though it needs no lateral TEA
+measurement. Retracts and clearance transports remain non-mutating native
+values and become `NonEngagingOperationAudit` only during replay/reporting.
 
 A cut-height lateral motion always reaches a native certifier. Unsupported
 geometry raises; it never produces a non-engaging record. A `RETRACT` label on

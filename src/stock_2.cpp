@@ -1,4 +1,5 @@
 #include "stock_2.h"
+#include "audit_classification_2.h"
 #include "engagement_2.h"
 #include "stock_local_2.h"
 
@@ -860,6 +861,7 @@ Stock2::CoordinateDigits Stock2::coordinate_digits() const
 
 NB_MODULE(_stock_2, m)
 {
+    register_audit_classification_2(m);
     nb::exception<ExactDepletionConstructionError> construction_error(
         m,
         "ExactDepletionConstructionError");

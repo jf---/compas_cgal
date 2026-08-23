@@ -12,15 +12,18 @@ from compas_cgal.adaptive.units import Clearance
 from compas_cgal.adaptive.units import ClearanceZ
 from compas_cgal.adaptive.units import CutPlane
 from compas_cgal.adaptive.units import CutZ
+from compas_cgal.adaptive.units import Direction3
 from compas_cgal.adaptive.units import EntryRadius
 from compas_cgal.adaptive.units import GuideRadius
 from compas_cgal.adaptive.units import Millimetre
 from compas_cgal.adaptive.units import Point2
+from compas_cgal.adaptive.units import Point3
 from compas_cgal.adaptive.units import Spacing
 from compas_cgal.adaptive.units import SquaredMillimetre
 from compas_cgal.adaptive.units import ToolRadius
 from compas_cgal.adaptive.units import Vector2
 from compas_cgal.adaptive.units import WorldXY
+from compas_cgal.adaptive.units import WorldXYZ
 
 
 def test_point_factory_accepts_scalar_and_sequence_forms() -> None:
@@ -37,6 +40,16 @@ def test_vector_factory_accepts_scalar_and_sequence_forms() -> None:
 
     assert scalar == sequence
     assert_type(scalar, Vector2[WorldXY])
+
+
+def test_world_xyz_factories_preserve_frame_and_dimension() -> None:
+    point = Point3[WorldXYZ].build(1.0, 2.0, 3.0)
+    direction = Direction3[WorldXYZ].build([1.0, 0.0, 0.0])
+
+    assert point == Point3[WorldXYZ].build([1.0, 2.0, 3.0])
+    assert direction == Direction3[WorldXYZ].build(1.0, 0.0, 0.0)
+    assert_type(point, Point3[WorldXYZ])
+    assert_type(direction, Direction3[WorldXYZ])
 
 
 @pytest.mark.parametrize(

@@ -23,3 +23,51 @@ class InvalidMotionVerdictError(InvalidMeasuredOperationAuditError):
 
 class InvalidNonEngagingOperationAuditError(EngagementAuditError):
     """A non-engaging operation carries an invalid geometric reason."""
+
+
+class InvalidAuthenticatedLateralOperationError(EngagementAuditError):
+    """An authenticated lateral operation omits valid source motion identity."""
+
+
+class InvalidAuthenticatedPlungeOperationError(EngagementAuditError):
+    """An authenticated plunge omits its exact native motion or typed endpoint."""
+
+
+class InvalidAuthenticatedNonEngagingOperationError(EngagementAuditError):
+    """An authenticated non-engaging operation carries unsupported native geometry."""
+
+
+class InvalidEngagementAuditInputError(EngagementAuditError):
+    """An engagement-audit input is incomplete or noncanonical."""
+
+
+class EmptyToolpathAuditError(InvalidEngagementAuditInputError):
+    """An audit was requested for an empty operation stream."""
+
+
+class InvalidAuditOperationError(InvalidEngagementAuditInputError):
+    """A legacy toolpath operation cannot enter the authenticated stream."""
+
+
+class NonFiniteAuditGeometryError(InvalidAuditOperationError):
+    """Toolpath geometry contains a nonfinite binary64 value."""
+
+
+class UnsupportedAuditGeometryError(InvalidEngagementAuditInputError):
+    """Toolpath geometry has no authoritative audit semantics."""
+
+
+class MultipleCutPlaneError(UnsupportedAuditGeometryError):
+    """A lateral operation lies on a plane other than the declared cut plane."""
+
+
+class ContradictoryOperationRoleError(InvalidEngagementAuditInputError):
+    """An operation label contradicts its geometry-derived role."""
+
+
+class ContradictoryOperationOrientationError(InvalidEngagementAuditInputError):
+    """An operation orientation contradicts its native arc traversal."""
+
+
+class InvalidAuditPlaneError(InvalidEngagementAuditInputError):
+    """The declared clearance plane is not strictly above the cut plane."""

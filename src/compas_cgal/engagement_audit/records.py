@@ -11,13 +11,19 @@ from typing import NewType
 from typing import Self
 from typing import TypeAlias
 
+from compas_cgal import _stock_2
 from compas_cgal.adaptive.canonical import encode_binary64
 from compas_cgal.adaptive.canonical import encode_component_map
 from compas_cgal.adaptive.canonical import encode_integer
 from compas_cgal.adaptive.canonical import encode_tagged_union
 from compas_cgal.adaptive.identity import IdentityDigest
 from compas_cgal.adaptive.motion_oracle_cache import NativeMotionVerdict
+from compas_cgal.adaptive.units import Point2
 from compas_cgal.adaptive.units import Radian
+from compas_cgal.adaptive.units import WorldXY
+from compas_cgal.engagement_audit.errors import InvalidAuthenticatedLateralOperationError
+from compas_cgal.engagement_audit.errors import InvalidAuthenticatedNonEngagingOperationError
+from compas_cgal.engagement_audit.errors import InvalidAuthenticatedPlungeOperationError
 from compas_cgal.engagement_audit.errors import InvalidMeasuredOperationAuditError
 from compas_cgal.engagement_audit.errors import InvalidMotionVerdictError
 from compas_cgal.engagement_audit.errors import InvalidNonEngagingOperationAuditError
@@ -36,6 +42,112 @@ NonEngagingReason: TypeAlias = Literal[
 
 _NATIVE_VERDICTS: Final[frozenset[str]] = frozenset({"certified", "cap_exceeded", "unresolved"})
 _NON_ENGAGING_REASONS: Final[frozenset[str]] = frozenset({"vertical_plunge", "vertical_retract", "clearance_transport"})
+SupportedLateralMotion: TypeAlias = _stock_2.AuditSegmentMotion2 | _stock_2.AuditCircleMotion2 | _stock_2.AuditArcMotion2
+SupportedNonEngagingMotion: TypeAlias = _stock_2.AuditVerticalRetract2 | _stock_2.AuditClearanceTransport2
+
+
+@dataclass(frozen=True)
+class AuthenticatedLateralOperation:
+    """Immutable classified motion tied to its source operation identity."""
+
+    operation_index: int
+    operation_digest: OperationDigest
+    motion: SupportedLateralMotion
+
+    def __post_init__(self) -> None:
+        if type(self.operation_index) is not int or self.operation_index < 0:
+            raise InvalidAuthenticatedLateralOperationError("operation index must be an exact non-negative integer.")
+        _require_digest(
+            self.operation_digest,
+            "operation digest",
+            InvalidAuthenticatedLateralOperationError,
+        )
+        if type(self.motion) not in (
+            _stock_2.AuditSegmentMotion2,
+            _stock_2.AuditCircleMotion2,
+            _stock_2.AuditArcMotion2,
+        ):
+            raise InvalidAuthenticatedLateralOperationError("lateral motion must be one exact supported motion type.")
+
+    @classmethod
+    def build(
+        cls,
+        *,
+        operation_index: int,
+        operation_digest: OperationDigest,
+        motion: SupportedLateralMotion,
+    ) -> Self:
+        return cls(operation_index=operation_index, operation_digest=operation_digest, motion=motion)
+
+
+@dataclass(frozen=True)
+class AuthenticatedPlungeOperation:
+    """Native-proved plunge retaining its typed cut-plane endpoint."""
+
+    operation_index: int
+    operation_digest: OperationDigest
+    motion: _stock_2.AuditVerticalPlunge2
+    endpoint: Point2[WorldXY]
+
+    def __post_init__(self) -> None:
+        if type(self.operation_index) is not int or self.operation_index < 0:
+            raise InvalidAuthenticatedPlungeOperationError("operation index must be an exact non-negative integer.")
+        _require_digest(
+            self.operation_digest,
+            "operation digest",
+            InvalidAuthenticatedPlungeOperationError,
+        )
+        if type(self.motion) is not _stock_2.AuditVerticalPlunge2:
+            raise InvalidAuthenticatedPlungeOperationError("plunge motion must be one native exact plunge value.")
+        if type(self.endpoint) is not Point2:
+            raise InvalidAuthenticatedPlungeOperationError("plunge endpoint must be one typed world-XY point.")
+
+    @classmethod
+    def build(
+        cls,
+        *,
+        operation_index: int,
+        operation_digest: OperationDigest,
+        motion: _stock_2.AuditVerticalPlunge2,
+        endpoint: Point2[WorldXY],
+    ) -> Self:
+        return cls(operation_index, operation_digest, motion, endpoint)
+
+
+@dataclass(frozen=True)
+class AuthenticatedNonEngagingOperation:
+    """Native-proved retract or clearance transport retained for replay."""
+
+    operation_index: int
+    operation_digest: OperationDigest
+    motion: SupportedNonEngagingMotion
+
+    def __post_init__(self) -> None:
+        if type(self.operation_index) is not int or self.operation_index < 0:
+            raise InvalidAuthenticatedNonEngagingOperationError("operation index must be an exact non-negative integer.")
+        _require_digest(
+            self.operation_digest,
+            "operation digest",
+            InvalidAuthenticatedNonEngagingOperationError,
+        )
+        if type(self.motion) not in (
+            _stock_2.AuditVerticalRetract2,
+            _stock_2.AuditClearanceTransport2,
+        ):
+            raise InvalidAuthenticatedNonEngagingOperationError("non-engaging motion must be one supported native exact value.")
+
+    @classmethod
+    def build(
+        cls,
+        *,
+        operation_index: int,
+        operation_digest: OperationDigest,
+        motion: SupportedNonEngagingMotion,
+    ) -> Self:
+        return cls(operation_index, operation_digest, motion)
+
+
+AuthenticatedOperation: TypeAlias = AuthenticatedLateralOperation | AuthenticatedPlungeOperation | AuthenticatedNonEngagingOperation
 
 
 def _require_digest(value: object, name: str, error: type[ValueError]) -> bytes:

@@ -164,6 +164,7 @@ nav:
       - Triangulation: examples/example_triangulation.md
   - Design Notes:
       - Exact-Kernel Discipline: exactness.md
+      - Truthful Engagement Audit: engagement_audit.md
       - Benchmark Corpus: benchmarks.md
       - Machining Quality: machining_quality.md
       - Drawing Tool Paths: toolpath_drawing.md

@@ -12,6 +12,7 @@ from typing import overload
 from compas_cgal.adaptive.errors import InvalidUnitValueError
 
 Millimetre = NewType("Millimetre", float)
+DirectionComponent = NewType("DirectionComponent", float)
 ExactMillimetre = NewType("ExactMillimetre", Fraction)
 SquaredMillimetre = NewType("SquaredMillimetre", Fraction)
 Radian = NewType("Radian", float)
@@ -19,6 +20,10 @@ Radian = NewType("Radian", float)
 
 class WorldXY:
     """Phantom frame tag for world-XY geometry."""
+
+
+class WorldXYZ:
+    """Phantom frame tag for world-XYZ ingress geometry."""
 
 
 FrameT = TypeVar("FrameT")
@@ -59,6 +64,25 @@ def _components(args: tuple[object, ...], name: str) -> tuple[float, float]:
     if len(args) == 2:
         return _finite(args[0], f"{name}.x"), _finite(args[1], f"{name}.y")
     raise InvalidUnitValueError(f"{name} requires two scalars or one two-component sequence.")
+
+
+def _components3(args: tuple[object, ...], name: str) -> tuple[float, float, float]:
+    if len(args) == 1 and isinstance(args[0], Sequence) and not isinstance(args[0], (str, bytes)):
+        values = args[0]
+        if len(values) != 3:
+            raise InvalidUnitValueError(f"{name} requires exactly three components.")
+        return (
+            _finite(values[0], f"{name}.x"),
+            _finite(values[1], f"{name}.y"),
+            _finite(values[2], f"{name}.z"),
+        )
+    if len(args) == 3:
+        return (
+            _finite(args[0], f"{name}.x"),
+            _finite(args[1], f"{name}.y"),
+            _finite(args[2], f"{name}.z"),
+        )
+    raise InvalidUnitValueError(f"{name} requires three scalars or one three-component sequence.")
 
 
 @dataclass(frozen=True)
@@ -105,6 +129,56 @@ class Vector2(Generic[FrameT]):
     def build(cls, *args: object) -> Self:  # pyright: ignore[reportInconsistentOverload]
         x, y = _components(args, cls.__name__)
         return cls(Millimetre(x), Millimetre(y))
+
+
+@dataclass(frozen=True)
+class Point3(Generic[FrameT]):
+    x: Millimetre
+    y: Millimetre
+    z: Millimetre
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "x", Millimetre(_finite(self.x, "Point3.x")))
+        object.__setattr__(self, "y", Millimetre(_finite(self.y, "Point3.y")))
+        object.__setattr__(self, "z", Millimetre(_finite(self.z, "Point3.z")))
+
+    @classmethod
+    @overload
+    def build(cls, x: float, y: float, z: float, /) -> Self: ...
+
+    @classmethod
+    @overload
+    def build(cls, components: Sequence[float], /) -> Self: ...
+
+    @classmethod
+    def build(cls, *args: object) -> Self:  # pyright: ignore[reportInconsistentOverload]
+        x, y, z = _components3(args, cls.__name__)
+        return cls(Millimetre(x), Millimetre(y), Millimetre(z))
+
+
+@dataclass(frozen=True)
+class Direction3(Generic[FrameT]):
+    x: DirectionComponent
+    y: DirectionComponent
+    z: DirectionComponent
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "x", DirectionComponent(_finite(self.x, "Direction3.x")))
+        object.__setattr__(self, "y", DirectionComponent(_finite(self.y, "Direction3.y")))
+        object.__setattr__(self, "z", DirectionComponent(_finite(self.z, "Direction3.z")))
+
+    @classmethod
+    @overload
+    def build(cls, x: float, y: float, z: float, /) -> Self: ...
+
+    @classmethod
+    @overload
+    def build(cls, components: Sequence[float], /) -> Self: ...
+
+    @classmethod
+    def build(cls, *args: object) -> Self:  # pyright: ignore[reportInconsistentOverload]
+        x, y, z = _components3(args, cls.__name__)
+        return cls(DirectionComponent(x), DirectionComponent(y), DirectionComponent(z))
 
 
 @dataclass(frozen=True)

@@ -197,20 +197,28 @@ git commit -m "feat(audit): define truthful records"
 
 **Files:**
 
+- Create: `src/audit_classification_2.h`
+- Create: `src/audit_classification_2.cpp`
+- Create: `src/compas_cgal/engagement_audit/operation_identity.py`
 - Create: `src/compas_cgal/engagement_audit/input.py`
 - Create: `src/compas_cgal/engagement_audit/classification.py`
+- Create: `tests/engagement_audit/test_native_classification.py`
 - Create: `tests/engagement_audit/test_input.py`
 - Create: `tests/engagement_audit/test_classification.py`
-- Create: `tests/adaptive/test_exact_arc_motion.py`
-- Modify: `src/compas_cgal/adaptive/motion.py`
+- Modify: `CMakeLists.txt`
+- Modify: `pyproject.toml`
+- Modify: `src/stock_2.cpp`
+- Modify: `src/compas_cgal/_stock_2.pyi`
+- Modify: `src/compas_cgal/adaptive/units.py`
 - Modify: `src/compas_cgal/engagement_audit/errors.py`
+- Modify: `src/compas_cgal/engagement_audit/records.py`
 
 **Interfaces:**
 
 - Consumes: `CanonicalRingV1`, `CutPlane`, `ToolRadius`, `EngagementCap`,
   `ToolpathOperation`, `BuildIdentity`.
-- Produces: `EngagementAuditInput.build(...)`, `classify_operation(...) ->
-  SupportedLateralMotion | NonEngagingOperationAudit`.
+- Produces: `EngagementAuditInput.build(...)`, `classify_operation(..., *,
+  operation_index: int) -> AuthenticatedOperation`.
 
 - [ ] **Step 1: Write RED input-boundary tests**
 
@@ -257,21 +265,26 @@ def build(
     operations: tuple[ToolpathOperation, ...],
     build_identity: BuildIdentity,
 ) -> Self:
-    validated_operations = _validate_operation_stream(operations, cut_plane)
+    classified_operations, stream_digest = _classify_operations(operations, cut_plane)
     return cls(
         design_boundary=design_boundary,
         holes=holes,
         cut_plane=cut_plane,
         tool_radius=tool_radius,
         engagement_cap=engagement_cap,
-        operations=validated_operations,
+        operations=classified_operations,
+        operation_stream_digest=stream_digest,
         build_identity=build_identity,
     )
 ```
 
 Canonical bytes bind every field and an ordered operation-stream digest. Use
-one operation canonicalizer in `input.py`; do not parse warning strings or
-derive cut Z from operations.
+one operation canonicalizer in `operation_identity.py`; do not parse warning
+strings or derive cut Z from operations. `build(...)` is the sole mutable
+COMPAS ingress. It canonicalizes the source stream, sends its geometry to the
+native Epeck classifier, and retains only immutable classified operations plus
+the ordered source digest. No downstream consumer receives caller-owned
+`ToolpathOperation` objects.
 
 - [ ] **Step 4: Write RED classification tests**
 
@@ -280,14 +293,14 @@ def test_retract_label_cannot_hide_cut_height_lateral_motion() -> None:
     operation = _horizontal_line(z=0.0, kind=OperationType.RETRACT)
 
     with pytest.raises(ContradictoryOperationRoleError, match="RETRACT"):
-        classify_operation(operation, _cut_plane())
+        classify_operation(operation, _cut_plane(), operation_index=0)
 
 
 def test_clearance_transport_requires_both_endpoints_on_clearance_plane() -> None:
     operation = _horizontal_line(z=5.0, end_z=4.0, kind=OperationType.LINK)
 
     with pytest.raises(UnsupportedAuditGeometryError, match="clearance"):
-        classify_operation(operation, _cut_plane())
+        classify_operation(operation, _cut_plane(), operation_index=0)
 ```
 
 Cover exact vertical plunge/retract, exact horizontal clearance transport,
@@ -295,28 +308,48 @@ cut-height line, arc, circle, mixed-Z XY ramp, and unsupported geometry.
 
 - [ ] **Step 5: Implement geometry-derived classification**
 
-Define a typed lateral carrier:
+Define opaque native motion values and authenticated Python carriers:
 
 ```python
-SupportedLateralMotion: TypeAlias = ExactSegmentMotion | ExactArcMotion | ExactCircleMotion
+SupportedLateralMotion: TypeAlias = (
+    AuditSegmentMotion2 | AuditCircleMotion2 | AuditArcMotion2
+)
+
+AuthenticatedOperation: TypeAlias = (
+    AuthenticatedLateralOperation
+    | AuthenticatedPlungeOperation
+    | AuthenticatedNonEngagingOperation
+)
 ```
 
-Add `ExactArcMotion` to `adaptive/motion.py` in its own RED/GREEN cycle before
-classification. Its validated factory owns a typed world-XY center,
-start/end phase vectors, orientation, and exact cut-plane Z. Tests reject
-nonfinite values, zero-radius phases, unequal phase radii, and inconsistent
-orientation. Classify exact injected Z equality only. Operation labels validate
-consistency; they never decide non-engagement.
+Add typed `Point3[WorldXYZ]` and `Direction3[WorldXYZ]` ingress primitives.
+Each mutable COMPAS operation is read once into a frozen, typed capture;
+canonical bytes and the native call consume that same capture. `_stock_2`
+exact-injects the finite binary64 values into Epeck and owns XY coincidence,
+frame validity, plane, sweep-sign, orientation, and role decisions. It returns
+one of six non-constructible nanobind values backed by Epeck, never a label or
+reconstructive coordinate tuple. Arc phase crosses one named native
+transcendental seam whose native version is bound into audit identity, and
+remains opaque thereafter; no Python `point_at`, `atan2`, subtraction, or
+`abs` builds certifier geometry.
+
+A native-proved plunge is distinct from a non-mutating retract or clearance
+transport. `AuthenticatedPlungeOperation` retains the opaque plunge plus its
+typed cut-plane endpoint so replay can later apply depletion without rereading
+COMPAS. No depletion policy is chosen in Task 2. The explicit operation index
+is the ordered stream ordinal, never repeatable `ToolpathOperation.path_index`.
 
 - [ ] **Step 6: Run GREEN and commit**
 
 ```bash
 pixi run ruff format src/compas_cgal tests
 pixi run lint
+pixi run types-audit
 pixi run types-adaptive
-pixi run pytest -- tests/engagement_audit/test_input.py tests/engagement_audit/test_classification.py -n auto --testmon -q
+pixi run pytest -- tests/engagement_audit/test_input.py tests/engagement_audit/test_classification.py tests/engagement_audit/test_native_classification.py tests/adaptive/test_units.py -n auto --testmon -q
+pixi run -e docs docs
 git diff --check
-git add src/compas_cgal/engagement_audit src/compas_cgal/adaptive/motion.py tests/engagement_audit tests/adaptive/test_exact_arc_motion.py tests/adaptive/typecheck/auditor_contract.py
+git add CMakeLists.txt pyproject.toml src/audit_classification_2.* src/stock_2.cpp src/compas_cgal/_stock_2.pyi src/compas_cgal/engagement_audit src/compas_cgal/adaptive/units.py tests/engagement_audit tests/adaptive/test_units.py tests/adaptive/typecheck/auditor_contract.py docs/engagement_audit.md mkdocs.yml
 git commit -m "feat(audit): authenticate motion input"
 ```
 
@@ -333,8 +366,8 @@ git commit -m "feat(audit): authenticate motion input"
 
 **Interfaces:**
 
-- Consumes: `EngagementAuditInput`, `Stock`, supported lateral motions, native
-  segment/arc certifiers.
+- Consumes: `EngagementAuditInput`, `Stock`, preclassified opaque native
+  operations, native segment/arc certifiers.
 - Produces: `audit_toolpath_engagement(...) -> EngagementAuditReport`,
   `EngagementAuditReport.require_certified() -> None`.
 
@@ -375,10 +408,12 @@ def test_report_requires_a_measured_lateral_motion() -> None:
 
 - [ ] **Step 3: Implement the native adapter and replay**
 
-`native.py` converts each supported typed motion to one native call and returns
-`MeasuredOperationAudit`. It never contains geometry policy. `replay.py`
-classifies, certifies, then depletes each operation in order and returns the
-immutable record tuple.
+`native.py` passes each opaque native motion directly to one native certifier
+and returns `MeasuredOperationAudit`. It never reconstructs geometry or
+contains geometry policy. `replay.py` consumes only the preclassified immutable
+stream from `EngagementAuditInput`; it certifies, then depletes each operation
+in order and returns the immutable record tuple. It never rereads or
+reclassifies `ToolpathOperation` objects.
 
 - [ ] **Step 4: Implement derived report construction**
 
@@ -416,8 +451,9 @@ git commit -m "feat(audit): replay truthful verdicts"
 
 - Consumes: P0's exact dependency closure and existing segment swept-annulus
   primitives.
-- Produces: `_stock_2.certify_arc_tea(...) -> tuple[NativeMotionVerdict,
-  float, int, bytes]` and the sole authoritative arc audit path.
+- Produces: `_stock_2.certify_arc_tea(AuditArcMotion2, ...) ->
+  tuple[NativeMotionVerdict, float, int, bytes]` and the sole authoritative arc
+  audit path.
 
 - [ ] **Step 1: Write RED native and Python boundary tests**
 
@@ -443,7 +479,8 @@ the source branch's Python diagnostic mirror.
 
 - [ ] **Step 4: Bind one exact API**
 
-Expose one `certify_arc_tea` nanobind function and matching stub. Separate
+Expose one `certify_arc_tea` nanobind function that consumes the opaque
+`AuditArcMotion2` directly, plus its matching stub. Separate
 nanobind lambdas are required for any overloads. Translate each native failure
 to its named Python exception; no boolean compatibility return is added.
 
