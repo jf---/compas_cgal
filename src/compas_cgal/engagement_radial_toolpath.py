@@ -204,8 +204,32 @@ NO_RADIUS_FLOOR = 0.0
 # machining-circle engagement an independent 32-position walk finds away from the
 # chain entries on the 20x12 pocket, against the subdivision count:
 #
-#   N          1(off)    2      4      8     16
-#   cap 60      126.1  MEAS   MEAS   MEAS   MEAS
+# Measured on the 20x12 pocket at a 60 deg cap, tool diameter 2.0, over the 244
+# machining circles that are NOT chain entries, each probed at 16 positions:
+#
+#   N                        1      2      4      8     16
+#   worst engagement, deg  88.6   88.6   88.6   88.6   88.6
+#   circles over the cap     12     12      8      8      8
+#
+# The peak does not move; the COUNT is what the resolution buys, and it converges
+# at N = 4. Eight is one doubling of headroom past that, at no measured cost.
+#
+# READ THE FIRST COLUMN CAREFULLY: N = 1 is not "refinement off". The rescan
+# branch runs whenever `_least_bad_rung` leaves the station within
+# `RADIUS_LADDER_REFINEMENT_MARGIN` of the cap, and no constant disables it --
+# setting this to 1 only collapses the refined ladder onto the coarse one while
+# the RANKING still applies, which is why N = 1 and N = 2 agree. Deleting the
+# branch outright is a different experiment and a much worse one: 126.1 deg worst
+# engagement, measured separately.
+#
+# AND DO NOT KEEP THIS WHILE DROPPING `_least_bad_rung`. Measured on 6x4 at a
+# 40 deg cap, refinement without the ranking takes the over-cap count from 34 to
+# 1 and emits a 213.6 deg circle -- a slotting cut that breaks tools. The refined
+# scan rescues a station by DEFERRING it, and the maximal circle that must still
+# follow lands in a worse state; the ranking is what caps the tail, the
+# refinement is what caps the count, and neither is safe alone. Both together
+# UNGATED is also worse than the ranking alone on both pockets, which is why the
+# gate exists.
 #
 # TERMINATION IS THE INTEGER, not a tolerance: the refined ladder is a fixed-length
 # list of `(rungs - 1) * N + 1` radii built once, and the scan walks it. No
