@@ -23,7 +23,7 @@ from compas_cgal.adaptive.canonical import encode_integer
 from compas_cgal.adaptive.canonical import encode_sequence
 from compas_cgal.adaptive.canonical import encode_tagged_union
 from compas_cgal.adaptive.units import Direction3
-from compas_cgal.adaptive.units import GuideRadius
+from compas_cgal.adaptive.units import ObservedRadius
 from compas_cgal.adaptive.units import Point3
 from compas_cgal.adaptive.units import Radian
 from compas_cgal.adaptive.units import WorldXYZ
@@ -77,7 +77,7 @@ class CircleOperationSnapshot:
     center: Point3[WorldXYZ]
     xaxis: Direction3[WorldXYZ]
     yaxis: Direction3[WorldXYZ]
-    radius: GuideRadius
+    radius: ObservedRadius
     operation: OperationType
     path_index: int
     clockwise: bool
@@ -95,7 +95,7 @@ class CircleOperationSnapshot:
         center: Point3[WorldXYZ],
         xaxis: Direction3[WorldXYZ],
         yaxis: Direction3[WorldXYZ],
-        radius: GuideRadius,
+        radius: ObservedRadius,
         operation: OperationType,
         path_index: int,
         clockwise: bool,
@@ -112,7 +112,7 @@ class ArcOperationSnapshot:
     center: Point3[WorldXYZ]
     xaxis: Direction3[WorldXYZ]
     yaxis: Direction3[WorldXYZ]
-    radius: GuideRadius
+    radius: ObservedRadius
     start_angle: Radian
     end_angle: Radian
     operation: OperationType
@@ -136,7 +136,7 @@ class ArcOperationSnapshot:
         center: Point3[WorldXYZ],
         xaxis: Direction3[WorldXYZ],
         yaxis: Direction3[WorldXYZ],
-        radius: GuideRadius,
+        radius: ObservedRadius,
         start_angle: Radian,
         end_angle: Radian,
         operation: OperationType,
@@ -192,8 +192,8 @@ def _validate_curve_snapshot(
         raise InvalidAuditOperationError("curve snapshot center must be one typed world-XYZ point.")
     if type(xaxis) is not Direction3 or type(yaxis) is not Direction3:
         raise InvalidAuditOperationError("curve snapshot axes must be typed world-XYZ directions.")
-    if type(radius) is not GuideRadius:
-        raise InvalidAuditOperationError("curve snapshot radius must be one typed guide radius.")
+    if type(radius) is not ObservedRadius:
+        raise InvalidAuditOperationError("curve snapshot radius must be one typed finite observation.")
 
 
 def _finite(value: object, name: str) -> float:
@@ -277,13 +277,11 @@ def snapshot_toolpath_operation(operation: ToolpathOperation) -> OperationSnapsh
             raise InvalidAuditOperationError("arc geometry must be exact Arc, not a subclass.")
         frame = geometry.frame
         radius = _finite(geometry.radius, "arc radius")
-        if radius <= 0.0:
-            raise InvalidAuditOperationError("arc radius must be positive.")
         return ArcOperationSnapshot.build(
             center=_point3(frame.point, "arc center"),
             xaxis=_direction3(frame.xaxis, "arc frame X axis"),
             yaxis=_direction3(frame.yaxis, "arc frame Y axis"),
-            radius=GuideRadius.build(radius),
+            radius=ObservedRadius.build(radius),
             start_angle=Radian(_finite(geometry.start_angle, "arc start angle")),
             end_angle=Radian(_finite(geometry.end_angle, "arc end angle")),
             operation=role,
@@ -297,13 +295,11 @@ def snapshot_toolpath_operation(operation: ToolpathOperation) -> OperationSnapsh
             raise InvalidAuditOperationError("circle geometry must be exact Circle, not a subclass.")
         frame = geometry.frame
         radius = _finite(geometry.radius, "circle radius")
-        if radius <= 0.0:
-            raise InvalidAuditOperationError("circle radius must be positive.")
         return CircleOperationSnapshot.build(
             center=_point3(frame.point, "circle center"),
             xaxis=_direction3(frame.xaxis, "circle frame X axis"),
             yaxis=_direction3(frame.yaxis, "circle frame Y axis"),
-            radius=GuideRadius.build(radius),
+            radius=ObservedRadius.build(radius),
             operation=role,
             path_index=path_index,
             clockwise=clockwise,

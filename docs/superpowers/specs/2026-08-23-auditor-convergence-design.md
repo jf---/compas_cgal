@@ -357,8 +357,16 @@ It has no certification verdict and cannot enter compliant-motion counts.
 
 A native-proved plunge remains a separate authenticated input operation because
 its terminal cut-plane disk mutates stock even though it needs no lateral TEA
-measurement. Retracts and clearance transports remain non-mutating native
+measurement. The authenticated carrier stores only opaque native geometry;
+Python neither copies the endpoint nor reconstructs a curve radius. Circle and
+arc native values retain their exact-injected guide radius for downstream
+native consumers. Retracts and clearance transports remain non-mutating native
 values and become `NonEngagingOperationAudit` only during replay/reporting.
+
+Ingress radius is a finite unit-bearing observation, not a positivity
+claim. Exact native sign owns acceptance. Every authenticated input-operation
+carrier has a distinct versioned digest binding its stream index, source
+operation digest, and closed native classification tag.
 
 A cut-height lateral motion always reaches a native certifier. Unsupported
 geometry raises; it never produces a non-engaging record. A `RETRACT` label on

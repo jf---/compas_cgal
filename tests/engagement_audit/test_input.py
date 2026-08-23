@@ -5,6 +5,7 @@ import hashlib
 import math
 from typing import cast
 
+import numpy as np
 import pytest
 from compas.geometry import Line
 
@@ -86,11 +87,17 @@ def _line(
     operation: OperationType = OperationType.CUT,
     *,
     path_index: int = 0,
+    clockwise: bool = False,
+    start_tangent: np.ndarray | None = None,
+    end_tangent: np.ndarray | None = None,
 ) -> ToolpathOperation:
     return ToolpathOperation(
         geometry=Line(start, end),
         operation=operation,
         path_index=path_index,
+        clockwise=clockwise,
+        start_tangent=start_tangent,
+        end_tangent=end_tangent,
     )
 
 
@@ -183,8 +190,47 @@ def test_input_digest_binds_every_authoritative_field() -> None:
                 _line((4.0, 1.0, -1.0), (4.0, 4.0, -1.0), path_index=1),
             ),
         ),
+        _audit_input(
+            cut_plane=CutPlane.build(CutZ.build(CUT_Z), ClearanceZ.build(6.0)),
+            operations=(first, second),
+        ),
         _audit_input(tool_radius=ToolRadius.build(2.5), operations=(first, second)),
         _audit_input(engagement_cap=EngagementCap.build(math.pi / 3.0), operations=(first, second)),
+        _audit_input(
+            operations=(
+                _line((1.0, 1.0, CUT_Z), (5.0, 1.0, CUT_Z), path_index=0),
+                second,
+            )
+        ),
+        _audit_input(
+            operations=(
+                _line((1.0, 1.0, CUT_Z), (4.0, 1.0, CUT_Z), OperationType.LEAD_IN, path_index=0),
+                second,
+            )
+        ),
+        _audit_input(
+            operations=(
+                _line((1.0, 1.0, CUT_Z), (4.0, 1.0, CUT_Z), path_index=0, clockwise=True),
+                second,
+            )
+        ),
+        _audit_input(
+            operations=(
+                _line(
+                    (1.0, 1.0, CUT_Z),
+                    (4.0, 1.0, CUT_Z),
+                    path_index=0,
+                    start_tangent=np.array([1.0, 0.0, 0.0]),
+                ),
+                second,
+            )
+        ),
+        _audit_input(
+            operations=(
+                _line((1.0, 1.0, CUT_Z), (4.0, 1.0, CUT_Z), path_index=2),
+                second,
+            )
+        ),
         _audit_input(operations=(second, first)),
         _audit_input(build_identity=_build_identity(revision=b"source-v2"), operations=(first, second)),
     )
@@ -253,7 +299,7 @@ def test_one_capture_owns_identity_and_native_classification(
     assert audit_input.operation_stream_digest == operation_stream_digest((expected_source,))
 
 
-def test_input_snapshots_plunge_endpoint_before_caller_mutation() -> None:
+def test_input_retains_opaque_plunge_after_caller_mutation() -> None:
     operation = _line(
         (2.0, 3.0, CLEARANCE_Z),
         (2.0, 3.0, CUT_Z),
@@ -263,7 +309,8 @@ def test_input_snapshots_plunge_endpoint_before_caller_mutation() -> None:
     snapshot = audit_input.operations[0]
 
     assert isinstance(snapshot, AuthenticatedPlungeOperation)
-    assert snapshot.endpoint == Point2[WorldXY].build(2.0, 3.0)
+    assert isinstance(snapshot.motion, _stock_2.AuditVerticalPlunge2)
+    assert not hasattr(snapshot, "endpoint")
 
     operation.geometry = Line((8.0, 9.0, CLEARANCE_Z), (8.0, 9.0, CUT_Z))
 

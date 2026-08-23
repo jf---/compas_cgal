@@ -1,13 +1,18 @@
 from __future__ import annotations
 
 import hashlib
+from dataclasses import replace
 
 import pytest
 
+from compas_cgal import _stock_2
 from compas_cgal.adaptive.units import Radian
 from compas_cgal.engagement_audit.errors import InvalidMeasuredOperationAuditError
 from compas_cgal.engagement_audit.errors import InvalidMotionVerdictError
 from compas_cgal.engagement_audit.errors import InvalidNonEngagingOperationAuditError
+from compas_cgal.engagement_audit.records import AuthenticatedLateralOperation
+from compas_cgal.engagement_audit.records import AuthenticatedNonEngagingOperation
+from compas_cgal.engagement_audit.records import AuthenticatedPlungeOperation
 from compas_cgal.engagement_audit.records import MeasuredOperationAudit
 from compas_cgal.engagement_audit.records import NonEngagingOperationAudit
 from compas_cgal.engagement_audit.records import OperationDigest
@@ -15,6 +20,14 @@ from compas_cgal.engagement_audit.records import OperationDigest
 
 def _digest(seed: bytes) -> bytes:
     return hashlib.sha256(seed).digest()
+
+
+def _line_classification(
+    start: tuple[float, float, float],
+    end: tuple[float, float, float],
+    role: str,
+) -> _stock_2.AuditLineClassification2:
+    return _stock_2.classify_audit_line(start, end, 0.0, 5.0, role)
 
 
 def _measured(**changes: object) -> MeasuredOperationAudit:
@@ -41,6 +54,86 @@ def test_non_engaging_record_has_no_certificate_verdict() -> None:
     assert not hasattr(record, "verdict")
     assert not hasattr(record, "max_tea")
     assert not hasattr(record, "station_count")
+
+
+def test_authenticated_carrier_digest_binds_domain_index_and_source() -> None:
+    operation_digest = OperationDigest(_digest(b"source"))
+    segment = _line_classification((0.0, 0.0, 0.0), (1.0, 0.0, 0.0), "cut")
+    plunge = _line_classification((0.0, 0.0, 5.0), (0.0, 0.0, 0.0), "plunge")
+    retract = _line_classification((0.0, 0.0, 0.0), (0.0, 0.0, 5.0), "retract")
+    assert isinstance(segment, _stock_2.AuditSegmentMotion2)
+    assert isinstance(plunge, _stock_2.AuditVerticalPlunge2)
+    assert isinstance(retract, _stock_2.AuditVerticalRetract2)
+    lateral = AuthenticatedLateralOperation.build(
+        operation_index=0,
+        operation_digest=operation_digest,
+        motion=segment,
+    )
+    authenticated_plunge = AuthenticatedPlungeOperation.build(
+        operation_index=0,
+        operation_digest=operation_digest,
+        motion=plunge,
+    )
+    non_engaging = AuthenticatedNonEngagingOperation.build(
+        operation_index=0,
+        operation_digest=operation_digest,
+        motion=retract,
+    )
+
+    variants = (
+        lateral,
+        replace(lateral, operation_index=1),
+        replace(lateral, operation_digest=OperationDigest(_digest(b"other-source"))),
+        authenticated_plunge,
+        non_engaging,
+    )
+
+    assert len({variant.digest for variant in variants}) == len(variants)
+    assert all(bytes(variant.digest) == hashlib.sha256(variant.canonical_bytes).digest() for variant in variants)
+
+
+def test_authenticated_carrier_digest_binds_closed_native_tag() -> None:
+    operation_digest = OperationDigest(_digest(b"same-source"))
+    segment = _line_classification((0.0, 0.0, 0.0), (1.0, 0.0, 0.0), "cut")
+    circle = _stock_2.classify_audit_circle(
+        (0.0, 0.0, 0.0),
+        (1.0, 0.0, 0.0),
+        (0.0, 1.0, 0.0),
+        1.0,
+        False,
+        0.0,
+        5.0,
+        "cut",
+    )
+    arc = _stock_2.classify_audit_arc(
+        (0.0, 0.0, 0.0),
+        (1.0, 0.0, 0.0),
+        (0.0, 1.0, 0.0),
+        1.0,
+        0.0,
+        1.0,
+        False,
+        0.0,
+        5.0,
+        "cut",
+    )
+    retract = _line_classification((0.0, 0.0, 0.0), (0.0, 0.0, 5.0), "retract")
+    clearance = _line_classification((0.0, 0.0, 5.0), (1.0, 0.0, 5.0), "link")
+    assert isinstance(segment, _stock_2.AuditSegmentMotion2)
+    assert isinstance(circle, _stock_2.AuditCircleMotion2)
+    assert isinstance(arc, _stock_2.AuditArcMotion2)
+    assert isinstance(retract, _stock_2.AuditVerticalRetract2)
+    assert isinstance(clearance, _stock_2.AuditClearanceTransport2)
+
+    variants = (
+        AuthenticatedLateralOperation.build(operation_index=0, operation_digest=operation_digest, motion=segment),
+        AuthenticatedLateralOperation.build(operation_index=0, operation_digest=operation_digest, motion=circle),
+        AuthenticatedLateralOperation.build(operation_index=0, operation_digest=operation_digest, motion=arc),
+        AuthenticatedNonEngagingOperation.build(operation_index=0, operation_digest=operation_digest, motion=retract),
+        AuthenticatedNonEngagingOperation.build(operation_index=0, operation_digest=operation_digest, motion=clearance),
+    )
+
+    assert len({variant.digest for variant in variants}) == len(variants)
 
 
 def test_measured_record_rejects_foreign_verdict() -> None:

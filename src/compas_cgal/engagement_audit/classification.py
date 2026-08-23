@@ -7,9 +7,7 @@ from typing import assert_never
 from compas_cgal import _stock_2
 from compas_cgal.adaptive.units import CutPlane
 from compas_cgal.adaptive.units import Direction3
-from compas_cgal.adaptive.units import Point2
 from compas_cgal.adaptive.units import Point3
-from compas_cgal.adaptive.units import WorldXY
 from compas_cgal.adaptive.units import WorldXYZ
 from compas_cgal.engagement_audit.errors import ContradictoryOperationOrientationError
 from compas_cgal.engagement_audit.errors import ContradictoryOperationRoleError
@@ -160,7 +158,6 @@ def classify_operation_snapshot(
             operation_index=operation_index,
             operation_digest=digest,
             motion=result,
-            endpoint=Point2[WorldXY].build(snapshot.end.x, snapshot.end.y),
         )
     if isinstance(
         result,

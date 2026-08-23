@@ -18,9 +18,7 @@ from compas_cgal.adaptive.canonical import encode_integer
 from compas_cgal.adaptive.canonical import encode_tagged_union
 from compas_cgal.adaptive.identity import IdentityDigest
 from compas_cgal.adaptive.motion_oracle_cache import NativeMotionVerdict
-from compas_cgal.adaptive.units import Point2
 from compas_cgal.adaptive.units import Radian
-from compas_cgal.adaptive.units import WorldXY
 from compas_cgal.engagement_audit.errors import InvalidAuthenticatedLateralOperationError
 from compas_cgal.engagement_audit.errors import InvalidAuthenticatedNonEngagingOperationError
 from compas_cgal.engagement_audit.errors import InvalidAuthenticatedPlungeOperationError
@@ -30,6 +28,9 @@ from compas_cgal.engagement_audit.errors import InvalidNonEngagingOperationAudit
 
 MEASURED_OPERATION_AUDIT_VERSION: Final[bytes] = b"measured-operation-audit-v1"
 NON_ENGAGING_OPERATION_AUDIT_VERSION: Final[bytes] = b"non-engaging-operation-audit-v1"
+AUTHENTICATED_LATERAL_OPERATION_VERSION: Final[bytes] = b"authenticated-lateral-operation-v1"
+AUTHENTICATED_PLUNGE_OPERATION_VERSION: Final[bytes] = b"authenticated-plunge-operation-v1"
+AUTHENTICATED_NON_ENGAGING_OPERATION_VERSION: Final[bytes] = b"authenticated-non-engaging-operation-v1"
 
 OperationDigest = NewType("OperationDigest", bytes)
 StockLineageDigest = NewType("StockLineageDigest", bytes)
@@ -79,15 +80,30 @@ class AuthenticatedLateralOperation:
     ) -> Self:
         return cls(operation_index=operation_index, operation_digest=operation_digest, motion=motion)
 
+    @property
+    def canonical_bytes(self) -> bytes:
+        if type(self) is not AuthenticatedLateralOperation:
+            raise InvalidAuthenticatedLateralOperationError("authenticated lateral operation must be exact, not a subclass.")
+        return _authenticated_operation_bytes(
+            AUTHENTICATED_LATERAL_OPERATION_VERSION,
+            self.operation_index,
+            self.operation_digest,
+            self.motion,
+            InvalidAuthenticatedLateralOperationError,
+        )
+
+    @property
+    def digest(self) -> IdentityDigest:
+        return IdentityDigest(hashlib.sha256(self.canonical_bytes).digest())
+
 
 @dataclass(frozen=True)
 class AuthenticatedPlungeOperation:
-    """Native-proved plunge retaining its typed cut-plane endpoint."""
+    """Native-proved plunge retained as opaque exact geometry."""
 
     operation_index: int
     operation_digest: OperationDigest
     motion: _stock_2.AuditVerticalPlunge2
-    endpoint: Point2[WorldXY]
 
     def __post_init__(self) -> None:
         if type(self.operation_index) is not int or self.operation_index < 0:
@@ -99,8 +115,6 @@ class AuthenticatedPlungeOperation:
         )
         if type(self.motion) is not _stock_2.AuditVerticalPlunge2:
             raise InvalidAuthenticatedPlungeOperationError("plunge motion must be one native exact plunge value.")
-        if type(self.endpoint) is not Point2:
-            raise InvalidAuthenticatedPlungeOperationError("plunge endpoint must be one typed world-XY point.")
 
     @classmethod
     def build(
@@ -109,9 +123,24 @@ class AuthenticatedPlungeOperation:
         operation_index: int,
         operation_digest: OperationDigest,
         motion: _stock_2.AuditVerticalPlunge2,
-        endpoint: Point2[WorldXY],
     ) -> Self:
-        return cls(operation_index, operation_digest, motion, endpoint)
+        return cls(operation_index, operation_digest, motion)
+
+    @property
+    def canonical_bytes(self) -> bytes:
+        if type(self) is not AuthenticatedPlungeOperation:
+            raise InvalidAuthenticatedPlungeOperationError("authenticated plunge operation must be exact, not a subclass.")
+        return _authenticated_operation_bytes(
+            AUTHENTICATED_PLUNGE_OPERATION_VERSION,
+            self.operation_index,
+            self.operation_digest,
+            self.motion,
+            InvalidAuthenticatedPlungeOperationError,
+        )
+
+    @property
+    def digest(self) -> IdentityDigest:
+        return IdentityDigest(hashlib.sha256(self.canonical_bytes).digest())
 
 
 @dataclass(frozen=True)
@@ -146,6 +175,22 @@ class AuthenticatedNonEngagingOperation:
     ) -> Self:
         return cls(operation_index, operation_digest, motion)
 
+    @property
+    def canonical_bytes(self) -> bytes:
+        if type(self) is not AuthenticatedNonEngagingOperation:
+            raise InvalidAuthenticatedNonEngagingOperationError("authenticated non-engaging operation must be exact, not a subclass.")
+        return _authenticated_operation_bytes(
+            AUTHENTICATED_NON_ENGAGING_OPERATION_VERSION,
+            self.operation_index,
+            self.operation_digest,
+            self.motion,
+            InvalidAuthenticatedNonEngagingOperationError,
+        )
+
+    @property
+    def digest(self) -> IdentityDigest:
+        return IdentityDigest(hashlib.sha256(self.canonical_bytes).digest())
+
 
 AuthenticatedOperation: TypeAlias = AuthenticatedLateralOperation | AuthenticatedPlungeOperation | AuthenticatedNonEngagingOperation
 
@@ -154,6 +199,41 @@ def _require_digest(value: object, name: str, error: type[ValueError]) -> bytes:
     if type(value) is not bytes or len(value) != hashlib.sha256().digest_size:
         raise error(f"{name} must be exactly one 32-byte SHA-256 digest.")
     return value
+
+
+def _native_classification_tag(motion: object, error: type[ValueError]) -> bytes:
+    if type(motion) is _stock_2.AuditSegmentMotion2:
+        return b"segment"
+    if type(motion) is _stock_2.AuditCircleMotion2:
+        return b"circle"
+    if type(motion) is _stock_2.AuditArcMotion2:
+        return b"arc"
+    if type(motion) is _stock_2.AuditVerticalPlunge2:
+        return b"vertical-plunge"
+    if type(motion) is _stock_2.AuditVerticalRetract2:
+        return b"vertical-retract"
+    if type(motion) is _stock_2.AuditClearanceTransport2:
+        return b"clearance-transport"
+    raise error("native motion is outside the closed authenticated classification domain.")
+
+
+def _authenticated_operation_bytes(
+    version: bytes,
+    operation_index: int,
+    operation_digest: OperationDigest,
+    motion: object,
+    error: type[ValueError],
+) -> bytes:
+    return encode_tagged_union(
+        version,
+        encode_component_map(
+            {
+                b"native-classification": _native_classification_tag(motion, error),
+                b"operation-digest": bytes(operation_digest),
+                b"operation-index": encode_integer(operation_index),
+            }
+        ),
+    )
 
 
 @dataclass(frozen=True)

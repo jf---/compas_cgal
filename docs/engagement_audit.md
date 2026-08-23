@@ -40,10 +40,11 @@ All branch-producing geometric decisions execute in
 Operation labels can contradict a native geometric classification and cause a
 named failure. They never prove that a motion is non-engaging. Vertical retract
 and clearance-plane transport are the non-mutating native alternatives. A
-native-proved plunge is retained separately with its typed cut-plane endpoint
-because it must deplete a disk before later motion certification. Every
-cut-plane lateral line, circle, or arc becomes an opaque Epeck motion value for
-a later native certifier.
+native-proved plunge is retained separately because it must deplete a disk
+before later motion certification. Its endpoint exists only inside the opaque
+native value; Python retains no parallel geometry. Every cut-plane lateral
+line, circle, or arc becomes an opaque Epeck motion value for a later native
+certifier.
 
 The six nanobind motion classes have no Python constructor and expose no
 reconstructive coordinate getters. For arcs, `audit-arc-phase-binary64-v1`
@@ -52,6 +53,18 @@ exact-injects that binary64 surrogate, and retains the Epeck vector. There is no
 Python `point_at`, `atan2`, phase subtraction, or angle reconstruction path.
 The native module exposes that strategy identifier and every audit-input digest
 binds it, so changing the transcendental seam changes request identity.
+Circle and arc values also retain their exact-injected guide radius internally,
+so later native depletion and certification never reconstruct it from a phase
+vector through an unavailable square root.
+
+Python snapshots curve radius as a finite, millimetre-bearing observation. It
+does not decide positivity. `CGAL::sign` after exact injection is the sole
+positive-radius authority and its named native rejection crosses the adapter.
+
+Each authenticated lateral, plunge, and non-engaging carrier has its own
+versioned canonical encoding and SHA-256 digest. The encoding binds stream
+ordinal, source-operation digest, and the closed native classification tag;
+source identity binds the opaque geometry itself.
 
 Task 2 accepts only frames whose binary64 axes satisfy exact orthonormal
 world-XY predicates. Scaled, skewed, tilted, and inexactly normalized rotated

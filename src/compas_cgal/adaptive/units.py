@@ -230,6 +230,20 @@ class GuideRadius:
 
 
 @dataclass(frozen=True)
+class ObservedRadius:
+    """Finite millimetre observation awaiting native geometric validation."""
+
+    value: Millimetre
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "value", Millimetre(_finite(self.value, "observed radius")))
+
+    @classmethod
+    def build(cls, value: float) -> Self:
+        return cls(Millimetre(_finite(value, "observed radius")))
+
+
+@dataclass(frozen=True)
 class Spacing:
     value: Millimetre
 
