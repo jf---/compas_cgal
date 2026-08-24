@@ -1,10 +1,10 @@
 # Auditor convergence progress
 
 **Plan:** P1 truthful audit
-**Task:** P1 Task 3 final verification
+**Task:** P1 Task 4A native request identity SDD correction
 **Branch:** `codex/auditor-convergence-sdd`
 **Worktree:** `/Users/jelle/Code/CADCAM/worktrees/compas_cgal_prs-auditor-convergence-sdd`
-**Current HEAD:** `0cac084a4cd3b9964cffcffa19527e7db8bfd11e`
+**Current HEAD:** `27f97c71ab1b999de2744125cec262174aa3ec36`
 **Integration source:** `073a0f7f833da440fe323a0a046ad31550579f82`
 **Certifier source:** `73d53729564851d69eb1c28d6c2f1e68350cd20f`
 
@@ -17,6 +17,7 @@
 - `0b41ba7` — authenticated opaque native motion input
 - `f9787f5` — native-only geometry and carrier identity review fixes
 - `0cac084` — audit dependency closure and exact-arc prerequisite plan
+- `27f97c7` — exact rational-chart arc surrogate and atomic depletion
 
 ## Last verified commands
 
@@ -95,14 +96,24 @@
 - Task 3 independent specification rereview — passed
 - Task 3 independent ETH-quality rereview — passed; no Critical or Important
   findings
+- Task 3 final root verification — native gate, 16 exact-arc tests, five shared-
+  atlas regressions, 32 affected tests, Ruff, strict mypy, strict docs, and diff
+  check passed
+- Task 3 commit authorship — Jelle author and committer, clean worktree
+- Task 4 source audit — `73d5372` Boolean conflates violation/exhaustion and is
+  proof/refinement input only
+- Task 4 architecture audit — domain-separated lineage, named digest authority,
+  one-clone transaction, and three linear delivery slices required
+- Task 4 corrected SDD review — source semantics and architecture passed; no
+  exact blocker
 
 ## Open blockers
 
 - no unadjudicated source commit
 - P1 must restore the two absent falsifier modules before porting certification
-- P1 Task 3 final lint, type, docs, and affected-suite verification pending
+- P1 Task 4A identity RED/GREEN implementation pending
 - P4 must identify the extreme full-suite tail before CI enforcement
 
 ## Next exact command
 
-run P1 Task 3 final verification matrix
+run P1 Task 4A native-request identity RED gate
