@@ -325,7 +325,9 @@ The factory binds canonical rings, frame/unit-bearing physical parameters, the
 ordered operation-stream digest, audit schema version, motion-certifier
 versions, depletion policy, and native build identity. The cap encoding binds
 both the authored binary64 angle and its native chord-ratio surrogate. The
-input encoding also binds the arc-surrogate, decision, and depletion strategy
+native policy boundary recomputes that binary64 surrogate once and requires
+bit-identical equality before exact injection. The input encoding also binds
+the arc-surrogate, audit decision-contract, and depletion strategy
 versions plus the ordered authenticated-operation digests. Arc-operation
 identity therefore includes the exact chart-motion digest, not only authored
 angles and a strategy label. It also binds a native request digest over the
@@ -333,6 +335,15 @@ exact-injected stock rings, immutable native policy, and ordered native-motion
 digests. Empty operation streams raise
 `EmptyToolpathAuditError`. Multi-depth or unsupported 3D motion raises a named
 geometry error before stock mutation.
+
+Digest domains have no generic raw-byte constructor or cross-domain retagger.
+External input and authenticated-operation expectations enter through distinct
+named ingress functions; generated request, motion, policy, decision,
+depletion, lineage, and result digests arise only from their domain's canonical-
+hash authority. All six
+native motion carriers are private-constructor invariant classes. The request
+factory accepts only their opaque Python values and retains their ordered typed
+digests; no raw digest tuple or generic motion union crosses Python.
 
 Stage 1 defines `BuildIdentity` and requires complete component-version and
 32-byte source/lock digests at the audit boundary. Stage 4 replaces the
@@ -382,7 +393,8 @@ values and become `NonEngagingOperationAudit` only during replay/reporting.
 Ingress radius is a finite unit-bearing observation, not a positivity
 claim. Exact native sign owns acceptance. Every authenticated input-operation
 carrier has a distinct versioned digest binding its stream index, source
-operation digest, and closed native classification tag.
+operation digest, closed native classification tag, and opaque native-motion
+digest.
 
 A cut-height lateral motion always reaches a native certifier. Unsupported
 geometry raises; it never produces a non-engaging record. A `RETRACT` label on
@@ -391,16 +403,39 @@ cutting geometry is contradictory input and raises
 
 ### Native transaction and lineage
 
-Python never supplies an authoritative `Stock2`. One opaque, nonconstructible
-native replay owner constructs stock from the canonical input rings, recomputes
-and verifies the input-bound native request digest, binds the ordered
-authenticated-operation digests, and only then seeds lineage with the input
-digest. Each lateral call must match the next bound identity and consumes one
-opaque native motion. It performs one atomic transaction: decide from pre-motion stock, clone,
-deplete the clone for every returned verdict, validate the depletion witness,
-advance lineage, swap, and return. Any exception occurs before swap and exposes
-neither a result nor partial report. Plunges use the same clone/validate/swap
-chronology; retracts and clearance transports preserve lineage.
+Python never supplies an authoritative `Stock2`. Native request identity
+recomputes and verifies the stock/policy/motion digest from actual opaque native
+values; the input digest separately accepts the verified request digest, so no
+circular native authentication claim is made. One opaque, nonconstructible
+native replay owner constructs stock from the canonical input rings, accepts
+the input digest as an external typed root, binds the ordered authenticated-
+operation digests, and only then derives
+`StockLineageDigest = SHA256(stock-lineage-seed-v1 {input_digest,
+verified_native_request_digest})`. Input-seeded means domain-separated
+derivation, never retagging the input digest bytes. Each lateral call must match
+the next bound identity and consumes one opaque native motion. It performs one
+atomic transaction: decide from immutable pre-motion stock, clone exactly once,
+apply validated depletion in-place to the trial for every returned verdict,
+validate decision and depletion witnesses, derive the complete result and next
+state, then perform one no-throw state swap. No allocation, hashing, validation,
+or cursor update remains after the swap. Any exception exposes neither a result
+nor partial report. Plunges use the same chronology; retracts and clearance
+transports preserve lineage.
+
+The native request value owns its canonical stock/policy identity and ordered
+typed motion digests; only replay can inspect that retained sequence. The Python
+request factory accepts the six opaque motion classes, never a generic motion
+union or raw digest tuple. `begin_audit_replay(...)` accepts external bytes only
+for the named input and authenticated-operation digest domains, then rebuilds
+and matches the actual rings, opaque policy, and native request before state
+exists. Native request digests are generated-only.
+
+Replay's one-clone trial applicators do not clone or swap internally. Each
+returns a validated nonconstructible depletion witness binding motion, policy,
+exact trace or plunge disk, pre/post canonical stock-state digests, and strategy
+identity. The authority swap occurs only after the complete decision, witness,
+lineage, result, and next-state values exist. Controlled failure tests at every
+stage prove stock, cursor, lineage, and finalization remain unchanged.
 
 The native result boundary is a closed union of distinct read-only values for
 lateral, plunge, and non-engaging chronologies. Reporting-only TEA and work
@@ -458,19 +493,31 @@ require trimmed-domain endpoint/seam ownership and non-cyclic event ordering.
 The legacy trigonometric `subtract_arc_sweep` is never evidence for, or
 reachable from, the authoritative path.
 
-Port the adaptive native arc certifier only after this surrogate and the Stage
-0 dependency closure are adjudicated. The certifier and depleter consume the
-same opaque `AuditArcMotion2`. Together they must:
+Commit `73d5372` is theorem, falsifier, and refinement-strategy input, not
+transferable authority. Its false `cap_certified` result conflates an observed
+violation with proof exhaustion, its guarded station threshold is stricter than
+the authored cap, and its double trigonometric centers do not describe the Task
+3 surrogate. `CAP_EXCEEDED` therefore requires a replay-validated exact station
+witness against the unguarded policy chord surrogate. Guarded-cap failure or an
+inconclusive swept upper bound can only refine or return `UNRESOLVED`.
+
+The native arc adapter and depleter consume the same opaque
+`AuditArcMotion2`. Exact existential witnesses take precedence over incomplete
+coverage. `CERTIFIED` requires complete exact coverage and exact
+between-station closure of every clipped interval; until a general trimmed
+closure exists, a sound safe-superset proof such as complete full-circle
+authority may certify the subset, otherwise a witness-free valid arc is
+`UNRESOLVED`. Together the adapter and depleter must:
 
 - own the sole circular-motion acceptance path;
 - use adaptive refinement with an absolute spatial floor and finite depth;
-- preserve exact station predicates and the swept-annulus between-station
-  guard;
+- preserve exact station predicates and exact between-station closure;
 - return all three native verdicts;
 - deplete certified, cap-exceeded, and unresolved motions through the same
   exact-on-surrogate disk-chain contract;
 - refuse annular, machined, and spiral rib counterexamples;
 - certify non-vacuous clear positive controls; and
+- use double analytic quantities only to schedule refinement, never to decide;
 - report refinement work without using it as a decision input;
 - validate every proof and depletion trace before atomically swapping stock;
   and

@@ -69,8 +69,8 @@ history rather than commit subjects alone.
 | `eee1c35bde6d0c9cd28f4361ebbff6d2c6f0d890` | annular-rib false certificate | `test_false_certificate.py` | required | C2 negative control absent on integration; it proves a station-green segment can contain a cap violation | P1 Task 4 |
 | `3c270cb5f3279c95a531a9d99ac543ca0802e783` | spiral-rib generalization | spiral probe/alignment controls | dependent | Prevents the annular-rib repair from overfitting one radius/alignment | P1 Task 4 |
 | `c3bdef8419c437a4606f9b3031d16d8b426197c2` | separate witness liveness/verdict | falsifier assertions | dependent | Required evidence discipline: a dead witness may not make a negative control green | P1 Task 4 |
-| `2e2422b58d2a6a03fc394520d190531af3b33b2c` | exact swept-annulus segment guard | `interior_run_within_cap` | required | Integration segment oracle is different; adaptive arc support still lacks this proved interior guard | P1 Task 4 |
-| `03866fccd2b54b7034b9ab63c984cbe1332ff31c` | rotation-invariant interior bound | exact direction spans | dependent | Removes the axis-aligned-box dependence exposed by rotated falsifiers; needed with the swept guard | P1 Task 4 |
+| `2e2422b58d2a6a03fc394520d190531af3b33b2c` | swept-annulus segment guard | `interior_run_within_cap` | dependent | Uses double-deciding angular readout; retain theorem, falsifier, and refinement input only, never certification authority | P1 Task 4 |
+| `03866fccd2b54b7034b9ab63c984cbe1332ff31c` | rotation-invariant interior bound | direction spans | dependent | Retain theorem/falsifier input for the newly exact between-station predicate; source double readout is not authority | P1 Task 4 |
 | `e446d035f5e8bcc2f5a93ec73288ac0520c28a9f` | witness statement cleanup | false-certificate docstring | dependent | Preserves witness provenance without asserting an incidental station count | P1 Task 4 |
 | `3db92d6445b15e34a55d5de768fede6c9d5a6335` | sub-ulp rim reporting repair | `max_run_tea` span normalization | superseded | `62aea8f` independently forbids promoting a rim sub-arc to a full turn; `test_a_full_turn_report_means_a_buried_rim` is the stronger control | P1 Task 4 |
 | `f227dab2fe04af8d8956f623c2839579c0cd7142` | TEA certificate explanation | `docs/engagement_certificate.md` | dependent | The negative-control derivation accompanies the port, but P1 documentation must describe the new authoritative package | P1 Task 6 |
@@ -80,7 +80,7 @@ history rather than commit subjects alone.
 | `48b9e08fab687989d81c253d5b710e64c2537a52` | slack/full-turn preconditions | `<= pi` guard, overflow-safe derivation | dependent | Required by the final arc/segment report assembly and source-side ULP budget | P1 Task 4 |
 | `c90a4fef4a4c1da3e98beae75033edfe91fe2619` | machining-quality task track | benchmark plan/policy | superseded | P3/P4 plans separate instrumentation from product gates and bind generator/audit identities | P3/P4 |
 | `f369b3df9fd2d2645f02826781463796f93b7434` | reviews and Figure 6 artifacts | review documents, SVG/PDF | unrelated | Review findings informed the approved SDD; generated artifacts are not source-code dependencies | none |
-| `73d53729564851d69eb1c28d6c2f1e68350cd20f` | adaptive arc certification | `_certify_arc_engagement`, native recursive arc proof | required | C2 remains unimplemented at `073a0f7`; P1 adds typed partial arcs and ports this dependency-closed proof | P1 Tasks 2/4 |
+| `73d53729564851d69eb1c28d6c2f1e68350cd20f` | adaptive arc certification | `_certify_arc_engagement`, native recursive arc proof | dependent | Source Boolean conflates violation and exhaustion, guarded failures use a stricter cap, and double arc centers do not match the exact surrogate; retain theorem/falsifier/refinement input only | P1 Task 4 |
 
 ## Required dependency closure
 
@@ -94,7 +94,8 @@ The source-side proof-bearing transfer order is:
    rotation/witness closure.
 4. `148a49a`, `48b9e08` — release shared-root and full-turn/slack
    preconditions.
-5. `73d5372` — adaptive arc recursion, only after the prerequisites above.
+5. `73d5372` — adaptive arc theorem, falsifier, and refinement input only after
+   the prerequisites above; never transfer its Boolean verdict as authority.
 
 `3db92d6` is not transferred because integration commit `62aea8f` has the
 stronger rim-reporting contract. `f227dab` is documentation input, rewritten
@@ -117,15 +118,16 @@ for the new package after executable proof transfer.
 ### Bounded disk chain
 
 - Source: `chain_intervals` and `MAX_CHAIN_INTERVALS` from `5c489fb`.
-- Integration: no bounded-chain symbol or unbuildable-chain test exists.
-- Difference: finite input alone does not bound allocation/work.
+- Integration: closed by Task 3 commit `27f97c7` for authoritative exact arc
+  depletion, with explicit center-count policy and unbuildable-chain tests.
+- Historical difference: finite input alone did not bound allocation/work.
 - Negative control: adapt the source allocation proof into
   `test_exact_segment_refuses_an_unbuildable_chain` and
   `test_exact_arc_refuses_an_unbuildable_chain`; do not route the authoritative
   test through legacy `subtract_arc_sweep`.
 - Positive control: exact ordinary segment and rational-chart arc depletions
   remain far below the bound.
-- Destination: P1 Task 3.
+- Destination: P1 Task 3, complete at `27f97c7`.
 
 ### Compiled growth guard
 
@@ -153,26 +155,29 @@ for the new package after executable proof transfer.
   the violation.
 - Destination: P1 Task 4 before implementation transfer.
 
-### Swept-annulus segment certificate
+### Swept-annulus segment theorem input
 
 - Source: `interior_run_within_cap` from `2e2422b`.
 - Integration: `continuous_tea_2` owns a newer exact segment event oracle, but
   no typed partial-arc audit path consumes a dependency-closed equivalent.
-- Difference: station verdicts alone do not prove the continuous interior.
+- Difference: station verdicts alone do not prove the continuous interior, but
+  the source double angular readout is also inadmissible as exact authority.
 - Negative control: a station-green motion whose interior crosses the annular
   rib.
 - Positive control: wall-following motions at every orientation.
-- Destination: adapt behind P1 Task 4's narrow native audit seam; do not
-  replace the newer segment oracle.
+- Destination: retain the theorem, falsifiers, and refinement structure behind
+  P1 Task 4's narrow native seam. Only a newly exact between-station predicate
+  may certify; do not replace the newer segment oracle.
 
-### Rotation-invariant bound
+### Rotation-invariant theorem input
 
-- Source: exact direction spans from `03866fc`.
+- Source: rotation-invariant direction-span construction from `03866fc`.
 - Integration: no equivalent source-side arc interior bound is wired.
-- Difference: an axis-aligned bounding argument is orientation-dependent.
+- Difference: an axis-aligned argument is orientation-dependent, while the
+  source direction-span readout still uses double angles and is not authority.
 - Negative control: rationally rotated rib/alignment cases.
 - Positive control: identical verdict across the complete orientation sweep.
-- Destination: P1 Task 4 with the swept-annulus guard.
+- Destination: theorem/falsifier input for P1 Task 4's newly exact closure.
 
 ### Rim reporting
 
@@ -200,42 +205,40 @@ for the new package after executable proof transfer.
   full rim.
 - Destination: P1 Task 4.
 
-### Adaptive arc certification
+### Adaptive arc certification source
 
 - Source: native recursive arc proof and `_certify_arc_engagement` wiring from
   `73d5372`.
-- Integration: `ExactArcMotion` is absent; the legacy Python arc audit is not a
-  native three-verdict authoritative boundary.
-- Difference: C2 remains open for partial arcs.
+- Integration: Task 3 now supplies opaque `AuditArcMotion2` and exact
+  rational-chart depletion; native three-verdict certification remains open.
+- Difference: the source Boolean conflates exact violation with
+  floor/depth/inconclusive refusal, and its double trigonometric stations do not
+  describe the Task 3 surrogate.
 - Negative control: annular/spiral rib arc whose sampled stations appear safe.
 - Positive control: constant-stock arc with a known below-cap maximum.
-- Destination: P1 Tasks 2 and 4 after the full dependency closure above.
+- Destination: P1 Task 4 as theorem/falsifier/refinement input. Exact authored-
+  cap witnesses and complete exact coverage own the authoritative verdict.
 
 ### Integration-discovered exact partial-arc depletion dependency
 
 - Source status: no source commit supplies this theorem. `73d5372` certifies an
   arc but its replay still calls the legacy trigonometric
   `subtract_arc_sweep`.
-- Integration status: `subtract_exact_segment` and
-  `subtract_exact_full_circle` own exact incident-center traces. Partial arcs
-  have neither an exact coherent motion nor a structural depletion trace.
-- Difference: `AuditArcMotion2.phase_vector` and `guide_radius` are independently
-  exact-injected, while legacy depletion reconstructs centers with
-  `atan2`/`cos`/`sin`. Certification and depletion can therefore describe
-  different paths, and the removed disks have no exact subset proof against the
-  claimed guide.
-- Required closure: define a versioned rational quarter-chart arc surrogate;
-  make certification and depletion consume that same opaque value; prove exact
-  incidence, traversal/seam ownership, anchors, chord density, finite center
-  count, and atomic no-mutation-on-refusal before accepting replay.
+- Integration status: closed by Task 3 commit `27f97c7`; partial arcs now own an
+  exact coherent motion, structural trace, motion digest, and atomic depletion.
+- Historical defect: the earlier arc carrier and legacy depletion could describe
+  different paths, and removed disks lacked an exact subset proof.
+- Closure evidence: `27f97c7` defines one versioned rational quarter-chart arc
+  surrogate and proves incidence, traversal/seam ownership, anchors, chord
+  density, finite center count, motion identity, and atomic refusal.
 - Negative controls: awkward non-quadrant endpoints, off-guide centers,
   reversed/missing chart parameters, complement confusion, nextafter seams,
   nonpositive or excessive chord policy, and unbuildable center counts.
 - Positive controls: CW/CCW minor, major, and full-turn surrogate arcs under
   rational rotation, translation, and scale.
-- Destination: P1 Task 3. This is a hard prerequisite for P1 Task 4 native
-  transaction and P1 Task 5 public replay; it is not satisfied by the bounded
-  disk-chain allocation row.
+- Destination: P1 Task 3, complete at `27f97c7`. Task 4 must consume this path;
+  it is not satisfied by the bounded disk-chain allocation row or by legacy
+  `subtract_arc_sweep`.
 
 ## Baseline
 

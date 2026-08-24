@@ -565,17 +565,59 @@ git commit -m "feat(audit): deplete exact arc"
 
 ### Task 4: Close the native certify-and-deplete transaction
 
+#### Source adjudication and delivery slices
+
+Commit `73d5372` is theorem, falsifier, and refinement-strategy input only. Its
+`CertifiedTea::cap_certified == false` conflates an observed violation with
+floor/depth exhaustion and an inconclusive swept bound. Its guarded station
+checks also use a stricter cap than the authored policy. Neither condition may
+be translated to `CAP_EXCEEDED`, and its double trigonometric arc centers may
+not replace Task 3's exact rational-chart motion.
+
+Task 4 lands as three linear, independently reviewed commits:
+
+1. **Identity:** cap/policy sealing, six opaque motion digests, native stock and
+   request identity, and input/carrier schema v2.
+2. **Decision:** exact witness-bearing three-way adapters for segment, circle,
+   and the Task 3 arc surrogate, plus content-addressed depletion witnesses.
+3. **Transaction:** one-clone replay state, lineage/result derivation, opaque
+   bindings, and finalization.
+
+The closed audit verdict is `AuditTeaVerdict2 {CERTIFIED, CAP_EXCEEDED,
+UNRESOLVED}`. Existing `ContinuousTeaVerdict::UNRESOLVED_DEGENERACY` maps into
+the broader audit `UNRESOLVED`; the old enum is not renamed or broadened.
+
 **Files:**
 
 - Create: `src/audit_motion_result_2.h`
 - Create: `src/audit_motion_result_2.cpp`
+- Create: `src/audit_motion_identity_2.h`
+- Create: `src/audit_motion_identity_2.cpp`
 - Create: `src/audit_policy_2.h`
 - Create: `src/audit_policy_2.cpp`
+- Create: `src/audit_stock_identity_2.h`
+- Create: `src/audit_stock_identity_2.cpp`
+- Create: `src/audit_request_identity_2.h`
+- Create: `src/audit_request_identity_2.cpp`
+- Create: `src/audit_strategy_versions_2.h`
+- Create: `src/audit_strategy_versions_2.cpp`
+- Create: `src/audit_depletion_witness_2.h`
+- Create: `src/audit_depletion_witness_2.cpp`
+- Create: `src/audit_lineage_2.h`
+- Create: `src/audit_lineage_2.cpp`
 - Create: `src/audit_certification_2.h`
 - Create: `src/audit_certification_2.cpp`
 - Create: `src/audit_replay_2.h`
 - Create: `src/audit_replay_2.cpp`
+- Create: `src/audit_replay_bindings_2.h`
+- Create: `src/audit_replay_bindings_2.cpp`
+- Create: `src/stock_exact_depletion_2.h`
+- Create: `src/stock_exact_depletion_2.cpp`
+- Create: `src/exact_disk_region_2.h`
+- Create: `src/exact_disk_region_2.cpp`
 - Modify: `src/audit_digest_2.h`
+- Modify: `src/audit_arc_motion_2.cpp`
+- Modify: `src/exact_depletion_2.cpp`
 - Create: `src/continuous_tea_2/arc_oracle.h`
 - Create: `src/continuous_tea_2/arc_oracle.cpp`
 - Modify: `src/audit_classification_2.h`
@@ -590,12 +632,18 @@ git commit -m "feat(audit): deplete exact arc"
 - Modify: `src/compas_cgal/engagement_audit/input.py`
 - Modify: `src/compas_cgal/engagement_audit/records.py`
 - Modify: `src/compas_cgal/engagement_audit/errors.py`
+- Create: `src/compas_cgal/engagement_audit/digests.py`
 - Modify: `CMakeLists.txt`
 - Modify: `pyproject.toml`
+- Create: `tests/native/test_audit_identity_2.cpp`
+- Modify: `tests/native/test_exact_arc_depletion_2.cpp`
 - Create: `tests/native/test_audit_replay_2.cpp`
 - Create: `tests/native/test_audit_certification_2.cpp`
 - Modify: `tests/adaptive/test_canonical.py`
+- Modify: `tests/engagement_audit/test_native_classification.py`
+- Modify: `tests/engagement_audit/test_records.py`
 - Modify: `tests/engagement_audit/test_input.py`
+- Create: `tests/engagement_audit/test_native_request_identity.py`
 - Create: `tests/engagement_audit/test_native_replay.py`
 - Create: `tests/engagement_audit/test_false_arc_certificate.py`
 - Create: `tests/test_false_certificate.py`
@@ -616,6 +664,8 @@ The native boundary is fixed before implementation:
 
 ```cpp
 struct AuditInputDigestDomain;
+struct AuditNativeStockDigestDomain;
+struct AuditStockStateDigestDomain;
 struct AuditNativeRequestDigestDomain;
 struct AuthenticatedOperationDigestDomain;
 struct AuditPolicyDigestDomain;
@@ -625,6 +675,8 @@ struct StockLineageDigestDomain;
 struct AuditResultDigestDomain;
 
 using AuditInputDigest2 = AuditDigest2<AuditInputDigestDomain>;
+using AuditNativeStockDigest2 = AuditDigest2<AuditNativeStockDigestDomain>;
+using AuditStockStateDigest2 = AuditDigest2<AuditStockStateDigestDomain>;
 using AuditNativeRequestDigest2 = AuditDigest2<AuditNativeRequestDigestDomain>;
 using AuthenticatedOperationDigest2 = AuditDigest2<AuthenticatedOperationDigestDomain>;
 using AuditPolicyDigest2 = AuditDigest2<AuditPolicyDigestDomain>;
@@ -633,27 +685,106 @@ using DepletionWitnessDigest2 = AuditDigest2<DepletionWitnessDigestDomain>;
 using StockLineageDigest2 = AuditDigest2<StockLineageDigestDomain>;
 using AuditResultDigest2 = AuditDigest2<AuditResultDigestDomain>;
 
+class AuditCapObservation2;
+
 class AuditPolicy2 {
 public:
     static AuditPolicy2 build(
+        const AuditCapObservation2& engagement_cap,
         const Epeck::FT& tool_radius_mm,
-        const Epeck::FT& engagement_cap_radians,
-        const Epeck::FT& engagement_cap_chord_ratio,
         const Epeck::FT& depletion_chord_bound_mm,
         std::size_t center_count_limit);
     const AuditPolicyDigest2& digest() const;
+
+private:
+    struct Storage;
+    explicit AuditPolicy2(Storage storage);
+};
+
+class AuditCapObservation2 {
+public:
+    static AuditCapObservation2 build(
+        double authored_radians,
+        double supplied_chord_ratio);
+
+private:
+    struct Storage;
+    explicit AuditCapObservation2(Storage storage);
+};
+
+enum class AuditTeaVerdict2 {
+    CERTIFIED,
+    CAP_EXCEEDED,
+    UNRESOLVED,
 };
 
 class AuditReportedRadian2 {
 public:
     static AuditReportedRadian2 build(double reporting_radians);
     double value() const noexcept;
+
+private:
+    explicit AuditReportedRadian2(double reporting_radians);
 };
+
+enum class AuditDepletionKind2 {
+    SEGMENT,
+    FULL_CIRCLE,
+    ARC,
+    PLUNGE,
+};
+
+class AuditDepletionWitness2 {
+public:
+    AuditDepletionKind2 kind() const noexcept;
+    const AuditStockStateDigest2& pre_stock_digest() const noexcept;
+    const AuditStockStateDigest2& post_stock_digest() const noexcept;
+    const DepletionWitnessDigest2& digest() const noexcept;
+
+private:
+    struct Storage;
+    explicit AuditDepletionWitness2(Storage storage);
+    friend AuditDepletionWitness2 apply_audit_segment_depletion_to_trial(
+        const Stock2&, Stock2&, const AuditSegmentMotion2&, const AuditPolicy2&);
+    friend AuditDepletionWitness2 apply_audit_circle_depletion_to_trial(
+        const Stock2&, Stock2&, const AuditCircleMotion2&, const AuditPolicy2&);
+    friend AuditDepletionWitness2 apply_audit_arc_depletion_to_trial(
+        const Stock2&, Stock2&, const AuditArcMotion2&, const AuditPolicy2&);
+    friend AuditDepletionWitness2 apply_audit_plunge_depletion_to_trial(
+        const Stock2&, Stock2&, const AuditVerticalPlunge2&, const AuditPolicy2&);
+};
+
+AuditDepletionWitness2 apply_audit_segment_depletion_to_trial(
+    const Stock2& authority,
+    Stock2& trial,
+    const AuditSegmentMotion2& motion,
+    const AuditPolicy2& policy);
+AuditDepletionWitness2 apply_audit_circle_depletion_to_trial(
+    const Stock2& authority,
+    Stock2& trial,
+    const AuditCircleMotion2& motion,
+    const AuditPolicy2& policy);
+AuditDepletionWitness2 apply_audit_arc_depletion_to_trial(
+    const Stock2& authority,
+    Stock2& trial,
+    const AuditArcMotion2& motion,
+    const AuditPolicy2& policy);
+AuditDepletionWitness2 apply_audit_plunge_depletion_to_trial(
+    const Stock2& authority,
+    Stock2& trial,
+    const AuditVerticalPlunge2& motion,
+    const AuditPolicy2& policy);
+
+// Declared only by exact_disk_region_2.h and defined only by
+// exact_disk_region_2.cpp.
+Gps build_exact_disk_union_region_2(
+    const std::vector<EPoint>& centers,
+    const Epeck::FT& radius);
 
 class AuditLateralResult2 {
 public:
     static AuditLateralResult2 build(
-        ContinuousTeaVerdict verdict,
+        AuditTeaVerdict2 verdict,
         const AuditReportedRadian2& reported_max_tea,
         std::size_t evidence_count,
         const AuthenticatedOperationDigest2& operation_digest,
@@ -661,6 +792,10 @@ public:
         const DepletionWitnessDigest2& depletion_digest,
         const StockLineageDigest2& pre_lineage,
         const StockLineageDigest2& post_lineage);
+
+private:
+    struct Storage;
+    explicit AuditLateralResult2(Storage storage);
 };
 
 class AuditPlungeResult2 {
@@ -670,6 +805,10 @@ public:
         const DepletionWitnessDigest2& depletion_digest,
         const StockLineageDigest2& pre_lineage,
         const StockLineageDigest2& post_lineage);
+
+private:
+    struct Storage;
+    explicit AuditPlungeResult2(Storage storage);
 };
 
 enum class AuditNonEngagingReason2 {
@@ -683,6 +822,10 @@ public:
         const AuthenticatedOperationDigest2& operation_digest,
         AuditNonEngagingReason2 reason,
         const StockLineageDigest2& unchanged_lineage);
+
+private:
+    struct Storage;
+    explicit AuditNonEngagingResult2(Storage storage);
 };
 
 class AuditReplayCompletion2 {
@@ -691,7 +834,42 @@ public:
         const AuditNativeRequestDigest2& request_digest,
         std::size_t operation_count,
         const StockLineageDigest2& terminal_lineage);
+
+private:
+    struct Storage;
+    explicit AuditReplayCompletion2(Storage storage);
 };
+
+class AuditNativeStockIdentity2 {
+public:
+    static AuditNativeStockIdentity2 build(
+        Eigen::Ref<const compas::RowMatrixXd> boundary,
+        const std::vector<compas::RowMatrixXd>& holes);
+    const std::string& canonical_bytes() const noexcept;
+    const AuditNativeStockDigest2& digest() const noexcept;
+
+private:
+    struct Storage;
+    explicit AuditNativeStockIdentity2(Storage storage);
+};
+
+class AuditNativeRequestIdentity2 {
+public:
+    const std::string& canonical_bytes() const noexcept;
+    const AuditNativeRequestDigest2& digest() const noexcept;
+
+private:
+    struct Storage;
+    explicit AuditNativeRequestIdentity2(Storage storage);
+    friend class AuditReplay2;
+    friend AuditNativeRequestIdentity2 build_audit_native_request_identity(
+        const AuditNativeStockIdentity2&,
+        const AuditPolicy2&,
+        const std::vector<NativeMotionDigest2>&);
+};
+
+const std::string& audit_native_decision_contract_version();
+const std::string& audit_native_depletion_contract_version();
 
 class AuditReplay2 {
 public:
@@ -699,10 +877,14 @@ public:
         Eigen::Ref<const compas::RowMatrixXd> boundary,
         const std::vector<compas::RowMatrixXd>& holes,
         const AuditInputDigest2& input_digest,
-        const AuditNativeRequestDigest2& native_request_digest,
+        const AuditNativeRequestIdentity2& native_request,
         const AuditPolicy2& policy,
-        std::vector<AuthenticatedOperationDigest2> authenticated_operation_digests,
-        std::vector<NativeMotionDigest2> native_motion_digests);
+        std::vector<AuthenticatedOperationDigest2> authenticated_operation_digests);
+
+private:
+    struct RequestState;
+    struct MutableState;
+    AuditReplay2(RequestState request, MutableState state);
 };
 
 AuditReplayCompletion2 finish_audit_replay(AuditReplay2&);
@@ -725,13 +907,25 @@ AuditNonEngagingResult2 record_audit_retract(
 AuditNonEngagingResult2 record_audit_clearance(
     AuditReplay2&, const AuditClearanceTransport2&,
     const AuthenticatedOperationDigest2& authenticated_operation_digest);
+
+// Nanobind-only ingress: digest bytes use their named external domains;
+// request and policy remain opaque native values.
+AuditReplay2 begin_audit_replay(
+    Eigen::Ref<const compas::RowMatrixXd> boundary,
+    const std::vector<compas::RowMatrixXd>& holes,
+    std::string input_digest_bytes,
+    const AuditNativeRequestIdentity2& native_request,
+    const AuditPolicy2& policy,
+    std::vector<std::string> authenticated_operation_digest_bytes);
 ```
 
-`AuditPolicy2::build(...)` exact-injects finite millimetre/radian inputs once,
-checks exact positive tool/chord values, exact `chord_bound < tool_radius`,
-positive center limit, and exact consistency of authored cap with its native
-chord surrogate. It is immutable and stored by `AuditReplay2`; per-motion calls
-cannot change policy mid-stream.
+`AuditCapObservation2::build(...)` validates the two finite binary64 cap
+representations, recomputes the repository's native
+`4*sin^2(theta/2)` observation exactly once, and requires bit-identical equality
+with the supplied surrogate before exact injection. `AuditPolicy2::build(...)`
+then checks exact positive tool/chord values, exact
+`chord_bound < tool_radius`, and a positive center limit. It is immutable and
+stored by `AuditReplay2`; per-motion calls cannot change policy mid-stream.
 
 Each lateral result carries the closed verdict, reporting-only maximum TEA,
 positive evidence count, native decision digest, depletion-witness digest,
@@ -747,14 +941,50 @@ exact-injects the five scalar inputs and calls `AuditPolicy2::build(...)`; raw
 `AuditPolicy2` construction is unavailable. `AuditReplayCompletion2` binds the
 verified native request digest, operation count, and terminal lineage.
 
-- [ ] **Step 1: Write RED identity and transaction-boundary tests**
+`AuditNativeStockIdentity2::build(...)` exact-injects the actual matrix values,
+uses Epeck for degeneracy and winding decisions, canonicalizes ring rotation
+and orientation, sorts canonical holes, and encodes coordinates through the
+shared CCAN binary64 encoder. Cross-language golden tests require byte-identical
+stock identity to `CanonicalRingV1`. `AuditNativeRequestIdentity2` owns the
+canonical stock identity, policy digest, ordered typed motion digests, canonical
+bytes, and request digest. Its Python factory accepts a tuple of the six opaque
+motion classes. The binding may use a closed internal variant to visit them,
+but no generic motion union or raw motion-digest sequence crosses Python.
+Replay consumes the opaque request identity and retains its expected motion-
+digest sequence internally.
+
+`begin_audit_replay(...)` is the sole Python factory for the nonconstructible
+owner. It accepts raw bytes only for the external `AuditInputDigest2` and
+ordered `AuthenticatedOperationDigest2` domains, parses each through its named
+ingress, rebuilds stock and request identity from the actual rings, opaque
+policy, and request-retained motion sequence, and rejects any mismatch before
+constructing state. Native request digests are generated-only; Python may store
+their exposed bytes in input v2 but cannot manufacture the typed native value.
+
+The five non-arc motion carriers become private-constructor classes with named
+validating factories that derive their digest from canonical exact geometry,
+plane, orientation, and strategy identity. Classification is their only public
+construction path. Typed digest copies copy the typed value directly; they
+never re-ingest `digest.bytes()`.
+
+Each in-place trial applicator requires a trial exactly equal to the supplied
+authority, performs no clone or authority swap, reconstructs and structurally
+validates the corresponding segment/full-circle/arc trace or plunge disk, and
+returns a nonconstructible `AuditDepletionWitness2`. The witness binds kind,
+pre/post canonical stock-state digests, motion digest, policy digest, exact
+trace/disk identity, strategy version, and its own canonical digest. Replay
+validates the complete witness value before deriving lineage; a bare depletion
+digest is never accepted as evidence.
+
+- [ ] **Step 1: Write RED identity tests**
 
 Add assertions that `EngagementAuditInput.build(...)` requires one exact
 `DepletionPolicy`; `canonical_task1_bytes(EngagementCap)` binds both authored
-angle and chord surrogate; and input v2 binds the complete cap, policy, arc
-surrogate version, native decision version, native depletion version, ordered
-authenticated-operation digests, ordered native-motion digests, and the native
-request digest.
+angle and chord surrogate; all six opaque native motions expose a 32-byte digest;
+authenticated carrier v2 binds that motion digest; and input v2 binds the
+complete cap, policy, arc-surrogate version, audit decision-contract version,
+native depletion version, ordered authenticated-operation digests, ordered
+native-motion digests, and the independently recomputed native request digest.
 
 ```python
 def test_policy_and_authored_cap_are_request_identity() -> None:
@@ -765,7 +995,7 @@ def test_policy_and_authored_cap_are_request_identity() -> None:
     assert _with_center_limit(baseline, 2048).digest != baseline.digest
 
 
-def test_native_replay_is_input_seeded_and_nonconstructible() -> None:
+def test_native_request_is_recomputed_and_nonconstructible() -> None:
     audit_input = _audit_input()
     policy = _stock_2.build_audit_policy(
         audit_input.tool_radius.value,
@@ -774,34 +1004,32 @@ def test_native_replay_is_input_seeded_and_nonconstructible() -> None:
         audit_input.depletion_policy.chord_bound.value,
         audit_input.depletion_policy.center_count_limit,
     )
-    replay = _stock_2.begin_audit_replay(
+    request = _stock_2.build_audit_native_request_identity(
         _boundary_rows(audit_input),
         _hole_rows(audit_input),
-        bytes(audit_input.digest),
-        bytes(audit_input.native_request_digest),
         policy,
-        tuple(bytes(operation.digest) for operation in audit_input.operations),
-        tuple(operation.native_motion_digest for operation in audit_input.operations),
+        tuple(operation.motion for operation in audit_input.operations),
     )
 
-    assert replay.lineage_digest == bytes(audit_input.digest)
+    assert request.digest == audit_input.native_request_digest
     with pytest.raises(TypeError):
-        _stock_2.AuditReplay2()
+        _stock_2.AuditNativeRequestIdentity2()
 ```
 
-Mutate one boundary vertex, hole, policy field, expected operation digest, and
-native-motion digest while retaining the original native request digest. Begin
-must reject boundary/policy changes; the matching per-motion call must reject
-identity changes before decision or depletion. Early finalization and duplicate
-or omitted operations must fail with named errors and unchanged lineage.
+Mutate one boundary vertex, hole, policy field, native motion, and motion order.
+The native request digest must change. Equivalent ring rotation/orientation and
+hole input order must canonicalize to the same request. Changing source metadata
+without changing native geometry changes authenticated/input identity but not
+native request identity. Compile-time tests prove `AuditDigest2<Domain>` has no
+public raw-byte constructor or generic `from_bytes` retagger.
 
 - [ ] **Step 2: Run the contract RED gate**
 
 ```bash
-PYTEST_XDIST_AUTO_NUM_WORKERS=2 pixi run pytest -- tests/adaptive/test_canonical.py tests/engagement_audit/test_input.py tests/engagement_audit/test_native_replay.py -n auto -q
+PYTEST_XDIST_AUTO_NUM_WORKERS=2 pixi run pytest -- tests/adaptive/test_canonical.py tests/engagement_audit/test_native_classification.py tests/engagement_audit/test_records.py tests/engagement_audit/test_input.py tests/engagement_audit/test_native_request_identity.py -n auto -q
 ```
 
-Expected: missing depletion policy/input v2 and native replay symbols. Do not
+Expected: missing depletion policy/input v2 and native request symbols. Do not
 commit this RED state.
 
 - [ ] **Step 3: Implement cap/policy/input v2 identity**
@@ -817,47 +1045,85 @@ bump every authenticated carrier encoding to bind its native-motion digest.
 The native request digest is SHA-256 over versioned canonical bytes containing
 the native-canonical stock rings, `AuditPolicy2.digest()`, and the ordered
 native-motion digests. Input v2 binds that digest plus the ordered authenticated
-carrier digests. `AuditReplay2.build(...)` recomputes the native request digest
-from actual rings/policy, and every motion call checks both expected digests at
-the current cursor. Raw constructor and mutated-state tests must continue to
-fail closed.
+carrier digests. `build_audit_native_request_identity(...)` recomputes the
+native request digest from actual rings, policy, and the closed tuple of opaque
+motions. Task 4's later `AuditReplay2.build(...)` calls the same authority and
+every motion call checks both expected digests at the current cursor. Raw
+constructor and mutated-state tests must continue to fail closed.
+
+Remove generic `AuditDigest2<Domain>::from_bytes`. Domain-specific ingress is
+permitted only for external input and authenticated-operation expectations;
+generated request,
+motion, policy, decision, depletion, lineage, and result digests arise only from
+their named canonical-hash authorities. The first Task 4 commit ends here and
+runs the focused identity, native, Ruff, strict-mypy, docs, and diff gates before
+review.
 
 - [ ] **Step 4: Restore the P0 falsifiers and write native verdict RED tests**
 
 Port only the ledger-targeted exact seam, bounded work, false-certificate,
 swept-annulus, rotation, shared-root, full-turn, and adaptive-arc controls.
-Assert three outcomes independently: a live exact violating witness produces
-`cap_exceeded`; complete guarded coverage produces `certified`; exhausted or
-unsupported proof closure produces `unresolved`. A dead negative witness may
-not be labeled exceeded.
+Assert three outcomes independently. `CAP_EXCEEDED` requires a replay-validated
+exact station witness evaluated against the unguarded policy chord surrogate.
+Guarded-cap failure and an inconclusive swept upper bound cause refinement or
+`UNRESOLVED`; they never prove exceedance. Complete exact domain coverage and
+exact between-station closure produce `CERTIFIED`. Exhausted or unsupported
+proof closure without a witness produces `UNRESOLVED`. A live falsifier proves
+witness liveness independently; a dead witness may not produce
+`CAP_EXCEEDED`. Exact witness identity binds stock, opaque motion, policy,
+canonical parameter, and station disposition, and is validated before decision
+digest construction.
 
 - [ ] **Step 5: Factor and bind one native decision adapter**
 
 Link the existing event-exact segment/full-circle oracle core into `_stock_2`
-through one shared CMake target; do not copy its algorithm. Port the adjudicated
-arc proof behind `audit_certification_2.*`, adapting its polynomial/root core
-through `continuous_tea_2/arc_oracle.*` to Task 3's trimmed chart domains,
-endpoint ownership, and non-cyclic event order. The full four-chart cyclic
-oracle is not reused unchanged. Return the
-same closed internal result shape for segment, circle, and arc. The exact
-verdict and decision digest are computed before any reporting maximum.
-Reporting probes cannot feed back into verdict, digest, or stock.
+through one shared CMake target; do not copy its algorithm. Treat `73d5372` as
+theorem, falsifier, and refinement-strategy input only: do not transfer its
+Boolean result, double trigonometric centers, relative spacing floor, or double
+angular comparisons into authority. Arc certification evaluates Task 3's exact
+clipped chart intervals through the shared evaluator, uses non-cyclic event
+order, queries the unguarded exact cap at every examined station, and certifies
+only when an exact between-station predicate closes every interval. Until that
+general closure exists, the adapter may certify a partial arc only from a sound
+safe superset proof such as a complete full-circle authority; otherwise it
+returns `UNRESOLVED` unless an exact violating station exists. The spatial
+floor is an exact rational millimetre value or exact squared-distance threshold;
+depth and node limits are exact integers. All are bound into decision-strategy
+canonical bytes. Reaching any limit yields `UNRESOLVED` unless an already
+validated exact witness yields `CAP_EXCEEDED`; none may decide `CERTIFIED`.
+Return one witness-bearing internal result shape for all
+motions. The exact verdict and decision digest are computed before any reporting
+maximum; reporting probes cannot feed back into verdict, digest, or stock.
+
+- [ ] **Step 5A: Write replay-transaction RED tests**
+
+Before implementing replay, require early finalization, duplicate calls,
+omitted operations, wrong authenticated-operation identity, and wrong actual
+motion identity to fail with named errors. Add controlled native failure
+injection at decision, trial depletion, witness validation, lineage/result
+construction, and finalization. Every failure must preserve authority stock,
+cursor, lineage, and finalized state. Native instrumentation proves exactly one
+`Stock2::clone()` per mutating call and zero clones for retract/clearance calls;
+the trial applicators themselves must report zero internal clones and swaps.
+Finalization succeeds exactly once after complete consumption.
 
 - [ ] **Step 6: Implement the opaque replay owner and atomic calls**
 
 For each mutating native call execute exactly:
 
 ```text
-read current stock and lineage
-decide against current stock
-clone stock
-deplete clone even for cap_exceeded or unresolved
+check replay state, cursor, operation digest, and actual motion digest
+decide against immutable current stock
+clone stock exactly once
+apply validated depletion in-place to the trial for every lateral verdict
 validate decision and depletion evidence
-derive operation-bound post-lineage and canonical result digest
-swap clone into authority
-return result
+derive operation-bound post-lineage and complete canonical result
+construct the complete next replay state
+swap next state into authority with no-throw moves
+return the already-built result
 ```
 
+No allocation, hashing, validation, or cursor update remains after the swap.
 Any exception precedes swap and yields no result. Plunge uses exact disk
 depletion; retract and clearance transport return a non-engaging result with
 identical pre/post lineage. Separate nanobind functions consume each opaque
@@ -866,6 +1132,29 @@ through Python. `finish_audit_replay(...)` succeeds exactly once and only after
 the cursor consumed every bound operation; it returns the opaque completion
 value used by Task 5. Calls after finalization fail with a named replay-state
 error.
+
+The initial `StockLineageDigest2` is
+`SHA256(stock-lineage-seed-v1 {input_digest,
+verified_native_request_digest})`. It is derived from both typed roots, never
+byte-equal retagging of `AuditInputDigest2`. Replay state is decomposed into an
+immutable request and a mutable stock/cursor/lineage/finalized state. Existing
+`Stock2::subtract_exact_*` paths remain intact; Task 4 adds validated in-place
+trial applicators in `stock_exact_depletion_2.*` and validates them before any
+later removal or binding extraction is considered.
+
+Every mutating post-lineage digest is
+`SHA256(stock-lineage-transition-v1 {verified_request_digest, cursor,
+pre_lineage_digest, authenticated_operation_digest, actual_motion_digest,
+decision_witness_digest_if_lateral, depletion_witness_digest})`. Non-engaging
+operations preserve the exact lineage bytes. `stock_2.cpp` changes are limited
+to registration and delegation. One externally linked exact disk-union region
+builder, `build_exact_disk_union_region_2(...)`, is declared only in
+`exact_disk_region_2.h` and defined only in `exact_disk_region_2.cpp`. Every new
+trial applicator and every legacy exact segment/full-circle/arc subtraction path
+calls that one symbol. The existing anonymous helper first becomes a delegating
+compatibility wrapper and remains present until the new route is independently
+validated and the user authorizes later removal. Both new files are compiled
+into the shared native core and the `_stock_2` module through CMake.
 
 - [ ] **Step 7: Run native and Python GREEN gates**
 
@@ -884,12 +1173,23 @@ reported green unless those errors are separately repaired. The task is not
 committable until every motion type passes and no authoritative symbol reaches
 legacy `subtract_arc_sweep`.
 
-- [ ] **Step 8: Commit the closed native unit**
+- [ ] **Step 8: Commit the three closed native slices**
 
 ```bash
-git add CMakeLists.txt pyproject.toml src/audit_digest_2.h src/audit_motion_result_2.* src/audit_policy_2.* src/audit_certification_2.* src/audit_replay_2.* src/audit_classification_2.* src/continuous_tea_2/arc_oracle.* src/engagement_2.* src/stock_2.* src/compas_cgal/_stock_2.pyi src/compas_cgal/adaptive/canonical.py src/compas_cgal/engagement_audit/classification.py src/compas_cgal/engagement_audit/input.py src/compas_cgal/engagement_audit/records.py src/compas_cgal/engagement_audit/errors.py tests/native/test_audit_replay_2.cpp tests/native/test_audit_certification_2.cpp tests/adaptive/test_canonical.py tests/engagement_audit/test_input.py tests/engagement_audit/test_native_replay.py tests/engagement_audit/test_false_arc_certificate.py tests/test_false_certificate.py tests/test_growth_bound.py tests/adaptive/typecheck/auditor_contract.py docs/engagement_audit.md
+# Slice A stages only identity/policy/motion/request files and tests.
+git commit -m "feat(audit): bind native request"
+
+# Slice B stages only decision/oracle/falsifier/witness files and tests.
+git commit -m "feat(audit): decide exact motion"
+
+# Slice C stages only trial-depletion/lineage/result/replay files and tests.
 git commit -m "feat(audit): transact exact motion"
 ```
+
+Before each commit, obtain an independent scoped review and run that slice's
+focused native/Python tests, Ruff, strict mypy, strict docs, and diff check. Use
+`git diff --name-only` against the prior slice to stage every new or modified
+file explicitly; an incomplete fixed path list is a plan failure.
 
 ### Task 5: Implement public replay and truthful report semantics
 
@@ -932,8 +1232,9 @@ def test_returned_unresolved_motion_still_advances_lineage() -> None:
 ```
 
 Add exception injection proving no report escapes, first pre-lineage equals the
-input digest, terminal report lineage equals the last result, and every source
-operation has exactly one result at the same index.
+native read-back of the domain-separated input/request lineage seed, terminal
+report lineage equals the last result, and every source operation has exactly
+one result at the same index.
 
 - [ ] **Step 2: Repair the closed record union**
 
