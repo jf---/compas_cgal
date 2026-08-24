@@ -11,7 +11,13 @@ from compas.geometry import Line
 
 from compas_cgal import _stock_2
 from compas_cgal.adaptive.canonical import CanonicalRingV1
+from compas_cgal.adaptive.canonical import canonical_clearance_z_bytes
+from compas_cgal.adaptive.canonical import canonical_cut_z_bytes
+from compas_cgal.adaptive.canonical import canonical_task1_bytes
+from compas_cgal.adaptive.canonical import encode_binary64
 from compas_cgal.adaptive.canonical import encode_bytes
+from compas_cgal.adaptive.canonical import encode_component_map
+from compas_cgal.adaptive.canonical import encode_sequence
 from compas_cgal.adaptive.canonical import encode_tagged_union
 from compas_cgal.adaptive.identity import ComponentDomainTag
 from compas_cgal.adaptive.identity import ComponentIdentity
@@ -19,6 +25,8 @@ from compas_cgal.adaptive.identity import NativeSourceTreeDigest
 from compas_cgal.adaptive.identity import SourceRevision
 from compas_cgal.adaptive.identity import StrategyVersion
 from compas_cgal.adaptive.motion import EngagementCap
+from compas_cgal.adaptive.policy import DepletionPolicy
+from compas_cgal.adaptive.units import ChordBound
 from compas_cgal.adaptive.units import ClearanceZ
 from compas_cgal.adaptive.units import CutPlane
 from compas_cgal.adaptive.units import CutZ
@@ -37,6 +45,7 @@ from compas_cgal.engagement_audit.identity import BuildIdentity
 from compas_cgal.engagement_audit.identity import PixiLockDigest
 from compas_cgal.engagement_audit.identity import PythonSourceTreeDigest
 from compas_cgal.engagement_audit.input import EngagementAuditInput
+from compas_cgal.engagement_audit.input import AUDIT_INPUT_VERSION
 from compas_cgal.engagement_audit.input import OperationStreamDigest
 from compas_cgal.engagement_audit.operation_identity import canonical_toolpath_operation_bytes
 from compas_cgal.engagement_audit.operation_identity import OperationSnapshot
@@ -109,6 +118,7 @@ def _audit_input(
     cut_plane: CutPlane | None = None,
     tool_radius: ToolRadius | None = None,
     engagement_cap: EngagementCap | None = None,
+    depletion_policy: DepletionPolicy | None = None,
     build_identity: BuildIdentity | None = None,
 ) -> EngagementAuditInput:
     return EngagementAuditInput.build(
@@ -117,6 +127,11 @@ def _audit_input(
         cut_plane=cut_plane or CutPlane.build(CutZ.build(CUT_Z), ClearanceZ.build(CLEARANCE_Z)),
         tool_radius=tool_radius or ToolRadius.build(2.0),
         engagement_cap=engagement_cap or EngagementCap.build(math.pi / 2.0),
+        depletion_policy=depletion_policy
+        or DepletionPolicy.build(
+            chord_bound=ChordBound.build(0.0625),
+            center_count_limit=4096,
+        ),
         operations=operations if operations is not None else (_line((1.0, 1.0, CUT_Z), (4.0, 1.0, CUT_Z)),),
         build_identity=build_identity or _build_identity(),
     )
@@ -244,6 +259,9 @@ def test_raw_construction_cannot_replace_authenticated_stream_digest() -> None:
     with pytest.raises(InvalidEngagementAuditInputError, match="must be created"):
         replace(audit_input, operation_stream_digest=OperationStreamDigest(b"forged"))
 
+    with pytest.raises(InvalidEngagementAuditInputError, match="must be created"):
+        replace(audit_input, native_request_digest=b"forged")
+
 
 def test_input_snapshots_legacy_operation_before_caller_mutation() -> None:
     operation = _line((1.0, 1.0, CUT_Z), (4.0, 1.0, CUT_Z))
@@ -327,6 +345,117 @@ def test_input_identity_binds_native_arc_phase_strategy() -> None:
     audit_input = _audit_input()
 
     assert _stock_2.audit_arc_phase_strategy_version() in audit_input.canonical_bytes
+
+
+def test_input_v2_binds_policy_strategies_and_ordered_native_identity() -> None:
+    audit_input = _audit_input()
+
+    assert b"engagement-audit-input-v2" in audit_input.canonical_bytes
+    assert audit_input.depletion_policy.chord_bound.exact_bytes in audit_input.canonical_bytes
+    assert _stock_2.audit_native_decision_contract_version() in audit_input.canonical_bytes
+    assert _stock_2.audit_native_depletion_contract_version() in audit_input.canonical_bytes
+    assert bytes(audit_input.operations[0].digest) in audit_input.canonical_bytes
+    assert audit_input.operations[0].motion.digest in audit_input.canonical_bytes
+    assert audit_input.native_request_digest in audit_input.canonical_bytes
+
+
+def test_input_v2_binds_exact_two_operation_order_and_native_recomputation() -> None:
+    first = _line((1.0, 1.0, CUT_Z), (4.0, 1.0, CUT_Z), path_index=0)
+    second = _line((4.0, 1.0, CUT_Z), (4.0, 4.0, CUT_Z), path_index=1)
+    audit_input = _audit_input(operations=(first, second))
+    authenticated = encode_sequence(tuple(bytes(operation.digest) for operation in audit_input.operations))
+    native = encode_sequence(tuple(operation.motion.digest for operation in audit_input.operations))
+    policy = _stock_2.build_audit_policy(
+        audit_input.tool_radius.value,
+        audit_input.engagement_cap.theta,
+        audit_input.engagement_cap.chord_ratio,
+        audit_input.depletion_policy.chord_bound.value,
+        audit_input.depletion_policy.center_count_limit,
+    )
+    recomputed = _stock_2.build_audit_native_request_identity(
+        np.array(
+            tuple((point.x, point.y) for point in audit_input.design_boundary.vertices),
+            dtype=np.float64,
+        ),
+        [],
+        policy,
+        tuple(operation.motion for operation in audit_input.operations),
+    )
+
+    expected = encode_tagged_union(
+        AUDIT_INPUT_VERSION,
+        encode_component_map(
+            {
+                b"arc-phase-strategy": _stock_2.audit_arc_phase_strategy_version(),
+                b"authenticated-operation-digests": authenticated,
+                b"build-identity": audit_input.build_identity.canonical_bytes,
+                b"clearance-z": canonical_clearance_z_bytes(audit_input.cut_plane.clearance_z),
+                b"cut-z": canonical_cut_z_bytes(audit_input.cut_plane.cut_z),
+                b"depletion-policy": canonical_task1_bytes(audit_input.depletion_policy),
+                b"design-boundary": audit_input.design_boundary.canonical_bytes,
+                b"engagement-cap": canonical_task1_bytes(audit_input.engagement_cap),
+                b"holes": encode_sequence(()),
+                b"native-decision-contract": _stock_2.audit_native_decision_contract_version(),
+                b"native-depletion-contract": _stock_2.audit_native_depletion_contract_version(),
+                b"native-motion-digests": native,
+                b"native-request-digest": bytes(audit_input.native_request_digest),
+                b"operation-stream-digest": bytes(audit_input.operation_stream_digest),
+                b"tool-radius": encode_binary64(float(audit_input.tool_radius.value)),
+            }
+        ),
+    )
+
+    assert audit_input.canonical_bytes == expected
+    assert recomputed.digest == audit_input.native_request_digest
+
+
+def test_policy_and_authored_cap_are_request_identity() -> None:
+    baseline = _audit_input()
+    changed_cap = _audit_input(engagement_cap=EngagementCap.build(0.7))
+    changed_chord = _audit_input(
+        depletion_policy=DepletionPolicy.build(
+            chord_bound=ChordBound.build(0.03125),
+            center_count_limit=4096,
+        )
+    )
+    changed_limit = _audit_input(
+        depletion_policy=DepletionPolicy.build(
+            chord_bound=ChordBound.build(0.0625),
+            center_count_limit=2048,
+        )
+    )
+
+    assert (
+        len(
+            {
+                baseline.digest,
+                changed_cap.digest,
+                changed_chord.digest,
+                changed_limit.digest,
+            }
+        )
+        == 4
+    )
+    assert (
+        len(
+            {
+                baseline.native_request_digest,
+                changed_cap.native_request_digest,
+                changed_chord.native_request_digest,
+                changed_limit.native_request_digest,
+            }
+        )
+        == 4
+    )
+
+
+def test_source_only_mutation_changes_input_but_not_native_request() -> None:
+    baseline = _audit_input(operations=(_line((1.0, 1.0, CUT_Z), (4.0, 1.0, CUT_Z), path_index=0),))
+    source_changed = _audit_input(operations=(_line((1.0, 1.0, CUT_Z), (4.0, 1.0, CUT_Z), path_index=7),))
+
+    assert baseline.operations[0].digest != source_changed.operations[0].digest
+    assert baseline.digest != source_changed.digest
+    assert baseline.native_request_digest == source_changed.native_request_digest
 
 
 def test_authenticated_lateral_operation_has_its_own_failure_model() -> None:

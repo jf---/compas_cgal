@@ -306,7 +306,7 @@ AuditArcMotion2 AuditArcMotion2::build(
         canonical_end,
         start_point,
         end_point,
-        NativeMotionDigest2::from_bytes(sha256_bytes(canonical)));
+        NativeMotionDigestAuthority2::hash_canonical(canonical));
 }
 
 AuditArcMotion2::AuditArcMotion2(

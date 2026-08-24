@@ -1,5 +1,7 @@
 #pragma once
 
+#include "compas_matrix.h"
+
 // This file contains headers that are compiled once.
 // It helps to have faster compilation times during development.
 // This file is referenced in CMakeLists PCH section.
@@ -44,9 +46,6 @@ namespace compas
     using Polylines = std::list<Polyline>;
     using Polyhedron = CGAL::Polyhedron_3<Kernel, CGAL::Polyhedron_items_with_id_3>;
     using Mesh = CGAL::Surface_mesh<Point>;
-    using RowMatrixXd = Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
-    using RowMatrixXi = Eigen::Matrix<int, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
-
     template <class HDS>
     class Build_polyhedron : public CGAL::Modifier_base<HDS>
     {

@@ -195,6 +195,72 @@ def test_native_arc_classifier_owns_phase_and_sweep_direction() -> None:
         )
 
 
+def test_all_six_native_motion_digests_bind_exact_geometry() -> None:
+    segment = _stock_2.classify_audit_line(
+        (0.0, 0.0, 0.0),
+        (1.0, 0.0, 0.0),
+        0.0,
+        5.0,
+        "cut",
+    )
+    changed_segment = _stock_2.classify_audit_line(
+        (0.0, 0.0, 0.0),
+        (2.0, 0.0, 0.0),
+        0.0,
+        5.0,
+        "cut",
+    )
+    circle = _stock_2.classify_audit_circle((1.0, 2.0, 0.0), WORLD_X, WORLD_Y, 2.0, False, 0.0, 5.0, "cut")
+    changed_circle = _stock_2.classify_audit_circle((1.0, 2.0, 0.0), WORLD_X, WORLD_Y, 3.0, False, 0.0, 5.0, "cut")
+    arc = _stock_2.classify_audit_arc((1.0, 2.0, 0.0), WORLD_X, WORLD_Y, 2.0, 0.0, 1.0, False, 0.0, 5.0, "cut")
+    changed_arc = _stock_2.classify_audit_arc((1.0, 2.0, 0.0), WORLD_X, WORLD_Y, 2.0, 0.0, 1.25, False, 0.0, 5.0, "cut")
+    plunge = _stock_2.classify_audit_line((1.0, 2.0, 5.0), (1.0, 2.0, 0.0), 0.0, 5.0, "plunge")
+    changed_plunge = _stock_2.classify_audit_line((2.0, 2.0, 5.0), (2.0, 2.0, 0.0), 0.0, 5.0, "plunge")
+    retract = _stock_2.classify_audit_line((1.0, 2.0, 0.0), (1.0, 2.0, 5.0), 0.0, 5.0, "retract")
+    changed_retract = _stock_2.classify_audit_line((2.0, 2.0, 0.0), (2.0, 2.0, 5.0), 0.0, 5.0, "retract")
+    clearance = _stock_2.classify_audit_line((0.0, 0.0, 5.0), (1.0, 0.0, 5.0), 0.0, 5.0, "link")
+    changed_clearance = _stock_2.classify_audit_line((0.0, 0.0, 5.0), (2.0, 0.0, 5.0), 0.0, 5.0, "link")
+
+    pairs = (
+        (segment, changed_segment),
+        (circle, changed_circle),
+        (arc, changed_arc),
+        (plunge, changed_plunge),
+        (retract, changed_retract),
+        (clearance, changed_clearance),
+    )
+    assert all(len(original.digest) == 32 for original, _ in pairs)
+    assert all(original.digest != changed.digest for original, changed in pairs)
+    assert len({original.digest for original, _ in pairs}) == 6
+
+
+def test_nonarc_motion_digests_bind_planes_orientation_and_clearance_source() -> None:
+    segment = _stock_2.classify_audit_line((0.0, 0.0, 0.0), (1.0, 0.0, 0.0), 0.0, 5.0, "cut")
+    changed_segment_plane = _stock_2.classify_audit_line((0.0, 0.0, 1.0), (1.0, 0.0, 1.0), 1.0, 6.0, "cut")
+    circle_ccw = _stock_2.classify_audit_circle((1.0, 2.0, 0.0), WORLD_X, WORLD_Y, 2.0, False, 0.0, 5.0, "cut")
+    circle_cw = _stock_2.classify_audit_circle((1.0, 2.0, 0.0), WORLD_X, WORLD_Y, 2.0, True, 0.0, 5.0, "cut")
+    plunge = _stock_2.classify_audit_line((1.0, 2.0, 5.0), (1.0, 2.0, 0.0), 0.0, 5.0, "plunge")
+    changed_plunge_plane = _stock_2.classify_audit_line((1.0, 2.0, 6.0), (1.0, 2.0, 1.0), 1.0, 6.0, "plunge")
+    retract = _stock_2.classify_audit_line((1.0, 2.0, 0.0), (1.0, 2.0, 5.0), 0.0, 5.0, "retract")
+    changed_retract_plane = _stock_2.classify_audit_line((1.0, 2.0, 1.0), (1.0, 2.0, 6.0), 1.0, 6.0, "retract")
+    clearance_circle = _stock_2.classify_audit_circle((1.0, 2.0, 5.0), WORLD_X, WORLD_Y, 2.0, False, 0.0, 5.0, "link")
+    changed_clearance_circle = _stock_2.classify_audit_circle((1.0, 2.0, 5.0), WORLD_X, WORLD_Y, 2.0, True, 0.0, 5.0, "link")
+    clearance_arc = _stock_2.classify_audit_arc((1.0, 2.0, 5.0), WORLD_X, WORLD_Y, 2.0, 0.0, math.pi / 2.0, False, 0.0, 5.0, "link")
+    complementary_clearance_arc = _stock_2.classify_audit_arc((1.0, 2.0, 5.0), WORLD_X, WORLD_Y, 2.0, 0.0, -3.0 * math.pi / 2.0, True, 0.0, 5.0, "link")
+
+    assert segment.digest != changed_segment_plane.digest
+    assert circle_ccw.digest != circle_cw.digest
+    assert plunge.digest != changed_plunge_plane.digest
+    assert retract.digest != changed_retract_plane.digest
+    assert clearance_circle.digest != changed_clearance_circle.digest
+    assert clearance_arc.digest != complementary_clearance_arc.digest
+
+    shifted_clearance_circle = _stock_2.classify_audit_circle((1.0, 2.0, 6.0), WORLD_X, WORLD_Y, 2.0, False, 1.0, 6.0, "link")
+    shifted_clearance_arc = _stock_2.classify_audit_arc((1.0, 2.0, 6.0), WORLD_X, WORLD_Y, 2.0, 0.0, math.pi / 2.0, False, 1.0, 6.0, "link")
+    assert clearance_circle.digest != shifted_clearance_circle.digest
+    assert clearance_arc.digest != shifted_clearance_arc.digest
+
+
 @pytest.mark.parametrize("end_angle", [0.0, math.nextafter(math.tau, math.inf)])
 def test_native_arc_classifier_rejects_degenerate_sweep(end_angle: float) -> None:
     with pytest.raises(_stock_2.AuditUnsupportedGeometryError):
@@ -239,3 +305,5 @@ def test_native_classification_values_cannot_be_forged(
 ) -> None:
     with pytest.raises(TypeError):
         native_type()
+    with pytest.raises(TypeError):
+        type("ForgedMotion", (native_type,), {})

@@ -91,9 +91,6 @@ private:
     bool owns_end_seam_;
 };
 
-struct NativeMotionDigestDomain;
-using NativeMotionDigest2 = AuditDigest2<NativeMotionDigestDomain>;
-
 class AuditArcMotion2 {
 public:
     static AuditArcMotion2 build(

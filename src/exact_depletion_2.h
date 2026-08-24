@@ -65,9 +65,6 @@ public:
     using std::invalid_argument::invalid_argument;
 };
 
-struct DepletionWitnessDigestDomain;
-using DepletionWitnessDigest2 = AuditDigest2<DepletionWitnessDigestDomain>;
-
 class ExactArcDepletionTrace2 {
 public:
     static ExactArcDepletionTrace2 build(

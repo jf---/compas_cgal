@@ -443,7 +443,15 @@ def _engagement_cap_bytes(cap: EngagementCap) -> bytes:
     _require_exact(cap, EngagementCap, "engagement cap")
     if type(cap.chord_ratio_bytes) is not bytes or len(cap.chord_ratio_bytes) != _BINARY64.size:
         raise CanonicalEncodingError("engagement cap must retain one native binary64 surrogate.")
-    return encode_tagged_union(b"engagement-cap-v1", encode_bytes(cap.chord_ratio_bytes))
+    return encode_tagged_union(
+        b"engagement-cap-v2",
+        encode_component_map(
+            {
+                b"chord-ratio": encode_binary64(cap.chord_ratio),
+                b"theta-radian": encode_binary64(cap.theta),
+            }
+        ),
+    )
 
 
 def _candidate_policy_bytes(policy: CandidatePolicy) -> bytes:

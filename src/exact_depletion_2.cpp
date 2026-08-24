@@ -735,13 +735,13 @@ ExactArcDepletionTrace2 ExactArcDepletionTrace2::build(
         append_audit_bytes(canonical, canonical_audit_rational_bytes(parameter.parameter()));
     }
     return ExactArcDepletionTrace2(
-        NativeMotionDigest2::from_bytes(motion.digest().bytes()),
+        motion.digest(),
         tool_radius,
         max_chord,
         center_count_limit,
         std::move(parameters),
         canonical,
-        DepletionWitnessDigest2::from_bytes(sha256_bytes(canonical)),
+        DepletionWitnessDigestAuthority2::hash_canonical(canonical),
         false);
 }
 
