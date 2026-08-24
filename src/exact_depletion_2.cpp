@@ -741,7 +741,7 @@ ExactArcDepletionTrace2 ExactArcDepletionTrace2::build(
         center_count_limit,
         std::move(parameters),
         canonical,
-        DepletionWitnessDigestAuthority2::hash_canonical(canonical),
+        ExactDepletionTraceDigestAuthority2::hash_canonical(canonical),
         false);
 }
 
@@ -752,7 +752,7 @@ ExactArcDepletionTrace2::ExactArcDepletionTrace2(
     std::size_t center_count_limit,
     std::vector<ExactCircleChartParameter2> parameters,
     std::string canonical_bytes,
-    DepletionWitnessDigest2 digest,
+    ExactDepletionTraceDigest2 digest,
     bool cyclic)
     : motion_digest_(std::move(motion_digest)),
       tool_radius_(std::move(tool_radius)),
@@ -770,7 +770,7 @@ const std::string& ExactArcDepletionTrace2::canonical_bytes() const noexcept
     return canonical_bytes_;
 }
 
-const DepletionWitnessDigest2& ExactArcDepletionTrace2::digest() const noexcept
+const ExactDepletionTraceDigest2& ExactArcDepletionTrace2::digest() const noexcept
 {
     return digest_;
 }

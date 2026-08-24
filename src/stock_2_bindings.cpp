@@ -1,5 +1,6 @@
 #include "audit_classification_2.h"
 #include "audit_identity_bindings_2.h"
+#include "audit_replay_bindings_2.h"
 #include "engagement_2_bindings.h"
 #include "stock_2.h"
 #include "stock_local_2.h"
@@ -38,6 +39,7 @@ NB_MODULE(_stock_2, m)
 {
     register_audit_classification_2(m);
     register_audit_identity_2(m);
+    register_audit_replay_2(m);
     nb::exception<ExactDepletionConstructionError> construction_error(
         m,
         "ExactDepletionConstructionError");

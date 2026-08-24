@@ -233,6 +233,7 @@ add_library(continuous_tea_exact_core STATIC
     src/exact_algebraic_1.cpp
     src/exact_circle_chart_2.cpp
     src/exact_stock_region_2.cpp
+    src/exact_disk_region_2.cpp
     src/audit_arc_motion_2.cpp
     src/stock_2.cpp
     src/stock_local_2.cpp
@@ -246,6 +247,14 @@ add_library(continuous_tea_exact_core STATIC
     src/audit_exact_station_2.cpp
     src/audit_decision_strategy_2.cpp
     src/audit_stock_state_identity_2.cpp
+    src/audit_depletion_witness_2.cpp
+    src/stock_exact_depletion_2.cpp
+    src/audit_lineage_2.cpp
+    src/audit_motion_result_2.cpp
+    src/audit_replay_2.cpp
+    src/audit_replay_mutating_2.cpp
+    src/audit_replay_non_engaging_2.cpp
+    src/audit_replay_finalization_2.cpp
     src/audit_station_parameters_2.cpp
     src/audit_decision_evidence_values_2.cpp
     src/audit_station_evidence_2.cpp
@@ -308,6 +317,11 @@ add_executable(audit_native_gate EXCLUDE_FROM_ALL
     tests/native/test_audit_certification_refinement_2.cpp
     tests/native/test_audit_certification_falsifiers_2.cpp
     tests/native/test_audit_certification_identity_2.cpp
+    tests/native/test_audit_replay_2.cpp
+    tests/native/test_audit_replay_transaction_state_2.cpp
+    tests/native/test_audit_replay_trial_depletion_2.cpp
+    tests/native/test_audit_replay_identity_lineage_2.cpp
+    tests/native/test_audit_replay_finalization_2.cpp
 )
 target_link_libraries(audit_native_gate PRIVATE continuous_tea_exact_core)
 
@@ -396,7 +410,7 @@ add_nanobind_module(_polylines src/polylines.cpp)
 add_nanobind_module(_toolpath src/toolpath.cpp)
 add_nanobind_module(
     _stock_2
-    "src/stock_2_bindings.cpp;src/engagement_2.cpp;src/engagement_2_bindings.cpp;src/audit_identity_bindings_2.cpp;src/audit_classification_2.cpp")
+    "src/stock_2_bindings.cpp;src/engagement_2.cpp;src/engagement_2_bindings.cpp;src/audit_identity_bindings_2.cpp;src/audit_replay_bindings_2.cpp;src/audit_classification_2.cpp")
 target_link_libraries(_stock_2 PRIVATE continuous_tea_exact_core)
 add_nanobind_module(
     _continuous_tea_2

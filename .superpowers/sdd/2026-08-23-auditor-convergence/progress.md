@@ -1,10 +1,10 @@
 # Auditor convergence progress
 
 **Plan:** P1 truthful audit
-**Task:** P1 Task 4B exact native verdict RED/GREEN
+**Task:** P1 Task 4C exact native replay RED/GREEN
 **Branch:** `codex/auditor-convergence-sdd`
 **Worktree:** `/Users/jelle/Code/CADCAM/worktrees/compas_cgal_prs-auditor-convergence-sdd`
-**Current HEAD:** `e678fe04a7819363d7d6cd315cec532dd021b177`
+**Current HEAD:** `7cda8f6d6576e51271e8adfbfd9a8505dbaa53c0`
 **Integration source:** `073a0f7f833da440fe323a0a046ad31550579f82`
 **Certifier source:** `73d53729564851d69eb1c28d6c2f1e68350cd20f`
 
@@ -20,6 +20,7 @@
 - `27f97c7` — exact rational-chart arc surrogate and atomic depletion
 - `1cef174` — bounded native-audit SDD correction
 - `e678fe0` — native request identity and closed motion-classification core
+- `7cda8f6` — exact native motion decision and evidence adapter
 
 ## Last verified commands
 
@@ -153,6 +154,57 @@
   machined and spiral arc fixtures each exceeded a 120 s bounded gate after
   fixture coarsening; no adapter semantics or proof budgets were weakened, and
   no machined/spiral arc-adapter coverage is claimed
+- Task 4C initial replay RED — fresh native configure registered the replay
+  gate; compile failed causally at missing `audit_replay_2.h`
+- Task 4C preflight amendment — exact decision limits enter native request and
+  input identity; exact trace and full depletion-witness digest domains are
+  distinct; replay owns stock separately from no-throw progress; native result
+  minting is witness-driven and has no unspecified reporting maximum
+- Task 4C atomicity boundary — native transaction work completes before the
+  no-throw stock/progress commit; nanobind return-value packaging is explicitly
+  outside the atomic guarantee
+- Task 4C input-v3 checkpoint — opaque unit-bearing decision limits bind input
+  and native request identity; the focused Python input/request gate passed 63
+  tests
+- Task 4C identity/lineage RED — private minting and digest-authority gates,
+  exact evidence-count derivation, complete seed/transition/result/completion
+  component mutations, no-material chronology, non-engaging chaining, and
+  clone-free request preflight are specified in the native gate
+- Task 4C expanded native RED —
+  `cmake --build build/audit-native --target audit_native_gate -j2` stopped
+  causally because the not-yet-implemented `audit_replay_2.h` is absent
+- Task 4C exact trial depletion — one shared exact disk region builder and four
+  in-place applicators validate canonical pre/post stock, complete typed
+  witnesses, and independently replay each removal; legacy subtraction remains
+  present as delegated compatibility code
+- Task 4C replay authority — sealed lineage, result, completion, and opaque
+  replay owners transact all six typed motion routes; lateral and plunge
+  commits swap one trial stock plus no-throw progress, while retract and
+  clearance preserve stock and lineage without cloning
+- Task 4C atomicity evidence — actual `Stock2::clone` and `Stock2::swap`
+  instrumentation proves one clone and one swap for successful mutating calls,
+  none for non-engaging calls, and no commit at every injected precommit
+  failure stage; finalization is complete-only and exactly once
+- Task 4C Python boundary — opaque request, limits, replay, result, and
+  completion values expose exactly six typed dispatch functions; no generic
+  motion, raw geometry, replay stock, depletion witness, or reporting maximum
+  crosses the boundary
+- Task 4C binding GREEN — focused native replay test passed 3 tests in 0.92 s
+  after the editable `_stock_2` artifact was rebuilt and installed
+- Task 4C compatibility GREEN — corrected focused coverage list passed 68 tests
+  in 1.97 s under two xdist workers; the former plan path
+  `tests/engagement_audit/test_false_arc_certificate.py` did not exist and is
+  replaced by the retained `tests/test_false_certificate.py` control
+- Task 4C complete Python audit boundary — all 129 engagement-audit tests
+  passed in 1.47 s under two xdist workers after the final formatting pass
+- Task 4C authoritative native GREEN — fresh configure completed in 76.6 s,
+  `audit_native_gate` exited 0, 16 exact-arc stock tests passed in 1.23 s, and
+  five continuous-chart tests passed in 0.67 s
+- Task 4C static GREEN — Ruff passed, strict audit mypy passed 11 source files,
+  strict MkDocs passed, and `git diff --check` passed; `types-adaptive`
+  reproduced the accepted six errors in three files exactly
+- Task 4C commit — `feat(audit): transact exact motion`; Jelle is author and
+  committer on the isolated `codex/auditor-convergence-sdd` branch
 
 ## Open blockers
 
@@ -160,5 +212,4 @@
 
 ## Next exact command
 
-after adding `tests/native/test_audit_replay_2.cpp`, run `pixi run audit-native`
-and capture the Task 4C replay-transaction compile RED
+`PYTEST_XDIST_AUTO_NUM_WORKERS=2 pixi run pytest -- tests/engagement_audit/test_replay.py tests/engagement_audit/test_report.py -n auto -q`

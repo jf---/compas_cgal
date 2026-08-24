@@ -457,15 +457,22 @@ void audit_identity_gate()
         std::numbers::pi / 2.0,
         false,
         Epeck::FT(0));
+    const AuditDecisionLimits2 limits = AuditDecisionLimits2::build(
+        AuditSquaredSpatialFloorMm2::build(
+            Epeck::FT(1) / Epeck::FT(4096)),
+        8,
+        256);
     const AuditNativeRequestIdentity2 request =
         AuditNativeRequestIdentity2::build(
             stock,
             policy,
+            limits,
             {first.digest(), second.digest()});
     const AuditNativeRequestIdentity2 reordered =
         AuditNativeRequestIdentity2::build(
             stock,
             policy,
+            limits,
             {second.digest(), first.digest()});
     require(
         request.digest().bytes().size() == 32,

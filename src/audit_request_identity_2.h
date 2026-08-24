@@ -1,5 +1,6 @@
 #pragma once
 
+#include "audit_certification_2.h"
 #include "audit_policy_2.h"
 #include "audit_stock_identity_2.h"
 
@@ -17,6 +18,7 @@ public:
     static AuditNativeRequestIdentity2 build(
         const AuditNativeStockIdentity2& stock,
         const AuditPolicy2& policy,
+        const AuditDecisionLimits2& decision_limits,
         std::vector<NativeMotionDigest2> motion_digests);
 
     const std::string& canonical_bytes() const noexcept;
@@ -26,12 +28,14 @@ private:
     AuditNativeRequestIdentity2(
         AuditNativeStockIdentity2 stock,
         AuditPolicyDigest2 policy_digest,
+        AuditDecisionLimits2 decision_limits,
         std::vector<NativeMotionDigest2> motion_digests,
         std::string canonical_bytes,
         AuditNativeRequestDigest2 digest);
 
     AuditNativeStockIdentity2 stock_;
     AuditPolicyDigest2 policy_digest_;
+    AuditDecisionLimits2 decision_limits_;
     std::vector<NativeMotionDigest2> motion_digests_;
     std::string canonical_bytes_;
     AuditNativeRequestDigest2 digest_;

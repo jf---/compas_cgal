@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from dataclasses import FrozenInstanceError
 import hashlib
 import math
 from typing import cast
@@ -41,6 +42,7 @@ from compas_cgal.engagement_audit.errors import InvalidEngagementAuditInputError
 from compas_cgal.engagement_audit.errors import MultipleCutPlaneError
 from compas_cgal.engagement_audit.errors import NonFiniteAuditGeometryError
 from compas_cgal.engagement_audit.errors import UnsupportedAuditGeometryError
+from compas_cgal.engagement_audit.decision_limits import AuditDecisionLimits
 from compas_cgal.engagement_audit.identity import BuildIdentity
 from compas_cgal.engagement_audit.identity import PixiLockDigest
 from compas_cgal.engagement_audit.identity import PythonSourceTreeDigest
@@ -119,6 +121,7 @@ def _audit_input(
     tool_radius: ToolRadius | None = None,
     engagement_cap: EngagementCap | None = None,
     depletion_policy: DepletionPolicy | None = None,
+    decision_limits: AuditDecisionLimits | None = None,
     build_identity: BuildIdentity | None = None,
 ) -> EngagementAuditInput:
     return EngagementAuditInput.build(
@@ -132,9 +135,65 @@ def _audit_input(
             chord_bound=ChordBound.build(0.0625),
             center_count_limit=4096,
         ),
+        decision_limits=decision_limits
+        or AuditDecisionLimits.build(
+            spatial_floor_mm=0.015625,
+            max_depth=8,
+            max_nodes=256,
+        ),
         operations=operations if operations is not None else (_line((1.0, 1.0, CUT_Z), (4.0, 1.0, CUT_Z)),),
         build_identity=build_identity or _build_identity(),
     )
+
+
+def test_input_v3_requires_exact_decision_limits() -> None:
+    with pytest.raises(InvalidEngagementAuditInputError, match="decision limits"):
+        _audit_input(decision_limits=cast(AuditDecisionLimits, object()))
+
+
+def test_decision_limits_are_factory_owned_and_immutable() -> None:
+    limits = AuditDecisionLimits.build(
+        spatial_floor_mm=0.015625,
+        max_depth=8,
+        max_nodes=256,
+    )
+
+    with pytest.raises(InvalidEngagementAuditInputError):
+        AuditDecisionLimits()  # type: ignore[call-arg]
+    with pytest.raises(FrozenInstanceError):
+        limits.max_nodes = 255  # type: ignore[misc]
+
+
+def test_input_v3_binds_each_decision_limit_component() -> None:
+    baseline = _audit_input()
+    mutations = (
+        _audit_input(
+            decision_limits=AuditDecisionLimits.build(
+                spatial_floor_mm=0.0078125,
+                max_depth=8,
+                max_nodes=256,
+            )
+        ),
+        _audit_input(
+            decision_limits=AuditDecisionLimits.build(
+                spatial_floor_mm=0.015625,
+                max_depth=7,
+                max_nodes=256,
+            )
+        ),
+        _audit_input(
+            decision_limits=AuditDecisionLimits.build(
+                spatial_floor_mm=0.015625,
+                max_depth=8,
+                max_nodes=255,
+            )
+        ),
+    )
+
+    assert b"engagement-audit-input-v3" in baseline.canonical_bytes
+    assert baseline.decision_limits.canonical_bytes in baseline.canonical_bytes
+    assert all(mutation.digest != baseline.digest for mutation in mutations)
+    assert all(mutation.native_request_digest != baseline.native_request_digest for mutation in mutations)
 
 
 def test_empty_toolpath_cannot_audit_clean() -> None:
@@ -347,11 +406,12 @@ def test_input_identity_binds_native_arc_phase_strategy() -> None:
     assert _stock_2.audit_arc_phase_strategy_version() in audit_input.canonical_bytes
 
 
-def test_input_v2_binds_policy_strategies_and_ordered_native_identity() -> None:
+def test_input_v3_binds_policy_strategies_limits_and_ordered_native_identity() -> None:
     audit_input = _audit_input()
 
-    assert b"engagement-audit-input-v2" in audit_input.canonical_bytes
+    assert b"engagement-audit-input-v3" in audit_input.canonical_bytes
     assert audit_input.depletion_policy.chord_bound.exact_bytes in audit_input.canonical_bytes
+    assert audit_input.decision_limits.canonical_bytes in audit_input.canonical_bytes
     assert _stock_2.audit_native_decision_contract_version() in audit_input.canonical_bytes
     assert _stock_2.audit_native_depletion_contract_version() in audit_input.canonical_bytes
     assert bytes(audit_input.operations[0].digest) in audit_input.canonical_bytes
@@ -359,7 +419,7 @@ def test_input_v2_binds_policy_strategies_and_ordered_native_identity() -> None:
     assert audit_input.native_request_digest in audit_input.canonical_bytes
 
 
-def test_input_v2_binds_exact_two_operation_order_and_native_recomputation() -> None:
+def test_input_v3_binds_exact_two_operation_order_and_native_recomputation() -> None:
     first = _line((1.0, 1.0, CUT_Z), (4.0, 1.0, CUT_Z), path_index=0)
     second = _line((4.0, 1.0, CUT_Z), (4.0, 4.0, CUT_Z), path_index=1)
     audit_input = _audit_input(operations=(first, second))
@@ -379,6 +439,7 @@ def test_input_v2_binds_exact_two_operation_order_and_native_recomputation() -> 
         ),
         [],
         policy,
+        audit_input.decision_limits.native,
         tuple(operation.motion for operation in audit_input.operations),
     )
 
@@ -392,6 +453,7 @@ def test_input_v2_binds_exact_two_operation_order_and_native_recomputation() -> 
                 b"clearance-z": canonical_clearance_z_bytes(audit_input.cut_plane.clearance_z),
                 b"cut-z": canonical_cut_z_bytes(audit_input.cut_plane.cut_z),
                 b"depletion-policy": canonical_task1_bytes(audit_input.depletion_policy),
+                b"decision-limits": audit_input.decision_limits.canonical_bytes,
                 b"design-boundary": audit_input.design_boundary.canonical_bytes,
                 b"engagement-cap": canonical_task1_bytes(audit_input.engagement_cap),
                 b"holes": encode_sequence(()),

@@ -50,6 +50,42 @@ std::size_t positive_center_limit(nb::handle value)
     return static_cast<std::size_t>(parsed);
 }
 
+std::size_t checked_decision_limit(
+    nb::handle value,
+    const char* name,
+    bool depth)
+{
+    if (!PyLong_CheckExact(value.ptr())) {
+        if (depth) {
+            throw AuditDecisionDepthLimitError(
+                std::string(name) + " must be an exact non-negative integer");
+        }
+        throw AuditDecisionNodeLimitError(
+            std::string(name) + " must be an exact positive integer");
+    }
+    const long long parsed = PyLong_AsLongLong(value.ptr());
+    if (PyErr_Occurred()) {
+        PyErr_Clear();
+        if (depth) {
+            throw AuditDecisionDepthLimitError(
+                std::string(name) + " exceeds the native integer domain");
+        }
+        throw AuditDecisionNodeLimitError(
+            std::string(name) + " exceeds the native integer domain");
+    }
+    if ((depth && parsed < 0) || (!depth && parsed <= 0)
+        || static_cast<unsigned long long>(parsed)
+            > std::numeric_limits<std::size_t>::max()) {
+        if (depth) {
+            throw AuditDecisionDepthLimitError(
+                std::string(name) + " must be non-negative and representable");
+        }
+        throw AuditDecisionNodeLimitError(
+            std::string(name) + " must be positive and representable");
+    }
+    return static_cast<std::size_t>(parsed);
+}
+
 std::vector<NativeMotionDigest2> closed_motion_digests(const nb::tuple& motions)
 {
     if (motions.size() == 0) {
@@ -107,6 +143,14 @@ void register_audit_identity_2(nb::module_& module)
         module, "AuditNativeStockDuplicateHoleError", stock_error.ptr());
     nb::exception<AuditNativeRequestMotionError>(
         module, "AuditNativeRequestMotionError", PyExc_ValueError);
+    nb::exception<AuditDecisionLimitsNonFiniteInputError>(
+        module, "AuditDecisionLimitsNonFiniteInputError", PyExc_ValueError);
+    nb::exception<AuditSquaredSpatialFloorError>(
+        module, "AuditSquaredSpatialFloorError", PyExc_ValueError);
+    nb::exception<AuditDecisionDepthLimitError>(
+        module, "AuditDecisionDepthLimitError", PyExc_ValueError);
+    nb::exception<AuditDecisionNodeLimitError>(
+        module, "AuditDecisionNodeLimitError", PyExc_ValueError);
 
     nb::class_<AuditPolicy2>(module, "AuditPolicy2", nb::is_final())
         .def_prop_ro("digest", [](const AuditPolicy2& policy) {
@@ -127,6 +171,11 @@ void register_audit_identity_2(nb::module_& module)
         })
         .def_prop_ro("digest", [](const AuditNativeRequestIdentity2& identity) {
             return digest_bytes(identity.digest().bytes());
+        });
+    nb::class_<AuditDecisionLimits2>(
+        module, "AuditDecisionLimits2", nb::is_final())
+        .def_prop_ro("canonical_bytes", [](const AuditDecisionLimits2& limits) {
+            return digest_bytes(limits.canonical_bytes());
         });
 
     module.def(
@@ -157,6 +206,29 @@ void register_audit_identity_2(nb::module_& module)
         "depletion_chord_bound_mm"_a,
         "center_count_limit"_a);
     module.def(
+        "build_audit_decision_limits",
+        [](double spatial_floor_mm,
+           nb::handle max_depth,
+           nb::handle max_nodes) {
+            if (!std::isfinite(spatial_floor_mm)) {
+                throw AuditDecisionLimitsNonFiniteInputError(
+                    "audit decision spatial floor must be finite binary64");
+            }
+            const Epeck::FT exact_floor(spatial_floor_mm);
+            if (CGAL::sign(exact_floor) != CGAL::POSITIVE) {
+                throw AuditSquaredSpatialFloorError(
+                    "audit decision spatial floor must be positive mm");
+            }
+            return AuditDecisionLimits2::build(
+                AuditSquaredSpatialFloorMm2::build(
+                    exact_floor * exact_floor),
+                checked_decision_limit(max_depth, "max depth", true),
+                checked_decision_limit(max_nodes, "max nodes", false));
+        },
+        "spatial_floor_mm"_a,
+        "max_depth"_a,
+        "max_nodes"_a);
+    module.def(
         "build_audit_native_stock_identity",
         &AuditNativeStockIdentity2::build,
         "boundary"_a,
@@ -166,15 +238,18 @@ void register_audit_identity_2(nb::module_& module)
         [](Eigen::Ref<const compas::RowMatrixXd> boundary,
            const std::vector<compas::RowMatrixXd>& holes,
            const AuditPolicy2& policy,
+           const AuditDecisionLimits2& decision_limits,
            const nb::tuple& motions) {
             return AuditNativeRequestIdentity2::build(
                 AuditNativeStockIdentity2::build(boundary, holes),
                 policy,
+                decision_limits,
                 closed_motion_digests(motions));
         },
         "boundary"_a,
         "holes"_a,
         "policy"_a,
+        "decision_limits"_a,
         "motions"_a);
     module.def("audit_native_decision_contract_version", []() {
         return digest_bytes(audit_native_decision_contract_version());

@@ -76,7 +76,7 @@ public:
 
     const std::vector<ExactCircleChartParameter2>& parameters() const noexcept;
     const std::string& canonical_bytes() const noexcept;
-    const DepletionWitnessDigest2& digest() const noexcept;
+    const ExactDepletionTraceDigest2& digest() const noexcept;
     const std::string& strategy_version() const noexcept;
     bool cyclic() const noexcept;
     bool matches_exact_inputs(
@@ -93,7 +93,7 @@ private:
         std::size_t center_count_limit,
         std::vector<ExactCircleChartParameter2> parameters,
         std::string canonical_bytes,
-        DepletionWitnessDigest2 digest,
+        ExactDepletionTraceDigest2 digest,
         bool cyclic);
 
     NativeMotionDigest2 motion_digest_;
@@ -102,7 +102,7 @@ private:
     std::size_t center_count_limit_;
     std::vector<ExactCircleChartParameter2> parameters_;
     std::string canonical_bytes_;
-    DepletionWitnessDigest2 digest_;
+    ExactDepletionTraceDigest2 digest_;
     bool cyclic_;
 };
 

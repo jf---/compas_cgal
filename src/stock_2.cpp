@@ -1,4 +1,6 @@
 #include "stock_2.h"
+#include "exact_disk_region_2.h"
+#include "audit_replay_internal_2.h"
 #include "stock_local_2.h"
 
 #include <algorithm>
@@ -62,14 +64,7 @@ Gps exact_disk_union(
     const std::vector<EPoint>& centers,
     const Epeck::FT& radius)
 {
-    std::vector<GpsPolygon> disks;
-    disks.reserve(centers.size());
-    for (const EPoint& center : centers) {
-        disks.push_back(disk_polygon(center, radius));
-    }
-    Gps region;
-    region.join(disks.begin(), disks.end());
-    return region;
+    return build_exact_disk_union_region_2(centers, radius);
 }
 
 // The exact annulus between `inner_radius` and `outer_radius` about `center`.
@@ -189,7 +184,16 @@ bool Stock2::is_empty() const
 
 Stock2 Stock2::clone() const
 {
+    note_audit_trial_stock_clone_for_test();
+    note_audit_replay_stock_clone_for_test();
     return Stock2(std::make_unique<Gps>(*set_));
+}
+
+void Stock2::swap(Stock2& other) noexcept
+{
+    note_audit_trial_stock_swap_for_test();
+    note_audit_replay_stock_swap_for_test();
+    set_.swap(other.set_);
 }
 
 bool Stock2::is_subset_of(const Stock2& other) const
@@ -502,6 +506,7 @@ void Stock2::subtract_capsule_quad(double x0, double y0, double x1, double y1, d
 void Stock2::subtract_arc_sweep(double cx, double cy, double sx, double sy,
                                 double ex, double ey, bool cw, double tool_radius)
 {
+    note_legacy_arc_sweep_reached_for_test();
     if (tool_radius <= 0.0) throw std::invalid_argument("tool_radius should be positive.");
     const double rx = sx - cx, ry = sy - cy;
     const double guide_r = std::hypot(rx, ry);
