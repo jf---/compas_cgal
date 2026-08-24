@@ -134,33 +134,29 @@ std::pair<Rational, Rational> unit_direction(
 }
 
 StationEventSource2 station_source(
-    double center_x,
-    double center_y,
-    double phase_dx,
-    double phase_dy,
-    double tool_radius,
-    double cap_chord_ratio,
+    const Epeck::FT& center_x,
+    const Epeck::FT& center_y,
+    const Epeck::FT& phase_dx,
+    const Epeck::FT& phase_dy,
+    const Epeck::FT& tool_radius,
+    const Epeck::FT& cap_chord_ratio,
     const ChartWitness& witness)
 {
     const Rational exact_center_x =
         parse_rational(
-            exact_rational_text(
-                Epeck::FT(center_x)),
+            exact_rational_text(center_x),
             "circle center x");
     const Rational exact_center_y =
         parse_rational(
-            exact_rational_text(
-                Epeck::FT(center_y)),
+            exact_rational_text(center_y),
             "circle center y");
     const Rational exact_phase_x =
         parse_rational(
-            exact_rational_text(
-                Epeck::FT(phase_dx)),
+            exact_rational_text(phase_dx),
             "circle phase x");
     const Rational exact_phase_y =
         parse_rational(
-            exact_rational_text(
-                Epeck::FT(phase_dy)),
+            exact_rational_text(phase_dy),
             "circle phase y");
     const auto [unit_x, unit_y] =
         unit_direction(
@@ -177,10 +173,8 @@ StationEventSource2 station_source(
     return StationEventSource2::build(
         rational_text(station_x),
         rational_text(station_y),
-        exact_rational_text(
-            Epeck::FT(tool_radius)),
-        exact_rational_text(
-            Epeck::FT(cap_chord_ratio)));
+        exact_rational_text(tool_radius),
+        exact_rational_text(cap_chord_ratio));
 }
 
 const SegmentBoundaryBranch2* branch_for(
@@ -380,12 +374,12 @@ std::vector<std::string>
 derive_full_circle_pair_requests(
     const Stock2& stock,
     const EventPartitionCertificate2& topology_partition,
-    double center_x,
-    double center_y,
-    double phase_dx,
-    double phase_dy,
-    double tool_radius,
-    double cap_chord_ratio)
+    const Epeck::FT& center_x,
+    const Epeck::FT& center_y,
+    const Epeck::FT& phase_dx,
+    const Epeck::FT& phase_dy,
+    const Epeck::FT& tool_radius,
+    const Epeck::FT& cap_chord_ratio)
 {
     const std::vector<BoundaryFeatureRecord2>
         boundary_records =
@@ -471,12 +465,12 @@ construct_full_circle_pair_closed_partition(
     const std::string& cap_chord_ratio,
     const std::vector<std::string>& line_sources,
     const std::vector<std::string>& circle_sources,
-    double center_x,
-    double center_y,
-    double phase_dx,
-    double phase_dy,
-    double tool_radius,
-    double cap_chord_ratio_value)
+    const Epeck::FT& center_x,
+    const Epeck::FT& center_y,
+    const Epeck::FT& phase_dx,
+    const Epeck::FT& phase_dy,
+    const Epeck::FT& tool_radius,
+    const Epeck::FT& cap_chord_ratio_value)
 {
     std::vector<std::string> pair_requests;
     while (true) {
@@ -518,12 +512,12 @@ FullCircleCellAuthority2
 construct_full_circle_cell_authority(
     const Stock2& stock,
     const VerifiedEventPartition2& verified_partition,
-    double center_x,
-    double center_y,
-    double phase_dx,
-    double phase_dy,
-    double tool_radius,
-    double cap_chord_ratio)
+    const Epeck::FT& center_x,
+    const Epeck::FT& center_y,
+    const Epeck::FT& phase_dx,
+    const Epeck::FT& phase_dy,
+    const Epeck::FT& tool_radius,
+    const Epeck::FT& cap_chord_ratio)
 {
     if (verified_partition.verdict
         != ContinuousTeaVerdict::CERTIFIED) {
@@ -553,6 +547,7 @@ construct_full_circle_cell_authority(
     bool any_material = false;
     bool any_partial = false;
     bool cap_exceeded = false;
+    std::optional<FullCircleAuthorityParameter2> violating_parameter;
     bool unresolved =
         partition.cells.empty()
         || std::any_of(
@@ -562,7 +557,7 @@ construct_full_circle_cell_authority(
     const bool cap_is_pi =
         parse_rational(
             exact_rational_text(
-                Epeck::FT(cap_chord_ratio)),
+                cap_chord_ratio),
             "circle cap chord ratio")
         == Rational(4);
     std::vector<std::string> cell_records;
@@ -649,6 +644,15 @@ construct_full_circle_cell_authority(
                 == StationCellDecision::MATERIAL
             || classification.decision
                 == StationCellDecision::CAP_EXCEEDED;
+        if (!violating_parameter.has_value()
+            && (classification.decision == StationCellDecision::MATERIAL
+                || classification.decision
+                    == StationCellDecision::CAP_EXCEEDED)) {
+            violating_parameter = FullCircleAuthorityParameter2{
+                static_cast<int>(witness.chart),
+                Epeck::FT(witness.local_parameter),
+            };
+        }
         unresolved = unresolved
             || classification.decision
                 == StationCellDecision::UNRESOLVED;
@@ -683,15 +687,11 @@ construct_full_circle_cell_authority(
                 }));
     }
 
-    const ContinuousTeaVerdict verdict =
-        unresolved
-        ? ContinuousTeaVerdict::
-              UNRESOLVED_DEGENERACY
-        : (
-              cap_exceeded
-                  ? ContinuousTeaVerdict::
-                        CAP_EXCEEDED
-                  : ContinuousTeaVerdict::CERTIFIED);
+    const ContinuousTeaVerdict verdict = cap_exceeded
+        ? ContinuousTeaVerdict::CAP_EXCEEDED
+        : (unresolved
+               ? ContinuousTeaVerdict::UNRESOLVED_DEGENERACY
+               : ContinuousTeaVerdict::CERTIFIED);
     const std::string whole_rim_disposition =
         any_partial
         ? "partial"
@@ -721,18 +721,12 @@ construct_full_circle_cell_authority(
                 "full-circle-cell-authority-v1",
                 partition.canonical_bytes,
                 encode_string_sequence(feature_ids),
-                exact_rational_text(
-                    Epeck::FT(center_x)),
-                exact_rational_text(
-                    Epeck::FT(center_y)),
-                exact_rational_text(
-                    Epeck::FT(phase_dx)),
-                exact_rational_text(
-                    Epeck::FT(phase_dy)),
-                exact_rational_text(
-                    Epeck::FT(tool_radius)),
-                exact_rational_text(
-                    Epeck::FT(cap_chord_ratio)),
+                exact_rational_text(center_x),
+                exact_rational_text(center_y),
+                exact_rational_text(phase_dx),
+                exact_rational_text(phase_dy),
+                exact_rational_text(tool_radius),
+                exact_rational_text(cap_chord_ratio),
                 encode_string_sequence(cell_records),
                 verdict_text(),
                 whole_rim_disposition,
@@ -742,18 +736,19 @@ construct_full_circle_cell_authority(
         whole_rim_disposition,
         canonical_bytes,
         sha256_bytes(canonical_bytes),
+        std::move(violating_parameter),
     };
 }
 
 bool verify_full_circle_cell_authority(
     const Stock2& stock,
     const VerifiedEventPartition2& verified_partition,
-    double center_x,
-    double center_y,
-    double phase_dx,
-    double phase_dy,
-    double tool_radius,
-    double cap_chord_ratio,
+    const Epeck::FT& center_x,
+    const Epeck::FT& center_y,
+    const Epeck::FT& phase_dx,
+    const Epeck::FT& phase_dy,
+    const Epeck::FT& tool_radius,
+    const Epeck::FT& cap_chord_ratio,
     const FullCircleCellAuthority2& candidate)
 {
     try {
@@ -774,6 +769,13 @@ bool verify_full_circle_cell_authority(
                 == expected.canonical_bytes
             && candidate.canonical_digest
                 == expected.canonical_digest
+            && candidate.violating_parameter.has_value()
+                == expected.violating_parameter.has_value()
+            && (!candidate.violating_parameter.has_value()
+                || (candidate.violating_parameter->chart
+                        == expected.violating_parameter->chart
+                    && candidate.violating_parameter->parameter
+                        == expected.violating_parameter->parameter))
             && sha256_bytes(
                    candidate.canonical_bytes)
                 == candidate.canonical_digest;

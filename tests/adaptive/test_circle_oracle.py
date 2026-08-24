@@ -18,6 +18,20 @@ CENTER_CHART_IDS = (
     "center-quarter-2-v1",
     "center-quarter-3-v1",
 )
+LEGACY_MOTION_IDENTITY_SHA256 = bytes.fromhex(
+    "8c74544c7b8ee1e95a43cf71a1fb016df3bea1bd31153aafae2c068cad932b50",
+)
+LEGACY_CAP_IDENTITY_SHA256 = bytes.fromhex(
+    "1b885d0a4746ff7f86899a39158850625008cd693bcd4a29b863d8e297791f05",
+)
+LEGACY_FULL_TRACE_SHA256 = tuple(
+    bytes.fromhex(value)
+    for value in (
+        "baf4f0fc0142e22091fa625c217b931c71e1ac0081d7f4fdec2b517b699bd1bf",
+        "493da494c4c32af8ecd2aa8319200547581a1629215110b2baac427069339690",
+        "04055dae765c3ee67fd8c3820152437d348c2970fecdd5497d1f802ebd83ea16",
+    )
+)
 
 
 def _audit(stock: _stock_2.Stock2) -> tuple[str, _continuous_tea_2.EventTrace2]:
@@ -31,6 +45,81 @@ def _audit(stock: _stock_2.Stock2) -> tuple[str, _continuous_tea_2.EventTrace2]:
         0.5,
         4.0,
     )
+
+
+def test_legacy_binary64_identity_survives_every_full_circle_outcome() -> None:
+    clear_stock = _stock_2.Stock2(SQUARE, [])
+    clear_stock.subtract_disk(5.0, 5.0, 100.0)
+    nonuniform_stock = _stock_2.Stock2(SQUARE, [])
+    nonuniform_stock.subtract_disk(5.0, 5.0, 1.375)
+
+    traces = (
+        _audit(clear_stock)[1],
+        _audit(_stock_2.Stock2(SQUARE, []))[1],
+        _audit(nonuniform_stock)[1],
+    )
+
+    assert tuple(trace.whole_rim_disposition for trace in traces) == (
+        "clear",
+        "material",
+        "partial",
+    )
+    assert tuple(trace.canonical_digest for trace in traces) == LEGACY_FULL_TRACE_SHA256
+    for trace in traces:
+        assert b"full-circle-motion-binary64-v1" in trace.motion_identity
+        assert b"cap-chord-ratio-binary64-v1" in trace.effective_cap_bytes
+        assert b"full-circle-motion-exact-v1" not in trace.motion_identity
+        assert b"cap-chord-ratio-exact-v1" not in trace.effective_cap_bytes
+        assert hashlib.sha256(trace.motion_identity).digest() == LEGACY_MOTION_IDENTITY_SHA256
+        assert hashlib.sha256(trace.effective_cap_bytes).digest() == LEGACY_CAP_IDENTITY_SHA256
+        assert hashlib.sha256(trace.canonical_bytes).digest() == trace.canonical_digest
+
+
+def test_legacy_motion_identity_binds_signed_zero_and_direction() -> None:
+    stock = _stock_2.Stock2(SQUARE, [])
+    traces = tuple(
+        _continuous_tea_2.audit_full_circle_tea_event_exact(
+            stock,
+            5.0,
+            5.0,
+            1.0,
+            phase_dy,
+            clockwise,
+            0.5,
+            4.0,
+        )[1]
+        for phase_dy, clockwise in (
+            (0.0, False),
+            (-0.0, False),
+            (0.0, True),
+        )
+    )
+
+    assert len({trace.motion_identity for trace in traces}) == len(traces)
+    assert len({trace.canonical_digest for trace in traces}) == len(traces)
+
+
+def test_legacy_cap_identity_binds_one_binary64_step() -> None:
+    stock = _stock_2.Stock2(SQUARE, [])
+    stock.subtract_disk(5.0, 5.0, 100.0)
+    cap_ratios = (4.0, np.nextafter(4.0, 0.0))
+    traces = tuple(
+        _continuous_tea_2.audit_full_circle_tea_event_exact(
+            stock,
+            5.0,
+            5.0,
+            1.0,
+            0.0,
+            False,
+            0.5,
+            cap_ratio,
+        )[1]
+        for cap_ratio in cap_ratios
+    )
+
+    assert traces[0].effective_cap_bytes != traces[1].effective_cap_bytes
+    assert traces[0].canonical_digest != traces[1].canonical_digest
+    assert all(b"cap-chord-ratio-binary64-v1" in trace.effective_cap_bytes for trace in traces)
 
 
 def test_full_circle_trace_owns_all_four_exact_center_seams() -> None:

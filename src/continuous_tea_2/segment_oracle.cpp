@@ -491,6 +491,7 @@ SegmentTeaAudit2 audit_segment_tea_event_exact(
             partition.certificate.overlaps.end(),
             overlap_requires_resolution);
     bool cap_exceeded = false;
+    std::optional<SegmentAuthorityParameter2> violating_parameter;
     for (const SegmentEventStratum2& stratum :
          partition.strata) {
         if (stratum.kind == "fibre") {
@@ -523,6 +524,19 @@ SegmentTeaAudit2 audit_segment_tea_event_exact(
             || decision == StationCellDecision::MATERIAL
             || decision
                 == StationCellDecision::CAP_EXCEEDED;
+        if (decision == StationCellDecision::MATERIAL
+            || decision == StationCellDecision::CAP_EXCEEDED) {
+            const Epeck::FT parameter(Rational(
+                Integer(stratum.witness_numerator),
+                Integer(stratum.witness_denominator)));
+            if (!violating_parameter.has_value()
+                || CGAL::compare(
+                       parameter,
+                       violating_parameter->parameter)
+                    == CGAL::SMALLER) {
+                violating_parameter = SegmentAuthorityParameter2{parameter};
+            }
+        }
         unresolved = unresolved
             || decision
                 == StationCellDecision::UNRESOLVED;
@@ -557,6 +571,7 @@ SegmentTeaAudit2 audit_segment_tea_event_exact(
             verdict,
             whole_rim_disposition,
             trace_events(partition)),
+        std::move(violating_parameter),
     };
 }
 

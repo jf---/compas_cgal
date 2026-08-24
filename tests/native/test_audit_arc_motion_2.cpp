@@ -11,6 +11,7 @@
 
 void exact_arc_depletion_gate();
 void audit_identity_gate();
+void audit_certification_gate();
 
 namespace {
 
@@ -296,5 +297,6 @@ int main()
     exact_arc_motion_gate();
     exact_arc_depletion_gate();
     audit_identity_gate();
+    audit_certification_gate();
     return 0;
 }

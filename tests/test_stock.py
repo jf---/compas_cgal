@@ -434,6 +434,34 @@ def test_engagement_rejects_bad_cap_ratio():
         _stock_2.engagement_at(stock, 5.0, 5.0, 0.5, 4.0 + 1e-9)
 
 
+@pytest.mark.parametrize("invalid", [math.nan, math.inf, -math.inf])
+def test_engagement_native_boundary_raises_named_errors(invalid):
+    stock = _stock_2.Stock2(SQUARE, [])
+    with pytest.raises(_stock_2.NonFiniteEngagementInputError):
+        _stock_2.engagement_at(stock, invalid, 5.0, 0.5, 2.0)
+    with pytest.raises(_stock_2.NonPositiveEngagementToolRadiusError):
+        _stock_2.engagement_at(stock, 5.0, 5.0, 0.0, 2.0)
+    with pytest.raises(_stock_2.InvalidEngagementCapRatioError):
+        _stock_2.engagement_at(stock, 5.0, 5.0, 0.5, 0.0)
+    with pytest.raises(_stock_2.InvalidEngagementGapRatioError):
+        _stock_2.engagement_at(stock, 5.0, 5.0, 0.5, 2.0, 5.0)
+
+
+@pytest.mark.parametrize("invalid", [math.nan, math.inf, -math.inf])
+def test_segment_and_radical_boundaries_raise_named_errors(invalid):
+    stock = _stock_2.Stock2(SQUARE, [])
+    with pytest.raises(_stock_2.NonFiniteSegmentCertificationInputError):
+        _stock_2.certify_segment_tea(stock, invalid, 0.0, 1.0, 0.0, 0.5, 1.0)
+    with pytest.raises(_stock_2.NonPositiveSegmentCertificationToolRadiusError):
+        _stock_2.certify_segment_tea(stock, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0)
+    with pytest.raises(_stock_2.InvalidSegmentCertificationCapError):
+        _stock_2.certify_segment_tea(stock, 0.0, 0.0, 1.0, 0.0, 0.5, 0.0)
+    with pytest.raises(_stock_2.NonFiniteMixedRadicalInputError):
+        _stock_2._sign_mixed_radical(invalid, 0.0, 0.0, 0.0, 0.0, 0.0)
+    with pytest.raises(_stock_2.InvalidMixedRadicalRootError):
+        _stock_2._sign_mixed_radical(0.0, 0.0, 0.0, 0.0, -1.0, 0.0)
+
+
 # --------------------------------------------------------------------------- #
 # _sign_mixed_radical: exact sign of A + B*sqrt(a) + C*sqrt(b) + D*sqrt(a*b)   #
 # --------------------------------------------------------------------------- #

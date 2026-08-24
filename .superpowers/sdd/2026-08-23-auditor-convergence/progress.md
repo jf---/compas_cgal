@@ -1,10 +1,10 @@
 # Auditor convergence progress
 
 **Plan:** P1 truthful audit
-**Task:** P1 Task 4A native request identity final verification
+**Task:** P1 Task 4B exact native verdict RED/GREEN
 **Branch:** `codex/auditor-convergence-sdd`
 **Worktree:** `/Users/jelle/Code/CADCAM/worktrees/compas_cgal_prs-auditor-convergence-sdd`
-**Current HEAD:** `1cef1742542c03014c0054b36b5001e79e6761bb`
+**Current HEAD:** `e678fe04a7819363d7d6cd315cec532dd021b177`
 **Integration source:** `073a0f7f833da440fe323a0a046ad31550579f82`
 **Certifier source:** `73d53729564851d69eb1c28d6c2f1e68350cd20f`
 
@@ -19,6 +19,7 @@
 - `0cac084` — audit dependency closure and exact-arc prerequisite plan
 - `27f97c7` — exact rational-chart arc surrogate and atomic depletion
 - `1cef174` — bounded native-audit SDD correction
+- `e678fe0` — native request identity and closed motion-classification core
 
 ## Last verified commands
 
@@ -120,15 +121,44 @@
   distinct from verdict and replay closure
 - Task 4A independent architecture rereview — passed after splitting opaque
   motion storage, native classification core, and nanobind registration
+- Task 4B bounded falsifier restore — 14 independent P0 geometry/liveness
+  controls passed; legacy Boolean, guarded-cap, double-bound, and trigonometric
+  arc authorities excluded
+- Task 4B native verdict RED — causal compile failure at missing
+  `audit_certification_2.h`; no production decision implementation exists
+- Task 4B RED review repair — exact pi equality, replayed closed evidence,
+  live-witness precedence, full-turn arcs, motion-owned seams, shared-root
+  mismatch, typed limits, semantic forgery, and current-stock identity covered
+- Task 4B exact fixture repair — dyadic stock/motion geometry and integer
+  Pythagorean similarities preserve exact Epeck images and unit scaling
+- Task 4B test morphology — contract, verdict, refinement, falsifier, and
+  identity native gates split into single-responsibility translation units
+  below 500 lines
+- Task 4B shared exact core and decision adapter — one PIC upper core links the
+  native gate and both extensions; typed station, coverage, unresolved-cause,
+  strategy, stock-state, and motion evidence replays without reporting input
+- Task 4B evidence morphology — decision values, station evidence, authority
+  evidence, refinement cells, and unresolved evidence each have one native TU;
+  the combined 1,464-line evidence source is absent
+- Task 4B legacy two-step restoration — dormant station helpers and their
+  `CoordNT` dependency remain intact while public reporting delegates to the
+  shared exact classifier; fresh `_stock_2` and native linkage passed
+- Task 4B authoritative GREEN — fresh configure completed;
+  `audit_native_gate` exited 0 in 74.80 s, 16 exact-arc tests passed, five
+  continuous-chart tests passed, and 106 Python compatibility tests passed
+- Task 4B bounded native coverage — exact dyadic interior-arc adapter coverage
+  passed; Task 3 machined and spiral fixtures retain exact depletion/station
+  guards and segment verdict coverage
+- Task 4B falsifier runtime adjudication — full-circle closure on the exact
+  machined and spiral arc fixtures each exceeded a 120 s bounded gate after
+  fixture coarsening; no adapter semantics or proof budgets were weakened, and
+  no machined/spiral arc-adapter coverage is claimed
 
 ## Open blockers
 
-- no unadjudicated source commit
-- P1 must restore the two absent falsifier modules before porting certification
-- P1 Task 4B must implement witness-bearing exact native verdicts without
-  promoting guard exhaustion or incomplete closure to certification
 - P4 must identify the extreme full-suite tail before CI enforcement
 
 ## Next exact command
 
-restore P0 falsifiers and write P1 Task 4B native-verdict RED tests
+after adding `tests/native/test_audit_replay_2.cpp`, run `pixi run audit-native`
+and capture the Task 4C replay-transaction compile RED

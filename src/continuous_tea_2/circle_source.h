@@ -15,11 +15,11 @@ std::optional<std::string>
 full_circle_uniform_disposition(
     const Stock2& stock,
     const std::vector<BoundaryFeatureRecord2>& records,
-    double center_x,
-    double center_y,
-    double phase_dx,
-    double phase_dy,
-    double tool_radius);
+    const Epeck::FT& center_x,
+    const Epeck::FT& center_y,
+    const Epeck::FT& phase_dx,
+    const Epeck::FT& phase_dy,
+    const Epeck::FT& tool_radius);
 
 bool has_material_rational_chart_witness(
     const Stock2& stock,

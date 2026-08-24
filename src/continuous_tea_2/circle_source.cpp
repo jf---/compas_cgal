@@ -86,11 +86,11 @@ GpsPolygon circle_disk(
 std::optional<std::string> full_circle_uniform_disposition(
     const Stock2& stock,
     const std::vector<BoundaryFeatureRecord2>& records,
-    double center_x,
-    double center_y,
-    double phase_dx,
-    double phase_dy,
-    double tool_radius)
+    const Epeck::FT& center_x,
+    const Epeck::FT& center_y,
+    const Epeck::FT& phase_dx,
+    const Epeck::FT& phase_dy,
+    const Epeck::FT& tool_radius)
 {
     if (records.empty()) {
         return "clear";
@@ -98,24 +98,22 @@ std::optional<std::string> full_circle_uniform_disposition(
     ReachSet overlap =
         reach_full_circle_sweep(
             ReachKernelPoint(
-                ReachFT(center_x),
-                ReachFT(center_y)),
+                ReachFT(center_x.exact()),
+                ReachFT(center_y.exact())),
             ReachKernelVector(
-                ReachFT(phase_dx),
-                ReachFT(phase_dy)),
-            ReachFT(tool_radius));
+                ReachFT(phase_dx.exact()),
+                ReachFT(phase_dy.exact())),
+            ReachFT(tool_radius.exact()));
     overlap.intersection(
         lift_exact_stock_region(stock));
     if (overlap.is_empty()) {
         return "clear";
     }
-    const Epeck::FT phase_x(phase_dx);
-    const Epeck::FT phase_y(phase_dy);
     Epeck::FT guide_radius;
-    if (CGAL::is_zero(phase_y)) {
-        guide_radius = CGAL::abs(phase_x);
-    } else if (CGAL::is_zero(phase_x)) {
-        guide_radius = CGAL::abs(phase_y);
+    if (CGAL::is_zero(phase_dy)) {
+        guide_radius = CGAL::abs(phase_dx);
+    } else if (CGAL::is_zero(phase_dx)) {
+        guide_radius = CGAL::abs(phase_dy);
     } else {
         return std::nullopt;
     }
@@ -123,7 +121,7 @@ std::optional<std::string> full_circle_uniform_disposition(
     outer_disk.insert(
         circle_disk(
             EPoint(center_x, center_y),
-            guide_radius + Epeck::FT(tool_radius)));
+            guide_radius + tool_radius));
     outer_disk.difference(stock.set());
     if (outer_disk.is_empty()) {
         return "material";

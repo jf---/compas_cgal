@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../exact_motion_2.h"
 #include "partition_certificate.h"
 
 #include <string>
@@ -32,6 +33,10 @@ public:
         double y1,
         double tool_radius,
         double cap_chord_ratio);
+    static SegmentEventSource2 from_exact(
+        const ExactSegmentMotion2& motion,
+        const Epeck::FT& tool_radius,
+        const Epeck::FT& cap_chord_ratio);
 
     const ExactBinary64Rational2& x0() const noexcept;
     const ExactBinary64Rational2& y0() const noexcept;
@@ -45,6 +50,7 @@ public:
 
 private:
     static ExactBinary64Rational2 lift_binary64(double value);
+    static ExactBinary64Rational2 lift_exact(const Epeck::FT& value);
 
     SegmentEventSource2(
         ExactBinary64Rational2 x0,
@@ -64,6 +70,45 @@ private:
     std::string canonical_digest_;
 };
 
+class FullCircleEventSource2 {
+public:
+    static FullCircleEventSource2 from_binary64(
+        double center_x,
+        double center_y,
+        double phase_dx,
+        double phase_dy,
+        bool clockwise,
+        double tool_radius,
+        double cap_chord_ratio);
+    static FullCircleEventSource2 from_exact(
+        const ExactCircleMotion2& motion,
+        const Epeck::FT& tool_radius,
+        const Epeck::FT& cap_chord_ratio);
+
+    const ExactCircleMotion2& motion() const noexcept;
+    const Epeck::FT& tool_radius() const noexcept;
+    const Epeck::FT& cap_chord_ratio() const noexcept;
+    const std::string& canonical_bytes() const noexcept;
+    const std::string& motion_identity_bytes() const noexcept;
+    const std::string& cap_identity_bytes() const noexcept;
+
+private:
+    FullCircleEventSource2(
+        ExactCircleMotion2 motion,
+        Epeck::FT tool_radius,
+        Epeck::FT cap_chord_ratio,
+        std::string canonical_bytes,
+        std::string motion_identity_bytes,
+        std::string cap_identity_bytes);
+
+    ExactCircleMotion2 motion_;
+    Epeck::FT tool_radius_;
+    Epeck::FT cap_chord_ratio_;
+    std::string canonical_bytes_;
+    std::string motion_identity_bytes_;
+    std::string cap_identity_bytes_;
+};
+
 class NonFiniteSegmentInputError : public EventSubstrateError {
 public:
     using EventSubstrateError::EventSubstrateError;
@@ -80,6 +125,16 @@ public:
 };
 
 class InvalidCapChordRatioError : public EventSubstrateError {
+public:
+    using EventSubstrateError::EventSubstrateError;
+};
+
+class NonFiniteFullCircleInputError : public EventSubstrateError {
+public:
+    using EventSubstrateError::EventSubstrateError;
+};
+
+class ZeroFullCirclePhaseError : public EventSubstrateError {
 public:
     using EventSubstrateError::EventSubstrateError;
 };
