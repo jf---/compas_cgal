@@ -1,6 +1,7 @@
 #include "parameter_charts.h"
 
 #include "../exact_algebraic_1.h"
+#include "../exact_circle_chart_atlas_2.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -309,33 +310,12 @@ RationalMotion segment_motion(
     };
 }
 
-std::pair<Polynomial2, Polynomial2>
-quarter_circle_numerators(const std::string& chart_id)
+int exact_circle_chart_index(const std::string& chart_id)
 {
-    const Polynomial2 one_minus_square =
-        motion_quadratic(1, 0, -1);
-    const Polynomial2 twice_parameter =
-        motion_quadratic(0, 2, 0);
-    if (chart_id == "center-quarter-0-v1") {
-        return {one_minus_square, twice_parameter};
-    }
-    if (chart_id == "center-quarter-1-v1") {
-        return {
-            scale(twice_parameter, -1),
-            one_minus_square,
-        };
-    }
-    if (chart_id == "center-quarter-2-v1") {
-        return {
-            scale(one_minus_square, -1),
-            scale(twice_parameter, -1),
-        };
-    }
-    if (chart_id == "center-quarter-3-v1") {
-        return {
-            twice_parameter,
-            scale(one_minus_square, -1),
-        };
+    for (int chart = 0; chart < 4; ++chart) {
+        if (chart_id == exact_circle_chart_id(chart)) {
+            return chart;
+        }
     }
     throw ChartCoverageError(
         "full-circle motion requires a frozen center chart");
@@ -360,10 +340,15 @@ RationalMotion full_circle_motion(
                 4,
                 "oriented full-circle motion");
     }
-    const Polynomial2 denominator =
-        motion_quadratic(1, 0, 1);
-    const auto [unit_x, unit_y] =
-        quarter_circle_numerators(center_chart);
+    const ExactCircleChartAtlasRecord2& chart =
+        exact_circle_chart_record(
+            exact_circle_chart_index(center_chart));
+    const auto polynomial = [](const std::array<int, 3>& values) {
+        return motion_quadratic(values[0], values[1], values[2]);
+    };
+    const Polynomial2 denominator = polynomial(chart.denominator);
+    const Polynomial2 unit_x = polynomial(chart.x_numerator);
+    const Polynomial2 unit_y = polynomial(chart.y_numerator);
     return {
         add(
             scale(denominator, values[0]),
@@ -639,8 +624,7 @@ std::vector<ParameterChart2> parameter_charts()
     for (std::size_t index = 0; index < 4; ++index) {
         charts.push_back(
             {
-                "center-quarter-" + std::to_string(index)
-                    + "-v1",
+                exact_circle_chart_id(static_cast<int>(index)),
                 "center-circle",
                 "0",
                 "1",

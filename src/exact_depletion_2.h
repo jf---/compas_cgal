@@ -1,5 +1,7 @@
 #pragma once
 
+#include "audit_arc_motion_2.h"
+#include "exact_circle_chart_2.h"
 #include "exact_motion_2.h"
 
 #include <cstddef>
@@ -48,6 +50,70 @@ struct ExactDepletionConstruction2 {
     DepletionTrace trace;
 };
 
+class ExactArcDepletionPolicyError : public ExactDepletionConstructionError {
+public:
+    using ExactDepletionConstructionError::ExactDepletionConstructionError;
+};
+
+class ExactArcForgedTraceError : public ExactDepletionConstructionError {
+public:
+    using ExactDepletionConstructionError::ExactDepletionConstructionError;
+};
+
+class NonFiniteExactArcDepletionInputError : public std::invalid_argument {
+public:
+    using std::invalid_argument::invalid_argument;
+};
+
+struct DepletionWitnessDigestDomain;
+using DepletionWitnessDigest2 = AuditDigest2<DepletionWitnessDigestDomain>;
+
+class ExactArcDepletionTrace2 {
+public:
+    static ExactArcDepletionTrace2 build(
+        const AuditArcMotion2& motion,
+        const Epeck::FT& tool_radius,
+        const Epeck::FT& max_chord,
+        std::size_t center_count_limit,
+        std::vector<ExactCircleChartParameter2> parameters);
+
+    const std::vector<ExactCircleChartParameter2>& parameters() const noexcept;
+    const std::string& canonical_bytes() const noexcept;
+    const DepletionWitnessDigest2& digest() const noexcept;
+    const std::string& strategy_version() const noexcept;
+    bool cyclic() const noexcept;
+    bool matches_exact_inputs(
+        const Epeck::FT& expected_tool_radius,
+        const Epeck::FT& expected_max_chord,
+        std::size_t expected_center_count_limit) const;
+    bool matches_motion(const AuditArcMotion2& expected_motion) const noexcept;
+
+private:
+    ExactArcDepletionTrace2(
+        NativeMotionDigest2 motion_digest,
+        Epeck::FT tool_radius,
+        Epeck::FT max_chord,
+        std::size_t center_count_limit,
+        std::vector<ExactCircleChartParameter2> parameters,
+        std::string canonical_bytes,
+        DepletionWitnessDigest2 digest,
+        bool cyclic);
+
+    NativeMotionDigest2 motion_digest_;
+    Epeck::FT tool_radius_;
+    Epeck::FT max_chord_;
+    std::size_t center_count_limit_;
+    std::vector<ExactCircleChartParameter2> parameters_;
+    std::string canonical_bytes_;
+    DepletionWitnessDigest2 digest_;
+    bool cyclic_;
+};
+
+struct ExactArcDepletionConstruction2 {
+    std::vector<EPoint> centers;
+    ExactArcDepletionTrace2 trace;
+};
+
 ExactDepletionConstruction2 construct_exact_segment_depletion(
     const ExactSegmentMotion2& motion,
     const Epeck::FT& tool_radius,
@@ -56,6 +122,12 @@ ExactDepletionConstruction2 construct_exact_segment_depletion(
 
 ExactDepletionConstruction2 construct_exact_full_circle_depletion(
     const ExactCircleMotion2& motion,
+    const Epeck::FT& tool_radius,
+    const Epeck::FT& max_chord,
+    std::size_t center_count_limit);
+
+ExactArcDepletionConstruction2 construct_exact_arc_depletion(
+    const AuditArcMotion2& motion,
     const Epeck::FT& tool_radius,
     const Epeck::FT& max_chord,
     std::size_t center_count_limit);
@@ -78,4 +150,10 @@ bool exact_full_circle_structural_density_holds(
     const Epeck::FT& max_chord,
     const std::vector<ExactCenterParameter2>& parameters);
 
+bool exact_arc_structural_density_holds(
+    const AuditArcMotion2& motion,
+    const Epeck::FT& max_chord,
+    const std::vector<ExactCircleChartParameter2>& parameters);
+
 const std::string& exact_depletion_strategy_version();
+const std::string& exact_arc_depletion_strategy_version();

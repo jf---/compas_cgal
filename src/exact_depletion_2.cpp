@@ -1,5 +1,7 @@
 #include "exact_depletion_2.h"
 
+#include "continuous_tea_2/sha256.h"
+
 #include <CGAL/Kernel/global_functions_2.h>
 
 #include <algorithm>
@@ -26,6 +28,25 @@ void validate_inputs(
     }
     if (center_count_limit == 0) {
         throw ExactDepletionCenterLimitError("exact depletion center-count limit must be positive.");
+    }
+}
+
+void validate_arc_inputs(
+    const Epeck::FT& tool_radius,
+    const Epeck::FT& max_chord,
+    std::size_t center_count_limit)
+{
+    if (!is_positive(tool_radius) || !is_positive(max_chord)) {
+        throw ExactArcDepletionPolicyError(
+            "exact arc tool radius and chord bound must be positive");
+    }
+    if (center_count_limit == 0) {
+        throw ExactDepletionCenterLimitError(
+            "exact arc center-count limit must be positive");
+    }
+    if (CGAL::compare(max_chord, tool_radius) != CGAL::SMALLER) {
+        throw ExactArcDepletionPolicyError(
+            "exact arc chord bound must be strictly smaller than tool radius");
     }
 }
 
@@ -62,45 +83,88 @@ EPoint segment_center(
     return CGAL::barycenter(motion.start, start_weight, motion.end, end_weight);
 }
 
-EVector quarter_chart_vector(
-    const EVector& phase,
-    int chart,
-    std::size_t numerator,
-    std::size_t denominator)
-{
-    const Epeck::FT t = Epeck::FT(numerator) / Epeck::FT(denominator);
-    const Epeck::FT t_squared = t * t;
-    const Epeck::FT chart_denominator = Epeck::FT(1) + t_squared;
-    const Epeck::FT cosine = (Epeck::FT(1) - t_squared) / chart_denominator;
-    const Epeck::FT sine = (Epeck::FT(2) * t) / chart_denominator;
-    const Epeck::FT x = cosine * phase.x() - sine * phase.y();
-    const Epeck::FT y = sine * phase.x() + cosine * phase.y();
-
-    switch (chart) {
-    case 0:
-        return EVector(x, y);
-    case 1:
-        return EVector(-y, x);
-    case 2:
-        return EVector(-x, -y);
-    case 3:
-        return EVector(y, -x);
-    default:
-        throw ExactDepletionConstructionError("exact circle chart index is outside [0, 3].");
-    }
-}
-
 EPoint circle_center(
     const ExactCircleMotion2& motion,
     int chart,
     std::size_t numerator,
     std::size_t denominator)
 {
-    return motion.center + quarter_chart_vector(
+    return exact_circle_chart_point(
+        motion.center,
         motion.phase_vector,
-        chart,
-        numerator,
-        denominator);
+        ExactCircleChartParameter2::build(
+            chart,
+            Epeck::FT(numerator) / Epeck::FT(denominator)));
+}
+
+Epeck::FT interval_parameter(
+    const ExactArcChartInterval2& interval,
+    std::size_t numerator,
+    std::size_t denominator)
+{
+    return interval.start_parameter()
+        + (interval.end_parameter() - interval.start_parameter())
+            * Epeck::FT(numerator) / Epeck::FT(denominator);
+}
+
+EPoint arc_center(
+    const AuditArcMotion2& motion,
+    int chart,
+    const Epeck::FT& parameter)
+{
+    return exact_circle_chart_point(
+        motion.center(),
+        motion.zero_phase(),
+        ExactCircleChartParameter2::build(chart, parameter));
+}
+
+bool arc_interval_chords_hold(
+    const AuditArcMotion2& motion,
+    const ExactArcChartInterval2& interval,
+    std::size_t intervals,
+    const Epeck::FT& max_chord_squared)
+{
+    EPoint previous = arc_center(
+        motion,
+        interval.chart(),
+        interval.start_parameter());
+    for (std::size_t index = 1; index <= intervals; ++index) {
+        const EPoint current = arc_center(
+            motion,
+            interval.chart(),
+            interval_parameter(interval, index, intervals));
+        if (CGAL::compare(
+                CGAL::squared_distance(previous, current),
+                max_chord_squared)
+            == CGAL::LARGER) {
+            return false;
+        }
+        previous = current;
+    }
+    return true;
+}
+
+std::size_t refined_arc_interval_count(
+    const AuditArcMotion2& motion,
+    const ExactArcChartInterval2& interval,
+    const Epeck::FT& max_chord_squared,
+    std::size_t center_count_limit)
+{
+    std::size_t intervals = 1;
+    while (!arc_interval_chords_hold(
+        motion,
+        interval,
+        intervals,
+        max_chord_squared)) {
+        if (intervals > std::numeric_limits<std::size_t>::max() / 2) {
+            throw ExactDepletionCenterLimitError("exact arc refinement overflows size_t");
+        }
+        intervals *= 2;
+        if (intervals >= center_count_limit) {
+            throw ExactDepletionCenterLimitError("exact arc center-count limit exceeded");
+        }
+    }
+    return intervals;
 }
 
 ExactCenterParameter2 ordered_circle_parameter(
@@ -266,11 +330,107 @@ bool exact_chords_hold(
             != CGAL::LARGER;
 }
 
+bool same_parameter(
+    const ExactCircleChartParameter2& lhs,
+    const ExactCircleChartParameter2& rhs)
+{
+    return lhs.chart() == rhs.chart()
+        && CGAL::compare(lhs.parameter(), rhs.parameter()) == CGAL::EQUAL;
+}
+
+ExactCircleChartParameter2 canonical_circle_parameter(
+    int chart,
+    const Epeck::FT& parameter)
+{
+    if (CGAL::compare(parameter, Epeck::FT(1)) == CGAL::EQUAL) {
+        return ExactCircleChartParameter2::build(
+            (chart + 1) % 4,
+            Epeck::FT(0));
+    }
+    return ExactCircleChartParameter2::build(chart, parameter);
+}
+
+struct CanonicalArcSamples2 {
+    std::vector<EPoint> centers;
+    std::vector<ExactCircleChartParameter2> parameters;
+};
+
+CanonicalArcSamples2 canonical_arc_samples(
+    const AuditArcMotion2& motion,
+    const Epeck::FT& max_chord,
+    std::size_t center_count_limit)
+{
+    const Epeck::FT max_chord_squared = max_chord * max_chord;
+    std::vector<std::size_t> interval_counts;
+    interval_counts.reserve(motion.intervals().size());
+    std::size_t sum = 0;
+    for (const ExactArcChartInterval2& interval : motion.intervals()) {
+        const std::size_t intervals = refined_arc_interval_count(
+            motion,
+            interval,
+            max_chord_squared,
+            center_count_limit);
+        if (intervals > std::numeric_limits<std::size_t>::max() - sum) {
+            throw ExactDepletionCenterLimitError("exact arc center count overflows size_t");
+        }
+        sum += intervals;
+        interval_counts.push_back(intervals);
+    }
+    if (sum == std::numeric_limits<std::size_t>::max()) {
+        throw ExactDepletionCenterLimitError(
+            "exact arc center count overflows size_t");
+    }
+    const std::size_t center_count = sum + 1;
+    if (center_count > center_count_limit) {
+        throw ExactDepletionCenterLimitError("exact arc center-count limit exceeded");
+    }
+
+    CanonicalArcSamples2 result;
+    result.centers.reserve(center_count);
+    result.parameters.reserve(center_count);
+    const auto append = [&motion, &result](
+                            const ExactCircleChartParameter2& parameter) {
+        if (!result.parameters.empty()
+            && same_parameter(result.parameters.back(), parameter)) {
+            return;
+        }
+        result.parameters.push_back(parameter);
+        result.centers.push_back(exact_circle_chart_point(
+            motion.center(),
+            motion.zero_phase(),
+            parameter));
+    };
+    append(motion.start_parameter());
+    for (std::size_t interval_index = 0;
+         interval_index < motion.intervals().size();
+         ++interval_index) {
+        const ExactArcChartInterval2& interval = motion.intervals()[interval_index];
+        const std::size_t intervals = interval_counts[interval_index];
+        for (std::size_t index = 0; index <= intervals; ++index) {
+            append(canonical_circle_parameter(
+                interval.chart(),
+                interval_parameter(interval, index, intervals)));
+        }
+    }
+    if (result.parameters.size() != center_count) {
+        throw ExactDepletionConstructionError(
+            "exact arc canonical seam ownership changed center count");
+    }
+    return result;
+}
+
 } // namespace
 
 const std::string& exact_depletion_strategy_version()
 {
     static const std::string version = "exact-pythagorean-guide-v1";
+    return version;
+}
+
+const std::string& exact_arc_depletion_strategy_version()
+{
+    static const std::string version =
+        "exact-arc-pythagorean-guide-v1";
     return version;
 }
 
@@ -381,6 +541,45 @@ bool exact_full_circle_structural_density_holds(
         && centers.front() == motion.center + motion.phase_vector
         && exact_incidence_holds(motion, centers)
         && exact_chords_hold(centers, max_chord * max_chord, true);
+}
+
+bool exact_arc_structural_density_holds(
+    const AuditArcMotion2& motion,
+    const Epeck::FT& max_chord,
+    const std::vector<ExactCircleChartParameter2>& parameters)
+{
+    if (!is_positive(max_chord) || parameters.size() < 2) {
+        return false;
+    }
+    CanonicalArcSamples2 expected;
+    try {
+        expected = canonical_arc_samples(motion, max_chord, parameters.size());
+    } catch (const ExactDepletionConstructionError&) {
+        return false;
+    }
+    if (expected.parameters.size() != parameters.size()
+        || !std::equal(
+            expected.parameters.begin(),
+            expected.parameters.end(),
+            parameters.begin(),
+            [](const ExactCircleChartParameter2& lhs,
+               const ExactCircleChartParameter2& rhs) {
+                return same_parameter(lhs, rhs);
+            })) {
+        return false;
+    }
+    return expected.centers.front() == motion.start_point()
+        && expected.centers.back() == motion.end_point()
+        && exact_chords_hold(
+            expected.centers,
+            max_chord * max_chord,
+            false)
+        && std::all_of(
+        expected.centers.begin(),
+        expected.centers.end(),
+        [&motion](const EPoint& point) {
+            return exact_arc_point_is_incident(motion, point);
+        });
 }
 
 ExactDepletionConstruction2 construct_exact_segment_depletion(
@@ -507,4 +706,124 @@ ExactDepletionConstruction2 construct_exact_full_circle_depletion(
     trace.exact_parameters_in_range = circle_parameters_in_range(trace.center_parameters);
     trace.exact_anchors_present = circle_anchors_present(trace.center_parameters);
     return {std::move(centers), std::move(trace)};
+}
+
+ExactArcDepletionTrace2 ExactArcDepletionTrace2::build(
+    const AuditArcMotion2& motion,
+    const Epeck::FT& tool_radius,
+    const Epeck::FT& max_chord,
+    std::size_t center_count_limit,
+    std::vector<ExactCircleChartParameter2> parameters)
+{
+    validate_arc_inputs(tool_radius, max_chord, center_count_limit);
+    if (parameters.size() > center_count_limit
+        || !exact_arc_structural_density_holds(motion, max_chord, parameters)) {
+        throw ExactArcForgedTraceError(
+            "exact arc depletion trace does not prove the declared surrogate");
+    }
+    std::string canonical("exact-arc-depletion-trace-v1");
+    append_audit_bytes(canonical, exact_arc_depletion_strategy_version());
+    append_audit_bytes(canonical, motion.digest().bytes());
+    append_audit_bytes(canonical, canonical_audit_rational_bytes(tool_radius));
+    append_audit_bytes(canonical, canonical_audit_rational_bytes(max_chord));
+    std::string encoded_limit;
+    append_audit_size(encoded_limit, center_count_limit);
+    append_audit_bytes(canonical, encoded_limit);
+    append_audit_bytes(canonical, std::string(1, '\0'));
+    for (const ExactCircleChartParameter2& parameter : parameters) {
+        append_audit_bytes(canonical, std::string(1, static_cast<char>(parameter.chart())));
+        append_audit_bytes(canonical, canonical_audit_rational_bytes(parameter.parameter()));
+    }
+    return ExactArcDepletionTrace2(
+        NativeMotionDigest2::from_bytes(motion.digest().bytes()),
+        tool_radius,
+        max_chord,
+        center_count_limit,
+        std::move(parameters),
+        canonical,
+        DepletionWitnessDigest2::from_bytes(sha256_bytes(canonical)),
+        false);
+}
+
+ExactArcDepletionTrace2::ExactArcDepletionTrace2(
+    NativeMotionDigest2 motion_digest,
+    Epeck::FT tool_radius,
+    Epeck::FT max_chord,
+    std::size_t center_count_limit,
+    std::vector<ExactCircleChartParameter2> parameters,
+    std::string canonical_bytes,
+    DepletionWitnessDigest2 digest,
+    bool cyclic)
+    : motion_digest_(std::move(motion_digest)),
+      tool_radius_(std::move(tool_radius)),
+      max_chord_(std::move(max_chord)),
+      center_count_limit_(center_count_limit),
+      parameters_(std::move(parameters)),
+      canonical_bytes_(std::move(canonical_bytes)),
+      digest_(std::move(digest)),
+      cyclic_(cyclic)
+{
+}
+
+const std::string& ExactArcDepletionTrace2::canonical_bytes() const noexcept
+{
+    return canonical_bytes_;
+}
+
+const DepletionWitnessDigest2& ExactArcDepletionTrace2::digest() const noexcept
+{
+    return digest_;
+}
+
+const std::string& ExactArcDepletionTrace2::strategy_version() const noexcept
+{
+    return exact_arc_depletion_strategy_version();
+}
+
+bool ExactArcDepletionTrace2::matches_motion(
+    const AuditArcMotion2& expected_motion) const noexcept
+{
+    return motion_digest_.bytes() == expected_motion.digest().bytes();
+}
+
+bool ExactArcDepletionTrace2::cyclic() const noexcept
+{
+    return cyclic_;
+}
+
+const std::vector<ExactCircleChartParameter2>& ExactArcDepletionTrace2::parameters() const noexcept
+{
+    return parameters_;
+}
+
+bool ExactArcDepletionTrace2::matches_exact_inputs(
+    const Epeck::FT& expected_tool_radius,
+    const Epeck::FT& expected_max_chord,
+    std::size_t expected_center_count_limit) const
+{
+    return CGAL::compare(tool_radius_, expected_tool_radius) == CGAL::EQUAL
+        && CGAL::compare(max_chord_, expected_max_chord) == CGAL::EQUAL
+        && center_count_limit_ == expected_center_count_limit
+        && parameters_.size() <= expected_center_count_limit;
+}
+
+ExactArcDepletionConstruction2 construct_exact_arc_depletion(
+    const AuditArcMotion2& motion,
+    const Epeck::FT& tool_radius,
+    const Epeck::FT& max_chord,
+    std::size_t center_count_limit)
+{
+    validate_arc_inputs(tool_radius, max_chord, center_count_limit);
+
+    CanonicalArcSamples2 samples = canonical_arc_samples(
+        motion,
+        max_chord,
+        center_count_limit);
+    ExactArcDepletionTrace2 trace = ExactArcDepletionTrace2::build(
+        motion,
+        tool_radius,
+        max_chord,
+        center_count_limit,
+        std::move(samples.parameters));
+    return {std::move(samples.centers), std::move(trace)};
 }

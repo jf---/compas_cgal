@@ -1,10 +1,10 @@
 # Auditor convergence progress
 
 **Plan:** P1 truthful audit
-**Task:** P1 Task 2 COMPLETE — Task 3 exact arc surrogate ready
+**Task:** P1 Task 3 final verification
 **Branch:** `codex/auditor-convergence-sdd`
 **Worktree:** `/Users/jelle/Code/CADCAM/worktrees/compas_cgal_prs-auditor-convergence-sdd`
-**Current HEAD:** `f9787f5441a32e6a5d756793b532a822c6e8be97`
+**Current HEAD:** `0cac084a4cd3b9964cffcffa19527e7db8bfd11e`
 **Integration source:** `073a0f7f833da440fe323a0a046ad31550579f82`
 **Certifier source:** `73d53729564851d69eb1c28d6c2f1e68350cd20f`
 
@@ -16,6 +16,7 @@
 - `1e1dd52` — truthful audit identity and records
 - `0b41ba7` — authenticated opaque native motion input
 - `f9787f5` — native-only geometry and carrier identity review fixes
+- `0cac084` — audit dependency closure and exact-arc prerequisite plan
 
 ## Last verified commands
 
@@ -78,14 +79,30 @@
 - ETH plan audit — split proof commits, typed digest domains, native request read-back, and exact replay finalization added
 - corrected SDD strict docs — passed
 - corrected SDD `git diff --check` — passed
+- Task 3 initial native RED — missing exact arc motion/depletion sources
+- Task 3 adversarial RED — missing trace witness identity and shared atlas
+- Task 3 native GREEN — exact arc gate compiled, linked, and exited 0
+- Task 3 focused public GREEN — 43 passed after `_stock_2` and
+  `_continuous_tea_2` rebuild
+- Task 3 review RED — missing motion matcher and digest-size error; ordinary
+  full turns, non-cyclic terminal closure, public finite/limit guards, and
+  foreign trace identity were not enforced
+- Task 3 review repair native GREEN — v2 authored-sweep seam, no exact-to-double
+  arc roundtrip, explicit terminal closure, named errors, CCAN binary64 reuse,
+  and motion-bound trace passed focused native gate
+- Task 3 review repair public GREEN — 16 exact-arc tests passed under two xdist
+  workers after `_stock_2` rebuild
+- Task 3 independent specification rereview — passed
+- Task 3 independent ETH-quality rereview — passed; no Critical or Important
+  findings
 
 ## Open blockers
 
 - no unadjudicated source commit
 - P1 must restore the two absent falsifier modules before porting certification
-- P1 Task 3 must close exact-on-surrogate partial-arc depletion before native certification can bind decision digests
+- P1 Task 3 final lint, type, docs, and affected-suite verification pending
 - P4 must identify the extreme full-suite tail before CI enforcement
 
 ## Next exact command
 
-write P1 Task 3 RED arc-surrogate and exact-depletion tests
+run P1 Task 3 final verification matrix

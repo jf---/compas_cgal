@@ -164,6 +164,12 @@ public:
         const Epeck::FT& max_chord,
         std::size_t center_count_limit);
 
+    ExactArcDepletionTrace2 subtract_exact_arc(
+        const AuditArcMotion2& motion,
+        const Epeck::FT& tool_radius,
+        const Epeck::FT& max_chord,
+        std::size_t center_count_limit);
+
     const Gps& set() const { return *set_; }          // engagement kernel reads this
     Gps& set() { return *set_; }
 

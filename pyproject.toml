@@ -223,6 +223,12 @@ _task3-gate-configure = "cmake -S . -B build/task3-algorithm -G Ninja -Dnanobind
 _task3-gate-build = "cmake --build build/task3-algorithm --target task3_algorithm_gate"
 _task3-gate-run = "build/task3-algorithm/task3_algorithm_gate"
 task3-algorithm-gate = { depends-on = ["_task3-gate-configure", "_task3-gate-build", "_task3-gate-run"], description = "Prove bounded exact Task 3 construction" }
+_audit-native-configure = "cmake -S . -B build/audit-native -G Ninja -Dnanobind_DIR=$(python -m nanobind --cmake_dir)"
+_audit-native-build = "cmake --build build/audit-native --target audit_native_gate _stock_2"
+_audit-native-run = "build/audit-native/audit_native_gate"
+_audit-native-stock = { cmd = "PYTEST_XDIST_AUTO_NUM_WORKERS=2 pytest tests/adaptive/test_exact_depletion.py -k exact_arc -n auto -q", depends-on = ["_editable-rebuild"] }
+_audit-native-continuous = "PYTEST_XDIST_AUTO_NUM_WORKERS=2 pytest tests/adaptive/test_event_substrate.py::test_frozen_center_and_rim_charts_cover_each_seam_once tests/adaptive/test_event_substrate.py::test_exact_pullbacks_match_literal_coefficient_grids_and_bounds -n auto -q"
+audit-native = { depends-on = ["_audit-native-configure", "_audit-native-build", "_audit-native-run", "_audit-native-stock", "_audit-native-continuous"], description = "Prove native engagement-audit contracts" }
 _task9-mat-configure = "cmake -S . -B build/task9-mat -G Ninja -Dnanobind_DIR=$(python -m nanobind --cmake_dir)"
 _task9-mat-build = "cmake --build build/task9-mat --target task9_mat_compile_gate"
 _task9-mat-run = "build/task9-mat/task9_mat_compile_gate"
