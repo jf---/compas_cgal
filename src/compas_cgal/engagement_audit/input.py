@@ -23,10 +23,12 @@ from compas_cgal.adaptive.policy import DepletionPolicy
 from compas_cgal.adaptive.units import CutPlane
 from compas_cgal.adaptive.units import ToolRadius
 from compas_cgal.engagement_audit.classification import classify_operation_snapshot
+from compas_cgal.engagement_audit.decision_limits import AuditDecisionLimits
 from compas_cgal.engagement_audit.digests import AuditInputDigest
 from compas_cgal.engagement_audit.digests import AuditNativeRequestDigest
 from compas_cgal.engagement_audit.errors import EmptyToolpathAuditError
 from compas_cgal.engagement_audit.errors import InconsistentEngagementCapSurrogateError
+from compas_cgal.engagement_audit.errors import InvalidAuditDecisionLimitsError
 from compas_cgal.engagement_audit.errors import InvalidAuditDepletionPolicyError
 from compas_cgal.engagement_audit.errors import InvalidAuditOperationError
 from compas_cgal.engagement_audit.errors import InvalidEngagementAuditInputError
@@ -40,7 +42,7 @@ from compas_cgal.engagement_audit.operation_identity import snapshot_toolpath_op
 from compas_cgal.engagement_audit.records import AuthenticatedOperation
 from compas_cgal.toolpath import ToolpathOperation
 
-AUDIT_INPUT_VERSION: Final[bytes] = b"engagement-audit-input-v2"
+AUDIT_INPUT_VERSION: Final[bytes] = b"engagement-audit-input-v3"
 
 
 def _validated_holes(
@@ -64,6 +66,7 @@ def _validate_authoritative_fields(
     tool_radius: object,
     engagement_cap: object,
     depletion_policy: object,
+    decision_limits: object,
     build_identity: object,
 ) -> None:
     if type(design_boundary) is not CanonicalRingV1 or not design_boundary.is_outer:
@@ -76,6 +79,8 @@ def _validate_authoritative_fields(
         raise InvalidEngagementAuditInputError("engagement cap must be exact EngagementCap.")
     if type(depletion_policy) is not DepletionPolicy:
         raise InvalidAuditDepletionPolicyError("depletion policy must be exact DepletionPolicy.")
+    if type(decision_limits) is not AuditDecisionLimits:
+        raise InvalidAuditDecisionLimitsError("decision limits must be exact AuditDecisionLimits.")
     if type(build_identity) is not BuildIdentity:
         raise InvalidEngagementAuditInputError("build identity must be exact BuildIdentity.")
 
@@ -109,6 +114,7 @@ def _native_request_digest(
     tool_radius: ToolRadius,
     engagement_cap: EngagementCap,
     depletion_policy: DepletionPolicy,
+    decision_limits: AuditDecisionLimits,
     operations: tuple[AuthenticatedOperation, ...],
 ) -> AuditNativeRequestDigest:
     try:
@@ -134,6 +140,7 @@ def _native_request_digest(
             _ring_rows(design_boundary),
             [_ring_rows(hole) for hole in holes],
             policy,
+            decision_limits.native,
             tuple(operation.motion for operation in operations),
         )
     except (
@@ -154,6 +161,7 @@ class EngagementAuditInput:
     tool_radius: ToolRadius
     engagement_cap: EngagementCap
     depletion_policy: DepletionPolicy
+    decision_limits: AuditDecisionLimits
     operations: tuple[AuthenticatedOperation, ...]
     operation_stream_digest: OperationStreamDigest
     native_request_digest: AuditNativeRequestDigest
@@ -172,6 +180,7 @@ class EngagementAuditInput:
         tool_radius: ToolRadius,
         engagement_cap: EngagementCap,
         depletion_policy: DepletionPolicy,
+        decision_limits: AuditDecisionLimits,
         operations: tuple[ToolpathOperation, ...],
         build_identity: BuildIdentity,
     ) -> Self:
@@ -182,6 +191,7 @@ class EngagementAuditInput:
             tool_radius,
             engagement_cap,
             depletion_policy,
+            decision_limits,
             build_identity,
         )
         validated_holes = _validated_holes(holes, require_canonical_order=False)
@@ -192,6 +202,7 @@ class EngagementAuditInput:
             tool_radius,
             engagement_cap,
             depletion_policy,
+            decision_limits,
             classified_operations,
         )
         instance = object.__new__(cls)
@@ -201,6 +212,7 @@ class EngagementAuditInput:
         object.__setattr__(instance, "tool_radius", tool_radius)
         object.__setattr__(instance, "engagement_cap", engagement_cap)
         object.__setattr__(instance, "depletion_policy", depletion_policy)
+        object.__setattr__(instance, "decision_limits", decision_limits)
         object.__setattr__(instance, "operations", classified_operations)
         object.__setattr__(instance, "operation_stream_digest", stream_digest)
         object.__setattr__(instance, "native_request_digest", native_request_digest)
@@ -221,6 +233,7 @@ class EngagementAuditInput:
                     b"cut-z": canonical_cut_z_bytes(self.cut_plane.cut_z),
                     b"design-boundary": self.design_boundary.canonical_bytes,
                     b"depletion-policy": canonical_task1_bytes(self.depletion_policy),
+                    b"decision-limits": self.decision_limits.canonical_bytes,
                     b"engagement-cap": canonical_task1_bytes(self.engagement_cap),
                     b"holes": encode_sequence(tuple(hole.canonical_bytes for hole in self.holes)),
                     b"native-decision-contract": _stock_2.audit_native_decision_contract_version(),

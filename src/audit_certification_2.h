@@ -3,6 +3,7 @@
 #include "audit_digest_2.h"
 #include "audit_motion_identity_2.h"
 #include "audit_policy_2.h"
+#include "audit_stock_state_identity_2.h"
 #include "stock_2.h"
 
 #include <cstddef>
@@ -25,6 +26,11 @@ public:
 };
 
 class AuditSquaredSpatialFloorError : public AuditCertificationError {
+public:
+    using AuditCertificationError::AuditCertificationError;
+};
+
+class AuditDecisionLimitsNonFiniteInputError : public AuditCertificationError {
 public:
     using AuditCertificationError::AuditCertificationError;
 };
@@ -198,20 +204,6 @@ private:
     std::size_t max_depth_;
     std::size_t max_nodes_;
     std::string canonical_bytes_;
-};
-
-class AuditStockStateIdentity2 {
-public:
-    static AuditStockStateIdentity2 build(const Stock2& stock);
-    const std::string& canonical_bytes() const noexcept;
-    const AuditStockStateDigest2& digest() const noexcept;
-
-private:
-    AuditStockStateIdentity2(
-        std::string canonical_bytes,
-        AuditStockStateDigest2 digest);
-    std::string canonical_bytes_;
-    AuditStockStateDigest2 digest_;
 };
 
 class AuditSegmentStationParameter2 {

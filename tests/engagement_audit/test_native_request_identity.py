@@ -49,6 +49,36 @@ def _policy(
     )
 
 
+def _limits(
+    *,
+    spatial_floor_mm: float = 0.015625,
+    max_depth: int = 8,
+    max_nodes: int = 256,
+) -> _stock_2.AuditDecisionLimits2:
+    return _stock_2.build_audit_decision_limits(
+        spatial_floor_mm,
+        max_depth,
+        max_nodes,
+    )
+
+
+def _request(
+    boundary: np.ndarray,
+    holes: list[np.ndarray],
+    policy: _stock_2.AuditPolicy2,
+    motions: tuple[object, ...] | list[object],
+    *,
+    limits: _stock_2.AuditDecisionLimits2 | None = None,
+) -> _stock_2.AuditNativeRequestIdentity2:
+    return _stock_2.build_audit_native_request_identity(
+        boundary,
+        holes,
+        policy,
+        limits or _limits(),
+        motions,
+    )
+
+
 def _segment(*, end_x: float = 4.0) -> _stock_2.AuditSegmentMotion2:
     motion = _stock_2.classify_audit_line(
         (1.0, 1.0, 0.0),
@@ -59,6 +89,46 @@ def _segment(*, end_x: float = 4.0) -> _stock_2.AuditSegmentMotion2:
     )
     assert isinstance(motion, _stock_2.AuditSegmentMotion2)
     return motion
+
+
+def test_native_decision_limits_are_opaque_unit_bearing_identity() -> None:
+    limits = _limits()
+
+    assert len(limits.canonical_bytes) > 32
+    with pytest.raises(TypeError):
+        _stock_2.AuditDecisionLimits2()
+
+
+@pytest.mark.parametrize(
+    ("spatial_floor_mm", "max_depth", "max_nodes", "error"),
+    (
+        (0.0, 8, 256, "AuditSquaredSpatialFloorError"),
+        (-0.015625, 8, 256, "AuditSquaredSpatialFloorError"),
+        (math.nan, 8, 256, "AuditDecisionLimitsNonFiniteInputError"),
+        (0.015625, 65, 256, "AuditDecisionDepthLimitError"),
+        (0.015625, -1, 256, "AuditDecisionDepthLimitError"),
+        (0.015625, True, 256, "AuditDecisionDepthLimitError"),
+        (0.015625, 8, 0, "AuditDecisionNodeLimitError"),
+        (0.015625, 8, -1, "AuditDecisionNodeLimitError"),
+        (0.015625, 8, True, "AuditDecisionNodeLimitError"),
+    ),
+)
+def test_native_decision_limits_reject_invalid_ingress(
+    spatial_floor_mm: float,
+    max_depth: int | bool,
+    max_nodes: int | bool,
+    error: str,
+) -> None:
+    with pytest.raises(getattr(_stock_2, error)):
+        _stock_2.build_audit_decision_limits(
+            spatial_floor_mm,
+            max_depth,
+            max_nodes,
+        )
+
+
+def test_native_decision_limits_accept_zero_refinement_depth() -> None:
+    assert len(_limits(max_depth=0).canonical_bytes) > 32
 
 
 def test_policy_seals_the_authored_cap_observation() -> None:
@@ -150,28 +220,31 @@ def test_policy_rejects_each_invalid_input_with_named_error(
 def test_native_request_recomputes_stock_policy_motion_and_order_identity() -> None:
     first = _segment(end_x=4.0)
     second = _segment(end_x=5.0)
-    baseline = _stock_2.build_audit_native_request_identity(
+    baseline = _request(
         _boundary(),
         [_hole()],
         _policy(),
         (first, second),
     )
     mutations = (
-        _stock_2.build_audit_native_request_identity(_boundary(extent=11.0), [_hole()], _policy(), (first, second)),
-        _stock_2.build_audit_native_request_identity(_boundary(), [_hole(offset=3.0)], _policy(), (first, second)),
-        _stock_2.build_audit_native_request_identity(_boundary(), [_hole()], _policy(chord_bound=0.03125), (first, second)),
-        _stock_2.build_audit_native_request_identity(_boundary(), [_hole()], _policy(cap=0.7), (first, second)),
-        _stock_2.build_audit_native_request_identity(
+        _request(_boundary(extent=11.0), [_hole()], _policy(), (first, second)),
+        _request(_boundary(), [_hole(offset=3.0)], _policy(), (first, second)),
+        _request(_boundary(), [_hole()], _policy(chord_bound=0.03125), (first, second)),
+        _request(_boundary(), [_hole()], _policy(cap=0.7), (first, second)),
+        _request(
             _boundary(),
             [_hole()],
             _stock_2.build_audit_policy(2.5, math.pi / 2.0, _stock_2.cap_chord_ratio(math.pi / 2.0), 0.0625, 4096),
             (first, second),
         ),
-        _stock_2.build_audit_native_request_identity(_boundary(), [_hole()], _policy(center_limit=2048), (first, second)),
-        _stock_2.build_audit_native_request_identity(_boundary(), [_hole()], _policy(), (_segment(end_x=6.0), second)),
-        _stock_2.build_audit_native_request_identity(_boundary(), [_hole()], _policy(), (first, _segment(end_x=6.0))),
-        _stock_2.build_audit_native_request_identity(_boundary(), [_hole()], _policy(), (first,)),
-        _stock_2.build_audit_native_request_identity(_boundary(), [_hole()], _policy(), (second, first)),
+        _request(_boundary(), [_hole()], _policy(center_limit=2048), (first, second)),
+        _request(_boundary(), [_hole()], _policy(), (_segment(end_x=6.0), second)),
+        _request(_boundary(), [_hole()], _policy(), (first, _segment(end_x=6.0))),
+        _request(_boundary(), [_hole()], _policy(), (first,)),
+        _request(_boundary(), [_hole()], _policy(), (second, first)),
+        _request(_boundary(), [_hole()], _policy(), (first, second), limits=_limits(spatial_floor_mm=0.0078125)),
+        _request(_boundary(), [_hole()], _policy(), (first, second), limits=_limits(max_depth=7)),
+        _request(_boundary(), [_hole()], _policy(), (first, second), limits=_limits(max_nodes=255)),
     )
 
     assert len(baseline.digest) == 32
@@ -182,11 +255,11 @@ def test_native_request_recomputes_stock_policy_motion_and_order_identity() -> N
 
 def test_native_request_rejects_empty_list_and_foreign_motion_sequence() -> None:
     with pytest.raises(_stock_2.AuditNativeRequestMotionError):
-        _stock_2.build_audit_native_request_identity(_boundary(), [], _policy(), ())
+        _request(_boundary(), [], _policy(), ())
     with pytest.raises(_stock_2.AuditNativeRequestMotionError):
-        _stock_2.build_audit_native_request_identity(_boundary(), [], _policy(), (_segment(), object()))
+        _request(_boundary(), [], _policy(), (_segment(), object()))
     with pytest.raises(TypeError):
-        _stock_2.build_audit_native_request_identity(_boundary(), [], _policy(), [_segment()])
+        _request(_boundary(), [], _policy(), [_segment()])
 
 
 def test_native_request_ccan_binds_stock_policy_and_ordered_motion_digests() -> None:
@@ -194,11 +267,13 @@ def test_native_request_ccan_binds_stock_policy_and_ordered_motion_digests() -> 
     second = _segment(end_x=5.0)
     stock = _stock_2.build_audit_native_stock_identity(_boundary(), [_hole()])
     policy = _policy()
-    request = _stock_2.build_audit_native_request_identity(_boundary(), [_hole()], policy, (first, second))
+    limits = _limits()
+    request = _request(_boundary(), [_hole()], policy, (first, second), limits=limits)
     expected = encode_tagged_union(
-        b"audit-native-request-v1",
+        b"audit-native-request-v2",
         encode_component_map(
             {
+                b"decision-limits": limits.canonical_bytes,
                 b"native-motion-digests": encode_sequence((first.digest, second.digest)),
                 b"policy-digest": policy.digest,
                 b"stock-digest": stock.digest,
@@ -216,13 +291,13 @@ def test_native_stock_identity_normalizes_ring_and_hole_order() -> None:
     second_hole = _hole(offset=5.0)
     motion = _segment()
 
-    baseline = _stock_2.build_audit_native_request_identity(
+    baseline = _request(
         boundary,
         [first_hole, second_hole],
         _policy(),
         (motion,),
     )
-    equivalent = _stock_2.build_audit_native_request_identity(
+    equivalent = _request(
         np.roll(boundary[::-1], 1, axis=0),
         [np.roll(second_hole[::-1], 2, axis=0), np.roll(first_hole[::-1], 1, axis=0)],
         _policy(),

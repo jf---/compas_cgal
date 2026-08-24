@@ -24,6 +24,7 @@ class AuthenticatedOperationDigestAuthority2;
 class AuditPolicyDigestAuthority2;
 class NativeMotionDigestAuthority2;
 class NativeDecisionDigestAuthority2;
+class ExactDepletionTraceDigestAuthority2;
 class DepletionWitnessDigestAuthority2;
 class AuditStockStateDigestAuthority2;
 class StockLineageDigestAuthority2;
@@ -36,6 +37,7 @@ class AuditNativeRequestIdentity2;
 class ExactArcDepletionTrace2;
 class AuditDecisionWitness2;
 class AuditDepletionWitness2;
+class AuditDepletionWitnessFactory2;
 class AuditStockStateIdentity2;
 class AuditLineage2;
 class AuditMotionResult2;
@@ -61,6 +63,7 @@ private:
     friend class AuditPolicyDigestAuthority2;
     friend class NativeMotionDigestAuthority2;
     friend class NativeDecisionDigestAuthority2;
+    friend class ExactDepletionTraceDigestAuthority2;
     friend class DepletionWitnessDigestAuthority2;
     friend class AuditStockStateDigestAuthority2;
     friend class StockLineageDigestAuthority2;
@@ -77,6 +80,7 @@ struct AuthenticatedOperationDigestDomain;
 struct AuditPolicyDigestDomain;
 struct NativeMotionDigestDomain;
 struct NativeDecisionDigestDomain;
+struct ExactDepletionTraceDigestDomain;
 struct DepletionWitnessDigestDomain;
 struct StockLineageDigestDomain;
 struct AuditResultDigestDomain;
@@ -89,6 +93,7 @@ using AuthenticatedOperationDigest2 = AuditDigest2<AuthenticatedOperationDigestD
 using AuditPolicyDigest2 = AuditDigest2<AuditPolicyDigestDomain>;
 using NativeMotionDigest2 = AuditDigest2<NativeMotionDigestDomain>;
 using NativeDecisionDigest2 = AuditDigest2<NativeDecisionDigestDomain>;
+using ExactDepletionTraceDigest2 = AuditDigest2<ExactDepletionTraceDigestDomain>;
 using DepletionWitnessDigest2 = AuditDigest2<DepletionWitnessDigestDomain>;
 using StockLineageDigest2 = AuditDigest2<StockLineageDigestDomain>;
 using AuditResultDigest2 = AuditDigest2<AuditResultDigestDomain>;
@@ -164,8 +169,19 @@ class DepletionWitnessDigestAuthority2 {
     {
         return DepletionWitnessDigest2(sha256_bytes(std::string(canonical)));
     }
+    friend class AuditDepletionWitness2;
+    friend class AuditDepletionWitnessFactory2;
+};
+
+class ExactDepletionTraceDigestAuthority2 {
+    static ExactDepletionTraceDigest2 hash_canonical(std::string_view canonical)
+    {
+        return ExactDepletionTraceDigest2(
+            sha256_bytes(std::string(canonical)));
+    }
     friend class ExactArcDepletionTrace2;
     friend class AuditDepletionWitness2;
+    friend class AuditDepletionWitnessFactory2;
 };
 
 class AuditStockStateDigestAuthority2 {

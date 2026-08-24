@@ -76,6 +76,7 @@ public:
     bool contains(double x, double y) const;
     bool is_empty() const;
     Stock2 clone() const;
+    void swap(Stock2& other) noexcept;
     bool is_subset_of(const Stock2& other) const;
     bool exactly_equals(const Stock2& other) const;
 

@@ -1,4 +1,4 @@
-#include "audit_certification_2.h"
+#include "audit_stock_state_identity_2.h"
 
 #include "canonical_encoding.h"
 #include "continuous_tea_2/boundary_events.h"

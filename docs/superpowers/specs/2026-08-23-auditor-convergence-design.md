@@ -290,6 +290,7 @@ Add a focused `compas_cgal.engagement_audit` package:
 | --- | --- |
 | `identity.py` | validate content-addressed Python/native component inputs as `BuildIdentity` |
 | `operation_identity.py` | snapshot and canonically encode mutable COMPAS operation ingress |
+| `decision_limits.py` | validate unit-bearing bounded native decision work |
 | `input.py` | retain immutable classified operations and content-address the authoritative request |
 | `classification.py` | translate the closed native classifier result into typed Python motion records |
 | `records.py` | invariant-bearing measured and non-engaging operation records |
@@ -316,6 +317,7 @@ EngagementAuditInput.build(
     tool_radius: ToolRadius,
     engagement_cap: EngagementCap,
     depletion_policy: DepletionPolicy,
+    decision_limits: AuditDecisionLimits,
     operations: tuple[ToolpathOperation, ...],
     build_identity: BuildIdentity,
 ) -> EngagementAuditInput
@@ -323,7 +325,7 @@ EngagementAuditInput.build(
 
 The factory binds canonical rings, frame/unit-bearing physical parameters, the
 ordered operation-stream digest, audit schema version, motion-certifier
-versions, depletion policy, and native build identity. The cap encoding binds
+versions, depletion policy, sealed decision limits, and native build identity. The cap encoding binds
 both the authored binary64 angle and its native chord-ratio surrogate. The
 native policy boundary recomputes that binary64 surrogate once and requires
 bit-identical equality before exact injection. The input encoding also binds
@@ -331,15 +333,16 @@ the arc-surrogate, audit decision-contract, and depletion strategy
 versions plus the ordered authenticated-operation digests. Arc-operation
 identity therefore includes the exact chart-motion digest, not only authored
 angles and a strategy label. It also binds a native request digest over the
-exact-injected stock rings, immutable native policy, and ordered native-motion
-digests. Empty operation streams raise
+exact-injected stock rings, immutable native policy, exact typed decision
+limits, and ordered native-motion digests. Empty operation streams raise
 `EmptyToolpathAuditError`. Multi-depth or unsupported 3D motion raises a named
 geometry error before stock mutation.
 
 Digest domains have no generic raw-byte constructor or cross-domain retagger.
 External input and authenticated-operation expectations enter through distinct
 named ingress functions; generated request, motion, policy, decision,
-depletion, lineage, and result digests arise only from their domain's canonical-
+exact-depletion-trace, depletion-witness, lineage, and result digests arise only
+from their domain's canonical-
 hash authority. All six
 native motion carriers are private-constructor invariant classes. The request
 factory accepts only their opaque Python values and retains their ordered typed
@@ -404,7 +407,7 @@ cutting geometry is contradictory input and raises
 ### Native transaction and lineage
 
 Python never supplies an authoritative `Stock2`. Native request identity
-recomputes and verifies the stock/policy/motion digest from actual opaque native
+recomputes and verifies the stock/policy/decision-limits/motion digest from actual opaque native
 values; the input digest separately accepts the verified request digest, so no
 circular native authentication claim is made. One opaque, nonconstructible
 native replay owner constructs stock from the canonical input rings, accepts
@@ -417,17 +420,26 @@ the next bound identity and consumes one opaque native motion. It performs one
 atomic transaction: decide from immutable pre-motion stock, clone exactly once,
 apply validated depletion in-place to the trial for every returned verdict,
 validate decision and depletion witnesses, derive the complete result and next
-state, then perform one no-throw state swap. No allocation, hashing, validation,
-or cursor update remains after the swap. Any exception exposes neither a result
-nor partial report. Plunges use the same chronology; retracts and clearance
-transports preserve lineage.
+progress, then commit by no-throw `Stock2::swap(trial)` followed by a no-throw
+progress swap. Stock and progress have distinct ownership so retract and
+clearance do not clone. No allocation, hashing, validation, cursor update, or
+failure probe remains after the stock swap. Any native transaction exception
+exposes neither a result nor partial state. Nanobind packaging occurs after the
+native return and is explicitly outside this atomicity claim. Plunges use the
+same chronology; retracts and clearance transports preserve lineage. Mutable
+progress contains only cursor and lineage; the once-changing finalized state
+belongs to a separate replay-lifecycle value.
 
-The native request value owns its canonical stock/policy identity and ordered
+Lateral and plunge lineage transitions use distinct canonical domains. The
+lateral transition binds decision and depletion witnesses; the plunge
+transition binds only its depletion witness and never invents a decision.
+
+The native request value owns its canonical stock/policy/decision-limits identity and ordered
 typed motion digests; only replay can inspect that retained sequence. The Python
 request factory accepts the six opaque motion classes, never a generic motion
 union or raw digest tuple. `begin_audit_replay(...)` accepts external bytes only
 for the named input and authenticated-operation digest domains, then rebuilds
-and matches the actual rings, opaque policy, and native request before state
+and matches the actual rings, opaque policy, opaque limits, and native request before state
 exists. Native request digests are generated-only.
 
 Replay's one-clone trial applicators do not clone or swap internally. Each
@@ -437,9 +449,18 @@ identity. The authority swap occurs only after the complete decision, witness,
 lineage, result, and next-state values exist. Controlled failure tests at every
 stage prove stock, cursor, lineage, and finalization remain unchanged.
 
+Exact segment/circle/arc trace identities inhabit a distinct typed digest
+domain from full depletion witnesses. The latter alone bind depletion kind,
+actual motion, policy, and pre/post stock state. Mutable legacy trace aggregates
+remain compatibility output and are never accepted as audit evidence.
+
 The native result boundary is a closed union of distinct read-only values for
-lateral, plunge, and non-engaging chronologies. Reporting-only TEA and work
-counts cannot affect the exact verdict or native decision digest. Every result
+lateral, plunge, and non-engaging chronologies. Task 4C carries no reporting
+maximum; Task 5 adds one from a separately authenticated deterministic
+reporting observation. Evidence count is exactly the sum of native exact
+station replays and exact coverage replays; refinement nodes remain work
+accounting and are not double-counted. The count derives from the sealed
+decision witness and cannot be supplied independently. Every result
 binds its authenticated-operation digest and adjacent lineage, and the report
 validates the complete chain through the terminal lineage. Native finalization
 fails unless every bound operation was consumed exactly once.

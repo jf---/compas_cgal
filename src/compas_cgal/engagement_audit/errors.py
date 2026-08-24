@@ -57,6 +57,22 @@ class InvalidNativeAuditRequestIdentityError(InvalidEngagementAuditInputError):
     """Native stock, policy, or motion identity construction failed."""
 
 
+class InvalidAuditDecisionLimitsError(InvalidEngagementAuditInputError):
+    """The audit input does not own one exact sealed decision-limits value."""
+
+
+class InvalidAuditSpatialFloorError(InvalidAuditDecisionLimitsError):
+    """The audit decision spatial floor is not a positive finite length."""
+
+
+class InvalidAuditDecisionDepthError(InvalidAuditDecisionLimitsError):
+    """The audit decision depth is outside its sealed non-negative range."""
+
+
+class InvalidAuditDecisionNodeLimitError(InvalidAuditDecisionLimitsError):
+    """The audit decision node limit is outside its sealed positive range."""
+
+
 class EmptyToolpathAuditError(InvalidEngagementAuditInputError):
     """An audit was requested for an empty operation stream."""
 

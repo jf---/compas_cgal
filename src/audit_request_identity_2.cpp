@@ -9,6 +9,7 @@
 AuditNativeRequestIdentity2 AuditNativeRequestIdentity2::build(
     const AuditNativeStockIdentity2& stock,
     const AuditPolicy2& policy,
+    const AuditDecisionLimits2& decision_limits,
     std::vector<NativeMotionDigest2> motion_digests)
 {
     if (motion_digests.empty()) {
@@ -21,8 +22,9 @@ AuditNativeRequestIdentity2 AuditNativeRequestIdentity2::build(
         digest_bytes.push_back(digest.bytes());
     }
     std::string canonical = canonical_encode_tagged_union(
-        "audit-native-request-v1",
+        "audit-native-request-v2",
         canonical_encode_component_map({
+            {"decision-limits", decision_limits.canonical_bytes()},
             {"native-motion-digests", canonical_encode_sequence(digest_bytes)},
             {"policy-digest", policy.digest().bytes()},
             {"stock-digest", stock.digest().bytes()},
@@ -32,6 +34,7 @@ AuditNativeRequestIdentity2 AuditNativeRequestIdentity2::build(
     return AuditNativeRequestIdentity2(
         stock,
         policy.digest(),
+        decision_limits,
         std::move(motion_digests),
         std::move(canonical),
         std::move(digest));
@@ -40,11 +43,13 @@ AuditNativeRequestIdentity2 AuditNativeRequestIdentity2::build(
 AuditNativeRequestIdentity2::AuditNativeRequestIdentity2(
     AuditNativeStockIdentity2 stock,
     AuditPolicyDigest2 policy_digest,
+    AuditDecisionLimits2 decision_limits,
     std::vector<NativeMotionDigest2> motion_digests,
     std::string canonical_bytes,
     AuditNativeRequestDigest2 digest)
     : stock_(std::move(stock)),
       policy_digest_(std::move(policy_digest)),
+      decision_limits_(std::move(decision_limits)),
       motion_digests_(std::move(motion_digests)),
       canonical_bytes_(std::move(canonical_bytes)),
       digest_(std::move(digest))
