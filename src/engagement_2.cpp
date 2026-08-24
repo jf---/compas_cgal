@@ -1,4 +1,5 @@
 #include "engagement_2.h"
+#include "audit_policy_2.h"
 #include "stock_2.h"
 
 #include <algorithm>
@@ -616,14 +617,7 @@ void certify_recursive(const Stock2& stock, double x0, double y0, double x1,
 
 double cap_chord_ratio(double cap_radians)
 {
-    if (!(cap_radians > 0.0 && cap_radians <= std::numbers::pi))
-        throw std::invalid_argument("cap_radians must be in (0, pi].");
-
-    const double half_cap_sine = std::sin(0.5 * cap_radians);
-    const double ratio = 4.0 * half_cap_sine * half_cap_sine;
-    if (!(ratio > 0.0 && ratio <= 4.0))
-        throw std::invalid_argument("cap_radians has no representable chord ratio in (0, 4].");
-    return ratio;
+    return audit_cap_chord_ratio(cap_radians);
 }
 
 bool cap_chord_ratio_le(double lhs, double rhs)

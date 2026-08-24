@@ -2,8 +2,9 @@
 
 ## Maturity
 
-Stage 1 Tasks 1–3 define the authenticated input and operation-record boundary
-and the exact partial-arc surrogate used by stock depletion. The audit replay,
+Stage 1 Tasks 1–3 and Task 4's identity slice define the authenticated input,
+sealed policy, native request identity, operation-record boundary, and exact
+partial-arc surrogate used by stock depletion. The audit replay,
 native motion certification, report aggregation, regulated-generator evidence,
 and release gate remain incomplete. This stage therefore proves admissible
 input classification and exact-on-surrogate depletion, not toolpath compliance.
@@ -16,7 +17,9 @@ the `_stock_2` Epeck classifier. The completed input retains only:
 
 - immutable records carrying opaque Epeck-classified motion values;
 - the ordered source-operation digest;
-- canonical design, cut-plane, tool, and cap values; and
+- canonical design, cut-plane, tool, complete cap, and depletion-policy values;
+- ordered authenticated-operation and native-motion digests;
+- the independently recomputed opaque native-request digest; and
 - complete native, Python, component, and lockfile build identity.
 
 Caller-owned `ToolpathOperation` objects are never retained. Mutating their
@@ -47,8 +50,14 @@ native value; Python retains no parallel geometry. Every cut-plane lateral
 line, circle, or arc becomes an opaque Epeck motion value for a later native
 certifier.
 
-The six nanobind motion classes have no Python constructor and expose no
-reconstructive coordinate getters. An arc uses the versioned
+The six final nanobind motion classes have no Python constructor, cannot be
+subclassed, and expose no reconstructive coordinate getters. Every class
+exposes only its generated 32-byte native-motion digest. Segment, circle,
+plunge, and retract identity binds exact geometry and both declared planes.
+Clearance line, full-circle, and arc identity binds the complete classified
+source geometry and both planes, so a full circle cannot collapse to a
+zero-length endpoint identity and complementary arcs cannot share an identity.
+An arc uses the versioned
 `audit-arc-quarter-chart-binary64-v2` seam. Ingress observes the authored
 binary64 subtraction `end_angle - start_angle` once, rejects a nonfinite
 result, and exact-injects that observation. Epeck then owns sweep sign,
@@ -64,23 +73,50 @@ The native arc retains its canonical start/end chart coordinates, ordered
 trimmed chart intervals, exact guide radius, cut plane, authored-angle identity,
 strategy versions, and a 32-byte SHA-256 motion digest. There is no Python
 `point_at`, `atan2`, phase subtraction, chart-coordinate getter, or angle
-reconstruction path. The native strategy identifier remains bound into audit
-input identity. Task 4 will additionally bind the opaque motion digest into the
-native replay request and ordered authenticated-operation digest.
+reconstruction path. The arc-surrogate, native decision-contract, and composite
+depletion-contract identifiers are bound into input v2.
 
 Python snapshots curve radius as a finite, millimetre-bearing observation. It
 does not decide positivity. `CGAL::sign` after exact injection is the sole
 positive-radius authority and its named native rejection crosses the adapter.
 
-Each authenticated lateral, plunge, and non-engaging carrier has its own
-versioned canonical encoding and SHA-256 digest. The encoding binds stream
-ordinal, source-operation digest, and the closed native classification tag;
-source identity binds the opaque geometry itself.
+Each authenticated lateral, plunge, and non-engaging carrier uses schema v2
+and its own typed SHA-256 domain. The encoding binds stream ordinal,
+source-operation digest, closed native classification tag, and native-motion
+digest. Source-only metadata therefore changes carrier and input identity
+without changing the independently derived native request.
 
 Task 2 accepts only frames whose binary64 axes satisfy exact orthonormal
 world-XY predicates. Scaled, skewed, tilted, and inexactly normalized rotated
 frames fail closed. Expanding that domain requires a proved native
 normalization contract; no tolerance or COMPAS fallback is permitted.
+
+## Sealed policy and native request identity
+
+`AuditCapObservation2` is the only cap-policy ingress. It accepts finite
+binary64 authored radians in `(0, pi]`, recomputes the repository's single
+`4*sin²(theta/2)` observation, requires bit-identical equality with the supplied
+surrogate, and only then exact-injects both values. `AuditPolicy2` additionally
+requires exact positive tool and chord values, exact
+`chord_bound < tool_radius`, and a positive representable center-count limit.
+Policy and cap objects are nonconstructible from Python. There is no tolerance,
+exact-to-double decision, or alternate cap implementation.
+
+`AuditNativeStockIdentity2` rebuilds identity from the actual matrix ingress.
+Epeck owns degeneracy, simplicity, area, and winding decisions. CCAN binary64
+coordinates normalize signed zero; one repeated closing vertex is normalized;
+ring rotation and winding are canonical; holes are sorted and must be unique.
+Cross-language tests require byte equality with `CanonicalRingV1`.
+
+`AuditNativeRequestIdentity2` is generated only from the opaque native stock
+identity, sealed policy digest, and ordered digests copied directly from the
+six opaque motion values. Python cannot supply or retag native-motion or native-
+request digest bytes. Its public surface is only canonical bytes and digest;
+the retained typed motion sequence remains private for the later replay owner.
+Generic `AuditDigest2.from_bytes` construction does not exist. Only the future
+external input and authenticated-operation domains have named, size-checking
+raw-byte ingress; every generated domain is owned by a private canonical-hash
+authority.
 
 ## Failure model
 
@@ -90,6 +126,11 @@ roles, and contradictory orientation. Python maps those exception types—not
 message text—to the engagement-audit error model.
 Empty streams, malformed source records, unsupported primitives, mixed-Z
 ramps, and undeclared depths fail before stock construction or mutation.
+Policy failures additionally distinguish nonfinite input, cap domain,
+bit-inconsistent surrogate, tool radius, depletion chord bound, and center
+limit. Native stock identity distinguishes shape, nonfinite coordinates,
+invalid rings, and duplicate holes. Foreign or empty request motion tuples fail
+with a request-specific error.
 
 ## Exact partial-arc depletion
 
@@ -163,6 +204,15 @@ rejection.
 The earlier Python-owned geometric classifier was rejected during review and
 is not an accepted implementation or evidence source. The production path has
 one classifier: `_stock_2` with Epeck predicates.
+
+Task 4A RED established the missing cap-v2, five non-arc digests, carrier-v2,
+policy, and request symbols. The identity gate checks private digest
+authorities, domain-specific external-ingress size errors, private motion
+construction, cap nextafter and subnormal boundaries, all motion and plane
+mutations, full-source clearance identity, carrier mutations, ordered request
+mutations at every slot, stock CCAN goldens, signed-zero/closure normalization,
+and named invalid stock/request inputs. It does not execute certification or
+stock depletion.
 
 ## Remaining work
 

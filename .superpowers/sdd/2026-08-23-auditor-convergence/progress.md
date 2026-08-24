@@ -1,10 +1,10 @@
 # Auditor convergence progress
 
 **Plan:** P1 truthful audit
-**Task:** P1 Task 4A native request identity SDD correction
+**Task:** P1 Task 4A native request identity final verification
 **Branch:** `codex/auditor-convergence-sdd`
 **Worktree:** `/Users/jelle/Code/CADCAM/worktrees/compas_cgal_prs-auditor-convergence-sdd`
-**Current HEAD:** `27f97c71ab1b999de2744125cec262174aa3ec36`
+**Current HEAD:** `1cef1742542c03014c0054b36b5001e79e6761bb`
 **Integration source:** `073a0f7f833da440fe323a0a046ad31550579f82`
 **Certifier source:** `73d53729564851d69eb1c28d6c2f1e68350cd20f`
 
@@ -18,6 +18,7 @@
 - `f9787f5` — native-only geometry and carrier identity review fixes
 - `0cac084` — audit dependency closure and exact-arc prerequisite plan
 - `27f97c7` — exact rational-chart arc surrogate and atomic depletion
+- `1cef174` — bounded native-audit SDD correction
 
 ## Last verified commands
 
@@ -106,14 +107,28 @@
   one-clone transaction, and three linear delivery slices required
 - Task 4 corrected SDD review — source semantics and architecture passed; no
   exact blocker
+- Task 4A identity RED — 29 failed and 62 passed; missing cap-v2, native
+  request, policy, and generated-only digest boundaries exposed
+- Task 4A native GREEN — production classification and independent canonical
+  SHA checks passed for all eight classified motion variants
+- Task 4A focused Python GREEN — 115 passed under two xdist workers after
+  `_stock_2` rebuild
+- Task 4A affected testmon — no tests selected after the native-only dependency
+  split; mandatory full focused fallback passed 115 tests
+- Task 4A Ruff, strict audit mypy, strict docs, and diff check — passed
+- Task 4A independent specification rereview — passed; identity remains
+  distinct from verdict and replay closure
+- Task 4A independent architecture rereview — passed after splitting opaque
+  motion storage, native classification core, and nanobind registration
 
 ## Open blockers
 
 - no unadjudicated source commit
 - P1 must restore the two absent falsifier modules before porting certification
-- P1 Task 4A identity RED/GREEN implementation pending
+- P1 Task 4B must implement witness-bearing exact native verdicts without
+  promoting guard exhaustion or incomplete closure to certification
 - P4 must identify the extreme full-suite tail before CI enforcement
 
 ## Next exact command
 
-run P1 Task 4A native-request identity RED gate
+restore P0 falsifiers and write P1 Task 4B native-verdict RED tests

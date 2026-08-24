@@ -117,6 +117,22 @@ def _neck_policy() -> NeckPolicy:
     )
 
 
+def test_engagement_cap_v2_binds_authored_radians_and_native_surrogate() -> None:
+    cap = EngagementCap.build(0.7)
+
+    encoded = canonical_task1_bytes(cap)
+
+    assert encoded == encode_tagged_union(
+        b"engagement-cap-v2",
+        encode_component_map(
+            {
+                b"chord-ratio": encode_binary64(cap.chord_ratio),
+                b"theta-radian": encode_binary64(cap.theta),
+            }
+        ),
+    )
+
+
 def test_primitives_are_versioned_big_endian_and_domain_separated() -> None:
     encoded_integer = encode_integer(0x0102)
 

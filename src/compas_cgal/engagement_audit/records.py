@@ -19,6 +19,8 @@ from compas_cgal.adaptive.canonical import encode_tagged_union
 from compas_cgal.adaptive.identity import IdentityDigest
 from compas_cgal.adaptive.motion_oracle_cache import NativeMotionVerdict
 from compas_cgal.adaptive.units import Radian
+from compas_cgal.engagement_audit.digests import AuthenticatedOperationDigest
+from compas_cgal.engagement_audit.digests import NativeMotionDigest
 from compas_cgal.engagement_audit.errors import InvalidAuthenticatedLateralOperationError
 from compas_cgal.engagement_audit.errors import InvalidAuthenticatedNonEngagingOperationError
 from compas_cgal.engagement_audit.errors import InvalidAuthenticatedPlungeOperationError
@@ -28,9 +30,9 @@ from compas_cgal.engagement_audit.errors import InvalidNonEngagingOperationAudit
 
 MEASURED_OPERATION_AUDIT_VERSION: Final[bytes] = b"measured-operation-audit-v1"
 NON_ENGAGING_OPERATION_AUDIT_VERSION: Final[bytes] = b"non-engaging-operation-audit-v1"
-AUTHENTICATED_LATERAL_OPERATION_VERSION: Final[bytes] = b"authenticated-lateral-operation-v1"
-AUTHENTICATED_PLUNGE_OPERATION_VERSION: Final[bytes] = b"authenticated-plunge-operation-v1"
-AUTHENTICATED_NON_ENGAGING_OPERATION_VERSION: Final[bytes] = b"authenticated-non-engaging-operation-v1"
+AUTHENTICATED_LATERAL_OPERATION_VERSION: Final[bytes] = b"authenticated-lateral-operation-v2"
+AUTHENTICATED_PLUNGE_OPERATION_VERSION: Final[bytes] = b"authenticated-plunge-operation-v2"
+AUTHENTICATED_NON_ENGAGING_OPERATION_VERSION: Final[bytes] = b"authenticated-non-engaging-operation-v2"
 
 OperationDigest = NewType("OperationDigest", bytes)
 StockLineageDigest = NewType("StockLineageDigest", bytes)
@@ -45,6 +47,7 @@ _NATIVE_VERDICTS: Final[frozenset[str]] = frozenset({"certified", "cap_exceeded"
 _NON_ENGAGING_REASONS: Final[frozenset[str]] = frozenset({"vertical_plunge", "vertical_retract", "clearance_transport"})
 SupportedLateralMotion: TypeAlias = _stock_2.AuditSegmentMotion2 | _stock_2.AuditCircleMotion2 | _stock_2.AuditArcMotion2
 SupportedNonEngagingMotion: TypeAlias = _stock_2.AuditVerticalRetract2 | _stock_2.AuditClearanceTransport2
+SupportedAuditMotion: TypeAlias = SupportedLateralMotion | _stock_2.AuditVerticalPlunge2 | SupportedNonEngagingMotion
 
 
 @dataclass(frozen=True)
@@ -93,8 +96,8 @@ class AuthenticatedLateralOperation:
         )
 
     @property
-    def digest(self) -> IdentityDigest:
-        return IdentityDigest(hashlib.sha256(self.canonical_bytes).digest())
+    def digest(self) -> AuthenticatedOperationDigest:
+        return AuthenticatedOperationDigest(hashlib.sha256(self.canonical_bytes).digest())
 
 
 @dataclass(frozen=True)
@@ -139,8 +142,8 @@ class AuthenticatedPlungeOperation:
         )
 
     @property
-    def digest(self) -> IdentityDigest:
-        return IdentityDigest(hashlib.sha256(self.canonical_bytes).digest())
+    def digest(self) -> AuthenticatedOperationDigest:
+        return AuthenticatedOperationDigest(hashlib.sha256(self.canonical_bytes).digest())
 
 
 @dataclass(frozen=True)
@@ -188,8 +191,8 @@ class AuthenticatedNonEngagingOperation:
         )
 
     @property
-    def digest(self) -> IdentityDigest:
-        return IdentityDigest(hashlib.sha256(self.canonical_bytes).digest())
+    def digest(self) -> AuthenticatedOperationDigest:
+        return AuthenticatedOperationDigest(hashlib.sha256(self.canonical_bytes).digest())
 
 
 AuthenticatedOperation: TypeAlias = AuthenticatedLateralOperation | AuthenticatedPlungeOperation | AuthenticatedNonEngagingOperation
@@ -201,7 +204,7 @@ def _require_digest(value: object, name: str, error: type[ValueError]) -> bytes:
     return value
 
 
-def _native_classification_tag(motion: object, error: type[ValueError]) -> bytes:
+def _native_classification_tag(motion: SupportedAuditMotion, error: type[ValueError]) -> bytes:
     if type(motion) is _stock_2.AuditSegmentMotion2:
         return b"segment"
     if type(motion) is _stock_2.AuditCircleMotion2:
@@ -217,11 +220,19 @@ def _native_classification_tag(motion: object, error: type[ValueError]) -> bytes
     raise error("native motion is outside the closed authenticated classification domain.")
 
 
+def _native_motion_digest(motion: SupportedAuditMotion, error: type[ValueError]) -> NativeMotionDigest:
+    _native_classification_tag(motion, error)
+    digest = motion.digest
+    if type(digest) is not bytes or len(digest) != hashlib.sha256().digest_size:
+        raise error("native motion must expose one exact 32-byte digest.")
+    return NativeMotionDigest(digest)
+
+
 def _authenticated_operation_bytes(
     version: bytes,
     operation_index: int,
     operation_digest: OperationDigest,
-    motion: object,
+    motion: SupportedAuditMotion,
     error: type[ValueError],
 ) -> bytes:
     return encode_tagged_union(
@@ -229,6 +240,7 @@ def _authenticated_operation_bytes(
         encode_component_map(
             {
                 b"native-classification": _native_classification_tag(motion, error),
+                b"native-motion-digest": bytes(_native_motion_digest(motion, error)),
                 b"operation-digest": bytes(operation_digest),
                 b"operation-index": encode_integer(operation_index),
             }

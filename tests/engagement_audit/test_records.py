@@ -136,6 +136,73 @@ def test_authenticated_carrier_digest_binds_closed_native_tag() -> None:
     assert len({variant.digest for variant in variants}) == len(variants)
 
 
+def test_authenticated_carrier_v2_binds_native_motion_digest() -> None:
+    operation_digest = OperationDigest(_digest(b"same-source"))
+    first = _line_classification((0.0, 0.0, 0.0), (1.0, 0.0, 0.0), "cut")
+    second = _line_classification((0.0, 0.0, 0.0), (2.0, 0.0, 0.0), "cut")
+    assert isinstance(first, _stock_2.AuditSegmentMotion2)
+    assert isinstance(second, _stock_2.AuditSegmentMotion2)
+
+    first_carrier = AuthenticatedLateralOperation.build(
+        operation_index=0,
+        operation_digest=operation_digest,
+        motion=first,
+    )
+    second_carrier = AuthenticatedLateralOperation.build(
+        operation_index=0,
+        operation_digest=operation_digest,
+        motion=second,
+    )
+
+    assert b"authenticated-lateral-operation-v2" in first_carrier.canonical_bytes
+    assert first.digest in first_carrier.canonical_bytes
+    assert first_carrier.digest != second_carrier.digest
+
+
+def test_all_carrier_v2_variants_bind_native_motion_digest() -> None:
+    operation_digest = OperationDigest(_digest(b"same-source"))
+    first_plunge = _line_classification((0.0, 0.0, 5.0), (0.0, 0.0, 0.0), "plunge")
+    second_plunge = _line_classification((1.0, 0.0, 5.0), (1.0, 0.0, 0.0), "plunge")
+    first_clearance = _line_classification((0.0, 0.0, 5.0), (1.0, 0.0, 5.0), "link")
+    second_clearance = _line_classification((0.0, 0.0, 5.0), (2.0, 0.0, 5.0), "link")
+    first_retract = _line_classification((0.0, 0.0, 0.0), (0.0, 0.0, 5.0), "retract")
+    second_retract = _line_classification((1.0, 0.0, 0.0), (1.0, 0.0, 5.0), "retract")
+    assert isinstance(first_plunge, _stock_2.AuditVerticalPlunge2)
+    assert isinstance(second_plunge, _stock_2.AuditVerticalPlunge2)
+    assert isinstance(first_clearance, _stock_2.AuditClearanceTransport2)
+    assert isinstance(second_clearance, _stock_2.AuditClearanceTransport2)
+    assert isinstance(first_retract, _stock_2.AuditVerticalRetract2)
+    assert isinstance(second_retract, _stock_2.AuditVerticalRetract2)
+
+    plunge = AuthenticatedPlungeOperation.build(
+        operation_index=0,
+        operation_digest=operation_digest,
+        motion=first_plunge,
+    )
+    changed_plunge = replace(plunge, motion=second_plunge)
+    clearance = AuthenticatedNonEngagingOperation.build(
+        operation_index=0,
+        operation_digest=operation_digest,
+        motion=first_clearance,
+    )
+    changed_clearance = replace(clearance, motion=second_clearance)
+    retract = AuthenticatedNonEngagingOperation.build(
+        operation_index=0,
+        operation_digest=operation_digest,
+        motion=first_retract,
+    )
+    changed_retract = replace(retract, motion=second_retract)
+
+    assert b"authenticated-plunge-operation-v2" in plunge.canonical_bytes
+    assert first_plunge.digest in plunge.canonical_bytes
+    assert plunge.digest != changed_plunge.digest
+    assert b"authenticated-non-engaging-operation-v2" in clearance.canonical_bytes
+    assert first_clearance.digest in clearance.canonical_bytes
+    assert clearance.digest != changed_clearance.digest
+    assert first_retract.digest in retract.canonical_bytes
+    assert retract.digest != changed_retract.digest
+
+
 def test_measured_record_rejects_foreign_verdict() -> None:
     with pytest.raises(InvalidMotionVerdictError, match="foreign"):
         _measured(verdict="foreign")

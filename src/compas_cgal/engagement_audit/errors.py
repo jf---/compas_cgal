@@ -41,6 +41,22 @@ class InvalidEngagementAuditInputError(EngagementAuditError):
     """An engagement-audit input is incomplete or noncanonical."""
 
 
+class InvalidAuditDepletionPolicyError(InvalidEngagementAuditInputError):
+    """The audit input does not own one exact depletion policy."""
+
+
+class InvalidNativeAuditPolicyError(InvalidEngagementAuditInputError):
+    """The native audit policy rejected an authoritative input."""
+
+
+class InconsistentEngagementCapSurrogateError(InvalidNativeAuditPolicyError):
+    """The supplied cap surrogate differs from the native cap observation."""
+
+
+class InvalidNativeAuditRequestIdentityError(InvalidEngagementAuditInputError):
+    """Native stock, policy, or motion identity construction failed."""
+
+
 class EmptyToolpathAuditError(InvalidEngagementAuditInputError):
     """An audit was requested for an empty operation stream."""
 

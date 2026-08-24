@@ -410,13 +410,27 @@ void exact_arc_depletion_gate()
             == canonical_encode_binary64(-3.5),
         "audit binary64 bytes diverge from canonical CCAN encoding");
 
-    bool digest_size_rejected = false;
+    bool input_digest_size_rejected = false;
     try {
-        static_cast<void>(NativeMotionDigest2::from_bytes("short"));
+        static_cast<void>(
+            AuditInputDigestAuthority2::from_external_bytes("short"));
     } catch (const AuditDigestSizeError&) {
-        digest_size_rejected = true;
+        input_digest_size_rejected = true;
     }
-    require(digest_size_rejected, "malformed audit digest lacked named rejection");
+    require(
+        input_digest_size_rejected,
+        "malformed external input digest lacked named rejection");
+    bool operation_digest_size_rejected = false;
+    try {
+        static_cast<void>(
+            AuthenticatedOperationDigestAuthority2::from_external_bytes(
+                "short"));
+    } catch (const AuditDigestSizeError&) {
+        operation_digest_size_rejected = true;
+    }
+    require(
+        operation_digest_size_rejected,
+        "malformed external operation digest lacked named rejection");
 
     for (const auto& invalid : {
              std::tuple<Epeck::FT, Epeck::FT, std::size_t>{

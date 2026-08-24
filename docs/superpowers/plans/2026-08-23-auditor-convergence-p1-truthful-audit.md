@@ -976,7 +976,7 @@ trace/disk identity, strategy version, and its own canonical digest. Replay
 validates the complete witness value before deriving lineage; a bare depletion
 digest is never accepted as evidence.
 
-- [ ] **Step 1: Write RED identity tests**
+- [x] **Step 1: Write RED identity tests**
 
 Add assertions that `EngagementAuditInput.build(...)` requires one exact
 `DepletionPolicy`; `canonical_task1_bytes(EngagementCap)` binds both authored
@@ -1023,7 +1023,7 @@ without changing native geometry changes authenticated/input identity but not
 native request identity. Compile-time tests prove `AuditDigest2<Domain>` has no
 public raw-byte constructor or generic `from_bytes` retagger.
 
-- [ ] **Step 2: Run the contract RED gate**
+- [x] **Step 2: Run the contract RED gate**
 
 ```bash
 PYTEST_XDIST_AUTO_NUM_WORKERS=2 pixi run pytest -- tests/adaptive/test_canonical.py tests/engagement_audit/test_native_classification.py tests/engagement_audit/test_records.py tests/engagement_audit/test_input.py tests/engagement_audit/test_native_request_identity.py -n auto -q
@@ -1032,7 +1032,7 @@ PYTEST_XDIST_AUTO_NUM_WORKERS=2 pixi run pytest -- tests/adaptive/test_canonical
 Expected: missing depletion policy/input v2 and native request symbols. Do not
 commit this RED state.
 
-- [ ] **Step 3: Implement cap/policy/input v2 identity**
+- [x] **Step 3: Implement cap/policy/input v2 identity**
 
 Change `engagement-cap-v1` to `engagement-cap-v2` with `theta-radian` and
 `chord-ratio` components. Add `depletion_policy` to the input factory and bump

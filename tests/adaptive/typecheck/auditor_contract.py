@@ -12,6 +12,7 @@ from compas_cgal.adaptive.units import Point3
 from compas_cgal.adaptive.units import Radian
 from compas_cgal.adaptive.units import WorldXYZ
 from compas_cgal.engagement_audit.identity import BuildIdentity
+from compas_cgal.engagement_audit.digests import AuthenticatedOperationDigest
 from compas_cgal.engagement_audit.operation_identity import ArcOperationSnapshot
 from compas_cgal.engagement_audit.records import AuthenticatedLateralOperation
 from compas_cgal.engagement_audit.records import AuthenticatedNonEngagingOperation
@@ -40,27 +41,31 @@ def consume_build_and_operation(
 def consume_native_motion_request(motion: SupportedLateralMotion) -> None:
     if isinstance(motion, _stock_2.AuditSegmentMotion2):
         assert_type(motion, _stock_2.AuditSegmentMotion2)
+        assert_type(motion.digest, bytes)
     elif isinstance(motion, _stock_2.AuditArcMotion2):
         assert_type(motion, _stock_2.AuditArcMotion2)
         assert_type(motion.digest, bytes)
     elif isinstance(motion, _stock_2.AuditCircleMotion2):
         assert_type(motion, _stock_2.AuditCircleMotion2)
+        assert_type(motion.digest, bytes)
     else:
         assert_never(motion)
 
 
 def consume_authenticated_operation(operation: AuthenticatedOperation) -> None:
     assert_type(operation.canonical_bytes, bytes)
-    assert_type(operation.digest, IdentityDigest)
+    assert_type(operation.digest, AuthenticatedOperationDigest)
     if isinstance(operation, AuthenticatedLateralOperation):
         consume_native_motion_request(operation.motion)
     elif isinstance(operation, AuthenticatedPlungeOperation):
         assert_type(operation.motion, _stock_2.AuditVerticalPlunge2)
+        assert_type(operation.motion.digest, bytes)
     elif isinstance(operation, AuthenticatedNonEngagingOperation):
         assert_type(
             operation.motion,
             _stock_2.AuditVerticalRetract2 | _stock_2.AuditClearanceTransport2,
         )
+        assert_type(operation.motion.digest, bytes)
     else:
         assert_never(operation)
 
