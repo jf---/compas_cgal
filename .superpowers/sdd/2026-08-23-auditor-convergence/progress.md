@@ -1,10 +1,10 @@
 # Auditor convergence progress
 
 **Plan:** P1 truthful audit
-**Task:** P1 Task 2 fix round 1 GREEN — formal re-review pending
+**Task:** P1 Task 2 COMPLETE — Task 3 exact arc surrogate ready
 **Branch:** `codex/auditor-convergence-sdd`
 **Worktree:** `/Users/jelle/Code/CADCAM/worktrees/compas_cgal_prs-auditor-convergence-sdd`
-**Fix base HEAD:** `0b41ba7cbb5c2e628aa481b31eb33486ee5e64c1`
+**Current HEAD:** `f9787f5441a32e6a5d756793b532a822c6e8be97`
 **Integration source:** `073a0f7f833da440fe323a0a046ad31550579f82`
 **Certifier source:** `73d53729564851d69eb1c28d6c2f1e68350cd20f`
 
@@ -14,6 +14,8 @@
 - `233527a` — reviewed auditor-convergence plans
 - `449b45b` — P0 reconciliation and baseline
 - `1e1dd52` — truthful audit identity and records
+- `0b41ba7` — authenticated opaque native motion input
+- `f9787f5` — native-only geometry and carrier identity review fixes
 
 ## Last verified commands
 
@@ -67,13 +69,23 @@
 - fix round `types-audit` — 9 source/type-contract files clean
 - fix round lint and strict docs — passed
 - `types-adaptive` — unchanged P0 six-error baseline
+- Task 2 scoped re-review — all findings addressed; no new Critical or Important breakage
+- Task 2 report-only re-review — literal gate commands and results accepted
+- Task 3/4 fan-out — Python replay cannot precede native all-motion closure
+- partial-arc depletion preflight — legacy trigonometric disk centers lack an exact subset proof
+- rational-chart review — shared four-quarter evaluator, trimmed domains, exact endpoint identity, and non-cyclic ordering required
+- P1 plan/spec/ledger — dependency order corrected to exact arc, native transaction, public replay, consumer migration
+- ETH plan audit — split proof commits, typed digest domains, native request read-back, and exact replay finalization added
+- corrected SDD strict docs — passed
+- corrected SDD `git diff --check` — passed
 
 ## Open blockers
 
 - no unadjudicated source commit
 - P1 must restore the two absent falsifier modules before porting certification
+- P1 Task 3 must close exact-on-surrogate partial-arc depletion before native certification can bind decision digests
 - P4 must identify the extreme full-suite tail before CI enforcement
 
 ## Next exact command
 
-formal re-review of the Task 2 fix commit
+write P1 Task 3 RED arc-surrogate and exact-depletion tests
