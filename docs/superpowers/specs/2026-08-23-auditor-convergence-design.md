@@ -293,6 +293,7 @@ Add a focused `compas_cgal.engagement_audit` package:
 | `input.py` | retain immutable classified operations and content-address the authoritative request |
 | `classification.py` | translate the closed native classifier result into typed Python motion records |
 | `records.py` | invariant-bearing measured and non-engaging operation records |
+| `native.py` | dispatch opaque motions into the native transactional replay owner |
 | `replay.py` | ordered measure-before-deplete orchestration |
 | `report.py` | report construction, aggregates, certification assertion, canonical bytes |
 | `errors.py` | one named exception per audit failure mode |
@@ -314,6 +315,7 @@ EngagementAuditInput.build(
     cut_plane: CutPlane,
     tool_radius: ToolRadius,
     engagement_cap: EngagementCap,
+    depletion_policy: DepletionPolicy,
     operations: tuple[ToolpathOperation, ...],
     build_identity: BuildIdentity,
 ) -> EngagementAuditInput
@@ -321,7 +323,14 @@ EngagementAuditInput.build(
 
 The factory binds canonical rings, frame/unit-bearing physical parameters, the
 ordered operation-stream digest, audit schema version, motion-certifier
-versions, and native build identity. Empty operation streams raise
+versions, depletion policy, and native build identity. The cap encoding binds
+both the authored binary64 angle and its native chord-ratio surrogate. The
+input encoding also binds the arc-surrogate, decision, and depletion strategy
+versions plus the ordered authenticated-operation digests. Arc-operation
+identity therefore includes the exact chart-motion digest, not only authored
+angles and a strategy label. It also binds a native request digest over the
+exact-injected stock rings, immutable native policy, and ordered native-motion
+digests. Empty operation streams raise
 `EmptyToolpathAuditError`. Multi-depth or unsupported 3D motion raises a named
 geometry error before stock mutation.
 
@@ -346,14 +355,21 @@ Replace the ambiguous boolean in the authoritative path with a closed union:
 ```python
 NativeMotionVerdict = Literal["certified", "cap_exceeded", "unresolved"]
 
-OperationAudit = MeasuredOperationAudit | NonEngagingOperationAudit
+OperationAudit = (
+    MeasuredOperationAudit
+    | PlungeOperationAudit
+    | NonEngagingOperationAudit
+)
 ```
 
 `MeasuredOperationAudit` binds the native verdict, reporting maximum TEA,
-station/event counts, pre-motion stock lineage, motion-certificate digest, and
-operation digest. `NonEngagingOperationAudit` binds a geometry-derived reason
-limited to vertical plunge, vertical retract, or clearance-plane transport.
-It has no certification verdict and cannot enter compliant-motion counts.
+station/event counts, pre- and post-motion stock lineage, native decision
+digest, depletion-witness digest, and authenticated-operation digest.
+`PlungeOperationAudit` binds its disk-depletion witness and lineage transition
+without inventing a lateral TEA verdict. `NonEngagingOperationAudit` binds a
+geometry-derived reason limited to vertical retract or clearance-plane
+transport. It has no certification verdict, does not mutate stock, and cannot
+enter compliant-motion counts.
 
 A native-proved plunge remains a separate authenticated input operation because
 its terminal cut-plane disk mutates stock even though it needs no lateral TEA
@@ -373,6 +389,26 @@ geometry raises; it never produces a non-engaging record. A `RETRACT` label on
 cutting geometry is contradictory input and raises
 `ContradictoryOperationRoleError`.
 
+### Native transaction and lineage
+
+Python never supplies an authoritative `Stock2`. One opaque, nonconstructible
+native replay owner constructs stock from the canonical input rings, recomputes
+and verifies the input-bound native request digest, binds the ordered
+authenticated-operation digests, and only then seeds lineage with the input
+digest. Each lateral call must match the next bound identity and consumes one
+opaque native motion. It performs one atomic transaction: decide from pre-motion stock, clone,
+deplete the clone for every returned verdict, validate the depletion witness,
+advance lineage, swap, and return. Any exception occurs before swap and exposes
+neither a result nor partial report. Plunges use the same clone/validate/swap
+chronology; retracts and clearance transports preserve lineage.
+
+The native result boundary is a closed union of distinct read-only values for
+lateral, plunge, and non-engaging chronologies. Reporting-only TEA and work
+counts cannot affect the exact verdict or native decision digest. Every result
+binds its authenticated-operation digest and adjacent lineage, and the report
+validates the complete chain through the terminal lineage. Native finalization
+fails unless every bound operation was consumed exactly once.
+
 ### Report semantics
 
 `EngagementAuditReport.build(...)` derives, rather than accepts:
@@ -380,6 +416,7 @@ cutting geometry is contradictory input and raises
 - certified motion count;
 - proved cap-exceedance count;
 - unresolved motion count;
+- plunge-depletion count;
 - non-engaging motion count;
 - maximum reported TEA over measured motions;
 - ordered operation-audit digest; and
@@ -391,19 +428,53 @@ contains at least one measured lateral motion, and every measured verdict is
 `UnresolvedEngagementAuditError`. Reporting APIs may display all verdicts but
 cannot reinterpret them.
 
-### Arc certifier integration
+### Exact arc surrogate, certification, and depletion
 
-Port the adaptive native arc certifier only after its dependency closure is
-adjudicated in Stage 0. It must:
+The authoritative partial-arc semantic is an explicit exact rational-chart
+surrogate constructed once at the native classification seam. It retains exact
+center, guide radius, radius-aligned base phase, ordered quarter-chart
+intervals, direction, cut plane, canonical bytes, and digest. A versioned
+binary64 angle-to-chart seam normalizes authored angles into `[0, tau)`, chooses
+quadrants by exact comparison against exact-injected seam values, maps exact
+seams structurally to parameter zero, and exact-injects
+`tan(local_angle / 2)` only for non-seam interval endpoints. Rounding that
+collapses distinct requested endpoints fails loudly. Every reconstructed phase
+therefore lies exactly on the same Epeck guide circle. The canonical motion
+binds its exact chart parameters and strategy version; Python observes only its
+digest, never reconstructive fields.
+
+One shared exact quarter-chart evaluator serves full circles, partial arcs,
+certification, and depletion; duplicate formula implementations are forbidden.
+The four frozen rational Pythagorean quarter charts used by full-circle event
+motion are reused, but a partial arc owns clipped interval endpoints and seam
+ownership. Its structural certificate proves endpoint and sample incidence,
+ordered direction, declared complement, seam ownership, exact chord bounds,
+and finite center count. The resulting full-radius disk union is a proved
+under-cover because every disk center lies on the declared surrogate. Exact
+`chord_bound < tool_radius` proves adjacent disks overlap; no stronger retained-
+sliver bound is claimed without a separate theorem. The full-circle oracle's
+cyclic four-chart coverage cannot certify a trimmed arc unchanged: partial arcs
+require trimmed-domain endpoint/seam ownership and non-cyclic event ordering.
+The legacy trigonometric `subtract_arc_sweep` is never evidence for, or
+reachable from, the authoritative path.
+
+Port the adaptive native arc certifier only after this surrogate and the Stage
+0 dependency closure are adjudicated. The certifier and depleter consume the
+same opaque `AuditArcMotion2`. Together they must:
 
 - own the sole circular-motion acceptance path;
 - use adaptive refinement with an absolute spatial floor and finite depth;
 - preserve exact station predicates and the swept-annulus between-station
   guard;
 - return all three native verdicts;
+- deplete certified, cap-exceeded, and unresolved motions through the same
+  exact-on-surrogate disk-chain contract;
 - refuse annular, machined, and spiral rib counterexamples;
 - certify non-vacuous clear positive controls; and
-- report refinement work without using it as a decision input.
+- report refinement work without using it as a decision input;
+- validate every proof and depletion trace before atomically swapping stock;
+  and
+- bind native decision, depletion witness, and post-lineage digests.
 
 The fixed-density Python mirror remains available only to legacy diagnostics
 during validation. No benchmark or certification consumer may call it after
@@ -414,9 +485,14 @@ the native path becomes authoritative.
 - Empty, multi-depth, mislabeled, off-plane, ramped, and unsupported inputs fail
   with their named errors before any audit success object exists.
 - Every cut-height line, arc, and circle yields one native three-way verdict.
+- Every mutating operation advances one continuous input-seeded stock lineage;
+  returned exceeded and unresolved motions still deplete.
 - An unmeasured cut cannot be constructed through public or raw dataclass
   construction.
 - False-certificate mutation tests kill both segment and arc paths.
+- Exact partial-arc incidence, chart order, seam ownership, center bounds, and
+  no-legacy-depletion controls pass for CW/CCW minor, major, and full-turn arc
+  surrogates.
 - Positive controls prove the certifier does not pass by refusing everything.
 - The 12x8 generator-circle acceptance measurement is recorded with exact
   command, input digest, certified fraction, unresolved fraction, and runtime.

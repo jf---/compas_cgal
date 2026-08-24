@@ -61,8 +61,8 @@ history rather than commit subjects alone.
 | `b2fa087e6b8c87aab56d1723d465b95eb4805d0d` | discontinuous tessellation | legacy `tessellate_toolpath` | unrelated | Auditor P1 classifies canonical operations directly; no polyline reconstruction is an authority | none |
 | `34bddcc0253040948bddd7a87af81950c64d24f0` | output junction dedup | `OUTPUT_DEDUP_TOL` | unrelated | Rendering/tessellation tolerance is outside exact audit identity and verdict semantics | none |
 | `2f983d8b84cbaa5a1f8d26b4487487cedc82015a` | exact engagement seam validation | `require_finite`, `require_positive_tool_radius` | dependent | Current legacy `engagement_2` lacks the complete native seam tests; P1 must retain these guards around the ported certifier | P1 Task 4 |
-| `832765b053410754b1b129dd0fbb3dfffe2d3306` | exact Stock seam validation | `exact_boundary.h`, all `Stock2` entries | dependent | Current integration only pins selected annulus nonfinite inputs; port needs the complete exact-injection boundary | P1 Task 4 |
-| `5c489fbd522a12d2e9d12c3c070880596d2e21ef` | bounded disk-chain count | `chain_intervals`, `MAX_CHAIN_INTERVALS` | dependent | No bounded-chain symbol or unbuildable-chain control exists at `073a0f7`; arc replay depends on loud finite allocation bounds | P1 Task 4 |
+| `832765b053410754b1b129dd0fbb3dfffe2d3306` | exact Stock seam validation | `exact_boundary.h`, all `Stock2` entries | dependent | Current integration only pins selected annulus nonfinite inputs; port needs the complete exact-injection boundary | P1 Task 3 |
+| `5c489fbd522a12d2e9d12c3c070880596d2e21ef` | bounded disk-chain count | `chain_intervals`, `MAX_CHAIN_INTERVALS` | dependent | No bounded-chain symbol or unbuildable-chain control exists at `073a0f7`; arc replay depends on loud finite allocation bounds | P1 Task 3 |
 | `92cedda24e95ca0b7cb435e351ff93525f34442b` | legacy toolpath parameter contracts | `radial_clearance`, radius/plane checks | unrelated | P3 factories own generator-specific parameter invariants; legacy API patch is not a dependency | none |
 | `728b6c8215a6242246dd3d2a6ce4a9954ef3a8e0` | one compiled growth guard | `tea_growth_bound`, `tea_guard` | dependent | Establishes the source certifier lineage that the swept-annulus repair replaces; never imported as certification authority | P1 Task 4 |
 | `ebb627d3379e8fd0c92c72abe57b5586187dde11` | growth-bound falsifier | `test_growth_bound.py` harness | dependent | Integration lacks this independent legacy falsifier; its liveness controls are prerequisites to trusting the repair | P1 Task 4 |
@@ -73,8 +73,8 @@ history rather than commit subjects alone.
 | `03866fccd2b54b7034b9ab63c984cbe1332ff31c` | rotation-invariant interior bound | exact direction spans | dependent | Removes the axis-aligned-box dependence exposed by rotated falsifiers; needed with the swept guard | P1 Task 4 |
 | `e446d035f5e8bcc2f5a93ec73288ac0520c28a9f` | witness statement cleanup | false-certificate docstring | dependent | Preserves witness provenance without asserting an incidental station count | P1 Task 4 |
 | `3db92d6445b15e34a55d5de768fede6c9d5a6335` | sub-ulp rim reporting repair | `max_run_tea` span normalization | superseded | `62aea8f` independently forbids promoting a rim sub-arc to a full turn; `test_a_full_turn_report_means_a_buried_rim` is the stronger control | P1 Task 4 |
-| `f227dab2fe04af8d8956f623c2839579c0cd7142` | TEA certificate explanation | `docs/engagement_certificate.md` | dependent | The negative-control derivation accompanies the port, but P1 documentation must describe the new authoritative package | P1 Task 5 |
-| `387bb7efa36783d8149916cde1f7a2b50afc373f` | correct rim-repair status | certificate docs | superseded | Integration executable full-turn controls already encode the repaired status | P1 Task 5 |
+| `f227dab2fe04af8d8956f623c2839579c0cd7142` | TEA certificate explanation | `docs/engagement_certificate.md` | dependent | The negative-control derivation accompanies the port, but P1 documentation must describe the new authoritative package | P1 Task 6 |
+| `387bb7efa36783d8149916cde1f7a2b50afc373f` | correct rim-repair status | certificate docs | superseded | Integration executable full-turn controls already encode the repaired status | P1 Task 6 |
 | `5c1d492a9478de5feece1dfcaefbca5d30fcb130` | earlier ETH remediation plan | findings/spec documents | superseded | Approved `233527a` SDD binds the current 254/36 topology and C1-C7 closure | P0 |
 | `148a49ad223c8aa4e620890ee70f5afc11defe74` | release shared-root guard | `test_release_build_still_enforces_the_shared_root_precondition` | required | Current `engagement_2.cpp` relies on a CGAL shared-root assumption without this release negative control | P1 Task 4 |
 | `48b9e08fab687989d81c253d5b710e64c2537a52` | slack/full-turn preconditions | `<= pi` guard, overflow-safe derivation | dependent | Required by the final arc/segment report assembly and source-side ULP budget | P1 Task 4 |
@@ -119,10 +119,13 @@ for the new package after executable proof transfer.
 - Source: `chain_intervals` and `MAX_CHAIN_INTERVALS` from `5c489fb`.
 - Integration: no bounded-chain symbol or unbuildable-chain test exists.
 - Difference: finite input alone does not bound allocation/work.
-- Negative control: `test_subtract_capsule_refuses_an_unbuildable_chain` and
-  `test_subtract_arc_sweep_refuses_an_unbuildable_chain`.
-- Positive control: `test_ordinary_sweeps_are_far_under_the_chain_limit`.
-- Destination: P1 Task 4.
+- Negative control: adapt the source allocation proof into
+  `test_exact_segment_refuses_an_unbuildable_chain` and
+  `test_exact_arc_refuses_an_unbuildable_chain`; do not route the authoritative
+  test through legacy `subtract_arc_sweep`.
+- Positive control: exact ordinary segment and rational-chart arc depletions
+  remain far below the bound.
+- Destination: P1 Task 3.
 
 ### Compiled growth guard
 
@@ -159,8 +162,8 @@ for the new package after executable proof transfer.
 - Negative control: a station-green motion whose interior crosses the annular
   rib.
 - Positive control: wall-following motions at every orientation.
-- Destination: adapt behind P1's narrow native audit seam; do not replace the
-  newer segment oracle.
+- Destination: adapt behind P1 Task 4's narrow native audit seam; do not
+  replace the newer segment oracle.
 
 ### Rotation-invariant bound
 
@@ -179,7 +182,8 @@ for the new package after executable proof transfer.
 - Difference: none requiring transfer; integration is stricter.
 - Negative control: a near-zero contact arc at large coordinate scale.
 - Positive control: `test_a_full_turn_report_means_a_buried_rim`.
-- Destination: reuse the integration implementation and regression in P1.
+- Destination: reuse the integration implementation and regression in P1 Task
+  4.
 
 ### Release shared-root guard and full-turn theorem
 
@@ -206,6 +210,32 @@ for the new package after executable proof transfer.
 - Negative control: annular/spiral rib arc whose sampled stations appear safe.
 - Positive control: constant-stock arc with a known below-cap maximum.
 - Destination: P1 Tasks 2 and 4 after the full dependency closure above.
+
+### Integration-discovered exact partial-arc depletion dependency
+
+- Source status: no source commit supplies this theorem. `73d5372` certifies an
+  arc but its replay still calls the legacy trigonometric
+  `subtract_arc_sweep`.
+- Integration status: `subtract_exact_segment` and
+  `subtract_exact_full_circle` own exact incident-center traces. Partial arcs
+  have neither an exact coherent motion nor a structural depletion trace.
+- Difference: `AuditArcMotion2.phase_vector` and `guide_radius` are independently
+  exact-injected, while legacy depletion reconstructs centers with
+  `atan2`/`cos`/`sin`. Certification and depletion can therefore describe
+  different paths, and the removed disks have no exact subset proof against the
+  claimed guide.
+- Required closure: define a versioned rational quarter-chart arc surrogate;
+  make certification and depletion consume that same opaque value; prove exact
+  incidence, traversal/seam ownership, anchors, chord density, finite center
+  count, and atomic no-mutation-on-refusal before accepting replay.
+- Negative controls: awkward non-quadrant endpoints, off-guide centers,
+  reversed/missing chart parameters, complement confusion, nextafter seams,
+  nonpositive or excessive chord policy, and unbuildable center counts.
+- Positive controls: CW/CCW minor, major, and full-turn surrogate arcs under
+  rational rotation, translation, and scale.
+- Destination: P1 Task 3. This is a hard prerequisite for P1 Task 4 native
+  transaction and P1 Task 5 public replay; it is not satisfied by the bounded
+  disk-chain allocation row.
 
 ## Baseline
 

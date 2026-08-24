@@ -100,5 +100,9 @@ one classifier: `_stock_2` with Epeck predicates.
 
 Stage 1 must still implement measure-before-deplete replay, the native
 three-way segment/circle/arc certification adapters, truthful report
-aggregation, consumer migration, and the bounded evidence matrix. Until those
-steps pass, no audit result can claim complete engagement compliance.
+aggregation, consumer migration, and the bounded evidence matrix. Before replay
+can become authoritative, Task 3 must replace the current independently
+injected arc phase/radius pair with one exact rational-chart surrogate shared
+by certification and exact-on-surrogate depletion. The legacy trigonometric
+`subtract_arc_sweep` is not proof-bearing depletion. Until those steps pass, no
+audit result can claim complete engagement compliance.
