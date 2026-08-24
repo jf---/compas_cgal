@@ -19,9 +19,6 @@ using namespace nb::literals;
 namespace {
 
 constexpr double FULL_TURN_SURROGATE = std::numbers::pi * 2.0;
-constexpr std::string_view ARC_PHASE_STRATEGY_VERSION
-    = "audit-arc-phase-binary64-v1";
-
 enum class CurvePlane {
     Cut,
     Clearance,
@@ -140,21 +137,6 @@ EVector exact_circle_phase(
         exact_radius * Epeck::FT(xaxis[1]));
 }
 
-EVector exact_arc_phase_surrogate(
-    const std::array<double, 3>& xaxis,
-    const std::array<double, 3>& yaxis,
-    double radius,
-    double angle)
-{
-    // ARC_PHASE_STRATEGY_VERSION names this sole transcendental seam. The
-    // binary64 phase is injected once and remains opaque Epeck geometry.
-    const double cosine = std::cos(angle);
-    const double sine = std::sin(angle);
-    return EVector(
-        Epeck::FT(radius * (cosine * xaxis[0] + sine * yaxis[0])),
-        Epeck::FT(radius * (cosine * xaxis[1] + sine * yaxis[1])));
-}
-
 } // namespace
 
 AuditLineClassification2 classify_audit_line(
@@ -266,49 +248,42 @@ AuditArcClassification2 classify_audit_arc(
     require_finite({ radius, start_angle, end_angle });
     require_valid_plane(cut_z, clearance_z);
     const Epeck::FT exact_radius(radius);
-    const Epeck::FT signed_sweep
-        = Epeck::FT(end_angle) - Epeck::FT(start_angle);
     if (CGAL::sign(exact_radius) != CGAL::POSITIVE) {
         throw AuditUnsupportedGeometryError(
             "arc radius must be exact positive");
-    }
-    const CGAL::Sign sweep_sign = CGAL::sign(signed_sweep);
-    if (sweep_sign == CGAL::ZERO
-        || CGAL::compare(
-               CGAL::abs(signed_sweep),
-               Epeck::FT(FULL_TURN_SURROGATE))
-            == CGAL::LARGER) {
-        throw AuditUnsupportedGeometryError(
-            "arc sweep must lie in the exact injected interval [-2*pi, 2*pi] excluding zero");
-    }
-    if (clockwise != (sweep_sign == CGAL::NEGATIVE)) {
-        throw AuditContradictoryOrientationError(
-            "operation orientation contradicts exact arc sweep sign");
     }
     require_canonical_world_xy_frame(xaxis, yaxis);
     const EPoint exact_center {
         Epeck::FT(center[0]), Epeck::FT(center[1])
     };
-    const EVector start_phase = exact_arc_phase_surrogate(
-        xaxis, yaxis, radius, start_angle);
+    const EVector zero_phase = exact_circle_phase(xaxis, radius);
+    AuditArcMotion2 motion = [&]() {
+        try {
+            return AuditArcMotion2::build(
+                exact_center,
+                zero_phase,
+                exact_radius,
+                start_angle,
+                end_angle,
+                clockwise,
+                Epeck::FT(cut_z));
+        } catch (const AuditArcOrientationError& error) {
+            throw AuditContradictoryOrientationError(
+                std::string("operation orientation contradicts exact arc sweep sign: ")
+                + error.what());
+        } catch (const AuditArcMotionError& error) {
+            throw AuditUnsupportedGeometryError(error.what());
+        }
+    }();
     const CurvePlane plane = classify_curve_plane(
         Epeck::FT(center[2]), Epeck::FT(cut_z),
         Epeck::FT(clearance_z), operation_role);
     if (plane == CurvePlane::Cut) {
-        return AuditArcMotion2 {
-            exact_center,
-            start_phase,
-            exact_radius,
-            CGAL::abs(signed_sweep),
-            clockwise,
-            Epeck::FT(cut_z),
-        };
+        return motion;
     }
-    const EVector end_phase = exact_arc_phase_surrogate(
-        xaxis, yaxis, radius, end_angle);
     return AuditClearanceTransport2 {
-        translated_point(exact_center, start_phase),
-        translated_point(exact_center, end_phase),
+        motion.start_point(),
+        motion.end_point(),
     };
 }
 
@@ -329,7 +304,12 @@ void register_audit_classification_2(nb::module_& module)
 
     nb::class_<AuditSegmentMotion2>(module, "AuditSegmentMotion2");
     nb::class_<AuditCircleMotion2>(module, "AuditCircleMotion2");
-    nb::class_<AuditArcMotion2>(module, "AuditArcMotion2");
+    nb::class_<AuditArcMotion2>(module, "AuditArcMotion2")
+        .def_prop_ro("digest", [](const AuditArcMotion2& motion) {
+            return nb::bytes(
+                motion.digest().bytes().data(),
+                motion.digest().bytes().size());
+        });
     nb::class_<AuditVerticalPlunge2>(module, "AuditVerticalPlunge2");
     nb::class_<AuditVerticalRetract2>(module, "AuditVerticalRetract2");
     nb::class_<AuditClearanceTransport2>(
@@ -339,8 +319,8 @@ void register_audit_classification_2(nb::module_& module)
         "audit_arc_phase_strategy_version",
         []() {
             return nb::bytes(
-                ARC_PHASE_STRATEGY_VERSION.data(),
-                ARC_PHASE_STRATEGY_VERSION.size());
+                audit_arc_motion_strategy_version().data(),
+                audit_arc_motion_strategy_version().size());
         });
 
     module.def(

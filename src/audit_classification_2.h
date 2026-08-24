@@ -1,5 +1,6 @@
 #pragma once
 
+#include "audit_arc_motion_2.h"
 #include "exact_motion_2.h"
 
 #include <array>
@@ -47,15 +48,6 @@ struct AuditSegmentMotion2 {
 struct AuditCircleMotion2 {
     ExactCircleMotion2 xy;
     Epeck::FT guide_radius;
-    Epeck::FT cut_z;
-};
-
-struct AuditArcMotion2 {
-    EPoint center;
-    EVector phase_vector;
-    Epeck::FT guide_radius;
-    Epeck::FT sweep;
-    bool clockwise;
     Epeck::FT cut_z;
 };
 

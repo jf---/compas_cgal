@@ -160,8 +160,27 @@ def test_native_arc_classifier_owns_phase_and_sweep_direction() -> None:
     )
 
     assert isinstance(result, _stock_2.AuditArcMotion2)
+    assert len(result.digest) == 32
+    assert (
+        result.digest
+        == _stock_2.classify_audit_arc(
+            (1.0, 2.0, 0.0),
+            WORLD_X,
+            WORLD_Y,
+            2.0,
+            0.0,
+            math.pi / 2.0,
+            False,
+            0.0,
+            5.0,
+            "cut",
+        ).digest
+    )
 
-    with pytest.raises(_stock_2.AuditContradictoryOrientationError):
+    with pytest.raises(
+        _stock_2.AuditContradictoryOrientationError,
+        match="exact arc sweep sign",
+    ):
         _stock_2.classify_audit_arc(
             (1.0, 2.0, 0.0),
             WORLD_X,

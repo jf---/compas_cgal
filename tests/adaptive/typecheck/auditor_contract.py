@@ -42,6 +42,7 @@ def consume_native_motion_request(motion: SupportedLateralMotion) -> None:
         assert_type(motion, _stock_2.AuditSegmentMotion2)
     elif isinstance(motion, _stock_2.AuditArcMotion2):
         assert_type(motion, _stock_2.AuditArcMotion2)
+        assert_type(motion.digest, bytes)
     elif isinstance(motion, _stock_2.AuditCircleMotion2):
         assert_type(motion, _stock_2.AuditCircleMotion2)
     else:

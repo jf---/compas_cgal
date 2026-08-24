@@ -224,6 +224,22 @@ add_executable(task3_algorithm_gate EXCLUDE_FROM_ALL
 target_link_libraries(task3_algorithm_gate PRIVATE coverage_exact_core)
 target_compile_definitions(task3_algorithm_gate PRIVATE CGAL_USE_CORE=1)
 
+add_executable(audit_native_gate EXCLUDE_FROM_ALL
+    tests/native/test_audit_arc_motion_2.cpp
+    tests/native/test_exact_arc_depletion_2.cpp
+    src/audit_arc_motion_2.cpp
+    src/exact_circle_chart_2.cpp
+    src/exact_depletion_2.cpp
+    src/canonical_encoding.cpp
+    src/continuous_tea_2/sha256.cpp
+)
+add_dependencies(audit_native_gate external_downloads)
+target_include_directories(audit_native_gate PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CGAL_INCLUDE_DIR}
+    ${BOOST_INCLUDE_DIR}
+)
+
 add_executable(task9_mat_compile_gate EXCLUDE_FROM_ALL
     tests/native/task9_mat_compile_gate.cpp
     tests/native/task9_point_graph_gate.cpp
@@ -312,7 +328,7 @@ add_nanobind_module(_triangulation src/triangulation.cpp)
 add_nanobind_module(_subdivision src/subdivision.cpp)
 add_nanobind_module(_polylines src/polylines.cpp)
 add_nanobind_module(_toolpath src/toolpath.cpp)
-add_nanobind_module(_stock_2 "src/stock_2.cpp;src/stock_local_2.cpp;src/exact_depletion_2.cpp;src/engagement_2.cpp;src/audit_classification_2.cpp")
+add_nanobind_module(_stock_2 "src/stock_2.cpp;src/stock_local_2.cpp;src/exact_circle_chart_2.cpp;src/audit_arc_motion_2.cpp;src/exact_depletion_2.cpp;src/engagement_2.cpp;src/audit_classification_2.cpp;src/canonical_encoding.cpp;src/continuous_tea_2/sha256.cpp")
 add_nanobind_module(
     _continuous_tea_2
     "src/continuous_tea_2.cpp;src/continuous_tea_2/bind_partition_records.cpp;src/continuous_tea_2/boundary_events.cpp;src/continuous_tea_2/parameter_charts.cpp;src/exact_algebraic_1.cpp;src/exact_stock_region_2.cpp;src/exact_sweep_2.cpp;src/continuous_tea_2/event_partition.cpp;src/continuous_tea_2/trimmed_line_branches.cpp;src/continuous_tea_2/cap_partition.cpp;src/continuous_tea_2/event_certificate.cpp;src/continuous_tea_2/event_trace.cpp;src/continuous_tea_2/circle_oracle.cpp;src/continuous_tea_2/circle_projection.cpp;src/continuous_tea_2/circle_pair_projection.cpp;src/continuous_tea_2/circle_fibre_state.cpp;src/continuous_tea_2/circle_source.cpp;src/continuous_tea_2/circle_strata.cpp;src/continuous_tea_2/circle_vertex_source.cpp;src/continuous_tea_2/sha256.cpp;src/continuous_tea_2/segment_source.cpp;src/continuous_tea_2/station_source.cpp;src/continuous_tea_2/station_classifier.cpp;src/continuous_tea_2/exact_polynomial_sign_2.cpp;src/continuous_tea_2/segment_projection.cpp;src/continuous_tea_2/segment_pair_projection.cpp;src/continuous_tea_2/segment_strata.cpp;src/continuous_tea_2/segment_fibre.cpp;src/continuous_tea_2/segment_partition.cpp;src/continuous_tea_2/segment_oracle.cpp"

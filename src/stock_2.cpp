@@ -607,6 +607,36 @@ DepletionTrace Stock2::subtract_exact_full_circle(
     return std::move(construction.trace);
 }
 
+ExactArcDepletionTrace2 Stock2::subtract_exact_arc(
+    const AuditArcMotion2& motion,
+    const Epeck::FT& tool_radius,
+    const Epeck::FT& max_chord,
+    std::size_t center_count_limit)
+{
+    ExactArcDepletionConstruction2 construction = construct_exact_arc_depletion(
+        motion,
+        tool_radius,
+        max_chord,
+        center_count_limit);
+    std::unique_ptr<Gps> trial = std::make_unique<Gps>(*set_);
+    Gps removal = exact_disk_union(construction.centers, tool_radius);
+    trial->difference(removal);
+    if (!exact_arc_structural_density_holds(
+            motion,
+            max_chord,
+            construction.trace.parameters())
+        || !construction.trace.matches_exact_inputs(
+            tool_radius,
+            max_chord,
+            center_count_limit)
+        || !construction.trace.matches_motion(motion)) {
+        throw ExactArcForgedTraceError(
+            "exact arc depletion failed atomic trace validation");
+    }
+    set_.swap(trial);
+    return std::move(construction.trace);
+}
+
 namespace {
 
 struct ExactSweepOracle {
@@ -869,6 +899,18 @@ NB_MODULE(_stock_2, m)
         m,
         "ExactDepletionCenterLimitError",
         construction_error.ptr());
+    nb::exception<ExactArcDepletionPolicyError>(
+        m,
+        "ExactArcDepletionPolicyError",
+        construction_error.ptr());
+    nb::exception<ExactArcForgedTraceError>(
+        m,
+        "ExactArcForgedTraceError",
+        construction_error.ptr());
+    nb::exception<NonFiniteExactArcDepletionInputError>(
+        m,
+        "NonFiniteExactArcDepletionInputError",
+        PyExc_ValueError);
 
     // Argument faults at the double boundary: ValueError-derived so they read the
     // same way as every other malformed-input rejection in this module.
@@ -928,6 +970,54 @@ NB_MODULE(_stock_2, m)
         .def_ro("exact_removal_radius_valid", &DepletionTrace::exact_removal_radius_valid)
         .def_ro("exact_chord_bound_holds", &DepletionTrace::exact_chord_bound_holds)
         .def_ro("exact_seam_chord_bound_holds", &DepletionTrace::exact_seam_chord_bound_holds);
+
+    nb::class_<ExactArcDepletionTrace2>(m, "ExactArcDepletionTrace2")
+        .def_prop_ro("center_count", [](const ExactArcDepletionTrace2& trace) {
+            return trace.parameters().size();
+        })
+        .def(
+            "matches_exact_inputs",
+            [](const ExactArcDepletionTrace2& trace,
+               double tool_radius,
+               double max_chord,
+               std::int64_t center_count_limit) {
+                if (!std::isfinite(tool_radius)
+                    || !std::isfinite(max_chord)) {
+                    throw NonFiniteExactArcDepletionInputError(
+                        "exact arc matcher inputs must be finite");
+                }
+                if (center_count_limit <= 0) {
+                    throw ExactDepletionCenterLimitError(
+                        "exact arc center-count limit must be positive");
+                }
+                return trace.matches_exact_inputs(
+                    Epeck::FT(tool_radius),
+                    Epeck::FT(max_chord),
+                    static_cast<std::size_t>(center_count_limit));
+            },
+            "tool_radius"_a,
+            "max_chord"_a,
+            "center_count_limit"_a)
+        .def(
+            "matches_motion",
+            &ExactArcDepletionTrace2::matches_motion,
+            "motion"_a)
+        .def_prop_ro("canonical_bytes", [](const ExactArcDepletionTrace2& trace) {
+            return nb::bytes(
+                trace.canonical_bytes().data(),
+                trace.canonical_bytes().size());
+        })
+        .def_prop_ro("digest", [](const ExactArcDepletionTrace2& trace) {
+            return nb::bytes(
+                trace.digest().bytes().data(),
+                trace.digest().bytes().size());
+        })
+        .def_prop_ro("strategy_version", [](const ExactArcDepletionTrace2& trace) {
+            return nb::bytes(
+                trace.strategy_version().data(),
+                trace.strategy_version().size());
+        })
+        .def_prop_ro("cyclic", &ExactArcDepletionTrace2::cyclic);
 
     nb::class_<Stock2>(m, "Stock2")
         .def(nb::init<Eigen::Ref<const compas::RowMatrixXd>,
@@ -989,6 +1079,32 @@ NB_MODULE(_stock_2, m)
             "phase_x"_a,
             "phase_y"_a,
             "clockwise"_a,
+            "tool_radius"_a,
+            "max_chord"_a,
+            "center_count_limit"_a)
+        .def(
+            "subtract_exact_arc",
+            [](Stock2& stock,
+               const AuditArcMotion2& motion,
+               double tool_radius,
+               double max_chord,
+               std::int64_t center_count_limit) {
+                if (!std::isfinite(tool_radius)
+                    || !std::isfinite(max_chord)) {
+                    throw NonFiniteExactArcDepletionInputError(
+                        "exact arc tool radius and chord bound must be finite");
+                }
+                if (center_count_limit <= 0) {
+                    throw ExactDepletionCenterLimitError(
+                        "exact arc center-count limit must be positive");
+                }
+                return stock.subtract_exact_arc(
+                    motion,
+                    Epeck::FT(tool_radius),
+                    Epeck::FT(max_chord),
+                    static_cast<std::size_t>(center_count_limit));
+            },
+            "motion"_a,
             "tool_radius"_a,
             "max_chord"_a,
             "center_count_limit"_a)

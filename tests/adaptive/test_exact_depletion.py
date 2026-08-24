@@ -1,4 +1,5 @@
 import inspect
+import math
 from dataclasses import FrozenInstanceError
 from dataclasses import replace
 from fractions import Fraction
@@ -104,6 +105,95 @@ def test_exact_circle_trace_proves_cardinal_anchors_and_cyclic_seam() -> None:
     assert trace.exact_chord_bound_holds
     assert trace.exact_seam_chord_bound_holds
     assert trace.cyclic
+
+
+def _audit_arc_motion() -> _stock_2.AuditArcMotion2:
+    motion = _stock_2.classify_audit_arc(
+        (1.0, 2.0, 0.0),
+        (1.0, 0.0, 0.0),
+        (0.0, 1.0, 0.0),
+        5.0,
+        0.37,
+        4.91,
+        False,
+        0.0,
+        5.0,
+        "cut",
+    )
+    assert isinstance(motion, _stock_2.AuditArcMotion2)
+    return motion
+
+
+def test_exact_arc_depletion_is_atomic_and_binds_native_motion() -> None:
+    stock = _raw_stock()
+    motion = _audit_arc_motion()
+
+    trace = stock.subtract_exact_arc(motion, 0.75, 0.25, 4096)
+
+    assert trace.center_count > 2
+    assert trace.matches_exact_inputs(0.75, 0.25, 4096)
+    assert len(trace.digest) == 32
+    assert trace.strategy_version == b"exact-arc-pythagorean-guide-v1"
+    assert not trace.cyclic
+    assert trace.matches_motion(motion)
+
+
+@pytest.mark.parametrize(
+    ("tool_radius", "max_chord", "center_count_limit", "error"),
+    [
+        (math.nan, 0.25, 4096, _stock_2.NonFiniteExactArcDepletionInputError),
+        (0.75, math.inf, 4096, _stock_2.NonFiniteExactArcDepletionInputError),
+        (0.75, 0.25, -1, _stock_2.ExactDepletionCenterLimitError),
+    ],
+)
+def test_exact_arc_trace_matcher_rejects_invalid_public_inputs(
+    tool_radius: float,
+    max_chord: float,
+    center_count_limit: int,
+    error: type[Exception],
+) -> None:
+    stock = _raw_stock()
+    trace = stock.subtract_exact_arc(_audit_arc_motion(), 0.75, 0.25, 4096)
+
+    with pytest.raises(error):
+        trace.matches_exact_inputs(tool_radius, max_chord, center_count_limit)
+
+
+@pytest.mark.parametrize(
+    ("tool_radius", "max_chord", "center_count_limit", "error"),
+    [
+        (0.0, 0.25, 4096, _stock_2.ExactDepletionConstructionError),
+        (0.75, 0.0, 4096, _stock_2.ExactDepletionConstructionError),
+        (0.75, 0.75, 4096, _stock_2.ExactArcDepletionPolicyError),
+        (0.75, 1.0, 4096, _stock_2.ExactArcDepletionPolicyError),
+        (0.75, 0.01, 2, _stock_2.ExactDepletionCenterLimitError),
+        (math.nan, 0.25, 4096, _stock_2.NonFiniteExactArcDepletionInputError),
+        (math.inf, 0.25, 4096, _stock_2.NonFiniteExactArcDepletionInputError),
+        (-math.inf, 0.25, 4096, _stock_2.NonFiniteExactArcDepletionInputError),
+        (0.75, math.nan, 4096, _stock_2.NonFiniteExactArcDepletionInputError),
+        (0.75, math.inf, 4096, _stock_2.NonFiniteExactArcDepletionInputError),
+        (0.75, -math.inf, 4096, _stock_2.NonFiniteExactArcDepletionInputError),
+        (0.75, 0.25, -1, _stock_2.ExactDepletionCenterLimitError),
+    ],
+)
+def test_exact_arc_refusal_leaves_stock_unchanged(
+    tool_radius: float,
+    max_chord: float,
+    center_count_limit: int,
+    error: type[Exception],
+) -> None:
+    stock = _raw_stock()
+    snapshot = stock.clone()
+
+    with pytest.raises(error):
+        stock.subtract_exact_arc(
+            _audit_arc_motion(),
+            tool_radius,
+            max_chord,
+            center_count_limit,
+        )
+
+    assert stock.exactly_equals(snapshot)
 
 
 @pytest.mark.parametrize(

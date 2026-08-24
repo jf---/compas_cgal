@@ -460,7 +460,7 @@ ExactArcDepletionConstruction2 construct_exact_arc_depletion(
     std::size_t center_count_limit);
 ```
 
-- [ ] **Step 1: Write RED arc-seam and identity tests**
+- [x] **Step 1: Write RED arc-seam and identity tests**
 
 Require awkward non-quadrant angles, exact quarter seams, negative and
 multi-turn start angles, CW/CCW minor and major arcs, and a full-turn surrogate
@@ -469,7 +469,7 @@ canonical interval order, distinct-endpoint preservation, strategy version,
 and 32-byte motion digest. Changing authored angle, direction, exact chart
 parameter, or strategy version must change the digest.
 
-- [ ] **Step 2: Run the arc-motion RED gate**
+- [x] **Step 2: Run the arc-motion RED gate**
 
 ```bash
 PYTEST_XDIST_AUTO_NUM_WORKERS=2 pixi run pytest -- tests/engagement_audit/test_native_classification.py tests/engagement_audit/test_classification.py tests/engagement_audit/test_input.py -n auto -q
@@ -478,7 +478,7 @@ PYTEST_XDIST_AUTO_NUM_WORKERS=2 pixi run pytest -- tests/engagement_audit/test_n
 Expected: the current independent trigonometric phase/radius carrier lacks
 canonical chart intervals and native motion identity.
 
-- [ ] **Step 3: Extract one exact quarter-chart evaluator**
+- [x] **Step 3: Extract one exact quarter-chart evaluator**
 
 Move the rational Pythagorean evaluator currently private to
 `exact_depletion_2.cpp` into `exact_circle_chart_2.*`. It accepts exact Epeck
@@ -486,13 +486,14 @@ parameters, not only `size_t` fractions. Make full-circle depletion and
 `continuous_tea_2` use the shared chart definition; formula duplication is a
 test failure. Preserve the four frozen chart ids and maps exactly.
 
-- [ ] **Step 4: Implement the versioned angle-to-chart seam**
+- [x] **Step 4: Implement the versioned angle-to-chart seam**
 
-Inside `AuditArcMotion2.build(...)`, first exact-inject the signed authored
-sweep, require nonzero magnitude no larger than the injected full turn, and
-prove its sign agrees with orientation. Preserve exact full-turn state before
-normalizing endpoints into `[0, tau)` using the named
-`audit-arc-quarter-chart-binary64-v1` seam. Choose quadrants by exact comparison
+Inside `AuditArcMotion2.build(...)`, observe the authored binary64 subtraction
+`end_angle - start_angle` once, require it to be finite, exact-inject that one
+signed sweep, require nonzero magnitude no larger than the injected full turn,
+and prove its sign agrees with orientation. Preserve exact full-turn state
+before normalizing endpoints into `[0, tau)` using the named
+`audit-arc-quarter-chart-binary64-v2` seam. Choose quadrants by exact comparison
 against exact-injected `0`, `pi/2`, `pi`, `3*pi/2`, and `tau`. Map exact seams
 structurally to parameter zero of the owning chart; otherwise exact-inject
 `tan(local_angle / 2)`. Build the ordered clipped interval sequence and fail
@@ -504,7 +505,7 @@ denominator, and reuse the existing `ExactRational2` canonical encoding; never
 serialize through decimal text or `to_double`. Expose only the digest to Python;
 chart coordinates remain opaque.
 
-- [ ] **Step 5: Write RED structural depletion tests**
+- [x] **Step 5: Write RED structural depletion tests**
 
 ```cpp
 CHECK(exact_arc_point_is_incident(motion, centers.front()));
@@ -522,7 +523,7 @@ confusion; nextafter seam values; an off-guide center; nonpositive policy;
 must leave stock exactly unchanged. Assert the authoritative symbols never
 call legacy `subtract_arc_sweep`.
 
-- [ ] **Step 6: Implement exact-on-surrogate depletion**
+- [x] **Step 6: Implement exact-on-surrogate depletion**
 
 Refine every clipped interval dyadically over its exact endpoint parameters
 until consecutive squared chords satisfy the exact bound. Check the aggregate
@@ -549,7 +550,7 @@ build, and run dependencies compile and execute the focused native audit gate.
 Task 4 extends the same CMake gate; it does not introduce a second native test
 runner.
 
-- [ ] **Step 7: Run Task 3 GREEN and commit**
+- [x] **Step 7: Run Task 3 GREEN and commit**
 
 ```bash
 pixi run audit-native
