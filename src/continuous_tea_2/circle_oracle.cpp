@@ -11,6 +11,7 @@
 #include "event_certificate.h"
 #include "event_partition.h"
 #include "parameter_charts.h"
+#include "segment_source.h"
 #include "sha256.h"
 
 #include <algorithm>
@@ -194,20 +195,20 @@ void require_finite(
     }
 }
 
-std::string motion_identity(
-    double center_x,
-    double center_y,
-    double phase_dx,
-    double phase_dy,
+std::string exact_motion_identity(
+    const Epeck::FT& center_x,
+    const Epeck::FT& center_y,
+    const Epeck::FT& phase_dx,
+    const Epeck::FT& phase_dy,
     bool clockwise)
 {
     return encode_canonical_record(
-        "full-circle-motion-binary64-v1",
+        "full-circle-motion-exact-v1",
         {
-            binary64_identity(center_x),
-            binary64_identity(center_y),
-            binary64_identity(phase_dx),
-            binary64_identity(phase_dy),
+            exact_rational_text(center_x),
+            exact_rational_text(center_y),
+            exact_rational_text(phase_dx),
+            exact_rational_text(phase_dy),
             clockwise ? "clockwise" : "counterclockwise",
         });
 }
@@ -494,6 +495,33 @@ audit_full_circle_tea_event_exact(
             "cap chord ratio must lie in (0, 4]");
     }
 
+    FullCircleTeaAudit2 audit = audit_full_circle_tea_event_exact(
+        stock,
+        FullCircleEventSource2::from_binary64(
+            center_x,
+            center_y,
+            phase_dx,
+            phase_dy,
+            clockwise,
+            tool_radius,
+            cap_chord_ratio));
+    return {std::move(audit.verdict), std::move(audit.trace)};
+}
+
+FullCircleTeaAudit2
+audit_full_circle_tea_event_exact(
+    const Stock2& stock,
+    const FullCircleEventSource2& source)
+{
+    const ExactCircleMotion2& motion = source.motion();
+    const Epeck::FT& center_x = motion.center.x();
+    const Epeck::FT& center_y = motion.center.y();
+    const Epeck::FT& phase_dx = motion.phase_vector.x();
+    const Epeck::FT& phase_dy = motion.phase_vector.y();
+    const bool clockwise = motion.clockwise;
+    const Epeck::FT& tool_radius = source.tool_radius();
+    const Epeck::FT& cap_chord_ratio = source.cap_chord_ratio();
+
     const std::vector<BoundaryFeatureRecord2>
         boundary_records =
             extract_boundary_records(stock);
@@ -573,18 +601,8 @@ audit_full_circle_tea_event_exact(
             build_event_trace(
                 verified.partition,
                 "full-circle-four-chart-v1",
-                motion_identity(
-                    center_x,
-                    center_y,
-                    phase_dx,
-                    phase_dy,
-                    clockwise),
-                encode_canonical_record(
-                    "cap-chord-ratio-binary64-v1",
-                    {
-                        binary64_identity(
-                            cap_chord_ratio),
-                    }),
+                source.motion_identity_bytes(),
+                source.cap_identity_bytes(),
                 verdict,
                 *uniform,
                 "full-circle-uniform-event-exact-v2",
@@ -594,6 +612,10 @@ audit_full_circle_tea_event_exact(
                 ? "certified"
                 : "cap_exceeded",
             std::move(trace),
+            *uniform == "material"
+                ? std::optional<FullCircleAuthorityParameter2>(
+                      FullCircleAuthorityParameter2{0, Epeck::FT(0)})
+                : std::nullopt,
         };
     }
 
@@ -694,15 +716,15 @@ audit_full_circle_tea_event_exact(
             }
         }
     }
-    const Epeck::FT exact_phase_x(phase_dx);
-    const Epeck::FT exact_phase_y(phase_dy);
+    const Epeck::FT& exact_phase_x = phase_dx;
+    const Epeck::FT& exact_phase_y = phase_dy;
     if (!line_sources.empty()
         || !circle_sources.empty()) {
         const std::vector<std::string> motion_data{
             exact_rational_text(
-                Epeck::FT(center_x)),
+                center_x),
             exact_rational_text(
-                Epeck::FT(center_y)),
+                center_y),
             exact_rational_text(
                 exact_phase_x),
             exact_rational_text(
@@ -710,10 +732,10 @@ audit_full_circle_tea_event_exact(
         };
         const std::string cutter_radius =
             exact_rational_text(
-                Epeck::FT(tool_radius));
+                tool_radius);
         const std::string cap_ratio =
             exact_rational_text(
-                Epeck::FT(cap_chord_ratio));
+                cap_chord_ratio);
         EventPartitionCertificate2 partition =
             rational_boundary_vertices
             ? construct_full_circle_boundary_pullback_partition(
@@ -744,35 +766,25 @@ audit_full_circle_tea_event_exact(
                 == boundary_records.size()
             && has_material_rational_chart_witness(
                 stock,
-                Epeck::FT(center_x),
-                Epeck::FT(center_y),
+                center_x,
+                center_y,
                 exact_phase_x,
                 exact_phase_y,
-                Epeck::FT(tool_radius));
+                tool_radius);
         std::vector<EventTraceEvent2> events =
             boundary_trace_events(
                 partition,
                 clockwise);
-        const std::string exact_motion_identity =
-            motion_identity(
-                center_x,
-                center_y,
-                phase_dx,
-                phase_dy,
-                clockwise);
-        const std::string exact_cap_identity =
-            encode_canonical_record(
-                "cap-chord-ratio-binary64-v1",
-                {
-                    binary64_identity(
-                        cap_chord_ratio),
-                });
+        const std::string& motion_identity_bytes =
+            source.motion_identity_bytes();
+        const std::string& exact_cap_identity =
+            source.cap_identity_bytes();
         if (cap_exceeded) {
             EventTrace2 trace =
                 build_event_trace(
                     std::move(partition),
                     "full-circle-four-chart-v1",
-                    exact_motion_identity,
+                    motion_identity_bytes,
                     exact_cap_identity,
                     ContinuousTeaVerdict::
                         CAP_EXCEEDED,
@@ -782,6 +794,10 @@ audit_full_circle_tea_event_exact(
             return {
                 "cap_exceeded",
                 std::move(trace),
+                FullCircleAuthorityParameter2{
+                    0,
+                    Epeck::FT(1) / Epeck::FT(2),
+                },
             };
         }
 
@@ -808,7 +824,7 @@ audit_full_circle_tea_event_exact(
                 authority.canonical_bytes,
                 authority.canonical_digest,
                 "full-circle-four-chart-v1",
-                exact_motion_identity,
+                motion_identity_bytes,
                 exact_cap_identity,
                 authority.verdict,
                 authority.whole_rim_disposition,
@@ -827,6 +843,7 @@ audit_full_circle_tea_event_exact(
         return {
             verdict,
             std::move(trace),
+            authority.violating_parameter,
         };
     }
 
@@ -892,30 +909,18 @@ audit_full_circle_tea_event_exact(
         clockwise,
         std::move(events));
 
-    const std::string identity =
-        motion_identity(
-            center_x,
-            center_y,
-            phase_dx,
-            phase_dy,
-            clockwise);
     EventTrace2 trace =
         build_event_trace(
             verified.partition,
             "full-circle-four-chart-v1",
-            identity,
-            encode_canonical_record(
-                "cap-chord-ratio-binary64-v1",
-                {
-                    binary64_identity(
-                        cap_chord_ratio),
-                }),
+            source.motion_identity_bytes(),
+            source.cap_identity_bytes(),
             ContinuousTeaVerdict::
                 UNRESOLVED_DEGENERACY,
             "unresolved",
             "full-circle-task5-blocked-v1",
             std::move(events));
-    return {"unresolved", std::move(trace)};
+    return {"unresolved", std::move(trace), std::nullopt};
 }
 
 bool full_circle_rational_probe_exceeds_cap_exact(

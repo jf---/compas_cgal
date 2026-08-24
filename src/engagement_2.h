@@ -1,7 +1,5 @@
 #pragma once
 
-#include "compas.h"
-
 #include <stdexcept>
 
 class Stock2;
@@ -19,6 +17,73 @@ class Stock2;
 struct RimSpanNormalizationError : std::logic_error {
     using std::logic_error::logic_error;
 };
+
+class NonFiniteEngagementInputError : public std::invalid_argument {
+public:
+    using std::invalid_argument::invalid_argument;
+};
+
+class NonPositiveEngagementToolRadiusError : public std::invalid_argument {
+public:
+    using std::invalid_argument::invalid_argument;
+};
+
+class InvalidEngagementCapRatioError : public std::invalid_argument {
+public:
+    using std::invalid_argument::invalid_argument;
+};
+
+class InvalidEngagementGapRatioError : public std::invalid_argument {
+public:
+    using std::invalid_argument::invalid_argument;
+};
+
+class NonFiniteSegmentCertificationInputError : public std::invalid_argument {
+public:
+    using std::invalid_argument::invalid_argument;
+};
+
+class NonPositiveSegmentCertificationToolRadiusError
+    : public std::invalid_argument {
+public:
+    using std::invalid_argument::invalid_argument;
+};
+
+class InvalidSegmentCertificationCapError : public std::invalid_argument {
+public:
+    using std::invalid_argument::invalid_argument;
+};
+
+class NonFiniteMixedRadicalInputError : public std::invalid_argument {
+public:
+    using std::invalid_argument::invalid_argument;
+};
+
+class InvalidMixedRadicalRootError : public std::invalid_argument {
+public:
+    using std::invalid_argument::invalid_argument;
+};
+
+void validate_engagement_input_binary64(
+    double cx,
+    double cy,
+    double tool_radius,
+    double cap_chord_ratio,
+    double gap_close_ratio);
+void validate_segment_certification_input_binary64(
+    double x0,
+    double y0,
+    double x1,
+    double y1,
+    double tool_radius,
+    double cap_radians);
+void validate_mixed_radical_input_binary64(
+    double a,
+    double b,
+    double c,
+    double d,
+    double alpha,
+    double beta);
 
 // Convert the ergonomic angle cap exactly once at the native boundary. The
 // returned binary64 value is subsequently injected into Epeck as a rational.
@@ -122,8 +187,13 @@ CertifiedTea certify_segment_tea(const Stock2& stock, double x0, double y0,
                                  double x1, double y1, double tool_radius,
                                  double cap_radians);
 
-// Engagement queries share the _stock_2 nanobind module (NB_STATIC forbids
-// cross-module type sharing), so registration is a hook the module macro in
-// stock_2.cpp calls. It also exposes a test-only `_sign_mixed_radical` binding
-// for direct unit tests of the exact cap predicate's core primitive.
-void register_engagement(nanobind::module_& m);
+// Binding-only diagnostic seam for the mixed-radical exact sign primitive.
+// It carries only binary64 ingress and an integer result, keeping nanobind out
+// of the deciding core translation unit.
+int sign_mixed_radical_for_binding(
+    double a,
+    double b,
+    double c,
+    double d,
+    double alpha,
+    double beta);

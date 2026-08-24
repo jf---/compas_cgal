@@ -1,19 +1,14 @@
 #pragma once
 
-#include "compas.h"
+#include "compas_matrix.h"
 #include "exact_depletion_2.h"
 #include "exact_motion_2.h"
-
-// compas.h supplies nanobind/stl/bind_vector.h (opaque nb::bind_vector) but NOT
-// the automatic std::vector<T> <-> Python-list type caster. The Stock2
-// constructor takes `holes` as a plain Python list, so this module needs the
-// caster in its own (NB_STATIC) translation unit.
-#include <nanobind/stl/vector.h>
 
 #include <cstddef>
 #include <memory>
 #include <stdexcept>
 #include <utility>
+#include <vector>
 
 #include <CGAL/Boolean_set_operations_2.h>
 #include <CGAL/General_polygon_set_2.h>
@@ -216,3 +211,33 @@ private:
 
     std::unique_ptr<Gps> set_;
 };
+
+bool exact_segment_undercover_holds(
+    const ExactSegmentMotion2& motion,
+    const Epeck::FT& exact_length,
+    const Epeck::FT& tool_radius,
+    const Epeck::FT& max_chord,
+    std::size_t center_count_limit);
+
+bool exact_full_circle_undercover_holds(
+    const ExactCircleMotion2& motion,
+    const Epeck::FT& guide_radius,
+    const Epeck::FT& tool_radius,
+    const Epeck::FT& max_chord,
+    std::size_t center_count_limit);
+
+bool exact_segment_induction_holds(
+    const Stock2& initial,
+    const ExactSegmentMotion2& motion,
+    const Epeck::FT& exact_length,
+    const Epeck::FT& tool_radius,
+    const Epeck::FT& max_chord,
+    std::size_t center_count_limit);
+
+bool exact_full_circle_induction_holds(
+    const Stock2& initial,
+    const ExactCircleMotion2& motion,
+    const Epeck::FT& guide_radius,
+    const Epeck::FT& tool_radius,
+    const Epeck::FT& max_chord,
+    std::size_t center_count_limit);

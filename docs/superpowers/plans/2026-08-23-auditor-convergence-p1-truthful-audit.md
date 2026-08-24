@@ -1059,7 +1059,7 @@ their named canonical-hash authorities. The first Task 4 commit ends here and
 runs the focused identity, native, Ruff, strict-mypy, docs, and diff gates before
 review.
 
-- [ ] **Step 4: Restore the P0 falsifiers and write native verdict RED tests**
+- [x] **Step 4: Restore the P0 falsifiers and write native verdict RED tests**
 
 Port only the ledger-targeted exact seam, bounded work, false-certificate,
 swept-annulus, rotation, shared-root, full-turn, and adaptive-arc controls.
@@ -1074,10 +1074,20 @@ witness liveness independently; a dead witness may not produce
 canonical parameter, and station disposition, and is validated before decision
 digest construction.
 
-- [ ] **Step 5: Factor and bind one native decision adapter**
+- [x] **Step 5: Factor and bind one native decision adapter**
+
+The first GREEN change factors one PIC `continuous_tea_exact_core` target that
+owns the non-binding Stock construction, one-root decomposition, exact station,
+segment-event, and full-circle-event sources exactly once. Link that same target
+into `_continuous_tea_2`, `_stock_2`, and `audit_native_gate`, propagate
+`CGAL_USE_CORE=1` and `CGAL_CORE_USE_BOOST_BACKEND=1`, and keep every nanobind
+registration translation unit outside it. Do not duplicate `stock_2.cpp`, an
+oracle source, or any exact-core object across consumers.
 
 Link the existing event-exact segment/full-circle oracle core into `_stock_2`
-through one shared CMake target; do not copy its algorithm. Treat `73d5372` as
+through that shared CMake target; do not copy its algorithm. Add exact Epeck
+motion ingress and a deciding-only exact-center station replay separated from
+reporting doubles. Treat `73d5372` as
 theorem, falsifier, and refinement-strategy input only: do not transfer its
 Boolean result, double trigonometric centers, relative spacing floor, or double
 angular comparisons into authority. Arc certification evaluates Task 3's exact
@@ -1092,8 +1102,21 @@ depth and node limits are exact integers. All are bound into decision-strategy
 canonical bytes. Reaching any limit yields `UNRESOLVED` unless an already
 validated exact witness yields `CAP_EXCEEDED`; none may decide `CERTIFIED`.
 Return one witness-bearing internal result shape for all
-motions. The exact verdict and decision digest are computed before any reporting
+three lateral motions; plunge, retract, and clearance do not receive invented
+TEA verdicts. The closed decision evidence union is exactly one of replayable
+certified coverage, a replayed unguarded exact station witness, or typed
+unresolved evidence. A live exact witness takes precedence over incomplete
+closure; incomplete closure takes precedence over certification. The exact
+verdict and decision digest are computed before any reporting
 maximum; reporting probes cannot feed back into verdict, digest, or stock.
+
+Bounded falsifier evidence is explicit about cost and scope. The low-complexity
+dyadic rib exercises the partial-arc adapter end to end. The Task 3 exact
+machined-rib and rational-oblique spiral fixtures independently retain exact
+depletion, safe-anchor, live-interior, and segment-adapter controls, but their
+full-circle partial-arc closure each exceeded the 120 s bounded native gate
+even after geometric coarsening. They are not claimed as arc-adapter coverage;
+the adapter, proof budgets, and verdict order remain unchanged.
 
 - [ ] **Step 5A: Write replay-transaction RED tests**
 

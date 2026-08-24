@@ -1,5 +1,6 @@
 #include "segment_source.h"
 
+#include "../canonical_encoding.h"
 #include "event_certificate.h"
 #include "sha256.h"
 
@@ -9,6 +10,8 @@
 #include <utility>
 
 #include <CGAL/CORE/BigRat.h>
+#include <CGAL/Fraction_traits.h>
+#include <CGAL/number_utils.h>
 
 namespace {
 
@@ -45,6 +48,11 @@ Rational exact_binary64(double value)
     return Rational(
         significand,
         Integer(1) << -exponent);
+}
+
+std::string binary64_bits_text(double value)
+{
+    return std::to_string(std::bit_cast<std::uint64_t>(value));
 }
 
 } // namespace
@@ -114,13 +122,40 @@ SegmentEventSource2 SegmentEventSource2::from_binary64(
         throw InvalidCapChordRatioError(
             "cap chord ratio must be in (0, 4]");
     }
+    return from_exact(
+        ExactSegmentMotion2{
+            EPoint(Epeck::FT(x0), Epeck::FT(y0)),
+            EPoint(Epeck::FT(x1), Epeck::FT(y1)),
+        },
+        Epeck::FT(tool_radius),
+        Epeck::FT(cap_chord_ratio));
+}
+
+SegmentEventSource2 SegmentEventSource2::from_exact(
+    const ExactSegmentMotion2& motion,
+    const Epeck::FT& tool_radius,
+    const Epeck::FT& cap_chord_ratio)
+{
+    if (motion.start == motion.end) {
+        throw ZeroLengthSegmentMotionError(
+            "segment motion endpoints must differ");
+    }
+    if (CGAL::sign(tool_radius) != CGAL::POSITIVE) {
+        throw NonPositiveToolRadiusError(
+            "tool radius must be exact positive");
+    }
+    if (CGAL::sign(cap_chord_ratio) != CGAL::POSITIVE
+        || CGAL::compare(cap_chord_ratio, Epeck::FT(4)) == CGAL::LARGER) {
+        throw InvalidCapChordRatioError(
+            "cap chord ratio must be exact in (0, 4]");
+    }
     return SegmentEventSource2(
-        lift_binary64(x0),
-        lift_binary64(y0),
-        lift_binary64(x1),
-        lift_binary64(y1),
-        lift_binary64(tool_radius),
-        lift_binary64(cap_chord_ratio));
+        lift_exact(motion.start.x()),
+        lift_exact(motion.start.y()),
+        lift_exact(motion.end.x()),
+        lift_exact(motion.end.y()),
+        lift_exact(tool_radius),
+        lift_exact(cap_chord_ratio));
 }
 
 ExactBinary64Rational2
@@ -130,6 +165,18 @@ SegmentEventSource2::lift_binary64(double value)
     return ExactBinary64Rational2(
         CORE::numerator(exact).convert_to<std::string>(),
         CORE::denominator(exact).convert_to<std::string>());
+}
+
+ExactBinary64Rational2 SegmentEventSource2::lift_exact(
+    const Epeck::FT& value)
+{
+    using Traits = CGAL::Fraction_traits<Epeck::FT>;
+    typename Traits::Numerator_type numerator;
+    typename Traits::Denominator_type denominator;
+    typename Traits::Decompose()(value, numerator, denominator);
+    return ExactBinary64Rational2(
+        CORE::BigInt(numerator.exact()).convert_to<std::string>(),
+        CORE::BigInt(denominator.exact()).convert_to<std::string>());
 }
 
 SegmentEventSource2::SegmentEventSource2(
@@ -215,4 +262,171 @@ const std::string&
 SegmentEventSource2::canonical_digest() const noexcept
 {
     return canonical_digest_;
+}
+
+FullCircleEventSource2 FullCircleEventSource2::from_binary64(
+    double center_x,
+    double center_y,
+    double phase_dx,
+    double phase_dy,
+    bool clockwise,
+    double tool_radius,
+    double cap_chord_ratio)
+{
+    if (!std::isfinite(center_x) || !std::isfinite(center_y)
+        || !std::isfinite(phase_dx) || !std::isfinite(phase_dy)
+        || !std::isfinite(tool_radius)
+        || !std::isfinite(cap_chord_ratio)) {
+        throw NonFiniteFullCircleInputError(
+            "full-circle binary64 inputs must be finite");
+    }
+    if (phase_dx == 0.0 && phase_dy == 0.0) {
+        throw ZeroFullCirclePhaseError(
+            "full-circle phase vector must be nonzero");
+    }
+    if (!(tool_radius > 0.0)) {
+        throw NonPositiveToolRadiusError(
+            "full-circle tool radius must be positive");
+    }
+    if (!(cap_chord_ratio > 0.0 && cap_chord_ratio <= 4.0)) {
+        throw InvalidCapChordRatioError(
+            "full-circle cap chord ratio must be in (0, 4]");
+    }
+    std::string canonical = encode_string_sequence({
+        "full-circle-event-source-binary64-v1",
+        canonical_encode_binary64(center_x),
+        canonical_encode_binary64(center_y),
+        canonical_encode_binary64(phase_dx),
+        canonical_encode_binary64(phase_dy),
+        clockwise ? "clockwise" : "counterclockwise",
+        canonical_encode_binary64(tool_radius),
+        canonical_encode_binary64(cap_chord_ratio),
+    });
+    return FullCircleEventSource2(
+        ExactCircleMotion2{
+            EPoint(Epeck::FT(center_x), Epeck::FT(center_y)),
+            EVector(Epeck::FT(phase_dx), Epeck::FT(phase_dy)),
+            clockwise,
+        },
+        Epeck::FT(tool_radius),
+        Epeck::FT(cap_chord_ratio),
+        std::move(canonical),
+        encode_canonical_record(
+            "full-circle-motion-binary64-v1",
+            {
+                binary64_bits_text(center_x),
+                binary64_bits_text(center_y),
+                binary64_bits_text(phase_dx),
+                binary64_bits_text(phase_dy),
+                clockwise ? "clockwise" : "counterclockwise",
+            }),
+        encode_canonical_record(
+            "cap-chord-ratio-binary64-v1",
+            {binary64_bits_text(cap_chord_ratio)}));
+}
+
+FullCircleEventSource2 FullCircleEventSource2::from_exact(
+    const ExactCircleMotion2& motion,
+    const Epeck::FT& tool_radius,
+    const Epeck::FT& cap_chord_ratio)
+{
+    if (CGAL::sign(motion.phase_vector.squared_length()) != CGAL::POSITIVE) {
+        throw ZeroFullCirclePhaseError(
+            "full-circle phase vector must be exact nonzero");
+    }
+    if (CGAL::sign(tool_radius) != CGAL::POSITIVE) {
+        throw NonPositiveToolRadiusError(
+            "tool radius must be exact positive");
+    }
+    if (CGAL::sign(cap_chord_ratio) != CGAL::POSITIVE
+        || CGAL::compare(cap_chord_ratio, Epeck::FT(4)) == CGAL::LARGER) {
+        throw InvalidCapChordRatioError(
+            "cap chord ratio must be exact in (0, 4]");
+    }
+    const auto rational_text = [](const Epeck::FT& value) {
+        using Traits = CGAL::Fraction_traits<Epeck::FT>;
+        typename Traits::Numerator_type numerator;
+        typename Traits::Denominator_type denominator;
+        typename Traits::Decompose()(value, numerator, denominator);
+        const std::string n =
+            CORE::BigInt(numerator.exact()).convert_to<std::string>();
+        const std::string d =
+            CORE::BigInt(denominator.exact()).convert_to<std::string>();
+        return d == "1" ? n : n + "/" + d;
+    };
+    std::string canonical = encode_string_sequence({
+        "full-circle-event-source-exact-v1",
+        rational_text(motion.center.x()),
+        rational_text(motion.center.y()),
+        rational_text(motion.phase_vector.x()),
+        rational_text(motion.phase_vector.y()),
+        motion.clockwise ? "clockwise" : "counterclockwise",
+        rational_text(tool_radius),
+        rational_text(cap_chord_ratio),
+    });
+    return FullCircleEventSource2(
+        motion,
+        tool_radius,
+        cap_chord_ratio,
+        std::move(canonical),
+        encode_canonical_record(
+            "full-circle-motion-exact-v1",
+            {
+                rational_text(motion.center.x()),
+                rational_text(motion.center.y()),
+                rational_text(motion.phase_vector.x()),
+                rational_text(motion.phase_vector.y()),
+                motion.clockwise ? "clockwise" : "counterclockwise",
+            }),
+        encode_canonical_record(
+            "cap-chord-ratio-exact-v1",
+            {rational_text(cap_chord_ratio)}));
+}
+
+FullCircleEventSource2::FullCircleEventSource2(
+    ExactCircleMotion2 motion,
+    Epeck::FT tool_radius,
+    Epeck::FT cap_chord_ratio,
+    std::string canonical_bytes,
+    std::string motion_identity_bytes,
+    std::string cap_identity_bytes)
+    : motion_(std::move(motion)),
+      tool_radius_(std::move(tool_radius)),
+      cap_chord_ratio_(std::move(cap_chord_ratio)),
+      canonical_bytes_(std::move(canonical_bytes)),
+      motion_identity_bytes_(std::move(motion_identity_bytes)),
+      cap_identity_bytes_(std::move(cap_identity_bytes))
+{
+}
+
+const ExactCircleMotion2& FullCircleEventSource2::motion() const noexcept
+{
+    return motion_;
+}
+
+const Epeck::FT& FullCircleEventSource2::tool_radius() const noexcept
+{
+    return tool_radius_;
+}
+
+const Epeck::FT& FullCircleEventSource2::cap_chord_ratio() const noexcept
+{
+    return cap_chord_ratio_;
+}
+
+const std::string& FullCircleEventSource2::canonical_bytes() const noexcept
+{
+    return canonical_bytes_;
+}
+
+const std::string&
+FullCircleEventSource2::motion_identity_bytes() const noexcept
+{
+    return motion_identity_bytes_;
+}
+
+const std::string&
+FullCircleEventSource2::cap_identity_bytes() const noexcept
+{
+    return cap_identity_bytes_;
 }

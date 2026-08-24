@@ -1,16 +1,23 @@
 #pragma once
 
 #include "event_trace.h"
+#include "../exact_motion_2.h"
 
 #include <cstddef>
+#include <optional>
 #include <string>
 
 class Stock2;
 class SegmentEventSource2;
 
+struct SegmentAuthorityParameter2 {
+    Epeck::FT parameter;
+};
+
 struct SegmentTeaAudit2 {
     ContinuousTeaVerdict verdict;
     EventTrace2 trace;
+    std::optional<SegmentAuthorityParameter2> violating_parameter;
 };
 
 struct SweptPrefixSegmentTeaAudit2 {

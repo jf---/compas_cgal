@@ -1,4 +1,5 @@
 #include "engagement_2.h"
+#include "audit_certification_2.h"
 #include "audit_policy_2.h"
 #include "stock_2.h"
 
@@ -21,7 +22,7 @@
 namespace {
 
 using FT = Epeck::FT;
-using CoordNT = GpsPoint::CoordNT;   // Sqrt_extension<FT, FT>: a0 + a1*sqrt(root)
+using CoordNT = GpsPoint::CoordNT;
 
 // ----------------------------------------------------------------------------
 // Exact sign of a mixed two-radical form   A + B*sqrt(alpha) + C*sqrt(beta)
@@ -149,16 +150,16 @@ struct Arc {
     double span;
 };
 
+
 // One full turn, the reported span of a rim entirely buried in material.
 constexpr double FULL_TURN = 2.0 * std::numbers::pi;
 
-// Reporting-only slack on the "a run cannot exceed a full turn" invariant checked
-// in finish_engagement. The engaged sub-arcs partition the cutter circle, so their
-// spans sum to at most FULL_TURN EXACTLY; the only error in the comparison is the
-// rounding of each rim_sub_arc_span evaluation and of their summation, a handful
-// of ulps of 2*pi (ulp(2*pi) ~ 8.9e-16). 1e-12 rad (~6e-11 deg) is ~1000x that --
-// far too loose for any correct build to trip, and still 12 orders of magnitude
-// below the failure it exists to catch, which mis-reports by a WHOLE TURN (6.28).
+// Reporting-only slack on the "a run cannot exceed a full turn" invariant. The
+// shared exact station classifier returns a partition of the cutter rim, so its
+// reporting spans sum to at most FULL_TURN exactly; the only error here is the
+// rounding of each rim_sub_arc_span evaluation and their summation, a handful of
+// ulps of 2*pi (ulp(2*pi) ~ 8.9e-16). 1e-12 rad (~6e-11 deg) is ~1000x that and
+// still 12 orders below the whole-turn normalization failure it detects.
 //
 // NOT A DECISION TOLERANCE (docs/exactness.md, deciding/reporting split). It never
 // appears in the cap verdict, which run_exceeds_cap decides exactly on one-root
@@ -197,8 +198,6 @@ double rim_sub_arc_span(const GpsPoint& s, const GpsPoint& t, double cx, double 
     const double bx = CGAL::to_double(t.x()) - cx, by = CGAL::to_double(t.y()) - cy;
     return 2.0 * std::atan2(std::hypot(bx - ax, by - ay), std::hypot(ax + bx, ay + by));
 }
-
-// Gap-closure pessimism: absorb every VOID gap between consecutive engaged runs
 // whose angular span does NOT exceed the gap-closure angle gamma (surrogate
 // gap_close_ratio, exact threshold T_gamma = gap_close_ratio * r^2), returning
 // the resulting PESSIMISTIC runs as (ccw_start, ccw_end) endpoint pairs for the
@@ -459,6 +458,7 @@ void engaged_arcs_zone(const Stock2& stock, double cx, double cy,
     }
 }
 
+
 // ----------------------------------------------------------------------------
 // Task 5: exact-station TEA cap certificate along a linear cutter motion.
 // ----------------------------------------------------------------------------
@@ -623,9 +623,11 @@ double cap_chord_ratio(double cap_radians)
 bool cap_chord_ratio_le(double lhs, double rhs)
 {
     if (!(lhs > 0.0 && lhs <= 4.0))
-        throw std::invalid_argument("lhs cap_chord_ratio must be in (0, 4].");
+        throw InvalidEngagementCapRatioError(
+            "lhs cap_chord_ratio must be in (0, 4]");
     if (!(rhs > 0.0 && rhs <= 4.0))
-        throw std::invalid_argument("rhs cap_chord_ratio must be in (0, 4].");
+        throw InvalidEngagementCapRatioError(
+            "rhs cap_chord_ratio must be in (0, 4]");
 
     return CGAL::compare(FT(lhs), FT(rhs)) != CGAL::LARGER;
 }
@@ -634,36 +636,47 @@ EngagementSample engagement_at(const Stock2& stock, double cx, double cy,
                                double tool_radius, double cap_chord_ratio,
                                double gap_close_ratio)
 {
+    validate_engagement_input_binary64(
+        cx, cy, tool_radius, cap_chord_ratio, gap_close_ratio);
     // API-boundary contract: cap_chord_ratio = 4*sin^2(cap/2) with 0 < cap <= pi
     // lies in (0, 4]. Validate the raw double before exact injection (NaN fails).
-    if (!(cap_chord_ratio > 0.0 && cap_chord_ratio <= 4.0))
-        throw std::invalid_argument("cap_chord_ratio must be in (0, 4] (= 4*sin^2(cap/2), 0 < cap <= pi).");
     // gap_close_ratio = 4*sin^2(gamma/2) with 0 <= gamma <= pi lies in [0, 4];
     // 0 (no gap closed) is the default and the pre-pessimism semantics.
-    if (!(gap_close_ratio >= 0.0 && gap_close_ratio <= 4.0))
-        throw std::invalid_argument("gap_close_ratio must be in [0, 4] (= 4*sin^2(gamma/2), 0 <= gamma <= pi).");
 
-    // Harvest the engaged rim arcs LOCALLY off the stock's OWN arrangement (its Gps
-    // faces carry contained() = material): zone the cutter circle there and collect
-    // the rim sub-arcs in material, then run the exact run-assembly + cap decision.
-    // This replaces the earlier whole-stock overlay (region =
-    // disk.intersection(stock.set())): the SAME exact certificate, read in
-    // O(cutter-crossings) instead of O(stock) -- measured ~4-5x/query, more on a
-    // heavily depleted pocket. The overlay was validated to reproduce this exactly:
-    // 0 certificate mismatches over 7200 comparisons; the only residual was a
-    // <= 1e-15 rad reporting-double representation artifact (algebraically-equal
-    // one-root crossings whose representation-sensitive to_double rounds by ulps),
-    // never the decision (docs/superpowers/state/engagement-zone-divergence.md).
-    const FT r_sq = FT(tool_radius) * FT(tool_radius);
-    std::vector<Arc> arcs;
-    engaged_arcs_zone(stock, cx, cy, tool_radius, arcs);
-    return finish_engagement(arcs, cx, cy, r_sq, cap_chord_ratio, gap_close_ratio);
+    const AuditExactStationClassification2 exact =
+        classify_audit_unguarded_station_exact(
+            stock,
+            EPoint(FT(cx), FT(cy)),
+            FT(tool_radius),
+            FT(cap_chord_ratio),
+            FT(gap_close_ratio));
+    EngagementSample out{
+        0.0,
+        0.0,
+        exact.disposition()
+            == AuditExactStationDisposition2::CAP_EXCEEDED,
+    };
+    for (const auto& run : exact.true_run_arcs()) {
+        double run_span = 0.0;
+        for (const auto& [start, end] : run) {
+            run_span += rim_sub_arc_span(start, end, cx, cy);
+        }
+        out.total_tea += run_span;
+        out.max_run_tea = std::max(out.max_run_tea, run_span);
+    }
+    if (out.total_tea > FULL_TURN + FULL_TURN_REPORTING_SLACK) {
+        throw RimSpanNormalizationError(
+            "Engaged rim runs exceed the cutter's full turn");
+    }
+    return out;
 }
 
 CertifiedTea certify_segment_tea(const Stock2& stock, double x0, double y0,
                                  double x1, double y1, double tool_radius,
                                  double cap_radians)
 {
+    validate_segment_certification_input_binary64(
+        x0, y0, x1, y1, tool_radius, cap_radians);
     // BOUNDARY (docs/exactness.md, boundary doctrine): validate the ergonomic
     // angular cap and convert it to its exact chord surrogate here, at the one
     // declared seam. Contract 0 < cap <= pi: a single engaged run subtends at
@@ -678,46 +691,16 @@ CertifiedTea certify_segment_tea(const Stock2& stock, double x0, double y0,
     return acc;
 }
 
-void register_engagement(nanobind::module_& m)
+int sign_mixed_radical_for_binding(
+    double a,
+    double b,
+    double c,
+    double d,
+    double alpha,
+    double beta)
 {
-    m.def("cap_chord_ratio", &cap_chord_ratio, "cap_radians"_a);
-    m.def("cap_chord_ratio_le", &cap_chord_ratio_le, "lhs"_a, "rhs"_a);
-
-    // Nanobind boundary. cx, cy, tool_radius are measured/computed station data:
-    // each double IS a rational and enters exact-land by exact injection
-    // (Epeck::FT) -- no snapping, no tolerance at the seam. cap_chord_ratio is
-    // the caller's exact rational surrogate 4*sin^2(cap/2) for the transcendental
-    // cap (docs/exactness.md "Input semantics" and "boundary doctrine").
-    m.def("engagement_at",
-          [](const Stock2& stock, double cx, double cy, double tool_radius,
-             double cap_chord_ratio, double gap_close_ratio) {
-              EngagementSample s = engagement_at(stock, cx, cy, tool_radius,
-                                                 cap_chord_ratio, gap_close_ratio);
-              return std::make_tuple(s.total_tea, s.max_run_tea, s.cap_exceeded);
-          },
-          "stock"_a, "cx"_a, "cy"_a, "tool_radius"_a, "cap_chord_ratio"_a,
-          "gap_close_ratio"_a = 0.0);
-
-    // Nanobind boundary for the motion certificate: x0..y1, tool_radius and the
-    // angular cap enter exact-land inside certify_segment_tea (validation + exact
-    // chord-surrogate injection). Returns (max_tea, cap_certified, stations),
-    // the CertifiedTea fields, matching the tuple style of engagement_at.
-    m.def("certify_segment_tea",
-          [](const Stock2& stock, double x0, double y0, double x1, double y1,
-             double tool_radius, double cap_radians) {
-              CertifiedTea c = certify_segment_tea(stock, x0, y0, x1, y1,
-                                                   tool_radius, cap_radians);
-              return std::make_tuple(c.max_tea, c.cap_certified, c.stations);
-          },
-          "stock"_a, "x0"_a, "y0"_a, "x1"_a, "y1"_a, "tool_radius"_a, "cap_radians"_a);
-
-    // Test-only: exact sign of A + B*sqrt(alpha) + C*sqrt(beta) + D*sqrt(alpha*beta)
-    // (returns -1/0/+1) so the cap predicate's core primitive is unit-tested
-    // directly against high-precision references.
-    m.def("_sign_mixed_radical",
-          [](double a, double b, double c, double d, double alpha, double beta) {
-              return static_cast<int>(
-                  sign_mixed_radical(FT(a), FT(b), FT(c), FT(d), FT(alpha), FT(beta)));
-          },
-          "a"_a, "b"_a, "c"_a, "d"_a, "alpha"_a, "beta"_a);
+    validate_mixed_radical_input_binary64(
+        a, b, c, d, alpha, beta);
+    return static_cast<int>(audit_sign_mixed_radical_exact(
+        FT(a), FT(b), FT(c), FT(d), FT(alpha), FT(beta)));
 }

@@ -1463,7 +1463,15 @@ NB_MODULE(_continuous_tea_2, m)
         "events"_a);
     m.def(
         "audit_full_circle_tea_event_exact",
-        &audit_full_circle_tea_event_exact,
+        static_cast<std::pair<std::string, EventTrace2> (*)(
+            const Stock2&,
+            double,
+            double,
+            double,
+            double,
+            bool,
+            double,
+            double)>(&audit_full_circle_tea_event_exact),
         "stock"_a,
         "center_x"_a,
         "center_y"_a,

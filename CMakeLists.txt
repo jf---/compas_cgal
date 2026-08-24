@@ -208,10 +208,14 @@ add_library(coverage_exact_core STATIC
 )
 add_dependencies(coverage_exact_core external_downloads)
 set_target_properties(coverage_exact_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
-target_compile_definitions(coverage_exact_core PRIVATE CGAL_USE_CORE=1)
+target_compile_definitions(
+    coverage_exact_core
+    PUBLIC
+        CGAL_USE_CORE=1
+        CGAL_CORE_USE_BOOST_BACKEND=1)
 target_include_directories(coverage_exact_core
-    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src
-    PRIVATE
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
         ${CGAL_INCLUDE_DIR}
         ${BOOST_INCLUDE_DIR}
         ${EIGEN_INCLUDE_DIR}
@@ -224,28 +228,88 @@ add_executable(task3_algorithm_gate EXCLUDE_FROM_ALL
 target_link_libraries(task3_algorithm_gate PRIVATE coverage_exact_core)
 target_compile_definitions(task3_algorithm_gate PRIVATE CGAL_USE_CORE=1)
 
-add_executable(audit_native_gate EXCLUDE_FROM_ALL
-    tests/native/test_audit_arc_motion_2.cpp
-    tests/native/test_exact_arc_depletion_2.cpp
-    tests/native/test_audit_identity_2.cpp
+add_library(continuous_tea_exact_core STATIC
+    src/canonical_encoding.cpp
+    src/exact_algebraic_1.cpp
+    src/exact_circle_chart_2.cpp
+    src/exact_stock_region_2.cpp
     src/audit_arc_motion_2.cpp
+    src/stock_2.cpp
+    src/stock_local_2.cpp
     src/audit_motion_identity_2.cpp
     src/audit_classification_core_2.cpp
     src/audit_policy_2.cpp
     src/audit_stock_identity_2.cpp
     src/audit_request_identity_2.cpp
     src/audit_strategy_versions_2.cpp
-    src/exact_circle_chart_2.cpp
     src/exact_depletion_2.cpp
-    src/canonical_encoding.cpp
+    src/audit_exact_station_2.cpp
+    src/audit_decision_strategy_2.cpp
+    src/audit_stock_state_identity_2.cpp
+    src/audit_station_parameters_2.cpp
+    src/audit_decision_evidence_values_2.cpp
+    src/audit_station_evidence_2.cpp
+    src/audit_authority_evidence_2.cpp
+    src/audit_refinement_cell_2.cpp
+    src/audit_unresolved_evidence_2.cpp
+    src/audit_certification_replay_2.cpp
+    src/audit_certification_2.cpp
+    src/continuous_tea_2/boundary_events.cpp
+    src/continuous_tea_2/parameter_charts.cpp
+    src/continuous_tea_2/event_partition.cpp
+    src/continuous_tea_2/trimmed_line_branches.cpp
+    src/continuous_tea_2/cap_partition.cpp
+    src/continuous_tea_2/event_certificate.cpp
+    src/continuous_tea_2/event_trace.cpp
+    src/continuous_tea_2/circle_oracle.cpp
+    src/continuous_tea_2/circle_projection.cpp
+    src/continuous_tea_2/circle_pair_projection.cpp
+    src/continuous_tea_2/circle_fibre_state.cpp
+    src/continuous_tea_2/circle_source.cpp
+    src/continuous_tea_2/circle_strata.cpp
+    src/continuous_tea_2/circle_vertex_source.cpp
     src/continuous_tea_2/sha256.cpp
+    src/continuous_tea_2/segment_source.cpp
+    src/continuous_tea_2/station_source.cpp
+    src/continuous_tea_2/station_classifier.cpp
+    src/continuous_tea_2/exact_polynomial_sign_2.cpp
+    src/continuous_tea_2/segment_projection.cpp
+    src/continuous_tea_2/segment_pair_projection.cpp
+    src/continuous_tea_2/segment_strata.cpp
+    src/continuous_tea_2/segment_fibre.cpp
+    src/continuous_tea_2/segment_partition.cpp
+    src/continuous_tea_2/segment_oracle.cpp
 )
-add_dependencies(audit_native_gate external_downloads)
-target_include_directories(audit_native_gate PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
-    ${CGAL_INCLUDE_DIR}
-    ${BOOST_INCLUDE_DIR}
+add_dependencies(continuous_tea_exact_core external_downloads)
+set_target_properties(
+    continuous_tea_exact_core
+    PROPERTIES POSITION_INDEPENDENT_CODE ON)
+target_compile_definitions(
+    continuous_tea_exact_core
+    PUBLIC
+        CGAL_USE_CORE=1
+        CGAL_CORE_USE_BOOST_BACKEND=1)
+target_include_directories(
+    continuous_tea_exact_core
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CGAL_INCLUDE_DIR}
+        ${BOOST_INCLUDE_DIR}
+        ${EIGEN_INCLUDE_DIR})
+target_link_libraries(continuous_tea_exact_core PUBLIC coverage_exact_core)
+
+add_executable(audit_native_gate EXCLUDE_FROM_ALL
+    tests/native/test_audit_arc_motion_2.cpp
+    tests/native/test_exact_arc_depletion_2.cpp
+    tests/native/test_audit_identity_2.cpp
+    tests/native/test_audit_certification_2.cpp
+    tests/native/test_audit_certification_contract_2.cpp
+    tests/native/test_audit_certification_verdicts_2.cpp
+    tests/native/test_audit_certification_refinement_2.cpp
+    tests/native/test_audit_certification_falsifiers_2.cpp
+    tests/native/test_audit_certification_identity_2.cpp
 )
+target_link_libraries(audit_native_gate PRIVATE continuous_tea_exact_core)
 
 add_executable(task9_mat_compile_gate EXCLUDE_FROM_ALL
     tests/native/task9_mat_compile_gate.cpp
@@ -299,12 +363,6 @@ add_executable(task9_mat_compile_gate EXCLUDE_FROM_ALL
     src/segment_site_provenance.cpp
     src/canonical_encoding.cpp
     src/exact_algebraic_1.cpp
-    src/exact_region_2.cpp
-    src/exact_sweep_2.cpp
-    src/reachable_input_2.cpp
-    src/reachable_arrangement_2.cpp
-    src/reachable_certificate_2.cpp
-    src/reachable_domain_2.cpp
     src/continuous_tea_2/exact_polynomial_sign_2.cpp
     src/continuous_tea_2/sha256.cpp
 )
@@ -320,6 +378,7 @@ target_compile_definitions(
         CGAL_USE_CORE=1
         CGAL_CORE_USE_BOOST_BACKEND=1
 )
+target_link_libraries(task9_mat_compile_gate PRIVATE coverage_exact_core)
 
 # Add new modules here
 add_nanobind_module(_types_std src/types_std.cpp)
@@ -335,11 +394,15 @@ add_nanobind_module(_triangulation src/triangulation.cpp)
 add_nanobind_module(_subdivision src/subdivision.cpp)
 add_nanobind_module(_polylines src/polylines.cpp)
 add_nanobind_module(_toolpath src/toolpath.cpp)
-add_nanobind_module(_stock_2 "src/stock_2.cpp;src/stock_local_2.cpp;src/exact_circle_chart_2.cpp;src/audit_arc_motion_2.cpp;src/audit_motion_identity_2.cpp;src/audit_classification_core_2.cpp;src/audit_policy_2.cpp;src/audit_stock_identity_2.cpp;src/audit_request_identity_2.cpp;src/audit_strategy_versions_2.cpp;src/audit_identity_bindings_2.cpp;src/exact_depletion_2.cpp;src/engagement_2.cpp;src/audit_classification_2.cpp;src/canonical_encoding.cpp;src/continuous_tea_2/sha256.cpp")
+add_nanobind_module(
+    _stock_2
+    "src/stock_2_bindings.cpp;src/engagement_2.cpp;src/engagement_2_bindings.cpp;src/audit_identity_bindings_2.cpp;src/audit_classification_2.cpp")
+target_link_libraries(_stock_2 PRIVATE continuous_tea_exact_core)
 add_nanobind_module(
     _continuous_tea_2
-    "src/continuous_tea_2.cpp;src/continuous_tea_2/bind_partition_records.cpp;src/continuous_tea_2/boundary_events.cpp;src/continuous_tea_2/parameter_charts.cpp;src/exact_algebraic_1.cpp;src/exact_stock_region_2.cpp;src/exact_sweep_2.cpp;src/continuous_tea_2/event_partition.cpp;src/continuous_tea_2/trimmed_line_branches.cpp;src/continuous_tea_2/cap_partition.cpp;src/continuous_tea_2/event_certificate.cpp;src/continuous_tea_2/event_trace.cpp;src/continuous_tea_2/circle_oracle.cpp;src/continuous_tea_2/circle_projection.cpp;src/continuous_tea_2/circle_pair_projection.cpp;src/continuous_tea_2/circle_fibre_state.cpp;src/continuous_tea_2/circle_source.cpp;src/continuous_tea_2/circle_strata.cpp;src/continuous_tea_2/circle_vertex_source.cpp;src/continuous_tea_2/sha256.cpp;src/continuous_tea_2/segment_source.cpp;src/continuous_tea_2/station_source.cpp;src/continuous_tea_2/station_classifier.cpp;src/continuous_tea_2/exact_polynomial_sign_2.cpp;src/continuous_tea_2/segment_projection.cpp;src/continuous_tea_2/segment_pair_projection.cpp;src/continuous_tea_2/segment_strata.cpp;src/continuous_tea_2/segment_fibre.cpp;src/continuous_tea_2/segment_partition.cpp;src/continuous_tea_2/segment_oracle.cpp"
+    "src/continuous_tea_2.cpp;src/continuous_tea_2/bind_partition_records.cpp"
 )
+target_link_libraries(_continuous_tea_2 PRIVATE continuous_tea_exact_core)
 target_compile_definitions(
     _continuous_tea_2
     PRIVATE
