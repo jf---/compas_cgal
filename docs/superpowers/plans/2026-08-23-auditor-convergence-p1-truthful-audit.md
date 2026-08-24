@@ -1267,11 +1267,32 @@ file explicitly; an incomplete fixed path list is a plan failure.
 
 **Files:**
 
+- Create: `src/audit_reporting_schedule_2.h`
+- Create: `src/audit_reporting_schedule_2.cpp`
+- Create: `src/audit_reporting_observation_2.h`
+- Create: `src/audit_reporting_observation_2.cpp`
+- Modify: `src/audit_digest_2.h`
+- Modify: `src/audit_motion_result_2.h`
+- Modify: `src/audit_motion_result_2.cpp`
+- Modify: `src/audit_replay_2.h`
+- Modify: `src/audit_replay_2.cpp`
+- Modify: `src/audit_replay_internal_2.h`
+- Modify: `src/audit_replay_mutating_2.cpp`
+- Modify: `src/audit_replay_finalization_2.cpp`
+- Modify: `src/audit_replay_bindings_2.cpp`
+- Modify: `src/compas_cgal/_stock_2.pyi`
+- Modify: `CMakeLists.txt`
+- Create: `tests/native/test_audit_reporting_observation_2.cpp`
+- Modify: `tests/native/test_audit_replay_transaction_state_2.cpp`
+- Modify: `tests/native/test_audit_replay_identity_lineage_2.cpp`
+- Modify: `tests/native/test_audit_replay_finalization_2.cpp`
 - Create: `src/compas_cgal/engagement_audit/native.py`
 - Create: `src/compas_cgal/engagement_audit/replay.py`
 - Create: `src/compas_cgal/engagement_audit/report.py`
+- Modify: `src/compas_cgal/engagement_audit/__init__.py`
 - Modify: `src/compas_cgal/engagement_audit/records.py`
 - Modify: `src/compas_cgal/engagement_audit/errors.py`
+- Modify: `tests/engagement_audit/test_records.py`
 - Create: `tests/engagement_audit/test_replay.py`
 - Create: `tests/engagement_audit/test_report.py`
 - Modify: `tests/adaptive/typecheck/auditor_contract.py`
@@ -1284,8 +1305,82 @@ file explicitly; an incomplete fixed path list is a plan failure.
   authoritative `Stock2`.
 - Produces: `audit_toolpath_engagement(...) -> EngagementAuditReport`,
   `EngagementAuditReport.require_certified() -> None`.
+- Each native lateral result owns one nonconstructible
+  `AuditTeaReportingObservation2`. The observation is a reporting projection,
+  not decision evidence: it exposes a validated unit-bearing
+  `AuditReportingRadian2 max_tea`, positive `station_count`, strategy version,
+  native-context read-backs, and its own
+  `TeaReportingObservationDigest2`. Nanobind projects the unit value to the
+  existing Python `Radian`-typed float boundary; bare doubles never circulate
+  inside the C++ reporting model.
+- `AuditReplayCompletion2` v2 additionally binds and exposes the exact input
+  digest and seed lineage. Every native operation result exposes its bound
+  request digest, cursor, authenticated-operation digest, and actual native-
+  motion digest so Python can reject genuine-but-foreign result splices.
 
-- [ ] **Step 1: Write RED replay-order tests**
+**Reporting authority and chronology:**
+
+The reporting maximum is the largest true engaged-run angle *observed* on the
+versioned `audit-motion-reporting-schedule-v1`; it is not a continuous supremum
+and never participates in `CERTIFIED`, `CAP_EXCEEDED`, or `UNRESOLVED`.
+Schedules are constructed in exact Epeck geometry from the opaque motion and
+store each point as `AuditReportingStationWorldXY2`, whose type fixes the
+WorldXY frame and exact millimetre unit:
+
+- segment: exact start, midpoint, and end;
+- full circle: the four owned chart anchors and four chart midpoints;
+- partial arc: start, terminal, every owned interior chart seam, and the exact
+  midpoint of every nonempty clipped chart interval, with exact-point
+  deduplication.
+
+The schedule is bounded independently of decision refinement and depletion
+density. Its canonical identity binds motion kind/digest, ordered typed chart
+parameters, exact station coordinates, count, and strategy version. At each
+station `classify_audit_unguarded_station_exact(...)` supplies the exact true-
+run decomposition. A dedicated reporting-only translation unit projects those
+exact run endpoints to radians with the stable Kahan chord formula already
+validated by the legacy reporter. `CGAL::to_double`, `atan2`, and `hypot` are
+permitted only in that projection; canonical binary64 values and a named full-
+turn rounding bound are checked for finiteness and range. The old reporting
+implementation remains intact; parity tests validate the new path before any
+later consolidation, which requires separate user permission.
+
+For a lateral transaction the exact verdict, decision digest, validated
+depletion witness, post-lineage, and Task 4C result digest are all derived
+before reporting. The immutable pre-depletion authority stock then produces
+the observation. Its canonical bytes bind request digest, cursor,
+authenticated-operation digest, native-motion digest, policy digest,
+pre-stock-state digest, pre-lineage, native decision digest, native result
+digest, ordered schedule digest, ordered station observations, derived maximum,
+station count, and strategy version. The Task 4C result digest and stock
+lineage deliberately exclude reporting bytes, preventing a reporting value
+from changing a verdict, decision, depletion, lineage, or result identity.
+`AuditLateralResult2` nevertheless owns the exact observation so callers cannot
+splice it independently. A `REPORTING` failure-injection point occurs after
+observation construction and before progress/stock commit; failure preserves
+stock, cursor, lineage, lifecycle, and deterministic retry. No work occurs
+after the no-throw commit.
+
+- [ ] **Step 1: Write native reporting/completion RED tests**
+
+Require `AuditTeaReportingObservation2` to be generated-only, immutable, and
+owned by every lateral result. Native canonical mutation tests independently
+change request, cursor, authenticated operation, native motion, policy,
+pre-stock state, pre-lineage, decision digest, Task 4C result digest, schedule,
+one station value, maximum, count, and strategy. Each change must alter or
+invalidate the observation digest. Prove deterministic repeatability, finite
+range, exact schedule ownership/deduplication, and parity with the existing
+reporting span on shared binary64 stations. Compile-time checks forbid raw
+construction and domain retagging.
+
+Expose result request/cursor/motion read-backs and require their exact canonical
+values. Extend completion to `audit-replay-completion-v2`, binding input digest,
+seed lineage, request digest, count, and terminal lineage. Mutating any field
+changes the digest. Inject `REPORTING` failure after a real decision/depletion
+prefix and prove the full transaction remains unchanged and retry produces the
+same result and reporting digests.
+
+- [ ] **Step 2: Write RED replay-order tests**
 
 Require the public API to accept exactly one input and dispatch each operation
 once, in stream order:
@@ -1303,21 +1398,62 @@ def test_returned_unresolved_motion_still_advances_lineage() -> None:
     assert report.operations[0].post_motion_stock_lineage == report.operations[1].pre_motion_stock_lineage
 ```
 
-Add exception injection proving no report escapes, first pre-lineage equals the
-native read-back of the domain-separated input/request lineage seed, terminal
-report lineage equals the last result, and every source operation has exactly
-one result at the same index.
+Use all six motion kinds and an intentional internal dispatch-observer seam to
+trace `begin`, the six exact typed calls once in input order, and `finish`
+without constraining import style. Fail a middle operation after a real
+committed prefix and fail finalization; both cases emit no partial report, skip
+all later routes, and never call `finish` after an operation failure. First
+pre-lineage equals completion's native read-back of the domain-separated
+input/request seed; terminal report lineage equals both completion and the last
+result; every source operation has exactly one result at the same index.
 
-- [ ] **Step 2: Repair the closed record union**
+Guards fail if public replay imports or calls `Stock2`, legacy
+`certify_segment_tea`/`engagement_at`, Python classification, a stock snapshot,
+or source COMPAS geometry after `EngagementAuditInput` construction. Mocks may
+observe calls but must delegate to genuine opaque native results; they may not
+mint authority.
+
+- [ ] **Step 3: Repair the closed record union**
 
 Rename `motion_certificate_digest` to `native_decision_digest`; add depletion
 witness and post-lineage to `MeasuredOperationAudit`; add
 `PlungeOperationAudit`; and remove `vertical_plunge` from
 `NonEngagingReason`. Output records rename `operation_digest` to
 `authenticated_operation_digest`; authenticated input carriers retain their
-nested source digest. Bump each changed canonical version. Every factory checks
-exact native result type, digest sizes, operation identity, lineage adjacency,
-and field presence appropriate to its chronology.
+nested source digest. Bump each changed canonical version.
+
+The measured factory consumes one exact authenticated lateral carrier and its
+exact native lateral result. It derives every field, including `max_tea`, exact
+decision `evidence_count`, distinct `reporting_station_count`, native decision,
+depletion witness, reporting-observation, and native-result digests; callers
+supply none of them. Plunge and non-engaging factories likewise consume their
+exact carrier/result pair. All factories validate request/cursor/motion/
+authenticated-operation identity, digest sizes, lineage fields, exact native
+result kind, and chronology. All three records bind `native_result_digest`;
+plunge additionally binds depletion, and non-engaging binds its native reason
+and unchanged pre/post lineage.
+
+The output classes are factory-owned sealed values: raw constructors,
+`object.__new__` impostors, `dataclasses.replace`, subclasses, foreign result
+kinds, and carrier/result or result/observation splices fail with named errors.
+Canonical properties revalidate the private factory seal and every stored
+field. No output record stores motion geometry, native stock, or a mutable
+native owner.
+
+The native layer distinguishes `AuditReportingScheduleError`,
+`AuditReportingObservationError`, and `AuditReportingNormalizationError`.
+Python adds `InvalidPublicAuditInputError`,
+`InvalidNativeAuditReplayRequestError`,
+`InvalidNativeAuditReplayOperationError`,
+`InvalidNativeAuditReplayCompletionError`,
+`InvalidNativeReportingObservationError`,
+`InvalidPlungeOperationAuditError`, `InvalidEngagementAuditReportError`,
+`ReportOperationCoverageError`, `ReportLineageContinuityError`, and
+`ReportCompletionError`. Runtime truth failures remain the disjoint
+`NoMeasuredLateralMotionError`, `CapExceededToolpathError`, and
+`UnresolvedEngagementAuditError`. Translations retain the native exception as
+their chained cause; no bare `_stock_2` exception crosses the public one-input
+API.
 
 ```python
 OperationAudit: TypeAlias = (
@@ -1327,7 +1463,7 @@ OperationAudit: TypeAlias = (
 )
 ```
 
-- [ ] **Step 3: Write RED report truth tests**
+- [ ] **Step 4: Write RED report truth tests**
 
 ```python
 def test_unresolved_is_not_a_cap_violation_or_certification() -> None:
@@ -1340,41 +1476,84 @@ def test_unresolved_is_not_a_cap_violation_or_certification() -> None:
 
 
 def test_report_requires_a_measured_lateral_motion() -> None:
+    report = audit_toolpath_engagement(_only_retract_input())
+
     with pytest.raises(NoMeasuredLateralMotionError):
-        EngagementAuditReport.build(_only_retract_records())
+        report.require_certified()
 ```
 
-- [ ] **Step 4: Implement the native adapter and replay**
+Report construction remains truthful for plunge/retract/clearance-only input;
+only certification fails for lack of measured lateral motion. The factory
+consumes exactly `(audit_input, operations, completion)`, where completion is
+the nonconstructible native value returned by `finish_audit_replay(...)`. It
+rejects missing/foreign completion, wrong input/request/count/seed/terminal/
+digest, cross-replay splices, index gaps/duplicates/reordering, wrong record arm
+for a carrier, authenticated-operation mismatch, first-pre seed mismatch, and
+every broken lineage adjacency. Canonical report identity binds input digest,
+native request, ordered record digests, all five derived counts, maximum
+observed TEA, seed, terminal lineage, and completion digest. Independent
+mutations of each must change or invalidate it.
+
+`EngagementAuditReport` is factory-owned and sealed under the same fail-closed
+rules as operation records. Raw construction, `object.__new__` impostors,
+`dataclasses.replace`, subclasses, and post-build field tampering fail with
+`InvalidEngagementAuditReportError`; canonical and digest properties revalidate
+the private factory seal and recompute every derived field before returning.
+The package root exports `audit_toolpath_engagement`, `EngagementAuditReport`,
+and the three output record types; a consumer-import RED test pins that public
+surface.
+
+Exercise all five disjoint count arms and require their sum to equal input
+cardinality. `require_certified()` returns `None` iff at least one measured
+lateral record exists and both exceeded/unresolved counts are zero; plunges do
+not satisfy measurement. A live `CAP_EXCEEDED` takes failure precedence over
+`UNRESOLVED` in mixed reports, while the message reports both counts.
+
+- [ ] **Step 5: Implement native reporting, completion v2, and replay adapter**
+
+Implement schedule and observation as separate responsibilities. Add a distinct
+`TeaReportingObservationDigest2` domain and named reporting failures. Extend
+Task 4C result storage/read-back without changing its v1 canonical result
+digest or lineage formulas. Store immutable input digest and seed lineage in
+replay request state; completion v2 authenticates both. Keep exactly six typed
+nanobind dispatch functions and expose only opaque results/observation plus
+read-only scalar/digest properties—no generic motion, stock, witness, raw
+geometry, or caller-supplied reporting data.
 
 `native.py` starts one native replay owner from input rings/digest and passes
 each opaque motion directly to its one typed Task 4 call. It translates only
 the returned opaque result into a Python audit record and passes
 `operation.digest` as the authenticated operation identity. `replay.py`
 consumes the immutable authenticated stream, never rereads COMPAS operations,
-and emits a
-record tuple only after the entire native stream returns and native
-`finish_audit_replay(...)` proves exact cardinality and terminal lineage.
+and emits a record tuple only after the entire native stream returns and native
+`finish_audit_replay(...)` proves exact input/request identity, seed,
+cardinality, and terminal lineage. Native exceptions are translated to one
+named public error per failure mode; the one-input public API never leaks raw
+`_stock_2` exceptions.
 
-- [ ] **Step 5: Implement derived report construction**
+- [ ] **Step 6: Implement derived report construction**
 
-`EngagementAuditReport.build(input_identity, operations)` derives counts,
-including the distinct plunge count, reporting maximum TEA, ordered digest,
-terminal lineage, and canonical bytes. It first proves exact index coverage,
-lineage continuity, and that the five disjoint counts sum to the operation
-count. It accepts no caller aggregate. `require_certified()` distinguishes
-proved exceedance from unresolved and requires at least one measured lateral
-motion; plunges do not satisfy that requirement.
+`EngagementAuditReport.build(audit_input, operations, completion)` derives all
+counts, including the distinct plunge count, observed reporting maximum,
+ordered digest, seed, terminal lineage, and canonical bytes. It first proves
+exact carrier/result pairing, native completion/input binding, exact index
+coverage, lineage continuity, and that the five disjoint counts sum to the
+operation count. It accepts no caller aggregate or terminal override.
+`require_certified()` distinguishes proved exceedance from unresolved and
+requires at least one measured lateral motion; plunges do not satisfy that
+requirement.
 
-- [ ] **Step 6: Run GREEN and commit**
+- [ ] **Step 7: Run GREEN and commit**
 
 ```bash
 pixi run ruff format src/compas_cgal tests
 pixi run lint
 pixi run types-audit
-pixi run pytest -- tests/engagement_audit/test_replay.py tests/engagement_audit/test_report.py -n auto --testmon -q
+pixi run audit-native
+PYTEST_XDIST_AUTO_NUM_WORKERS=2 pixi run pytest tests/engagement_audit/test_replay.py tests/engagement_audit/test_report.py -n auto --testmon-noselect -q
 pixi run -e docs docs
 git diff --check
-git add src/compas_cgal/engagement_audit tests/engagement_audit tests/adaptive/typecheck/auditor_contract.py docs/engagement_audit.md
+git add CMakeLists.txt src/audit_*_2.* src/compas_cgal/engagement_audit src/compas_cgal/_stock_2.pyi tests/native tests/engagement_audit tests/adaptive/typecheck/auditor_contract.py docs/engagement_audit.md
 git commit -m "feat(audit): replay truthful verdicts"
 ```
 
