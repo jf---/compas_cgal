@@ -1,5 +1,8 @@
 # Atomic Candidate Transaction Implementation Plan
 
+> **status: landed** — verified 2026-08-28. **evidence:** 5/5 artifacts exist; 20/20 boxes ticked.
+> The only plan in this directory whose checkbox state matches reality.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Evaluate each link-and-circle candidate on isolated exact state and commit only byte-identical, non-stale acceptance evidence.

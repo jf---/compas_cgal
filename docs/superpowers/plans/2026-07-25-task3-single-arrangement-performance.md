@@ -1,5 +1,9 @@
 # Task 3 Single-Arrangement Performance Implementation Plan
 
+> **status: landed** — verified 2026-08-28 by artifact audit. **evidence:** 24/24 promised
+> artifacts exist. The 0/46 ticked checkboxes below are noise: boxes were written at planning
+> time and never maintained during execution.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replace the rejected Task 3 spike with a one-pass exact reachable-domain and incremental coverage implementation, complete the end-to-end pipeline, then use structural counts and bounded timing to decide any deeper indexing refactor.

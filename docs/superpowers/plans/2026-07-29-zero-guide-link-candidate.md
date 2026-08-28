@@ -1,5 +1,9 @@
 # Exact Zero-Guide Link Candidate Implementation Plan
 
+> **status: landed** — verified 2026-08-28 by artifact audit. **evidence:** 44/44 promised
+> artifacts exist; 51/53 boxes ticked. The branch this plan named is the line the current
+> frontier descends from.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use
 > superpowers:executing-plans to implement this plan task-by-task. Steps use
 > checkbox (`- [ ]`) syntax for tracking.

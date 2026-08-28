@@ -1,5 +1,12 @@
 # Exact Inter-Route Retrace Implementation Plan
 
+> **status: PARTIAL — decision pending.** Verified 2026-08-28: 22/24 promised artifacts exist;
+> `src/compas_cgal/adaptive/route_retrace_replay.py` and its test were never written, and the
+> 4 standing red tests in `tests/adaptive/{test_generator,test_route_retrace_generator}.py`
+> belong to this plan. It predates the pivot to the quality instrument. **The user must rule:
+> finish the replay leg, or stamp this superseded and retire its red tests.** Tracked in
+> `docs/superpowers/state/backlog.md`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Cross the Task 13F route-1-to-route-2 discontinuity with one exact, causally authenticated cut-depth retrace and reproduce it under fresh replay.

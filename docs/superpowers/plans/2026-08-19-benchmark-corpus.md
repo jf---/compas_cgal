@@ -1,5 +1,11 @@
 # Benchmark Corpus & Reference-Problem Generator — Implementation Plan
 
+> **status: landed** — verified 2026-08-28. **evidence:** 43/44 promised artifacts exist (the
+> absent `tests/benchmarks/__init__.py` is benign); `pixi run pytest tests/benchmarks` = 259
+> collected, 6 deliberate quality-gate reds, 1 deliberate red property (translation-variance at
+> exact tangency). The 0/80 boxes are noise. The appendix "Open after the plan landed" is
+> superseded by `docs/superpowers/state/backlog.md`, which is the single live backlog.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** A parameterised corpus of pocket-machining reference problems, an instrumented runner that separates generation from certification cost and exposes the exact kernel's hidden clock (arrangement size and rational bit-length), and a reproduction of Held & Pfeiffer's Figure 6 — so that "is this fast enough?" and "how often does it say `unresolved`?" become measured numbers instead of estimates.

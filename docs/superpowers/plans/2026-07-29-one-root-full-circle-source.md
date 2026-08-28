@@ -1,5 +1,8 @@
 # Exact One-Root Full-Circle Source Implementation Plan
 
+> **status: landed** — verified 2026-08-28 by artifact audit. **evidence:** 22/22 promised
+> artifacts exist. Unticked boxes are unmaintained planning residue.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use
 > superpowers:executing-plans to implement this plan task-by-task. Steps use
 > checkbox (`- [ ]`) syntax for tracking.
