@@ -15,6 +15,7 @@ import pytest
 from benchmarks.cli import AGGREGATE_CORPUS_NAMES
 from benchmarks.cli import DEFAULT_CAP_DEG
 from benchmarks.cli import DEFAULT_TOOL_DIAMETER
+from benchmarks.cli import build_corpus
 from benchmarks.measurement import MeasurementRecord
 from benchmarks.report import write_report
 
@@ -78,6 +79,26 @@ def test_plan_public_imports_are_direct_forwarding_objects() -> None:
     assert measured_run.DirtyMeasuredRunError is artifact.DirtyMeasurementTreeError
     assert measured_run.MeasuredRunInputChangedError is artifact.MeasurementInputChangedError
     assert measured_run.MeasuredResultCollisionError is artifact.MeasurementArtifactCollisionError
+
+
+def test_the_committed_artifact_is_stamped_and_non_empty() -> None:
+    measured_run = _module()
+    repository = pathlib.Path(__file__).resolve().parents[2]
+    result = measured_run.latest_result(repository / "benchmarks" / "results")
+    assert result == repository / "benchmarks" / "results" / "2026-08-28-9c41a7cab375"
+    measured_run.validate_result(result)
+
+    stamp = json.loads((result / "stamp.json").read_text(encoding="utf-8"))
+    assert tuple(stamp) == measured_run.STAMP_KEYS
+    assert stamp["dirty"] is False
+    assert stamp["commit"] == "9c41a7cab3758e1c5fef49294c232744763ae9a3"
+
+    payload = json.loads((result / "benchmark_report.json").read_text(encoding="utf-8"))
+    records = [MeasurementRecord.from_dict(row) for row in payload]
+    corpus = build_corpus("all", DEFAULT_TOOL_DIAMETER, DEFAULT_CAP_DEG)
+    assert len(records) == 42
+    assert sum(record.error is not None for record in records) == 0
+    assert len(corpus.rejected) == 0
 
 
 def test_main_runs_fixed_all_corpus_from_repository_and_publishes(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
