@@ -1,0 +1,22 @@
+{
+  "expected_red": [
+    {
+      "match": "tests\\.benchmarks\\.test_quality::test_the_generated_path_is_worth_running",
+      "count": 6,
+      "reason": "product gate: both registered generators genuinely fail 5-7 criteria per pocket",
+      "closes_with": "generator work (parked lane C4/C5 feeds this)"
+    },
+    {
+      "match": "tests\\.benchmarks\\.test_quality_invariants::test_moving_the_pocket_across_the_table_changes_no_metric",
+      "count": 1,
+      "reason": "deliberate: engagement is translation-variant at exact rim-on-boundary tangency (machining_metric_validity.md case 4)",
+      "closes_with": "backlog C1"
+    },
+    {
+      "match": "tests\\.adaptive\\.(test_generator|test_route_retrace_generator)::",
+      "count": 4,
+      "reason": "plan superseded (backlog D1); retirement scheduled through the auditor programme",
+      "closes_with": "backlog S2"
+    }
+  ]
+}

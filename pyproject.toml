@@ -204,6 +204,10 @@ docs = { features = ["docs"], no-default-feature = true }
 _editable-rebuild = '''python -c "from compas_cgal import _containment_2, _coverage_2, _medial_axis_2, _stock_2, _toolpath"'''
 pytest = { cmd = '''editable_build_dir="$(python -c 'import sys; print(next(f.path for f in sys.meta_path if hasattr(f, "known_wheel_files") and "compas_cgal._stock_2" in f.known_wheel_files))')" && SKBUILD_EDITABLE_SKIP="$editable_build_dir" pytest''', depends-on = ["_editable-rebuild"] }
 baseline = { cmd = '''editable_build_dir="$(python -c 'import sys; print(next(f.path for f in sys.meta_path if hasattr(f, "known_wheel_files") and "compas_cgal._stock_2" in f.known_wheel_files))')" && SKBUILD_EDITABLE_SKIP="$editable_build_dir" pytest tests -n auto -q''', depends-on = ["_editable-rebuild"] }
+# Exit 1 carries deliberate reds in JUnit for the manifest checker to decide.
+# Exit 2+ is infrastructure/collection failure and must stop the task chain.
+_junit-baseline = { cmd = '''sh -c 'editable_build_dir="$(python -c "import sys; print(next(f.path for f in sys.meta_path if hasattr(f, \"known_wheel_files\") and \"compas_cgal._stock_2\" in f.known_wheel_files))")" || exit $?; SKBUILD_EDITABLE_SKIP="$editable_build_dir" pytest tests -n auto -q --junitxml=build/junit-baseline.xml; pytest_status=$?; if [ "$pytest_status" -le 1 ]; then exit 0; fi; exit "$pytest_status"' ''', depends-on = ["_editable-rebuild"] }
+red-manifest = { cmd = "python -m tools.red_manifest build/junit-baseline.xml", depends-on = ["_junit-baseline"], description = "Suite reds must equal docs/red_manifest.json, both directions" }
 affected = { cmd = '''editable_build_dir="$(python -c 'import sys; print(next(f.path for f in sys.meta_path if hasattr(f, "known_wheel_files") and "compas_cgal._stock_2" in f.known_wheel_files))')" && SKBUILD_EDITABLE_SKIP="$editable_build_dir" pytest tests -n auto --testmon -q''', depends-on = ["_editable-rebuild"] }
 lint = "ruff check src/compas_cgal tests"
 # Figures are regenerated through the same editable-extension dance the test
