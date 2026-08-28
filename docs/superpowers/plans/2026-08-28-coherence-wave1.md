@@ -1,7 +1,7 @@
 # Coherence Wave 1 Implementation Plan
 
 > **status: in execution** — opened 2026-08-28. The commit that lands a task
-> updates this header with the task number. Landed: 2, 3.
+> updates this header with the task number. Landed: 2, 3, 4.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use
 > superpowers:subagent-driven-development (recommended) or
@@ -473,7 +473,7 @@ Header: `Landed: 2, 3`.
   `commit, dirty, python, platform, started, finished, argv`. Ledger rows in
   Task 6/7 cite this directory.
 
-- [ ] **Step 1: failing test**
+- [x] **Step 1: failing test**
 
 ```python
 """tests/tools/test_measured_run.py"""
@@ -493,7 +493,7 @@ def test_the_committed_artifact_is_stamped_and_non_empty():
     assert len(records) > 0
 ```
 
-- [ ] **Step 2: implement the wrapper**
+- [x] **Step 2: implement the wrapper**
 
 ```python
 """tools/measured_run.py — a corpus run that carries its own provenance.
@@ -561,7 +561,7 @@ if __name__ == "__main__":
     sys.exit(main())
 ```
 
-- [ ] **Step 3: pixi task; run it FROM A CLEAN TREE**
+- [x] **Step 3: pixi task; run it FROM A CLEAN TREE**
 
 ```toml
 measured-run = { cmd = '''editable_build_dir="$(python -c 'import sys; print(next(f.path for f in sys.meta_path if hasattr(f, "known_wheel_files") and "compas_cgal._stock_2" in f.known_wheel_files))')" && SKBUILD_EDITABLE_SKIP="$editable_build_dir" python -m tools.measured_run''', depends-on = ["_editable-rebuild"], description = "Corpus run with provenance stamp, committed under benchmarks/results/" }
@@ -571,7 +571,7 @@ Commit the TOOL first (so the tree is clean and `dirty=false` is earnable):
 `git commit -m "feat(tools): provenance-stamped corpus run" -- tools/measured_run.py tests/tools/test_measured_run.py pyproject.toml`
 Then: `pixi run measured-run` (minutes). Then run the Step-1 test → PASS.
 
-- [ ] **Step 4: commit the artifact**
+- [x] **Step 4: commit the artifact**
 
 `git add benchmarks/results && git commit -m "bench: measured corpus run <dir-name> (R7)" -- benchmarks/results`
 Header: `Landed: 2, 3, 4`.
