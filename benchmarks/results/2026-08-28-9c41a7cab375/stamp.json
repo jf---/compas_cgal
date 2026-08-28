@@ -1,0 +1,56 @@
+{
+  "envelope_version": "measurement-artifact-envelope/v1",
+  "artifact_kind": "benchmark-corpus-result/v1",
+  "commit": "9c41a7cab3758e1c5fef49294c232744763ae9a3",
+  "dirty": false,
+  "python": "3.12.13 | packaged by conda-forge | (main, Mar  5 2026, 17:06:14) [Clang 19.1.7 ]",
+  "platform": "macOS-15.3.2-arm64-arm-64bit",
+  "started": "2026-08-28T15:32:11.664906+00:00",
+  "finished": "2026-08-28T19:24:08.777723+00:00",
+  "argv": [
+    "/Users/jelle/Code/CADCAM/worktrees/compas_cgal_prs-sdd-coherence/.pixi/envs/default/bin/python",
+    "-m",
+    "benchmarks.cli",
+    "corpus",
+    "--name",
+    "all",
+    "--out",
+    "benchmarks/results/.2026-08-28-9c41a7cab375.stage-5ocultkf"
+  ],
+  "build_identity": {
+    "version": "measurement-build-identity/v1",
+    "commit": "9c41a7cab3758e1c5fef49294c232744763ae9a3",
+    "pixi_lock_sha256": "64b07d80ab2267615976f36d42654a68b9809939baed38657d5eeafef823e397",
+    "sha256": "dd81e398c7017c10f57e43f10456c9f2462dd251637a634ae3b0d694d7d9f018"
+  },
+  "input_identity": {
+    "version": "benchmark-corpus-input/v1",
+    "payload": {
+      "aggregate_corpora": [
+        "analytic",
+        "complexity",
+        "necks",
+        "precision",
+        "topology",
+        "degeneracy"
+      ],
+      "cap_deg": 120.0,
+      "collect_digits": true,
+      "name": "all",
+      "tool_diameter": 1.0
+    },
+    "sha256": "dd1779c1193ec70ab1b0b339fc32ce1c22b987c3bb51852b7963ce9ffd4c24de"
+  },
+  "result_identity": {
+    "version": "benchmark-corpus-result/v1",
+    "payloads": {
+      "benchmark_report.json": {
+        "sha256": "ce57980779710b6f7109bba5f939247486f6442176d77d78a6831a47e81cc43a"
+      },
+      "benchmark_report.md": {
+        "sha256": "1f40790eba29d54501f161a71a25d73bec4e1adcb0e5eb6965741e4700f1e21a"
+      }
+    },
+    "sha256": "7cde90065a95f81fc709238aade9fe110f56058aed9b8dce390c0cd0e1881263"
+  }
+}
