@@ -9,9 +9,26 @@ effect it was built to measure.
 ## Running it
 
 ```bash
-pixi run python -m benchmarks.cli --corpus all --out docs/benchmarks
-pixi run python -m benchmarks.cli --corpus external --external-dir /path/to/profiles
+pixi run measured-run
+pixi run python -m benchmarks.cli corpus --name all --out build/benchmarks
+pixi run python -m benchmarks.cli corpus --name external --external-dir /path/to/profiles
 ```
+
+`measured-run` requires a clean committed worktree and publishes one immutable corpus bundle under
+`benchmarks/results/<UTC-date>-<commit-prefix>/`. Claim-specific measurements use the separate
+`benchmarks/measurement_claim_results/` root, so the two payload grammars cannot be confused.
+It rechecks full HEAD and worktree cleanliness after the child, immediately before publication;
+operator edits or a concurrent commit invalidate the run rather than entering its evidence.
+Every bundle stamps a full source commit and committed `pixi.lock` as its build identity, the
+complete effective corpus configuration as its input identity, and SHA-256 digests of every exact
+payload byte as its result identity. The consumer reconstructs all three identities before using
+the report.
+
+These bundles are authenticated **reporting evidence**, not geometric or continuous-engagement
+certificates. Publication uses a hidden sibling stage followed by one rename. It assumes a
+single writer: pre-existing non-empty destinations are preserved and ordinary failures expose no partial
+result, but portable standard-library rename does not guarantee atomic no-replace against an
+operator creating an empty destination in the final race window.
 
 ## The corpora
 

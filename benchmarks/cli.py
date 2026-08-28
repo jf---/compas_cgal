@@ -22,6 +22,10 @@ into `docs/`.
 Every sweep coordinate this module chooses is a named constant. The corpora are
 meant to be re-run and compared across branches, so a number changed in passing
 silently invalidates every earlier artifact it is compared against.
+
+`pixi run measured-run` is the clean-source publication path. It writes one
+authenticated reporting bundle under `benchmarks/results/`; the ordinary
+commands above remain useful for uncommitted exploratory output.
 """
 
 from __future__ import annotations
