@@ -1,7 +1,7 @@
 # Coherence Wave 1 Implementation Plan
 
 > **status: in execution** — opened 2026-08-28. The commit that lands a task
-> updates this header with the task number. Landed: 2, 3, 4.
+> updates this header with the task number. Landed: 2, 3, 4, 5.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use
 > superpowers:subagent-driven-development (recommended) or
@@ -589,7 +589,7 @@ Header: `Landed: 2, 3, 4`.
 **Interfaces:**
 - Produces: one ledger row per extracted claim; Tasks 6–7 fill dispositions.
 
-- [ ] **Step 1: canonical extraction.** The claim population is DEFINED by
+- [x] **Step 1: canonical extraction.** The claim population is DEFINED by
   this command (earlier counts differed because the regex was never fixed —
   fixing it is the point):
 
@@ -598,7 +598,7 @@ grep -rnE "# .*(MEASURED|[Mm]easured (on|at|against)|measures [0-9]|[0-9]+(\.[0-
   src/compas_cgal benchmarks --include='*.py' | grep -v superseded
 ```
 
-- [ ] **Step 2: write the ledger.** Header text, then a table with one row
+- [x] **Step 2: write the ledger.** Header text, then a table with one row
   per hit, in file/line order:
 
 ```markdown
@@ -619,7 +619,7 @@ longer constructible; labeled as such in place) · **deleted**.
 | 1 | `<file>:<line>` | <first clause> | pending | — |
 ```
 
-- [ ] **Step 3: cardinality gate + commit.** Row count MUST equal the
+- [x] **Step 3: cardinality gate + commit.** Row count MUST equal the
   extraction hit count (state both in the commit message).
 `git commit -m "docs: measurement-claim ledger skeleton, N claims extracted" -- docs/measurement_claims.md mkdocs.yml`
 Header: `Landed: 2, 3, 4, 5`.

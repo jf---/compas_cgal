@@ -166,6 +166,7 @@ nav:
       - Exact-Kernel Discipline: exactness.md
       - Truthful Engagement Audit: engagement_audit.md
       - Benchmark Corpus: benchmarks.md
+      - Measurement Claims: measurement_claims.md
       - Machining Quality: machining_quality.md
       - Drawing Tool Paths: toolpath_drawing.md
       - Exact Segment-Site MAT: segment_site_mat.md
