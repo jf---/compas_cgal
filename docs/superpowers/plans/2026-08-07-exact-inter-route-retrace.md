@@ -1,11 +1,12 @@
 # Exact Inter-Route Retrace Implementation Plan
 
-> **status: PARTIAL — decision pending.** Verified 2026-08-28: 22/24 promised artifacts exist;
-> `src/compas_cgal/adaptive/route_retrace_replay.py` and its test were never written, and the
-> 4 standing red tests in `tests/adaptive/{test_generator,test_route_retrace_generator}.py`
-> belong to this plan. It predates the pivot to the quality instrument. **The user must rule:
-> finish the replay leg, or stamp this superseded and retire its red tests.** Tracked in
-> `docs/superpowers/state/backlog.md`.
+> **status: SUPERSEDED** — user ruling, 2026-08-28 (backlog D1). The replay leg
+> (`src/compas_cgal/adaptive/route_retrace_replay.py` + test) was never written; replay
+> authority is being built by the auditor-convergence programme's P2 on newer foundations
+> (native transaction landed through its P1 Task 4C). The 4 standing red tests in
+> `tests/adaptive/{test_generator,test_route_retrace_generator}.py` belong to this plan and
+> are no longer pending work — their retirement is scheduled through the programme, which
+> owns `tests/adaptive` (backlog S2). 22/24 artifacts that did land remain in service.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
