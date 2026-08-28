@@ -59,7 +59,7 @@ double audit_cap_chord_ratio(double authored_radians)
     const double ratio = 4.0 * half_cap_sine * half_cap_sine;
     if (!(ratio > 0.0 && ratio <= 4.0)) {
         throw AuditPolicyCapSurrogateMismatchError(
-            "audit policy cap has no representable chord surrogate in (0, 4]");
+            "audit policy cap has no representable chord ratio surrogate in (0, 4]");
     }
     return ratio;
 }
