@@ -1,107 +1,155 @@
-# Backlog — the single live document
+# Coherence programme — the plan, and the single live backlog
 
-**This file is the one place open work lives.** Everything else under
-`docs/superpowers/` is immutable history: plans carry a status header stating
-what landed (verified by artifact audit, 2026-08-28 — checkbox state in plan
-bodies was never maintained and is noise), specs record what was designed, and
-the other `state/` documents are frozen kickoffs and ledgers. When an item here
-closes, the closing commit removes it here.
+**This file is the one place open work lives**, and it is now a *plan*, not an
+inventory: it defines the end state, gives a checkable oracle for it, and orders
+every open item into the wave that reaches it. Everything else under
+`docs/superpowers/` is immutable history — plans carry artifact-verified status
+headers, specs record designs, other `state/` files are frozen ledgers. When an
+item closes, the closing commit removes it here.
 
-## Authority and frozen refs
+## The end state — five invariants
 
-- **Canonical frontier:** `codex/auditor-convergence-sdd`. It strictly contains
-  `codex/exact-certified-adaptive-phase1-t9-zero-guide` and is driven by the
-  live five-phase programme `2026-08-23-auditor-convergence-p0…p4` with its own
-  progress tracker (`.superpowers/sdd/2026-08-23-auditor-convergence/progress.md`)
-  and reconciliation ledger
-  (`state/2026-08-23-auditor-reconciliation-ledger.md`). Do not stamp, edit, or
-  commit into the programme's plans from outside its own review discipline.
-- **Frozen sources — do not commit to either while the programme runs:**
-  `jf/toolpath-redesign@73d5372` (certifier source; every one of its 36 unique
-  commits carries a disposition in the ledger, 36/36) and
+**Maximally coherent** means all five hold at once. Each is stated so its
+violation is detectable, not aspirational.
+
+- **I1 — one history.** `main` is the only long-lived branch and contains every
+  effort; what was deliberately not merged is pinned by an `archive/*` tag. No
+  standing divergence, no frozen refs, one checkout, zero auxiliary worktrees.
+- **I2 — one truth per claim.** Every numeric or performance claim in comments,
+  docs, and memos is either generated from a committed measured artifact or
+  names the exact command + configuration that reproduces it. A claim that
+  cannot be re-earned is deleted. (The corpus runner exists to make this cheap.)
+- **I3 — one meaning for red.** The full suite's expected-red set is enumerated
+  in one manifest with a reason and a backlog link per entry; red outside the
+  manifest is a defect *by definition*, green inside it is a finding. No skip,
+  no xfail, ever — deliberate reds are the mechanism, the manifest is their
+  accounting.
+- **I4 — one live work document.** This file. Plans immutable once execution
+  starts; status lives in headers, derived from artifacts; a lint enforces that
+  every plan has a header.
+- **I5 — one build story.** Docs and CLAUDE.md point only at checkouts that
+  exist; env bootstrap is documented; lint, strict typing, baseline, and strict
+  docs run in CI on `main`.
+
+**Non-goal, stated so nobody "fixes" it:** the 6 quality-gate reds are the
+*product* gate — red until the generators earn green. Coherence is their
+accounting (I3), never their suppression.
+
+## The convergence oracle
+
+Run these when the waves complete; all must hold:
+
+```
+git branch                    → main only (plus archive/* tags)
+git worktree list             → one line
+pytest (full baseline)        → red set == the manifest, exactly, both directions
+claim audit                   → every registered claim carries artifact or command
+CI on main                    → lint + strict mypy gates + baseline + docs --strict green
+backlog.md                    → "Open" empty except items the user explicitly parks
+```
+
+## The path — three waves
+
+### Wave 1 — claims and instruments (independent of the fleet; starts now)
+
+Lands on `codex/sdd-coherence` — the one sanctioned side branch, absorbed in
+Wave 2 (S1). Ordered: R7 first, because A and C2 audit against its output.
+
+| id | item | notes |
+| --- | --- | --- |
+| R7 | **Commit one measured corpus run** — the keystone | runner exists; stamp env + commit into the artifact so every prose claim becomes checkable |
+| A | Audit the 34 measurement-asserting comments (12 files) | 2 of 2 checked so far were defective — one false, one correct-but-unreproducible. Re-earn, annotate with the producing command, or delete. Name the knob behind every column |
+| C2 | Qualify every performance claim with edge-direction regime | `center_domain()`: 5 ms axis-aligned → 17.5 s oblique integers → >90 s generic rotation, mechanism unestablished (`oblique_edge_cost.md`). The corpus is all axis-parallel, so parity claims are best-case. The `review.md` memo lives on the frozen certifier source and cannot be edited there — re-issued in Wave 3 from measured artifacts |
+| B | Write the two unrecorded ablations into docs | peak/count opposition at a forced station (a constraint, not a knob); the four-way ladder decomposition incl. the 213.6° slotting cut that justifies the gate |
+| C3 | Second gate cap (40–100°) | at 120° both registered generators emit byte-identical paths; the 3×2 gate cannot attribute. Small, benchmarks-only |
+| M1 | **The red manifest** (I3), first version below | enforcement (a test that diffs suite reds against it) lands with CI wiring in Wave 2/P4 |
+| C1 | *(instrument, optional in this wave)* identify which layer decides the exact-tangency case | translation-variance at a rim-on-boundary contact; the deliberate red property stays until this closes. `machining_metric_validity.md` case 4 |
+
+### Wave 2 — programme close (the critical path; owned by the auditor-convergence fleet)
+
+In execution inside the programme — do not duplicate: R1 (frontier
+reconciliation; P0 ledger 36/36), R2 (C1-verdict tri-valuation; P1 T4), R3
+(false-certificate control; P1 T4), R6 (replay theorem; P2), R8 (swept-prefix
+falsifiability; P1 T4), R4 (CI enforcement; P4 — its stated blocker: the
+full-suite tail).
+
+**At programme close, the close itself must include:**
+
+| id | item |
+| --- | --- |
+| W2.1 | Every `required`/`dependent` disposition of the 36 certifier commits consumed or explicitly discarded — then `jf/toolpath-redesign` archive-tagged and deleted; `codex/exact-certified-adaptive-phase1-t9-zero-guide` retired (fully contained, verified 0 missing) |
+| W2.2 | The programme's own five plans stamped with status headers, same convention as the legacy eight |
+| S2 | The 4 red retrace tests retired (their plan is superseded — D1); the manifest shrinks 11 → 7 |
+| S1 | `codex/sdd-coherence` (this branch, grown by Wave 1) absorbed into the frontier; branch retired |
+| R5 | Python floor raised to match `typing.Self` imports (≥3.11); the 6-error `types-adaptive` baseline cleared, not carried |
+
+### Wave 3 — the singleton
+
+| id | item |
+| --- | --- |
+| W3.1 | Fast-forward `main` to the closed frontier (it is 0 behind today — pure ff); delete `codex/auditor-convergence-sdd`; remove its worktree. One branch, one checkout |
+| W3.2 | CI green on `main` with the full gate set + the red-manifest diff + the plan-header lint. Fix stale build pointers (CLAUDE.md worktree paths) in the same pass |
+| W3.3 | Re-issue the due-diligence memo from committed measured artifacts — the current one predates the oblique-edge finding and states parity unqualified |
+| W3.4 | Run the convergence oracle; park or close every remaining line of this file |
+
+**Parked lane — capability work, deliberately not coherence-blocking:** C4
+(depletion model: score a true helical entry; until then the entry criterion is
+unsatisfiable — 240° floor and `V ≥ √3·r` proved in `loop_radius_degeneracy.md`)
+and C5 (arc motion vocabulary for tangent-continuous inter-chain links). These
+resume after Wave 3 or in parallel by explicit choice.
+
+## The red manifest (M1, v1 — 2026-08-28)
+
+| tests | count | reason | closes with |
+| --- | ---: | --- | --- |
+| `test_quality.py::test_the_generated_path_is_worth_running` (2 generators × 3 pockets) | 6 | product gate: paths genuinely fail 5–7 criteria each | generators earning it (parked lane feeds this) |
+| `test_quality_invariants.py::test_moving_the_pocket…` | 1 | deliberate: engagement is translation-variant at exact rim-on-boundary tangency | C1 |
+| `tests/adaptive/{test_generator,test_route_retrace_generator}` | 4 | plan superseded (D1); retirement scheduled through the programme | S2 |
+
+Anything red beyond these 11 is a defect, full stop.
+
+## Authority and frozen refs (until Wave 2 closes them)
+
+- **Canonical frontier:** `codex/auditor-convergence-sdd`, driven by the
+  five-phase programme with its own progress tracker
+  (`.superpowers/sdd/2026-08-23-auditor-convergence/progress.md`) and
+  reconciliation ledger. Its plans are off-limits to outside edits.
+- **Frozen sources — commit to neither:** `jf/toolpath-redesign@73d5372`
+  (certifier source, 36/36 dispositions) and
   `codex/exact-certified-adaptive-phase1-t9-zero-guide@073a0f7` (integration
-  source, fully contained in the frontier).
-- This file was authored on `codex/sdd-coherence`, a one-commit docs branch off
-  the frontier tip, kept disjoint from every file the programme touches so it
-  rebases or fast-forwards in with zero conflict. Absorbing it — and then
-  retiring `codex/sdd-coherence` — is itself an item below.
+  source, fully contained; checkout removed 2026-08-28, branch intact).
 
 ## Decisions — all ruled 2026-08-28
 
 | id | ruling | executed |
 | --- | --- | --- |
-| D1 | Retrace plan **superseded** by auditor P2; its 4 red tests in `tests/adaptive/` are no longer pending work | plan stamped; test retirement is S2 |
-| D2 | Deadwood: **archive-tag + delete, local only** | 17 branches deleted (12 zero-unique re-verified by `git cherry` at deletion time; 5 pinned first by `archive/*` tags), 8 stale worktree records pruned, perf worktree removed (branch kept). Origin untouched — `origin/codex/*` deletions were declined and stay out of scope |
-| D3 | Main-checkout dirt **discarded** | `jf/toolpath-redesign` checkout is bit-clean at `73d5372` |
+| D1 | Retrace plan **superseded** by auditor P2 | plan stamped; test retirement is S2 |
+| D2 | Deadwood: **archive-tag + delete, local only** | 17 branches deleted (zero-unique re-verified at deletion time; 5 pinned by `archive/*` first), 8 stale records pruned, perf worktree removed (branch kept), origin untouched |
+| D3 | Main-checkout dirt **discarded** | certifier source bit-clean at `73d5372` |
+| D4 | t9-zero-guide + sdd-coherence **checkouts removed** for disk (~2.7 GB) | branches intact at `073a0f7` / verified SHAs |
 
-## Open items
+## Deadwood ledger (EXECUTED 2026-08-28 under D2 — the record of what went and why)
 
-Origins: **R*n*** = `review-2026-08-22-t9-zero-guide.md` recommendation *n* ·
-**A/B/C** = the benchmark-corpus plan's "Open after the plan landed" appendix.
-
-### In execution — owned by the auditor-convergence programme (do not duplicate)
-
-| id | item | where in the programme |
-| --- | --- | --- |
-| R1 | Reconcile the split frontier (`jf/toolpath-redesign` × codex tip) | P0 ledger, 36/36 dispositions recorded; consumption of `dependent`/`required` commits runs through P1 |
-| R2 | C1 — verdict must not conflate violation with exhaustion (tri-valued, not Boolean) | P1 Task 4 (source audit finding: "Boolean conflates violation/exhaustion; proof/refinement input only") |
-| R3 | C2 — a station-green segment can hide a cap violation | P1 Task 4: the annular-rib false-certificate control is disposed `required`; spiral-rib generalization `dependent` |
-| R6 | C3 — replay/reproducibility instrument | P2 (`p2-replay-theorem`); native replay transaction landed through P1 Task 4C |
-| R8 | C7 — swept-prefix theorem needs falsifiable footing | P1 Task 4: theorem + falsifier retained as refinement input, never certification authority |
-| R4 | Wire the existing gates into CI | P4 (`p4-enforcement-evidence`); the programme's stated open blocker: identify the extreme full-suite tail before enforcement |
-
-### Open — unowned
-
-| id | item | notes |
-| --- | --- | --- |
-| R5 | Python floor: metadata says `>=3.9`, `adaptive/` imports `typing.Self` (3.11+) | the 6 `types-adaptive` errors are a tracked programme baseline; the floor is not |
-| R7 | Commit one measured corpus run | turns the prose performance claims into checkable ones; none committed to date |
-| A | Audit the 34 measurement-asserting comments across 12 files | 2 of 2 checked so far had a defect: one false (`MEAS` placeholder, fixed in `29050b0`), one correct but mislabelled (an unreachable "off" column). Re-run each claim; name the knob that produces every number |
-| B | Write the two unrecorded ablations into docs | (1) peak/count provably opposed at a forced station — a constraint, not a knob; (2) the four-way ladder decomposition incl. the 213.6° slotting cut that justifies the gate. Both currently live only in a code comment (`29050b0`) and this line |
-| C1 | Identify which layer decides the exact-tangency case | engagement is translation-variant when the rim lies exactly on a cleared boundary; the red property in `test_quality_invariants.py` is deliberate. Candidates: arrangement representation of a measure-zero contact, run extraction in `engagement_at`, boundary convention. `machining_metric_validity.md` case 4 |
-| C2 | The oblique-edge cliff, and the parity qualifier | `center_domain()`: 5 ms axis-aligned → 17.5 s oblique integer vertices → >90 s generic rotation; mechanism explicitly unestablished (`oblique_edge_cost.md`). Every corpus pocket is axis-parallel, so **every performance figure including Held parity is best-case; `review.md` still states parity unqualified** |
-| C3 | Second gate cap (40–100°) | at `GATE_CAP_DEG=120` both registered generators emit byte-identical paths, so the 3×2 gate cannot attribute a defect to either |
-| C4 | Depletion model: score a true helical entry | `_replay_kind` refuses Z+XY motion; the workaround encoding silently degrades to a no-op rapid. Until fixed, the entry criterion is unsatisfiable — the 240° floor and the `V ≥ √3·r` requirement are proved in `loop_radius_degeneracy.md` |
-| C5 | Arc motion vocabulary | inter-chain links cannot be tangent-continuous while loops are full circles; loops need distinct entry/exit tangency points (arcs) |
-| S1 | Absorb `codex/sdd-coherence` into the frontier, then retire the branch and its worktree | docs-only commits, disjoint files, rebases clean |
-| S2 | Retire the 4 red retrace tests in `tests/adaptive/{test_generator,test_route_retrace_generator}.py` | D1 superseded their plan; removal goes through the auditor programme, which owns `tests/adaptive` — never a silent local delete |
-
-## Deadwood ledger (EXECUTED 2026-08-28 under D2 — kept as the record of what went and why)
-
-Measured 2026-08-28 by `git cherry` patch-equivalence against the frontier tip
-`fa59120`, not by branch age or name.
-
-| branch | unique patches | verdict |
-| --- | --- | --- |
-| `codex/exact-certified-adaptive-phase1-t7-runtime` | 0 | delete |
-| `codex/exact-certified-adaptive-phase1-t9` | 0 | delete |
-| `codex/adaptive-clearing-sp1-completion` | 0 | delete |
-| `jf/2D_Minkowski_Sums` | 0 | delete |
-| `jf/adaptive-clearing-sp1`, `jf/geodesics-module`, `jf/isolines`, `jf/polylines-module`, `jf/standardize-cpp-params` | 0 | delete (long merged) |
-| `worktree-agent-a00e2496`, `-a0ec673d`, `-a668f212` | 0 | delete (agent residue) |
-| `codex/exact-certified-adaptive-phase1` | 5 | archive-tag then delete — early exact-TEA line, re-implemented rather than merged |
-| `codex/…-t6` / `-t7` / `-t8` / `-t10` | 2–5 (shared) | archive-tag then delete — the shelved circle-oracle research line (`continuous_engagement_cost.md` is its verdict: "research result, not a component") |
-| `perf/exact-rational-representation` | 3 | **keep branch** — the falsification record cited by `continuous_engagement_cost.md`; its worktree (clean) can go |
-| `jf/update_reconstruction_example` | 1 | park — unrelated old example fix, candidate for a `main` PR |
-| `jf/toolpath-redesign` | 36 | **frozen** — certifier source of the reconciliation ledger; untouchable until the programme closes it |
-| `codex/exact-certified-adaptive-phase1-t9-zero-guide` | 0 vs frontier | keep until the programme completes, then retire (fully contained) |
-| `main` | — | keep |
-
-Worktrees: the 8 `/private/tmp/compas_cgal_prs-*` records point at directories
-that no longer exist — `git worktree prune` removes only the stale records.
-Live worktrees: main checkout (frozen source), `…-t9-zero-guide` (frozen
-source), `…-auditor-convergence-sdd` (the programme's, ACTIVE and dirty — never
-touch), `…-perf-exact-rational` (clean; removable, branch stays),
-`…-sdd-coherence` (this pass; retire under S1).
+Measured by `git cherry` patch-equivalence against the frontier tip, not by
+branch age or name. Deleted: 12 zero-unique branches
+(`…-t7-runtime`, `…-t9`, `codex/adaptive-clearing-sp1-completion`,
+`jf/2D_Minkowski_Sums`, `jf/adaptive-clearing-sp1`, `jf/geodesics-module`,
+`jf/isolines`, `jf/polylines-module`, `jf/standardize-cpp-params`, three
+`worktree-agent-*`) and, behind `archive/*` tags, the early exact-TEA line
+(`codex/exact-certified-adaptive-phase1`) plus the shelved circle-oracle line
+(`…-t6/-t7/-t8/-t10` — `continuous_engagement_cost.md` is its verdict). Kept:
+`perf/exact-rational-representation` (falsification record),
+`jf/update_reconstruction_example` (parked for a `main` PR), the frozen
+sources, the frontier, `main`.
 
 ## Conventions, so this does not regrow
 
 1. **The commit that lands a task updates its plan's status header in the same
-   commit.** Plan bodies are immutable once execution starts; the header is the
-   truth, the body is the record of what was planned.
-2. **One live backlog — this file.** A TODO written anywhere else is lost by
-   construction; the three-place scatter this file replaced (unchecked boxes,
-   a plan appendix, an unintegrated review) proved it.
-3. **Status is derived from artifacts, never asserted from memory.** Checkbox
-   counting called a fully-landed plan 0/80 done; `git cherry` and test runs
-   are the measurement.
+   commit.** Bodies are immutable; the header is the truth.
+2. **One live document — this file.** A TODO anywhere else is lost by
+   construction; the three-place scatter this replaced proved it.
+3. **Status is derived from artifacts, never asserted.** Checkbox counting
+   called a fully-landed plan 0/80 done; `git cherry` and test runs are the
+   measurement.
+4. **A new deliberate red enters the manifest in the same commit that
+   introduces it** — with its reason and the item that will close it.
