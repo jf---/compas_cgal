@@ -54,6 +54,45 @@ _SECTION_HEADINGS = (
     "## Ledger",
     "## Frozen matched lines",
 )
+_SCOPE_REQUIRED = (
+    "This ledger freezes the Task-5 Python-comment regex population. It is not a",
+    "claim of repository-wide invariant-I2 closure. Tasks 6 and 7 may change only",
+    "the `disposition` and `evidence / change` cells; all identity columns and",
+    "frozen matched lines remain immutable.",
+)
+_FROZEN_METADATA_REQUIRED = (
+    f"Extraction source commit: `{FROZEN_SOURCE_COMMIT}`",
+    "",
+    "Population: 14 line hits across 5 files",
+)
+_EXTRACTOR_REQUIRED = (
+    "```bash",
+    'grep -rnE "# .*(MEASURED|[Mm]easured (on|at|against)|measures [0-9]|[0-9]+(\\.[0-9]+)?[x×] (faster|slower))" \\',
+    "  src/compas_cgal benchmarks --include='*.py' | grep -v superseded",
+    "```",
+)
+_ORDER_REQUIRED = (
+    "Canonical order is `src/compas_cgal` before `benchmarks`, then `LC_ALL=C`",
+    "relative-path order, numeric source line, and raw hit as the final tie-breaker.",
+)
+_DRIFT_REQUIRED = (
+    "Execution scan (2026-08-28 UTC): exact match — 14/14 frozen hits present;",
+    "0 changed, 0 missing, 0 new. Normalized stream SHA-256:",
+    "`b78ac690bceda37fdebcdcdeb9731a8b213e7d946a897be45181cb95b1100f66`.",
+    "This scan is drift evidence only and does not redefine the frozen population.",
+)
+_DISPOSITION_SEMANTICS_REQUIRED = (
+    "- `pending` — final adjudication has not happened.",
+    ("- `re-earned` — an authenticated rerun confirmed every material assertion and records the exact command, configuration, artifact, result digest, and full input commit."),
+    ("- `corrected` — the assertion was wrong or incomplete; authenticated evidence and the source correction commit are recorded."),
+    ("- `historical` — the original configuration cannot be reconstructed; the source is explicitly labelled and names the missing identity or configuration."),
+    "- `deleted` — the assertion was removed while its frozen identity remains here.",
+    ("- `not-a-claim` — semantic review found a regex false positive and records an explicit rationale."),
+    "",
+    "A case-level result does not automatically disposition every mapped row. Partial",
+    "reproduction cannot become `re-earned`; every material assertion is adjudicated",
+    "row by row. `reproduced` is not a ledger disposition.",
+)
 _EXTRACTION_PATTERN = re.compile(r"# .*(MEASURED|[Mm]easured (on|at|against)|measures [0-9]|[0-9]+(\.[0-9]+)?[x×] (faster|slower))")
 
 
@@ -196,22 +235,55 @@ def _unique_line_index(lines: Sequence[str], value: str, *, field: str) -> int:
     return indices[0]
 
 
+def _section(lines: Sequence[str], heading: str, next_heading: Optional[str]) -> tuple[str, ...]:
+    start = _unique_line_index(lines, heading, field="section heading") + 1
+    end = len(lines) if next_heading is None else _unique_line_index(lines, next_heading, field="section heading")
+    return tuple(lines[start:end])
+
+
+def _block_index(section: Sequence[str], block: Sequence[str], *, field: str) -> int:
+    width = len(block)
+    indices = [index for index in range(len(section) - width + 1) if tuple(section[index : index + width]) == tuple(block)]
+    if len(indices) != 1:
+        raise InvalidMeasurementClaimLedgerError(f"ledger {field} must occur exactly once in its owning section")
+    return indices[0]
+
+
 def _validate_page_frame(text: str) -> tuple[str, ...]:
     lines = tuple(text.splitlines())
-    if not lines or lines[0] != "# Measurement-claim ledger":
-        raise InvalidMeasurementClaimLedgerError("ledger title heading is missing or malformed")
-    section_indices = [_unique_line_index(lines, heading, field="section heading") for heading in _SECTION_HEADINGS]
-    if section_indices != sorted(section_indices):
-        raise InvalidMeasurementClaimLedgerError("ledger section headings are out of order")
-    required_fragments = (
-        f"Extraction source commit: `{FROZEN_SOURCE_COMMIT}`",
-        "Population: 14 line hits across 5 files",
+    opening = (
+        "# Measurement-claim ledger",
+        "",
+        lines[2] if len(lines) > 2 else "",
+        "",
         "- Opened (UTC): `2026-08-28`",
         "- Programme: coherence Wave 1 backlog A",
+        "",
+        "## Scope and limits",
     )
-    for fragment in required_fragments:
-        if lines.count(fragment) != 1:
-            raise InvalidMeasurementClaimLedgerError(f"ledger frozen metadata is missing or duplicated: {fragment}")
+    if len(lines) < len(opening) or tuple(lines[: len(opening)]) != opening or not opening[2].startswith("> **status:"):
+        raise InvalidMeasurementClaimLedgerError("ledger opening status and metadata layout is malformed")
+
+    actual_headings = tuple(line for line in lines if line.startswith("## "))
+    if actual_headings != _SECTION_HEADINGS:
+        raise InvalidMeasurementClaimLedgerError(f"ledger section headings must be exact and ordered: expected {_SECTION_HEADINGS!r}, got {actual_headings!r}")
+
+    scope = _section(lines, "## Scope and limits", "## Frozen extraction")
+    _block_index(scope, _SCOPE_REQUIRED, field="scope and I2 limitation")
+
+    extraction = _section(lines, "## Frozen extraction", "## Disposition semantics")
+    extraction_blocks = (
+        ("frozen extraction metadata", _FROZEN_METADATA_REQUIRED),
+        ("canonical extractor", _EXTRACTOR_REQUIRED),
+        ("canonical order", _ORDER_REQUIRED),
+        ("separate drift report", _DRIFT_REQUIRED),
+    )
+    positions = [_block_index(extraction, block, field=field) for field, block in extraction_blocks]
+    if positions != sorted(positions):
+        raise InvalidMeasurementClaimLedgerError("ledger extractor, canonical order, and drift report are out of order")
+
+    semantics = _section(lines, "## Disposition semantics", "## Ledger")
+    _block_index(semantics, _DISPOSITION_SEMANTICS_REQUIRED, field="disposition semantics")
     return lines
 
 
@@ -312,15 +384,21 @@ def _validate_rows(rows: Sequence[LedgerRow], hits: Sequence[_FrozenHit]) -> Non
         raise InvalidMeasurementClaimLedgerError(f"ledger immutable-column digest differs: expected {IMMUTABLE_COLUMNS_SHA256}, got {digest}")
 
 
-def _validate_frozen_blocks(text: str, hits: Sequence[_FrozenHit]) -> None:
-    pattern = re.compile(r"(?m)^### (MC-[0-9]{3})\n\n```text\n([^\n]*)\n```\n")
-    blocks = pattern.findall(text)
-    if len(blocks) != _ROW_COUNT:
-        raise InvalidMeasurementClaimLedgerError(f"ledger must contain {_ROW_COUNT} exact frozen text blocks, got {len(blocks)}")
-    for index, ((claim_id, frozen_text), hit) in enumerate(zip(blocks, hits), start=1):
-        expected_id = f"MC-{index:03d}"
-        if claim_id != expected_id or frozen_text != hit["text"]:
-            raise InvalidMeasurementClaimLedgerError(f"ledger frozen block {expected_id} differs from {FROZEN_SOURCE_COMMIT}: got heading {claim_id!r} and text {frozen_text!r}")
+def _validate_frozen_blocks(lines: Sequence[str], hits: Sequence[_FrozenHit]) -> None:
+    expected_headings = tuple(f"### MC-{index:03d}" for index in range(1, _ROW_COUNT + 1))
+    actual_headings = tuple(line for line in lines if line.startswith("### MC-"))
+    if actual_headings != expected_headings:
+        raise InvalidMeasurementClaimLedgerError(
+            f"ledger claim headings must be exact and confined to the frozen section: expected {expected_headings!r}, got {actual_headings!r}"
+        )
+    expected_section: list[str] = [""]
+    for index, hit in enumerate(hits, start=1):
+        expected_section.extend((f"### MC-{index:03d}", "", "```text", hit["text"], "```"))
+        if index != _ROW_COUNT:
+            expected_section.append("")
+    actual_section = _section(lines, "## Frozen matched lines", None)
+    if actual_section != tuple(expected_section):
+        raise InvalidMeasurementClaimLedgerError("ledger frozen blocks must be exact and wholly contained by the Frozen matched lines section")
 
 
 def _validate_status(lines: Sequence[str], rows: Sequence[LedgerRow]) -> None:
@@ -349,6 +427,6 @@ def validate_ledger_structure(ledger: pathlib.Path) -> tuple[LedgerRow, ...]:
     rows = _parse_table(lines)
     hits = _frozen_hits(_repository_root())
     _validate_rows(rows, hits)
-    _validate_frozen_blocks(text, hits)
+    _validate_frozen_blocks(lines, hits)
     _validate_status(lines, rows)
     return rows

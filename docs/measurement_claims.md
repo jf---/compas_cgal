@@ -36,13 +36,15 @@ This scan is drift evidence only and does not redefine the frozen population.
 ## Disposition semantics
 
 - `pending` — final adjudication has not happened.
-- `re-earned` — an authenticated rerun confirmed every material assertion.
-- `corrected` — the assertion was wrong or incomplete and its source changed.
-- `historical` — the original configuration cannot be reconstructed.
+- `re-earned` — an authenticated rerun confirmed every material assertion and records the exact command, configuration, artifact, result digest, and full input commit.
+- `corrected` — the assertion was wrong or incomplete; authenticated evidence and the source correction commit are recorded.
+- `historical` — the original configuration cannot be reconstructed; the source is explicitly labelled and names the missing identity or configuration.
 - `deleted` — the assertion was removed while its frozen identity remains here.
-- `not-a-claim` — semantic review found a regex false positive.
+- `not-a-claim` — semantic review found a regex false positive and records an explicit rationale.
 
-`reproduced` is not a ledger disposition.
+A case-level result does not automatically disposition every mapped row. Partial
+reproduction cannot become `re-earned`; every material assertion is adjudicated
+row by row. `reproduced` is not a ledger disposition.
 
 ## Ledger
 
