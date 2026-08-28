@@ -1,7 +1,7 @@
 # Coherence Wave 1 Implementation Plan
 
 > **status: in execution** — opened 2026-08-28. The commit that lands a task
-> updates this header with the task number. Landed: 2.
+> updates this header with the task number. Landed: 2, 3.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use
 > superpowers:subagent-driven-development (recommended) or
@@ -349,7 +349,7 @@ Update this plan's header: `Landed: 2`.
   exit 0 iff every `*.md` there carries a `> **status:` line within its first
   12 lines.
 
-- [ ] **Step 1: failing tests**
+- [x] **Step 1: failing tests**
 
 ```python
 """tests/tools/test_plan_headers.py"""
@@ -378,7 +378,7 @@ def test_a_header_buried_past_the_first_twelve_lines_does_not_count(tmp_path):
     assert [p.name for p in missing_headers(tmp_path)] == ["c.md"]
 ```
 
-- [ ] **Step 2: run, verify FAIL** (`ModuleNotFoundError`), then implement:
+- [x] **Step 2: run, verify FAIL** (`ModuleNotFoundError`), then implement:
 
 ```python
 """tools/plan_headers.py — invariant I4: every plan carries a status header.
@@ -423,7 +423,7 @@ if __name__ == "__main__":
     sys.exit(main())
 ```
 
-- [ ] **Step 3: run tests → pass; run against the real tree**
+- [x] **Step 3: run tests → pass; run against the real tree**
 
 Run: `pixi run pytest tests/tools/test_plan_headers.py -q` → 3 passed.
 Run: `pixi run python -m tools.plan_headers`
@@ -443,7 +443,7 @@ and in `missing_headers`, skip plans whose `plan.name.startswith(tuple(allow))`
 (thread the argument through; add a fourth test:
 `test_an_exempted_prefix_is_skipped`).
 
-- [ ] **Step 4: pixi task, gates, commit**
+- [x] **Step 4: pixi task, gates, commit**
 
 ```toml
 plan-headers = { cmd = "python -m tools.plan_headers", description = "Every SDD plan carries a status header (I4)" }
