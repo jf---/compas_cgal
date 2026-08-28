@@ -26,13 +26,13 @@ closes, the closing commit removes it here.
   rebases or fast-forwards in with zero conflict. Absorbing it — and then
   retiring `codex/sdd-coherence` — is itself an item below.
 
-## Decision needed from the user
+## Decisions — all ruled 2026-08-28
 
-| id | decision |
-| --- | --- |
-| D1 | **`2026-08-07-exact-inter-route-retrace` — finish or supersede.** The only genuinely in-flight legacy plan: `route_retrace_replay.py` + its test were never written, and the 4 standing red tests in `tests/adaptive/` are this plan's. It predates the pivot to the quality instrument. Finishing means writing the replay leg; superseding means stamping the plan and retiring its red tests' claim on the suite. |
-| D2 | **Deadwood execution.** Verdicts in the ledger at the bottom of this file; branch/worktree deletion requires explicit consent and has not been performed. |
-| D3 | **Main checkout dirt** (`compas_cgal_prs` on `jf/toolpath-redesign`): `docs/examples/example_isolines.py` (+32 lines, an abandoned experiment — `from asyncio import log` is an accidental import) and the empty stray file `0`. The reconciliation ledger explicitly excludes both and never touches them; they are the user's to discard or keep. |
+| id | ruling | executed |
+| --- | --- | --- |
+| D1 | Retrace plan **superseded** by auditor P2; its 4 red tests in `tests/adaptive/` are no longer pending work | plan stamped; test retirement is S2 |
+| D2 | Deadwood: **archive-tag + delete, local only** | 17 branches deleted (12 zero-unique re-verified by `git cherry` at deletion time; 5 pinned first by `archive/*` tags), 8 stale worktree records pruned, perf worktree removed (branch kept). Origin untouched — `origin/codex/*` deletions were declined and stay out of scope |
+| D3 | Main-checkout dirt **discarded** | `jf/toolpath-redesign` checkout is bit-clean at `73d5372` |
 
 ## Open items
 
@@ -63,9 +63,10 @@ Origins: **R*n*** = `review-2026-08-22-t9-zero-guide.md` recommendation *n* ·
 | C3 | Second gate cap (40–100°) | at `GATE_CAP_DEG=120` both registered generators emit byte-identical paths, so the 3×2 gate cannot attribute a defect to either |
 | C4 | Depletion model: score a true helical entry | `_replay_kind` refuses Z+XY motion; the workaround encoding silently degrades to a no-op rapid. Until fixed, the entry criterion is unsatisfiable — the 240° floor and the `V ≥ √3·r` requirement are proved in `loop_radius_degeneracy.md` |
 | C5 | Arc motion vocabulary | inter-chain links cannot be tangent-continuous while loops are full circles; loops need distinct entry/exit tangency points (arcs) |
-| S1 | Absorb `codex/sdd-coherence` into the frontier, then retire the branch and its worktree | one docs commit, disjoint files, rebases clean |
+| S1 | Absorb `codex/sdd-coherence` into the frontier, then retire the branch and its worktree | docs-only commits, disjoint files, rebases clean |
+| S2 | Retire the 4 red retrace tests in `tests/adaptive/{test_generator,test_route_retrace_generator}.py` | D1 superseded their plan; removal goes through the auditor programme, which owns `tests/adaptive` — never a silent local delete |
 
-## Deadwood ledger (verdicts recorded; execution awaits explicit consent — D2)
+## Deadwood ledger (EXECUTED 2026-08-28 under D2 — kept as the record of what went and why)
 
 Measured 2026-08-28 by `git cherry` patch-equivalence against the frontier tip
 `fa59120`, not by branch age or name.
