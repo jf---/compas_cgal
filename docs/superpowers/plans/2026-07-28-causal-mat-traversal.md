@@ -1,5 +1,8 @@
 # Causal MAT Traversal and Covered Generation Implementation Plan
 
+> **status: landed** — verified 2026-08-28 by artifact audit. **evidence:** 29/29 promised
+> artifacts exist. The 10 unticked boxes are unmaintained planning residue, not open work.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use
 > superpowers:executing-plans to implement this plan task-by-task. Steps use
 > checkbox (`- [ ]`) syntax for tracking.

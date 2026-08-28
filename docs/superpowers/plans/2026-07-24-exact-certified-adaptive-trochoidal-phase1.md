@@ -1,5 +1,11 @@
 # Exact-certified adaptive trochoidal-MAT — Phase 1 implementation plan
 
+> **status: landed** (this repository's leg) — verified 2026-08-28 by artifact audit, not checkboxes.
+> **evidence:** 109/121 promised artifacts exist here; the 12 missing paths live in the
+> `cam_swept_volume_demo` repository — this is a CROSS-REPO master plan and its other leg is not
+> tracked from here. As a live tracker it is **superseded** by the auditor-convergence programme
+> (`2026-08-23-auditor-convergence-p0…p4`).
+
 > Execute with `superpowers:executing-plans` and
 > `superpowers:subagent-driven-development`. Run one task at a time through
 > implementer review, specification review, and code-quality review. Do not
