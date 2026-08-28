@@ -1,7 +1,7 @@
 # Coherence Wave 1 Implementation Plan
 
 > **status: in execution** — opened 2026-08-28. The commit that lands a task
-> updates this header with the task number. Landed: none yet.
+> updates this header with the task number. Landed: 2.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use
 > superpowers:subagent-driven-development (recommended) or
@@ -64,24 +64,24 @@ disk (backlog D4). Recreate the build environment inside the Wave-1 worktree.
   `/Users/jelle/Code/CADCAM/worktrees/compas_cgal_prs-sdd-coherence` where
   `pixi run pytest …` works and `_stock_2` imports. Every later task runs here.
 
-- [ ] **Step 1: worktree exists on `codex/sdd-coherence`** (created at plan
+- [x] **Step 1: worktree exists on `codex/sdd-coherence`** (created at plan
   commit time; verify)
 
 Run: `git -C /Users/jelle/Code/CADCAM/worktrees/compas_cgal_prs-sdd-coherence status --short --branch`
 Expected: `## codex/sdd-coherence`, clean.
 
-- [ ] **Step 2: install the env and build the extensions**
+- [x] **Step 2: install the env and build the extensions**
 
 Run (long — CGAL compiles): `cd <worktree> && pixi install && pixi run _editable-rebuild`
 Expected: exit 0; the import line prints nothing.
 
-- [ ] **Step 3: sanity gate**
+- [x] **Step 3: sanity gate**
 
 Run: `pixi run pytest tests/benchmarks/test_quality.py -q -n auto`
 Expected: `6 failed, N passed` — exactly the six product-gate reds, nothing
 else red. If anything else is red, STOP: the env is wrong, do not proceed.
 
-- [ ] **Step 4: no commit** (environment is not a repo change).
+- [x] **Step 4: no commit** (environment is not a repo change).
 
 ---
 
@@ -99,7 +99,7 @@ else red. If anything else is red, STOP: the env is wrong, do not proceed.
   exit 0 iff suite reds == manifest, both directions. Task 11 wires it into
   the oracle; Wave-2/P4 wires it into CI.
 
-- [ ] **Step 1: write the failing tests**
+- [x] **Step 1: write the failing tests**
 
 ```python
 """tests/tools/test_red_manifest.py"""
@@ -171,12 +171,12 @@ def test_a_malformed_manifest_raises_a_named_error(tmp_path):
         check(junit, bad)
 ```
 
-- [ ] **Step 2: run, verify failure**
+- [x] **Step 2: run, verify failure**
 
 Run: `pixi run pytest tests/tools/test_red_manifest.py -q`
 Expected: FAIL — `ModuleNotFoundError: tools`.
 
-- [ ] **Step 3: implement**
+- [x] **Step 3: implement**
 
 ```python
 """tools/red_manifest.py — invariant I3: red outside the manifest is a defect,
@@ -282,7 +282,7 @@ if __name__ == "__main__":
 Note `List[str] | None` is a 3.10+ annotation — under
 `from __future__ import annotations` it is a string and 3.9-safe.
 
-- [ ] **Step 4: write the manifest itself** (`docs/red_manifest.json`)
+- [x] **Step 4: write the manifest itself** (`docs/red_manifest.json`)
 
 ```json
 {
@@ -309,12 +309,12 @@ Note `List[str] | None` is a 3.10+ annotation — under
 }
 ```
 
-- [ ] **Step 5: run tests, verify pass**
+- [x] **Step 5: run tests, verify pass**
 
 Run: `pixi run pytest tests/tools/test_red_manifest.py -q`
 Expected: 5 passed.
 
-- [ ] **Step 6: pixi task + end-to-end against the real suite**
+- [x] **Step 6: pixi task + end-to-end against the real suite**
 
 Add to `[tool.pixi.tasks]` (mirroring the existing `baseline` incantation):
 
@@ -329,7 +329,7 @@ disagrees with the manifest counts, the MANIFEST is corrected to observed
 reality (with reasons) — never the reverse — and the correction is stated in
 the commit message.
 
-- [ ] **Step 7: gates + commit**
+- [x] **Step 7: gates + commit**
 
 Run: `pixi run ruff format tools tests/tools && pixi run ruff check tools tests/tools && pixi run mypy --strict tools`
 Then: `git commit -m "feat(tools): red-manifest checker -- red outside the manifest is a defect" -- tools tests/tools docs/red_manifest.json pyproject.toml`
