@@ -121,6 +121,6 @@ def write_report(records: List[MeasurementRecord], out_dir: Path) -> Tuple[Path,
     out_dir.mkdir(parents=True, exist_ok=True)
     md_path = out_dir / MARKDOWN_NAME
     json_path = out_dir / JSON_NAME
-    md_path.write_text(render_markdown(records))
-    json_path.write_text(json.dumps([r.to_dict() for r in records], indent=2))
+    md_path.write_text(render_markdown(records), encoding="utf-8")
+    json_path.write_text(json.dumps([r.to_dict() for r in records], indent=2), encoding="utf-8")
     return md_path, json_path
