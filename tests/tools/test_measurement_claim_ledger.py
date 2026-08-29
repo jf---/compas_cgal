@@ -47,9 +47,7 @@ SOURCE_CORRECTIONS = {
     "radius-ladder-floor-steps": b"# Corrected floor evidence is authenticated by the Task-6 artifact.\n",
 }
 
-OPENING_BLOCK = (
-    "# Measurement-claim ledger\n\n> **status: in audit — 0/14 Task-5 extractor rows dispositioned**\n\n- Opened (UTC): `2026-08-28`\n- Programme: coherence Wave 1 backlog A\n\n"
-)
+INITIAL_STATUS = "> **status: in audit — 0/14 Task-5 extractor rows dispositioned**"
 SCOPE_BLOCK = (
     "This ledger freezes the Task-5 Python-comment regex population. It is not a\n"
     "claim of repository-wide invariant-I2 closure. Tasks 6 and 7 may change only\n"
@@ -126,7 +124,7 @@ def _write_page(tmp_path: pathlib.Path, text: str) -> pathlib.Path:
     return page
 
 
-def _page_text() -> str:
+def _live_page_text() -> str:
     return LEDGER.read_text(encoding="utf-8")
 
 
@@ -140,6 +138,18 @@ def _replace_row(text: str, ordinal: int, column: int, value: str) -> str:
     assert len(cells) == 7
     cells[column] = value
     lines[index] = "| " + " | ".join(cells) + " |"
+    return "\n".join(lines) + "\n"
+
+
+def _initial_page_text() -> str:
+    text = _live_page_text()
+    for ordinal in range(1, 15):
+        text = _replace_row(text, ordinal, 5, "pending")
+        text = _replace_row(text, ordinal, 6, "—")
+    lines = text.splitlines()
+    status_indexes = [index for index, line in enumerate(lines) if line.startswith("> **status:")]
+    assert len(status_indexes) == 1
+    lines[status_indexes[0]] = INITIAL_STATUS
     return "\n".join(lines) + "\n"
 
 
@@ -963,11 +973,15 @@ def test_measurement_claim_ledger_module_exists() -> None:
     assert importlib.util.find_spec("tools.measurement_claim_ledger") is not None
 
 
-def test_real_ledger_has_exact_initial_contract() -> None:
+def test_real_ledger_has_authenticated_task6_acceptance() -> None:
     module = _module()
-    text = _page_text()
+    text = _live_page_text()
+    artifact_root = PROJECT_ROOT / "benchmarks" / "measurement_claim_results"
+    artifacts = tuple(sorted(path for path in artifact_root.iterdir() if path.is_dir()))
+    assert len(artifacts) == 1
+    assert module.validate_ledger_evidence(LEDGER, artifacts) is None
     rows = module.validate_ledger_structure(LEDGER)
-    assert text.startswith(OPENING_BLOCK)
+    assert text.startswith("# Measurement-claim ledger\n\n")
     assert SCOPE_BLOCK in text
     assert EXTRACTOR_BLOCK in text
     assert ORDER_BLOCK in text
@@ -975,8 +989,8 @@ def test_real_ledger_has_exact_initial_contract() -> None:
     assert DISPOSITION_BLOCK in text
     assert module.FROZEN_SOURCE_COMMIT == FROZEN_COMMIT
     assert tuple((row["ordinal"], row["claim_id"], row["extracted_location"], row["stable_anchor"], row["anchor_match"]) for row in rows) == EXPECTED_ROWS
-    assert tuple(row["disposition"] for row in rows) == ("pending",) * 14
-    assert tuple(row["evidence"] for row in rows) == ("—",) * 14
+    assert sum(row["disposition"] != "pending" for row in rows) == 10
+    assert tuple((row["disposition"], row["evidence"]) for row in rows[10:]) == (("pending", "—"),) * 4
     assert _immutable_digest(rows) == module.IMMUTABLE_COLUMNS_SHA256
 
 
@@ -990,7 +1004,7 @@ def test_frozen_rows_match_the_full_git_source_object() -> None:
 @pytest.mark.parametrize("field", ["status", "metadata"])
 def test_opening_status_and_metadata_cannot_be_displaced(tmp_path: pathlib.Path, field: str) -> None:
     module = _module()
-    text = _page_text()
+    text = _initial_page_text()
     status = "> **status: in audit — 0/14 Task-5 extractor rows dispositioned**\n\n"
     metadata = "- Opened (UTC): `2026-08-28`\n- Programme: coherence Wave 1 backlog A\n\n"
     if field == "status":
@@ -1004,7 +1018,7 @@ def test_opening_status_and_metadata_cannot_be_displaced(tmp_path: pathlib.Path,
 @pytest.mark.parametrize("damage", ["missing", "moved"])
 def test_scope_and_i2_limitation_must_remain_in_scope_section(tmp_path: pathlib.Path, damage: str) -> None:
     module = _module()
-    text = _page_text().replace(SCOPE_BLOCK, "", 1)
+    text = _initial_page_text().replace(SCOPE_BLOCK, "", 1)
     if damage == "moved":
         text = text.replace("## Frozen extraction\n", "## Frozen extraction\n\n" + SCOPE_BLOCK, 1)
     with pytest.raises(module.InvalidMeasurementClaimLedgerError, match="scope|I2"):
@@ -1018,7 +1032,7 @@ def test_scope_and_i2_limitation_must_remain_in_scope_section(tmp_path: pathlib.
 @pytest.mark.parametrize("damage", ["missing", "moved"])
 def test_extraction_contract_must_remain_in_frozen_extraction_section(tmp_path: pathlib.Path, block: str, message: str, damage: str) -> None:
     module = _module()
-    text = _page_text().replace(block, "", 1)
+    text = _initial_page_text().replace(block, "", 1)
     if damage == "moved":
         text = text.replace("## Scope and limits\n", "## Scope and limits\n\n" + block, 1)
     with pytest.raises(module.InvalidMeasurementClaimLedgerError, match=message):
@@ -1028,7 +1042,7 @@ def test_extraction_contract_must_remain_in_frozen_extraction_section(tmp_path: 
 @pytest.mark.parametrize("damage", ["missing", "moved", "altered"])
 def test_disposition_semantics_are_exact_and_section_scoped(tmp_path: pathlib.Path, damage: str) -> None:
     module = _module()
-    text = _page_text().replace(DISPOSITION_BLOCK, "", 1)
+    text = _initial_page_text().replace(DISPOSITION_BLOCK, "", 1)
     if damage == "moved":
         text = text.replace("## Scope and limits\n", "## Scope and limits\n\n" + DISPOSITION_BLOCK, 1)
     elif damage == "altered":
@@ -1040,7 +1054,7 @@ def test_disposition_semantics_are_exact_and_section_scoped(tmp_path: pathlib.Pa
 
 def test_frozen_block_cannot_move_outside_frozen_section(tmp_path: pathlib.Path) -> None:
     module = _module()
-    text = _page_text()
+    text = _initial_page_text()
     block = "### MC-001\n\n```text\n" + EXPECTED_FROZEN_TEXT[0] + "\n```\n\n"
     text = text.replace(block, "", 1).replace("## Frozen matched lines\n", block + "## Frozen matched lines\n", 1)
     with pytest.raises(module.InvalidMeasurementClaimLedgerError, match="frozen|section|heading"):
@@ -1049,7 +1063,7 @@ def test_frozen_block_cannot_move_outside_frozen_section(tmp_path: pathlib.Path)
 
 def test_extra_claim_heading_is_rejected(tmp_path: pathlib.Path) -> None:
     module = _module()
-    text = _page_text().replace("## Frozen matched lines\n", "## Frozen matched lines\n\n### MC-999\n", 1)
+    text = _initial_page_text().replace("## Frozen matched lines\n", "## Frozen matched lines\n\n### MC-999\n", 1)
     with pytest.raises(module.InvalidMeasurementClaimLedgerError, match="claim heading|frozen"):
         module.validate_ledger_structure(_write_page(tmp_path, text))
 
@@ -1066,7 +1080,7 @@ def test_extra_claim_heading_is_rejected(tmp_path: pathlib.Path) -> None:
 )
 def test_each_immutable_column_mutation_is_rejected(tmp_path: pathlib.Path, column: int, replacement: str) -> None:
     module = _module()
-    page = _write_page(tmp_path, _replace_row(_page_text(), 1, column, replacement))
+    page = _write_page(tmp_path, _replace_row(_initial_page_text(), 1, column, replacement))
     with pytest.raises(module.InvalidMeasurementClaimLedgerError, match="row|immutable"):
         module.validate_ledger_structure(page)
 
@@ -1074,7 +1088,7 @@ def test_each_immutable_column_mutation_is_rejected(tmp_path: pathlib.Path, colu
 @pytest.mark.parametrize("damage", ["missing", "duplicate", "out-of-order"])
 def test_missing_duplicate_and_out_of_order_rows_are_rejected(tmp_path: pathlib.Path, damage: str) -> None:
     module = _module()
-    text = _page_text()
+    text = _initial_page_text()
     row_1 = next(line for line in text.splitlines() if line.startswith("| 001 | MC-001 |"))
     row_2 = next(line for line in text.splitlines() if line.startswith("| 002 | MC-002 |"))
     if damage == "missing":
@@ -1090,7 +1104,7 @@ def test_missing_duplicate_and_out_of_order_rows_are_rejected(tmp_path: pathlib.
 @pytest.mark.parametrize("damage", ["missing", "duplicate", "altered"])
 def test_missing_duplicate_and_altered_frozen_blocks_are_rejected(tmp_path: pathlib.Path, damage: str) -> None:
     module = _module()
-    text = _page_text()
+    text = _initial_page_text()
     block = "### MC-001\n\n```text\n" + EXPECTED_FROZEN_TEXT[0] + "\n```\n"
     if damage == "missing":
         text = text.replace(block, "", 1)
@@ -1104,7 +1118,7 @@ def test_missing_duplicate_and_altered_frozen_blocks_are_rejected(tmp_path: path
 
 def test_all_six_dispositions_are_accepted_with_matching_status(tmp_path: pathlib.Path) -> None:
     module = _module()
-    text = _page_text()
+    text = _initial_page_text()
     for ordinal, disposition in enumerate(module.DISPOSITIONS, start=1):
         text = _replace_row(text, ordinal, 5, disposition)
         if disposition != "pending":
@@ -1117,7 +1131,7 @@ def test_all_six_dispositions_are_accepted_with_matching_status(tmp_path: pathli
 @pytest.mark.parametrize("disposition", ["reproduced", "unknown", ""])
 def test_unknown_or_empty_disposition_is_rejected(tmp_path: pathlib.Path, disposition: str) -> None:
     module = _module()
-    page = _write_page(tmp_path, _replace_row(_page_text(), 1, 5, disposition))
+    page = _write_page(tmp_path, _replace_row(_initial_page_text(), 1, 5, disposition))
     with pytest.raises(module.InvalidMeasurementClaimLedgerError, match="disposition"):
         module.validate_ledger_structure(page)
 
@@ -1125,14 +1139,14 @@ def test_unknown_or_empty_disposition_is_rejected(tmp_path: pathlib.Path, dispos
 @pytest.mark.parametrize("done", [0, 10])
 def test_in_audit_status_is_exact_for_observed_terminal_count(tmp_path: pathlib.Path, done: int) -> None:
     module = _module()
-    text = _page_text() if done == 0 else _terminalize(_page_text(), done)
+    text = _initial_page_text() if done == 0 else _terminalize(_initial_page_text(), done)
     rows = module.validate_ledger_structure(_write_page(tmp_path, text))
     assert sum(row["disposition"] != "pending" for row in rows) == done
 
 
 def test_complete_status_is_required_at_fourteen_of_fourteen(tmp_path: pathlib.Path) -> None:
     module = _module()
-    text = _terminalize(_page_text(), 14, complete=True)
+    text = _terminalize(_initial_page_text(), 14, complete=True)
     assert len(module.validate_ledger_structure(_write_page(tmp_path, text))) == 14
     wrong = text.replace(module.COMPLETE_STATUS, module.IN_AUDIT_STATUS.format(done=14))
     with pytest.raises(module.InvalidMeasurementClaimLedgerError, match="status"):
@@ -1143,14 +1157,14 @@ def test_complete_status_is_required_at_fourteen_of_fourteen(tmp_path: pathlib.P
 def test_status_prefix_suffix_and_duplicate_lines_are_rejected(tmp_path: pathlib.Path, suffix: str) -> None:
     module = _module()
     exact = module.IN_AUDIT_STATUS.format(done=0)
-    page = _write_page(tmp_path, _page_text().replace(exact, exact + suffix, 1))
+    page = _write_page(tmp_path, _initial_page_text().replace(exact, exact + suffix, 1))
     with pytest.raises(module.InvalidMeasurementClaimLedgerError, match="status"):
         module.validate_ledger_structure(page)
 
 
 def test_status_count_disagreement_is_rejected(tmp_path: pathlib.Path) -> None:
     module = _module()
-    text = _replace_row(_page_text(), 1, 5, "historical")
+    text = _replace_row(_initial_page_text(), 1, 5, "historical")
     text = _replace_row(text, 1, 6, "reviewed=MC-001")
     with pytest.raises(module.InvalidMeasurementClaimLedgerError, match="status"):
         module.validate_ledger_structure(_write_page(tmp_path, text))
@@ -1158,7 +1172,7 @@ def test_status_count_disagreement_is_rejected(tmp_path: pathlib.Path) -> None:
 
 def test_pending_row_cannot_carry_evidence(tmp_path: pathlib.Path) -> None:
     module = _module()
-    page = _write_page(tmp_path, _replace_row(_page_text(), 1, 6, "unsupported evidence"))
+    page = _write_page(tmp_path, _replace_row(_initial_page_text(), 1, 6, "unsupported evidence"))
     with pytest.raises(module.InvalidMeasurementClaimLedgerError, match="pending|evidence"):
         module.validate_ledger_structure(page)
 
@@ -1173,7 +1187,7 @@ def test_pending_row_cannot_carry_evidence(tmp_path: pathlib.Path) -> None:
 )
 def test_malformed_heading_separator_and_column_count_raise_named_error(tmp_path: pathlib.Path, old: str, new: str, message: str) -> None:
     module = _module()
-    page = _write_page(tmp_path, _page_text().replace(old, new, 1))
+    page = _write_page(tmp_path, _initial_page_text().replace(old, new, 1))
     with pytest.raises(module.InvalidMeasurementClaimLedgerError, match=message):
         module.validate_ledger_structure(page)
 
@@ -1181,6 +1195,6 @@ def test_malformed_heading_separator_and_column_count_raise_named_error(tmp_path
 def test_missing_frozen_blobs_raise_named_error(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
     module = _module()
     monkeypatch.setattr(module, "FROZEN_SOURCE_COMMIT", "0" * 40)
-    page = _write_page(tmp_path, _page_text())
+    page = _write_page(tmp_path, _initial_page_text())
     with pytest.raises(module.InvalidMeasurementClaimLedgerError, match="Git|frozen"):
         module.validate_ledger_structure(page)
