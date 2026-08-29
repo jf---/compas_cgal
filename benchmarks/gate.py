@@ -55,7 +55,7 @@ GATE_CAP_DEG = 120.0
 GATE_RECT_WIDTH = 12.0
 GATE_RECT_HEIGHT = 8.0
 
-# The pocket the corner defect was measured on. Ten by six tool diameters.
+# The pocket the corner defect was first observed on. Ten by six tool diameters.
 GATE_LARGE_RECT_WIDTH = 20.0
 GATE_LARGE_RECT_HEIGHT = 12.0
 
@@ -63,12 +63,11 @@ GATE_LARGE_RECT_HEIGHT = 12.0
 # had to be DERIVED rather than picked. Along a channel of width W the clearance
 # is W/2, so a loop centred on the spine has radius at most W/2 - r; a trochoid
 # needs radius > r (see `benchmarks.quality.DEGENERATE_LOOP_RATIO`), hence
-# W > 4r, hence an arm STRICTLY WIDER THAN TWO TOOL DIAMETERS. Measured at
-# exactly two (2026-08-22, tool 2.0, cap 120): 68 of the 69 emitted circles come
-# out at radius 0.998 against a tool radius of 1.0, so every loop on the pocket
-# is degenerate by construction and the instance measures its own width instead
-# of the generator. Three tool diameters puts the largest loop at twice the tool
-# radius, which is a trochoid with room in it.
+# W > 4r, hence an arm STRICTLY WIDER THAN TWO TOOL DIAMETERS. Exactly two tool
+# diameters is the open degeneracy boundary. The prior empirical anecdote cannot
+# be reproduced without its generator, circle-selection, entry-treatment, and
+# operation-enumeration inputs, so it is deleted. Three tool diameters permits a
+# spine-centred radius up to 2r, which leaves room for a trochoid.
 L_ARM_TOOL_DIAMETERS = 3.0
 
 # The L's two arm lengths, in tool diameters. Chosen so the instance's area comes
