@@ -5,10 +5,12 @@ from __future__ import annotations
 import ast
 import datetime
 import hashlib
+import io
 import json
 import pathlib
 import re
 import subprocess
+import tokenize
 from typing import Dict
 from typing import Literal
 from typing import Mapping
@@ -49,11 +51,93 @@ class _FrozenHit(TypedDict):
     anchor_match: str
 
 
+class _SourceRegion(TypedDict):
+    raw: bytes
+    byte_start: int
+    byte_end: int
+    line_start: int
+    line_end: int
+
+
 DISPOSITIONS = ("pending", "re-earned", "corrected", "historical", "deleted", "not-a-claim")
 IN_AUDIT_STATUS = "> **status: in audit — {done}/14 Task-5 extractor rows dispositioned**"
 COMPLETE_STATUS = "> **status: complete — 14/14 Task-5 extractor rows dispositioned**"
 FROZEN_SOURCE_COMMIT = "eec665c1df1cd8d1e98dd9dd1001b5984e17a703"
 IMMUTABLE_COLUMNS_SHA256 = "e0761be0cce4f4bb5dfcc4335ec3b54ff5751c7e1454870c2273f2147250883e"
+
+_RADIAL_SOURCE = "src/compas_cgal/engagement_radial_toolpath.py"
+_ADVANCE_SOURCE = "src/compas_cgal/engagement_toolpath.py"
+_SOURCE_PATHS = (_RADIAL_SOURCE, _ADVANCE_SOURCE)
+_SOURCE_FILE_SHA256 = {
+    _RADIAL_SOURCE: "4a12b0d8a404a7355271eafb10baa864e33d64411a60ca3195ccf85bd1a19af0",
+    _ADVANCE_SOURCE: "6bc5095fd7853949c4c6f32bcfbe7b2d85ffd038b82e6ce8cf6d259e224117cf",
+}
+_SOURCE_REGION_SHA256 = {
+    "radial-module-which-circle": "1ab67dae4cbc8dea240b7f7a572be932eed99022427e7d773bb2442918ec7ccc",
+    "radius-ladder-subdivisions": "e3898ee926c10c0dcac29a92d4811aa2f98ef1dc0fa9591b54f5b1e99a769a34",
+    "radius-ladder-refinement-margin": "ba810f64945c4da67a1e994b2bab241dbba0bbb3d24241c9430f36178b1d0461",
+    "gentlest-rung-peak": "19357c059c7b7f67247485b1613c8b043077ac5be332e16e4b9c8e0bde89b4b5",
+    "least-bad-rung-double": "4aeee76e5df523410d1f0adc00d26fd6207d3c2f6b52937f9eceae80d6dfc311",
+    "regulation-cap-angle": "5ecd9cc249e9138e4dc9a7339ae7fd6cf33bc76432fab2c6a756c5347f45ca4a",
+    "measured-peak-reporting": "39fa70015f93d09c420d337aa80dbca94dbfe2dad4b86b72060c9698c5b96680",
+    "loop-probe-count": "a913fa0d7ce1c67304c72c1751e445c702798c6a6a887464f37d93394b6ad2ad",
+    "radius-ladder-floor-steps": "a3b0954dde586e1abd2d3399c81c05d70e2eb748c1db247f538b945217ea8128",
+}
+_SOURCE_REGION_PATH = {
+    "radial-module-which-circle": _RADIAL_SOURCE,
+    "radius-ladder-subdivisions": _RADIAL_SOURCE,
+    "radius-ladder-refinement-margin": _RADIAL_SOURCE,
+    "gentlest-rung-peak": _RADIAL_SOURCE,
+    "least-bad-rung-double": _RADIAL_SOURCE,
+    "regulation-cap-angle": _ADVANCE_SOURCE,
+    "measured-peak-reporting": _ADVANCE_SOURCE,
+    "loop-probe-count": _ADVANCE_SOURCE,
+    "radius-ladder-floor-steps": _RADIAL_SOURCE,
+}
+_MANDATORY_SOURCE_REGIONS = (
+    "radial-module-which-circle",
+    "radius-ladder-subdivisions",
+    "radius-ladder-refinement-margin",
+    "gentlest-rung-peak",
+    "least-bad-rung-double",
+    "regulation-cap-angle",
+    "measured-peak-reporting",
+    "loop-probe-count",
+)
+_FLOOR_SOURCE_REGION = "radius-ladder-floor-steps"
+_LEADING_COMMENT_ASSIGNMENTS = {
+    "radius-ladder-subdivisions": "RADIUS_LADDER_SUBDIVISIONS",
+    "radius-ladder-refinement-margin": "RADIUS_LADDER_REFINEMENT_MARGIN",
+    "loop-probe-count": "LOOP_PROBE_COUNT",
+    "radius-ladder-floor-steps": "RADIUS_LADDER_FLOOR_STEPS",
+}
+_DOCSTRING_REGION_BOUNDARIES = {
+    "radial-module-which-circle": (
+        b"emitted, counted, and warned about rather than hidden.\n\n",
+        b"\nIT IS NOT FREE,",
+    ),
+    "gentlest-rung-peak": (
+        b'    """The mildest of a station\'s already-refused candidate radii, with its measurement.\n\n',
+        b"\n    Attributes:\n",
+    ),
+    "least-bad-rung-double": (
+        b"    `tests/test_engagement_radial_toolpath.py` pins that state.\n\n",
+        b"\n    CANDIDATES are",
+    ),
+    "regulation-cap-angle": (
+        b"            `_cap_surrogate` -- the only form of the cap that reaches a predicate.\n",
+        b"        tool_radius: Tool radius in model units.\n",
+    ),
+    "measured-peak-reporting": (
+        b'    """Largest engaged-run angle REPORTED over this machining circle\'s evaluated positions.\n\n',
+        b"\n    The whole ring is evaluated",
+    ),
+}
+_COMMENT_SOURCE_REGIONS = frozenset(_LEADING_COMMENT_ASSIGNMENTS)
+_MC007_DISPOSITIONS = ("re-earned", "corrected", "historical")
+_RAW_SOURCE_DIFF = re.compile(r"^:100644 100644 [0-9a-f]+ [0-9a-f]+ M\t(.+)$")
+_DIFF_FILE = re.compile(r"^diff --git a/(.+) b/(.+)$")
+_DIFF_HUNK = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
 
 _ROW_COUNT = 14
 _FILE_COUNT = 5
@@ -134,6 +218,287 @@ def _repository_root() -> pathlib.Path:
     if not root.is_dir():
         raise InvalidMeasurementClaimLedgerError(f"Git repository path is not a directory: {root}")
     return root
+
+
+def _decode_source_blob(path: str, raw: bytes) -> str:
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise InvalidMeasurementClaimLedgerError(f"Task-6 source is not UTF-8: {path}") from exc
+
+
+def _source_region(raw: bytes, byte_start: int, byte_end: int, *, name: str) -> _SourceRegion:
+    region = raw[byte_start:byte_end]
+    if not region or not region.endswith(b"\n"):
+        raise InvalidMeasurementClaimLedgerError(f"Task-6 source region {name} must be non-empty and newline-terminated")
+    line_start = raw.count(b"\n", 0, byte_start) + 1
+    return {
+        "raw": region,
+        "byte_start": byte_start,
+        "byte_end": byte_end,
+        "line_start": line_start,
+        "line_end": line_start + region.count(b"\n") - 1,
+    }
+
+
+def _leading_comment_region(path: str, raw: bytes, *, name: str, assignment: str) -> _SourceRegion:
+    source = _decode_source_blob(path, raw)
+    try:
+        tree = ast.parse(source, filename=path)
+    except SyntaxError as exc:
+        raise InvalidMeasurementClaimLedgerError(f"Task-6 source cannot be parsed while locating {name}: {path}") from exc
+    matches = [node.lineno for node in tree.body if _assignment_name(node) == assignment]
+    if len(matches) != 1:
+        raise InvalidMeasurementClaimLedgerError(f"Task-6 source assignment {assignment} for {name} must occur exactly once in {path}")
+    lines = raw.splitlines(keepends=True)
+    assignment_index = matches[0] - 1
+    start_index = assignment_index - 1
+    while start_index >= 0 and (not lines[start_index].strip() or lines[start_index].lstrip().startswith(b"#")):
+        start_index -= 1
+    start_index += 1
+    while start_index < assignment_index and not lines[start_index].strip():
+        start_index += 1
+    if start_index == assignment_index or any(not line.lstrip().startswith(b"#") for line in lines[start_index:assignment_index] if line.strip()):
+        raise InvalidMeasurementClaimLedgerError(f"Task-6 source region {name} is not one complete leading comment in {path}")
+    byte_start = sum(len(line) for line in lines[:start_index])
+    byte_end = sum(len(line) for line in lines[:assignment_index])
+    return _source_region(raw, byte_start, byte_end, name=name)
+
+
+def _docstring_region(path: str, raw: bytes, *, name: str, before: bytes, after: bytes) -> _SourceRegion:
+    if raw.count(before) != 1:
+        raise InvalidMeasurementClaimLedgerError(f"Task-6 immutable docstring start boundary for {name} must occur exactly once in {path}")
+    byte_start = raw.index(before) + len(before)
+    byte_end = raw.find(after, byte_start)
+    if byte_end < 0:
+        raise InvalidMeasurementClaimLedgerError(f"Task-6 immutable docstring end boundary for {name} is missing in {path}")
+    return _source_region(raw, byte_start, byte_end, name=name)
+
+
+def _task6_source_region_spans(path: str, raw: bytes) -> Dict[str, _SourceRegion]:
+    if path not in _SOURCE_PATHS:
+        raise InvalidMeasurementClaimLedgerError(f"Task-6 source path is not allowlisted: {path}")
+    regions: Dict[str, _SourceRegion] = {}
+    for name, region_path in _SOURCE_REGION_PATH.items():
+        if region_path != path:
+            continue
+        if name in _LEADING_COMMENT_ASSIGNMENTS:
+            regions[name] = _leading_comment_region(
+                path,
+                raw,
+                name=name,
+                assignment=_LEADING_COMMENT_ASSIGNMENTS[name],
+            )
+        else:
+            before, after = _DOCSTRING_REGION_BOUNDARIES[name]
+            regions[name] = _docstring_region(path, raw, name=name, before=before, after=after)
+    return regions
+
+
+def _task6_source_regions(path: str, raw: bytes) -> Dict[str, bytes]:
+    """Resolve exact Task-6-owned source bytes for baseline attestation tests."""
+    return {name: region["raw"] for name, region in _task6_source_region_spans(path, raw).items()}
+
+
+def _source_sentinel(name: str) -> bytes:
+    marker = name.upper().replace("-", "_").encode("ascii")
+    if name in _COMMENT_SOURCE_REGIONS:
+        return b"# __TASK6_OWNED_" + marker + b"__\n"
+    return b"__TASK6_OWNED_" + marker + b"__\n"
+
+
+def _normalize_source(raw: bytes, regions: Mapping[str, _SourceRegion], applicable: frozenset[str]) -> bytes:
+    normalized = raw
+    owned = [(name, region) for name, region in regions.items() if name in applicable]
+    for name, region in sorted(owned, key=lambda item: item[1]["byte_start"], reverse=True):
+        normalized = normalized[: region["byte_start"]] + _source_sentinel(name) + normalized[region["byte_end"] :]
+    return normalized
+
+
+def _source_token_pairs(path: str, raw: bytes) -> tuple[tuple[int, str], ...]:
+    try:
+        return tuple((token.type, token.string) for token in tokenize.tokenize(io.BytesIO(raw).readline))
+    except (IndentationError, SyntaxError, tokenize.TokenError) as exc:
+        raise InvalidMeasurementClaimLedgerError(f"Task-6 normalized token stream is invalid for {path}") from exc
+
+
+def _strip_leading_docstrings(node: ast.AST) -> None:
+    for child in ast.iter_child_nodes(node):
+        _strip_leading_docstrings(child)
+    if not isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)) or not node.body:
+        return
+    first = node.body[0]
+    if isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant) and isinstance(first.value.value, str):
+        del node.body[0]
+
+
+def _docstring_stripped_ast_dump(path: str, raw: bytes) -> str:
+    source = _decode_source_blob(path, raw)
+    try:
+        tree = ast.parse(source, filename=path, type_comments=True)
+    except SyntaxError as exc:
+        raise InvalidMeasurementClaimLedgerError(f"Task-6 source AST is invalid for {path}") from exc
+    _strip_leading_docstrings(tree)
+    return ast.dump(tree, annotate_fields=True, include_attributes=False)
+
+
+def _commit_parent(repository: pathlib.Path, correction_commit: str) -> str:
+    try:
+        text = _git(repository, "rev-list", "--parents", "-n", "1", correction_commit).decode("ascii").strip()
+    except UnicodeDecodeError as exc:
+        raise InvalidMeasurementClaimLedgerError("Task-6 correction ancestry is not ASCII") from exc
+    objects = text.split()
+    if len(objects) != 2 or objects[0] != correction_commit:
+        raise InvalidMeasurementClaimLedgerError("Task-6 source correction commit must have exactly one parent")
+    return objects[1]
+
+
+def _source_blob(repository: pathlib.Path, commit: str, path: str) -> bytes:
+    return _git(repository, "show", f"{commit}:{path}")
+
+
+def _validate_source_diff_entries(repository: pathlib.Path, correction_commit: str) -> None:
+    raw = _git(repository, "diff-tree", "--no-commit-id", "--raw", "-r", "--no-renames", correction_commit)
+    try:
+        lines = raw.decode("ascii").splitlines()
+    except UnicodeDecodeError as exc:
+        raise InvalidMeasurementClaimLedgerError("Task-6 source correction raw diff is not ASCII") from exc
+    paths: list[str] = []
+    for line in lines:
+        match = _RAW_SOURCE_DIFF.fullmatch(line)
+        if match is None:
+            raise InvalidMeasurementClaimLedgerError("Task-6 source correction must contain exactly two ordinary 100644 modified paths")
+        paths.append(match.group(1))
+    if len(paths) != len(_SOURCE_PATHS) or set(paths) != set(_SOURCE_PATHS):
+        raise InvalidMeasurementClaimLedgerError(f"Task-6 source correction must contain exactly two ordinary modified paths: {_SOURCE_PATHS!r}")
+
+
+def _containing_regions(
+    path: str,
+    line_start: int,
+    line_count: int,
+    regions: Mapping[str, _SourceRegion],
+    applicable: frozenset[str],
+) -> frozenset[str]:
+    containing: set[str] = set()
+    for name, region in regions.items():
+        if name not in applicable or _SOURCE_REGION_PATH[name] != path:
+            continue
+        if line_count == 0:
+            inside = region["line_start"] - 1 <= line_start <= region["line_end"]
+        else:
+            line_end = line_start + line_count - 1
+            inside = region["line_start"] <= line_start and line_end <= region["line_end"]
+        if inside:
+            containing.add(name)
+    return frozenset(containing)
+
+
+def _validate_source_diff_hunks(
+    repository: pathlib.Path,
+    parent: str,
+    correction_commit: str,
+    baseline_regions: Mapping[str, Mapping[str, _SourceRegion]],
+    candidate_regions: Mapping[str, Mapping[str, _SourceRegion]],
+    applicable: frozenset[str],
+) -> None:
+    raw = _git(
+        repository,
+        "diff",
+        "--unified=0",
+        "--no-ext-diff",
+        "--no-textconv",
+        parent,
+        correction_commit,
+        "--",
+        *_SOURCE_PATHS,
+    )
+    try:
+        lines = raw.decode("utf-8").splitlines()
+    except UnicodeDecodeError as exc:
+        raise InvalidMeasurementClaimLedgerError("Task-6 zero-context source diff is not UTF-8") from exc
+    current_path: Optional[str] = None
+    touched: set[str] = set()
+    for line in lines:
+        file_match = _DIFF_FILE.fullmatch(line)
+        if file_match is not None:
+            old_path, new_path = file_match.groups()
+            if old_path != new_path or old_path not in _SOURCE_PATHS:
+                raise InvalidMeasurementClaimLedgerError("Task-6 source diff path is outside the exact two-path allowlist")
+            current_path = old_path
+            continue
+        hunk_match = _DIFF_HUNK.match(line)
+        if hunk_match is None:
+            continue
+        if current_path is None:
+            raise InvalidMeasurementClaimLedgerError("Task-6 source diff hunk has no owning allowlisted path")
+        old_start, old_count_text, new_start, new_count_text = hunk_match.groups()
+        old_count = 1 if old_count_text is None else int(old_count_text)
+        new_count = 1 if new_count_text is None else int(new_count_text)
+        old_owned = _containing_regions(current_path, int(old_start), old_count, baseline_regions[current_path], applicable)
+        new_owned = _containing_regions(current_path, int(new_start), new_count, candidate_regions[current_path], applicable)
+        owners = old_owned & new_owned
+        if len(owners) != 1:
+            raise InvalidMeasurementClaimLedgerError(f"Task-6 zero-context diff hunk is outside one applicable owned region in {current_path}: {line}")
+        touched.update(owners)
+    missing = set(_MANDATORY_SOURCE_REGIONS) - touched
+    if missing:
+        raise InvalidMeasurementClaimLedgerError(f"Task-6 source diff lacks mandatory owned-region coverage: {sorted(missing)!r}")
+
+
+def validate_task6_source_correction(
+    repository: pathlib.Path,
+    correction_commit: str,
+    *,
+    mc007_disposition: str,
+) -> None:
+    """Prove one committed Task-6 correction changes only its exact prose allowlist."""
+    if mc007_disposition not in _MC007_DISPOSITIONS:
+        raise InvalidMeasurementClaimLedgerError(f"Task-6 MC-007 disposition is invalid for source correction: {mc007_disposition!r}")
+    parent = _commit_parent(repository, correction_commit)
+    _validate_source_diff_entries(repository, correction_commit)
+    baseline_blobs = {path: _source_blob(repository, parent, path) for path in _SOURCE_PATHS}
+    candidate_blobs = {path: _source_blob(repository, correction_commit, path) for path in _SOURCE_PATHS}
+    for path, raw in baseline_blobs.items():
+        observed = hashlib.sha256(raw).hexdigest()
+        expected = _SOURCE_FILE_SHA256[path]
+        if observed != expected:
+            raise InvalidMeasurementClaimLedgerError(f"Task-6 baseline raw source SHA-256 differs for {path}: expected {expected}, got {observed}")
+
+    baseline_regions = {path: _task6_source_region_spans(path, raw) for path, raw in baseline_blobs.items()}
+    candidate_regions = {path: _task6_source_region_spans(path, raw) for path, raw in candidate_blobs.items()}
+    for name, expected in _SOURCE_REGION_SHA256.items():
+        path = _SOURCE_REGION_PATH[name]
+        observed = hashlib.sha256(baseline_regions[path][name]["raw"]).hexdigest()
+        if observed != expected:
+            raise InvalidMeasurementClaimLedgerError(f"Task-6 baseline source-region SHA-256 differs for {name}: expected {expected}, got {observed}")
+
+    for name in _MANDATORY_SOURCE_REGIONS:
+        path = _SOURCE_REGION_PATH[name]
+        if baseline_regions[path][name]["raw"] == candidate_regions[path][name]["raw"]:
+            raise InvalidMeasurementClaimLedgerError(f"Task-6 mandatory source region was not corrected: {name}")
+    floor_path = _SOURCE_REGION_PATH[_FLOOR_SOURCE_REGION]
+    floor_changed = baseline_regions[floor_path][_FLOOR_SOURCE_REGION]["raw"] != candidate_regions[floor_path][_FLOOR_SOURCE_REGION]["raw"]
+    if floor_changed and mc007_disposition != "corrected":
+        raise InvalidMeasurementClaimLedgerError("Task-6 radius-ladder-floor-steps may change only when MC-007 is corrected")
+
+    applicable = frozenset((*_MANDATORY_SOURCE_REGIONS, _FLOOR_SOURCE_REGION)) if mc007_disposition == "corrected" else frozenset(_MANDATORY_SOURCE_REGIONS)
+    for path in _SOURCE_PATHS:
+        normalized_baseline = _normalize_source(baseline_blobs[path], baseline_regions[path], applicable)
+        normalized_candidate = _normalize_source(candidate_blobs[path], candidate_regions[path], applicable)
+        if _source_token_pairs(path, normalized_baseline) != _source_token_pairs(path, normalized_candidate):
+            raise InvalidMeasurementClaimLedgerError(f"Task-6 protected token stream differs outside owned source regions: {path}")
+        if _docstring_stripped_ast_dump(path, baseline_blobs[path]) != _docstring_stripped_ast_dump(path, candidate_blobs[path]):
+            raise InvalidMeasurementClaimLedgerError(f"Task-6 docstring-stripped AST differs in executable source: {path}")
+
+    _validate_source_diff_hunks(
+        repository,
+        parent,
+        correction_commit,
+        baseline_regions,
+        candidate_regions,
+        applicable,
+    )
 
 
 def _decode_frozen_blob(repository: pathlib.Path, path: str) -> str:
@@ -535,6 +900,13 @@ def validate_ledger_evidence(ledger: pathlib.Path, artifact_directories: Sequenc
         raise InvalidMeasurementClaimLedgerError("Task-6 ledger acceptance requires exactly one authenticated artifact")
     rows = validate_ledger_structure(ledger)
     payload, envelope, started, artifact_directory = validate_claim_artifact(artifact_directories[0])
+    mc007 = next(claim for claim in payload["claims"] if claim["claim_id"] == "MC-007")
+    repository = artifact_directories[0].absolute().parent.parent.parent
+    validate_task6_source_correction(
+        repository,
+        str(payload["source_commit"]),
+        mc007_disposition=mc007["disposition"],
+    )
     _validate_task6_ledger_rows(
         rows,
         payload,

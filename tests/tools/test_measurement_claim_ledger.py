@@ -16,6 +16,36 @@ PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[2]
 LEDGER = PROJECT_ROOT / "docs" / "measurement_claims.md"
 FROZEN_COMMIT = "eec665c1df1cd8d1e98dd9dd1001b5984e17a703"
 FROZEN_SCAN_SHA256 = "b78ac690bceda37fdebcdcdeb9731a8b213e7d946a897be45181cb95b1100f66"
+RADIAL_SOURCE = "src/compas_cgal/engagement_radial_toolpath.py"
+ADVANCE_SOURCE = "src/compas_cgal/engagement_toolpath.py"
+SOURCE_FILE_SHA256 = {
+    RADIAL_SOURCE: "4a12b0d8a404a7355271eafb10baa864e33d64411a60ca3195ccf85bd1a19af0",
+    ADVANCE_SOURCE: "6bc5095fd7853949c4c6f32bcfbe7b2d85ffd038b82e6ce8cf6d259e224117cf",
+}
+SOURCE_REGION_BASELINES = (
+    ("radial-module-which-circle", RADIAL_SOURCE, 70, 76, "1ab67dae4cbc8dea240b7f7a572be932eed99022427e7d773bb2442918ec7ccc"),
+    ("radius-ladder-subdivisions", RADIAL_SOURCE, 186, 246, "e3898ee926c10c0dcac29a92d4811aa2f98ef1dc0fa9591b54f5b1e99a769a34"),
+    ("radius-ladder-refinement-margin", RADIAL_SOURCE, 264, 305, "ba810f64945c4da67a1e994b2bab241dbba0bbb3d24241c9430f36178b1d0461"),
+    ("gentlest-rung-peak", RADIAL_SOURCE, 393, 398, "19357c059c7b7f67247485b1613c8b043077ac5be332e16e4b9c8e0bde89b4b5"),
+    ("least-bad-rung-double", RADIAL_SOURCE, 607, 614, "4aeee76e5df523410d1f0adc00d26fd6207d3c2f6b52937f9eceae80d6dfc311"),
+    ("regulation-cap-angle", ADVANCE_SOURCE, 248, 254, "5ecd9cc249e9138e4dc9a7339ae7fd6cf33bc76432fab2c6a756c5347f45ca4a"),
+    ("measured-peak-reporting", ADVANCE_SOURCE, 580, 587, "39fa70015f93d09c420d337aa80dbca94dbfe2dad4b86b72060c9698c5b96680"),
+    ("loop-probe-count", ADVANCE_SOURCE, 109, 161, "a913fa0d7ce1c67304c72c1751e445c702798c6a6a887464f37d93394b6ad2ad"),
+    ("radius-ladder-floor-steps", RADIAL_SOURCE, 249, 261, "a3b0954dde586e1abd2d3399c81c05d70e2eb748c1db247f538b945217ea8128"),
+)
+MANDATORY_SOURCE_REGIONS = tuple(region[0] for region in SOURCE_REGION_BASELINES[:8])
+
+SOURCE_CORRECTIONS = {
+    "radial-module-which-circle": b"WHICH circle is selected by the current reporting-driven policy; it is not an exact cap decision.\n",
+    "radius-ladder-subdivisions": b"# Corrected subdivision evidence is authenticated by the Task-6 artifact.\n",
+    "radius-ladder-refinement-margin": b"# This reporting comparison controls whether the refined scan executes.\n",
+    "gentlest-rung-peak": b"    The peak travels with the rung because current forced-radius selection consumes this reported value.\n",
+    "least-bad-rung-double": b"    Reported engagement ranks refused radii and therefore determines the forced circle emitted.\n",
+    "regulation-cap-angle": b"        cap_angle: Reported cap angle used by the current refinement-control comparison.\n",
+    "measured-peak-reporting": b"    This reporting value participates in forced-radius selection and refined-scan control.\n",
+    "loop-probe-count": b"# Corrected finite-sweep evidence is authenticated by the Task-6 artifact.\n",
+    "radius-ladder-floor-steps": b"# Corrected floor evidence is authenticated by the Task-6 artifact.\n",
+}
 
 OPENING_BLOCK = (
     "# Measurement-claim ledger\n\n> **status: in audit — 0/14 Task-5 extractor rows dispositioned**\n\n- Opened (UTC): `2026-08-28`\n- Programme: coherence Wave 1 backlog A\n\n"
@@ -144,6 +174,243 @@ def _git_show(path: str) -> str:
         capture_output=True,
     )
     return completed.stdout.decode("utf-8")
+
+
+def _git_at(repository: pathlib.Path, *arguments: str, stdin: bytes | None = None) -> bytes:
+    return subprocess.run(
+        ["git", "-C", str(repository), *arguments],
+        check=True,
+        capture_output=True,
+        input=stdin,
+    ).stdout
+
+
+def _commit(repository: pathlib.Path, message: str) -> str:
+    _git_at(repository, "add", "-A")
+    _git_at(
+        repository,
+        "-c",
+        "user.name=Jelle Feringa",
+        "-c",
+        "user.email=jelleferinga@gmail.com",
+        "commit",
+        "-qm",
+        message,
+    )
+    return _git_at(repository, "rev-parse", "HEAD^{commit}").decode("ascii").strip()
+
+
+def _corrected_source_bytes(path: str, baseline: bytes, *, omitted: frozenset[str], correct_floor: bool) -> bytes:
+    lines = baseline.splitlines(keepends=True)
+    regions = [region for region in SOURCE_REGION_BASELINES if region[1] == path]
+    for name, _, start, end, _ in sorted(regions, key=lambda region: region[2], reverse=True):
+        if name in omitted or (name == "radius-ladder-floor-steps" and not correct_floor):
+            continue
+        lines[start - 1 : end] = [SOURCE_CORRECTIONS[name]]
+    return b"".join(lines)
+
+
+def _source_repository(
+    tmp_path: pathlib.Path,
+    *,
+    omitted: frozenset[str] = frozenset(),
+    correct_floor: bool = False,
+    baseline_suffix: bytes = b"",
+    candidate_mutation: str | None = None,
+    extra_path: bool = False,
+    executable_path: bool = False,
+) -> tuple[pathlib.Path, str, str]:
+    repository = tmp_path / "source-repository"
+    repository.mkdir()
+    _git_at(repository, "init", "-q")
+    baseline: dict[str, bytes] = {}
+    for path in SOURCE_FILE_SHA256:
+        raw = _git_at(PROJECT_ROOT, "show", f"{FROZEN_COMMIT}:{path}")
+        if path == RADIAL_SOURCE:
+            raw += baseline_suffix
+        baseline[path] = raw
+        target = repository / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(raw)
+    parent = _commit(repository, "baseline")
+
+    candidate = {path: _corrected_source_bytes(path, raw, omitted=omitted, correct_floor=correct_floor) for path, raw in baseline.items()}
+    if candidate_mutation == "unowned-docstring":
+        candidate[RADIAL_SOURCE] = candidate[RADIAL_SOURCE].replace(
+            b"READ THAT NUMBER PRECISELY:",
+            b"READ THIS NUMBER PRECISELY:",
+            1,
+        )
+    elif candidate_mutation == "executable":
+        candidate[RADIAL_SOURCE] = candidate[RADIAL_SOURCE].replace(
+            b"FULL_RADIUS_RUNG = 0\n",
+            b"FULL_RADIUS_RUNG = 1\n",
+            1,
+        )
+    elif candidate_mutation == "whitespace":
+        candidate[RADIAL_SOURCE] = candidate[RADIAL_SOURCE].replace(
+            b"FULL_RADIUS_RUNG = 0\n",
+            b"FULL_RADIUS_RUNG = 0  \n",
+            1,
+        )
+    for path, raw in candidate.items():
+        (repository / path).write_bytes(raw)
+    if extra_path:
+        (repository / "unexpected.txt").write_text("not source correction\n", encoding="utf-8")
+    _git_at(repository, "add", "-A")
+    if executable_path:
+        _git_at(repository, "update-index", "--chmod=+x", RADIAL_SOURCE)
+    _git_at(
+        repository,
+        "-c",
+        "user.name=Jelle Feringa",
+        "-c",
+        "user.email=jelleferinga@gmail.com",
+        "commit",
+        "-qm",
+        "correction",
+    )
+    correction = _git_at(repository, "rev-parse", "HEAD^{commit}").decode("ascii").strip()
+    return repository, parent, correction
+
+
+def _merge_commit(repository: pathlib.Path, correction: str, parent: str) -> str:
+    tree = _git_at(repository, "show", "-s", "--format=%T", correction).decode("ascii").strip()
+    return (
+        _git_at(
+            repository,
+            "-c",
+            "user.name=Jelle Feringa",
+            "-c",
+            "user.email=jelleferinga@gmail.com",
+            "commit-tree",
+            tree,
+            "-p",
+            correction,
+            "-p",
+            parent,
+            stdin=b"merge\n",
+        )
+        .decode("ascii")
+        .strip()
+    )
+
+
+def test_task6_source_baseline_pins_two_blobs_and_all_nine_regions() -> None:
+    module = _module()
+    observed_regions: dict[str, str] = {}
+    for path, expected in SOURCE_FILE_SHA256.items():
+        raw = _git_at(PROJECT_ROOT, "show", f"{FROZEN_COMMIT}:{path}")
+        assert hashlib.sha256(raw).hexdigest() == expected
+        regions = module._task6_source_regions(path, raw)
+        observed_regions.update({name: hashlib.sha256(region).hexdigest() for name, region in regions.items()})
+
+    assert observed_regions == {name: digest for name, _, _, _, digest in SOURCE_REGION_BASELINES}
+
+
+def test_task6_source_gate_accepts_exact_eight_region_correction(tmp_path: pathlib.Path) -> None:
+    module = _module()
+    repository, _, correction = _source_repository(tmp_path)
+
+    assert module.validate_task6_source_correction(repository, correction, mc007_disposition="historical") is None
+
+
+@pytest.mark.parametrize("omitted", MANDATORY_SOURCE_REGIONS)
+def test_task6_source_gate_requires_every_mandatory_region(tmp_path: pathlib.Path, omitted: str) -> None:
+    module = _module()
+    repository, _, correction = _source_repository(tmp_path, omitted=frozenset({omitted}))
+
+    with pytest.raises(module.InvalidMeasurementClaimLedgerError, match=omitted):
+        module.validate_task6_source_correction(repository, correction, mc007_disposition="historical")
+
+
+@pytest.mark.parametrize("disposition", ["re-earned", "historical"])
+def test_task6_source_gate_forbids_floor_comment_without_corrected_disposition(tmp_path: pathlib.Path, disposition: str) -> None:
+    module = _module()
+    repository, _, correction = _source_repository(tmp_path, correct_floor=True)
+
+    with pytest.raises(module.InvalidMeasurementClaimLedgerError, match="floor|MC-007"):
+        module.validate_task6_source_correction(repository, correction, mc007_disposition=disposition)
+
+
+def test_task6_source_gate_allows_floor_comment_for_corrected_disposition(tmp_path: pathlib.Path) -> None:
+    module = _module()
+    repository, _, correction = _source_repository(tmp_path, correct_floor=True)
+
+    assert module.validate_task6_source_correction(repository, correction, mc007_disposition="corrected") is None
+
+
+def test_task6_source_gate_does_not_require_floor_comment_for_corrected_disposition(tmp_path: pathlib.Path) -> None:
+    module = _module()
+    repository, _, correction = _source_repository(tmp_path)
+
+    assert module.validate_task6_source_correction(repository, correction, mc007_disposition="corrected") is None
+
+
+def test_task6_source_gate_rejects_baseline_blob_drift_before_candidate_analysis(tmp_path: pathlib.Path) -> None:
+    module = _module()
+    repository, _, correction = _source_repository(tmp_path, baseline_suffix=b"# baseline drift\n")
+
+    with pytest.raises(module.InvalidMeasurementClaimLedgerError, match="baseline.*SHA-256|raw source"):
+        module.validate_task6_source_correction(repository, correction, mc007_disposition="historical")
+
+
+def test_task6_source_gate_protects_unowned_prose_in_same_docstring(tmp_path: pathlib.Path) -> None:
+    module = _module()
+    repository, _, correction = _source_repository(tmp_path, candidate_mutation="unowned-docstring")
+
+    with pytest.raises(module.InvalidMeasurementClaimLedgerError, match="token|unowned"):
+        module.validate_task6_source_correction(repository, correction, mc007_disposition="historical")
+
+
+def test_task6_docstring_stripped_ast_keeps_executable_semantics() -> None:
+    module = _module()
+    baseline = _git_at(PROJECT_ROOT, "show", f"{FROZEN_COMMIT}:{RADIAL_SOURCE}")
+    docstring_only = baseline.replace(b"READ THAT NUMBER PRECISELY:", b"READ THIS NUMBER PRECISELY:", 1)
+    executable = baseline.replace(b"FULL_RADIUS_RUNG = 0\n", b"FULL_RADIUS_RUNG = 1\n", 1)
+
+    baseline_dump = module._docstring_stripped_ast_dump(RADIAL_SOURCE, baseline)
+    assert module._docstring_stripped_ast_dump(RADIAL_SOURCE, docstring_only) == baseline_dump
+    assert module._docstring_stripped_ast_dump(RADIAL_SOURCE, executable) != baseline_dump
+
+
+def test_task6_source_gate_rejects_executable_change(tmp_path: pathlib.Path) -> None:
+    module = _module()
+    repository, _, correction = _source_repository(tmp_path, candidate_mutation="executable")
+
+    with pytest.raises(module.InvalidMeasurementClaimLedgerError, match="token|AST|executable"):
+        module.validate_task6_source_correction(repository, correction, mc007_disposition="historical")
+
+
+def test_task6_source_gate_diff_rejects_token_and_ast_invisible_change(tmp_path: pathlib.Path) -> None:
+    module = _module()
+    repository, _, correction = _source_repository(tmp_path, candidate_mutation="whitespace")
+
+    with pytest.raises(module.InvalidMeasurementClaimLedgerError, match="diff|hunk|allowlist"):
+        module.validate_task6_source_correction(repository, correction, mc007_disposition="historical")
+
+
+@pytest.mark.parametrize("damage", ["extra-path", "mode-change"])
+def test_task6_source_gate_requires_exactly_two_ordinary_modified_paths(tmp_path: pathlib.Path, damage: str) -> None:
+    module = _module()
+    repository, _, correction = _source_repository(
+        tmp_path,
+        extra_path=damage == "extra-path",
+        executable_path=damage == "mode-change",
+    )
+
+    with pytest.raises(module.InvalidMeasurementClaimLedgerError, match="two ordinary|path|mode"):
+        module.validate_task6_source_correction(repository, correction, mc007_disposition="historical")
+
+
+def test_task6_source_gate_rejects_zero_and_multiple_parent_commits(tmp_path: pathlib.Path) -> None:
+    module = _module()
+    repository, parent, correction = _source_repository(tmp_path)
+    merge = _merge_commit(repository, correction, parent)
+
+    for commit in (parent, merge):
+        with pytest.raises(module.InvalidMeasurementClaimLedgerError, match="exactly one parent"):
+            module.validate_task6_source_correction(repository, commit, mc007_disposition="historical")
 
 
 SOURCE_COMMIT = "a" * 40
@@ -319,11 +586,28 @@ def test_public_task6_ledger_consumer_owns_structure_and_artifact_authentication
         calls.append(("artifact", candidate))
         return payload, envelope, STARTED, ARTIFACT_DIRECTORY
 
+    def validate_source(
+        repository: pathlib.Path,
+        correction_commit: str,
+        *,
+        mc007_disposition: str,
+    ) -> None:
+        assert repository == tmp_path
+        assert correction_commit == SOURCE_COMMIT
+        assert mc007_disposition == "corrected"
+        calls.append(("source", repository))
+
+    def compare_rows(*values: Any, **named: Any) -> None:
+        del values, named
+        calls.append(("rows", ledger))
+
     monkeypatch.setattr(module, "validate_ledger_structure", validate_structure)
     monkeypatch.setattr(module, "validate_claim_artifact", validate_artifact)
+    monkeypatch.setattr(module, "validate_task6_source_correction", validate_source)
+    monkeypatch.setattr(module, "_validate_task6_ledger_rows", compare_rows)
 
     assert module.validate_ledger_evidence(ledger, [artifact]) is None
-    assert calls == [("ledger", ledger), ("artifact", artifact)]
+    assert calls == [("ledger", ledger), ("artifact", artifact), ("source", tmp_path), ("rows", ledger)]
 
 
 @pytest.mark.parametrize("artifact_count", [0, 2])
@@ -397,6 +681,41 @@ def test_public_task6_ledger_consumer_does_not_compare_unauthenticated_artifact(
     with pytest.raises(result_module.InvalidMeasurementClaimPayloadError, match="unauthenticated"):
         module.validate_ledger_evidence(tmp_path / "measurement_claims.md", [artifact])
     assert artifact_calls == [artifact]
+    assert comparator_calls == []
+
+
+def test_public_task6_ledger_consumer_does_not_compare_source_unverified_artifact(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: pathlib.Path,
+) -> None:
+    module = _module()
+    payload = _claim_payload()
+    _trust_payload_validator(monkeypatch, module)
+    source_calls: list[tuple[pathlib.Path, str, str]] = []
+    comparator_calls: list[tuple[Any, ...]] = []
+    ledger = tmp_path / "docs" / "measurement_claims.md"
+    artifact = tmp_path / "benchmarks" / "measurement_claim_results" / ARTIFACT_DIRECTORY.name
+    monkeypatch.setattr(module, "validate_ledger_structure", lambda candidate: ())
+    monkeypatch.setattr(
+        module,
+        "validate_claim_artifact",
+        lambda candidate: (payload, _envelope(), STARTED, ARTIFACT_DIRECTORY),
+    )
+
+    def reject_source(repository: pathlib.Path, correction_commit: str, *, mc007_disposition: str) -> None:
+        source_calls.append((repository, correction_commit, mc007_disposition))
+        raise module.InvalidMeasurementClaimLedgerError("source unverified")
+
+    def compare(*values: Any, **named: Any) -> None:
+        comparator_calls.append((*values, named))
+
+    monkeypatch.setattr(module, "validate_task6_source_correction", reject_source)
+    monkeypatch.setattr(module, "_validate_task6_ledger_rows", compare)
+
+    with pytest.raises(module.InvalidMeasurementClaimLedgerError, match="source unverified"):
+        module.validate_ledger_evidence(ledger, [artifact])
+
+    assert source_calls == [(tmp_path, SOURCE_COMMIT, "corrected")]
     assert comparator_calls == []
 
 
