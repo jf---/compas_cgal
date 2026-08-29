@@ -295,6 +295,25 @@ def test_build_envelope_uses_specified_canonical_sha256_bytes(tmp_path: pathlib.
     assert envelope["result_identity"]["sha256"] == digest(result_body)
 
 
+def test_precomputed_input_digest_equals_envelope_identity(tmp_path: pathlib.Path) -> None:
+    module = _module()
+    source = module.SourceSnapshot.build(repository=tmp_path.resolve(), commit=COMMIT_40, pixi_lock_sha256=DIGEST)
+    payload = {"source": COMMIT_40, "semantic_command": ["-m", "benchmarks.cli", "figure6"]}
+    expected = module.input_identity_sha256(version=module.IdentityVersion("benchmark-input/v1"), payload=payload)
+    envelope = module.build_envelope(
+        artifact_kind=module.ArtifactKind("benchmark/v1"),
+        source=source,
+        started=datetime.datetime(2026, 8, 28, 12, 0, tzinfo=UTC),
+        finished=datetime.datetime(2026, 8, 28, 12, 0, 1, tzinfo=UTC),
+        argv=("python", "-m", "benchmarks.cli", "figure6"),
+        input_version=module.IdentityVersion("benchmark-input/v1"),
+        input_payload=payload,
+        result_version=module.IdentityVersion("benchmark-result/v1"),
+        payloads={"result.json": b"{}\n"},
+    )
+    assert envelope["input_identity"]["sha256"] == expected
+
+
 def test_build_envelope_rejects_nan_input(tmp_path: pathlib.Path) -> None:
     module = _module()
     source = module.SourceSnapshot.build(repository=tmp_path.resolve(), commit=COMMIT_40, pixi_lock_sha256=DIGEST)

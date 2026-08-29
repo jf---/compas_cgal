@@ -211,6 +211,7 @@ def test_payload_round_trips_through_json() -> None:
     assert payload["points"][0]["length_ratio"] == pytest.approx(0.75)
     assert payload["points"][1]["mathsm_length"] is None
     assert payload["pocket"]["name"] == run.spec.name
+    assert payload["pocket"]["holes"] == []
     assert len(payload["spacing_trials"]) == 1
 
 
@@ -219,6 +220,8 @@ def test_write_figure6_emits_both_artifacts(tmp_path) -> None:
     assert md_path.exists() and json_path.exists()
     assert "| cap (deg) |" in md_path.read_text()
     assert json.loads(json_path.read_text())["points"][0]["cap_deg"] == 120.0
+    assert md_path.read_text(encoding="utf-8").startswith("# Figure 6 reproduction")
+    assert json.loads(json_path.read_text(encoding="utf-8"))["pocket"]["holes"] == []
 
 
 def test_run_figure6_carries_its_own_trials_for_the_report() -> None:
