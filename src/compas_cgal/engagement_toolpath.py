@@ -106,59 +106,38 @@ GUIDE_STEP_TOOL_DIAMETERS = 0.025
 # the unregulated generator leaves at a comparable stepover.
 MAX_ADVANCE_TOOL_DIAMETERS = 1.0
 
-# Tool-centre positions evaluated on a candidate machining circle, spaced
-# uniformly around the loop from the ADVANCE direction (previous accepted centre
-# -> candidate centre). With the loop's entry point these are the
-# K = LOOP_PROBE_COUNT + 1 evaluated positions per candidate.
+# Angles evaluated around a candidate machining circle, uniformly spaced from
+# the advance direction. `_probe_positions` separately prepends the circle's
+# entry point, so a configured ring of K angles produces K + 1 generator
+# positions.
 #
-# THE DERIVATION THIS REPLACES WAS FALSIFIED, and the falsification is recorded
-# here rather than quietly dropped. Until 2026-08-21 the probes were the triple
-# (-60, 0, +60) deg, justified by the steady-regime idealisation in which the
-# material a new loop meets is a crescent at its forward rim of radial thickness
-# ~a*cos(phi): engagement peaks at phi = 0, and "the backward half lies inside
-# the union of the preceding loops' swept annuli". The second half of that claim
-# is FALSE. Measured on a 20x12 pocket, 2 mm tool, by walking every machining
-# circle the generator ACCEPTED at 32 tool-centre positions on the same depleting
-# stock: at an 80 deg cap all 120 over-cap positions lie between -30 and -150 deg
-# from the advance direction and NONE lies at 0, +30, +60, +90 or +120; at a
-# 100 deg cap all 24 do. On the worst accepted circle at an 80 deg cap the peak is
-# 101.7 deg at -135 deg from the advance -- and re-measuring the OLD three probes
-# against that same stock returns 39.1 deg, so the gap was probe PLACEMENT, not a
-# difference between the generation and audit depletion models. The forward peak
-# is real (54 of 90 circles peak at phi = 0); it is simply not where the cap is
-# broken.
+# Uniform placement avoids assuming that the most heavily loaded side is the
+# forward half of the loop. The authenticated Task-6 placement case evaluates
+# the historical three-angle configuration with its separately prepended entry
+# probe, then audits selected non-forced circles with an independent
+# 32-position advance-phased ring on exact pre-bridge stock. Its finite results
+# and winding split belong to the claim artifact; this comment does not infer
+# omitted sector or forward-peak histograms.
 #
-# WHY UNIFORM AND NEVER ONE-SIDED. The loaded quadrant is the TRAILING-lateral
-# one, on the side fixed by the loop's turn direction, and it mirrors exactly with
-# the milling direction: the same pocket and cap that puts 4/16/52/36/12 over-cap
-# positions in the (-30,-60,-90,-120,-150) bins under climb milling puts
-# 12/36/52/16/4 in the (+150,+120,+90,+60,+30) bins under conventional. Any
-# placement biased to one side is therefore tuned to one winding and blind on the
-# other, which is a worse failure than the one being fixed. A uniform ring is the
-# only winding-agnostic placement, and it needs no empirical tuning to stay
-# correct when the guide curves or the clearance grows.
+# The shipped count is an empirical sampling density, not a continuous
+# engagement certificate. The authenticated count sweep evaluates the
+# historical three-angle configuration and uniform rings of 8, 12, 16, 24, 32,
+# 40 and 48 angles. Each generator configuration still receives its separate
+# entry probe. The independent audit uses exactly 60 half-step-offset positions,
+# excludes entry, and records sampled native verdicts and reported peaks on
+# selected non-forced pre-bridge stock.
 #
-# WHY THIS COUNT: MEASURED CONVERGENCE, NOT A DERIVATION. There is a geometric
-# floor -- consecutive evaluated positions are a chord 2*R*sin(pi/K) apart, so
-# their tool disks only overlap at all while that chord stays under 2*r, which on
-# the largest loops in this corpus (R = 4.998, r = 1.0) needs K >= 16 -- but the
-# measurement says the floor is not enough, so the shipped value is the measured
-# one. Worst engagement an INDEPENDENT 60-position walk (phase-offset by half a
-# step, so it shares no grid with the probes) finds on ACCEPTED circles, 20x12,
-# 2 mm tool:
+# That finite sweep measures engagement observations only. It performs no
+# timing measurement and supports no relative-cost percentage; in particular,
+# this source makes no "24% more" claim and quotes no generation times.
+# Increasing the count narrows the unsampled angular gap but does not close it
+# or bound engagement between evaluated positions.
 #
-#   K       3(old)   8     12    16    24    32    40    48
-#   cap 40   86.7  71.7  55.3  57.8  49.3  43.4  43.4  43.7
-#   cap 80  101.7  99.2  87.3  88.6  82.8  81.7  82.2  82.4
-#
-# The last count at which either column moves is 32; 40 and 48 buy nothing and
-# cost 24% more. Generation on that pocket goes 1.35 s -> 5.54 s at a 40 deg cap
-# and 0.19 s -> 0.39 s at a 120 deg cap.
-#
-# WHAT THIS DOES NOT DO. Raising the density NARROWS the sampling gap; it does
-# not close it. Nothing here bounds engagement between two evaluated positions,
-# and the residue is measurable: at a 40 deg cap on that pocket the independent
-# walk still finds 43.4 deg on a circle every probe accepted.
+# `engagement_at(...)[2]` remains the native sampled cap verdict. In the radial
+# generator, the reporting value at index 1 also reaches two disclosed decision
+# sites: `_least_bad_rung` uses it for forced-radius selection, and
+# `_largest_admissible_radius` uses the carried `_GentlestRung.peak` for
+# refined-scan control.
 LOOP_PROBE_COUNT = 32
 
 # The probe angles themselves, in degrees from the advance direction. Derived
@@ -245,13 +224,15 @@ class _Regulation:
     Attributes:
         cap_ratio: The exact rational cap surrogate ``4*sin^2(theta/2)`` from
             `_cap_surrogate` -- the only form of the cap that reaches a predicate.
-        cap_angle: The caller's cap in radians. REPORTING ONLY, and named apart
-            from `cap_ratio` so the two can never be confused: no predicate takes
-            it and no emission is gated on it. It exists so that a REPORTED
-            engagement can be described relative to the cap the caller asked for
-            -- in a message, or where a search decides how hard to keep looking --
-            which is a comparison between two doubles and must never be mistaken
-            for the exact verdict `cap_ratio` carries.
+        cap_angle: The caller's cap in radians, represented as a double and kept
+            distinct from `cap_ratio`. It is not reporting-only in the radial
+            generator: `_largest_admissible_radius` compares it with
+            `_GentlestRung.peak` and `RADIUS_LADDER_REFINEMENT_MARGIN` to decide
+            whether the refined scan runs. That control decision can change the
+            emitted radius. The sampled cap verdict itself remains the native
+            boolean derived from `cap_ratio`; keeping the fields distinct prevents
+            confusion but does not make the current reporting-angle control path
+            exact.
         tool_radius: Tool radius in model units.
         guide_step: Guide station spacing in model units.
         radial_clearance: Safety clearance subtracted from each available radius.
@@ -577,14 +558,19 @@ def _station_is_admissible(stock: Stock, station: _GuideStation, advance: tuple[
 def _measured_peak_engagement(stock: Stock, station: _GuideStation, advance: tuple[float, float], tool_radius: float, cap_ratio: float) -> float:
     """Largest engaged-run angle REPORTED over this machining circle's evaluated positions.
 
-    REPORTING, NOT DECIDING (`docs/exactness.md`, the deciding/reporting split).
-    `_station_is_admissible` is the decision -- an exact per-run predicate that
-    short-circuits at the first refusing position and never yields a number. This
-    function yields a NUMBER: the reported ``max_run_tea`` double, maximised over
-    the whole probe ring. It exists so that candidates the exact predicate has
-    ALREADY REFUSED can be ranked against one another, which is the only thing a
-    reported double is allowed to influence. It must never gate an emission, and
-    no caller may compare it against the cap.
+    REPORTING VALUE WITH DECISION CONSUMERS IN THE RADIAL GENERATOR.
+    `_station_is_admissible` obtains sampled acceptance from the native
+    `cap_exceeded` boolean at `engagement_at(...)[2]`. This function instead reads
+    the reported `max_run_tea` double at index 1 and discards that verdict.
+
+    The radial generator currently consumes the reported value at two decision
+    sites: `_least_bad_rung` uses it to select which refused radius is emitted,
+    and `_largest_admissible_radius` compares the carried `_GentlestRung.peak`
+    with `regulation.cap_angle` to decide whether the refined scan runs. The first
+    changes forced-radius selection; the second controls a search that can change
+    the emitted result. This function therefore remains a reporting-value
+    producer, but its current radial consumers do not provide complete
+    deciding/reporting separation.
 
     The whole ring is evaluated -- no short circuit -- because a partial maximum is
     a maximum over however many positions happened to be visited before the first
