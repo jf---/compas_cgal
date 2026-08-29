@@ -9,6 +9,7 @@ import io
 import json
 import pathlib
 import re
+import shlex
 import subprocess
 import tokenize
 from typing import Dict
@@ -197,14 +198,14 @@ class InvalidMeasurementClaimLedgerError(RuntimeError):
 
 
 def _git(repository: pathlib.Path, *arguments: str) -> bytes:
-    command = ["git", "-C", str(repository), *arguments]
+    command = ["git", "--no-replace-objects", "-C", str(repository), *arguments]
     try:
         completed = subprocess.run(command, check=False, capture_output=True)
     except OSError as exc:
-        raise InvalidMeasurementClaimLedgerError(f"Git invocation failed in frozen-ledger repository {repository}: {' '.join(arguments)}") from exc
+        raise InvalidMeasurementClaimLedgerError(f"Git command could not start: {shlex.join(command)}") from exc
     if completed.returncode != 0:
         detail = completed.stderr.decode("utf-8", errors="replace").strip()
-        raise InvalidMeasurementClaimLedgerError(f"Git could not read frozen ledger source {FROZEN_SOURCE_COMMIT}: {' '.join(arguments)}: {detail}")
+        raise InvalidMeasurementClaimLedgerError(f"Git command failed ({completed.returncode}): {shlex.join(command)}: {detail}")
     return completed.stdout
 
 
