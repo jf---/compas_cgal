@@ -21,6 +21,7 @@ import pytest
 UTC = datetime.timezone.utc
 EXTRACTION_COMMIT = "eec665c1df1cd8d1e98dd9dd1001b5984e17a703"
 HISTORY_COMMIT = "29050b01e656ea7bf577b18f7bb50a04ff9a23c9"
+SOURCE_CORRECTION_COMMIT = "53135e04390e84bf69aa74dc4d0c1ce6ca308eb4"
 CASE_ORDER = [
     "radial-station",
     "radial-subdivisions",
@@ -358,16 +359,16 @@ def _payload(source_commit: str) -> dict[str, object]:
         {
             "claim_id": "MC-001",
             "case": "radial-station",
-            "disposition": "historical",
-            "reason": "station measured",
+            "disposition": "re-earned",
+            "reason": "frozen station occurrence matches",
             "selection_decision_provenance": radial,
             "evidence": {"occurrence_count": 1, "station_centre": [18.482, 10.482], "maximal_radius": 0.5156, "length_unit": "mm"},
         },
         {
             "claim_id": "MC-002",
             "case": "radial-station",
-            "disposition": "historical",
-            "reason": "coarse rungs measured",
+            "disposition": "re-earned",
+            "reason": "frozen coarse-rung assertions match",
             "selection_decision_provenance": radial,
             "evidence": {
                 "coarse_step": 0.05,
@@ -384,10 +385,13 @@ def _payload(source_commit: str) -> dict[str, object]:
         {
             "claim_id": "MC-003",
             "case": "radial-station",
-            "disposition": "historical",
-            "reason": "refined band measured",
+            "disposition": "re-earned",
+            "reason": "frozen rung-7 and refined-band assertions match",
             "selection_decision_provenance": radial,
             "evidence": {
+                "rung_7_radius": 0.1656,
+                "rung_7_peak": 5.9,
+                "rung_7_cuts_material": False,
                 "refined_band_min_radius": 0.1719,
                 "refined_band_max_radius": 0.2123,
                 "forced_peak": 107.0,
@@ -399,16 +403,16 @@ def _payload(source_commit: str) -> dict[str, object]:
         {
             "claim_id": "MC-004",
             "case": "radial-subdivisions",
-            "disposition": "historical",
-            "reason": "audit phase recorded",
+            "disposition": "corrected",
+            "reason": "entry-phased audit statement corrected",
             "selection_decision_provenance": radial,
             "evidence": {"audit_position_count": 16, "audit_phase": "entry-angle", "includes_entry_phase": True, "adds_separate_entry_probe": False},
         },
         {
             "claim_id": "MC-005",
             "case": "radial-subdivisions",
-            "disposition": "historical",
-            "reason": "subdivision rows recorded",
+            "disposition": "re-earned",
+            "reason": "frozen subdivision table matches",
             "selection_decision_provenance": radial,
             "evidence": {"non_entry_circle_count": 244, "rows": subdivision_reporting},
         },
@@ -416,48 +420,49 @@ def _payload(source_commit: str) -> dict[str, object]:
             "claim_id": "MC-006",
             "case": "radial-subdivisions",
             "disposition": "historical",
-            "reason": "configuration absent",
+            "reason": "configuration absent in history",
             "selection_decision_provenance": radial,
             "evidence": {"history_commit": HISTORY_COMMIT, "missing_configuration": "refinement-without-reporting-ranking"},
         },
         {
             "claim_id": "MC-007",
             "case": "radial-floor",
-            "disposition": "historical",
-            "reason": "floor rows recorded",
+            "disposition": "re-earned",
+            "reason": "frozen floor counts match",
             "selection_decision_provenance": radial,
             "evidence": {"audit_position_count": 16, "rows": floor_reporting},
         },
         {
             "claim_id": "MC-008",
             "case": "radial-margin",
-            "disposition": "historical",
-            "reason": "margin claims corrected",
+            "disposition": "corrected",
+            "reason": "finite sweep corrects open-ended claim",
             "selection_decision_provenance": radial,
             "evidence": {"rows": margin_reporting, "baseline_available": False, "open_ended_gate_claim_removed": True, "reporting_selection_disclosed": True},
         },
         {
             "claim_id": "MC-009",
             "case": "advance-placement",
-            "disposition": "historical",
-            "reason": "placement rows recorded",
+            "disposition": "corrected",
+            "reason": "sector tie policy and omitted forward-peak histogram prevent whole-row re-earning",
             "selection_decision_provenance": advance,
             "evidence": {"selected_circle_count": 4, "audit_position_count": 32, "rows": placement_reporting},
         },
         {
             "claim_id": "MC-010",
             "case": "advance-probe-count",
-            "disposition": "historical",
-            "reason": "unsupported costs removed",
+            "disposition": "corrected",
+            "reason": "unsupported cost claims removed",
             "selection_decision_provenance": advance,
             "evidence": {"audit_position_count": 60, "rows": count_reporting, "timing_claim_removed": True, "relative_cost_claim_removed": True},
         },
     ]
     return {
-        "schema_version": "measurement-claim-payload/v1",
+        "schema_version": "measurement-claim-payload/v2",
         "batch": "generator",
         "extraction_commit": EXTRACTION_COMMIT,
         "source_commit": source_commit,
+        "source_correction_commit": SOURCE_CORRECTION_COMMIT,
         "case_order": CASE_ORDER,
         "cases": cases,
         "claims": claims,
@@ -469,6 +474,7 @@ def _input_payload(payload: dict[str, object]) -> dict[str, object]:
     assert type(cases) is list
     return {
         "extraction_commit": payload["extraction_commit"],
+        "source_correction_commit": payload["source_correction_commit"],
         "case_order": payload["case_order"],
         "case_inputs": [
             {
@@ -546,8 +552,8 @@ def _write_artifact(
     payload_transform: Optional[Callable[[bytes], bytes]] = None,
     input_transform: Optional[Callable[[dict[str, object]], dict[str, object]]] = None,
     argv: Optional[tuple[str, ...]] = None,
-    input_version: str = "generator-measurement-claim-input/v1",
-    result_version: str = "generator-measurement-claim-result/v1",
+    input_version: str = "generator-measurement-claim-input/v2",
+    result_version: str = "generator-measurement-claim-result/v2",
     stamp_transform: Optional[Callable[[bytes], bytes]] = None,
 ) -> tuple[pathlib.Path, pathlib.PurePosixPath, dict[str, object]]:
     artifact = _artifact()
@@ -561,7 +567,7 @@ def _write_artifact(
         semantic_input = input_transform(semantic_input)
     started = datetime.datetime(2026, 8, 28, 23, 59, 59, 123456, tzinfo=UTC)
     envelope = artifact.build_envelope(
-        artifact_kind=artifact.ArtifactKind("generator-measurement-claims/v1"),
+        artifact_kind=artifact.ArtifactKind("generator-measurement-claims/v2"),
         source=_source(repository, commit),
         started=started,
         finished=started + datetime.timedelta(seconds=2),
@@ -591,11 +597,142 @@ def test_measurement_claim_result_module_exists() -> None:
 
 def test_claim_artifact_identity_constants_are_single_source() -> None:
     module = _claims()
-    assert module.ARTIFACT_KIND == "generator-measurement-claims/v1"
-    assert module.INPUT_VERSION == "generator-measurement-claim-input/v1"
-    assert module.RESULT_VERSION == "generator-measurement-claim-result/v1"
+    assert module.ARTIFACT_KIND == "generator-measurement-claims/v2"
+    assert module.INPUT_VERSION == "generator-measurement-claim-input/v2"
+    assert module.RESULT_VERSION == "generator-measurement-claim-result/v2"
     assert module.PAYLOAD_NAME == "generator-claims.json"
     assert module.EXTRACTION_COMMIT == EXTRACTION_COMMIT
+
+
+def test_semantic_repair_uses_exact_v2_identity_contract() -> None:
+    module = _claims()
+    payload = module.compose_generator_payload(_artifact().GitObjectId("a" * 40), _typed_cases("a" * 40))
+
+    assert module.ARTIFACT_KIND == "generator-measurement-claims/v2"
+    assert module.INPUT_VERSION == "generator-measurement-claim-input/v2"
+    assert module.RESULT_VERSION == "generator-measurement-claim-result/v2"
+    assert set(payload) == {
+        "schema_version",
+        "batch",
+        "extraction_commit",
+        "source_commit",
+        "source_correction_commit",
+        "case_order",
+        "cases",
+        "claims",
+    }
+    assert payload["schema_version"] == "measurement-claim-payload/v2"
+    assert payload["source_commit"] == "a" * 40
+    assert payload["source_correction_commit"] == SOURCE_CORRECTION_COMMIT
+    semantic_input = module.generator_semantic_input(payload)
+    assert semantic_input["source_correction_commit"] == SOURCE_CORRECTION_COMMIT
+    assert set(semantic_input) == {"extraction_commit", "source_correction_commit", "case_order", "case_inputs"}
+
+    with pytest.raises(module.InvalidMeasurementClaimPayloadError, match="distinct.*correction"):
+        module.compose_generator_payload(_artifact().GitObjectId(SOURCE_CORRECTION_COMMIT), _typed_cases("a" * 40))
+
+
+def test_semantic_repair_rejects_v1_payload_and_wrong_correction_identity() -> None:
+    composed = _claims().compose_generator_payload(_artifact().GitObjectId("a" * 40), _typed_cases("a" * 40))
+    payload = json.loads(json.dumps(composed, allow_nan=False))
+    assert _claims().validate_generator_payload(payload) == payload
+
+    v1 = copy.deepcopy(payload)
+    v1["schema_version"] = "measurement-claim-payload/v1"
+    with pytest.raises(_claims().InvalidMeasurementClaimPayloadError, match="schema_version"):
+        _claims().validate_generator_payload(v1)
+
+    wrong_correction = copy.deepcopy(payload)
+    wrong_correction["source_correction_commit"] = "b" * 40
+    with pytest.raises(_claims().InvalidMeasurementClaimPayloadError, match="source_correction_commit"):
+        _claims().validate_generator_payload(wrong_correction)
+
+
+def _station_dispositions(cases: list[Any]) -> list[str]:
+    payload = _claims().compose_generator_payload(_artifact().GitObjectId("a" * 40), cases)
+    return [claim["disposition"] for claim in payload["claims"][:3]]
+
+
+def test_semantic_repair_adjudicates_authenticated_station_rows_independently() -> None:
+    cases = _typed_cases("a" * 40)
+    station = cases[0]
+    station["reporting_values"].update(
+        rung_6_peak=63.7,
+        rung_7_peak=40.2,
+        refined_band_min_radius=0.1156,
+        refined_band_max_radius=0.1844,
+        forced_peak=105.7,
+        rescued_peak=40.2,
+    )
+    station["native_sampled_decisions"]["rung_7_cuts_material"] = True
+
+    payload = _claims().compose_generator_payload(_artifact().GitObjectId("a" * 40), cases)
+    assert [claim["disposition"] for claim in payload["claims"][:3]] == ["re-earned", "corrected", "corrected"]
+    assert payload["claims"][2]["evidence"] == {
+        "rung_7_radius": 0.1656,
+        "rung_7_peak": 40.2,
+        "rung_7_cuts_material": True,
+        "refined_band_min_radius": 0.1156,
+        "refined_band_max_radius": 0.1844,
+        "forced_peak": 105.7,
+        "rescued_peak": 40.2,
+        "angle_unit": "degree",
+        "length_unit": "mm",
+    }
+
+
+def test_semantic_repair_json_round_trip_and_full_canonical_renderer_cell() -> None:
+    result_module = _claims()
+    ledger_module = importlib.import_module("tools.measurement_claim_ledger")
+    composed = result_module.compose_generator_payload(_artifact().GitObjectId("a" * 40), _typed_cases("a" * 40))
+    decoded = json.loads(json.dumps(composed, allow_nan=False))
+    validated = result_module.validate_generator_payload(decoded)
+    started = datetime.datetime(2026, 8, 29, 9, 15, 30, 123456, tzinfo=UTC)
+    envelope = _artifact().ValidatedEnvelope.build(
+        finished=started + datetime.timedelta(seconds=1),
+        commit="a" * 40,
+        input_sha256="b" * 64,
+        result_sha256="c" * 64,
+        payload_sha256={"generator-claims.json": "d" * 64},
+    )
+    directory = result_module.ValidatedArtifactDirectory(pathlib.PurePosixPath("benchmarks/measurement_claim_results/2026-08-29-aaaaaaaaaaaa-generator-bbbbbbbbbbbb"))
+    rendered = ledger_module.render_ledger_evidence(
+        validated,
+        envelope,
+        started=result_module.ValidatedArtifactStartedUtc(started),
+        artifact_directory=directory,
+    )
+    claim = validated["claims"][0]
+    case = validated["cases"][0]
+
+    def canonical(value: object) -> str:
+        return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False)
+
+    assert rendered["MC-001"] == (
+        f"artifact={directory}; claim=MC-001; input={'b' * 64}; result={'c' * 64}; source={'a' * 40}; "
+        f"source_correction={SOURCE_CORRECTION_COMMIT}; case=radial-station; disposition=re-earned; "
+        f"reason=frozen station occurrence matches; config={canonical(case['config'])}; evidence={canonical(claim['evidence'])}; "
+        f"selection={canonical(claim['selection_decision_provenance'])}; continuous_certificate=null"
+    )
+
+
+@pytest.mark.parametrize(
+    ("path", "replacement", "expected"),
+    [
+        (("reconstruction", "occurrence_count"), 0, ["corrected", "re-earned", "re-earned"]),
+        (("reporting_values", "rung_6_peak"), 63.7, ["re-earned", "corrected", "re-earned"]),
+        (("reporting_values", "refined_band_min_radius"), 0.1156, ["re-earned", "re-earned", "corrected"]),
+        (("reporting_values", "rung_7_peak"), 40.2, ["re-earned", "corrected", "corrected"]),
+    ],
+)
+def test_semantic_repair_station_claim_scope_isolated_except_shared_rung7(
+    path: tuple[str, str],
+    replacement: object,
+    expected: list[str],
+) -> None:
+    cases = _typed_cases("a" * 40)
+    cases[0][path[0]][path[1]] = replacement
+    assert _station_dispositions(cases) == expected
 
 
 def test_compose_generator_payload_owns_claims_and_exact_semantic_projection() -> None:
@@ -630,7 +767,7 @@ def test_compose_generator_payload_fails_conditional_claims_closed() -> None:
     cases[2]["reporting_values"][0]["circles_over_cap"] = 9
     cases[2]["native_sampled_decisions"][0]["observations"] = _counts(3904, 9)
     payload = _claims().compose_generator_payload(_artifact().GitObjectId(source_commit), cases)
-    assert [payload["claims"][index]["disposition"] for index in (0, 1, 2)] == ["historical"] * 3
+    assert [payload["claims"][index]["disposition"] for index in (0, 1, 2)] == ["re-earned", "corrected", "re-earned"]
     assert payload["claims"][4]["disposition"] == "corrected"
     assert payload["claims"][6]["disposition"] == "corrected"
 
@@ -750,6 +887,8 @@ def test_validate_generator_payload_distinguishes_radial_position_and_circle_cou
     for native, report in zip(case["native_sampled_decisions"], case["reporting_values"]):
         native["selected_circles"], native["observations"] = 2, _counts(32, 16)
         report["circles_over_cap"] = 1
+    payload["claims"][4]["disposition"] = "corrected"
+    payload["claims"][4]["reason"] = "authenticated subdivision table differs"
     assert _claims().validate_generator_payload(payload) == payload
 
 
@@ -767,7 +906,7 @@ def test_validate_claim_artifact_accepts_final_and_owned_stage(tmp_path: pathlib
 @pytest.mark.parametrize(
     "transform",
     [
-        lambda raw: raw.replace(b"{", b'{"schema_version":"measurement-claim-payload/v1",', 1),
+        lambda raw: raw.replace(b"{", b'{"schema_version":"measurement-claim-payload/v2",', 1),
         lambda raw: b"\xff" + raw,
         lambda raw: raw.replace(b'"tool_diameter":2.0', b'"tool_diameter":NaN', 1),
         lambda raw: raw.replace(b'"tool_diameter":2.0', b'"tool_diameter":1e999', 1),
@@ -950,7 +1089,7 @@ placement_input: m.AdvancePlacementCaseInputPayload = {"case": "advance-placemen
 probe_input: m.AdvanceProbeCountCaseInputPayload = {"case": "advance-probe-count", "source_claim_ids": ["MC-010"], "config": probe_cfg, "selection_decision_provenance": advance_p}
 e1: m.MC001EvidencePayload = {"occurrence_count": 1, "station_centre": station_recon["target_centre"], "maximal_radius": station_report["maximal_radius"], "length_unit": "mm"}
 e2: m.MC002EvidencePayload = {"coarse_step": m.Millimetres(0.05), "rung_6_radius": station_report["rung_6_radius"], "rung_6_peak": station_report["rung_6_peak"], "rung_6_cuts_material": True, "rung_7_radius": None, "rung_7_peak": None, "rung_7_cuts_material": None, "angle_unit": "degree", "length_unit": "mm"}
-e3: m.MC003EvidencePayload = {"refined_band_min_radius": station_report["refined_band_min_radius"], "refined_band_max_radius": station_report["refined_band_max_radius"], "forced_peak": station_report["forced_peak"], "rescued_peak": station_report["rescued_peak"], "angle_unit": "degree", "length_unit": "mm"}
+e3: m.MC003EvidencePayload = {"rung_7_radius": station_report["rung_7_radius"], "rung_7_peak": station_report["rung_7_peak"], "rung_7_cuts_material": None, "refined_band_min_radius": station_report["refined_band_min_radius"], "refined_band_max_radius": station_report["refined_band_max_radius"], "forced_peak": station_report["forced_peak"], "rescued_peak": station_report["rescued_peak"], "angle_unit": "degree", "length_unit": "mm"}
 e4: m.MC004EvidencePayload = {"audit_position_count": 1, "audit_phase": "entry-angle", "includes_entry_phase": True, "adds_separate_entry_probe": False}
 e5: m.MC005EvidencePayload = {"non_entry_circle_count": 1, "rows": sub_report}
 e6: m.MC006EvidencePayload = {"history_commit": source, "missing_configuration": "refinement-without-reporting-ranking"}
@@ -971,8 +1110,8 @@ c10: m.MC010ClaimPayload = {"claim_id": "MC-010", "case": "advance-probe-count",
 case_order: list[m.GeneratorCase] = ["radial-station", "radial-subdivisions", "radial-floor", "radial-margin", "advance-placement", "advance-probe-count"]
 cases: list[m.GeneratorCasePayload] = [station, sub, floor, margin, placement, probe]
 claims: list[m.GeneratorClaimRecord] = [c1, c2, c3, c4, c5, c6, c7, c8, c9, c10]
-generator_input: m.GeneratorClaimInputPayload = {"extraction_commit": source, "case_order": case_order, "case_inputs": [station_input, sub_input, floor_input, margin_input, placement_input, probe_input]}
-generator_result: m.GeneratorClaimPayload = {"schema_version": "measurement-claim-payload/v1", "batch": "generator", "extraction_commit": source, "source_commit": source, "case_order": case_order, "cases": cases, "claims": claims}
+generator_input: m.GeneratorClaimInputPayload = {"extraction_commit": source, "source_correction_commit": source, "case_order": case_order, "case_inputs": [station_input, sub_input, floor_input, margin_input, placement_input, probe_input]}
+generator_result: m.GeneratorClaimPayload = {"schema_version": "measurement-claim-payload/v2", "batch": "generator", "extraction_commit": source, "source_commit": source, "source_correction_commit": source, "case_order": case_order, "cases": cases, "claims": claims}
 real_input: m.GeneratorClaimInputPayload = m.generator_semantic_input(generator_result)
 """,
         encoding="utf-8",
