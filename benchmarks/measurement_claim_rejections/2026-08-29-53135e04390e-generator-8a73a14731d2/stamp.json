@@ -1,0 +1,1119 @@
+{
+  "envelope_version": "measurement-artifact-envelope/v1",
+  "artifact_kind": "generator-measurement-claims/v1",
+  "commit": "53135e04390e84bf69aa74dc4d0c1ce6ca308eb4",
+  "dirty": false,
+  "python": "3.12.13 | packaged by conda-forge | (main, Mar  5 2026, 17:06:14) [Clang 19.1.7 ]",
+  "platform": "macOS-15.3.2-arm64-arm-64bit",
+  "started": "2026-08-29T11:50:09.396728+00:00",
+  "finished": "2026-08-29T11:52:20.550896+00:00",
+  "argv": [
+    "/Users/jelle/Code/CADCAM/worktrees/compas_cgal_prs-sdd-coherence/.pixi/envs/default/bin/python",
+    "-m",
+    "tools.measurement_claim_probes",
+    "run-generator",
+    "--all"
+  ],
+  "build_identity": {
+    "version": "measurement-build-identity/v1",
+    "commit": "53135e04390e84bf69aa74dc4d0c1ce6ca308eb4",
+    "pixi_lock_sha256": "64b07d80ab2267615976f36d42654a68b9809939baed38657d5eeafef823e397",
+    "sha256": "1033c590887cd68f55485f98625794d578308e8edc68d55c7aa93421b00aa96f"
+  },
+  "input_identity": {
+    "version": "generator-measurement-claim-input/v1",
+    "payload": {
+      "case_inputs": [
+        {
+          "case": "radial-station",
+          "config": {
+            "floor_steps": 0.5,
+            "generator_probe_angles": [
+              0.0,
+              11.25,
+              22.5,
+              33.75,
+              45.0,
+              56.25,
+              67.5,
+              78.75,
+              90.0,
+              101.25,
+              112.5,
+              123.75,
+              135.0,
+              146.25,
+              157.5,
+              168.75,
+              180.0,
+              191.25,
+              202.5,
+              213.75,
+              225.0,
+              236.25,
+              247.5,
+              258.75,
+              270.0,
+              281.25,
+              292.5,
+              303.75,
+              315.0,
+              326.25,
+              337.5,
+              348.75
+            ],
+            "ladder_rungs": 40,
+            "ladder_span": 1.0,
+            "ladder_step": 0.025,
+            "max_radial_sweeps": 40,
+            "public_call": {
+              "clearance_z": 2.0,
+              "climb": true,
+              "cut_z": 0.0,
+              "guide_step": 0.025,
+              "holes": [],
+              "max_advance": 1.0,
+              "max_passes": 1000,
+              "polygon": [
+                [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  20.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  20.0,
+                  12.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  12.0,
+                  0.0
+                ]
+              ],
+              "radial_clearance": 0.002,
+              "samples_per_radian": 10.0,
+              "tea_cap": 60.0,
+              "tool_diameter": 2.0
+            },
+            "refinement_margin": 1.4,
+            "subdivisions": 8
+          },
+          "selection_decision_provenance": {
+            "engagement_reporting_value_site": "compas_cgal._stock_2.engagement_at[1]",
+            "native_cap_decision_site": "compas_cgal._stock_2.engagement_at[2]",
+            "policy": "radial-known-reporting-driven-selection/v1",
+            "reporting_driven_decision_sites": [
+              {
+                "effect": "forced-radius-selection",
+                "symbol": "compas_cgal.engagement_radial_toolpath._least_bad_rung",
+                "value_source": "compas_cgal._stock_2.engagement_at[1]"
+              },
+              {
+                "effect": "refined-scan-control",
+                "symbol": "compas_cgal.engagement_radial_toolpath._largest_admissible_radius",
+                "value_source": "compas_cgal.engagement_radial_toolpath._GentlestRung.peak"
+              }
+            ]
+          },
+          "source_claim_ids": [
+            "MC-001",
+            "MC-002",
+            "MC-003"
+          ]
+        },
+        {
+          "case": "radial-subdivisions",
+          "config": {
+            "audit": {
+              "adds_separate_entry_probe": false,
+              "excludes_chain_entry_circles": true,
+              "includes_entry_phase": true,
+              "phase": "entry-angle",
+              "probe_offsets": [
+                0.0,
+                22.5,
+                45.0,
+                67.5,
+                90.0,
+                112.5,
+                135.0,
+                157.5,
+                180.0,
+                202.5,
+                225.0,
+                247.5,
+                270.0,
+                292.5,
+                315.0,
+                337.5
+              ]
+            },
+            "floor_steps": 0.5,
+            "generator_probe_angles": [
+              0.0,
+              11.25,
+              22.5,
+              33.75,
+              45.0,
+              56.25,
+              67.5,
+              78.75,
+              90.0,
+              101.25,
+              112.5,
+              123.75,
+              135.0,
+              146.25,
+              157.5,
+              168.75,
+              180.0,
+              191.25,
+              202.5,
+              213.75,
+              225.0,
+              236.25,
+              247.5,
+              258.75,
+              270.0,
+              281.25,
+              292.5,
+              303.75,
+              315.0,
+              326.25,
+              337.5,
+              348.75
+            ],
+            "public_call": {
+              "clearance_z": 2.0,
+              "climb": true,
+              "cut_z": 0.0,
+              "guide_step": 0.025,
+              "holes": [],
+              "max_advance": 1.0,
+              "max_passes": 1000,
+              "polygon": [
+                [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  20.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  20.0,
+                  12.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  12.0,
+                  0.0
+                ]
+              ],
+              "radial_clearance": 0.002,
+              "samples_per_radian": 10.0,
+              "tea_cap": 60.0,
+              "tool_diameter": 2.0
+            },
+            "refinement_margin": 1.4,
+            "subdivision_values": [
+              1,
+              2,
+              4,
+              8,
+              16
+            ]
+          },
+          "selection_decision_provenance": {
+            "engagement_reporting_value_site": "compas_cgal._stock_2.engagement_at[1]",
+            "native_cap_decision_site": "compas_cgal._stock_2.engagement_at[2]",
+            "policy": "radial-known-reporting-driven-selection/v1",
+            "reporting_driven_decision_sites": [
+              {
+                "effect": "forced-radius-selection",
+                "symbol": "compas_cgal.engagement_radial_toolpath._least_bad_rung",
+                "value_source": "compas_cgal._stock_2.engagement_at[1]"
+              },
+              {
+                "effect": "refined-scan-control",
+                "symbol": "compas_cgal.engagement_radial_toolpath._largest_admissible_radius",
+                "value_source": "compas_cgal.engagement_radial_toolpath._GentlestRung.peak"
+              }
+            ]
+          },
+          "source_claim_ids": [
+            "MC-004",
+            "MC-005",
+            "MC-006"
+          ]
+        },
+        {
+          "case": "radial-floor",
+          "config": {
+            "audit": {
+              "adds_separate_entry_probe": false,
+              "excludes_chain_entry_circles": true,
+              "includes_entry_phase": true,
+              "phase": "entry-angle",
+              "probe_offsets": [
+                0.0,
+                22.5,
+                45.0,
+                67.5,
+                90.0,
+                112.5,
+                135.0,
+                157.5,
+                180.0,
+                202.5,
+                225.0,
+                247.5,
+                270.0,
+                292.5,
+                315.0,
+                337.5
+              ]
+            },
+            "floor_values": [
+              0.25,
+              0.5,
+              1.0
+            ],
+            "generator_probe_angles": [
+              0.0,
+              11.25,
+              22.5,
+              33.75,
+              45.0,
+              56.25,
+              67.5,
+              78.75,
+              90.0,
+              101.25,
+              112.5,
+              123.75,
+              135.0,
+              146.25,
+              157.5,
+              168.75,
+              180.0,
+              191.25,
+              202.5,
+              213.75,
+              225.0,
+              236.25,
+              247.5,
+              258.75,
+              270.0,
+              281.25,
+              292.5,
+              303.75,
+              315.0,
+              326.25,
+              337.5,
+              348.75
+            ],
+            "public_call": {
+              "clearance_z": 2.0,
+              "climb": true,
+              "cut_z": 0.0,
+              "guide_step": 0.025,
+              "holes": [],
+              "max_advance": 1.0,
+              "max_passes": 1000,
+              "polygon": [
+                [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  20.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  20.0,
+                  12.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  12.0,
+                  0.0
+                ]
+              ],
+              "radial_clearance": 0.002,
+              "samples_per_radian": 10.0,
+              "tea_cap": 60.0,
+              "tool_diameter": 2.0
+            },
+            "refinement_margin": 1.4,
+            "subdivisions": 8
+          },
+          "selection_decision_provenance": {
+            "engagement_reporting_value_site": "compas_cgal._stock_2.engagement_at[1]",
+            "native_cap_decision_site": "compas_cgal._stock_2.engagement_at[2]",
+            "policy": "radial-known-reporting-driven-selection/v1",
+            "reporting_driven_decision_sites": [
+              {
+                "effect": "forced-radius-selection",
+                "symbol": "compas_cgal.engagement_radial_toolpath._least_bad_rung",
+                "value_source": "compas_cgal._stock_2.engagement_at[1]"
+              },
+              {
+                "effect": "refined-scan-control",
+                "symbol": "compas_cgal.engagement_radial_toolpath._largest_admissible_radius",
+                "value_source": "compas_cgal.engagement_radial_toolpath._GentlestRung.peak"
+              }
+            ]
+          },
+          "source_claim_ids": [
+            "MC-007"
+          ]
+        },
+        {
+          "case": "radial-margin",
+          "config": {
+            "audit": {
+              "adds_separate_entry_probe": false,
+              "excludes_chain_entry_circles": true,
+              "includes_entry_phase": true,
+              "phase": "entry-angle",
+              "probe_offsets": [
+                0.0,
+                22.5,
+                45.0,
+                67.5,
+                90.0,
+                112.5,
+                135.0,
+                157.5,
+                180.0,
+                202.5,
+                225.0,
+                247.5,
+                270.0,
+                292.5,
+                315.0,
+                337.5
+              ]
+            },
+            "floor_steps": 0.5,
+            "generator_probe_angles": [
+              0.0,
+              11.25,
+              22.5,
+              33.75,
+              45.0,
+              56.25,
+              67.5,
+              78.75,
+              90.0,
+              101.25,
+              112.5,
+              123.75,
+              135.0,
+              146.25,
+              157.5,
+              168.75,
+              180.0,
+              191.25,
+              202.5,
+              213.75,
+              225.0,
+              236.25,
+              247.5,
+              258.75,
+              270.0,
+              281.25,
+              292.5,
+              303.75,
+              315.0,
+              326.25,
+              337.5,
+              348.75
+            ],
+            "margin_values": [
+              1.25,
+              1.4,
+              1.5,
+              1.75,
+              2.0
+            ],
+            "public_call": {
+              "clearance_z": 2.0,
+              "climb": true,
+              "cut_z": 0.0,
+              "guide_step": 0.025,
+              "holes": [],
+              "max_advance": 1.0,
+              "max_passes": 1000,
+              "polygon": [
+                [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  6.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  6.0,
+                  4.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  4.0,
+                  0.0
+                ]
+              ],
+              "radial_clearance": 0.002,
+              "samples_per_radian": 10.0,
+              "tea_cap": 40.0,
+              "tool_diameter": 2.0
+            },
+            "subdivisions": 8
+          },
+          "selection_decision_provenance": {
+            "engagement_reporting_value_site": "compas_cgal._stock_2.engagement_at[1]",
+            "native_cap_decision_site": "compas_cgal._stock_2.engagement_at[2]",
+            "policy": "radial-known-reporting-driven-selection/v1",
+            "reporting_driven_decision_sites": [
+              {
+                "effect": "forced-radius-selection",
+                "symbol": "compas_cgal.engagement_radial_toolpath._least_bad_rung",
+                "value_source": "compas_cgal._stock_2.engagement_at[1]"
+              },
+              {
+                "effect": "refined-scan-control",
+                "symbol": "compas_cgal.engagement_radial_toolpath._largest_admissible_radius",
+                "value_source": "compas_cgal.engagement_radial_toolpath._GentlestRung.peak"
+              }
+            ]
+          },
+          "source_claim_ids": [
+            "MC-008"
+          ]
+        },
+        {
+          "case": "advance-placement",
+          "config": {
+            "audit": {
+              "excludes_entry_probe": true,
+              "phase": "advance-direction",
+              "probe_offsets": [
+                0.0,
+                11.25,
+                22.5,
+                33.75,
+                45.0,
+                56.25,
+                67.5,
+                78.75,
+                90.0,
+                101.25,
+                112.5,
+                123.75,
+                135.0,
+                146.25,
+                157.5,
+                168.75,
+                180.0,
+                191.25,
+                202.5,
+                213.75,
+                225.0,
+                236.25,
+                247.5,
+                258.75,
+                270.0,
+                281.25,
+                292.5,
+                303.75,
+                315.0,
+                326.25,
+                337.5,
+                348.75
+              ]
+            },
+            "generator_prepends_entry_probe": true,
+            "generator_probe_angles": [
+              -60.0,
+              0.0,
+              60.0
+            ],
+            "public_calls": [
+              {
+                "clearance_z": 2.0,
+                "climb": true,
+                "cut_z": 0.0,
+                "guide_step": 0.025,
+                "holes": [],
+                "max_advance": 1.0,
+                "max_passes": 1000,
+                "polygon": [
+                  [
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    20.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    20.0,
+                    12.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    12.0,
+                    0.0
+                  ]
+                ],
+                "radial_clearance": 0.002,
+                "samples_per_radian": 10.0,
+                "tea_cap": 80.0,
+                "tool_diameter": 2.0
+              },
+              {
+                "clearance_z": 2.0,
+                "climb": false,
+                "cut_z": 0.0,
+                "guide_step": 0.025,
+                "holes": [],
+                "max_advance": 1.0,
+                "max_passes": 1000,
+                "polygon": [
+                  [
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    20.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    20.0,
+                    12.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    12.0,
+                    0.0
+                  ]
+                ],
+                "radial_clearance": 0.002,
+                "samples_per_radian": 10.0,
+                "tea_cap": 80.0,
+                "tool_diameter": 2.0
+              },
+              {
+                "clearance_z": 2.0,
+                "climb": true,
+                "cut_z": 0.0,
+                "guide_step": 0.025,
+                "holes": [],
+                "max_advance": 1.0,
+                "max_passes": 1000,
+                "polygon": [
+                  [
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    20.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    20.0,
+                    12.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    12.0,
+                    0.0
+                  ]
+                ],
+                "radial_clearance": 0.002,
+                "samples_per_radian": 10.0,
+                "tea_cap": 100.0,
+                "tool_diameter": 2.0
+              },
+              {
+                "clearance_z": 2.0,
+                "climb": false,
+                "cut_z": 0.0,
+                "guide_step": 0.025,
+                "holes": [],
+                "max_advance": 1.0,
+                "max_passes": 1000,
+                "polygon": [
+                  [
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    20.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    20.0,
+                    12.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    12.0,
+                    0.0
+                  ]
+                ],
+                "radial_clearance": 0.002,
+                "samples_per_radian": 10.0,
+                "tea_cap": 100.0,
+                "tool_diameter": 2.0
+              }
+            ]
+          },
+          "selection_decision_provenance": {
+            "engagement_reporting_value_site": "compas_cgal._stock_2.engagement_at[1]",
+            "native_cap_decision_site": "compas_cgal._stock_2.engagement_at[2]",
+            "policy": "advance-native-cap-reporting-observation/v1",
+            "reporting_driven_decision_sites": []
+          },
+          "source_claim_ids": [
+            "MC-009"
+          ]
+        },
+        {
+          "case": "advance-probe-count",
+          "config": {
+            "audit": {
+              "excludes_entry_probe": true,
+              "phase": "advance-half-step",
+              "probe_offsets": [
+                3.0,
+                9.0,
+                15.0,
+                21.0,
+                27.0,
+                33.0,
+                39.0,
+                45.0,
+                51.0,
+                57.0,
+                63.0,
+                69.0,
+                75.0,
+                81.0,
+                87.0,
+                93.0,
+                99.0,
+                105.0,
+                111.0,
+                117.0,
+                123.0,
+                129.0,
+                135.0,
+                141.0,
+                147.0,
+                153.0,
+                159.0,
+                165.0,
+                171.0,
+                177.0,
+                183.0,
+                189.0,
+                195.0,
+                201.0,
+                207.0,
+                213.0,
+                219.0,
+                225.0,
+                231.0,
+                237.0,
+                243.0,
+                249.0,
+                255.0,
+                261.0,
+                267.0,
+                273.0,
+                279.0,
+                285.0,
+                291.0,
+                297.0,
+                303.0,
+                309.0,
+                315.0,
+                321.0,
+                327.0,
+                333.0,
+                339.0,
+                345.0,
+                351.0,
+                357.0
+              ]
+            },
+            "generator_configurations": [
+              {
+                "label": "3-old",
+                "probe_angles": [
+                  -60.0,
+                  0.0,
+                  60.0
+                ],
+                "probe_count": 3
+              },
+              {
+                "label": "8",
+                "probe_angles": [
+                  0.0,
+                  45.0,
+                  90.0,
+                  135.0,
+                  180.0,
+                  225.0,
+                  270.0,
+                  315.0
+                ],
+                "probe_count": 8
+              },
+              {
+                "label": "12",
+                "probe_angles": [
+                  0.0,
+                  30.0,
+                  60.0,
+                  90.0,
+                  120.0,
+                  150.0,
+                  180.0,
+                  210.0,
+                  240.0,
+                  270.0,
+                  300.0,
+                  330.0
+                ],
+                "probe_count": 12
+              },
+              {
+                "label": "16",
+                "probe_angles": [
+                  0.0,
+                  22.5,
+                  45.0,
+                  67.5,
+                  90.0,
+                  112.5,
+                  135.0,
+                  157.5,
+                  180.0,
+                  202.5,
+                  225.0,
+                  247.5,
+                  270.0,
+                  292.5,
+                  315.0,
+                  337.5
+                ],
+                "probe_count": 16
+              },
+              {
+                "label": "24",
+                "probe_angles": [
+                  0.0,
+                  15.0,
+                  30.0,
+                  45.0,
+                  60.0,
+                  75.0,
+                  90.0,
+                  105.0,
+                  120.0,
+                  135.0,
+                  150.0,
+                  165.0,
+                  180.0,
+                  195.0,
+                  210.0,
+                  225.0,
+                  240.0,
+                  255.0,
+                  270.0,
+                  285.0,
+                  300.0,
+                  315.0,
+                  330.0,
+                  345.0
+                ],
+                "probe_count": 24
+              },
+              {
+                "label": "32",
+                "probe_angles": [
+                  0.0,
+                  11.25,
+                  22.5,
+                  33.75,
+                  45.0,
+                  56.25,
+                  67.5,
+                  78.75,
+                  90.0,
+                  101.25,
+                  112.5,
+                  123.75,
+                  135.0,
+                  146.25,
+                  157.5,
+                  168.75,
+                  180.0,
+                  191.25,
+                  202.5,
+                  213.75,
+                  225.0,
+                  236.25,
+                  247.5,
+                  258.75,
+                  270.0,
+                  281.25,
+                  292.5,
+                  303.75,
+                  315.0,
+                  326.25,
+                  337.5,
+                  348.75
+                ],
+                "probe_count": 32
+              },
+              {
+                "label": "40",
+                "probe_angles": [
+                  0.0,
+                  9.0,
+                  18.0,
+                  27.0,
+                  36.0,
+                  45.0,
+                  54.0,
+                  63.0,
+                  72.0,
+                  81.0,
+                  90.0,
+                  99.0,
+                  108.0,
+                  117.0,
+                  126.0,
+                  135.0,
+                  144.0,
+                  153.0,
+                  162.0,
+                  171.0,
+                  180.0,
+                  189.0,
+                  198.0,
+                  207.0,
+                  216.0,
+                  225.0,
+                  234.0,
+                  243.0,
+                  252.0,
+                  261.0,
+                  270.0,
+                  279.0,
+                  288.0,
+                  297.0,
+                  306.0,
+                  315.0,
+                  324.0,
+                  333.0,
+                  342.0,
+                  351.0
+                ],
+                "probe_count": 40
+              },
+              {
+                "label": "48",
+                "probe_angles": [
+                  0.0,
+                  7.5,
+                  15.0,
+                  22.5,
+                  30.0,
+                  37.5,
+                  45.0,
+                  52.5,
+                  60.0,
+                  67.5,
+                  75.0,
+                  82.5,
+                  90.0,
+                  97.5,
+                  105.0,
+                  112.5,
+                  120.0,
+                  127.5,
+                  135.0,
+                  142.5,
+                  150.0,
+                  157.5,
+                  165.0,
+                  172.5,
+                  180.0,
+                  187.5,
+                  195.0,
+                  202.5,
+                  210.0,
+                  217.5,
+                  225.0,
+                  232.5,
+                  240.0,
+                  247.5,
+                  255.0,
+                  262.5,
+                  270.0,
+                  277.5,
+                  285.0,
+                  292.5,
+                  300.0,
+                  307.5,
+                  315.0,
+                  322.5,
+                  330.0,
+                  337.5,
+                  345.0,
+                  352.5
+                ],
+                "probe_count": 48
+              }
+            ],
+            "generator_prepends_entry_probe": true,
+            "public_calls": [
+              {
+                "clearance_z": 2.0,
+                "climb": true,
+                "cut_z": 0.0,
+                "guide_step": 0.025,
+                "holes": [],
+                "max_advance": 1.0,
+                "max_passes": 1000,
+                "polygon": [
+                  [
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    20.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    20.0,
+                    12.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    12.0,
+                    0.0
+                  ]
+                ],
+                "radial_clearance": 0.002,
+                "samples_per_radian": 10.0,
+                "tea_cap": 40.0,
+                "tool_diameter": 2.0
+              },
+              {
+                "clearance_z": 2.0,
+                "climb": true,
+                "cut_z": 0.0,
+                "guide_step": 0.025,
+                "holes": [],
+                "max_advance": 1.0,
+                "max_passes": 1000,
+                "polygon": [
+                  [
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    20.0,
+                    0.0,
+                    0.0
+                  ],
+                  [
+                    20.0,
+                    12.0,
+                    0.0
+                  ],
+                  [
+                    0.0,
+                    12.0,
+                    0.0
+                  ]
+                ],
+                "radial_clearance": 0.002,
+                "samples_per_radian": 10.0,
+                "tea_cap": 80.0,
+                "tool_diameter": 2.0
+              }
+            ]
+          },
+          "selection_decision_provenance": {
+            "engagement_reporting_value_site": "compas_cgal._stock_2.engagement_at[1]",
+            "native_cap_decision_site": "compas_cgal._stock_2.engagement_at[2]",
+            "policy": "advance-native-cap-reporting-observation/v1",
+            "reporting_driven_decision_sites": []
+          },
+          "source_claim_ids": [
+            "MC-010"
+          ]
+        }
+      ],
+      "case_order": [
+        "radial-station",
+        "radial-subdivisions",
+        "radial-floor",
+        "radial-margin",
+        "advance-placement",
+        "advance-probe-count"
+      ],
+      "extraction_commit": "eec665c1df1cd8d1e98dd9dd1001b5984e17a703"
+    },
+    "sha256": "8a73a14731d21986efba86c8354245dc960cf6d6f0279d8ff706fa300d3eec09"
+  },
+  "result_identity": {
+    "version": "generator-measurement-claim-result/v1",
+    "payloads": {
+      "generator-claims.json": {
+        "sha256": "e1d8eeb6386f159dee98deed7302531dfafc1b0cec31f2ebecd101acf6881826"
+      }
+    },
+    "sha256": "38a0775a821532a33196a8e9429551c07ec9846bf6fe933a6b81364e7554a446"
+  }
+}
