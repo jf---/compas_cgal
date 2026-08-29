@@ -278,6 +278,18 @@ def _identity(version: str, fields: Mapping[str, object]) -> dict[str, object]:
     return {**body, "sha256": _sha256(_canonical_json_bytes(body))}
 
 
+def _input_identity(*, version: IdentityVersion, payload: Mapping[str, object]) -> dict[str, object]:
+    canonical = _decode_strict_json_bytes(_canonical_json_bytes(dict(payload)), field="input payload")
+    if type(canonical) is not dict:
+        raise InvalidMeasurementEnvelopeError("input payload must be a JSON object")
+    return _identity(version, {"payload": canonical})
+
+
+def input_identity_sha256(*, version: IdentityVersion, payload: Mapping[str, object]) -> Sha256Hex:
+    """Return the canonical digest used by an envelope input identity."""
+    return Sha256Hex(str(_input_identity(version=version, payload=payload)["sha256"]))
+
+
 def _isoformat_utc(value: datetime.datetime, *, field: str) -> str:
     return _validate_utc(value, field=field).isoformat(timespec="microseconds")
 
@@ -317,9 +329,6 @@ def build_envelope(
         raise InvalidMeasurementEnvelopeError("artifact_kind must be a non-empty string")
     if not argv or any(type(argument) is not str or not argument for argument in argv):
         raise InvalidMeasurementEnvelopeError("argv must contain non-empty strings")
-    canonical_input = _decode_strict_json_bytes(_canonical_json_bytes(dict(input_payload)), field="input payload")
-    if type(canonical_input) is not dict:
-        raise InvalidMeasurementEnvelopeError("input payload must be a JSON object")
     payload_digests = _payload_digest_map(payloads)
     return {
         "envelope_version": ENVELOPE_VERSION,
@@ -335,7 +344,7 @@ def build_envelope(
             BUILD_IDENTITY_VERSION,
             {"commit": source.commit, "pixi_lock_sha256": source.pixi_lock_sha256},
         ),
-        "input_identity": _identity(input_version, {"payload": canonical_input}),
+        "input_identity": _input_identity(version=input_version, payload=input_payload),
         "result_identity": _identity(result_version, {"payloads": payload_digests}),
     }
 

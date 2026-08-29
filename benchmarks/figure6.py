@@ -430,7 +430,13 @@ def figure6_payload(run: Figure6Run) -> Dict[str, Any]:
     """
     spec = run.spec
     return {
-        "pocket": {"name": spec.name, "family": spec.family, "tool_diameter": spec.tool_diameter, "params": dict(spec.params)},
+        "pocket": {
+            "name": spec.name,
+            "family": spec.family,
+            "tool_diameter": spec.tool_diameter,
+            "params": dict(spec.params),
+            "holes": [[[point.x, point.y, point.z] for point in ring.points] for ring in spec.holes],
+        },
         "engagement_measured_at_cap_deg": REFERENCE_CAP_DEG,
         "points": [
             {
@@ -476,6 +482,6 @@ def write_figure6(run: Figure6Run, out_dir: Path) -> Tuple[Path, Path]:
     out_dir.mkdir(parents=True, exist_ok=True)
     md_path = out_dir / MARKDOWN_NAME
     json_path = out_dir / JSON_NAME
-    md_path.write_text(render_figure6_markdown(run))
-    json_path.write_text(json.dumps(figure6_payload(run), indent=2))
+    md_path.write_text(render_figure6_markdown(run), encoding="utf-8")
+    json_path.write_text(json.dumps(figure6_payload(run), indent=2), encoding="utf-8")
     return md_path, json_path
