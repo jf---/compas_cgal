@@ -139,6 +139,7 @@ _MC007_DISPOSITIONS = ("re-earned", "corrected", "historical")
 _RAW_SOURCE_DIFF = re.compile(r"^:100644 100644 [0-9a-f]+ [0-9a-f]+ M\t(.+)$")
 _DIFF_FILE = re.compile(r"^diff --git a/(.+) b/(.+)$")
 _DIFF_HUNK = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
+_OBJECT_ID = re.compile(r"(?:[0-9a-f]{40}|[0-9a-f]{64})\Z")
 
 _ROW_COUNT = 14
 _FILE_COUNT = 5
@@ -344,22 +345,34 @@ def _docstring_stripped_ast_dump(path: str, raw: bytes) -> str:
 
 
 def _commit_parent(repository: pathlib.Path, correction_commit: str) -> str:
+    if _OBJECT_ID.fullmatch(correction_commit) is None:
+        raise InvalidMeasurementClaimLedgerError("Task-6 source correction commit must be one full Git object ID")
+    raw = _git(repository, "cat-file", "commit", correction_commit)
+    hasher = hashlib.sha1() if len(correction_commit) == 40 else hashlib.sha256()
+    hasher.update(b"commit " + str(len(raw)).encode("ascii") + b"\0" + raw)
+    if hasher.hexdigest() != correction_commit:
+        raise InvalidMeasurementClaimLedgerError("Task-6 source correction raw commit identity differs from its object ID")
+    header, separator, _ = raw.partition(b"\n\n")
+    if not separator:
+        raise InvalidMeasurementClaimLedgerError("Task-6 source correction commit must have exactly one parent")
+    parent_headers = [line[len(b"parent ") :] for line in header.splitlines() if line.startswith(b"parent ")]
+    if len(parent_headers) != 1:
+        raise InvalidMeasurementClaimLedgerError("Task-6 source correction commit must have exactly one parent")
     try:
-        text = _git(repository, "rev-list", "--parents", "-n", "1", correction_commit).decode("ascii").strip()
+        parent = parent_headers[0].decode("ascii")
     except UnicodeDecodeError as exc:
         raise InvalidMeasurementClaimLedgerError("Task-6 correction ancestry is not ASCII") from exc
-    objects = text.split()
-    if len(objects) != 2 or objects[0] != correction_commit:
-        raise InvalidMeasurementClaimLedgerError("Task-6 source correction commit must have exactly one parent")
-    return objects[1]
+    if _OBJECT_ID.fullmatch(parent) is None or len(parent) != len(correction_commit):
+        raise InvalidMeasurementClaimLedgerError("Task-6 source correction parent is not one full Git object ID")
+    return parent
 
 
 def _source_blob(repository: pathlib.Path, commit: str, path: str) -> bytes:
     return _git(repository, "show", f"{commit}:{path}")
 
 
-def _validate_source_diff_entries(repository: pathlib.Path, correction_commit: str) -> None:
-    raw = _git(repository, "diff-tree", "--no-commit-id", "--raw", "-r", "--no-renames", correction_commit)
+def _validate_source_diff_entries(repository: pathlib.Path, parent: str, correction_commit: str) -> None:
+    raw = _git(repository, "diff-tree", "--no-commit-id", "--raw", "-r", "--no-renames", parent, correction_commit)
     try:
         lines = raw.decode("ascii").splitlines()
     except UnicodeDecodeError as exc:
@@ -457,7 +470,7 @@ def validate_task6_source_correction(
     if mc007_disposition not in _MC007_DISPOSITIONS:
         raise InvalidMeasurementClaimLedgerError(f"Task-6 MC-007 disposition is invalid for source correction: {mc007_disposition!r}")
     parent = _commit_parent(repository, correction_commit)
-    _validate_source_diff_entries(repository, correction_commit)
+    _validate_source_diff_entries(repository, parent, correction_commit)
     baseline_blobs = {path: _source_blob(repository, parent, path) for path in _SOURCE_PATHS}
     candidate_blobs = {path: _source_blob(repository, correction_commit, path) for path in _SOURCE_PATHS}
     for path, raw in baseline_blobs.items():

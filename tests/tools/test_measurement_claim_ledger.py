@@ -474,6 +474,16 @@ def test_task6_source_gate_rejects_replaced_bad_commit_identity(tmp_path: pathli
         module.validate_task6_source_correction(repository, bad_commit, mc007_disposition="historical")
 
 
+def test_task6_source_gate_rejects_grafted_two_parent_commit_identity(tmp_path: pathlib.Path) -> None:
+    module = _module()
+    repository, parent, correction = _source_repository(tmp_path)
+    bad_commit = _merge_commit(repository, correction, parent)
+    (repository / ".git" / "info" / "grafts").write_text(f"{bad_commit} {parent}\n", encoding="ascii")
+
+    with pytest.raises(module.InvalidMeasurementClaimLedgerError, match="exactly one parent"):
+        module.validate_task6_source_correction(repository, bad_commit, mc007_disposition="historical")
+
+
 def test_git_failure_names_the_actual_replacement_immune_command(tmp_path: pathlib.Path) -> None:
     module = _module()
     repository = tmp_path / "missing-object-repository"
