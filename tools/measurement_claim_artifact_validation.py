@@ -1,4 +1,4 @@
-"""Filesystem and envelope authentication for v2 claim artifacts."""
+"""Filesystem and envelope authentication for generator-v2 and benchmark-v1 claim artifacts."""
 
 from __future__ import annotations
 
