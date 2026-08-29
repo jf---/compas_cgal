@@ -296,6 +296,57 @@ def _merge_commit(repository: pathlib.Path, correction: str, parent: str) -> str
     )
 
 
+def _test_source_region(lines: list[bytes], line_start: int, line_end: int) -> dict[str, object]:
+    byte_start = sum(len(line) for line in lines[: line_start - 1])
+    byte_end = sum(len(line) for line in lines[:line_end])
+    return {
+        "raw": b"".join(lines[line_start - 1 : line_end]),
+        "byte_start": byte_start,
+        "byte_end": byte_end,
+        "line_start": line_start,
+        "line_end": line_end,
+    }
+
+
+def _zero_count_hunk_repository(
+    tmp_path: pathlib.Path,
+    *,
+    operation: str,
+    zero_position: int,
+    delete_count: int = 1,
+) -> tuple[pathlib.Path, str, str, dict[str, dict[str, dict[str, object]]], dict[str, dict[str, dict[str, object]]]]:
+    repository = tmp_path / "hunk-repository"
+    repository.mkdir()
+    _git_at(repository, "init", "-q")
+    baseline_lines = [f"line-{line}\n".encode("ascii") for line in range(1, 15)]
+    target = repository / RADIAL_SOURCE
+    target.parent.mkdir(parents=True)
+    target.write_bytes(b"".join(baseline_lines))
+    parent = _commit(repository, "baseline")
+
+    candidate_lines = baseline_lines.copy()
+    if operation == "insertion":
+        candidate_lines.insert(zero_position, b"inserted\n")
+    else:
+        del candidate_lines[zero_position : zero_position + delete_count]
+    target.write_bytes(b"".join(candidate_lines))
+    correction = _commit(repository, operation)
+
+    region_name = "radial-module-which-circle"
+    line_start = 5
+    line_end = 8
+    candidate_end = line_end
+    if operation == "insertion" and line_start - 1 <= zero_position <= line_end:
+        candidate_end += 1
+    elif operation == "deletion":
+        first_deleted = zero_position + 1
+        last_deleted = zero_position + delete_count
+        candidate_end -= max(0, min(line_end, last_deleted) - max(line_start, first_deleted) + 1)
+    baseline_regions = {RADIAL_SOURCE: {region_name: _test_source_region(baseline_lines, line_start, line_end)}}
+    candidate_regions = {RADIAL_SOURCE: {region_name: _test_source_region(candidate_lines, line_start, candidate_end)}}
+    return repository, parent, correction, baseline_regions, candidate_regions
+
+
 def test_task6_source_baseline_pins_two_blobs_and_all_nine_regions() -> None:
     module = _module()
     observed_regions: dict[str, str] = {}
@@ -411,6 +462,137 @@ def test_task6_source_gate_rejects_zero_and_multiple_parent_commits(tmp_path: pa
     for commit in (parent, merge):
         with pytest.raises(module.InvalidMeasurementClaimLedgerError, match="exactly one parent"):
             module.validate_task6_source_correction(repository, commit, mc007_disposition="historical")
+
+
+def test_task6_source_gate_rejects_replaced_bad_commit_identity(tmp_path: pathlib.Path) -> None:
+    module = _module()
+    repository, parent, correction = _source_repository(tmp_path)
+    bad_commit = _merge_commit(repository, correction, parent)
+    _git_at(repository, "replace", bad_commit, correction)
+
+    with pytest.raises(module.InvalidMeasurementClaimLedgerError, match="exactly one parent"):
+        module.validate_task6_source_correction(repository, bad_commit, mc007_disposition="historical")
+
+
+def test_git_failure_names_the_actual_replacement_immune_command(tmp_path: pathlib.Path) -> None:
+    module = _module()
+    repository = tmp_path / "missing-object-repository"
+    repository.mkdir()
+    _git_at(repository, "init", "-q")
+
+    with pytest.raises(module.InvalidMeasurementClaimLedgerError, match=r"git --no-replace-objects -C .* show missing"):
+        module._git(repository, "show", "missing")
+
+
+@pytest.mark.parametrize(("name", "path", "line_start", "line_end", "digest"), SOURCE_REGION_BASELINES)
+@pytest.mark.parametrize(
+    ("boundary", "zero_position", "expected_owner"),
+    [
+        ("line_start-1", -1, True),
+        ("line_start", 0, True),
+        ("line_end", 0, True),
+        ("line_end+1", 1, False),
+    ],
+)
+def test_task6_zero_count_hunk_point_ownership_is_exact_at_region_boundaries(
+    name: str,
+    path: str,
+    line_start: int,
+    line_end: int,
+    digest: str,
+    boundary: str,
+    zero_position: int,
+    expected_owner: bool,
+) -> None:
+    del digest
+    module = _module()
+    raw = _git_at(PROJECT_ROOT, "show", f"{FROZEN_COMMIT}:{path}")
+    regions = module._task6_source_region_spans(path, raw)
+    position = line_start + zero_position if boundary.startswith("line_start") else line_end + zero_position
+
+    observed = module._containing_regions(path, position, 0, regions, frozenset({name}))
+
+    assert observed == (frozenset({name}) if expected_owner else frozenset())
+
+
+@pytest.mark.parametrize(
+    ("operation", "boundary", "zero_position", "accepted"),
+    [
+        ("insertion", "line_start-1", 4, True),
+        ("insertion", "line_start", 5, True),
+        ("insertion", "line_end", 8, True),
+        ("insertion", "line_end+1", 9, False),
+        ("deletion", "line_start-1", 4, True),
+        ("deletion", "line_start", 5, True),
+        ("deletion", "line_end", 8, False),
+        ("deletion", "line_end+1", 9, False),
+    ],
+)
+def test_task6_committed_zero_count_hunks_require_both_sides_in_one_region(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: pathlib.Path,
+    operation: str,
+    boundary: str,
+    zero_position: int,
+    accepted: bool,
+) -> None:
+    del boundary
+    module = _module()
+    repository, parent, correction, baseline_regions, candidate_regions = _zero_count_hunk_repository(
+        tmp_path,
+        operation=operation,
+        zero_position=zero_position,
+    )
+    region_name = "radial-module-which-circle"
+    monkeypatch.setattr(module, "_MANDATORY_SOURCE_REGIONS", (region_name,))
+
+    if accepted:
+        assert (
+            module._validate_source_diff_hunks(
+                repository,
+                parent,
+                correction,
+                baseline_regions,
+                candidate_regions,
+                frozenset({region_name}),
+            )
+            is None
+        )
+    else:
+        with pytest.raises(module.InvalidMeasurementClaimLedgerError, match="hunk.*outside one applicable owned region"):
+            module._validate_source_diff_hunks(
+                repository,
+                parent,
+                correction,
+                baseline_regions,
+                candidate_regions,
+                frozenset({region_name}),
+            )
+
+
+def test_task6_committed_zero_count_deletion_cannot_cross_owned_region_boundary(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: pathlib.Path,
+) -> None:
+    module = _module()
+    repository, parent, correction, baseline_regions, candidate_regions = _zero_count_hunk_repository(
+        tmp_path,
+        operation="deletion",
+        zero_position=7,
+        delete_count=2,
+    )
+    region_name = "radial-module-which-circle"
+    monkeypatch.setattr(module, "_MANDATORY_SOURCE_REGIONS", (region_name,))
+
+    with pytest.raises(module.InvalidMeasurementClaimLedgerError, match="hunk.*outside one applicable owned region"):
+        module._validate_source_diff_hunks(
+            repository,
+            parent,
+            correction,
+            baseline_regions,
+            candidate_regions,
+            frozenset({region_name}),
+        )
 
 
 SOURCE_COMMIT = "a" * 40

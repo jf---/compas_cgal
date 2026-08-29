@@ -17,6 +17,7 @@ UTC = datetime.timezone.utc
 COMMIT_40 = "a" * 40
 COMMIT_64 = "b" * 64
 DIGEST = "c" * 64
+REPLACEMENT_LOCK = b"replacement dependency graph\n"
 
 
 def _module() -> Any:
@@ -48,6 +49,26 @@ def _repository(tmp_path: pathlib.Path) -> pathlib.Path:
         "lock",
     )
     return repository.resolve()
+
+
+def _replace_head_commit(repository: pathlib.Path) -> str:
+    original = _git(repository, "rev-parse", "HEAD^{commit}").decode("ascii").strip()
+    (repository / "pixi.lock").write_bytes(REPLACEMENT_LOCK)
+    _git(repository, "add", "pixi.lock")
+    _git(
+        repository,
+        "-c",
+        "user.name=Jelle Feringa",
+        "-c",
+        "user.email=jelleferinga@gmail.com",
+        "commit",
+        "-qm",
+        "replacement lock",
+    )
+    replacement = _git(repository, "rev-parse", "HEAD^{commit}").decode("ascii").strip()
+    _git(repository, "replace", original, replacement)
+    _git(repository, "update-ref", "HEAD", original)
+    return original
 
 
 def _payloads() -> dict[str, bytes]:
@@ -178,6 +199,16 @@ def test_capture_clean_source_uses_full_head_and_committed_lock(tmp_path: pathli
     assert source.repository == repository
     assert source.commit == _git(repository, "rev-parse", "HEAD^{commit}").decode().strip()
     assert source.pixi_lock_sha256 == hashlib.sha256(b"locked dependency graph\n").hexdigest()
+
+
+def test_capture_clean_source_does_not_bind_original_commit_to_replacement_tree(tmp_path: pathlib.Path) -> None:
+    module = _module()
+    repository = _repository(tmp_path)
+    _replace_head_commit(repository)
+    assert _git(repository, "status", "--porcelain=v1") == b""
+
+    with pytest.raises(module.DirtyMeasurementTreeError):
+        module.capture_clean_source(repository)
 
 
 def test_capture_clean_source_rejects_untracked_input(tmp_path: pathlib.Path) -> None:
@@ -418,6 +449,32 @@ def test_validate_envelope_rejects_committed_lock_digest_mismatch(tmp_path: path
     _mutate_stamp(result, mutate)
     with pytest.raises(module.InvalidMeasurementEnvelopeError):
         module.validate_envelope(result, logical_name=name, artifact_kind=module.ArtifactKind("benchmark-corpus-result/v1"), repository=repository)
+
+
+def test_validate_envelope_rejects_lock_content_from_replacement_commit(tmp_path: pathlib.Path) -> None:
+    module = _module()
+    repository = _repository(tmp_path)
+    original = _replace_head_commit(repository)
+    source = module.SourceSnapshot.build(
+        repository=repository,
+        commit=original,
+        pixi_lock_sha256=hashlib.sha256(REPLACEMENT_LOCK).hexdigest(),
+    )
+    name = f"2026-08-28-{original[:12]}"
+    result = repository / "benchmarks" / "results" / name
+    result.mkdir(parents=True)
+    payloads = _payloads()
+    for payload_name, payload in payloads.items():
+        (result / payload_name).write_bytes(payload)
+    module.write_envelope(result, _envelope(module, source, payloads))
+
+    with pytest.raises(module.InvalidMeasurementEnvelopeError):
+        module.validate_envelope(
+            result,
+            logical_name=name,
+            artifact_kind=module.ArtifactKind("benchmark-corpus-result/v1"),
+            repository=repository,
+        )
 
 
 def test_require_source_unchanged_excludes_only_owned_stage(tmp_path: pathlib.Path) -> None:

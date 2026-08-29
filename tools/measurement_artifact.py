@@ -162,7 +162,7 @@ class ValidatedEnvelope:
 
 
 def _git(repository: pathlib.Path, *arguments: str) -> bytes:
-    command = ["git", "-C", str(repository), *arguments]
+    command = ["git", "--no-replace-objects", "-C", str(repository), *arguments]
     try:
         completed = subprocess.run(command, check=False, capture_output=True)
     except OSError as exc:
