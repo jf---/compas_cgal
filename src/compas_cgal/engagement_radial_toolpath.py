@@ -67,13 +67,20 @@ whose whole clearance disk is narrower than the tool. Refusing to cut there is
 not an option -- the guide runs through it -- so a circle the predicate refuses is
 emitted, counted, and warned about rather than hidden.
 
-WHICH circle is a measurement, not an index. `_least_bad_rung` ranks the refused
-candidates by their REPORTED peak engagement and returns the mildest; ties go to
-the maximal circle, so virgin-stock entries still emit a full slot and still
-finish in one pass. This is the one place in the module where a reported double
-influences a choice, and it is admissible because the exact predicate has already
-refused every option being ranked -- the ordering cannot promote one back into the
-guarantee.
+WHICH forced circle is emitted is decided from a reported double.
+`_least_bad_rung` reads the reported `max_run_tea` value from
+`compas_cgal._stock_2.engagement_at(...)[1]` and uses it to select the forced
+radius. The native sampled cap verdict remains the boolean at index 2, and this
+ranking cannot turn a refused candidate into an accepted one; nevertheless,
+changing the emitted radius is a decision under `docs/exactness.md`.
+
+That selected reporting value then travels as `_GentlestRung.peak` to
+`_largest_admissible_radius`, where comparison with
+`RADIUS_LADDER_REFINEMENT_MARGIN * regulation.cap_angle` decides whether the
+refined scan runs. That control decision can also change the emitted radius and
+whether the station is forced. These are two reporting-driven radial decision
+sites, not a complete deciding/reporting separation. Replacing them with an
+exact-decision path is a separate merge/release requirement.
 
 IT IS NOT FREE, and the cost is structural rather than incidental. A circle
 smaller than the station's maximum does not FINISH the station, so the maximal
@@ -183,67 +190,39 @@ FULL_RADIUS_RUNG = 0
 # as a bare zero someone might mistake for a tolerance.
 NO_RADIUS_FLOOR = 0.0
 
-# Sub-intervals each coarse ladder interval is split into for the SECOND scan, run
-# only where the first one found nothing admissible.
+# Sub-intervals into which each coarse ladder interval is divided for the
+# optional second scan. The coarse spacing is inherited from advance
+# quantisation and can step over radii that both cut material and satisfy the
+# native sampled cap predicate, so the refined ladder searches the same span at
+# finer resolution.
 #
-# WHY A SECOND SCAN EXISTS AT ALL. The coarse spacing above is the ADVANCE
-# quantisation, whose derivation prices one step against the tool radius. That
-# pricing is wrong for the radius knob at a station whose maximal radius is itself
-# a fraction of the tool radius, and it is wrong by enough to step over the answer.
-# Measured on the 20x12 pocket at a 60 deg cap, station (18.482, 10.482), maximal
-# radius 0.5156, coarse step 0.05: rung 6 (radius 0.2156) measures 61.3 deg and
-# still cuts, rung 7 (radius 0.1656) measures 5.9 deg and cuts NOTHING -- one step
-# crosses from over-cap to idle. Sampling that same interval finely shows a band of
-# radii from 0.1719 to 0.2123, about four fifths of a coarse step wide, where the
-# loop BOTH complies and cuts. The coarse ladder straddles it, reports the station
-# unsalvageable, and forces a 107 deg circle where a 59 deg one exists.
+# The shipped value is empirical, not a derived completeness bound. The
+# authenticated Task-6 sweep evaluates subdivision counts 1, 2, 4, 8 and 16 on
+# fresh depleting stock. The generator uses its configured 32-angle ring plus
+# the separately prepended entry probe. The independent claim audit is a
+# different 16-position ring phased from the circle entry: entry is one of
+# those 16 positions and no seventeenth entry observation is added. No
+# 32-position audit result is inferred from that case.
 #
-# WHY THIS COUNT: MEASURED, NOT DERIVED -- the same footing as `LOOP_PROBE_COUNT`,
-# and for the same reason: what has to be resolved is the width of a compliant band
-# in a non-monotone function, which no closed form in this module bounds. Worst
-# machining-circle engagement an independent 32-position walk finds away from the
-# chain entries on the 20x12 pocket, against the subdivision count:
+# The audit excludes chain-entry circles and records the finite sweep's
+# measured rows in the authenticated claim artifact. This comment does not
+# promote those sampled rows into a continuous bound or a universal optimum.
 #
-# Measured on the 20x12 pocket at a 60 deg cap, tool diameter 2.0, over the 244
-# machining circles that are NOT chain entries, each probed at 16 positions:
+# A subdivision count of 1 does not disable the refinement branch. It merely
+# collapses the refined spacing onto the coarse spacing while both
+# reporting-driven radial decisions remain active:
+# `_least_bad_rung` uses reported engagement to select a forced radius, and
+# `_largest_admissible_radius` uses `_GentlestRung.peak` to decide whether the
+# refined scan runs. The former changes forced-radius selection; the latter can
+# change the emitted result by enabling a successful refined scan.
 #
-#   N                        1      2      4      8     16
-#   worst engagement, deg  88.6   88.6   88.6   88.6   88.6
-#   circles over the cap     12     12      8      8      8
+# The former refinement-without-reporting-ranking comparison is not
+# reconstructible by the committed producer and remains historical; no result
+# for that absent configuration is claimed here.
 #
-# The peak does not move; the COUNT is what the resolution buys, and it converges
-# at N = 4. Eight is one doubling of headroom past that, at no measured cost.
-#
-# READ THE FIRST COLUMN CAREFULLY: N = 1 is not "refinement off". The rescan
-# branch runs whenever `_least_bad_rung` leaves the station within
-# `RADIUS_LADDER_REFINEMENT_MARGIN` of the cap, and no constant disables it --
-# setting this to 1 only collapses the refined ladder onto the coarse one while
-# the RANKING still applies, which is why N = 1 and N = 2 agree. Deleting the
-# branch outright is a different experiment and a much worse one: 126.1 deg worst
-# engagement, measured separately.
-#
-# AND DO NOT KEEP THIS WHILE DROPPING `_least_bad_rung`. Measured on 6x4 at a
-# 40 deg cap, refinement without the ranking takes the over-cap count from 34 to
-# 1 and emits a 213.6 deg circle -- a slotting cut that breaks tools. The refined
-# scan rescues a station by DEFERRING it, and the maximal circle that must still
-# follow lands in a worse state; the ranking is what caps the tail, the
-# refinement is what caps the count, and neither is safe alone. Both together
-# UNGATED is also worse than the ranking alone on both pockets, which is why the
-# gate exists.
-#
-# TERMINATION IS THE INTEGER, not a tolerance: the refined ladder is a fixed-length
-# list of `(rungs - 1) * N + 1` radii built once, and the scan walks it. No
-# convergence test, no float comparison, nothing to tune.
-#
-# THE REFINED LADDER SPANS EXACTLY THE COARSE ONE -- from the top coarse rung to
-# the bottom one, no further. It resolves WITHIN the set of radii the module
-# already considers worth emitting; it does not extend that set downward. That
-# floor is load-bearing rather than incidental: at station (18.941, 10.941) on the
-# same pocket, whose coarse ladder is the two rungs 0.0568 and 0.0068, a fine sweep
-# does eventually find a complying radius -- at 0.0011, a circle roughly a
-# thousandth of the tool radius. Emitting that is not a lighter cut, it is a
-# degenerate motion that also leaves the station unfinished and buys another sweep.
-# Lowering the minimum useful circle is a separate change with its own evidence.
+# Termination is integer-bounded: the refined ladder is a fixed-length list and
+# the scan walks it. It spans the coarse ladder's configured radius range and
+# does not establish admissibility below that range.
 RADIUS_LADDER_SUBDIVISIONS = 8
 
 # Smallest radius the refined ladder offers below rung 0, as a multiple of the
@@ -261,48 +240,37 @@ RADIUS_LADDER_SUBDIVISIONS = 8
 # edge.
 RADIUS_LADDER_FLOOR_STEPS = 0.5
 
-# How far over the cap a station's gentlest available circle may measure and still
-# earn the second, finer scan -- as a multiple of the cap the caller asked for.
+# Reporting-angle multiplier used to decide whether the second, finer radius
+# scan runs after the coarse ladder has no admissible candidate.
 #
-# WHAT IT GATES, AND WHAT IT CANNOT. This decides how hard to LOOK, never what is
-# found: every verdict on every candidate is the same exact `cap_exceeded`
-# predicate whether the gate opened or not, and a station the gate skips is
-# emitted exactly as it would have been with no refinement at all. It is a
-# comparison of two doubles -- a REPORTED engagement against the caller's own
-# transcendental cap -- and that is admissible precisely because no emission
-# depends on it.
+# THIS IS A REPORTING-DRIVEN DECISION, not a look-only diagnostic.
+# `_least_bad_rung` first reads reported `max_run_tea` doubles from
+# `engagement_at(...)[1]` and selects which refused radius would be emitted.
+# `_largest_admissible_radius` then compares the resulting
+# `_GentlestRung.peak` with this multiplier times `regulation.cap_angle`.
+# Passing that comparison enables the refined scan; a refined candidate may
+# then replace the forced coarse choice. The comparison therefore controls
+# output as well as work.
 #
-# WHY A GATE AND NOT ALWAYS. The two halves of this search pull against each
-# other, and the gate is where they are balanced. Cutting a station back below its
-# maximal circle does not FINISH it (`_RadiusChoice.finishes`), so the maximal
-# circle still has to follow on a later sweep: a cut-back at a station where
-# nothing complies buys a gentler worst circle and pays for it with an extra
-# circle and an extra sweep. Refining unconditionally takes that trade everywhere,
-# including at stations whose rescue radius is a small fraction of the coarse rung
-# above it, where the extra sweeps cost more engagement than the rescue saves.
+# Every candidate's sampled cap acceptance still comes from the native
+# `cap_exceeded` verdict at `engagement_at(...)[2]`; the reporting comparison
+# does not replace that predicate. The current call graph nevertheless has the
+# two reporting-driven decision sites above and does not satisfy complete
+# deciding/reporting separation.
 #
-# MEASURED, on the 6x4 pocket at a 40 deg cap -- the hard case, a pocket three tool
-# diameters wide where the largest loop the clearance allows is the tool radius
-# itself. Worst machining-circle engagement away from the chain entries, circles
-# the dense audit finds over the cap, and total cutting length:
+# The authenticated Task-6 case is a finite sweep over margins 1.25, 1.4, 1.5,
+# 1.75 and 2.0 on the fixed 6x4-pocket configuration. Its independent audit has
+# 16 entry-phased positions, includes entry as one of the 16, adds no separate
+# entry observation, and excludes chain-entry circles. Cutting length is the
+# sum of XY machining-circle circumference and cut-plane CUT-line Euclidean
+# length. The measured rows belong to the authenticated claim artifact.
 #
-#   gate      1.25    1.4     1.5    1.75    2.0
-#   worst     54.5   61.1    76.3    76.3  110.0
-#   over cap    40     23      18      17     11
-#   length     413    593     661     704    835
-#
-# against 86.4 deg / 34 circles / 295 for this generator with no refinement and no
-# ranking at all. 1.4 is the smallest gate at which BOTH quality columns beat that
-# baseline; below it the count regresses, above it the worst engagement climbs back
-# and the path keeps growing. On the 20x12 pocket at a 60 deg cap every gate from
-# 1.1 up gives the same 88.6 deg / 12 circles / 3382, against 126.1 / 12 / 3236 for
-# the same baseline -- so that pocket does not constrain the value and this one
-# fixes it.
-#
-# THE PATH GETS LONGER, and that is the trade being made rather than an oversight:
-# 6x4 at a 40 deg cap goes from 295 to 593 units of cutting travel. A smaller
-# radial bite taken more times is what respecting the cap costs, which is the same
-# statement the module docstring makes about tighter caps.
+# The deleted no-refinement/no-ranking baseline is unavailable to the committed
+# producer, so this comment makes no baseline comparison. The finite sweep
+# cannot support an open-ended claim about larger margins or other geometry,
+# and it is not a continuous engagement certificate. The value below remains
+# the generator's selected empirical setting pending a separate exact-decision
+# repair.
 RADIUS_LADDER_REFINEMENT_MARGIN = 1.4
 
 # Passes one skeleton chain may take before the walk is declared broken. This is a
@@ -390,12 +358,15 @@ class _SweepOutcome:
 class _GentlestRung:
     """The mildest of a station's already-refused candidate radii, with its measurement.
 
-    The peak travels with the rung because the two have exactly one consumer each
-    and both are reporting quantities: the rung says which circle to emit, the
-    peak says how far over the cap that circle sits, which is what
-    `_largest_admissible_radius` reads to decide whether looking harder is worth
-    it. Recomputing the peak at that call site would mean walking the probe ring a
-    second time for a number that was just measured.
+    The peak travels with the rung because it has two decision consumers.
+    `_least_bad_rung` obtains the reported value from `engagement_at(...)[1]`
+    and uses it to select which refused radius is emitted.
+    `_largest_admissible_radius` then reads the same value through
+    `_GentlestRung.peak` to decide whether the refined scan runs. Carrying the
+    measurement avoids walking the probe ring twice, but neither use is
+    reporting-only: the first changes forced-radius selection and the second
+    controls a search that can change the emitted result. Native sampled cap
+    acceptance remains the separate verdict at `engagement_at(...)[2]`.
 
     Attributes:
         rung: Index into the ladder the ranking was run on.
@@ -604,14 +575,20 @@ def _least_bad_rung(
     rung 26: first, last, smallest and largest all miss it.
     `tests/test_engagement_radial_toolpath.py` pins that state.
 
-    WHY A DOUBLE MAY DECIDE THIS ONE THING. Everything the cap governs is settled
-    before this function is called, by the exact `cap_exceeded` predicate, and it
-    said NO to every candidate here. This ranking cannot promote a refused
-    candidate to an accepted one -- the caller flags whatever comes back as forced
-    either way -- so the reported `max_run_tea` doubles are ordering options that
-    are already outside the guarantee. That is the deciding/reporting split of
-    `docs/exactness.md` used exactly as written, and it is the ONE place in this
-    module where a reported number influences a choice.
+    WHY A REPORTED DOUBLE DECIDES HERE. The native sampled cap predicate has
+    already refused every candidate passed to this function, so the ranking
+    cannot reclassify a refused radius as accepted. It does, however, read
+    reported `max_run_tea` values from `engagement_at(...)[1]` and select which
+    forced radius the generator emits. That is the first reporting-driven
+    radial decision site and is a decision under `docs/exactness.md`, even
+    though the returned choice remains flagged forced.
+
+    The returned value is also carried as `_GentlestRung.peak` into
+    `_largest_admissible_radius`, where it is compared with the caller's
+    reported cap angle to control the refined scan. That second
+    reporting-driven decision can likewise change the emitted result. The
+    current implementation therefore does not claim complete
+    deciding/reporting separation.
 
     CANDIDATES are the rungs that still reach uncut stock, plus rung 0
     unconditionally: a rung that cuts nothing is not a lesser evil, it is a wasted
