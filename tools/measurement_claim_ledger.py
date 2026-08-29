@@ -11,6 +11,7 @@ import re
 import subprocess
 from typing import Dict
 from typing import Literal
+from typing import Mapping
 from typing import Optional
 from typing import Sequence
 from typing import TypedDict
@@ -22,6 +23,7 @@ from tools.measurement_claim_result import GeneratorClaimPayload
 from tools.measurement_claim_result import GeneratorClaimRecord
 from tools.measurement_claim_result import ValidatedArtifactDirectory
 from tools.measurement_claim_result import ValidatedArtifactStartedUtc
+from tools.measurement_claim_result import validate_claim_artifact
 from tools.measurement_claim_result import validate_generator_payload
 
 Disposition = Literal["pending", "re-earned", "corrected", "historical", "deleted", "not-a-claim"]
@@ -480,12 +482,12 @@ def _render_validated_ledger_evidence(
 
 
 def render_ledger_evidence(
-    payload: GeneratorClaimPayload,
+    payload: object,
     envelope: ValidatedEnvelope,
     *,
     started: ValidatedArtifactStartedUtc,
     artifact_directory: ValidatedArtifactDirectory,
-) -> Dict[str, str]:
+) -> Mapping[str, str]:
     """Render the ten authenticated generator-claim ledger evidence cells."""
     validated = validate_generator_payload(payload)
     return _render_validated_ledger_evidence(
@@ -496,25 +498,23 @@ def render_ledger_evidence(
     )
 
 
-def validate_ledger_evidence(
+def _validate_task6_ledger_rows(
     rows: Sequence[LedgerRow],
     payload: GeneratorClaimPayload,
     envelope: ValidatedEnvelope,
     *,
     started: ValidatedArtifactStartedUtc,
     artifact_directory: ValidatedArtifactDirectory,
-) -> tuple[LedgerRow, ...]:
-    """Require the exact Task-6 ten-of-fourteen ledger acceptance state."""
+) -> None:
     if len(rows) != _ROW_COUNT:
         raise InvalidMeasurementClaimLedgerError(f"Task-6 ledger acceptance requires exactly {_ROW_COUNT} rows")
-    validated = validate_generator_payload(payload)
     evidence = _render_validated_ledger_evidence(
-        validated,
+        payload,
         envelope,
         started=started,
         artifact_directory=artifact_directory,
     )
-    claims: Dict[str, GeneratorClaimRecord] = {claim["claim_id"]: claim for claim in validated["claims"]}
+    claims: Dict[str, GeneratorClaimRecord] = {claim["claim_id"]: claim for claim in payload["claims"]}
     for index, row in enumerate(rows, start=1):
         claim_id = f"MC-{index:03d}"
         if row["ordinal"] != f"{index:03d}" or row["claim_id"] != claim_id:
@@ -527,7 +527,21 @@ def validate_ledger_evidence(
                 raise InvalidMeasurementClaimLedgerError(f"Task-6 {claim_id} evidence is not byte-equal to the authenticated rendering")
         elif row["disposition"] != "pending" or row["evidence"] != "—":
             raise InvalidMeasurementClaimLedgerError(f"Task-6 {claim_id} must remain pending with em-dash evidence")
-    return tuple(rows)
+
+
+def validate_ledger_evidence(ledger: pathlib.Path, artifact_directories: Sequence[pathlib.Path]) -> None:
+    """Authenticate one Task-6 artifact and require its exact ledger projection."""
+    if len(artifact_directories) != 1:
+        raise InvalidMeasurementClaimLedgerError("Task-6 ledger acceptance requires exactly one authenticated artifact")
+    rows = validate_ledger_structure(ledger)
+    payload, envelope, started, artifact_directory = validate_claim_artifact(artifact_directories[0])
+    _validate_task6_ledger_rows(
+        rows,
+        payload,
+        envelope,
+        started=started,
+        artifact_directory=artifact_directory,
+    )
 
 
 def validate_ledger_structure(ledger: pathlib.Path) -> tuple[LedgerRow, ...]:

@@ -245,7 +245,7 @@ def _task6_rows(payload: dict[str, Any], evidence: dict[str, str]) -> tuple[dict
 
 def test_task6_evidence_renderer_emits_exact_authenticated_one_line_cells(monkeypatch: pytest.MonkeyPatch) -> None:
     module = _module()
-    payload = _claim_payload()
+    payload: object = _claim_payload()
     _trust_payload_validator(monkeypatch, module)
 
     rendered = module.render_ledger_evidence(
@@ -264,14 +264,14 @@ def test_task6_evidence_renderer_emits_exact_authenticated_one_line_cells(monkey
     assert all("\n" not in cell and "\r" not in cell and "|" not in cell for cell in rendered.values())
 
 
-def test_task6_ledger_acceptance_is_exactly_ten_of_fourteen(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_task6_private_row_comparator_accepts_exactly_ten_of_fourteen(monkeypatch: pytest.MonkeyPatch) -> None:
     module = _module()
     payload = _claim_payload()
     _trust_payload_validator(monkeypatch, module)
     rendered = module.render_ledger_evidence(payload, _envelope(), started=STARTED, artifact_directory=ARTIFACT_DIRECTORY)
     rows = _task6_rows(payload, rendered)
 
-    assert module.validate_ledger_evidence(rows, payload, _envelope(), started=STARTED, artifact_directory=ARTIFACT_DIRECTORY) == rows
+    assert module._validate_task6_ledger_rows(rows, payload, _envelope(), started=STARTED, artifact_directory=ARTIFACT_DIRECTORY) is None
     assert sum(row["disposition"] != "pending" for row in rows) == 10
     assert tuple((row["disposition"], row["evidence"]) for row in rows[10:]) == (("pending", "—"),) * 4
 
@@ -294,7 +294,110 @@ def test_task6_ledger_rejects_any_non_byte_equal_or_post_task6_row(monkeypatch: 
     rows[10 if field == "pending" else 0] = target
 
     with pytest.raises(module.InvalidMeasurementClaimLedgerError, match="MC-001|MC-011|byte|pending|disposition|evidence"):
-        module.validate_ledger_evidence(tuple(rows), payload, _envelope(), started=STARTED, artifact_directory=ARTIFACT_DIRECTORY)
+        module._validate_task6_ledger_rows(tuple(rows), payload, _envelope(), started=STARTED, artifact_directory=ARTIFACT_DIRECTORY)
+
+
+def test_public_task6_ledger_consumer_owns_structure_and_artifact_authentication(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: pathlib.Path,
+) -> None:
+    module = _module()
+    payload = _claim_payload()
+    _trust_payload_validator(monkeypatch, module)
+    envelope = _envelope()
+    rendered = module.render_ledger_evidence(payload, envelope, started=STARTED, artifact_directory=ARTIFACT_DIRECTORY)
+    rows = _task6_rows(payload, rendered)
+    ledger = tmp_path / "measurement_claims.md"
+    artifact = tmp_path / "benchmarks" / "measurement_claim_results" / ARTIFACT_DIRECTORY.name
+    calls: list[tuple[str, pathlib.Path]] = []
+
+    def validate_structure(candidate: pathlib.Path) -> tuple[Any, ...]:
+        calls.append(("ledger", candidate))
+        return rows
+
+    def validate_artifact(candidate: pathlib.Path) -> tuple[Any, ...]:
+        calls.append(("artifact", candidate))
+        return payload, envelope, STARTED, ARTIFACT_DIRECTORY
+
+    monkeypatch.setattr(module, "validate_ledger_structure", validate_structure)
+    monkeypatch.setattr(module, "validate_claim_artifact", validate_artifact)
+
+    assert module.validate_ledger_evidence(ledger, [artifact]) is None
+    assert calls == [("ledger", ledger), ("artifact", artifact)]
+
+
+@pytest.mark.parametrize("artifact_count", [0, 2])
+def test_public_task6_ledger_consumer_rejects_noncanonical_artifact_cardinality_before_authentication(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: pathlib.Path,
+    artifact_count: int,
+) -> None:
+    module = _module()
+    calls: list[pathlib.Path] = []
+
+    def validate_artifact(candidate: pathlib.Path) -> tuple[Any, ...]:
+        calls.append(candidate)
+        raise AssertionError("artifact authentication must not run")
+
+    monkeypatch.setattr(module, "validate_claim_artifact", validate_artifact)
+    artifacts = [tmp_path / f"artifact-{index}" for index in range(artifact_count)]
+
+    with pytest.raises(module.InvalidMeasurementClaimLedgerError, match="exactly one.*artifact"):
+        module.validate_ledger_evidence(tmp_path / "measurement_claims.md", artifacts)
+    assert calls == []
+
+
+def test_public_task6_ledger_consumer_does_not_authenticate_artifact_after_structure_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: pathlib.Path,
+) -> None:
+    module = _module()
+    ledger_error = module.InvalidMeasurementClaimLedgerError("invalid ledger")
+    artifact_calls: list[pathlib.Path] = []
+
+    def reject_structure(candidate: pathlib.Path) -> tuple[Any, ...]:
+        assert candidate == tmp_path / "measurement_claims.md"
+        raise ledger_error
+
+    def validate_artifact(candidate: pathlib.Path) -> tuple[Any, ...]:
+        artifact_calls.append(candidate)
+        raise AssertionError("artifact authentication must not run")
+
+    monkeypatch.setattr(module, "validate_ledger_structure", reject_structure)
+    monkeypatch.setattr(module, "validate_claim_artifact", validate_artifact)
+
+    with pytest.raises(module.InvalidMeasurementClaimLedgerError, match="invalid ledger"):
+        module.validate_ledger_evidence(tmp_path / "measurement_claims.md", [tmp_path / "artifact"])
+    assert artifact_calls == []
+
+
+def test_public_task6_ledger_consumer_does_not_compare_unauthenticated_artifact(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: pathlib.Path,
+) -> None:
+    module = _module()
+    result_module = importlib.import_module("tools.measurement_claim_result")
+    rows: tuple[Any, ...] = ()
+    artifact_calls: list[pathlib.Path] = []
+    comparator_calls: list[tuple[Any, ...]] = []
+
+    monkeypatch.setattr(module, "validate_ledger_structure", lambda candidate: rows)
+
+    def reject_artifact(candidate: pathlib.Path) -> tuple[Any, ...]:
+        artifact_calls.append(candidate)
+        raise result_module.InvalidMeasurementClaimPayloadError("unauthenticated")
+
+    def compare(*values: Any, **named: Any) -> None:
+        comparator_calls.append((*values, named))
+
+    monkeypatch.setattr(module, "validate_claim_artifact", reject_artifact)
+    monkeypatch.setattr(module, "_validate_task6_ledger_rows", compare)
+    artifact = tmp_path / "artifact"
+
+    with pytest.raises(result_module.InvalidMeasurementClaimPayloadError, match="unauthenticated"):
+        module.validate_ledger_evidence(tmp_path / "measurement_claims.md", [artifact])
+    assert artifact_calls == [artifact]
+    assert comparator_calls == []
 
 
 @pytest.mark.parametrize("unsafe", ["pipe | reason", "two\nlines", "carriage\rreturn"])

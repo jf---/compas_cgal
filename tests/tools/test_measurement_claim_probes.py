@@ -184,3 +184,37 @@ def test_validate_cli_prints_authenticated_canonical_path(monkeypatch: pytest.Mo
 
     assert probes.main(["validate", str(artifact)]) == 0
     assert capsys.readouterr().out == f"{canonical}\n"
+
+
+def test_validate_ledger_cli_delegates_the_complete_consumer_boundary(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    probes = _probes()
+    ledger = pathlib.Path("docs/measurement_claims.md")
+    artifact = pathlib.Path("benchmarks/measurement_claim_results/example")
+    calls: list[tuple[pathlib.Path, list[pathlib.Path]]] = []
+    monkeypatch.setattr(
+        probes,
+        "validate_ledger_evidence",
+        lambda candidate, artifacts: calls.append((candidate, artifacts)),
+    )
+    monkeypatch.setattr(
+        probes,
+        "validate_claim_artifact",
+        lambda path: pytest.fail(f"CLI bypassed ledger consumer boundary: {path}"),
+    )
+
+    assert probes.main(["validate-ledger", "--ledger", str(ledger), str(artifact)]) == 0
+
+    assert calls == [(ledger, [artifact])]
+    assert capsys.readouterr().out == f"{ledger}\n"
+
+
+def test_run_generator_does_not_advertise_an_unstampable_results_override(capsys: pytest.CaptureFixture[str]) -> None:
+    probes = _probes()
+
+    with pytest.raises(SystemExit):
+        probes.main(["run-generator", "--all", "--results", "elsewhere"])
+
+    assert "unrecognized arguments: --results elsewhere" in capsys.readouterr().err

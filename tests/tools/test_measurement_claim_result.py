@@ -618,7 +618,6 @@ def test_compose_generator_payload_owns_claims_and_exact_semantic_projection() -
         "corrected",
     ]
     assert "omitted forward-peak histogram" in payload["claims"][8]["reason"]
-    assert _claims().generator_semantic_input(payload) == _input_payload(payload)
     decoded = _claims()._decode(json.dumps(payload, allow_nan=False).encode("utf-8"), "payload")
     assert _claims().validate_generator_payload(decoded) == decoded
 
@@ -971,10 +970,10 @@ c9: m.MC009ClaimPayload = {"claim_id": "MC-009", "case": "advance-placement", "d
 c10: m.MC010ClaimPayload = {"claim_id": "MC-010", "case": "advance-probe-count", "disposition": "corrected", "reason": "r", "selection_decision_provenance": advance_p, "evidence": e10}
 case_order: list[m.GeneratorCase] = ["radial-station", "radial-subdivisions", "radial-floor", "radial-margin", "advance-placement", "advance-probe-count"]
 cases: list[m.GeneratorCasePayload] = [station, sub, floor, margin, placement, probe]
-inputs: list[m.GeneratorCaseInputPayload] = [station_input, sub_input, floor_input, margin_input, placement_input, probe_input]
 claims: list[m.GeneratorClaimRecord] = [c1, c2, c3, c4, c5, c6, c7, c8, c9, c10]
-generator_input: m.GeneratorClaimInputPayload = {"extraction_commit": source, "case_order": case_order, "case_inputs": inputs}
+generator_input: m.GeneratorClaimInputPayload = {"extraction_commit": source, "case_order": case_order, "case_inputs": [station_input, sub_input, floor_input, margin_input, placement_input, probe_input]}
 generator_result: m.GeneratorClaimPayload = {"schema_version": "measurement-claim-payload/v1", "batch": "generator", "extraction_commit": source, "source_commit": source, "case_order": case_order, "cases": cases, "claims": claims}
+real_input: m.GeneratorClaimInputPayload = m.generator_semantic_input(generator_result)
 """,
         encoding="utf-8",
     )

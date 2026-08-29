@@ -25,7 +25,6 @@ from tools.measurement_artifact import write_envelope
 from tools.measurement_claim_advance import run_advance_case
 from tools.measurement_claim_ledger import render_ledger_evidence
 from tools.measurement_claim_ledger import validate_ledger_evidence
-from tools.measurement_claim_ledger import validate_ledger_structure
 from tools.measurement_claim_radial import run_radial_case
 from tools.measurement_claim_result import ARTIFACT_KIND
 from tools.measurement_claim_result import INPUT_VERSION
@@ -150,7 +149,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     selection = run_parser.add_mutually_exclusive_group(required=True)
     selection.add_argument("--all", action="store_true", help="run the canonical authenticated batch")
     selection.add_argument("--case", action="append", default=[], help="run one or more cases in canonical order as diagnostics")
-    run_parser.add_argument("--results", type=pathlib.Path, help="reserved diagnostic result root")
     validate_parser = subparsers.add_parser("validate", help="validate one generator claim artifact")
     validate_parser.add_argument("artifact", type=pathlib.Path)
     ledger_parser = subparsers.add_parser("validate-ledger", help="validate the Task-6 ledger against one authenticated artifact")
@@ -163,14 +161,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
     if arguments.command == "run-generator":
         if arguments.all:
-            if arguments.results is not None:
-                raise InvalidMeasurementClaimConfigError("authenticated --all runs require the canonical default result root")
             repository = pathlib.Path.cwd().resolve()
             result = _produce_generator(repository, repository / "benchmarks" / "measurement_claim_results")
             print(result.relative_to(repository).as_posix())
             return 0
-        if arguments.results is not None:
-            raise InvalidMeasurementClaimConfigError("diagnostic case runs write no artifact and do not accept --results")
         selected = _selected_cases(arguments.case)
         print(json.dumps(_run_cases(selected), indent=2, allow_nan=False))
         return 0
@@ -179,11 +173,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print(canonical)
         return 0
     if arguments.command == "validate-ledger":
-        if len(arguments.artifacts) != 1:
-            raise InvalidMeasurementClaimConfigError("Task-6 ledger validation requires exactly one generator artifact")
-        rows = validate_ledger_structure(arguments.ledger)
-        payload, envelope, started, canonical = validate_claim_artifact(arguments.artifacts[0])
-        validate_ledger_evidence(rows, payload, envelope, started=started, artifact_directory=canonical)
+        validate_ledger_evidence(arguments.ledger, arguments.artifacts)
         print(arguments.ledger)
         return 0
     raise InvalidMeasurementClaimConfigError(f"unsupported measurement-claim command: {arguments.command!r}")

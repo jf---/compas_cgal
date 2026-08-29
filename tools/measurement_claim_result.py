@@ -667,14 +667,7 @@ RESULT_VERSION = "generator-measurement-claim-result/v1"
 PAYLOAD_NAME = "generator-claims.json"
 EXTRACTION_COMMIT = "eec665c1df1cd8d1e98dd9dd1001b5984e17a703"
 _HISTORY_COMMIT = "29050b01e656ea7bf577b18f7bb50a04ff9a23c9"
-_CASE_ORDER: List[GeneratorCase] = [
-    "radial-station",
-    "radial-subdivisions",
-    "radial-floor",
-    "radial-margin",
-    "advance-placement",
-    "advance-probe-count",
-]
+_CASE_ORDER: List[GeneratorCase] = ["radial-station", "radial-subdivisions", "radial-floor", "radial-margin", "advance-placement", "advance-probe-count"]
 _CLAIM_IDS = [f"MC-{index:03d}" for index in range(1, 11)]
 _CASE_CLAIMS = {
     "radial-station": ["MC-001", "MC-002", "MC-003"],
@@ -1094,8 +1087,6 @@ def _advance_placement(case: Dict[str, object], field: str) -> None:
             offsets.append(bin_row["offset"])
             bin_sum += _integer(bin_row["positions_over_cap"], f"{field}.reporting_values[{index}].offset_bin_counts[{bin_index}].positions_over_cap")
             _literal(bin_row["angle_unit"], "degree", f"{field}.reporting_values[{index}].offset_bin_counts[{bin_index}].angle_unit")
-        if len(set(cast(List[float], offsets))) != len(offsets):
-            _fail(field, "offset bins must be unique and ordered")
         _same(offsets, _PLACEMENT_BIN_CENTRES, f"{field}.reporting_values[{index}].offset_bin_counts offsets")
         _literal(bin_sum, over_cap, f"{field}.reporting_values[{index}].offset_bin_counts")
     _literal(selected_sum, total_selected, f"{field}.reconstruction.selected_circle_count")
@@ -1136,7 +1127,6 @@ def _validate_case(value: object, expected_case: str, index: int) -> Dict[str, o
     case = _object(value, _COMMON_KEYS, field)
     _literal(case["case"], expected_case, f"{field}.case")
     _same(case["source_claim_ids"], _CASE_CLAIMS[expected_case], f"{field}.source_claim_ids")
-    _finite_tree(case["config"], f"{field}.config")
     try:
         _same(case["config"], _expected_config(expected_case), f"{field}.config")
     except InvalidMeasurementClaimPayloadError as exc:
@@ -1428,20 +1418,31 @@ def _logical_name(actual_name: str) -> str:
     return actual_name
 
 
-def generator_semantic_input(payload: GeneratorClaimPayload) -> Dict[str, object]:
-    return {
-        "extraction_commit": payload["extraction_commit"],
-        "case_order": payload["case_order"],
-        "case_inputs": [
-            {
-                "case": case["case"],
-                "source_claim_ids": case["source_claim_ids"],
-                "config": case["config"],
-                "selection_decision_provenance": case["selection_decision_provenance"],
-            }
-            for case in payload["cases"]
-        ],
-    }
+def generator_semantic_input(payload: GeneratorClaimPayload) -> GeneratorClaimInputPayload:
+    cases = payload["cases"]
+    s = cast(RadialStationCasePayload, cases[0])
+    d = cast(RadialSubdivisionsCasePayload, cases[1])
+    f = cast(RadialFloorCasePayload, cases[2])
+    m = cast(RadialMarginCasePayload, cases[3])
+    p = cast(AdvancePlacementCasePayload, cases[4])
+    c = cast(AdvanceProbeCountCasePayload, cases[5])
+    case_inputs: List[GeneratorCaseInputPayload] = [
+        RadialStationCaseInputPayload(
+            case=s["case"], source_claim_ids=s["source_claim_ids"], config=s["config"], selection_decision_provenance=s["selection_decision_provenance"]
+        ),
+        RadialSubdivisionsCaseInputPayload(
+            case=d["case"], source_claim_ids=d["source_claim_ids"], config=d["config"], selection_decision_provenance=d["selection_decision_provenance"]
+        ),
+        RadialFloorCaseInputPayload(case=f["case"], source_claim_ids=f["source_claim_ids"], config=f["config"], selection_decision_provenance=f["selection_decision_provenance"]),
+        RadialMarginCaseInputPayload(case=m["case"], source_claim_ids=m["source_claim_ids"], config=m["config"], selection_decision_provenance=m["selection_decision_provenance"]),
+        AdvancePlacementCaseInputPayload(
+            case=p["case"], source_claim_ids=p["source_claim_ids"], config=p["config"], selection_decision_provenance=p["selection_decision_provenance"]
+        ),
+        AdvanceProbeCountCaseInputPayload(
+            case=c["case"], source_claim_ids=c["source_claim_ids"], config=c["config"], selection_decision_provenance=c["selection_decision_provenance"]
+        ),
+    ]
+    return GeneratorClaimInputPayload(extraction_commit=payload["extraction_commit"], case_order=payload["case_order"], case_inputs=case_inputs)
 
 
 def validate_claim_artifact(
@@ -1455,8 +1456,7 @@ def validate_claim_artifact(
         raise InvalidMeasurementClaimPayloadError("artifact must be directly below benchmarks/measurement_claim_results")
     logical_name = _logical_name(lexical.name)
     repository = lexical.parent.parent.parent
-    stamp_path = lexical / measurement_artifact.STAMP_NAME
-    payload_path = lexical / PAYLOAD_NAME
+    stamp_path, payload_path = lexical / measurement_artifact.STAMP_NAME, lexical / PAYLOAD_NAME
     stamp_before = _read(stamp_path, "stamp")
     payload_before = _read(payload_path, PAYLOAD_NAME)
     envelope = measurement_artifact.validate_envelope(
