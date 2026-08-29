@@ -220,3 +220,21 @@ def test_joint_ledger_rejects_row_or_status_damage(
 
     with pytest.raises(module.InvalidMeasurementClaimLedgerError, match="disposition|evidence|pending|status"):
         module.validate_ledger_evidence(ledger, _artifact_paths(tmp_path))
+
+
+def test_repository_ledger_accepts_exact_authenticated_generator_and_benchmark_artifacts() -> None:
+    module = _module()
+    repository = pathlib.Path(__file__).resolve().parents[2]
+    artifact_root = repository / "benchmarks" / "measurement_claim_results"
+    generators = tuple(sorted(artifact_root.glob("*-generator-*")))
+    benchmarks = tuple(sorted(artifact_root.glob("*-benchmark-*")))
+    assert len(generators) == 1
+    assert len(benchmarks) == 1
+
+    assert (
+        module.validate_ledger_evidence(
+            repository / "docs" / "measurement_claims.md",
+            (generators[0], benchmarks[0]),
+        )
+        is None
+    )

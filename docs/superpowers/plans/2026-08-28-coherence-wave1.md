@@ -1,7 +1,7 @@
 # Coherence Wave 1 Implementation Plan
 
 > **status: in execution** — opened 2026-08-28. The commit that lands a task
-> updates this header with the task number. Landed: 2, 3, 4, 5, 6.
+> updates this header with the task number. Landed: 2, 3, 4, 5, 6, 7.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use
 > superpowers:subagent-driven-development (recommended) or

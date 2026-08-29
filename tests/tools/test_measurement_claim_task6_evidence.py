@@ -811,14 +811,27 @@ def test_measurement_claim_task6_ledger_module_exists() -> None:
     assert importlib.util.find_spec("tools.measurement_claim_task6_ledger") is not None
 
 
-def test_real_ledger_has_authenticated_task6_acceptance() -> None:
+def test_committed_task6_ledger_has_authenticated_acceptance(tmp_path: pathlib.Path) -> None:
     module = _module()
-    text = _live_page_text()
+    raw = subprocess.run(
+        [
+            "git",
+            "--no-replace-objects",
+            "show",
+            "a8b6adbb40d2bea630068990828119011ece156c:docs/measurement_claims.md",
+        ],
+        cwd=PROJECT_ROOT,
+        check=True,
+        stdout=subprocess.PIPE,
+    ).stdout
+    ledger = tmp_path / "measurement_claims.md"
+    ledger.write_bytes(raw)
+    text = raw.decode("utf-8")
     artifact_root = PROJECT_ROOT / "benchmarks" / "measurement_claim_results"
     artifacts = tuple(sorted(path for path in artifact_root.glob("*-generator-*") if path.is_dir()))
     assert len(artifacts) == 1
-    assert module.validate_ledger_evidence(LEDGER, artifacts) is None
-    rows = module.validate_ledger_structure(LEDGER)
+    assert module.validate_ledger_evidence(ledger, artifacts) is None
+    rows = module.validate_ledger_structure(ledger)
     assert text.startswith("# Measurement-claim ledger\n\n")
     assert SCOPE_BLOCK in text
     assert EXTRACTOR_BLOCK in text
