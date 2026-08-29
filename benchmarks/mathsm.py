@@ -15,13 +15,10 @@ admitted discretisation. Nothing here reproduces a published number; what it
 reproduces is a like-for-like curve a reader can regenerate.
 
 THE RELATION IS NOT MONOTONE, which is why the search is brute force and the
-selection is a minimum over all compliant trials rather than a bisection. Measured
-on the 20x12 pocket at tool 2.0, the after-entry maximum engagement runs 131.14,
-110.11, 120.99, 98.73, 119.42, 131.49, 117.79, 128.84, 138.38, 166.54, 189.56,
-205.73 degrees across the twelve default spacings -- it falls and rises three
-times before settling into a monotone climb, and its minimum sits in the middle of
-the sweep rather than at its fine end. Bisecting on spacing would have found a
-compliant trial and missed shorter ones.
+selection is a minimum over all compliant trials rather than a bisection. The
+complete fixed sweep exposes that non-monotone behavior; MC-013 in
+`docs/measurement_claims.md` records the exact command and authenticated
+artifact. Bisecting on spacing can find a compliant trial and miss shorter ones.
 
 Spacings are expressed in TOOL DIAMETERS so a sweep means the same thing at every
 scale, and engagement is measured through `benchmarks.pathmetrics` so the entry
@@ -43,12 +40,10 @@ from benchmarks.spec import PocketSpec
 from compas_cgal.toolpath import ToolpathResult
 from compas_cgal.toolpath import trochoidal_mat_toolpath_circular
 
-# Trial spacings in tool diameters. The lower end is past the turn where finer
-# spacing stops helping -- on the reference pocket 0.025 measures 131.14 degrees
-# against 98.73 at 0.1 -- and is kept so the sweep shows that turn rather than
-# implying engagement falls without limit. The upper end is where the path is a
-# rough slot at any cap worth setting. Twelve trials sweep the reference pocket in
-# about three minutes, dominated by the audit rather than by generation.
+# Trial spacings in tool diameters. The complete fixed sweep exposes
+# non-monotone engagement as spacing changes. MC-013 in
+# `docs/measurement_claims.md` records the exact command and authenticated
+# artifact.
 SPACING_SWEEP_TOOL_DIAMETERS: Tuple[float, ...] = (0.025, 0.05, 0.075, 0.1, 0.125, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5, 0.6)
 
 

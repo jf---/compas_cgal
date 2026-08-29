@@ -147,7 +147,7 @@ TANGENT_CONTINUITY_SLACK = 1e-4
 # around it is near zero wide, and the metric reports a catastrophic-looking
 # number that measures the median's smallness rather than the cut's steadiness.
 # Scaling by the commissioned load keeps one fixed absolute width for every path
-# measured at the same cap, which is also what makes two generators comparable.
+# evaluated under the same commissioned cap, which is also what makes two generators comparable.
 IMMERSION_STEADY_BAND_FRACTION = 0.10
 
 # Percentile of the CUT-BLOCK-LENGTH distribution reported as its short tail.
