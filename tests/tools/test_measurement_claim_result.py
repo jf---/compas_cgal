@@ -765,7 +765,7 @@ def test_compose_generator_payload_fails_conditional_claims_closed() -> None:
     cases[0]["reporting_values"]["rung_6_peak"] = 61.4
     cases[1]["reporting_values"][0]["worst_peak"] = 88.7
     cases[2]["reporting_values"][0]["circles_over_cap"] = 9
-    cases[2]["native_sampled_decisions"][0]["observations"] = _counts(3904, 9)
+    cases[2]["native_sampled_decisions"][0]["observations"] = _counts(3840, 9)
     payload = _claims().compose_generator_payload(_artifact().GitObjectId(source_commit), cases)
     assert [payload["claims"][index]["disposition"] for index in (0, 1, 2)] == ["re-earned", "corrected", "re-earned"]
     assert payload["claims"][4]["disposition"] == "corrected"
@@ -939,8 +939,9 @@ def test_validate_claim_artifact_calls_common_before_family_parsing(tmp_path: pa
     repository = _repository(tmp_path)
     result, _, _ = _write_artifact(repository)
     events: list[str] = []
+    artifact_validation = importlib.import_module("tools.measurement_claim_artifact_validation")
     common = _artifact().validate_envelope
-    decode = _claims()._decode
+    decode = artifact_validation._decode
 
     def recording_common(*args: object, **kwargs: object) -> Any:
         events.append("common")
@@ -951,7 +952,7 @@ def test_validate_claim_artifact_calls_common_before_family_parsing(tmp_path: pa
         return decode(data, field)
 
     monkeypatch.setattr(_artifact(), "validate_envelope", recording_common)
-    monkeypatch.setattr(_claims(), "_decode", recording_decode)
+    monkeypatch.setattr(artifact_validation, "_decode", recording_decode)
     _claims().validate_claim_artifact(result)
     assert events == ["common", "decode:stamp", "decode:generator-claims.json"]
 

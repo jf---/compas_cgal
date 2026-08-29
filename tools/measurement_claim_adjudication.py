@@ -2,17 +2,14 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
 from typing import Literal
 
+from tools.measurement_claim_schema import MC001EvidencePayload
+from tools.measurement_claim_schema import MC002EvidencePayload
+from tools.measurement_claim_schema import MC003EvidencePayload
 from tools.measurement_claim_units import Degrees
 from tools.measurement_claim_units import Millimetres
 from tools.measurement_claim_units import WorldMillimetres
-
-if TYPE_CHECKING:
-    from tools.measurement_claim_result import MC001EvidencePayload
-    from tools.measurement_claim_result import MC002EvidencePayload
-    from tools.measurement_claim_result import MC003EvidencePayload
 
 StationDisposition = Literal["re-earned", "corrected"]
 

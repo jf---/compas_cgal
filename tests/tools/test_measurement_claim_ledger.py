@@ -427,6 +427,74 @@ def test_semantic_repair_docstring_region_cannot_relocate_to_another_ast_owner()
         )
 
 
+DOCSTRING_OWNER_CASES = (
+    ("gentlest-rung-peak", RADIAL_SOURCE, "_GentlestRung", "class"),
+    ("least-bad-rung-double", RADIAL_SOURCE, "_least_bad_rung", "function"),
+    ("regulation-cap-angle", ADVANCE_SOURCE, "_Regulation", "class"),
+    ("measured-peak-reporting", ADVANCE_SOURCE, "_measured_peak_engagement", "function"),
+)
+
+
+def _synthetic_docstring_owner(owner_name: str, owner_kind: str, *, nested: bool) -> tuple[bytes, bytes, bytes]:
+    outer = b"def outer():\n" if nested else b""
+    owner_indent = b"    " if nested else b""
+    docstring_indent = owner_indent + b"    "
+    if owner_kind == "class":
+        header = b"class " + owner_name.encode("ascii") + b":\n"
+    elif owner_kind == "function":
+        header = b"def " + owner_name.encode("ascii") + b"():\n"
+    else:
+        assert owner_kind == "async-function"
+        header = b"async def " + owner_name.encode("ascii") + b"():\n"
+    before = b'"""BEGIN\n'
+    after = docstring_indent + b"END\n"
+    source = outer + owner_indent + header + docstring_indent + before + docstring_indent + b"protected claim\n" + after + docstring_indent + b'"""\n'
+    return source, before, after
+
+
+@pytest.mark.parametrize(("name", "path", "owner_name", "expected_kind"), DOCSTRING_OWNER_CASES)
+def test_task6_docstring_owner_rejects_class_function_interchange(
+    name: str,
+    path: str,
+    owner_name: str,
+    expected_kind: str,
+) -> None:
+    module = _module()
+    wrong_kind = "function" if expected_kind == "class" else "class"
+    source, before, after = _synthetic_docstring_owner(owner_name, wrong_kind, nested=False)
+
+    with pytest.raises(module.InvalidMeasurementClaimLedgerError, match="owner"):
+        module._docstring_region(path, source, name=name, before=before, after=after)
+
+
+@pytest.mark.parametrize(("name", "path", "owner_name", "expected_kind"), DOCSTRING_OWNER_CASES)
+def test_task6_docstring_owner_rejects_same_name_nested_owner(
+    name: str,
+    path: str,
+    owner_name: str,
+    expected_kind: str,
+) -> None:
+    module = _module()
+    source, before, after = _synthetic_docstring_owner(owner_name, expected_kind, nested=True)
+
+    with pytest.raises(module.InvalidMeasurementClaimLedgerError, match="owner"):
+        module._docstring_region(path, source, name=name, before=before, after=after)
+
+
+@pytest.mark.parametrize(("name", "path", "owner_name", "expected_kind"), DOCSTRING_OWNER_CASES)
+def test_task6_docstring_owner_rejects_same_name_async_nesting(
+    name: str,
+    path: str,
+    owner_name: str,
+    expected_kind: str,
+) -> None:
+    module = _module()
+    source, before, after = _synthetic_docstring_owner(owner_name, "async-function", nested=True)
+
+    with pytest.raises(module.InvalidMeasurementClaimLedgerError, match="owner"):
+        module._docstring_region(path, source, name=name, before=before, after=after)
+
+
 def test_task6_source_gate_accepts_exact_eight_region_correction(tmp_path: pathlib.Path) -> None:
     module = _module()
     repository, _, correction = _source_repository(tmp_path)
