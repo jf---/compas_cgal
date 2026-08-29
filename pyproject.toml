@@ -210,6 +210,8 @@ _junit-baseline = { cmd = '''sh -c 'editable_build_dir="$(python -c "import sys;
 red-manifest = { cmd = "python -m tools.red_manifest build/junit-baseline.xml", depends-on = ["_junit-baseline"], description = "Suite reds must equal docs/red_manifest.json, both directions" }
 plan-headers = { cmd = "python -m tools.plan_headers", description = "Every SDD plan carries a status header (I4)" }
 measured-run = { cmd = '''editable_build_dir="$(python -c 'import sys; print(next(f.path for f in sys.meta_path if hasattr(f, "known_wheel_files") and "compas_cgal._stock_2" in f.known_wheel_files))')" && SKBUILD_EDITABLE_SKIP="$editable_build_dir" python -m tools.measured_run''', depends-on = ["_editable-rebuild"], description = "Corpus run with authenticated provenance under benchmarks/results/" }
+measurement-claims-generator = { cmd = "python -m tools.measurement_claim_probes run-generator --all", depends-on = ["_editable-rebuild"], description = "Run the authenticated generator measurement-claim batch" }
+measurement-claims-validate = { cmd = "python -m tools.measurement_claim_probes validate", description = "Validate one authenticated generator measurement-claim artifact" }
 affected = { cmd = '''editable_build_dir="$(python -c 'import sys; print(next(f.path for f in sys.meta_path if hasattr(f, "known_wheel_files") and "compas_cgal._stock_2" in f.known_wheel_files))')" && SKBUILD_EDITABLE_SKIP="$editable_build_dir" pytest tests -n auto --testmon -q''', depends-on = ["_editable-rebuild"] }
 lint = "ruff check src/compas_cgal tests"
 # Figures are regenerated through the same editable-extension dance the test

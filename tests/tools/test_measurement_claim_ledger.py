@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime
 import hashlib
 import importlib
 import importlib.util
@@ -143,6 +144,205 @@ def _git_show(path: str) -> str:
         capture_output=True,
     )
     return completed.stdout.decode("utf-8")
+
+
+SOURCE_COMMIT = "a" * 40
+INPUT_SHA256 = "b" * 64
+RESULT_SHA256 = "c" * 64
+PAYLOAD_SHA256 = "d" * 64
+STARTED = datetime.datetime(2026, 8, 29, 9, 15, 30, 123456, tzinfo=datetime.timezone.utc)
+ARTIFACT_DIRECTORY = pathlib.PurePosixPath("benchmarks/measurement_claim_results/2026-08-29-aaaaaaaaaaaa-generator-bbbbbbbbbbbb")
+GENERATOR_CASES = (
+    "radial-station",
+    "radial-subdivisions",
+    "radial-floor",
+    "radial-margin",
+    "advance-placement",
+    "advance-probe-count",
+)
+CLAIM_CASES = (
+    "radial-station",
+    "radial-station",
+    "radial-station",
+    "radial-subdivisions",
+    "radial-subdivisions",
+    "radial-subdivisions",
+    "radial-floor",
+    "radial-margin",
+    "advance-placement",
+    "advance-probe-count",
+)
+
+
+def _claim_payload() -> dict[str, Any]:
+    cases = [
+        {
+            "case": case,
+            "config": {"z": index, "a": [index, True]},
+            "selection_decision_provenance": {"policy": f"policy-{index}"},
+            "continuous_certificate": None,
+        }
+        for index, case in enumerate(GENERATOR_CASES, start=1)
+    ]
+    case_by_name = {case["case"]: case for case in cases}
+    claims = [
+        {
+            "claim_id": f"MC-{index:03d}",
+            "case": case,
+            "disposition": "re-earned" if index == 1 else "corrected",
+            "reason": f"reason {index}",
+            "selection_decision_provenance": case_by_name[case]["selection_decision_provenance"],
+            "evidence": {"value": index + 0.25, "ordinal": index},
+        }
+        for index, case in enumerate(CLAIM_CASES, start=1)
+    ]
+    return {
+        "schema_version": "measurement-claim-payload/v1",
+        "batch": "generator",
+        "extraction_commit": FROZEN_COMMIT,
+        "source_commit": SOURCE_COMMIT,
+        "case_order": list(GENERATOR_CASES),
+        "cases": cases,
+        "claims": claims,
+    }
+
+
+def _envelope() -> Any:
+    from tools.measurement_artifact import ValidatedEnvelope
+
+    return ValidatedEnvelope.build(
+        finished=STARTED + datetime.timedelta(minutes=1),
+        commit=SOURCE_COMMIT,
+        input_sha256=INPUT_SHA256,
+        result_sha256=RESULT_SHA256,
+        payload_sha256={"generator-claims.json": PAYLOAD_SHA256},
+    )
+
+
+def _trust_payload_validator(monkeypatch: pytest.MonkeyPatch, module: Any) -> None:
+    monkeypatch.setattr(module, "validate_generator_payload", lambda payload: payload)
+
+
+def _task6_rows(payload: dict[str, Any], evidence: dict[str, str]) -> tuple[dict[str, Any], ...]:
+    rows: list[dict[str, Any]] = []
+    claims = {claim["claim_id"]: claim for claim in payload["claims"]}
+    for ordinal in range(1, 15):
+        claim_id = f"MC-{ordinal:03d}"
+        claim = claims.get(claim_id)
+        rows.append(
+            {
+                "ordinal": f"{ordinal:03d}",
+                "claim_id": claim_id,
+                "extracted_location": f"path:{ordinal}",
+                "stable_anchor": f"anchor.{ordinal}",
+                "anchor_match": "1/1",
+                "disposition": "pending" if claim is None else claim["disposition"],
+                "evidence": "—" if claim is None else evidence[claim_id],
+            }
+        )
+    return tuple(rows)
+
+
+def test_task6_evidence_renderer_emits_exact_authenticated_one_line_cells(monkeypatch: pytest.MonkeyPatch) -> None:
+    module = _module()
+    payload = _claim_payload()
+    _trust_payload_validator(monkeypatch, module)
+
+    rendered = module.render_ledger_evidence(
+        payload,
+        _envelope(),
+        started=STARTED,
+        artifact_directory=ARTIFACT_DIRECTORY,
+    )
+
+    assert tuple(rendered) == tuple(f"MC-{index:03d}" for index in range(1, 11))
+    assert rendered["MC-001"] == (
+        f"artifact={ARTIFACT_DIRECTORY}; claim=MC-001; input={INPUT_SHA256}; result={RESULT_SHA256}; "
+        f'source={SOURCE_COMMIT}; case=radial-station; disposition=re-earned; reason=reason 1; config={{"a":[1,true],"z":1}}; '
+        'evidence={"ordinal":1,"value":1.25}; selection={"policy":"policy-1"}; continuous_certificate=null'
+    )
+    assert all("\n" not in cell and "\r" not in cell and "|" not in cell for cell in rendered.values())
+
+
+def test_task6_ledger_acceptance_is_exactly_ten_of_fourteen(monkeypatch: pytest.MonkeyPatch) -> None:
+    module = _module()
+    payload = _claim_payload()
+    _trust_payload_validator(monkeypatch, module)
+    rendered = module.render_ledger_evidence(payload, _envelope(), started=STARTED, artifact_directory=ARTIFACT_DIRECTORY)
+    rows = _task6_rows(payload, rendered)
+
+    assert module.validate_ledger_evidence(rows, payload, _envelope(), started=STARTED, artifact_directory=ARTIFACT_DIRECTORY) == rows
+    assert sum(row["disposition"] != "pending" for row in rows) == 10
+    assert tuple((row["disposition"], row["evidence"]) for row in rows[10:]) == (("pending", "—"),) * 4
+
+
+@pytest.mark.parametrize("field", ["disposition", "evidence", "pending"])
+def test_task6_ledger_rejects_any_non_byte_equal_or_post_task6_row(monkeypatch: pytest.MonkeyPatch, field: str) -> None:
+    module = _module()
+    payload = _claim_payload()
+    _trust_payload_validator(monkeypatch, module)
+    rendered = module.render_ledger_evidence(payload, _envelope(), started=STARTED, artifact_directory=ARTIFACT_DIRECTORY)
+    rows = list(_task6_rows(payload, rendered))
+    target = dict(rows[10] if field == "pending" else rows[0])
+    if field == "disposition":
+        target["disposition"] = "historical"
+    elif field == "evidence":
+        target["evidence"] += " changed"
+    else:
+        target["disposition"] = "historical"
+        target["evidence"] = "premature"
+    rows[10 if field == "pending" else 0] = target
+
+    with pytest.raises(module.InvalidMeasurementClaimLedgerError, match="MC-001|MC-011|byte|pending|disposition|evidence"):
+        module.validate_ledger_evidence(tuple(rows), payload, _envelope(), started=STARTED, artifact_directory=ARTIFACT_DIRECTORY)
+
+
+@pytest.mark.parametrize("unsafe", ["pipe | reason", "two\nlines", "carriage\rreturn"])
+def test_task6_renderer_rejects_unsafe_reason_even_after_payload_validation(monkeypatch: pytest.MonkeyPatch, unsafe: str) -> None:
+    module = _module()
+    payload = _claim_payload()
+    payload["claims"][0]["reason"] = unsafe
+    _trust_payload_validator(monkeypatch, module)
+    with pytest.raises(module.InvalidMeasurementClaimLedgerError, match="one physical line|unsafe|Markdown"):
+        module.render_ledger_evidence(payload, _envelope(), started=STARTED, artifact_directory=ARTIFACT_DIRECTORY)
+
+
+@pytest.mark.parametrize(
+    ("started", "directory"),
+    [
+        (STARTED.replace(tzinfo=None), ARTIFACT_DIRECTORY),
+        (STARTED.astimezone(datetime.timezone(datetime.timedelta(hours=1))), ARTIFACT_DIRECTORY),
+        (STARTED + datetime.timedelta(minutes=2), ARTIFACT_DIRECTORY),
+        (STARTED, pathlib.PurePosixPath("benchmarks/measurement_claim_results/../unsafe|artifact")),
+        (STARTED, pathlib.PurePosixPath("/benchmarks/measurement_claim_results/2026-08-29-aaaaaaaaaaaa-generator-bbbbbbbbbbbb")),
+        (STARTED, pathlib.PurePosixPath("benchmarks/measurement_claim_results/2026-08-28-aaaaaaaaaaaa-generator-bbbbbbbbbbbb")),
+    ],
+)
+def test_task6_renderer_rejects_unsafe_started_or_artifact_path(
+    monkeypatch: pytest.MonkeyPatch,
+    started: datetime.datetime,
+    directory: pathlib.PurePosixPath,
+) -> None:
+    module = _module()
+    _trust_payload_validator(monkeypatch, module)
+    with pytest.raises(module.InvalidMeasurementClaimLedgerError, match="started|artifact"):
+        module.render_ledger_evidence(_claim_payload(), _envelope(), started=started, artifact_directory=directory)
+
+
+def test_task6_renderer_cross_binds_payload_source_to_authenticated_commit(monkeypatch: pytest.MonkeyPatch) -> None:
+    module = _module()
+    payload = _claim_payload()
+    payload["source_commit"] = "e" * 40
+    _trust_payload_validator(monkeypatch, module)
+    with pytest.raises(module.InvalidMeasurementClaimLedgerError, match="source commit|artifact commit"):
+        module.render_ledger_evidence(payload, _envelope(), started=STARTED, artifact_directory=ARTIFACT_DIRECTORY)
+
+
+def test_task6_renderer_invokes_the_shared_payload_validator() -> None:
+    module = _module()
+    result_module = importlib.import_module("tools.measurement_claim_result")
+    with pytest.raises(result_module.InvalidMeasurementClaimPayloadError):
+        module.render_ledger_evidence(_claim_payload(), _envelope(), started=STARTED, artifact_directory=ARTIFACT_DIRECTORY)
 
 
 def test_measurement_claim_ledger_module_exists() -> None:

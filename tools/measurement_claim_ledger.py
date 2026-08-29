@@ -3,16 +3,26 @@
 from __future__ import annotations
 
 import ast
+import datetime
 import hashlib
 import json
 import pathlib
 import re
 import subprocess
+from typing import Dict
 from typing import Literal
 from typing import Optional
 from typing import Sequence
 from typing import TypedDict
 from typing import cast
+
+from tools.measurement_artifact import ValidatedEnvelope
+from tools.measurement_claim_result import GeneratorCasePayload
+from tools.measurement_claim_result import GeneratorClaimPayload
+from tools.measurement_claim_result import GeneratorClaimRecord
+from tools.measurement_claim_result import ValidatedArtifactDirectory
+from tools.measurement_claim_result import ValidatedArtifactStartedUtc
+from tools.measurement_claim_result import validate_generator_payload
 
 Disposition = Literal["pending", "re-earned", "corrected", "historical", "deleted", "not-a-claim"]
 
@@ -407,6 +417,117 @@ def _validate_status(lines: Sequence[str], rows: Sequence[LedgerRow]) -> None:
     expected = COMPLETE_STATUS if done == _ROW_COUNT else IN_AUDIT_STATUS.format(done=done)
     if status_lines != [expected]:
         raise InvalidMeasurementClaimLedgerError(f"ledger status must equal observed disposition count byte-for-byte: expected {expected!r}, got {status_lines!r}")
+
+
+def _artifact_text(
+    payload: GeneratorClaimPayload,
+    envelope: ValidatedEnvelope,
+    *,
+    started: ValidatedArtifactStartedUtc,
+    artifact_directory: ValidatedArtifactDirectory,
+) -> str:
+    if type(started) is not datetime.datetime or started.tzinfo is None or started.utcoffset() != datetime.timedelta(0):
+        raise InvalidMeasurementClaimLedgerError("Task-6 artifact started value must be one timezone-aware UTC datetime")
+    if started > envelope.finished:
+        raise InvalidMeasurementClaimLedgerError("Task-6 artifact started value must not follow the authenticated finish")
+    if payload["source_commit"] != envelope.commit:
+        raise InvalidMeasurementClaimLedgerError("Task-6 payload source commit differs from the authenticated artifact commit")
+    expected = pathlib.PurePosixPath(
+        "benchmarks",
+        "measurement_claim_results",
+        f"{started.date().isoformat()}-{str(envelope.commit)[:12]}-generator-{str(envelope.input_sha256)[:12]}",
+    )
+    if type(artifact_directory) is not pathlib.PurePosixPath or artifact_directory != expected:
+        raise InvalidMeasurementClaimLedgerError(f"Task-6 artifact directory must equal the authenticated repository-relative path: {expected}")
+    text = artifact_directory.as_posix()
+    if any(token in text for token in ("|", "\r", "\n", "\u2028", "\u2029")):
+        raise InvalidMeasurementClaimLedgerError("Task-6 artifact directory is not Markdown-table-safe")
+    return text
+
+
+def _canonical_json(value: object, *, field: str) -> str:
+    try:
+        return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False)
+    except (TypeError, ValueError) as exc:
+        raise InvalidMeasurementClaimLedgerError(f"Task-6 {field} is not canonical finite JSON") from exc
+
+
+def _render_validated_ledger_evidence(
+    payload: GeneratorClaimPayload,
+    envelope: ValidatedEnvelope,
+    *,
+    started: ValidatedArtifactStartedUtc,
+    artifact_directory: ValidatedArtifactDirectory,
+) -> Dict[str, str]:
+    artifact = _artifact_text(payload, envelope, started=started, artifact_directory=artifact_directory)
+    cases: Dict[str, GeneratorCasePayload] = {case["case"]: case for case in payload["cases"]}
+    rendered: Dict[str, str] = {}
+    for claim in payload["claims"]:
+        claim_id = claim["claim_id"]
+        case = cases[claim["case"]]
+        cell = (
+            f"artifact={artifact}; claim={claim_id}; input={envelope.input_sha256}; result={envelope.result_sha256}; "
+            f"source={payload['source_commit']}; case={claim['case']}; disposition={claim['disposition']}; reason={claim['reason']}; "
+            f"config={_canonical_json(case['config'], field=f'{claim_id} config')}; "
+            f"evidence={_canonical_json(claim['evidence'], field=f'{claim_id} evidence')}; "
+            f"selection={_canonical_json(claim['selection_decision_provenance'], field=f'{claim_id} selection')}; "
+            "continuous_certificate=null"
+        )
+        if any(token in cell for token in ("|", "\r", "\n", "\u2028", "\u2029")):
+            raise InvalidMeasurementClaimLedgerError(f"Task-6 {claim_id} evidence must be Markdown-safe and one physical line")
+        rendered[claim_id] = cell
+    return rendered
+
+
+def render_ledger_evidence(
+    payload: GeneratorClaimPayload,
+    envelope: ValidatedEnvelope,
+    *,
+    started: ValidatedArtifactStartedUtc,
+    artifact_directory: ValidatedArtifactDirectory,
+) -> Dict[str, str]:
+    """Render the ten authenticated generator-claim ledger evidence cells."""
+    validated = validate_generator_payload(payload)
+    return _render_validated_ledger_evidence(
+        validated,
+        envelope,
+        started=started,
+        artifact_directory=artifact_directory,
+    )
+
+
+def validate_ledger_evidence(
+    rows: Sequence[LedgerRow],
+    payload: GeneratorClaimPayload,
+    envelope: ValidatedEnvelope,
+    *,
+    started: ValidatedArtifactStartedUtc,
+    artifact_directory: ValidatedArtifactDirectory,
+) -> tuple[LedgerRow, ...]:
+    """Require the exact Task-6 ten-of-fourteen ledger acceptance state."""
+    if len(rows) != _ROW_COUNT:
+        raise InvalidMeasurementClaimLedgerError(f"Task-6 ledger acceptance requires exactly {_ROW_COUNT} rows")
+    validated = validate_generator_payload(payload)
+    evidence = _render_validated_ledger_evidence(
+        validated,
+        envelope,
+        started=started,
+        artifact_directory=artifact_directory,
+    )
+    claims: Dict[str, GeneratorClaimRecord] = {claim["claim_id"]: claim for claim in validated["claims"]}
+    for index, row in enumerate(rows, start=1):
+        claim_id = f"MC-{index:03d}"
+        if row["ordinal"] != f"{index:03d}" or row["claim_id"] != claim_id:
+            raise InvalidMeasurementClaimLedgerError(f"Task-6 ledger row {index:03d} identity is not canonical")
+        if index <= 10:
+            claim = claims[claim_id]
+            if row["disposition"] != claim["disposition"]:
+                raise InvalidMeasurementClaimLedgerError(f"Task-6 {claim_id} disposition differs from the authenticated payload")
+            if row["evidence"] != evidence[claim_id]:
+                raise InvalidMeasurementClaimLedgerError(f"Task-6 {claim_id} evidence is not byte-equal to the authenticated rendering")
+        elif row["disposition"] != "pending" or row["evidence"] != "—":
+            raise InvalidMeasurementClaimLedgerError(f"Task-6 {claim_id} must remain pending with em-dash evidence")
+    return tuple(rows)
 
 
 def validate_ledger_structure(ledger: pathlib.Path) -> tuple[LedgerRow, ...]:
