@@ -21,13 +21,13 @@ from typing import TypedDict
 from typing import cast
 
 from tools.measurement_artifact import ValidatedEnvelope
-from tools.measurement_claim_result import GeneratorCasePayload
-from tools.measurement_claim_result import GeneratorClaimPayload
-from tools.measurement_claim_result import GeneratorClaimRecord
-from tools.measurement_claim_result import ValidatedArtifactDirectory
-from tools.measurement_claim_result import ValidatedArtifactStartedUtc
-from tools.measurement_claim_result import validate_claim_artifact
-from tools.measurement_claim_result import validate_generator_payload
+from tools.measurement_claim_artifact_validation import validate_claim_artifact
+from tools.measurement_claim_payload import validate_generator_payload
+from tools.measurement_claim_schema import GeneratorCasePayload
+from tools.measurement_claim_schema import GeneratorClaimPayload
+from tools.measurement_claim_schema import GeneratorClaimRecord
+from tools.measurement_claim_schema import ValidatedArtifactDirectory
+from tools.measurement_claim_schema import ValidatedArtifactStartedUtc
 
 Disposition = Literal["pending", "re-earned", "corrected", "historical", "deleted", "not-a-claim"]
 
@@ -134,12 +134,19 @@ _DOCSTRING_REGION_BOUNDARIES = {
         b"\n    The whole ring is evaluated",
     ),
 }
-_DOCSTRING_REGION_OWNERS: Mapping[str, Optional[str]] = {
-    "radial-module-which-circle": None,
-    "gentlest-rung-peak": "_GentlestRung",
-    "least-bad-rung-double": "_least_bad_rung",
-    "regulation-cap-angle": "_Regulation",
-    "measured-peak-reporting": "_measured_peak_engagement",
+_SOURCE_MODULES = {
+    _RADIAL_SOURCE: "compas_cgal.engagement_radial_toolpath",
+    _ADVANCE_SOURCE: "compas_cgal.engagement_toolpath",
+}
+_DOCSTRING_REGION_OWNERS: Mapping[
+    str,
+    tuple[str, type[ast.Module] | type[ast.ClassDef] | type[ast.FunctionDef]],
+] = {
+    "radial-module-which-circle": ("compas_cgal.engagement_radial_toolpath", ast.Module),
+    "gentlest-rung-peak": ("compas_cgal.engagement_radial_toolpath._GentlestRung", ast.ClassDef),
+    "least-bad-rung-double": ("compas_cgal.engagement_radial_toolpath._least_bad_rung", ast.FunctionDef),
+    "regulation-cap-angle": ("compas_cgal.engagement_toolpath._Regulation", ast.ClassDef),
+    "measured-peak-reporting": ("compas_cgal.engagement_toolpath._measured_peak_engagement", ast.FunctionDef),
 }
 _COMMENT_SOURCE_REGIONS = frozenset(_LEADING_COMMENT_ASSIGNMENTS)
 _MC007_DISPOSITIONS = ("re-earned", "corrected", "historical")
@@ -287,11 +294,16 @@ def _docstring_region(path: str, raw: bytes, *, name: str, before: bytes, after:
         tree = ast.parse(source, filename=path)
     except SyntaxError as exc:
         raise InvalidMeasurementClaimLedgerError(f"Task-6 source cannot be parsed while binding {name}: {path}") from exc
-    owner_name = _DOCSTRING_REGION_OWNERS[name]
-    if owner_name is None:
-        owners: list[ast.Module | ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef] = [tree]
+    qualified_owner, owner_kind = _DOCSTRING_REGION_OWNERS[name]
+    module_name = _SOURCE_MODULES[path]
+    if owner_kind is ast.Module:
+        owners: list[ast.Module | ast.ClassDef | ast.FunctionDef] = [tree] if qualified_owner == module_name else []
     else:
-        owners = [node for node in ast.walk(tree) if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == owner_name]
+        owner_module, separator, owner_name = qualified_owner.rpartition(".")
+        if not separator or owner_module != module_name:
+            owners = []
+        else:
+            owners = [node for node in tree.body if type(node) is owner_kind and getattr(node, "name", None) == owner_name]
     if len(owners) != 1 or not owners[0].body:
         raise InvalidMeasurementClaimLedgerError(f"Task-6 docstring owner for {name} must occur exactly once in {path}")
     expression = owners[0].body[0]

@@ -23,21 +23,21 @@ from tools.measurement_artifact import publication_stage
 from tools.measurement_artifact import publish_stage
 from tools.measurement_artifact import write_envelope
 from tools.measurement_claim_advance import run_advance_case
+from tools.measurement_claim_artifact_validation import validate_claim_artifact
+from tools.measurement_claim_errors import InvalidMeasurementClaimConfigError
+from tools.measurement_claim_errors import InvalidMeasurementClaimPayloadError
+from tools.measurement_claim_identity import ARTIFACT_KIND
+from tools.measurement_claim_identity import INPUT_VERSION
+from tools.measurement_claim_identity import PAYLOAD_NAME
+from tools.measurement_claim_identity import RESULT_VERSION
 from tools.measurement_claim_ledger import render_ledger_evidence
 from tools.measurement_claim_ledger import validate_ledger_evidence
+from tools.measurement_claim_payload import compose_generator_payload
 from tools.measurement_claim_radial import run_radial_case
-from tools.measurement_claim_result import ARTIFACT_KIND
-from tools.measurement_claim_result import INPUT_VERSION
-from tools.measurement_claim_result import PAYLOAD_NAME
-from tools.measurement_claim_result import RESULT_VERSION
-from tools.measurement_claim_result import GeneratorCase
-from tools.measurement_claim_result import GeneratorCasePayload
-from tools.measurement_claim_result import GeneratorClaimPayload
-from tools.measurement_claim_result import InvalidMeasurementClaimConfigError
-from tools.measurement_claim_result import InvalidMeasurementClaimPayloadError
-from tools.measurement_claim_result import compose_generator_payload
-from tools.measurement_claim_result import generator_semantic_input
-from tools.measurement_claim_result import validate_claim_artifact
+from tools.measurement_claim_schema import GeneratorCase
+from tools.measurement_claim_schema import GeneratorCasePayload
+from tools.measurement_claim_schema import GeneratorClaimPayload
+from tools.measurement_claim_semantic_input import generator_semantic_input
 
 GENERATOR_CASE_ORDER: Tuple[GeneratorCase, ...] = (
     "radial-station",
