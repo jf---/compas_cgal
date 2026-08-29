@@ -1,5 +1,7 @@
 # Wave-1 Task-6 Historical Assertions Implementation Plan
 
+> **status: landed** — Tasks 1–3 complete; canonical v2 Task-6 evidence accepted.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use
 > superpowers:subagent-driven-development (recommended) or
 > superpowers:executing-plans to implement this plan task-by-task. Steps use
@@ -46,7 +48,7 @@ pytest, Ruff, strict mypy, Pixi.
 - Produces: one byte-reproducible provenance artifact for MC-001 through
   MC-010. It is not imported by runtime code.
 
-- [ ] **Step 1: write the failing repository-boundary test**
+- [x] **Step 1: write the failing repository-boundary test**
 
 The test must:
 
@@ -61,7 +63,7 @@ The test must:
 8. require MC-001…008 map to the radial source and MC-009…010 to the advance
    source.
 
-- [ ] **Step 2: run the focused test and observe missing-artifact failure**
+- [x] **Step 2: run the focused test and observe missing-artifact failure**
 
 Run:
 
@@ -71,13 +73,13 @@ pixi run pytest tests/tools/test_measurement_claim_history.py -q -n auto
 
 Expected: failure naming the absent manifest or patch.
 
-- [ ] **Step 3: create the exact patch and manifest**
+- [x] **Step 3: create the exact patch and manifest**
 
 Create `source-correction.patch` from the command in the spec without
 normalization. Set `patch_sha256` to the SHA-256 of those exact bytes. Map all
 ten claim IDs once in canonical order.
 
-- [ ] **Step 4: run focused and adjacent gates**
+- [x] **Step 4: run focused and adjacent gates**
 
 ```bash
 pixi run pytest tests/tools/test_measurement_claim_history.py -q -n auto
@@ -100,26 +102,26 @@ Task-6 acceptance red.
 - Produces: explicit rulings, S1 absorption instructions, and durable rejected
   evidence outside the accepted root.
 
-- [ ] **Step 1: write both deviation rulings**
+- [x] **Step 1: write both deviation rulings**
 
 Record the exact fleet diagnostic test command, the observed twelfth red before
 `681f045`, current focused green, why revert violates I3, and the S1
 patch-equivalence rule. Record the framework guarantee, measured 7,757-line
 cost, frozen ten-claim scope, and post-Task-11 retirement boundary.
 
-- [ ] **Step 2: move the rejected bundle without changing its bytes**
+- [x] **Step 2: move the rejected bundle without changing its bytes**
 
 Move the untracked v1 directory from `benchmarks/measurement_claim_results/`
 to `benchmarks/measurement_claim_rejections/`, add a rejection note containing
 its input/result/payload/stamp hashes and semantic rejection reason, and verify
 the payload/stamp hashes after the move.
 
-- [ ] **Step 3: restore the ledger with `apply_patch`**
+- [x] **Step 3: restore the ledger with `apply_patch`**
 
 Restore the status line and MC-001 through MC-010 evidence cells to the exact
 committed Task-5 pending state. Do not use checkout, reset, or stash.
 
-- [ ] **Step 4: validate and commit the prerequisite evidence state**
+- [x] **Step 4: validate and commit the prerequisite evidence state**
 
 Run the history contract, ledger structural tests, Ruff, and strict mypy for
 the new test boundary. Commit only the historical artifact, rejected evidence,
@@ -139,7 +141,7 @@ pathspec.
   generator, historical assertion artifact.
 - Produces: exactly one accepted v2 artifact and 10/14 ledger acceptance.
 
-- [ ] **Step 1: generate once from the clean prerequisite commit**
+- [x] **Step 1: generate once from the clean prerequisite commit**
 
 ```bash
 pixi run measurement-claims-generator
@@ -149,13 +151,13 @@ Expected: exactly one directory below
 `benchmarks/measurement_claim_results/`, with v2 envelope, payload, distinct
 execution/correction identities, and `dirty: false`.
 
-- [ ] **Step 2: validate and render ledger evidence**
+- [x] **Step 2: validate and render ledger evidence**
 
 Use the canonical validator/renderer only. MC-001 must be `re-earned`;
 MC-002 and MC-003 must be independently `corrected`; MC-004 through MC-010
 must match their v2 adjudications. MC-011 through MC-014 remain pending.
 
-- [ ] **Step 3: run Task-6 acceptance gates**
+- [x] **Step 3: run Task-6 acceptance gates**
 
 ```bash
 pixi run pytest tests/tools -q -n auto
@@ -170,7 +172,7 @@ pixi run mypy --strict tools
 Expected: all green except only the reds already accepted by
 `docs/red_manifest.json`; the ledger acceptance test is green.
 
-- [ ] **Step 4: update completion records and commit Task 6**
+- [x] **Step 4: update completion records and commit Task 6**
 
 Tick Task-6 checkboxes and add `6` to the Wave-1 plan header only now. Record
 the v2 artifact identities, historical artifact SHA-256, exact gate outputs,
