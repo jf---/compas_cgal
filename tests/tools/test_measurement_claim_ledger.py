@@ -229,10 +229,11 @@ def _source_repository(
     candidate_mutation: str | None = None,
     extra_path: bool = False,
     executable_path: bool = False,
+    object_format: str = "sha1",
 ) -> tuple[pathlib.Path, str, str]:
     repository = tmp_path / "source-repository"
     repository.mkdir()
-    _git_at(repository, "init", "-q")
+    _git_at(repository, "init", "-q", f"--object-format={object_format}")
     baseline: dict[str, bytes] = {}
     for path in SOURCE_FILE_SHA256:
         raw = _git_at(PROJECT_ROOT, "show", f"{FROZEN_COMMIT}:{path}")
@@ -306,6 +307,48 @@ def _merge_commit(repository: pathlib.Path, correction: str, parent: str) -> str
     )
 
 
+def _commit_tree(repository: pathlib.Path, tree_commit: str, parent: str, message: bytes) -> str:
+    tree = _git_at(repository, "show", "-s", "--format=%T", tree_commit).decode("ascii").strip()
+    return (
+        _git_at(
+            repository,
+            "-c",
+            "user.name=Jelle Feringa",
+            "-c",
+            "user.email=jelleferinga@gmail.com",
+            "commit-tree",
+            tree,
+            "-p",
+            parent,
+            stdin=message,
+        )
+        .decode("ascii")
+        .strip()
+    )
+
+
+def _merge_with_tree(repository: pathlib.Path, tree_commit: str, first_parent: str, second_parent: str) -> str:
+    tree = _git_at(repository, "show", "-s", "--format=%T", tree_commit).decode("ascii").strip()
+    return (
+        _git_at(
+            repository,
+            "-c",
+            "user.name=Jelle Feringa",
+            "-c",
+            "user.email=jelleferinga@gmail.com",
+            "commit-tree",
+            tree,
+            "-p",
+            first_parent,
+            "-p",
+            second_parent,
+            stdin=b"merge execution\n",
+        )
+        .decode("ascii")
+        .strip()
+    )
+
+
 def _test_source_region(lines: list[bytes], line_start: int, line_end: int) -> dict[str, object]:
     byte_start = sum(len(line) for line in lines[: line_start - 1])
     byte_end = sum(len(line) for line in lines[:line_end])
@@ -367,6 +410,21 @@ def test_task6_source_baseline_pins_two_blobs_and_all_nine_regions() -> None:
         observed_regions.update({name: hashlib.sha256(region).hexdigest() for name, region in regions.items()})
 
     assert observed_regions == {name: digest for name, _, _, _, digest in SOURCE_REGION_BASELINES}
+
+
+def test_semantic_repair_docstring_region_cannot_relocate_to_another_ast_owner() -> None:
+    module = _module()
+    before, after = module._DOCSTRING_REGION_BOUNDARIES["measured-peak-reporting"]
+    relocated = b"def other():\n" + before + b"    moved claim\n" + after + b'\n    """\n    pass\n'
+
+    with pytest.raises(module.InvalidMeasurementClaimLedgerError, match="owner|relocated"):
+        module._docstring_region(
+            ADVANCE_SOURCE,
+            relocated,
+            name="measured-peak-reporting",
+            before=before,
+            after=after,
+        )
 
 
 def test_task6_source_gate_accepts_exact_eight_region_correction(tmp_path: pathlib.Path) -> None:
@@ -494,6 +552,131 @@ def test_task6_source_gate_rejects_grafted_two_parent_commit_identity(tmp_path: 
         module.validate_task6_source_correction(repository, bad_commit, mc007_disposition="historical")
 
 
+@pytest.mark.parametrize("object_format", ["sha1", "sha256"])
+def test_semantic_repair_accepts_forward_descendant_with_identical_protected_regions(
+    tmp_path: pathlib.Path,
+    object_format: str,
+) -> None:
+    module = _module()
+    repository, _, correction = _source_repository(tmp_path, object_format=object_format)
+    execution = _commit_tree(repository, correction, correction, b"execution\n")
+
+    assert module.validate_task6_source_lineage(repository, correction, execution, mc007_disposition="re-earned") is None
+
+
+def test_semantic_repair_lineage_reads_commits_not_working_tree(tmp_path: pathlib.Path) -> None:
+    module = _module()
+    repository, _, correction = _source_repository(tmp_path)
+    execution = _commit_tree(repository, correction, correction, b"execution\n")
+    source = repository / RADIAL_SOURCE
+    source.write_bytes(
+        source.read_bytes().replace(
+            SOURCE_CORRECTIONS["radial-module-which-circle"],
+            b"uncommitted working-tree drift\n",
+            1,
+        )
+    )
+
+    assert module.validate_task6_source_lineage(repository, correction, execution, mc007_disposition="re-earned") is None
+
+
+def test_semantic_repair_finds_correction_on_merge_second_parent(tmp_path: pathlib.Path) -> None:
+    module = _module()
+    repository, parent, correction = _source_repository(tmp_path)
+    execution = _merge_with_tree(repository, correction, parent, correction)
+
+    assert module.validate_task6_source_lineage(repository, correction, execution, mc007_disposition="re-earned") is None
+
+
+def test_semantic_repair_rejects_reflexive_execution_identity(tmp_path: pathlib.Path) -> None:
+    module = _module()
+    repository, _, correction = _source_repository(tmp_path)
+
+    with pytest.raises(module.InvalidMeasurementClaimLedgerError, match="strict ancestor|distinct"):
+        module.validate_task6_source_lineage(repository, correction, correction, mc007_disposition="re-earned")
+
+
+def test_semantic_repair_rejects_nonancestor_correction(tmp_path: pathlib.Path) -> None:
+    module = _module()
+    repository, parent, correction = _source_repository(tmp_path)
+    execution = _commit_tree(repository, correction, parent, b"sibling execution\n")
+
+    with pytest.raises(module.InvalidMeasurementClaimLedgerError, match="ancestor"):
+        module.validate_task6_source_lineage(repository, correction, execution, mc007_disposition="re-earned")
+
+
+def test_semantic_repair_rejects_mixed_object_id_widths(tmp_path: pathlib.Path) -> None:
+    module = _module()
+    repository, _, correction = _source_repository(tmp_path)
+
+    with pytest.raises(module.InvalidMeasurementClaimLedgerError, match="same object-ID format"):
+        module.validate_task6_source_lineage(repository, correction, "a" * 64, mc007_disposition="re-earned")
+
+
+@pytest.mark.parametrize("attack", ["graft", "replacement"])
+@pytest.mark.parametrize("attack_point", ["endpoint", "intermediate"])
+def test_semantic_repair_rejects_real_graft_or_replacement_ancestry_attack(
+    tmp_path: pathlib.Path,
+    attack: str,
+    attack_point: str,
+) -> None:
+    module = _module()
+    repository, parent, correction = _source_repository(tmp_path)
+    attacked = _commit_tree(repository, correction, parent, b"attacked commit\n")
+    execution = attacked if attack_point == "endpoint" else _commit_tree(repository, correction, attacked, b"execution\n")
+    if attack == "graft":
+        git_directory = pathlib.Path(_git_at(repository, "rev-parse", "--git-dir").decode("utf-8").strip())
+        if not git_directory.is_absolute():
+            git_directory = repository / git_directory
+        info = git_directory / "info"
+        info.mkdir(exist_ok=True)
+        (info / "grafts").write_text(f"{attacked} {correction}\n", encoding="ascii")
+    else:
+        _git_at(repository, "replace", "--graft", attacked, correction)
+
+    apparent = subprocess.run(
+        ["git", "-C", str(repository), "merge-base", "--is-ancestor", correction, execution],
+        check=False,
+    )
+    assert apparent.returncode == 0
+    with pytest.raises(module.InvalidMeasurementClaimLedgerError, match="ancestor"):
+        module.validate_task6_source_lineage(repository, correction, execution, mc007_disposition="re-earned")
+
+
+def test_semantic_repair_rejects_protected_region_drift_at_execution(tmp_path: pathlib.Path) -> None:
+    module = _module()
+    repository, _, correction = _source_repository(tmp_path)
+    source = repository / RADIAL_SOURCE
+    source.write_bytes(
+        source.read_bytes().replace(
+            SOURCE_CORRECTIONS["radial-module-which-circle"],
+            b"WHICH circle drifted after correction.\n",
+            1,
+        )
+    )
+    execution = _commit(repository, "drift")
+
+    with pytest.raises(module.InvalidMeasurementClaimLedgerError, match="protected.*region|region.*differs"):
+        module.validate_task6_source_lineage(repository, correction, execution, mc007_disposition="re-earned")
+
+
+def test_semantic_repair_protects_floor_only_when_correction_changed_it(tmp_path: pathlib.Path) -> None:
+    module = _module()
+    repository, _, correction = _source_repository(tmp_path, correct_floor=True)
+    source = repository / RADIAL_SOURCE
+    source.write_bytes(
+        source.read_bytes().replace(
+            SOURCE_CORRECTIONS["radius-ladder-floor-steps"],
+            b"# floor drifted after correction\n",
+            1,
+        )
+    )
+    execution = _commit(repository, "floor drift")
+
+    with pytest.raises(module.InvalidMeasurementClaimLedgerError, match="radius-ladder-floor-steps"):
+        module.validate_task6_source_lineage(repository, correction, execution, mc007_disposition="historical")
+
+
 def test_git_failure_names_the_actual_replacement_immune_command(tmp_path: pathlib.Path) -> None:
     module = _module()
     repository = tmp_path / "missing-object-repository"
@@ -616,6 +799,7 @@ def test_task6_committed_zero_count_deletion_cannot_cross_owned_region_boundary(
 
 
 SOURCE_COMMIT = "a" * 40
+SOURCE_CORRECTION_COMMIT = "53135e04390e84bf69aa74dc4d0c1ce6ca308eb4"
 INPUT_SHA256 = "b" * 64
 RESULT_SHA256 = "c" * 64
 PAYLOAD_SHA256 = "d" * 64
@@ -666,10 +850,11 @@ def _claim_payload() -> dict[str, Any]:
         for index, case in enumerate(CLAIM_CASES, start=1)
     ]
     return {
-        "schema_version": "measurement-claim-payload/v1",
+        "schema_version": "measurement-claim-payload/v2",
         "batch": "generator",
         "extraction_commit": FROZEN_COMMIT,
         "source_commit": SOURCE_COMMIT,
+        "source_correction_commit": SOURCE_CORRECTION_COMMIT,
         "case_order": list(GENERATOR_CASES),
         "cases": cases,
         "claims": claims,
@@ -727,10 +912,21 @@ def test_task6_evidence_renderer_emits_exact_authenticated_one_line_cells(monkey
     assert tuple(rendered) == tuple(f"MC-{index:03d}" for index in range(1, 11))
     assert rendered["MC-001"] == (
         f"artifact={ARTIFACT_DIRECTORY}; claim=MC-001; input={INPUT_SHA256}; result={RESULT_SHA256}; "
-        f'source={SOURCE_COMMIT}; case=radial-station; disposition=re-earned; reason=reason 1; config={{"a":[1,true],"z":1}}; '
+        f'source={SOURCE_COMMIT}; source_correction={SOURCE_CORRECTION_COMMIT}; case=radial-station; disposition=re-earned; reason=reason 1; config={{"a":[1,true],"z":1}}; '
         'evidence={"ordinal":1,"value":1.25}; selection={"policy":"policy-1"}; continuous_certificate=null'
     )
     assert all("\n" not in cell and "\r" not in cell and "|" not in cell for cell in rendered.values())
+
+
+def test_semantic_repair_renderer_carries_execution_and_correction_identities(monkeypatch: pytest.MonkeyPatch) -> None:
+    module = _module()
+    payload = _claim_payload()
+    payload["source_correction_commit"] = SOURCE_CORRECTION_COMMIT
+    _trust_payload_validator(monkeypatch, module)
+
+    rendered = module.render_ledger_evidence(payload, _envelope(), started=STARTED, artifact_directory=ARTIFACT_DIRECTORY)
+
+    assert all(f"source={SOURCE_COMMIT}; source_correction={SOURCE_CORRECTION_COMMIT};" in cell for cell in rendered.values())
 
 
 def test_task6_private_row_comparator_accepts_exactly_ten_of_fourteen(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -795,9 +991,22 @@ def test_public_task6_ledger_consumer_owns_structure_and_artifact_authentication
         mc007_disposition: str,
     ) -> None:
         assert repository == tmp_path
-        assert correction_commit == SOURCE_COMMIT
+        assert correction_commit == SOURCE_CORRECTION_COMMIT
         assert mc007_disposition == "corrected"
         calls.append(("source", repository))
+
+    def validate_lineage(
+        repository: pathlib.Path,
+        correction_commit: str,
+        execution_commit: str,
+        *,
+        mc007_disposition: str,
+    ) -> None:
+        assert repository == tmp_path
+        assert correction_commit == SOURCE_CORRECTION_COMMIT
+        assert execution_commit == SOURCE_COMMIT
+        assert mc007_disposition == "corrected"
+        calls.append(("lineage", repository))
 
     def compare_rows(*values: Any, **named: Any) -> None:
         del values, named
@@ -806,10 +1015,11 @@ def test_public_task6_ledger_consumer_owns_structure_and_artifact_authentication
     monkeypatch.setattr(module, "validate_ledger_structure", validate_structure)
     monkeypatch.setattr(module, "validate_claim_artifact", validate_artifact)
     monkeypatch.setattr(module, "validate_task6_source_correction", validate_source)
+    monkeypatch.setattr(module, "validate_task6_source_lineage", validate_lineage)
     monkeypatch.setattr(module, "_validate_task6_ledger_rows", compare_rows)
 
     assert module.validate_ledger_evidence(ledger, [artifact]) is None
-    assert calls == [("ledger", ledger), ("artifact", artifact), ("source", tmp_path), ("rows", ledger)]
+    assert calls == [("ledger", ledger), ("artifact", artifact), ("source", tmp_path), ("lineage", tmp_path), ("rows", ledger)]
 
 
 @pytest.mark.parametrize("artifact_count", [0, 2])
@@ -917,8 +1127,34 @@ def test_public_task6_ledger_consumer_does_not_compare_source_unverified_artifac
     with pytest.raises(module.InvalidMeasurementClaimLedgerError, match="source unverified"):
         module.validate_ledger_evidence(ledger, [artifact])
 
-    assert source_calls == [(tmp_path, SOURCE_COMMIT, "corrected")]
+    assert source_calls == [(tmp_path, SOURCE_CORRECTION_COMMIT, "corrected")]
     assert comparator_calls == []
+
+
+def test_semantic_repair_public_consumer_stops_before_rows_when_lineage_fails(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: pathlib.Path,
+) -> None:
+    module = _module()
+    payload = _claim_payload()
+    ledger = tmp_path / "docs" / "measurement_claims.md"
+    artifact = tmp_path / "benchmarks" / "measurement_claim_results" / ARTIFACT_DIRECTORY.name
+    events: list[str] = []
+    monkeypatch.setattr(module, "validate_ledger_structure", lambda candidate: ())
+    monkeypatch.setattr(module, "validate_claim_artifact", lambda candidate: (payload, _envelope(), STARTED, ARTIFACT_DIRECTORY))
+    monkeypatch.setattr(module, "validate_task6_source_correction", lambda *args, **kwargs: events.append("correction"))
+
+    def reject_lineage(*args: Any, **kwargs: Any) -> None:
+        del args, kwargs
+        events.append("lineage")
+        raise module.InvalidMeasurementClaimLedgerError("lineage unverified")
+
+    monkeypatch.setattr(module, "validate_task6_source_lineage", reject_lineage)
+    monkeypatch.setattr(module, "_validate_task6_ledger_rows", lambda *args, **kwargs: events.append("rows"))
+
+    with pytest.raises(module.InvalidMeasurementClaimLedgerError, match="lineage unverified"):
+        module.validate_ledger_evidence(ledger, [artifact])
+    assert events == ["correction", "lineage"]
 
 
 @pytest.mark.parametrize("unsafe", ["pipe | reason", "two\nlines", "carriage\rreturn"])

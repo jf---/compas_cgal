@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import datetime
-import json
 import math
 import pathlib
 import re
@@ -19,15 +18,17 @@ from typing import Union
 from typing import cast
 
 from tools import measurement_artifact
+from tools import measurement_claim_json
 from tools.measurement_artifact import GitObjectId
 from tools.measurement_artifact import MeasurementArtifactError
 from tools.measurement_artifact import ValidatedEnvelope
+from tools.measurement_claim_adjudication import adjudicate_station_claims
+from tools.measurement_claim_units import Degrees as Degrees
+from tools.measurement_claim_units import Millimetres as Millimetres
+from tools.measurement_claim_units import WorldMillimetres as WorldMillimetres
 
-Degrees = NewType("Degrees", float)
-Millimetres = NewType("Millimetres", float)
 ToolDiameters = NewType("ToolDiameters", float)
 CoarseSteps = NewType("CoarseSteps", float)
-WorldMillimetres = NewType("WorldMillimetres", float)
 DimensionlessRatio = NewType("DimensionlessRatio", float)
 SamplesPerRadian = NewType("SamplesPerRadian", float)
 ValidatedArtifactStartedUtc = NewType("ValidatedArtifactStartedUtc", datetime.datetime)
@@ -421,6 +422,9 @@ class MC002EvidencePayload(TypedDict):
 
 
 class MC003EvidencePayload(TypedDict):
+    rung_7_radius: Optional[Millimetres]
+    rung_7_peak: Optional[Degrees]
+    rung_7_cuts_material: Optional[bool]
     refined_band_min_radius: Optional[Millimetres]
     refined_band_max_radius: Optional[Millimetres]
     forced_peak: Optional[Degrees]
@@ -474,7 +478,7 @@ class MC010EvidencePayload(TypedDict):
 class MC001ClaimPayload(TypedDict):
     claim_id: Literal["MC-001"]
     case: Literal["radial-station"]
-    disposition: Literal["re-earned", "historical"]
+    disposition: Literal["re-earned", "corrected"]
     reason: str
     selection_decision_provenance: RadialSelectionDecisionProvenancePayload
     evidence: MC001EvidencePayload
@@ -483,7 +487,7 @@ class MC001ClaimPayload(TypedDict):
 class MC002ClaimPayload(TypedDict):
     claim_id: Literal["MC-002"]
     case: Literal["radial-station"]
-    disposition: Literal["re-earned", "historical"]
+    disposition: Literal["re-earned", "corrected"]
     reason: str
     selection_decision_provenance: RadialSelectionDecisionProvenancePayload
     evidence: MC002EvidencePayload
@@ -492,7 +496,7 @@ class MC002ClaimPayload(TypedDict):
 class MC003ClaimPayload(TypedDict):
     claim_id: Literal["MC-003"]
     case: Literal["radial-station"]
-    disposition: Literal["re-earned", "historical"]
+    disposition: Literal["re-earned", "corrected"]
     reason: str
     selection_decision_provenance: RadialSelectionDecisionProvenancePayload
     evidence: MC003EvidencePayload
@@ -629,15 +633,17 @@ GeneratorCaseInputPayload = Union[
 
 class GeneratorClaimInputPayload(TypedDict):
     extraction_commit: GitObjectId
+    source_correction_commit: GitObjectId
     case_order: List[GeneratorCase]
     case_inputs: List[GeneratorCaseInputPayload]
 
 
 class GeneratorClaimPayload(TypedDict):
-    schema_version: Literal["measurement-claim-payload/v1"]
+    schema_version: Literal["measurement-claim-payload/v2"]
     batch: Literal["generator"]
     extraction_commit: GitObjectId
     source_commit: GitObjectId
+    source_correction_commit: GitObjectId
     case_order: List[GeneratorCase]
     cases: List[GeneratorCasePayload]
     claims: List[GeneratorClaimRecord]
@@ -661,11 +667,12 @@ class InvalidMeasurementClaimPayloadError(MeasurementClaimError): ...
 class MeasurementClaimChildError(MeasurementClaimError): ...
 
 
-ARTIFACT_KIND = "generator-measurement-claims/v1"
-INPUT_VERSION = "generator-measurement-claim-input/v1"
-RESULT_VERSION = "generator-measurement-claim-result/v1"
+ARTIFACT_KIND = "generator-measurement-claims/v2"
+INPUT_VERSION = "generator-measurement-claim-input/v2"
+RESULT_VERSION = "generator-measurement-claim-result/v2"
 PAYLOAD_NAME = "generator-claims.json"
 EXTRACTION_COMMIT = "eec665c1df1cd8d1e98dd9dd1001b5984e17a703"
+SOURCE_CORRECTION_COMMIT = "53135e04390e84bf69aa74dc4d0c1ce6ca308eb4"
 _HISTORY_COMMIT = "29050b01e656ea7bf577b18f7bb50a04ff9a23c9"
 _CASE_ORDER: List[GeneratorCase] = ["radial-station", "radial-subdivisions", "radial-floor", "radial-margin", "advance-placement", "advance-probe-count"]
 _CLAIM_IDS = [f"MC-{index:03d}" for index in range(1, 11)]
@@ -760,14 +767,7 @@ def _same(value: object, expected: object, field: str) -> None:
 
 
 def _finite_tree(value: object, field: str) -> None:
-    if type(value) is float and not math.isfinite(value):
-        _fail(field, "contains a non-finite number")
-    if type(value) is list:
-        for index, item in enumerate(cast(List[object], value)):
-            _finite_tree(item, f"{field}[{index}]")
-    if type(value) is dict:
-        for key, item in cast(Dict[str, object], value).items():
-            _finite_tree(item, f"{field}.{key}")
+    measurement_claim_json.validate_finite(value, field, InvalidMeasurementClaimPayloadError)
 
 
 def _public_call(width: float, height: float, cap: float, climb: bool = True) -> Dict[str, object]:
@@ -1192,6 +1192,9 @@ def _claim_evidence(cases: Sequence[GeneratorCasePayload]) -> ClaimEvidencePaylo
         "length_unit": "mm",
     }
     evidence_3: MC003EvidencePayload = {
+        "rung_7_radius": reporting["rung_7_radius"],
+        "rung_7_peak": reporting["rung_7_peak"],
+        "rung_7_cuts_material": native["rung_7_cuts_material"],
         "refined_band_min_radius": reporting["refined_band_min_radius"],
         "refined_band_max_radius": reporting["refined_band_max_radius"],
         "forced_peak": reporting["forced_peak"],
@@ -1244,6 +1247,8 @@ def compose_generator_payload(source_commit: GitObjectId, cases: Sequence[Genera
     """Compose and validate the sole ten-record claim adjudication."""
     if _OBJECT_ID.fullmatch(str(source_commit)) is None:
         _fail("source_commit", "must be one full lowercase Git object ID")
+    if str(source_commit) == SOURCE_CORRECTION_COMMIT:
+        _fail("source_commit", "must be later than the distinct source correction commit")
     case_list: List[GeneratorCasePayload] = list(cases)
     if len(case_list) != len(_CASE_ORDER):
         _fail("cases", "must contain exactly six cases")
@@ -1257,23 +1262,7 @@ def compose_generator_payload(source_commit: GitObjectId, cases: Sequence[Genera
     placement = cast(AdvancePlacementCasePayload, case_list[4])
     probe_count = cast(AdvanceProbeCountCasePayload, case_list[5])
     e1, e2, e3, e4, e5, e6, e7, e8, e9, e10 = _claim_evidence(case_list)
-    station_matches = (
-        (e1["occurrence_count"], e1["station_centre"], e1["maximal_radius"]) == (1, (WorldMillimetres(18.482), WorldMillimetres(10.482)), Millimetres(0.5156))
-        and (
-            e2["coarse_step"],
-            e2["rung_6_radius"],
-            e2["rung_6_peak"],
-            e2["rung_6_cuts_material"],
-            e2["rung_7_radius"],
-            e2["rung_7_peak"],
-            e2["rung_7_cuts_material"],
-        )
-        == (Millimetres(0.05), Millimetres(0.2156), Degrees(61.3), True, Millimetres(0.1656), Degrees(5.9), False)
-        and (e3["refined_band_min_radius"], e3["refined_band_max_radius"], e3["forced_peak"], e3["rescued_peak"])
-        == (Millimetres(0.1719), Millimetres(0.2123), Degrees(107.0), Degrees(59.0))
-    )
-    station_d: Literal["re-earned", "historical"] = "re-earned" if station_matches else "historical"
-    station_r = "frozen station assertions match" if station_matches else "frozen station assertions differ"
+    (mc001_disposition, mc001_reason), (mc002_disposition, mc002_reason), (mc003_disposition, mc003_reason) = adjudicate_station_claims(e1, e2, e3)
 
     subdivision_rows = [(row["subdivisions"], row["worst_peak"], row["circles_over_cap"]) for row in e5["rows"]]
     subdivisions_match = e5["non_entry_circle_count"] == 244 and subdivision_rows == [(value, Degrees(88.6), count) for value, count in zip([1, 2, 4, 8, 16], [12, 12, 8, 8, 8])]
@@ -1293,9 +1282,9 @@ def compose_generator_payload(source_commit: GitObjectId, cases: Sequence[Genera
     reason_8 = "finite sweep corrects open-ended claim"
     reason_9 = "sector tie policy and omitted forward-peak histogram prevent whole-row re-earning"
     reason_10 = "unsupported cost claims removed"
-    claim_1 = MC001ClaimPayload(claim_id="MC-001", case="radial-station", disposition=station_d, reason=station_r, selection_decision_provenance=station_p, evidence=e1)
-    claim_2 = MC002ClaimPayload(claim_id="MC-002", case="radial-station", disposition=station_d, reason=station_r, selection_decision_provenance=station_p, evidence=e2)
-    claim_3 = MC003ClaimPayload(claim_id="MC-003", case="radial-station", disposition=station_d, reason=station_r, selection_decision_provenance=station_p, evidence=e3)
+    claim_1 = MC001ClaimPayload(claim_id="MC-001", case="radial-station", disposition=mc001_disposition, reason=mc001_reason, selection_decision_provenance=station_p, evidence=e1)
+    claim_2 = MC002ClaimPayload(claim_id="MC-002", case="radial-station", disposition=mc002_disposition, reason=mc002_reason, selection_decision_provenance=station_p, evidence=e2)
+    claim_3 = MC003ClaimPayload(claim_id="MC-003", case="radial-station", disposition=mc003_disposition, reason=mc003_reason, selection_decision_provenance=station_p, evidence=e3)
     claim_4 = MC004ClaimPayload(claim_id="MC-004", case="radial-subdivisions", disposition="corrected", reason=reason_4, selection_decision_provenance=subdivision_p, evidence=e4)
     claim_5 = MC005ClaimPayload(
         claim_id="MC-005", case="radial-subdivisions", disposition=subdivision_d, reason=subdivision_r, selection_decision_provenance=subdivision_p, evidence=e5
@@ -1306,10 +1295,11 @@ def compose_generator_payload(source_commit: GitObjectId, cases: Sequence[Genera
     claim_9 = MC009ClaimPayload(claim_id="MC-009", case="advance-placement", disposition="corrected", reason=reason_9, selection_decision_provenance=placement_p, evidence=e9)
     claim_10 = MC010ClaimPayload(claim_id="MC-010", case="advance-probe-count", disposition="corrected", reason=reason_10, selection_decision_provenance=count_p, evidence=e10)
     payload: GeneratorClaimPayload = {
-        "schema_version": "measurement-claim-payload/v1",
+        "schema_version": "measurement-claim-payload/v2",
         "batch": "generator",
         "extraction_commit": GitObjectId(EXTRACTION_COMMIT),
         "source_commit": source_commit,
+        "source_correction_commit": GitObjectId(SOURCE_CORRECTION_COMMIT),
         "case_order": list(_CASE_ORDER),
         "cases": case_list,
         "claims": [claim_1, claim_2, claim_3, claim_4, claim_5, claim_6, claim_7, claim_8, claim_9, claim_10],
@@ -1330,9 +1320,9 @@ def _validate_claim(
     _literal(claim["claim_id"], claim_id, f"{field}.claim_id")
     _literal(claim["case"], expected_case, f"{field}.case")
     permitted = {
-        "MC-001": ("re-earned", "historical"),
-        "MC-002": ("re-earned", "historical"),
-        "MC-003": ("re-earned", "historical"),
+        "MC-001": ("re-earned", "corrected"),
+        "MC-002": ("re-earned", "corrected"),
+        "MC-003": ("re-earned", "corrected"),
         "MC-004": ("corrected", "historical"),
         "MC-005": ("re-earned", "corrected", "historical"),
         "MC-006": ("historical", "deleted"),
@@ -1354,12 +1344,17 @@ def _validate_claim(
 def validate_generator_payload(payload: object) -> GeneratorClaimPayload:
     """Validate the complete six-case, ten-claim payload without schema erasure."""
     _finite_tree(payload, "payload")
-    root = _object(payload, ("schema_version", "batch", "extraction_commit", "source_commit", "case_order", "cases", "claims"), "payload")
-    _literal(root["schema_version"], "measurement-claim-payload/v1", "schema_version")
+    root = _object(
+        payload,
+        ("schema_version", "batch", "extraction_commit", "source_commit", "source_correction_commit", "case_order", "cases", "claims"),
+        "payload",
+    )
+    _literal(root["schema_version"], "measurement-claim-payload/v2", "schema_version")
     _literal(root["batch"], "generator", "batch")
     _literal(root["extraction_commit"], EXTRACTION_COMMIT, "extraction_commit")
     if type(root["source_commit"]) is not str or _OBJECT_ID.fullmatch(root["source_commit"]) is None:
         _fail("source_commit", "must be one full lowercase Git object ID")
+    _literal(root["source_correction_commit"], SOURCE_CORRECTION_COMMIT, "source_correction_commit")
     _same(root["case_order"], _CASE_ORDER, "case_order")
     case_values = _array(root["cases"], "cases")
     if len(case_values) != len(_CASE_ORDER):
@@ -1373,29 +1368,13 @@ def validate_generator_payload(payload: object) -> GeneratorClaimPayload:
     for index, claim_id in enumerate(_CLAIM_IDS):
         expected_case = next(case for case, claim_ids in _CASE_CLAIMS.items() if claim_id in claim_ids)
         _validate_claim(claim_values[index], claim_id, cases[expected_case], evidence[index], index)
+    canonical = compose_generator_payload(GitObjectId(cast(str, root["source_commit"])), typed_cases)
+    _same(claim_values, canonical["claims"], "claims")
     return cast(GeneratorClaimPayload, payload)
 
 
-def _pairs(pairs: List[Tuple[str, object]]) -> Dict[str, object]:
-    result: Dict[str, object] = {}
-    for key, value in pairs:
-        if key in result:
-            raise InvalidMeasurementClaimPayloadError(f"duplicate JSON key: {key}")
-        result[key] = value
-    return result
-
-
-def _constant(value: str) -> object:
-    raise InvalidMeasurementClaimPayloadError(f"non-standard JSON constant: {value}")
-
-
 def _decode(data: bytes, field: str) -> object:
-    try:
-        value = json.loads(data.decode("utf-8"), object_pairs_hook=_pairs, parse_constant=_constant)
-    except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
-        raise InvalidMeasurementClaimPayloadError(f"{field}: not strict UTF-8 JSON") from exc
-    _finite_tree(value, field)
-    return value
+    return measurement_claim_json.decode_strict(data, field, InvalidMeasurementClaimPayloadError)
 
 
 def _read(path: pathlib.Path, field: str) -> bytes:
@@ -1442,7 +1421,12 @@ def generator_semantic_input(payload: GeneratorClaimPayload) -> GeneratorClaimIn
             case=c["case"], source_claim_ids=c["source_claim_ids"], config=c["config"], selection_decision_provenance=c["selection_decision_provenance"]
         ),
     ]
-    return GeneratorClaimInputPayload(extraction_commit=payload["extraction_commit"], case_order=payload["case_order"], case_inputs=case_inputs)
+    return GeneratorClaimInputPayload(
+        extraction_commit=payload["extraction_commit"],
+        source_correction_commit=payload["source_correction_commit"],
+        case_order=payload["case_order"],
+        case_inputs=case_inputs,
+    )
 
 
 def validate_claim_artifact(

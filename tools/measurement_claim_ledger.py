@@ -134,6 +134,13 @@ _DOCSTRING_REGION_BOUNDARIES = {
         b"\n    The whole ring is evaluated",
     ),
 }
+_DOCSTRING_REGION_OWNERS: Mapping[str, Optional[str]] = {
+    "radial-module-which-circle": None,
+    "gentlest-rung-peak": "_GentlestRung",
+    "least-bad-rung-double": "_least_bad_rung",
+    "regulation-cap-angle": "_Regulation",
+    "measured-peak-reporting": "_measured_peak_engagement",
+}
 _COMMENT_SOURCE_REGIONS = frozenset(_LEADING_COMMENT_ASSIGNMENTS)
 _MC007_DISPOSITIONS = ("re-earned", "corrected", "historical")
 _RAW_SOURCE_DIFF = re.compile(r"^:100644 100644 [0-9a-f]+ [0-9a-f]+ M\t(.+)$")
@@ -274,7 +281,30 @@ def _docstring_region(path: str, raw: bytes, *, name: str, before: bytes, after:
     byte_end = raw.find(after, byte_start)
     if byte_end < 0:
         raise InvalidMeasurementClaimLedgerError(f"Task-6 immutable docstring end boundary for {name} is missing in {path}")
-    return _source_region(raw, byte_start, byte_end, name=name)
+    region = _source_region(raw, byte_start, byte_end, name=name)
+    source = _decode_source_blob(path, raw)
+    try:
+        tree = ast.parse(source, filename=path)
+    except SyntaxError as exc:
+        raise InvalidMeasurementClaimLedgerError(f"Task-6 source cannot be parsed while binding {name}: {path}") from exc
+    owner_name = _DOCSTRING_REGION_OWNERS[name]
+    if owner_name is None:
+        owners: list[ast.Module | ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef] = [tree]
+    else:
+        owners = [node for node in ast.walk(tree) if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == owner_name]
+    if len(owners) != 1 or not owners[0].body:
+        raise InvalidMeasurementClaimLedgerError(f"Task-6 docstring owner for {name} must occur exactly once in {path}")
+    expression = owners[0].body[0]
+    if not isinstance(expression, ast.Expr) or not isinstance(expression.value, ast.Constant) or not isinstance(expression.value.value, str):
+        raise InvalidMeasurementClaimLedgerError(f"Task-6 region {name} is not inside its expected owner docstring")
+    if expression.end_lineno is None or expression.end_col_offset is None:
+        raise InvalidMeasurementClaimLedgerError(f"Task-6 docstring owner location is incomplete for {name}")
+    lines = raw.splitlines(keepends=True)
+    owner_start = sum(len(line) for line in lines[: expression.lineno - 1]) + expression.col_offset
+    owner_end = sum(len(line) for line in lines[: expression.end_lineno - 1]) + expression.end_col_offset
+    if not (owner_start <= region["byte_start"] < region["byte_end"] <= owner_end):
+        raise InvalidMeasurementClaimLedgerError(f"Task-6 region {name} was relocated outside its expected owner docstring")
+    return region
 
 
 def _task6_source_region_spans(path: str, raw: bytes) -> Dict[str, _SourceRegion]:
@@ -344,27 +374,32 @@ def _docstring_stripped_ast_dump(path: str, raw: bytes) -> str:
     return ast.dump(tree, annotate_fields=True, include_attributes=False)
 
 
-def _commit_parent(repository: pathlib.Path, correction_commit: str) -> str:
-    if _OBJECT_ID.fullmatch(correction_commit) is None:
-        raise InvalidMeasurementClaimLedgerError("Task-6 source correction commit must be one full Git object ID")
-    raw = _git(repository, "cat-file", "commit", correction_commit)
-    hasher = hashlib.sha1() if len(correction_commit) == 40 else hashlib.sha256()
+def _commit_parents(repository: pathlib.Path, commit: str) -> tuple[str, ...]:
+    if _OBJECT_ID.fullmatch(commit) is None:
+        raise InvalidMeasurementClaimLedgerError("Task-6 source commit must be one full Git object ID")
+    raw = _git(repository, "cat-file", "commit", commit)
+    hasher = hashlib.sha1() if len(commit) == 40 else hashlib.sha256()
     hasher.update(b"commit " + str(len(raw)).encode("ascii") + b"\0" + raw)
-    if hasher.hexdigest() != correction_commit:
-        raise InvalidMeasurementClaimLedgerError("Task-6 source correction raw commit identity differs from its object ID")
+    if hasher.hexdigest() != commit:
+        raise InvalidMeasurementClaimLedgerError("Task-6 source raw commit identity differs from its object ID")
     header, separator, _ = raw.partition(b"\n\n")
     if not separator:
-        raise InvalidMeasurementClaimLedgerError("Task-6 source correction commit must have exactly one parent")
+        raise InvalidMeasurementClaimLedgerError("Task-6 source commit object lacks its header separator")
     parent_headers = [line[len(b"parent ") :] for line in header.splitlines() if line.startswith(b"parent ")]
-    if len(parent_headers) != 1:
-        raise InvalidMeasurementClaimLedgerError("Task-6 source correction commit must have exactly one parent")
     try:
-        parent = parent_headers[0].decode("ascii")
+        parents = tuple(parent.decode("ascii") for parent in parent_headers)
     except UnicodeDecodeError as exc:
-        raise InvalidMeasurementClaimLedgerError("Task-6 correction ancestry is not ASCII") from exc
-    if _OBJECT_ID.fullmatch(parent) is None or len(parent) != len(correction_commit):
-        raise InvalidMeasurementClaimLedgerError("Task-6 source correction parent is not one full Git object ID")
-    return parent
+        raise InvalidMeasurementClaimLedgerError("Task-6 source ancestry is not ASCII") from exc
+    if any(_OBJECT_ID.fullmatch(parent) is None or len(parent) != len(commit) for parent in parents):
+        raise InvalidMeasurementClaimLedgerError("Task-6 source parent is not one same-format full Git object ID")
+    return parents
+
+
+def _commit_parent(repository: pathlib.Path, correction_commit: str) -> str:
+    parents = _commit_parents(repository, correction_commit)
+    if len(parents) != 1:
+        raise InvalidMeasurementClaimLedgerError("Task-6 source correction commit must have exactly one parent")
+    return parents[0]
 
 
 def _source_blob(repository: pathlib.Path, commit: str, path: str) -> bytes:
@@ -513,6 +548,46 @@ def validate_task6_source_correction(
         candidate_regions,
         applicable,
     )
+
+
+def validate_task6_source_lineage(
+    repository: pathlib.Path,
+    correction_commit: str,
+    execution_commit: str,
+    *,
+    mc007_disposition: str,
+) -> None:
+    """Prove strict raw ancestry and preserved Task-6 correction-region bytes."""
+    if mc007_disposition not in _MC007_DISPOSITIONS:
+        raise InvalidMeasurementClaimLedgerError(f"Task-6 MC-007 disposition is invalid for source lineage: {mc007_disposition!r}")
+    if correction_commit == execution_commit:
+        raise InvalidMeasurementClaimLedgerError("Task-6 correction must be a strict ancestor of the distinct execution commit")
+    if len(correction_commit) != len(execution_commit):
+        raise InvalidMeasurementClaimLedgerError("Task-6 correction and execution commits must use the same object-ID format")
+    _commit_parents(repository, correction_commit)
+    pending = list(_commit_parents(repository, execution_commit))
+    visited: set[str] = set()
+    while pending:
+        candidate = pending.pop()
+        if candidate == correction_commit:
+            break
+        if candidate not in visited:
+            visited.add(candidate)
+            pending.extend(_commit_parents(repository, candidate))
+    else:
+        raise InvalidMeasurementClaimLedgerError("Task-6 source correction is not a raw-parent ancestor of the execution commit")
+
+    correction_parent = _commit_parent(repository, correction_commit)
+    floor_path = _SOURCE_REGION_PATH[_FLOOR_SOURCE_REGION]
+    parent_floor = _task6_source_region_spans(floor_path, _source_blob(repository, correction_parent, floor_path))[_FLOOR_SOURCE_REGION]["raw"]
+    correction_floor = _task6_source_region_spans(floor_path, _source_blob(repository, correction_commit, floor_path))[_FLOOR_SOURCE_REGION]["raw"]
+    applicable = frozenset((*_MANDATORY_SOURCE_REGIONS, _FLOOR_SOURCE_REGION)) if parent_floor != correction_floor else frozenset(_MANDATORY_SOURCE_REGIONS)
+    for path in _SOURCE_PATHS:
+        corrected = _task6_source_region_spans(path, _source_blob(repository, correction_commit, path))
+        executed = _task6_source_region_spans(path, _source_blob(repository, execution_commit, path))
+        for name in applicable:
+            if _SOURCE_REGION_PATH[name] == path and corrected[name]["raw"] != executed[name]["raw"]:
+                raise InvalidMeasurementClaimLedgerError(f"Task-6 protected correction region differs at execution: {name}")
 
 
 def _decode_frozen_blob(repository: pathlib.Path, path: str) -> str:
@@ -848,7 +923,8 @@ def _render_validated_ledger_evidence(
         case = cases[claim["case"]]
         cell = (
             f"artifact={artifact}; claim={claim_id}; input={envelope.input_sha256}; result={envelope.result_sha256}; "
-            f"source={payload['source_commit']}; case={claim['case']}; disposition={claim['disposition']}; reason={claim['reason']}; "
+            f"source={payload['source_commit']}; source_correction={payload['source_correction_commit']}; "
+            f"case={claim['case']}; disposition={claim['disposition']}; reason={claim['reason']}; "
             f"config={_canonical_json(case['config'], field=f'{claim_id} config')}; "
             f"evidence={_canonical_json(claim['evidence'], field=f'{claim_id} evidence')}; "
             f"selection={_canonical_json(claim['selection_decision_provenance'], field=f'{claim_id} selection')}; "
@@ -918,6 +994,12 @@ def validate_ledger_evidence(ledger: pathlib.Path, artifact_directories: Sequenc
     repository = artifact_directories[0].absolute().parent.parent.parent
     validate_task6_source_correction(
         repository,
+        str(payload["source_correction_commit"]),
+        mc007_disposition=mc007["disposition"],
+    )
+    validate_task6_source_lineage(
+        repository,
+        str(payload["source_correction_commit"]),
         str(payload["source_commit"]),
         mc007_disposition=mc007["disposition"],
     )
