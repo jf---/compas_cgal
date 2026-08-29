@@ -1,0 +1,4072 @@
+{
+  "schema_version": "measurement-claim-payload/v2",
+  "batch": "generator",
+  "extraction_commit": "eec665c1df1cd8d1e98dd9dd1001b5984e17a703",
+  "source_commit": "3f62304932dd9e1d0b2560e8b07d98fa18791565",
+  "source_correction_commit": "53135e04390e84bf69aa74dc4d0c1ce6ca308eb4",
+  "case_order": [
+    "radial-station",
+    "radial-subdivisions",
+    "radial-floor",
+    "radial-margin",
+    "advance-placement",
+    "advance-probe-count"
+  ],
+  "cases": [
+    {
+      "case": "radial-station",
+      "source_claim_ids": [
+        "MC-001",
+        "MC-002",
+        "MC-003"
+      ],
+      "config": {
+        "public_call": {
+          "polygon": [
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              20.0,
+              0.0,
+              0.0
+            ],
+            [
+              20.0,
+              12.0,
+              0.0
+            ],
+            [
+              0.0,
+              12.0,
+              0.0
+            ]
+          ],
+          "holes": [],
+          "tool_diameter": 2.0,
+          "tea_cap": 60.0,
+          "guide_step": 0.025,
+          "max_advance": 1.0,
+          "radial_clearance": 0.002,
+          "climb": true,
+          "cut_z": 0.0,
+          "clearance_z": 2.0,
+          "max_passes": 1000,
+          "samples_per_radian": 10.0
+        },
+        "subdivisions": 8,
+        "floor_steps": 0.5,
+        "refinement_margin": 1.4,
+        "generator_probe_angles": [
+          0.0,
+          11.25,
+          22.5,
+          33.75,
+          45.0,
+          56.25,
+          67.5,
+          78.75,
+          90.0,
+          101.25,
+          112.5,
+          123.75,
+          135.0,
+          146.25,
+          157.5,
+          168.75,
+          180.0,
+          191.25,
+          202.5,
+          213.75,
+          225.0,
+          236.25,
+          247.5,
+          258.75,
+          270.0,
+          281.25,
+          292.5,
+          303.75,
+          315.0,
+          326.25,
+          337.5,
+          348.75
+        ],
+        "ladder_step": 0.025,
+        "ladder_span": 1.0,
+        "ladder_rungs": 40,
+        "max_radial_sweeps": 40
+      },
+      "reconstruction": {
+        "stock_model": "generator-faithful-radial-pre-bridge/v1",
+        "target_centre": [
+          18.482,
+          10.482
+        ],
+        "centre_decimal_places": 3,
+        "target_maximal_radius": 0.5156,
+        "radius_decimal_places": 4,
+        "occurrence_count": 1,
+        "coarse_step": 0.05,
+        "coarse_rungs": [
+          6,
+          7
+        ],
+        "refined_radius_sequence": [
+          0.5156,
+          0.5094,
+          0.5031,
+          0.4969,
+          0.4906,
+          0.4844,
+          0.4781,
+          0.4719,
+          0.4656,
+          0.4594,
+          0.4531,
+          0.4469,
+          0.4406,
+          0.4344,
+          0.4281,
+          0.4219,
+          0.4156,
+          0.4094,
+          0.4031,
+          0.3969,
+          0.3906,
+          0.3844,
+          0.3781,
+          0.3719,
+          0.3656,
+          0.3594,
+          0.3531,
+          0.3469,
+          0.3406,
+          0.3344,
+          0.3281,
+          0.3219,
+          0.3156,
+          0.3094,
+          0.3031,
+          0.2969,
+          0.2906,
+          0.2844,
+          0.2781,
+          0.2719,
+          0.2656,
+          0.2594,
+          0.2531,
+          0.2469,
+          0.2406,
+          0.2344,
+          0.2281,
+          0.2219,
+          0.2156,
+          0.2094,
+          0.2031,
+          0.1969,
+          0.1906,
+          0.1844,
+          0.1781,
+          0.1719,
+          0.1656,
+          0.1594,
+          0.1531,
+          0.1469,
+          0.1406,
+          0.1344,
+          0.1281,
+          0.1219,
+          0.1156,
+          0.1094,
+          0.1031,
+          0.0969,
+          0.0906,
+          0.0844,
+          0.0781,
+          0.0719,
+          0.0656,
+          0.0594,
+          0.0531,
+          0.0469,
+          0.0406,
+          0.0344,
+          0.0281
+        ]
+      },
+      "native_sampled_decisions": {
+        "rung_6_cap_exceeded": true,
+        "rung_6_cuts_material": true,
+        "rung_7_cap_exceeded": false,
+        "rung_7_cuts_material": true,
+        "refined_candidates": [
+          {
+            "radius": 0.5156,
+            "cap_exceeded": true,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.5094,
+            "cap_exceeded": true,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.5031,
+            "cap_exceeded": true,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.4969,
+            "cap_exceeded": true,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.4906,
+            "cap_exceeded": true,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.4844,
+            "cap_exceeded": true,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.4781,
+            "cap_exceeded": true,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.4719,
+            "cap_exceeded": true,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.4656,
+            "cap_exceeded": true,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.4594,
+            "cap_exceeded": true,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.4531,
+            "cap_exceeded": true,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.4469,
+            "cap_exceeded": true,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.4406,
+            "cap_exceeded": true,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.4344,
+            "cap_exceeded": true,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.4281,
+            "cap_exceeded": true,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.4219,
+            "cap_exceeded": true,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.4156,
+            "cap_exceeded": true,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.4094,
+            "cap_exceeded": true,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.4031,
+            "cap_exceeded": true,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.3969,
+            "cap_exceeded": true,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.3906,
+            "cap_exceeded": true,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.3844,
+            "cap_exceeded": true,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.3781,
+            "cap_exceeded": true,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.3719,
+            "cap_exceeded": true,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.3656,
+            "cap_exceeded": true,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.3594,
+            "cap_exceeded": true,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.3531,
+            "cap_exceeded": true,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.3469,
+            "cap_exceeded": true,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.3406,
+            "cap_exceeded": true,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.3344,
+            "cap_exceeded": true,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.3281,
+            "cap_exceeded": true,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.3219,
+            "cap_exceeded": true,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.3156,
+            "cap_exceeded": true,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.3094,
+            "cap_exceeded": true,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.3031,
+            "cap_exceeded": true,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.2969,
+            "cap_exceeded": true,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.2906,
+            "cap_exceeded": true,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.2844,
+            "cap_exceeded": true,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.2781,
+            "cap_exceeded": true,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.2719,
+            "cap_exceeded": true,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.2656,
+            "cap_exceeded": true,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.2594,
+            "cap_exceeded": true,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.2531,
+            "cap_exceeded": true,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.2469,
+            "cap_exceeded": true,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.2406,
+            "cap_exceeded": true,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.2344,
+            "cap_exceeded": true,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.2281,
+            "cap_exceeded": true,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.2219,
+            "cap_exceeded": true,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.2156,
+            "cap_exceeded": true,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.2094,
+            "cap_exceeded": true,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.2031,
+            "cap_exceeded": true,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.1969,
+            "cap_exceeded": true,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.1906,
+            "cap_exceeded": true,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.1844,
+            "cap_exceeded": false,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.1781,
+            "cap_exceeded": false,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.1719,
+            "cap_exceeded": false,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.1656,
+            "cap_exceeded": false,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.1594,
+            "cap_exceeded": false,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.1531,
+            "cap_exceeded": false,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.1469,
+            "cap_exceeded": false,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.1406,
+            "cap_exceeded": false,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.1344,
+            "cap_exceeded": false,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.1281,
+            "cap_exceeded": false,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.1219,
+            "cap_exceeded": false,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.1156,
+            "cap_exceeded": false,
+            "cuts_material": true
+          },
+          {
+            "radius": 0.1094,
+            "cap_exceeded": false,
+            "cuts_material": false
+          },
+          {
+            "radius": 0.1031,
+            "cap_exceeded": false,
+            "cuts_material": false
+          },
+          {
+            "radius": 0.0969,
+            "cap_exceeded": false,
+            "cuts_material": false
+          },
+          {
+            "radius": 0.0906,
+            "cap_exceeded": false,
+            "cuts_material": false
+          },
+          {
+            "radius": 0.0844,
+            "cap_exceeded": false,
+            "cuts_material": false
+          },
+          {
+            "radius": 0.0781,
+            "cap_exceeded": false,
+            "cuts_material": false
+          },
+          {
+            "radius": 0.0719,
+            "cap_exceeded": false,
+            "cuts_material": false
+          },
+          {
+            "radius": 0.0656,
+            "cap_exceeded": false,
+            "cuts_material": false
+          },
+          {
+            "radius": 0.0594,
+            "cap_exceeded": false,
+            "cuts_material": false
+          },
+          {
+            "radius": 0.0531,
+            "cap_exceeded": false,
+            "cuts_material": false
+          },
+          {
+            "radius": 0.0469,
+            "cap_exceeded": false,
+            "cuts_material": false
+          },
+          {
+            "radius": 0.0406,
+            "cap_exceeded": false,
+            "cuts_material": false
+          },
+          {
+            "radius": 0.0344,
+            "cap_exceeded": false,
+            "cuts_material": false
+          },
+          {
+            "radius": 0.0281,
+            "cap_exceeded": false,
+            "cuts_material": false
+          }
+        ]
+      },
+      "reporting_values": {
+        "maximal_radius": 0.5156,
+        "rung_6_radius": 0.2156,
+        "rung_6_peak": 63.7,
+        "rung_7_radius": 0.1656,
+        "rung_7_peak": 40.2,
+        "refined_band_min_radius": 0.1156,
+        "refined_band_max_radius": 0.1844,
+        "forced_peak": 105.7,
+        "rescued_peak": 40.2,
+        "angle_unit": "degree",
+        "length_unit": "mm"
+      },
+      "selection_decision_provenance": {
+        "policy": "radial-known-reporting-driven-selection/v1",
+        "native_cap_decision_site": "compas_cgal._stock_2.engagement_at[2]",
+        "engagement_reporting_value_site": "compas_cgal._stock_2.engagement_at[1]",
+        "reporting_driven_decision_sites": [
+          {
+            "symbol": "compas_cgal.engagement_radial_toolpath._least_bad_rung",
+            "value_source": "compas_cgal._stock_2.engagement_at[1]",
+            "effect": "forced-radius-selection"
+          },
+          {
+            "symbol": "compas_cgal.engagement_radial_toolpath._largest_admissible_radius",
+            "value_source": "compas_cgal.engagement_radial_toolpath._GentlestRung.peak",
+            "effect": "refined-scan-control"
+          }
+        ]
+      },
+      "continuous_certificate": null
+    },
+    {
+      "case": "radial-subdivisions",
+      "source_claim_ids": [
+        "MC-004",
+        "MC-005",
+        "MC-006"
+      ],
+      "config": {
+        "public_call": {
+          "polygon": [
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              20.0,
+              0.0,
+              0.0
+            ],
+            [
+              20.0,
+              12.0,
+              0.0
+            ],
+            [
+              0.0,
+              12.0,
+              0.0
+            ]
+          ],
+          "holes": [],
+          "tool_diameter": 2.0,
+          "tea_cap": 60.0,
+          "guide_step": 0.025,
+          "max_advance": 1.0,
+          "radial_clearance": 0.002,
+          "climb": true,
+          "cut_z": 0.0,
+          "clearance_z": 2.0,
+          "max_passes": 1000,
+          "samples_per_radian": 10.0
+        },
+        "subdivision_values": [
+          1,
+          2,
+          4,
+          8,
+          16
+        ],
+        "floor_steps": 0.5,
+        "refinement_margin": 1.4,
+        "generator_probe_angles": [
+          0.0,
+          11.25,
+          22.5,
+          33.75,
+          45.0,
+          56.25,
+          67.5,
+          78.75,
+          90.0,
+          101.25,
+          112.5,
+          123.75,
+          135.0,
+          146.25,
+          157.5,
+          168.75,
+          180.0,
+          191.25,
+          202.5,
+          213.75,
+          225.0,
+          236.25,
+          247.5,
+          258.75,
+          270.0,
+          281.25,
+          292.5,
+          303.75,
+          315.0,
+          326.25,
+          337.5,
+          348.75
+        ],
+        "audit": {
+          "phase": "entry-angle",
+          "probe_offsets": [
+            0.0,
+            22.5,
+            45.0,
+            67.5,
+            90.0,
+            112.5,
+            135.0,
+            157.5,
+            180.0,
+            202.5,
+            225.0,
+            247.5,
+            270.0,
+            292.5,
+            315.0,
+            337.5
+          ],
+          "includes_entry_phase": true,
+          "adds_separate_entry_probe": false,
+          "excludes_chain_entry_circles": true
+        }
+      },
+      "reconstruction": {
+        "stock_model": "generator-faithful-radial-pre-bridge/v1",
+        "audit_position_count": 16,
+        "audit_includes_entry_phase": true,
+        "audit_adds_separate_entry_probe": false,
+        "excludes_chain_entry_circles": true,
+        "non_entry_circle_counts": [
+          248,
+          248,
+          248,
+          248,
+          248
+        ]
+      },
+      "native_sampled_decisions": [
+        {
+          "subdivisions": 1,
+          "selected_circles": 248,
+          "observations": {
+            "observations": 3968,
+            "accepted": 3836,
+            "exceeded": 132
+          }
+        },
+        {
+          "subdivisions": 2,
+          "selected_circles": 248,
+          "observations": {
+            "observations": 3968,
+            "accepted": 3836,
+            "exceeded": 132
+          }
+        },
+        {
+          "subdivisions": 4,
+          "selected_circles": 248,
+          "observations": {
+            "observations": 3968,
+            "accepted": 3852,
+            "exceeded": 116
+          }
+        },
+        {
+          "subdivisions": 8,
+          "selected_circles": 248,
+          "observations": {
+            "observations": 3968,
+            "accepted": 3852,
+            "exceeded": 116
+          }
+        },
+        {
+          "subdivisions": 16,
+          "selected_circles": 248,
+          "observations": {
+            "observations": 3968,
+            "accepted": 3852,
+            "exceeded": 116
+          }
+        }
+      ],
+      "reporting_values": [
+        {
+          "subdivisions": 1,
+          "worst_peak": 88.6,
+          "circles_over_cap": 12,
+          "angle_unit": "degree"
+        },
+        {
+          "subdivisions": 2,
+          "worst_peak": 88.6,
+          "circles_over_cap": 12,
+          "angle_unit": "degree"
+        },
+        {
+          "subdivisions": 4,
+          "worst_peak": 88.6,
+          "circles_over_cap": 8,
+          "angle_unit": "degree"
+        },
+        {
+          "subdivisions": 8,
+          "worst_peak": 88.6,
+          "circles_over_cap": 8,
+          "angle_unit": "degree"
+        },
+        {
+          "subdivisions": 16,
+          "worst_peak": 88.6,
+          "circles_over_cap": 8,
+          "angle_unit": "degree"
+        }
+      ],
+      "selection_decision_provenance": {
+        "policy": "radial-known-reporting-driven-selection/v1",
+        "native_cap_decision_site": "compas_cgal._stock_2.engagement_at[2]",
+        "engagement_reporting_value_site": "compas_cgal._stock_2.engagement_at[1]",
+        "reporting_driven_decision_sites": [
+          {
+            "symbol": "compas_cgal.engagement_radial_toolpath._least_bad_rung",
+            "value_source": "compas_cgal._stock_2.engagement_at[1]",
+            "effect": "forced-radius-selection"
+          },
+          {
+            "symbol": "compas_cgal.engagement_radial_toolpath._largest_admissible_radius",
+            "value_source": "compas_cgal.engagement_radial_toolpath._GentlestRung.peak",
+            "effect": "refined-scan-control"
+          }
+        ]
+      },
+      "continuous_certificate": null
+    },
+    {
+      "case": "radial-floor",
+      "source_claim_ids": [
+        "MC-007"
+      ],
+      "config": {
+        "public_call": {
+          "polygon": [
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              20.0,
+              0.0,
+              0.0
+            ],
+            [
+              20.0,
+              12.0,
+              0.0
+            ],
+            [
+              0.0,
+              12.0,
+              0.0
+            ]
+          ],
+          "holes": [],
+          "tool_diameter": 2.0,
+          "tea_cap": 60.0,
+          "guide_step": 0.025,
+          "max_advance": 1.0,
+          "radial_clearance": 0.002,
+          "climb": true,
+          "cut_z": 0.0,
+          "clearance_z": 2.0,
+          "max_passes": 1000,
+          "samples_per_radian": 10.0
+        },
+        "floor_values": [
+          0.25,
+          0.5,
+          1.0
+        ],
+        "subdivisions": 8,
+        "refinement_margin": 1.4,
+        "generator_probe_angles": [
+          0.0,
+          11.25,
+          22.5,
+          33.75,
+          45.0,
+          56.25,
+          67.5,
+          78.75,
+          90.0,
+          101.25,
+          112.5,
+          123.75,
+          135.0,
+          146.25,
+          157.5,
+          168.75,
+          180.0,
+          191.25,
+          202.5,
+          213.75,
+          225.0,
+          236.25,
+          247.5,
+          258.75,
+          270.0,
+          281.25,
+          292.5,
+          303.75,
+          315.0,
+          326.25,
+          337.5,
+          348.75
+        ],
+        "audit": {
+          "phase": "entry-angle",
+          "probe_offsets": [
+            0.0,
+            22.5,
+            45.0,
+            67.5,
+            90.0,
+            112.5,
+            135.0,
+            157.5,
+            180.0,
+            202.5,
+            225.0,
+            247.5,
+            270.0,
+            292.5,
+            315.0,
+            337.5
+          ],
+          "includes_entry_phase": true,
+          "adds_separate_entry_probe": false,
+          "excludes_chain_entry_circles": true
+        }
+      },
+      "reconstruction": {
+        "stock_model": "generator-faithful-radial-pre-bridge/v1",
+        "audit_position_count": 16,
+        "audit_includes_entry_phase": true,
+        "audit_adds_separate_entry_probe": false,
+        "excludes_chain_entry_circles": true,
+        "non_entry_circle_counts": [
+          248,
+          248,
+          248
+        ]
+      },
+      "native_sampled_decisions": [
+        {
+          "floor_steps": 0.25,
+          "selected_circles": 248,
+          "observations": {
+            "observations": 3968,
+            "accepted": 3852,
+            "exceeded": 116
+          }
+        },
+        {
+          "floor_steps": 0.5,
+          "selected_circles": 248,
+          "observations": {
+            "observations": 3968,
+            "accepted": 3852,
+            "exceeded": 116
+          }
+        },
+        {
+          "floor_steps": 1.0,
+          "selected_circles": 248,
+          "observations": {
+            "observations": 3968,
+            "accepted": 3836,
+            "exceeded": 132
+          }
+        }
+      ],
+      "reporting_values": [
+        {
+          "floor_steps": 0.25,
+          "worst_peak": 88.6,
+          "circles_over_cap": 8,
+          "angle_unit": "degree"
+        },
+        {
+          "floor_steps": 0.5,
+          "worst_peak": 88.6,
+          "circles_over_cap": 8,
+          "angle_unit": "degree"
+        },
+        {
+          "floor_steps": 1.0,
+          "worst_peak": 88.6,
+          "circles_over_cap": 12,
+          "angle_unit": "degree"
+        }
+      ],
+      "selection_decision_provenance": {
+        "policy": "radial-known-reporting-driven-selection/v1",
+        "native_cap_decision_site": "compas_cgal._stock_2.engagement_at[2]",
+        "engagement_reporting_value_site": "compas_cgal._stock_2.engagement_at[1]",
+        "reporting_driven_decision_sites": [
+          {
+            "symbol": "compas_cgal.engagement_radial_toolpath._least_bad_rung",
+            "value_source": "compas_cgal._stock_2.engagement_at[1]",
+            "effect": "forced-radius-selection"
+          },
+          {
+            "symbol": "compas_cgal.engagement_radial_toolpath._largest_admissible_radius",
+            "value_source": "compas_cgal.engagement_radial_toolpath._GentlestRung.peak",
+            "effect": "refined-scan-control"
+          }
+        ]
+      },
+      "continuous_certificate": null
+    },
+    {
+      "case": "radial-margin",
+      "source_claim_ids": [
+        "MC-008"
+      ],
+      "config": {
+        "public_call": {
+          "polygon": [
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              6.0,
+              0.0,
+              0.0
+            ],
+            [
+              6.0,
+              4.0,
+              0.0
+            ],
+            [
+              0.0,
+              4.0,
+              0.0
+            ]
+          ],
+          "holes": [],
+          "tool_diameter": 2.0,
+          "tea_cap": 40.0,
+          "guide_step": 0.025,
+          "max_advance": 1.0,
+          "radial_clearance": 0.002,
+          "climb": true,
+          "cut_z": 0.0,
+          "clearance_z": 2.0,
+          "max_passes": 1000,
+          "samples_per_radian": 10.0
+        },
+        "margin_values": [
+          1.25,
+          1.4,
+          1.5,
+          1.75,
+          2.0
+        ],
+        "subdivisions": 8,
+        "floor_steps": 0.5,
+        "generator_probe_angles": [
+          0.0,
+          11.25,
+          22.5,
+          33.75,
+          45.0,
+          56.25,
+          67.5,
+          78.75,
+          90.0,
+          101.25,
+          112.5,
+          123.75,
+          135.0,
+          146.25,
+          157.5,
+          168.75,
+          180.0,
+          191.25,
+          202.5,
+          213.75,
+          225.0,
+          236.25,
+          247.5,
+          258.75,
+          270.0,
+          281.25,
+          292.5,
+          303.75,
+          315.0,
+          326.25,
+          337.5,
+          348.75
+        ],
+        "audit": {
+          "phase": "entry-angle",
+          "probe_offsets": [
+            0.0,
+            22.5,
+            45.0,
+            67.5,
+            90.0,
+            112.5,
+            135.0,
+            157.5,
+            180.0,
+            202.5,
+            225.0,
+            247.5,
+            270.0,
+            292.5,
+            315.0,
+            337.5
+          ],
+          "includes_entry_phase": true,
+          "adds_separate_entry_probe": false,
+          "excludes_chain_entry_circles": true
+        }
+      },
+      "reconstruction": {
+        "stock_model": "generator-faithful-radial-pre-bridge/v1",
+        "audit_position_count": 16,
+        "audit_includes_entry_phase": true,
+        "audit_adds_separate_entry_probe": false,
+        "excludes_chain_entry_circles": true,
+        "non_entry_circle_counts": [
+          70,
+          110,
+          130,
+          139,
+          177
+        ]
+      },
+      "native_sampled_decisions": [
+        {
+          "refinement_margin": 1.25,
+          "selected_circles": 70,
+          "observations": {
+            "observations": 1120,
+            "accepted": 930,
+            "exceeded": 190
+          }
+        },
+        {
+          "refinement_margin": 1.4,
+          "selected_circles": 110,
+          "observations": {
+            "observations": 1760,
+            "accepted": 1611,
+            "exceeded": 149
+          }
+        },
+        {
+          "refinement_margin": 1.5,
+          "selected_circles": 130,
+          "observations": {
+            "observations": 2080,
+            "accepted": 1970,
+            "exceeded": 110
+          }
+        },
+        {
+          "refinement_margin": 1.75,
+          "selected_circles": 139,
+          "observations": {
+            "observations": 2224,
+            "accepted": 2120,
+            "exceeded": 104
+          }
+        },
+        {
+          "refinement_margin": 2.0,
+          "selected_circles": 177,
+          "observations": {
+            "observations": 2832,
+            "accepted": 2717,
+            "exceeded": 115
+          }
+        }
+      ],
+      "reporting_values": [
+        {
+          "refinement_margin": 1.25,
+          "worst_peak": 54.5,
+          "circles_over_cap": 40,
+          "cutting_length": 413.0,
+          "angle_unit": "degree",
+          "length_unit": "mm"
+        },
+        {
+          "refinement_margin": 1.4,
+          "worst_peak": 61.1,
+          "circles_over_cap": 23,
+          "cutting_length": 593.0,
+          "angle_unit": "degree",
+          "length_unit": "mm"
+        },
+        {
+          "refinement_margin": 1.5,
+          "worst_peak": 76.3,
+          "circles_over_cap": 18,
+          "cutting_length": 661.0,
+          "angle_unit": "degree",
+          "length_unit": "mm"
+        },
+        {
+          "refinement_margin": 1.75,
+          "worst_peak": 76.3,
+          "circles_over_cap": 16,
+          "cutting_length": 704.0,
+          "angle_unit": "degree",
+          "length_unit": "mm"
+        },
+        {
+          "refinement_margin": 2.0,
+          "worst_peak": 126.2,
+          "circles_over_cap": 11,
+          "cutting_length": 835.0,
+          "angle_unit": "degree",
+          "length_unit": "mm"
+        }
+      ],
+      "selection_decision_provenance": {
+        "policy": "radial-known-reporting-driven-selection/v1",
+        "native_cap_decision_site": "compas_cgal._stock_2.engagement_at[2]",
+        "engagement_reporting_value_site": "compas_cgal._stock_2.engagement_at[1]",
+        "reporting_driven_decision_sites": [
+          {
+            "symbol": "compas_cgal.engagement_radial_toolpath._least_bad_rung",
+            "value_source": "compas_cgal._stock_2.engagement_at[1]",
+            "effect": "forced-radius-selection"
+          },
+          {
+            "symbol": "compas_cgal.engagement_radial_toolpath._largest_admissible_radius",
+            "value_source": "compas_cgal.engagement_radial_toolpath._GentlestRung.peak",
+            "effect": "refined-scan-control"
+          }
+        ]
+      },
+      "continuous_certificate": null
+    },
+    {
+      "case": "advance-placement",
+      "source_claim_ids": [
+        "MC-009"
+      ],
+      "config": {
+        "public_calls": [
+          {
+            "polygon": [
+              [
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                20.0,
+                0.0,
+                0.0
+              ],
+              [
+                20.0,
+                12.0,
+                0.0
+              ],
+              [
+                0.0,
+                12.0,
+                0.0
+              ]
+            ],
+            "holes": [],
+            "tool_diameter": 2.0,
+            "tea_cap": 80.0,
+            "guide_step": 0.025,
+            "max_advance": 1.0,
+            "radial_clearance": 0.002,
+            "climb": true,
+            "cut_z": 0.0,
+            "clearance_z": 2.0,
+            "max_passes": 1000,
+            "samples_per_radian": 10.0
+          },
+          {
+            "polygon": [
+              [
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                20.0,
+                0.0,
+                0.0
+              ],
+              [
+                20.0,
+                12.0,
+                0.0
+              ],
+              [
+                0.0,
+                12.0,
+                0.0
+              ]
+            ],
+            "holes": [],
+            "tool_diameter": 2.0,
+            "tea_cap": 80.0,
+            "guide_step": 0.025,
+            "max_advance": 1.0,
+            "radial_clearance": 0.002,
+            "climb": false,
+            "cut_z": 0.0,
+            "clearance_z": 2.0,
+            "max_passes": 1000,
+            "samples_per_radian": 10.0
+          },
+          {
+            "polygon": [
+              [
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                20.0,
+                0.0,
+                0.0
+              ],
+              [
+                20.0,
+                12.0,
+                0.0
+              ],
+              [
+                0.0,
+                12.0,
+                0.0
+              ]
+            ],
+            "holes": [],
+            "tool_diameter": 2.0,
+            "tea_cap": 100.0,
+            "guide_step": 0.025,
+            "max_advance": 1.0,
+            "radial_clearance": 0.002,
+            "climb": true,
+            "cut_z": 0.0,
+            "clearance_z": 2.0,
+            "max_passes": 1000,
+            "samples_per_radian": 10.0
+          },
+          {
+            "polygon": [
+              [
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                20.0,
+                0.0,
+                0.0
+              ],
+              [
+                20.0,
+                12.0,
+                0.0
+              ],
+              [
+                0.0,
+                12.0,
+                0.0
+              ]
+            ],
+            "holes": [],
+            "tool_diameter": 2.0,
+            "tea_cap": 100.0,
+            "guide_step": 0.025,
+            "max_advance": 1.0,
+            "radial_clearance": 0.002,
+            "climb": false,
+            "cut_z": 0.0,
+            "clearance_z": 2.0,
+            "max_passes": 1000,
+            "samples_per_radian": 10.0
+          }
+        ],
+        "generator_probe_angles": [
+          -60.0,
+          0.0,
+          60.0
+        ],
+        "generator_prepends_entry_probe": true,
+        "audit": {
+          "phase": "advance-direction",
+          "probe_offsets": [
+            0.0,
+            11.25,
+            22.5,
+            33.75,
+            45.0,
+            56.25,
+            67.5,
+            78.75,
+            90.0,
+            101.25,
+            112.5,
+            123.75,
+            135.0,
+            146.25,
+            157.5,
+            168.75,
+            180.0,
+            191.25,
+            202.5,
+            213.75,
+            225.0,
+            236.25,
+            247.5,
+            258.75,
+            270.0,
+            281.25,
+            292.5,
+            303.75,
+            315.0,
+            326.25,
+            337.5,
+            348.75
+          ],
+          "excludes_entry_probe": true
+        }
+      },
+      "reconstruction": {
+        "stock_model": "generator-pre-bridge/v1",
+        "selected_circle_policy": "accepted-non-forced/v1",
+        "original_calls_per_wrapper": 1,
+        "generator_prepends_entry_probe": true,
+        "audit_excludes_entry_probe": true,
+        "selected_circle_count": 226
+      },
+      "native_sampled_decisions": [
+        {
+          "cap": 80.0,
+          "climb": true,
+          "selected_circles": 70,
+          "observations": {
+            "observations": 2240,
+            "accepted": 2192,
+            "exceeded": 48
+          }
+        },
+        {
+          "cap": 80.0,
+          "climb": false,
+          "selected_circles": 70,
+          "observations": {
+            "observations": 2240,
+            "accepted": 2192,
+            "exceeded": 48
+          }
+        },
+        {
+          "cap": 100.0,
+          "climb": true,
+          "selected_circles": 43,
+          "observations": {
+            "observations": 1376,
+            "accepted": 1328,
+            "exceeded": 48
+          }
+        },
+        {
+          "cap": 100.0,
+          "climb": false,
+          "selected_circles": 43,
+          "observations": {
+            "observations": 1376,
+            "accepted": 1328,
+            "exceeded": 48
+          }
+        }
+      ],
+      "reporting_values": [
+        {
+          "cap": 80.0,
+          "climb": true,
+          "selected_circles": 70,
+          "positions_over_cap": 48,
+          "worst_peak": 101.69010820615703,
+          "worst_peak_offset": 135.0,
+          "old_probe_peak": 39.115433419233746,
+          "offset_bin_counts": [
+            {
+              "offset": 0.0,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 11.25,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 22.5,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 33.75,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 45.0,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 56.25,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 67.5,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 78.75,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 90.0,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 101.25,
+              "positions_over_cap": 4,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 112.5,
+              "positions_over_cap": 4,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 123.75,
+              "positions_over_cap": 4,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 135.0,
+              "positions_over_cap": 4,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 146.25,
+              "positions_over_cap": 4,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 157.5,
+              "positions_over_cap": 4,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 168.75,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 180.0,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -168.75,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -157.5,
+              "positions_over_cap": 4,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -146.25,
+              "positions_over_cap": 4,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -135.0,
+              "positions_over_cap": 4,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -123.75,
+              "positions_over_cap": 4,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -112.5,
+              "positions_over_cap": 4,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -101.25,
+              "positions_over_cap": 4,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -90.0,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -78.75,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -67.5,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -56.25,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -45.0,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -33.75,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -22.5,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -11.25,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            }
+          ],
+          "angle_unit": "degree"
+        },
+        {
+          "cap": 80.0,
+          "climb": false,
+          "selected_circles": 70,
+          "positions_over_cap": 48,
+          "worst_peak": 101.69010820615709,
+          "worst_peak_offset": 135.0,
+          "old_probe_peak": 39.11543341923374,
+          "offset_bin_counts": [
+            {
+              "offset": 0.0,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 11.25,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 22.5,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 33.75,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 45.0,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 56.25,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 67.5,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 78.75,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 90.0,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 101.25,
+              "positions_over_cap": 4,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 112.5,
+              "positions_over_cap": 4,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 123.75,
+              "positions_over_cap": 4,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 135.0,
+              "positions_over_cap": 4,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 146.25,
+              "positions_over_cap": 4,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 157.5,
+              "positions_over_cap": 4,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 168.75,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 180.0,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -168.75,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -157.5,
+              "positions_over_cap": 4,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -146.25,
+              "positions_over_cap": 4,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -135.0,
+              "positions_over_cap": 4,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -123.75,
+              "positions_over_cap": 4,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -112.5,
+              "positions_over_cap": 4,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -101.25,
+              "positions_over_cap": 4,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -90.0,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -78.75,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -67.5,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -56.25,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -45.0,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -33.75,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -22.5,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -11.25,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            }
+          ],
+          "angle_unit": "degree"
+        },
+        {
+          "cap": 100.0,
+          "climb": true,
+          "selected_circles": 43,
+          "positions_over_cap": 48,
+          "worst_peak": 112.59772203543884,
+          "worst_peak_offset": 78.75,
+          "old_probe_peak": 29.946793394549193,
+          "offset_bin_counts": [
+            {
+              "offset": 0.0,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 11.25,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 22.5,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 33.75,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 45.0,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 56.25,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 67.5,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 78.75,
+              "positions_over_cap": 4,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 90.0,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 101.25,
+              "positions_over_cap": 4,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 112.5,
+              "positions_over_cap": 4,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 123.75,
+              "positions_over_cap": 4,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 135.0,
+              "positions_over_cap": 4,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 146.25,
+              "positions_over_cap": 4,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 157.5,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 168.75,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 180.0,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -168.75,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -157.5,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -146.25,
+              "positions_over_cap": 4,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -135.0,
+              "positions_over_cap": 4,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -123.75,
+              "positions_over_cap": 4,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -112.5,
+              "positions_over_cap": 4,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -101.25,
+              "positions_over_cap": 4,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -90.0,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -78.75,
+              "positions_over_cap": 4,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -67.5,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -56.25,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -45.0,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -33.75,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -22.5,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -11.25,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            }
+          ],
+          "angle_unit": "degree"
+        },
+        {
+          "cap": 100.0,
+          "climb": false,
+          "selected_circles": 43,
+          "positions_over_cap": 48,
+          "worst_peak": 112.59772203543884,
+          "worst_peak_offset": 78.75,
+          "old_probe_peak": 29.946793394549513,
+          "offset_bin_counts": [
+            {
+              "offset": 0.0,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 11.25,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 22.5,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 33.75,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 45.0,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 56.25,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 67.5,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 78.75,
+              "positions_over_cap": 4,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 90.0,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 101.25,
+              "positions_over_cap": 4,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 112.5,
+              "positions_over_cap": 4,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 123.75,
+              "positions_over_cap": 4,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 135.0,
+              "positions_over_cap": 4,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 146.25,
+              "positions_over_cap": 4,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 157.5,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 168.75,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": 180.0,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -168.75,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -157.5,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -146.25,
+              "positions_over_cap": 4,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -135.0,
+              "positions_over_cap": 4,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -123.75,
+              "positions_over_cap": 4,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -112.5,
+              "positions_over_cap": 4,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -101.25,
+              "positions_over_cap": 4,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -90.0,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -78.75,
+              "positions_over_cap": 4,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -67.5,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -56.25,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -45.0,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -33.75,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -22.5,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            },
+            {
+              "offset": -11.25,
+              "positions_over_cap": 0,
+              "angle_unit": "degree"
+            }
+          ],
+          "angle_unit": "degree"
+        }
+      ],
+      "selection_decision_provenance": {
+        "policy": "advance-native-cap-reporting-observation/v1",
+        "native_cap_decision_site": "compas_cgal._stock_2.engagement_at[2]",
+        "engagement_reporting_value_site": "compas_cgal._stock_2.engagement_at[1]",
+        "reporting_driven_decision_sites": []
+      },
+      "continuous_certificate": null
+    },
+    {
+      "case": "advance-probe-count",
+      "source_claim_ids": [
+        "MC-010"
+      ],
+      "config": {
+        "public_calls": [
+          {
+            "polygon": [
+              [
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                20.0,
+                0.0,
+                0.0
+              ],
+              [
+                20.0,
+                12.0,
+                0.0
+              ],
+              [
+                0.0,
+                12.0,
+                0.0
+              ]
+            ],
+            "holes": [],
+            "tool_diameter": 2.0,
+            "tea_cap": 40.0,
+            "guide_step": 0.025,
+            "max_advance": 1.0,
+            "radial_clearance": 0.002,
+            "climb": true,
+            "cut_z": 0.0,
+            "clearance_z": 2.0,
+            "max_passes": 1000,
+            "samples_per_radian": 10.0
+          },
+          {
+            "polygon": [
+              [
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                20.0,
+                0.0,
+                0.0
+              ],
+              [
+                20.0,
+                12.0,
+                0.0
+              ],
+              [
+                0.0,
+                12.0,
+                0.0
+              ]
+            ],
+            "holes": [],
+            "tool_diameter": 2.0,
+            "tea_cap": 80.0,
+            "guide_step": 0.025,
+            "max_advance": 1.0,
+            "radial_clearance": 0.002,
+            "climb": true,
+            "cut_z": 0.0,
+            "clearance_z": 2.0,
+            "max_passes": 1000,
+            "samples_per_radian": 10.0
+          }
+        ],
+        "generator_configurations": [
+          {
+            "label": "3-old",
+            "probe_count": 3,
+            "probe_angles": [
+              -60.0,
+              0.0,
+              60.0
+            ]
+          },
+          {
+            "label": "8",
+            "probe_count": 8,
+            "probe_angles": [
+              0.0,
+              45.0,
+              90.0,
+              135.0,
+              180.0,
+              225.0,
+              270.0,
+              315.0
+            ]
+          },
+          {
+            "label": "12",
+            "probe_count": 12,
+            "probe_angles": [
+              0.0,
+              30.0,
+              60.0,
+              90.0,
+              120.0,
+              150.0,
+              180.0,
+              210.0,
+              240.0,
+              270.0,
+              300.0,
+              330.0
+            ]
+          },
+          {
+            "label": "16",
+            "probe_count": 16,
+            "probe_angles": [
+              0.0,
+              22.5,
+              45.0,
+              67.5,
+              90.0,
+              112.5,
+              135.0,
+              157.5,
+              180.0,
+              202.5,
+              225.0,
+              247.5,
+              270.0,
+              292.5,
+              315.0,
+              337.5
+            ]
+          },
+          {
+            "label": "24",
+            "probe_count": 24,
+            "probe_angles": [
+              0.0,
+              15.0,
+              30.0,
+              45.0,
+              60.0,
+              75.0,
+              90.0,
+              105.0,
+              120.0,
+              135.0,
+              150.0,
+              165.0,
+              180.0,
+              195.0,
+              210.0,
+              225.0,
+              240.0,
+              255.0,
+              270.0,
+              285.0,
+              300.0,
+              315.0,
+              330.0,
+              345.0
+            ]
+          },
+          {
+            "label": "32",
+            "probe_count": 32,
+            "probe_angles": [
+              0.0,
+              11.25,
+              22.5,
+              33.75,
+              45.0,
+              56.25,
+              67.5,
+              78.75,
+              90.0,
+              101.25,
+              112.5,
+              123.75,
+              135.0,
+              146.25,
+              157.5,
+              168.75,
+              180.0,
+              191.25,
+              202.5,
+              213.75,
+              225.0,
+              236.25,
+              247.5,
+              258.75,
+              270.0,
+              281.25,
+              292.5,
+              303.75,
+              315.0,
+              326.25,
+              337.5,
+              348.75
+            ]
+          },
+          {
+            "label": "40",
+            "probe_count": 40,
+            "probe_angles": [
+              0.0,
+              9.0,
+              18.0,
+              27.0,
+              36.0,
+              45.0,
+              54.0,
+              63.0,
+              72.0,
+              81.0,
+              90.0,
+              99.0,
+              108.0,
+              117.0,
+              126.0,
+              135.0,
+              144.0,
+              153.0,
+              162.0,
+              171.0,
+              180.0,
+              189.0,
+              198.0,
+              207.0,
+              216.0,
+              225.0,
+              234.0,
+              243.0,
+              252.0,
+              261.0,
+              270.0,
+              279.0,
+              288.0,
+              297.0,
+              306.0,
+              315.0,
+              324.0,
+              333.0,
+              342.0,
+              351.0
+            ]
+          },
+          {
+            "label": "48",
+            "probe_count": 48,
+            "probe_angles": [
+              0.0,
+              7.5,
+              15.0,
+              22.5,
+              30.0,
+              37.5,
+              45.0,
+              52.5,
+              60.0,
+              67.5,
+              75.0,
+              82.5,
+              90.0,
+              97.5,
+              105.0,
+              112.5,
+              120.0,
+              127.5,
+              135.0,
+              142.5,
+              150.0,
+              157.5,
+              165.0,
+              172.5,
+              180.0,
+              187.5,
+              195.0,
+              202.5,
+              210.0,
+              217.5,
+              225.0,
+              232.5,
+              240.0,
+              247.5,
+              255.0,
+              262.5,
+              270.0,
+              277.5,
+              285.0,
+              292.5,
+              300.0,
+              307.5,
+              315.0,
+              322.5,
+              330.0,
+              337.5,
+              345.0,
+              352.5
+            ]
+          }
+        ],
+        "generator_prepends_entry_probe": true,
+        "audit": {
+          "phase": "advance-half-step",
+          "probe_offsets": [
+            3.0,
+            9.0,
+            15.0,
+            21.0,
+            27.0,
+            33.0,
+            39.0,
+            45.0,
+            51.0,
+            57.0,
+            63.0,
+            69.0,
+            75.0,
+            81.0,
+            87.0,
+            93.0,
+            99.0,
+            105.0,
+            111.0,
+            117.0,
+            123.0,
+            129.0,
+            135.0,
+            141.0,
+            147.0,
+            153.0,
+            159.0,
+            165.0,
+            171.0,
+            177.0,
+            183.0,
+            189.0,
+            195.0,
+            201.0,
+            207.0,
+            213.0,
+            219.0,
+            225.0,
+            231.0,
+            237.0,
+            243.0,
+            249.0,
+            255.0,
+            261.0,
+            267.0,
+            273.0,
+            279.0,
+            285.0,
+            291.0,
+            297.0,
+            303.0,
+            309.0,
+            315.0,
+            321.0,
+            327.0,
+            333.0,
+            339.0,
+            345.0,
+            351.0,
+            357.0
+          ],
+          "excludes_entry_probe": true
+        }
+      },
+      "reconstruction": {
+        "stock_model": "generator-pre-bridge/v1",
+        "selected_circle_policy": "accepted-non-forced/v1",
+        "original_calls_per_wrapper": 1,
+        "generator_prepends_entry_probe": true,
+        "audit_excludes_entry_probe": true,
+        "selected_circle_count": 2728
+      },
+      "native_sampled_decisions": [
+        {
+          "label": "3-old",
+          "probe_count": 3,
+          "cap": 40.0,
+          "selected_circles": 188,
+          "observations": {
+            "observations": 11280,
+            "accepted": 11120,
+            "exceeded": 160
+          }
+        },
+        {
+          "label": "3-old",
+          "probe_count": 3,
+          "cap": 80.0,
+          "selected_circles": 70,
+          "observations": {
+            "observations": 4200,
+            "accepted": 4104,
+            "exceeded": 96
+          }
+        },
+        {
+          "label": "8",
+          "probe_count": 8,
+          "cap": 40.0,
+          "selected_circles": 208,
+          "observations": {
+            "observations": 12480,
+            "accepted": 12192,
+            "exceeded": 288
+          }
+        },
+        {
+          "label": "8",
+          "probe_count": 8,
+          "cap": 80.0,
+          "selected_circles": 86,
+          "observations": {
+            "observations": 5160,
+            "accepted": 5032,
+            "exceeded": 128
+          }
+        },
+        {
+          "label": "12",
+          "probe_count": 12,
+          "cap": 40.0,
+          "selected_circles": 244,
+          "observations": {
+            "observations": 14640,
+            "accepted": 14384,
+            "exceeded": 256
+          }
+        },
+        {
+          "label": "12",
+          "probe_count": 12,
+          "cap": 80.0,
+          "selected_circles": 90,
+          "observations": {
+            "observations": 5400,
+            "accepted": 5304,
+            "exceeded": 96
+          }
+        },
+        {
+          "label": "16",
+          "probe_count": 16,
+          "cap": 40.0,
+          "selected_circles": 276,
+          "observations": {
+            "observations": 16560,
+            "accepted": 16432,
+            "exceeded": 128
+          }
+        },
+        {
+          "label": "16",
+          "probe_count": 16,
+          "cap": 80.0,
+          "selected_circles": 94,
+          "observations": {
+            "observations": 5640,
+            "accepted": 5584,
+            "exceeded": 56
+          }
+        },
+        {
+          "label": "24",
+          "probe_count": 24,
+          "cap": 40.0,
+          "selected_circles": 272,
+          "observations": {
+            "observations": 16320,
+            "accepted": 16184,
+            "exceeded": 136
+          }
+        },
+        {
+          "label": "24",
+          "probe_count": 24,
+          "cap": 80.0,
+          "selected_circles": 98,
+          "observations": {
+            "observations": 5880,
+            "accepted": 5856,
+            "exceeded": 24
+          }
+        },
+        {
+          "label": "32",
+          "probe_count": 32,
+          "cap": 40.0,
+          "selected_circles": 272,
+          "observations": {
+            "observations": 16320,
+            "accepted": 16272,
+            "exceeded": 48
+          }
+        },
+        {
+          "label": "32",
+          "probe_count": 32,
+          "cap": 80.0,
+          "selected_circles": 98,
+          "observations": {
+            "observations": 5880,
+            "accepted": 5848,
+            "exceeded": 32
+          }
+        },
+        {
+          "label": "40",
+          "probe_count": 40,
+          "cap": 40.0,
+          "selected_circles": 260,
+          "observations": {
+            "observations": 15600,
+            "accepted": 15560,
+            "exceeded": 40
+          }
+        },
+        {
+          "label": "40",
+          "probe_count": 40,
+          "cap": 80.0,
+          "selected_circles": 102,
+          "observations": {
+            "observations": 6120,
+            "accepted": 6104,
+            "exceeded": 16
+          }
+        },
+        {
+          "label": "48",
+          "probe_count": 48,
+          "cap": 40.0,
+          "selected_circles": 272,
+          "observations": {
+            "observations": 16320,
+            "accepted": 16280,
+            "exceeded": 40
+          }
+        },
+        {
+          "label": "48",
+          "probe_count": 48,
+          "cap": 80.0,
+          "selected_circles": 98,
+          "observations": {
+            "observations": 5880,
+            "accepted": 5856,
+            "exceeded": 24
+          }
+        }
+      ],
+      "reporting_values": [
+        {
+          "label": "3-old",
+          "probe_count": 3,
+          "cap": 40.0,
+          "worst_peak": 86.68307056737956,
+          "angle_unit": "degree"
+        },
+        {
+          "label": "3-old",
+          "probe_count": 3,
+          "cap": 80.0,
+          "worst_peak": 101.69010820615703,
+          "angle_unit": "degree"
+        },
+        {
+          "label": "8",
+          "probe_count": 8,
+          "cap": 40.0,
+          "worst_peak": 71.71011657538423,
+          "angle_unit": "degree"
+        },
+        {
+          "label": "8",
+          "probe_count": 8,
+          "cap": 80.0,
+          "worst_peak": 99.18244106872031,
+          "angle_unit": "degree"
+        },
+        {
+          "label": "12",
+          "probe_count": 12,
+          "cap": 40.0,
+          "worst_peak": 55.32682153562348,
+          "angle_unit": "degree"
+        },
+        {
+          "label": "12",
+          "probe_count": 12,
+          "cap": 80.0,
+          "worst_peak": 87.26940625304394,
+          "angle_unit": "degree"
+        },
+        {
+          "label": "16",
+          "probe_count": 16,
+          "cap": 40.0,
+          "worst_peak": 57.803025298027066,
+          "angle_unit": "degree"
+        },
+        {
+          "label": "16",
+          "probe_count": 16,
+          "cap": 80.0,
+          "worst_peak": 88.64821644120859,
+          "angle_unit": "degree"
+        },
+        {
+          "label": "24",
+          "probe_count": 24,
+          "cap": 40.0,
+          "worst_peak": 49.32859699117221,
+          "angle_unit": "degree"
+        },
+        {
+          "label": "24",
+          "probe_count": 24,
+          "cap": 80.0,
+          "worst_peak": 82.77385720381469,
+          "angle_unit": "degree"
+        },
+        {
+          "label": "32",
+          "probe_count": 32,
+          "cap": 40.0,
+          "worst_peak": 43.409188676117424,
+          "angle_unit": "degree"
+        },
+        {
+          "label": "32",
+          "probe_count": 32,
+          "cap": 80.0,
+          "worst_peak": 81.72285155500273,
+          "angle_unit": "degree"
+        },
+        {
+          "label": "40",
+          "probe_count": 40,
+          "cap": 40.0,
+          "worst_peak": 43.409188676117424,
+          "angle_unit": "degree"
+        },
+        {
+          "label": "40",
+          "probe_count": 40,
+          "cap": 80.0,
+          "worst_peak": 82.1627520637008,
+          "angle_unit": "degree"
+        },
+        {
+          "label": "48",
+          "probe_count": 48,
+          "cap": 40.0,
+          "worst_peak": 43.704826927598326,
+          "angle_unit": "degree"
+        },
+        {
+          "label": "48",
+          "probe_count": 48,
+          "cap": 80.0,
+          "worst_peak": 82.40259901632332,
+          "angle_unit": "degree"
+        }
+      ],
+      "selection_decision_provenance": {
+        "policy": "advance-native-cap-reporting-observation/v1",
+        "native_cap_decision_site": "compas_cgal._stock_2.engagement_at[2]",
+        "engagement_reporting_value_site": "compas_cgal._stock_2.engagement_at[1]",
+        "reporting_driven_decision_sites": []
+      },
+      "continuous_certificate": null
+    }
+  ],
+  "claims": [
+    {
+      "claim_id": "MC-001",
+      "case": "radial-station",
+      "disposition": "re-earned",
+      "reason": "frozen station occurrence matches",
+      "selection_decision_provenance": {
+        "policy": "radial-known-reporting-driven-selection/v1",
+        "native_cap_decision_site": "compas_cgal._stock_2.engagement_at[2]",
+        "engagement_reporting_value_site": "compas_cgal._stock_2.engagement_at[1]",
+        "reporting_driven_decision_sites": [
+          {
+            "symbol": "compas_cgal.engagement_radial_toolpath._least_bad_rung",
+            "value_source": "compas_cgal._stock_2.engagement_at[1]",
+            "effect": "forced-radius-selection"
+          },
+          {
+            "symbol": "compas_cgal.engagement_radial_toolpath._largest_admissible_radius",
+            "value_source": "compas_cgal.engagement_radial_toolpath._GentlestRung.peak",
+            "effect": "refined-scan-control"
+          }
+        ]
+      },
+      "evidence": {
+        "occurrence_count": 1,
+        "station_centre": [
+          18.482,
+          10.482
+        ],
+        "maximal_radius": 0.5156,
+        "length_unit": "mm"
+      }
+    },
+    {
+      "claim_id": "MC-002",
+      "case": "radial-station",
+      "disposition": "corrected",
+      "reason": "authenticated coarse-rung assertions differ",
+      "selection_decision_provenance": {
+        "policy": "radial-known-reporting-driven-selection/v1",
+        "native_cap_decision_site": "compas_cgal._stock_2.engagement_at[2]",
+        "engagement_reporting_value_site": "compas_cgal._stock_2.engagement_at[1]",
+        "reporting_driven_decision_sites": [
+          {
+            "symbol": "compas_cgal.engagement_radial_toolpath._least_bad_rung",
+            "value_source": "compas_cgal._stock_2.engagement_at[1]",
+            "effect": "forced-radius-selection"
+          },
+          {
+            "symbol": "compas_cgal.engagement_radial_toolpath._largest_admissible_radius",
+            "value_source": "compas_cgal.engagement_radial_toolpath._GentlestRung.peak",
+            "effect": "refined-scan-control"
+          }
+        ]
+      },
+      "evidence": {
+        "coarse_step": 0.05,
+        "rung_6_radius": 0.2156,
+        "rung_6_peak": 63.7,
+        "rung_6_cuts_material": true,
+        "rung_7_radius": 0.1656,
+        "rung_7_peak": 40.2,
+        "rung_7_cuts_material": true,
+        "angle_unit": "degree",
+        "length_unit": "mm"
+      }
+    },
+    {
+      "claim_id": "MC-003",
+      "case": "radial-station",
+      "disposition": "corrected",
+      "reason": "authenticated rung-7 or refined-band assertions differ",
+      "selection_decision_provenance": {
+        "policy": "radial-known-reporting-driven-selection/v1",
+        "native_cap_decision_site": "compas_cgal._stock_2.engagement_at[2]",
+        "engagement_reporting_value_site": "compas_cgal._stock_2.engagement_at[1]",
+        "reporting_driven_decision_sites": [
+          {
+            "symbol": "compas_cgal.engagement_radial_toolpath._least_bad_rung",
+            "value_source": "compas_cgal._stock_2.engagement_at[1]",
+            "effect": "forced-radius-selection"
+          },
+          {
+            "symbol": "compas_cgal.engagement_radial_toolpath._largest_admissible_radius",
+            "value_source": "compas_cgal.engagement_radial_toolpath._GentlestRung.peak",
+            "effect": "refined-scan-control"
+          }
+        ]
+      },
+      "evidence": {
+        "rung_7_radius": 0.1656,
+        "rung_7_peak": 40.2,
+        "rung_7_cuts_material": true,
+        "refined_band_min_radius": 0.1156,
+        "refined_band_max_radius": 0.1844,
+        "forced_peak": 105.7,
+        "rescued_peak": 40.2,
+        "angle_unit": "degree",
+        "length_unit": "mm"
+      }
+    },
+    {
+      "claim_id": "MC-004",
+      "case": "radial-subdivisions",
+      "disposition": "corrected",
+      "reason": "entry-phased audit statement corrected",
+      "selection_decision_provenance": {
+        "policy": "radial-known-reporting-driven-selection/v1",
+        "native_cap_decision_site": "compas_cgal._stock_2.engagement_at[2]",
+        "engagement_reporting_value_site": "compas_cgal._stock_2.engagement_at[1]",
+        "reporting_driven_decision_sites": [
+          {
+            "symbol": "compas_cgal.engagement_radial_toolpath._least_bad_rung",
+            "value_source": "compas_cgal._stock_2.engagement_at[1]",
+            "effect": "forced-radius-selection"
+          },
+          {
+            "symbol": "compas_cgal.engagement_radial_toolpath._largest_admissible_radius",
+            "value_source": "compas_cgal.engagement_radial_toolpath._GentlestRung.peak",
+            "effect": "refined-scan-control"
+          }
+        ]
+      },
+      "evidence": {
+        "audit_position_count": 16,
+        "audit_phase": "entry-angle",
+        "includes_entry_phase": true,
+        "adds_separate_entry_probe": false
+      }
+    },
+    {
+      "claim_id": "MC-005",
+      "case": "radial-subdivisions",
+      "disposition": "corrected",
+      "reason": "authenticated subdivision table differs",
+      "selection_decision_provenance": {
+        "policy": "radial-known-reporting-driven-selection/v1",
+        "native_cap_decision_site": "compas_cgal._stock_2.engagement_at[2]",
+        "engagement_reporting_value_site": "compas_cgal._stock_2.engagement_at[1]",
+        "reporting_driven_decision_sites": [
+          {
+            "symbol": "compas_cgal.engagement_radial_toolpath._least_bad_rung",
+            "value_source": "compas_cgal._stock_2.engagement_at[1]",
+            "effect": "forced-radius-selection"
+          },
+          {
+            "symbol": "compas_cgal.engagement_radial_toolpath._largest_admissible_radius",
+            "value_source": "compas_cgal.engagement_radial_toolpath._GentlestRung.peak",
+            "effect": "refined-scan-control"
+          }
+        ]
+      },
+      "evidence": {
+        "non_entry_circle_count": 248,
+        "rows": [
+          {
+            "subdivisions": 1,
+            "worst_peak": 88.6,
+            "circles_over_cap": 12,
+            "angle_unit": "degree"
+          },
+          {
+            "subdivisions": 2,
+            "worst_peak": 88.6,
+            "circles_over_cap": 12,
+            "angle_unit": "degree"
+          },
+          {
+            "subdivisions": 4,
+            "worst_peak": 88.6,
+            "circles_over_cap": 8,
+            "angle_unit": "degree"
+          },
+          {
+            "subdivisions": 8,
+            "worst_peak": 88.6,
+            "circles_over_cap": 8,
+            "angle_unit": "degree"
+          },
+          {
+            "subdivisions": 16,
+            "worst_peak": 88.6,
+            "circles_over_cap": 8,
+            "angle_unit": "degree"
+          }
+        ]
+      }
+    },
+    {
+      "claim_id": "MC-006",
+      "case": "radial-subdivisions",
+      "disposition": "historical",
+      "reason": "configuration absent in history",
+      "selection_decision_provenance": {
+        "policy": "radial-known-reporting-driven-selection/v1",
+        "native_cap_decision_site": "compas_cgal._stock_2.engagement_at[2]",
+        "engagement_reporting_value_site": "compas_cgal._stock_2.engagement_at[1]",
+        "reporting_driven_decision_sites": [
+          {
+            "symbol": "compas_cgal.engagement_radial_toolpath._least_bad_rung",
+            "value_source": "compas_cgal._stock_2.engagement_at[1]",
+            "effect": "forced-radius-selection"
+          },
+          {
+            "symbol": "compas_cgal.engagement_radial_toolpath._largest_admissible_radius",
+            "value_source": "compas_cgal.engagement_radial_toolpath._GentlestRung.peak",
+            "effect": "refined-scan-control"
+          }
+        ]
+      },
+      "evidence": {
+        "history_commit": "29050b01e656ea7bf577b18f7bb50a04ff9a23c9",
+        "missing_configuration": "refinement-without-reporting-ranking"
+      }
+    },
+    {
+      "claim_id": "MC-007",
+      "case": "radial-floor",
+      "disposition": "re-earned",
+      "reason": "frozen floor counts match",
+      "selection_decision_provenance": {
+        "policy": "radial-known-reporting-driven-selection/v1",
+        "native_cap_decision_site": "compas_cgal._stock_2.engagement_at[2]",
+        "engagement_reporting_value_site": "compas_cgal._stock_2.engagement_at[1]",
+        "reporting_driven_decision_sites": [
+          {
+            "symbol": "compas_cgal.engagement_radial_toolpath._least_bad_rung",
+            "value_source": "compas_cgal._stock_2.engagement_at[1]",
+            "effect": "forced-radius-selection"
+          },
+          {
+            "symbol": "compas_cgal.engagement_radial_toolpath._largest_admissible_radius",
+            "value_source": "compas_cgal.engagement_radial_toolpath._GentlestRung.peak",
+            "effect": "refined-scan-control"
+          }
+        ]
+      },
+      "evidence": {
+        "audit_position_count": 16,
+        "rows": [
+          {
+            "floor_steps": 0.25,
+            "worst_peak": 88.6,
+            "circles_over_cap": 8,
+            "angle_unit": "degree"
+          },
+          {
+            "floor_steps": 0.5,
+            "worst_peak": 88.6,
+            "circles_over_cap": 8,
+            "angle_unit": "degree"
+          },
+          {
+            "floor_steps": 1.0,
+            "worst_peak": 88.6,
+            "circles_over_cap": 12,
+            "angle_unit": "degree"
+          }
+        ]
+      }
+    },
+    {
+      "claim_id": "MC-008",
+      "case": "radial-margin",
+      "disposition": "corrected",
+      "reason": "finite sweep corrects open-ended claim",
+      "selection_decision_provenance": {
+        "policy": "radial-known-reporting-driven-selection/v1",
+        "native_cap_decision_site": "compas_cgal._stock_2.engagement_at[2]",
+        "engagement_reporting_value_site": "compas_cgal._stock_2.engagement_at[1]",
+        "reporting_driven_decision_sites": [
+          {
+            "symbol": "compas_cgal.engagement_radial_toolpath._least_bad_rung",
+            "value_source": "compas_cgal._stock_2.engagement_at[1]",
+            "effect": "forced-radius-selection"
+          },
+          {
+            "symbol": "compas_cgal.engagement_radial_toolpath._largest_admissible_radius",
+            "value_source": "compas_cgal.engagement_radial_toolpath._GentlestRung.peak",
+            "effect": "refined-scan-control"
+          }
+        ]
+      },
+      "evidence": {
+        "rows": [
+          {
+            "refinement_margin": 1.25,
+            "worst_peak": 54.5,
+            "circles_over_cap": 40,
+            "cutting_length": 413.0,
+            "angle_unit": "degree",
+            "length_unit": "mm"
+          },
+          {
+            "refinement_margin": 1.4,
+            "worst_peak": 61.1,
+            "circles_over_cap": 23,
+            "cutting_length": 593.0,
+            "angle_unit": "degree",
+            "length_unit": "mm"
+          },
+          {
+            "refinement_margin": 1.5,
+            "worst_peak": 76.3,
+            "circles_over_cap": 18,
+            "cutting_length": 661.0,
+            "angle_unit": "degree",
+            "length_unit": "mm"
+          },
+          {
+            "refinement_margin": 1.75,
+            "worst_peak": 76.3,
+            "circles_over_cap": 16,
+            "cutting_length": 704.0,
+            "angle_unit": "degree",
+            "length_unit": "mm"
+          },
+          {
+            "refinement_margin": 2.0,
+            "worst_peak": 126.2,
+            "circles_over_cap": 11,
+            "cutting_length": 835.0,
+            "angle_unit": "degree",
+            "length_unit": "mm"
+          }
+        ],
+        "baseline_available": false,
+        "open_ended_gate_claim_removed": true,
+        "reporting_selection_disclosed": true
+      }
+    },
+    {
+      "claim_id": "MC-009",
+      "case": "advance-placement",
+      "disposition": "corrected",
+      "reason": "sector tie policy and omitted forward-peak histogram prevent whole-row re-earning",
+      "selection_decision_provenance": {
+        "policy": "advance-native-cap-reporting-observation/v1",
+        "native_cap_decision_site": "compas_cgal._stock_2.engagement_at[2]",
+        "engagement_reporting_value_site": "compas_cgal._stock_2.engagement_at[1]",
+        "reporting_driven_decision_sites": []
+      },
+      "evidence": {
+        "selected_circle_count": 226,
+        "audit_position_count": 32,
+        "rows": [
+          {
+            "cap": 80.0,
+            "climb": true,
+            "selected_circles": 70,
+            "positions_over_cap": 48,
+            "worst_peak": 101.69010820615703,
+            "worst_peak_offset": 135.0,
+            "old_probe_peak": 39.115433419233746,
+            "offset_bin_counts": [
+              {
+                "offset": 0.0,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 11.25,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 22.5,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 33.75,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 45.0,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 56.25,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 67.5,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 78.75,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 90.0,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 101.25,
+                "positions_over_cap": 4,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 112.5,
+                "positions_over_cap": 4,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 123.75,
+                "positions_over_cap": 4,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 135.0,
+                "positions_over_cap": 4,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 146.25,
+                "positions_over_cap": 4,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 157.5,
+                "positions_over_cap": 4,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 168.75,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 180.0,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -168.75,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -157.5,
+                "positions_over_cap": 4,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -146.25,
+                "positions_over_cap": 4,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -135.0,
+                "positions_over_cap": 4,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -123.75,
+                "positions_over_cap": 4,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -112.5,
+                "positions_over_cap": 4,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -101.25,
+                "positions_over_cap": 4,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -90.0,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -78.75,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -67.5,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -56.25,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -45.0,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -33.75,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -22.5,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -11.25,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              }
+            ],
+            "angle_unit": "degree"
+          },
+          {
+            "cap": 80.0,
+            "climb": false,
+            "selected_circles": 70,
+            "positions_over_cap": 48,
+            "worst_peak": 101.69010820615709,
+            "worst_peak_offset": 135.0,
+            "old_probe_peak": 39.11543341923374,
+            "offset_bin_counts": [
+              {
+                "offset": 0.0,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 11.25,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 22.5,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 33.75,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 45.0,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 56.25,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 67.5,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 78.75,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 90.0,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 101.25,
+                "positions_over_cap": 4,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 112.5,
+                "positions_over_cap": 4,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 123.75,
+                "positions_over_cap": 4,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 135.0,
+                "positions_over_cap": 4,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 146.25,
+                "positions_over_cap": 4,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 157.5,
+                "positions_over_cap": 4,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 168.75,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 180.0,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -168.75,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -157.5,
+                "positions_over_cap": 4,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -146.25,
+                "positions_over_cap": 4,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -135.0,
+                "positions_over_cap": 4,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -123.75,
+                "positions_over_cap": 4,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -112.5,
+                "positions_over_cap": 4,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -101.25,
+                "positions_over_cap": 4,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -90.0,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -78.75,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -67.5,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -56.25,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -45.0,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -33.75,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -22.5,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -11.25,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              }
+            ],
+            "angle_unit": "degree"
+          },
+          {
+            "cap": 100.0,
+            "climb": true,
+            "selected_circles": 43,
+            "positions_over_cap": 48,
+            "worst_peak": 112.59772203543884,
+            "worst_peak_offset": 78.75,
+            "old_probe_peak": 29.946793394549193,
+            "offset_bin_counts": [
+              {
+                "offset": 0.0,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 11.25,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 22.5,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 33.75,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 45.0,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 56.25,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 67.5,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 78.75,
+                "positions_over_cap": 4,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 90.0,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 101.25,
+                "positions_over_cap": 4,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 112.5,
+                "positions_over_cap": 4,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 123.75,
+                "positions_over_cap": 4,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 135.0,
+                "positions_over_cap": 4,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 146.25,
+                "positions_over_cap": 4,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 157.5,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 168.75,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 180.0,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -168.75,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -157.5,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -146.25,
+                "positions_over_cap": 4,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -135.0,
+                "positions_over_cap": 4,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -123.75,
+                "positions_over_cap": 4,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -112.5,
+                "positions_over_cap": 4,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -101.25,
+                "positions_over_cap": 4,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -90.0,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -78.75,
+                "positions_over_cap": 4,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -67.5,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -56.25,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -45.0,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -33.75,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -22.5,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -11.25,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              }
+            ],
+            "angle_unit": "degree"
+          },
+          {
+            "cap": 100.0,
+            "climb": false,
+            "selected_circles": 43,
+            "positions_over_cap": 48,
+            "worst_peak": 112.59772203543884,
+            "worst_peak_offset": 78.75,
+            "old_probe_peak": 29.946793394549513,
+            "offset_bin_counts": [
+              {
+                "offset": 0.0,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 11.25,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 22.5,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 33.75,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 45.0,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 56.25,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 67.5,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 78.75,
+                "positions_over_cap": 4,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 90.0,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 101.25,
+                "positions_over_cap": 4,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 112.5,
+                "positions_over_cap": 4,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 123.75,
+                "positions_over_cap": 4,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 135.0,
+                "positions_over_cap": 4,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 146.25,
+                "positions_over_cap": 4,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 157.5,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 168.75,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": 180.0,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -168.75,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -157.5,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -146.25,
+                "positions_over_cap": 4,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -135.0,
+                "positions_over_cap": 4,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -123.75,
+                "positions_over_cap": 4,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -112.5,
+                "positions_over_cap": 4,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -101.25,
+                "positions_over_cap": 4,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -90.0,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -78.75,
+                "positions_over_cap": 4,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -67.5,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -56.25,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -45.0,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -33.75,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -22.5,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              },
+              {
+                "offset": -11.25,
+                "positions_over_cap": 0,
+                "angle_unit": "degree"
+              }
+            ],
+            "angle_unit": "degree"
+          }
+        ]
+      }
+    },
+    {
+      "claim_id": "MC-010",
+      "case": "advance-probe-count",
+      "disposition": "corrected",
+      "reason": "unsupported cost claims removed",
+      "selection_decision_provenance": {
+        "policy": "advance-native-cap-reporting-observation/v1",
+        "native_cap_decision_site": "compas_cgal._stock_2.engagement_at[2]",
+        "engagement_reporting_value_site": "compas_cgal._stock_2.engagement_at[1]",
+        "reporting_driven_decision_sites": []
+      },
+      "evidence": {
+        "audit_position_count": 60,
+        "rows": [
+          {
+            "label": "3-old",
+            "probe_count": 3,
+            "cap": 40.0,
+            "worst_peak": 86.68307056737956,
+            "angle_unit": "degree"
+          },
+          {
+            "label": "3-old",
+            "probe_count": 3,
+            "cap": 80.0,
+            "worst_peak": 101.69010820615703,
+            "angle_unit": "degree"
+          },
+          {
+            "label": "8",
+            "probe_count": 8,
+            "cap": 40.0,
+            "worst_peak": 71.71011657538423,
+            "angle_unit": "degree"
+          },
+          {
+            "label": "8",
+            "probe_count": 8,
+            "cap": 80.0,
+            "worst_peak": 99.18244106872031,
+            "angle_unit": "degree"
+          },
+          {
+            "label": "12",
+            "probe_count": 12,
+            "cap": 40.0,
+            "worst_peak": 55.32682153562348,
+            "angle_unit": "degree"
+          },
+          {
+            "label": "12",
+            "probe_count": 12,
+            "cap": 80.0,
+            "worst_peak": 87.26940625304394,
+            "angle_unit": "degree"
+          },
+          {
+            "label": "16",
+            "probe_count": 16,
+            "cap": 40.0,
+            "worst_peak": 57.803025298027066,
+            "angle_unit": "degree"
+          },
+          {
+            "label": "16",
+            "probe_count": 16,
+            "cap": 80.0,
+            "worst_peak": 88.64821644120859,
+            "angle_unit": "degree"
+          },
+          {
+            "label": "24",
+            "probe_count": 24,
+            "cap": 40.0,
+            "worst_peak": 49.32859699117221,
+            "angle_unit": "degree"
+          },
+          {
+            "label": "24",
+            "probe_count": 24,
+            "cap": 80.0,
+            "worst_peak": 82.77385720381469,
+            "angle_unit": "degree"
+          },
+          {
+            "label": "32",
+            "probe_count": 32,
+            "cap": 40.0,
+            "worst_peak": 43.409188676117424,
+            "angle_unit": "degree"
+          },
+          {
+            "label": "32",
+            "probe_count": 32,
+            "cap": 80.0,
+            "worst_peak": 81.72285155500273,
+            "angle_unit": "degree"
+          },
+          {
+            "label": "40",
+            "probe_count": 40,
+            "cap": 40.0,
+            "worst_peak": 43.409188676117424,
+            "angle_unit": "degree"
+          },
+          {
+            "label": "40",
+            "probe_count": 40,
+            "cap": 80.0,
+            "worst_peak": 82.1627520637008,
+            "angle_unit": "degree"
+          },
+          {
+            "label": "48",
+            "probe_count": 48,
+            "cap": 40.0,
+            "worst_peak": 43.704826927598326,
+            "angle_unit": "degree"
+          },
+          {
+            "label": "48",
+            "probe_count": 48,
+            "cap": 80.0,
+            "worst_peak": 82.40259901632332,
+            "angle_unit": "degree"
+          }
+        ],
+        "timing_claim_removed": true,
+        "relative_cost_claim_removed": true
+      }
+    }
+  ]
+}

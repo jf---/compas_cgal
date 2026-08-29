@@ -1,7 +1,7 @@
 # Coherence Wave 1 Implementation Plan
 
 > **status: in execution** — opened 2026-08-28. The commit that lands a task
-> updates this header with the task number. Landed: 2, 3, 4, 5.
+> updates this header with the task number. Landed: 2, 3, 4, 5, 6.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use
 > superpowers:subagent-driven-development (recommended) or
@@ -634,15 +634,15 @@ Header: `Landed: 2, 3, 4, 5`.
   `engagement_toolpath.py`, `engagement_rho_toolpath.py`,
   `engagement_spiral_entry_toolpath.py`, `engagement_ordered_toolpath.py`).
 
-- [ ] **Step 1:** for every ledger row in `src/compas_cgal/engagement_*.py`:
+- [x] **Step 1:** for every ledger row in `src/compas_cgal/engagement_*.py`:
   re-run the claim against the Task-4 artifact where it covers it, else with a
   targeted probe (write the probe under the scratchpad, cite the command in
   the row). Known prior: 2 of 2 previously-checked claims in the radial module
   were defective — expect corrections.
-- [ ] **Step 2:** fill each row's disposition; apply `corrected`/`deleted`
+- [x] **Step 2:** fill each row's disposition; apply `corrected`/`deleted`
   edits to the source comments in the same change.
-- [ ] **Step 3:** `pixi run pytest tests -n auto -q -k "radial or rho or ordered or spiral"` → no new reds; `pixi run red-manifest` → exit 0.
-- [ ] **Step 4:** commit:
+- [x] **Step 3:** `pixi run pytest tests -n auto -q -k "radial or rho or ordered or spiral"` → no new reds; `pixi run red-manifest` → exit 0.
+- [x] **Step 4:** commit:
 `git commit -m "docs: claims audit, generators batch -- X re-earned, Y corrected, Z deleted" -- docs/measurement_claims.md src/compas_cgal`
 Header: `Landed: …, 6`.
 
