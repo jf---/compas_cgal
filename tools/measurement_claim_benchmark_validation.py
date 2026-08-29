@@ -108,9 +108,7 @@ def _table_rows(lines: Sequence[str], header: str, rule: str, width: int, field:
     rows: List[List[str]] = []
     for line in lines[index + 2 :]:
         if not line.startswith("|"):
-            if rows:
-                break
-            continue
+            break
         if not line.endswith("|"):
             fail_payload(field, "row must start and end with an outer pipe")
         cells = [cell.strip() for cell in line.strip()[1:-1].split("|")]

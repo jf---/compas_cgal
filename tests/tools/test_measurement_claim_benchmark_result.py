@@ -214,6 +214,31 @@ def test_markdown_structure_is_strict_but_numbers_are_not_authority(damage: str)
     assert module.validate_benchmark_payload(_payload(module), figure6_payload=raw, figure6_markdown=numeric_mutation)
 
 
+@pytest.mark.parametrize("table", ["comparison", "trials"])
+@pytest.mark.parametrize("gap", [b"\n", b"prose before rows\n\n"], ids=["blank", "prose-then-blank"])
+def test_markdown_rejects_gap_after_rule_but_allows_prose_after_completed_rows(table: str, gap: bytes) -> None:
+    module = _module()
+    rules = {
+        "comparison": b"| ---: | ---: | ---: | :--- | ---: | ---: | ---: | ---: | ---: |\n",
+        "trials": b"| ---: | ---: | ---: | ---: | ---: |\n",
+    }
+    markdown = _markdown()
+    if table == "comparison":
+        broken = markdown.replace(rules[table], rules[table] + gap, 1)
+    else:
+        comparison, trials = markdown.split(b"## Constant-spacing trials\n", 1)
+        broken = comparison + b"## Constant-spacing trials\n" + trials.replace(rules[table], rules[table] + gap, 1)
+    with pytest.raises(module.InvalidMeasurementClaimPayloadError, match=rf"figure6\.md {table}: requires exactly"):
+        module.validate_benchmark_payload(_payload(module), figure6_payload=_raw(), figure6_markdown=broken)
+
+    valid = _markdown()
+    if table == "comparison":
+        valid = valid.replace(b"\n## Constant-spacing trials", b"\nprose after comparison rows\n\n## Constant-spacing trials", 1)
+    else:
+        valid += b"prose after trial rows\n"
+    assert module.validate_benchmark_payload(_payload(module), figure6_payload=_raw(), figure6_markdown=valid)
+
+
 def test_result_facade_contains_reexports_only() -> None:
     path = pathlib.Path(importlib.import_module("tools.measurement_claim_result").__file__)
     tree = ast.parse(path.read_text(encoding="utf-8"))
