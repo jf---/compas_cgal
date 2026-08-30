@@ -27,6 +27,7 @@ from __future__ import annotations
 from typing import Callable
 from typing import Dict
 from typing import List
+from typing import NewType
 from typing import Tuple
 
 from compas.geometry import Polygon
@@ -44,9 +45,18 @@ from compas_cgal.toolpath import ToolpathResult
 # stays in seconds. It is also the diameter the corner defect was found at.
 GATE_TOOL_DIAMETER = 2.0
 
-# Engagement cap for every gate instance, in degrees: the corpus default, and a
-# cap a real trochoidal roughing pass would be programmed at.
-GATE_CAP_DEG = 120.0
+# Gate-only engagement caps, in degrees. The 120-degree cap remains the corpus
+# default and reporting snapshot; 40 degrees is the attribution product cap.
+GateCapDegrees = NewType("GateCapDegrees", float)
+
+GATE_DEFAULT_CAP_ID = "cap-120-default"
+GATE_CAP_DEG = GateCapDegrees(120.0)
+GATE_ATTRIBUTION_CAP_ID = "cap-40-attribution"
+GATE_ATTRIBUTION_CAP_DEG = GateCapDegrees(40.0)
+GATE_CAP_CASES: Tuple[Tuple[str, GateCapDegrees], ...] = (
+    (GATE_DEFAULT_CAP_ID, GATE_CAP_DEG),
+    (GATE_ATTRIBUTION_CAP_ID, GATE_ATTRIBUTION_CAP_DEG),
+)
 
 # Six by four tool diameters at `GATE_TOOL_DIAMETER`. Wide enough that the
 # largest spine loop comes out at three times the tool radius -- well clear of
@@ -91,7 +101,9 @@ def gate_pockets(tool_diameter: float = GATE_TOOL_DIAMETER, tea_cap_deg: float =
     Args:
         tool_diameter: Cutter diameter. The L-shape's arm width is expressed in
             it, so the corpus keeps its meaning at any tool size.
-        tea_cap_deg: Engagement cap in degrees.
+        tea_cap_deg: Engagement cap in degrees. Defaults to the 120-degree
+            reporting cap; the quality product also supplies the 40-degree
+            attribution cap explicitly.
 
     Returns:
         The three instances.
@@ -125,7 +137,8 @@ def gate_pocket(name: str, tool_diameter: float = GATE_TOOL_DIAMETER, tea_cap_de
     Args:
         name: One of `GATE_POCKET_NAMES`.
         tool_diameter: Cutter diameter.
-        tea_cap_deg: Engagement cap in degrees.
+        tea_cap_deg: Engagement cap in degrees. Defaults to the 120-degree
+            reporting cap; callers may supply the 40-degree attribution cap.
 
     Returns:
         The instance.

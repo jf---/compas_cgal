@@ -102,11 +102,12 @@ resume after Wave 3 or in parallel by explicit choice.
 
 | tests | count | reason | closes with |
 | --- | ---: | --- | --- |
-| `test_quality.py::test_the_generated_path_is_worth_running` (2 generators × 3 pockets) | 6 | product gate: paths genuinely fail 5–7 criteria each | generators earning it (parked lane feeds this) |
+| `^tests\.benchmarks\.test_quality::test_the_generated_path_is_worth_running\[cap-120-default-…\]$` (2 generators × 3 pockets) | 6 | default-cap product gate: identical streams genuinely fail 5–7 criteria per pocket | generators earning it (parked lane feeds this) |
+| `^tests\.benchmarks\.test_quality::test_the_generated_path_is_worth_running\[cap-40-attribution-…\]$` (2 generators × 3 pockets) | 6 | tighter-cap product gate: divergent streams still fail current criteria on all three pockets | generators earning it (parked lane feeds this) |
 | `test_quality_invariants.py::test_moving_the_pocket…` | 1 | deliberate: engagement is translation-variant at exact rim-on-boundary tangency | C1 |
 | `tests/adaptive/{test_generator,test_route_retrace_generator}` | 4 | plan superseded (D1); retirement scheduled through the programme | S2 |
 
-Anything red beyond these 11 is a defect, full stop.
+Anything red beyond these 17 is a defect, full stop.
 
 ## Authority and frozen refs (until Wave 2 closes them)
 

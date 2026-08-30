@@ -272,15 +272,16 @@ code:
    convention against the kernel itself, so a later reader cannot re-derive the
    wrong correction from theory.
 
-!!! note "Under verification"
+!!! success "Attribution pinned at two caps"
 
-    The gate presently runs at one cap, `GATE_CAP_DEG = 120`, at which the
-    `engagement_controlled` and `radius_regulated` generators emit byte-identical
-    paths — the radius ladder never fires. Three pockets across two generators is
-    the smallest product in which a defect can be attributed to one or the other,
-    and that attribution is void while both cells hold the same path. A second
-    cap in the range 40-100, where the two demonstrably diverge, is the pending
-    repair.
+    The quality gate now crosses all three pockets with both registered
+    generators at 120° and 40°. At 120° their complete emitted operation streams
+    are structurally identical on every pocket; at 40° they diverge on every
+    pocket. The bit-preserving witness retains defining Line/Circle binary64
+    geometry, operation kind, `path_index`, `clockwise`, both tangents, order,
+    and duplicates. This is bounded evidence about emitted binary64 objects,
+    not an exact-kernel certificate, geometric-equivalence proof, or proof of
+    machining quality; all twelve quality cells remain deliberately red.
 
 ## Case 4 — engagement is not translation-invariant at exact tangency
 
