@@ -64,9 +64,10 @@ millimetre larger that is equally admissible.
     runs a bisection beside the scan on this state and asserts they disagree, so the assumption
     cannot be reintroduced silently.
 
-This is the **second** instance of the same structure in this repository. Spacing does not order
-engagement either — see `benchmarks/figure6.py`, "Spacing does not order engagement", which is why
-the constant-spacing baseline is a minimum over a brute-force sweep rather than a bisection.
+The fixed reference sweep in `benchmarks/figure6.py` is a counterexample to any generic guarantee
+that spacing orders engagement; it is not a universal geometric law. The generic constant-spacing
+selector therefore assumes no monotonicity and chooses the shortest compliant path only after
+evaluating the full sweep.
 
 ## How a radius is chosen
 

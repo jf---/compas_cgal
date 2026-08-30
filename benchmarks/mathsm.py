@@ -14,11 +14,13 @@ engagement measurement is this project's exact audit rather than the paper's
 admitted discretisation. Nothing here reproduces a published number; what it
 reproduces is a like-for-like curve a reader can regenerate.
 
-THE RELATION IS NOT MONOTONE, which is why the search is brute force and the
-selection is a minimum over all compliant trials rather than a bisection. The
-complete fixed sweep exposes that non-monotone behavior; MC-013 in
-`docs/measurement_claims.md` records the exact command and authenticated
-artifact. Bisecting on spacing can find a compliant trial and miss shorter ones.
+The generic protocol assumes no monotonicity: it measures the complete requested
+sweep and selects the shortest compliant trial. The authenticated MC-013
+reference sweep is non-monotone over its twelve sampled spacings for the exact
+`rect_20x12`, 2 mm-tool configuration recorded in
+`docs/measurement_claims.md`. That configuration-specific counterexample shows
+why the generic selector cannot rely on spacing order; it does not establish
+that every spacing/engagement relation is non-monotone.
 
 Spacings are expressed in TOOL DIAMETERS so a sweep means the same thing at every
 scale, and engagement is measured through `benchmarks.pathmetrics` so the entry
@@ -40,10 +42,11 @@ from benchmarks.spec import PocketSpec
 from compas_cgal.toolpath import ToolpathResult
 from compas_cgal.toolpath import trochoidal_mat_toolpath_circular
 
-# Trial spacings in tool diameters. The complete fixed sweep exposes
-# non-monotone engagement as spacing changes. MC-013 in
-# `docs/measurement_claims.md` records the exact command and authenticated
-# artifact.
+# Trial spacings in tool diameters. The authenticated MC-013 reference sweep is
+# non-monotone over these sampled spacings for its recorded `rect_20x12`, 2
+# mm-tool configuration. The generic selector assumes no monotonicity and
+# evaluates every trial before choosing the shortest compliant one; the observed
+# sequence is configuration-specific.
 SPACING_SWEEP_TOOL_DIAMETERS: Tuple[float, ...] = (0.025, 0.05, 0.075, 0.1, 0.125, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5, 0.6)
 
 

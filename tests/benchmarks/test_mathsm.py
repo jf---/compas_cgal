@@ -94,11 +94,9 @@ def test_a_coarser_spacing_gives_a_shorter_path() -> None:
 def test_the_spacing_axis_actually_moves_the_measured_engagement() -> None:
     """Without this the baseline curve would be a constant dressed as a sweep.
 
-    The relation is deliberately NOT asserted to be monotone: it is not. Held
-    searches spacing by brute force precisely because no closed form or ordering
-    connects spacing to the engagement it produces, and this pocket reproduces
-    that -- which is why `shortest_within_cap` minimises over all compliant
-    trials instead of bisecting.
+    This test asserts meaningful spread only; it does not establish whether the
+    sampled relation is monotone. `shortest_within_cap` minimises over all
+    compliant trials because the generic protocol assumes no spacing order.
     """
     spec = rectangle(width=TEST_WIDTH, height=TEST_HEIGHT, tool_diameter=TEST_TOOL, tea_cap_deg=120.0)
     measured = [p.metrics.max_tea_after_entry_deg for p in sweep_spacing(spec, SPREAD_SWEEP)]

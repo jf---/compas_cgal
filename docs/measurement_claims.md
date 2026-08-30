@@ -12,6 +12,16 @@ claim of repository-wide invariant-I2 closure. Tasks 6 and 7 may change only
 the `disposition` and `evidence / change` cells; all identity columns and
 frozen matched lines remain immutable.
 
+**MC-013 review ruling (2026-08-30).** The accepted benchmark artifact remains
+the raw measurement authority, and MC-013 remains `corrected`; this
+post-artifact ruling is the interpretation authority. Its twelve recorded
+samples establish a non-monotone sample sequence only for the exact
+`rect_20x12`, 2 mm-tool run embedded in the artifact. They do not establish a
+universal spacing law, a common peak station, or a causal geometric mechanism.
+The reference sweep is therefore a counterexample to assuming a generic spacing
+order, while the selector remains exhaustive because its protocol has no
+monotonicity contract.
+
 ## Frozen extraction
 
 Extraction source commit: `eec665c1df1cd8d1e98dd9dd1001b5984e17a703`
