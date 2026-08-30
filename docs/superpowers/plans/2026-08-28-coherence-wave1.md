@@ -1,7 +1,7 @@
 # Coherence Wave 1 Implementation Plan
 
 > **status: in execution** — opened 2026-08-28. The commit that lands a task
-> updates this header with the task number. Landed: 2, 3, 4, 5, 6, 7, 8.
+> updates this header with the task number. Landed: 2, 3, 4, 5, 6, 7, 8, 9.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use
 > superpowers:subagent-driven-development (recommended) or
@@ -691,7 +691,7 @@ Header: `Landed: …, 8`.
 - Create: `docs/radius_ladder_ablation.md`
 - Modify: `mkdocs.yml` (same contention check as Task 5).
 
-- [ ] **Step 1:** write the page. Content requirements, verbatim where quoted:
+- [x] **Step 1:** write the page. Content requirements, verbatim where quoted:
   - Thesis first: *neither half of the radius-ladder repair is safe alone; the
     gate exists because both together UNGATED is worse than ranking alone.*
   - The four-way table (worst TEA / over-cap circles / cutting length on
@@ -709,8 +709,8 @@ Header: `Landed: …, 8`.
     over-cap by definition and a sub-maximal circle does not finish the
     station, so lowering the peak always costs a circle (verified 32/32 by
     one-step lookahead) — a structural opposition, not a tuning trade-off.
-- [ ] **Step 2:** `pixi run -e docs docs` → strict passes.
-- [ ] **Step 3:** commit:
+- [x] **Step 2:** `pixi run -e docs docs` → strict passes.
+- [x] **Step 3:** commit:
 `git commit -m "docs: radius-ladder ablation record with provenance labels (B)" -- docs/radius_ladder_ablation.md mkdocs.yml`
 Header: `Landed: …, 9`.
 
