@@ -6,6 +6,11 @@ formulation problem rather than a tuning problem. On current evidence the shippa
 the sampled + growth-bound-guarded one in `engagement_2.cpp`; `continuous_tea_2` is a research
 result, not a component, until its algebraic formulation changes.
 
+Measured on axis-parallel pockets only; `center_domain()` is ~3,500× slower
+on oblique geometry with the mechanism not yet established — see
+*The Oblique-Edge Cliff*. Treat every figure on this page as best-case with
+respect to edge direction.
+
 | certifier | per segment motion |
 | --- | ---: |
 | `engagement_2.cpp` — sampled + guard, local zone query | **129 ms** |
