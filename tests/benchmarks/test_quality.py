@@ -39,9 +39,11 @@ from benchmarks.errors import MissingMachineModelError
 from benchmarks.errors import MissingMaterialModelError
 from benchmarks.errors import ZeroLengthToolpathError
 from benchmarks.families.analytic import rectangle
+from benchmarks.gate import GATE_CAP_CASES
 from benchmarks.gate import GATE_GENERATOR_NAMES
 from benchmarks.gate import GATE_GENERATORS
 from benchmarks.gate import GATE_POCKET_NAMES
+from benchmarks.gate import GateCapDegrees
 from benchmarks.gate import gate_pocket
 from benchmarks.models import MachineModel
 from benchmarks.models import MaterialModel
@@ -806,16 +808,31 @@ def _report(pocket: str, generator: str, quality: PathQuality, violations: list)
     return "\n".join(lines) + "\n"
 
 
-@pytest.mark.parametrize("pocket_name", GATE_POCKET_NAMES)
-@pytest.mark.parametrize("generator_name", GATE_GENERATOR_NAMES)
-def test_the_generated_path_is_worth_running(pocket_name: str, generator_name: str) -> None:
+QUALITY_GATE_ARGUMENTS = tuple(
+    (tea_cap_deg, generator_name, pocket_name) for _, tea_cap_deg in GATE_CAP_CASES for generator_name in GATE_GENERATOR_NAMES for pocket_name in GATE_POCKET_NAMES
+)
+QUALITY_GATE_IDS = tuple(
+    f"{cap_id}-{generator_name}-{pocket_name}" for cap_id, _ in GATE_CAP_CASES for generator_name in GATE_GENERATOR_NAMES for pocket_name in GATE_POCKET_NAMES
+)
+
+
+@pytest.mark.parametrize(
+    ("tea_cap_deg", "generator_name", "pocket_name"),
+    QUALITY_GATE_ARGUMENTS,
+    ids=QUALITY_GATE_IDS,
+)
+def test_the_generated_path_is_worth_running(
+    tea_cap_deg: GateCapDegrees,
+    generator_name: str,
+    pocket_name: str,
+) -> None:
     """Every machining-quality criterion, on one pocket and one generator.
 
     All criteria are evaluated and reported together, so the failure message
     carries the full four-group measurement and the next person reads a diagnosis
     rather than a boolean.
     """
-    spec = gate_pocket(pocket_name)
+    spec = gate_pocket(pocket_name, tea_cap_deg=tea_cap_deg)
     quality = measure_quality(spec, GATE_GENERATORS[generator_name](spec))
     violations = _violations(spec, quality)
     assert not violations, _report(pocket_name, generator_name, quality, violations)

@@ -10,10 +10,12 @@ sharper curvature can be *slower*. This page measures both proxies and both
 quantities, separates what we computed from what we assumed, and reports that
 neither generator currently produces a toolpath worth running.
 
-The gate in `tests/benchmarks/test_quality.py` is **red on purpose**: six cells,
-six or seven failed criteria each. It is a specification of the target, not a
-description of the code. A quality gate that passed on the current generator
-would be worthless, because the current generator emits machining "circles" a
+The gate in `tests/benchmarks/test_quality.py` is **red on purpose**: twelve
+cells, crossing three pockets and two generators at the default 120° cap and
+the attribution 40° cap. The six-cell 120° snapshot below fails six or seven
+criteria per pocket. It is a specification of the target, not a description
+of the code. A quality gate that passed on the current generator would be
+worthless, because the current generator emits machining "circles" a
 fiftieth of the tool radius, ten operations per path that remove nothing, and
 motions at 360° of engagement under a 120° cap.
 
@@ -79,6 +81,7 @@ a named error when it is absent — `MissingMaterialModelError`,
 
 ## Measured
 
+This table is the 120° snapshot; it does not report the 40° attribution cells.
 Tool ⌀2.0, cap 120°, 45 probes per motion, 200-sample coverage grid. The two
 generators return **identical motion streams** on every pocket, so their columns
 are identical in pairs — see the note below. Every number here is reproduced by
@@ -167,13 +170,15 @@ defect the user first found by eye is real, is a corner phenomenon, and the
 12×8 rectangle — which has corners too — does not reproduce it at this tool and
 cap.
 
-!!! note "At a 120° cap the radius regulation is inert"
+!!! note "The two-cap gate separates saturation from attribution"
 
-    `radius_regulated_toolpath` and `engagement_controlled_toolpath` return
-    identical motion streams on all three pockets: same count, same loop radii,
-    same lengths. At this cap the full station radius is admissible everywhere,
-    so the radius ladder never leaves its top rung. Measured independently from
-    two directions.
+    At 120°, `radius_regulated_toolpath` and `engagement_controlled_toolpath`
+    emit structurally identical complete operation streams on all three pockets;
+    the radius ladder never leaves its top rung. At 40°, the complete streams
+    diverge on all three. The executable witness preserves defining Line/Circle
+    binary64 geometry, operation metadata, tangents, order, and duplicates.
+    This establishes attribution at the tighter cap; it does not make either
+    generator's quality cells green.
 
 ## Elementary
 
