@@ -1302,6 +1302,11 @@ published paths and runtime measurements. Phase 1 is not yet a competing
 end-to-end result; it is a stricter certification architecture under
 construction.
 
+Measured on axis-parallel pockets only; `center_domain()` is ~3,500× slower
+on oblique geometry with the mechanism not yet established — see
+*The Oblique-Edge Cliff*. Treat every figure on this page as best-case with
+respect to edge direction.
+
 | Dimension | Comparative status | Held–Pfeiffer 2025 | Exact-certified Phase 1 |
 | --- | --- | --- | --- |
 | Pocket geometry | stronger exact polygonal contract on bounded fixtures; incomplete scope | Segments and circular arcs; simply connected; machinability assumed after an `r + ε` transformation | Raw MAT primitives clip exactly against polygonal domains with holes and exact radius clearance. Task 11 certifies submitted segment/full-circle sweeps directly in the polygon-with-holes design domain, including equality and islands. General arbitrary-pocket traversal remains incomplete and circular boundaries are not supported |

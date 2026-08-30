@@ -1,7 +1,7 @@
 # Coherence Wave 1 Implementation Plan
 
 > **status: in execution** — opened 2026-08-28. The commit that lands a task
-> updates this header with the task number. Landed: 2, 3, 4, 5, 6, 7.
+> updates this header with the task number. Landed: 2, 3, 4, 5, 6, 7, 8.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use
 > superpowers:subagent-driven-development (recommended) or
@@ -667,7 +667,7 @@ Header: `Landed: …, 7`.
   `docs/continuous_engagement_cost.md`, `docs/exactness.md`,
   `docs/segment_site_mat.md`, `docs/oblique_edge_cost.md`.
 
-- [ ] **Step 1:** in each file, locate every performance figure
+- [x] **Step 1:** in each file, locate every performance figure
   (`grep -nE "parity|[0-9]+(\.[0-9]+)? ?ms|3–100"` per file) and attach, at
   first occurrence per page, this exact sentence (adapted only for grammar):
 
@@ -678,8 +678,8 @@ Header: `Landed: …, 7`.
 
   `oblique_edge_cost.md` is the source page: verify it already carries the
   danger admonition; add nothing redundant there.
-- [ ] **Step 2:** `pixi run -e docs docs` → strict build passes.
-- [ ] **Step 3:** commit:
+- [x] **Step 2:** `pixi run -e docs docs` → strict build passes.
+- [x] **Step 3:** commit:
 `git commit -m "docs: axis-parallel qualifier on every living performance claim (C2)" -- docs`
 Header: `Landed: …, 8`.
 

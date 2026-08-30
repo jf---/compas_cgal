@@ -6,6 +6,11 @@ claims about this project's performance and engagement quality are measurements 
 re-run, and so that a sweep cannot quietly be written in a regime where it is unable to show the
 effect it was built to measure.
 
+Measured on axis-parallel pockets only; `center_domain()` is ~3,500× slower
+on oblique geometry with the mechanism not yet established — see
+*The Oblique-Edge Cliff*. Treat every figure on this page as best-case with
+respect to edge direction.
+
 ## Running it
 
 ```bash

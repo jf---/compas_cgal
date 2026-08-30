@@ -319,6 +319,11 @@ dedicated line/vertex witness may still prove existential cap exceedance
 without completing every cell; that is a different proof object with a
 different contract.
 
+Measured on axis-parallel pockets only; `center_domain()` is ~3,500× slower
+on oblique geometry with the mechanism not yet established — see
+*The Oblique-Edge Cliff*. Treat every figure on this page as best-case with
+respect to edge direction.
+
 The first same-support implementation accidentally rebuilt the partition
 three times, reconstructed every stationary cell twice, and re-extracted the
 stock boundary once per cell. Hoisting verifiedness and boundary records
