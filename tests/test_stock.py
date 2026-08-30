@@ -1,7 +1,9 @@
 import math
+import multiprocessing
 import random
 from decimal import Decimal, getcontext
 from fractions import Fraction
+from multiprocessing.connection import Connection
 
 import numpy as np
 import pytest
@@ -315,6 +317,95 @@ def test_stock_wrapper_exposes_subtract_annulus():
 # --------------------------------------------------------------------------- #
 # engagement_at: exact station TEA                                            #
 # --------------------------------------------------------------------------- #
+
+# Fixed 18-vertex arrangement recovered from the scale-invariance property's
+# minimal hanging example. A healthy exact-station query on this tiny input is
+# sub-second; ten seconds leaves ample cold-process headroom while converting a
+# native GIL-holding regression into a finite, attributable test failure.
+EXACT_STATION_QUERY_BUDGET_SECONDS = 10.0
+PATHOLOGICAL_STOCK_BOUNDARY = np.array(
+    [[-6.0, -4.0, 0.0], [6.0, -4.0, 0.0], [6.0, 4.0, 0.0], [-6.0, 4.0, 0.0]],
+    dtype=np.float64,
+)
+PATHOLOGICAL_STATION_Y = -0.375
+PATHOLOGICAL_TOOL_RADIUS = 1.0
+PATHOLOGICAL_CIRCLES = (
+    (-3.375, 1.0),
+    (-2.5, 2.5),
+    (-1.625, 2.25),
+)
+
+
+def _query_pathological_exact_station(sender: Connection) -> None:
+    """Rebuild and query the minimal native hang in an independently killable process."""
+    stock = _stock_2.Stock2(PATHOLOGICAL_STOCK_BOUNDARY, [])
+    first_x = PATHOLOGICAL_CIRCLES[0][0]
+    stock.subtract_disk(
+        first_x,
+        PATHOLOGICAL_STATION_Y,
+        PATHOLOGICAL_TOOL_RADIUS,
+    )
+    for index, (center_x, guide_radius) in enumerate(PATHOLOGICAL_CIRCLES):
+        rim_x = center_x + guide_radius
+        stock.subtract_arc_sweep(
+            center_x,
+            PATHOLOGICAL_STATION_Y,
+            rim_x,
+            PATHOLOGICAL_STATION_Y,
+            rim_x,
+            PATHOLOGICAL_STATION_Y,
+            False,
+            PATHOLOGICAL_TOOL_RADIUS,
+        )
+        if index + 1 < len(PATHOLOGICAL_CIRCLES):
+            next_x = PATHOLOGICAL_CIRCLES[index + 1][0]
+            stock.subtract_capsule(
+                center_x,
+                PATHOLOGICAL_STATION_Y,
+                next_x,
+                PATHOLOGICAL_STATION_Y,
+                PATHOLOGICAL_TOOL_RADIUS,
+            )
+
+    query_x = PATHOLOGICAL_CIRCLES[-1][0]
+    result = _stock_2.engagement_at(
+        stock,
+        query_x,
+        PATHOLOGICAL_STATION_Y,
+        PATHOLOGICAL_TOOL_RADIUS,
+        cap_ratio(math.radians(120.0)),
+    )
+    sender.send(result)
+    sender.close()
+
+
+def test_exact_station_query_terminates_on_depleted_dyadic_stock():
+    """A small regularized stock must not strand exact point location."""
+    context = multiprocessing.get_context("spawn")
+    receiver, sender = context.Pipe(duplex=False)
+    process = context.Process(
+        target=_query_pathological_exact_station,
+        args=(sender,),
+    )
+    process.start()
+    sender.close()
+    try:
+        process.join(EXACT_STATION_QUERY_BUDGET_SECONDS)
+        if process.is_alive():
+            process.terminate()
+            process.join()
+            pytest.fail(
+                "exact engagement query did not terminate within "
+                f"{EXACT_STATION_QUERY_BUDGET_SECONDS:.0f} seconds"
+            )
+        assert process.exitcode == 0
+        assert receiver.poll(), "exact engagement child returned no result"
+        assert receiver.recv() == (0.0, 0.0, False)
+    finally:
+        if process.is_alive():
+            process.terminate()
+            process.join()
+        receiver.close()
 
 
 def test_engagement_full_material():
