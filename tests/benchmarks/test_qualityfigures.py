@@ -20,6 +20,8 @@ from typing import Any
 import matplotlib
 import pytest
 
+pytestmark = pytest.mark.xdist_group("qualityfigures")
+
 # The figure modules draw, so they must draw without a display here too.
 matplotlib.use("Agg")
 
