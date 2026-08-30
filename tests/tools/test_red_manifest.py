@@ -388,9 +388,14 @@ def test_cli_malformed_junit_exit(tmp_path: pathlib.Path) -> None:
 
 
 def test_pixi_junit_baseline_preserves_parallel_fixture_scope() -> None:
+    from tests.benchmarks import test_qualityfigures
+
     command = _junit_task_command()
     assert "-n auto" in command
-    assert "--dist=loadscope" in command
+    assert "--dist=loadgroup" in command
+    assert "--dist=loadscope" not in command
+    assert test_qualityfigures.pytestmark.name == "xdist_group"
+    assert test_qualityfigures.pytestmark.args == ("qualityfigures",)
 
 
 @pytest.mark.parametrize(
