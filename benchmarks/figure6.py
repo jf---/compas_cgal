@@ -393,7 +393,7 @@ def _row(point: Figure6Point) -> str:
 
 
 def _trial_table(trials: Sequence[MathsmPoint]) -> List[str]:
-    """The constant-spacing sweep, as evidence that the search must be brute force.
+    """The complete constant-spacing sweep used by exhaustive selection.
 
     Args:
         trials: Every trial, in sweep order.
@@ -405,8 +405,7 @@ def _trial_table(trials: Sequence[MathsmPoint]) -> List[str]:
         [
             "## Constant-spacing trials",
             "",
-            "Spacing does not order engagement: the measured maximum falls and rises as the spacing widens, which is why the "
-            "baseline is a minimum over every compliant trial rather than a bisection on spacing.",
+            "The fixed sweep is reported in full below. Baseline selection evaluates every compliant trial and chooses the shortest without assuming spacing orders engagement.",
             "",
             "| spacing (tool diam.) | length | cut motions | max TEA after entry (deg) | raw max TEA (deg) |",
             "| ---: | ---: | ---: | ---: | ---: |",

@@ -204,6 +204,22 @@ def test_the_trial_table_is_emitted_as_evidence_for_the_brute_force_search() -> 
     assert text.index("| cap (deg) |") < text.index("| spacing (tool diam.) |")
 
 
+def test_trial_table_does_not_infer_a_pattern_from_monotone_measurements() -> None:
+    trials = [
+        _trial(0.2, 400.0, 90.0),
+        _trial(0.4, 300.0, 120.0),
+        _trial(0.6, 200.0, 150.0),
+    ]
+    text = render_figure6_markdown(_run([_point(160.0, 300.0, 400.0)], trials))
+
+    assert "falls and rises" not in text
+    assert "evaluates every compliant trial" in text
+    assert "without assuming spacing orders engagement" in text
+    assert "| 0.200 | 400.0 | 20 | 90.0 | 360.0 |" in text
+    assert "| 0.400 | 300.0 | 20 | 120.0 | 360.0 |" in text
+    assert "| 0.600 | 200.0 | 20 | 150.0 | 360.0 |" in text
+
+
 def test_payload_round_trips_through_json() -> None:
     run = _run([_point(120.0, 300.0, 400.0), _point(40.0, 900.0, None)], [_trial(0.2, 400.0, 90.0)])
     payload = json.loads(json.dumps(figure6_payload(run)))
