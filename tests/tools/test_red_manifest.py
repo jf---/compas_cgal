@@ -387,6 +387,12 @@ def test_cli_malformed_junit_exit(tmp_path: pathlib.Path) -> None:
     assert "malformed-junit:" in result.stderr
 
 
+def test_pixi_junit_baseline_preserves_parallel_fixture_scope() -> None:
+    command = _junit_task_command()
+    assert "-n auto" in command
+    assert "--dist=loadscope" in command
+
+
 @pytest.mark.parametrize(
     ("pytest_status", "expected_task_status"),
     [(0, 0), (1, 0), (2, 2), (5, 5)],
