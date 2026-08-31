@@ -12,12 +12,15 @@ neither generator currently produces a toolpath worth running.
 
 The gate in `tests/benchmarks/test_quality.py` is **red on purpose**: twelve
 cells, crossing three pockets and two generators at the default 120° cap and
-the attribution 40° cap. The six-cell 120° snapshot below fails six or seven
-criteria per pocket. It is a specification of the target, not a description
-of the code. A quality gate that passed on the current generator would be
-worthless, because the current generator emits machining "circles" a
-fiftieth of the tool radius, ten operations per path that remove nothing, and
-motions at 360° of engagement under a 120° cap.
+the attribution 40° cap. The approved 40–100° sweep found 40° was the sole cap
+where every pocket's generator pair diverged; from 50° through 100° the L-shape
+remained saturated, including identical 453/453-operation streams at the
+original 60° stop. The six-cell 120° snapshot below fails six or seven criteria
+per pocket. It is a specification of the target, not a description of the code.
+A quality gate that passed on the current generator would be worthless, because
+the current generator emits machining "circles" a fiftieth of the tool radius,
+ten operations per path that remove nothing, and motions at 360° of engagement
+under a 120° cap.
 
 ## The four groups
 

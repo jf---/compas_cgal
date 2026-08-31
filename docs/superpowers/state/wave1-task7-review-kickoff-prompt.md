@@ -1,8 +1,16 @@
 # Wave-1 Task-7 review continuation kickoff prompt
 
-Paste everything below the rule as the FIRST message of a fresh session.
+> **status: superseded — do not execute.** The continuation ran through Wave-1
+> close, and the 2026-08-31 close review then reopened engineering acceptance.
+> WC1–WC7 and Task-7 F1–F10 were repaired in `80ddaa1` through `36e548f`;
+> current worktree state and the close-review repair record outrank this prompt.
+
+The text below is retained as historical handoff evidence, not as an active
+instruction.
 
 ---
+
+> **SUPERSEDED HANDOFF:** do not begin the session described below.
 
 I'm starting **Wave 1 continuation — Task-7 semantic review, then Tasks 8–11**
 of the `compas_cgal` coherence programme (worktree

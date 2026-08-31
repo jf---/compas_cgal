@@ -104,7 +104,7 @@ human-readable snapshot.
 
 | tests | count | reason | closes with |
 | --- | ---: | --- | --- |
-| `cap-120-default` quality product (2 generators × 3 pockets) | 6 | default-cap product gate: both registered generators emit identical streams and fail 5-7 criteria per pocket | generator work (parked lane C4/C5 feeds this) |
+| `cap-120-default` quality product (2 generators × 3 pockets) | 6 | default-cap product gate: both registered generators emit identical streams and fail 6-7 criteria per pocket | generator work (parked lane C4/C5 feeds this) |
 | `cap-40-attribution` quality product (2 generators × 3 pockets) | 6 | cap-40 attribution product gate: both registered generators fail current quality criteria on all three pockets | generator work (parked lane C4/C5 feeds this) |
 | `test_quality_invariants.py::test_moving_the_pocket…` | 1 | deliberate: engagement is translation-variant at exact rim-on-boundary tangency (machining_metric_validity.md case 4) | backlog C1 |
 | `tests/adaptive/{test_generator,test_route_retrace_generator}` | 4 | plan superseded (backlog D1); retirement scheduled through the auditor programme | backlog S2 |
