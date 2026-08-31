@@ -67,8 +67,8 @@ the Figure 5 reconstruction and is retained as supporting evidence.
 PDF extraction uses `PdfPoint2`, whose coordinates carry a dedicated
 `PdfPointUnit` `NewType`. Reconstructed geometry uses the existing
 `Point2[WorldXY]`, `Millimetre`, `ToolRadius`, and `Radian` types. A
-`ToolRadiusRatio` `NewType` carries dimensionless source measurements until
-normalization maps them into `WorldXY` millimetres.
+`MillimetresPerPdfPoint` `NewType` carries the source-to-world scale after the
+normalizing tool circle has been measured.
 
 The source-to-world transformation performs, in order:
 
@@ -100,21 +100,29 @@ transforms, and endpoint continuity. Unsupported drawing operators raise a
 named `UnsupportedPdfBoundaryOperatorError`; disconnected selected paths raise
 `DisconnectedPublishedBoundaryError`.
 
+Poppler exposes three intended junctions with a one-quantum seam: two in the
+crossed skis and one in Monstera. At ingestion only, unique degree-one endpoint
+pairs no farther apart than the PDF's `1/256 pt` coordinate quantum are replaced
+by one canonical endpoint. The next-nearest candidates are recorded and must
+remain outside that bound. All downstream continuity is exact equality.
+
 ### Analytic reconstruction
 
 Each source line becomes one `ReferenceLine`. Each source cubic follows this
 decision sequence:
 
-1. Intersect the endpoint-normal lines implied by the two endpoint tangents.
-2. If they yield a finite supporting-circle centre, construct the candidate
-   circular arc between the cubic endpoints with the authored sweep direction.
+1. Construct the unique equal-radius circle through both endpoints tangent to
+   the cubic at its start, then require the end tangent to agree in direction.
+2. If that finite supporting circle exists, construct the candidate circular
+   arc with the authored sweep direction.
 3. Measure the maximum centreline separation between the cubic and candidate
    arc using adaptive subdivision until the measurement bound closes.
 4. Accept the single arc only when that bound is no greater than one quarter of
    the normalized boundary stroke width.
-5. Otherwise construct a G1 biarc from the two endpoint positions and tangents,
-   measure it by the same rule, and subdivide the source cubic recursively until
-   every accepted biarc meets the same bound.
+5. Otherwise construct an equal-distance G1 biarc from the two endpoint
+   positions and tangents, measure it by a closed continuous-correspondence
+   bound, and subdivide the source cubic recursively until every accepted
+   biarc meets the same bound.
 
 The quarter-stroke rule is a publication-resolution limit: the reconstruction's
 centreline must remain well inside the printed boundary stroke. It scales with
@@ -232,12 +240,13 @@ identifies the next product blocker.
 - polygon projection deviation is within half of that reconstruction limit;
 - each overlay renders source centreline, analytic reconstruction, primitive
   junctions, projected vertices, start marker, and normalized tool circle; and
-- the registered Figure 7 silhouette stays within one full normalized boundary
-  stroke of the Figure 5 analytic reconstruction.
+- the Figure 7 overlay registers its coloured tool-centre samples against the
+  one-tool-radius inward offset of the Figure 5 analytic reconstruction.
 
-The Figure 7 gate is deliberately looser because engagement-colour marks partly
-occlude its boundary. It can falsify a wrong Figure 5 silhouette but cannot
-authorize geometry on its own.
+Figure 7 contains no independently drawn boundary stroke: its thousands of
+coloured paths are tool-centre samples. It is therefore retained as a
+shape-only falsification overlay, not a numeric boundary-fidelity gate and
+never authority for geometry.
 
 ### Repository gates
 
