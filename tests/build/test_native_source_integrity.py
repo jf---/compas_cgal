@@ -68,7 +68,7 @@ native_add_locked_dependency(
     SOURCE_DIR "{source_dir.as_posix()}"
     VERSION "1.0"
     URL "https://example.invalid/fixture.tar.gz"
-    ARCHIVE_SHA256 "{'0' * 64}"
+    ARCHIVE_SHA256 "{"0" * 64}"
     SOURCE_TREE_SHA256 "{expected_digest}"
 )
 """,
@@ -186,9 +186,7 @@ def _remove_file(source_dir: Path) -> None:
 
 
 def _rename_file(source_dir: Path) -> None:
-    (source_dir / "include" / "exact.h").rename(
-        source_dir / "include" / "inexact.h"
-    )
+    (source_dir / "include" / "exact.h").rename(source_dir / "include" / "inexact.h")
 
 
 @pytest.mark.parametrize(
@@ -222,9 +220,7 @@ def test_file_symlink_fails_loudly(tmp_path: Path) -> None:
     result = _run_verifier(source_dir)
 
     assert result.returncode != 0
-    assert "expected=regular-file-tree observed=symlink:linked.h" in (
-        result.stdout + result.stderr
-    )
+    assert "expected=regular-file-tree observed=symlink:linked.h" in (result.stdout + result.stderr)
 
 
 def test_root_symlink_fails_loudly(tmp_path: Path) -> None:

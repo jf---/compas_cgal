@@ -94,18 +94,12 @@ def test_task13f_route_trigger_distinguishes_incident_and_nonincident_edges(
     route_zero_terminal = boundary.commits[0].traversal_after
     route_one_active = route_zero_terminal.activate_next()
 
-    assert (
-        route_zero_terminal.active_cursor.route_step.exit_node_id
-        == route_one_active.active_cursor.route_step.entry_node_id
-    )
+    assert route_zero_terminal.active_cursor.route_step.exit_node_id == route_one_active.active_cursor.route_step.entry_node_id
     assert not _route_retrace_required(
         route_zero_terminal,
         route_one_active,
     )
-    assert (
-        boundary.terminal.active_cursor.route_step.exit_node_id
-        != boundary.activated.active_cursor.route_step.entry_node_id
-    )
+    assert boundary.terminal.active_cursor.route_step.exit_node_id != boundary.activated.active_cursor.route_step.entry_node_id
     assert _route_retrace_required(
         boundary.terminal,
         boundary.activated,
@@ -179,17 +173,11 @@ def test_route_retrace_decision_binds_the_final_exact_source(
     assert type(decision) is RouteRetraceDecision
     assert decision.completed_route_index == 1
     assert decision.activated_route_index == 2
-    assert decision.completed_exit_node_id == (
-        boundary.terminal.active_cursor.route_step.exit_node_id
-    )
-    assert decision.activated_entry_node_id == (
-        boundary.activated.active_cursor.route_step.entry_node_id
-    )
+    assert decision.completed_exit_node_id == (boundary.terminal.active_cursor.route_step.exit_node_id)
+    assert decision.activated_entry_node_id == (boundary.activated.active_cursor.route_step.entry_node_id)
     assert decision.terminal_traversal_digest == boundary.terminal.digest
     assert decision.activated_traversal_digest == boundary.activated.digest
-    assert decision.source_commit_digest.hex() == (
-        TASK13F_ROUTE_ONE_COMMIT_DIGEST
-    )
+    assert decision.source_commit_digest.hex() == (TASK13F_ROUTE_ONE_COMMIT_DIGEST)
     assert decision.source_transaction_digest == source_commit.transaction.digest
     assert decision.source_operation_index == len(boundary.physical.operations) - 1
     assert decision.source_operation_digest == IdentityDigest(
@@ -500,11 +488,7 @@ def test_diagnostic_restored_route_two_rank_41_accepts_swept_prefix_theorem(
     cap_decision = candidate.effective_cap_decision
     assert type(candidate.neck_scope) is NoNeckScope
     assert type(cap_decision) is FullCapDecision
-    assert (
-        cap_decision.user_cap_bytes
-        == cap_decision.effective_cap_bytes
-        == task13f.evaluator.user_cap.chord_ratio_bytes
-    )
+    assert cap_decision.user_cap_bytes == cap_decision.effective_cap_bytes == task13f.evaluator.user_cap.chord_ratio_bytes
     circle = candidate.motion
     link_motion = ExactSegmentMotion.build(
         restored.phase_point,

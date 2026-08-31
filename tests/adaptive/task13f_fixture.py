@@ -71,12 +71,8 @@ TASK13F_LAUNCH_PROGRESS = Fraction(
 )
 TASK13F_LAUNCH_GUIDE_RADIUS = Fraction(1, 32)
 TASK13F_ENTRY_RADIUS = Fraction(17, 16)
-TASK13F_ROUTE_ZERO_COMMIT_DIGEST = (
-    "ea5f987e1beddb3a40dd8c70663fe44a18bd5cb955cf8300a3d74713d6da2a1d"
-)
-TASK13F_ROUTE_ONE_COMMIT_DIGEST = (
-    "0a20db00bf444336ffd0138da9e4a938f28dd8bf7bc0baacb69ebdc8f1656c73"
-)
+TASK13F_ROUTE_ZERO_COMMIT_DIGEST = "ea5f987e1beddb3a40dd8c70663fe44a18bd5cb955cf8300a3d74713d6da2a1d"
+TASK13F_ROUTE_ONE_COMMIT_DIGEST = "0a20db00bf444336ffd0138da9e4a938f28dd8bf7bc0baacb69ebdc8f1656c73"
 
 
 def _ring() -> CanonicalRingV1:
@@ -373,12 +369,10 @@ def task13f_retrace_continuation(
         physical_after=physical_after,
         traversal_after=activated,
     )
-    physical_final, traversal_final, route_two_commit = (
-        advance_active_candidate_family(
-            evaluator=fixture.evaluator,
-            physical=physical_after,
-            traversal=activated,
-        )
+    physical_final, traversal_final, route_two_commit = advance_active_candidate_family(
+        evaluator=fixture.evaluator,
+        physical=physical_after,
+        traversal=activated,
     )
     continuation = GenerationContinuation.build(
         launch_transaction=fixture.launch_transaction,
