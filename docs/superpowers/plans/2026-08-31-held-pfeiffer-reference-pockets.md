@@ -69,13 +69,17 @@ consumers of those case documents.
   - `SourceLine.build(start: PdfPoint2, end: PdfPoint2) -> SourceLine`
   - `SourceCubic.build(start: PdfPoint2, control1: PdfPoint2,
     control2: PdfPoint2, end: PdfPoint2) -> SourceCubic`
+  - `SourceToWorld.build(..., reflect_source_y: bool)` with a positive typed
+    scale and explicit handedness conversion
   - `ReferenceLine.build(start: Point2[WorldXY], end: Point2[WorldXY])`
   - `ReferenceArc.build(start: Point2[WorldXY], end: Point2[WorldXY],
     centre: Point2[WorldXY], sweep: Radian)`
   - `ReferenceBoundary.build(primitives: Sequence[ReferencePrimitive],
     tool_radius: ToolRadius, boundary_stroke_width: Millimetre)`
   - `reconstruct_cubic(source: SourceCubic, transform: SourceToWorld,
-    deviation_limit: Millimetre) -> tuple[ReferenceArc, ...]`
+    deviation_limit: Millimetre) -> tuple[ReferencePrimitive, ...]`
+  - `reconstruct_cubic_certified(...) -> ReferenceReconstruction`
+  - `reconstruct_source_path(...) -> ReferenceReconstruction`
   - `project_boundary(boundary: ReferenceBoundary,
     deviation_limit: Millimetre) -> PolygonProjection`
 
@@ -261,9 +265,38 @@ If `types-benchmarks` does not yet exist, add this Pixi task in the same commit:
 types-benchmarks = "mypy --strict --warn-unused-ignores benchmarks/held_reference_geometry.py tests/benchmarks/typecheck/held_reference_contract.py"
 ```
 
+- [ ] **Step 8: Repair corpus-level biarc validation and retain its proof**
+
+Solve equal-distance biarcs in a chord-normalized, start-local frame and form
+both child arcs there before one final scale/translation. Replace the fixed
+join-tangent residual veto with an operation-derived backward-error
+certificate for the defining quadratic and a condition-aware forward bound on
+the represented G1 join. Return the continuous-correspondence proof upper bound
+instead of a boolean.
+
+Regression-test all four live publisher cycles at their exact quarter-stroke
+limits. The formerly rejected root biarcs must close without source
+subdivision; do not increase a limit or depth.
+
+- [ ] **Step 9: Add certified path reconstruction and canonicalization**
+
+Add `ReferenceReconstruction`, `reconstruct_cubic_certified`, and
+`reconstruct_source_path`. Preserve `reconstruct_cubic` as a thin primitive
+projection over the certified path while broadening its return union.
+
+When neither circle nor biarc closes, accept the endpoint chord only when an
+exact finite-segment control-hull calculation proves the cubic within the same
+limit and both authored endpoint directions advance along the chord. This is
+the straight-line analytic limit, not a polygon fallback.
+
+Merge adjacent arcs only inside path reconstruction, while their source spans
+are retained. Re-certify the combined spans against one candidate circle and
+the original limit; otherwise keep both arcs. The public result records the
+maximum certified span upper bound.
+
 The type-contract file uses `assert_type` for every public return type.
 
-- [x] **Step 8: Commit Task 1**
+- [x] **Step 10: Commit initial Task 1 implementation**
 
 ```bash
 git add benchmarks/errors.py benchmarks/held_reference_geometry.py \
