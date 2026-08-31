@@ -1,7 +1,6 @@
 # Held-Pfeiffer Reference Pockets Design
 
-> **status: review pending** - in-chat scope approved 2026-08-31; written
-> specification awaits user review before implementation.
+> **status: approved** - approved 2026-08-31.
 
 ## Decision
 
@@ -65,10 +64,11 @@ the Figure 5 reconstruction and is retained as supporting evidence.
 
 ### Frames and units
 
-PDF extraction uses a dedicated `PdfPageXY` phantom frame. Reconstructed
-geometry uses the existing `Point2[WorldXY]`, `Millimetre`, `ToolRadius`, and
-`Radian` types. A `ToolRadiusRatio` `NewType` carries dimensionless source
-measurements until normalization maps them into `WorldXY` millimetres.
+PDF extraction uses `PdfPoint2`, whose coordinates carry a dedicated
+`PdfPointUnit` `NewType`. Reconstructed geometry uses the existing
+`Point2[WorldXY]`, `Millimetre`, `ToolRadius`, and `Radian` types. A
+`ToolRadiusRatio` `NewType` carries dimensionless source measurements until
+normalization maps them into `WorldXY` millimetres.
 
 The source-to-world transformation performs, in order:
 
@@ -91,7 +91,7 @@ transform, and endpoints incident to the visible black boundary markers.
 
 The source grammar contains two closed variants:
 
-- `SourceLine`, carrying two `Point2[PdfPageXY]` endpoints; and
+- `SourceLine`, carrying two `PdfPoint2` endpoints; and
 - `SourceCubic`, carrying two endpoints and two control points in the same
   frame.
 
