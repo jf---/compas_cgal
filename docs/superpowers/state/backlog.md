@@ -31,7 +31,7 @@ violation is detectable, not aspirational.
   exist; env bootstrap is documented; lint, strict typing, baseline, and strict
   docs run in CI on `main`.
 
-**Non-goal, stated so nobody "fixes" it:** the 6 quality-gate reds are the
+**Non-goal, stated so nobody "fixes" it:** the 12 quality-gate reds are the
 *product* gate — red until the generators earn green. Coherence is their
 accounting (I3), never their suppression.
 
@@ -50,19 +50,18 @@ backlog.md                    → "Open" empty except items the user explicitly 
 
 ## The path — three waves
 
-### Wave 1 — claims and instruments (independent of the fleet; starts now)
+### Wave 1 — claims and instruments (landed locally)
 
-Lands on `codex/sdd-coherence` — the one sanctioned side branch, absorbed in
-Wave 2 (S1). Ordered: R7 first, because A and C2 audit against its output.
+The landed slice is on `codex/sdd-coherence`, the one sanctioned side branch
+to be absorbed in Wave 2 (S1). C1 remains open; its deliberate red stays in
+the canonical manifest until the exact-tangency investigation closes.
+
+The completed claim audit covers only the frozen Task-5 extractor population;
+it does not establish repository-wide I2. Local red-manifest and plan-header
+instruments exist, while CI enforcement remains Wave 2/P4.
 
 | id | item | notes |
 | --- | --- | --- |
-| R7 | **Commit one measured corpus run** — the keystone | runner exists; stamp env + commit into the artifact so every prose claim becomes checkable |
-| A | Audit the 34 measurement-asserting comments (12 files) | 2 of 2 checked so far were defective — one false, one correct-but-unreproducible. Re-earn, annotate with the producing command, or delete. Name the knob behind every column |
-| C2 | Qualify every performance claim with edge-direction regime | `center_domain()`: 5 ms axis-aligned → 17.5 s oblique integers → >90 s generic rotation, mechanism unestablished (`oblique_edge_cost.md`). The corpus is all axis-parallel, so parity claims are best-case. The `review.md` memo lives on the frozen certifier source and cannot be edited there — re-issued in Wave 3 from measured artifacts |
-| B | Write the two unrecorded ablations into docs | peak/count opposition at a forced station (a constraint, not a knob); the four-way ladder decomposition incl. the 213.6° slotting cut that justifies the gate |
-| C3 | Second gate cap (40–100°) | at 120° both registered generators emit byte-identical paths; the 3×2 gate cannot attribute. Small, benchmarks-only |
-| M1 | **The red manifest** (I3), first version below | enforcement (a test that diffs suite reds against it) lands with CI wiring in Wave 2/P4 |
 | C1 | *(instrument, optional in this wave)* identify which layer decides the exact-tangency case | translation-variance at a rim-on-boundary contact; the deliberate red property stays until this closes. `machining_metric_validity.md` case 4 |
 
 ### Wave 2 — programme close (the critical path; owned by the auditor-convergence fleet)
@@ -79,7 +78,7 @@ full-suite tail).
 | --- | --- |
 | W2.1 | Every `required`/`dependent` disposition of the 36 certifier commits consumed or explicitly discarded — then `jf/toolpath-redesign` archive-tagged and deleted; `codex/exact-certified-adaptive-phase1-t9-zero-guide` retired (fully contained, verified 0 missing) |
 | W2.2 | The programme's own five plans stamped with status headers, same convention as the legacy eight |
-| S2 | The 4 red retrace tests retired (their plan is superseded — D1); the manifest shrinks 11 → 7 |
+| S2 | The 4 red retrace tests retired (their plan is superseded — D1); the manifest shrinks 17 → 13 |
 | S1 | `codex/sdd-coherence` (this branch, grown by Wave 1) absorbed into the frontier; branch retired |
 | R5 | Python floor raised to match `typing.Self` imports (≥3.11); the 6-error `types-adaptive` baseline cleared, not carried |
 
@@ -98,14 +97,17 @@ unsatisfiable — 240° floor and `V ≥ √3·r` proved in `loop_radius_degener
 and C5 (arc motion vocabulary for tangent-continuous inter-chain links). These
 resume after Wave 3 or in parallel by explicit choice.
 
-## The red manifest (M1, v1 — 2026-08-28)
+## Current red snapshot
+
+`docs/red_manifest.json` is the sole current red authority. This table is its
+human-readable snapshot.
 
 | tests | count | reason | closes with |
 | --- | ---: | --- | --- |
-| `^tests\.benchmarks\.test_quality::test_the_generated_path_is_worth_running\[cap-120-default-…\]$` (2 generators × 3 pockets) | 6 | default-cap product gate: identical streams genuinely fail 5–7 criteria per pocket | generators earning it (parked lane feeds this) |
-| `^tests\.benchmarks\.test_quality::test_the_generated_path_is_worth_running\[cap-40-attribution-…\]$` (2 generators × 3 pockets) | 6 | tighter-cap product gate: divergent streams still fail current criteria on all three pockets | generators earning it (parked lane feeds this) |
-| `test_quality_invariants.py::test_moving_the_pocket…` | 1 | deliberate: engagement is translation-variant at exact rim-on-boundary tangency | C1 |
-| `tests/adaptive/{test_generator,test_route_retrace_generator}` | 4 | plan superseded (D1); retirement scheduled through the programme | S2 |
+| `cap-120-default` quality product (2 generators × 3 pockets) | 6 | default-cap product gate: both registered generators emit identical streams and fail 5-7 criteria per pocket | generator work (parked lane C4/C5 feeds this) |
+| `cap-40-attribution` quality product (2 generators × 3 pockets) | 6 | cap-40 attribution product gate: both registered generators fail current quality criteria on all three pockets | generator work (parked lane C4/C5 feeds this) |
+| `test_quality_invariants.py::test_moving_the_pocket…` | 1 | deliberate: engagement is translation-variant at exact rim-on-boundary tangency (machining_metric_validity.md case 4) | backlog C1 |
+| `tests/adaptive/{test_generator,test_route_retrace_generator}` | 4 | plan superseded (backlog D1); retirement scheduled through the auditor programme | backlog S2 |
 
 Anything red beyond these 17 is a defect, full stop.
 

@@ -1,7 +1,8 @@
 # Coherence Wave 1 Implementation Plan
 
-> **status: in execution** — opened 2026-08-28. The commit that lands a task
-> updates this header with the task number. Landed: 2, 3, 4, 5, 6, 7, 8, 9, 10.
+> **status: landed** — Tasks 1–11; local final-tree gates green; measured
+> artifact: `benchmarks/results/2026-08-28-9c41a7cab375`. Claim-audit scope is
+> the frozen Task-5 population; CI enforcement remains Wave 2/P4.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use
 > superpowers:subagent-driven-development (recommended) or
@@ -785,14 +786,14 @@ Header: `Landed: …, 10`.
 **Files:**
 - Modify: `docs/superpowers/state/backlog.md`, this plan's header.
 
-- [ ] **Step 1:** run the Wave-1 oracle subset:
+- [x] **Step 1:** run the Wave-1 oracle subset:
   `pixi run red-manifest && pixi run plan-headers && pixi run -e docs docs && pixi run lint && pixi run mypy --strict tools`
   — all green/exit 0.
-- [ ] **Step 2:** backlog edits: mark R7, A, B, C2, C3, M1 closed (convention:
+- [x] **Step 2:** backlog edits: mark R7, A, B, C2, C3, M1 closed (convention:
   the closing commit removes the line); note C1 remains open (its red stays in
   the manifest); flip this plan's header to
   `> **status: landed** — Tasks 1–11, evidence: pixi run red-manifest + plan-headers exit 0, artifact benchmarks/results/<dir>`.
-- [ ] **Step 3:** commit:
+- [x] **Step 3:** commit:
 `git commit -m "docs(sdd): Wave 1 closed -- I2/I3/I4 instrumented and enforced" -- docs/superpowers/state/backlog.md docs/superpowers/plans/2026-08-28-coherence-wave1.md`
 
 ---
