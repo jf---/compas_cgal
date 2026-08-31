@@ -39,12 +39,17 @@ def _findings(
     tmp_path: Path,
     *,
     capability: str = "",
+    finding_pass: str = "1",
     status: str = "proposed",
 ) -> Path:
     header = "ID\tPASS\tFAMILY\tVARIANT\tLOCATION\tQUOTE\tCAPABILITY\tISSUE\tCONSUMER\tLOSS_IF_CHANGED\tPROPOSED_CONDENSATION\tORACLE\tCOST\tFALSIFIER\tEVIDENCE\tSTATUS\n"
     if not capability:
         return _write(tmp_path / "findings.tsv", header)
-    row = f"F-0001\t1\tstock\tfrontier:src/stock_2.cpp\tstock_2.cpp:1\tquote\t{capability}\tissue\tconsumer\tloss\tproposal\toracle\tcheap\tfalsifier\tevidence\t{status}\n"
+    row = (
+        f"F-0001\t{finding_pass}\tstock\tfrontier:src/stock_2.cpp\t"
+        f"stock_2.cpp:1\tquote\t{capability}\tissue\tconsumer\tloss\tproposal\t"
+        f"oracle\tcheap\tfalsifier\tevidence\t{status}\n"
+    )
     return _write(tmp_path / "findings.tsv", header + row)
 
 
@@ -96,6 +101,17 @@ def test_manifest_rejects_unknown_pass_state(tmp_path: Path) -> None:
         )
 
 
+def test_tsv_rejects_additional_named_columns(tmp_path: Path) -> None:
+    manifest = _manifest(tmp_path)
+    lines = manifest.read_text(encoding="utf-8").splitlines()
+    lines[0] += "\tUNEXPECTED"
+    lines[1] += "\tvalue"
+    _write(manifest, "\n".join(lines) + "\n")
+
+    with pytest.raises(DistillationArtifactError, match="unexpected columns.*UNEXPECTED"):
+        validate_review(manifest, _capabilities(tmp_path), _findings(tmp_path), None)
+
+
 @pytest.mark.parametrize("status", ["proposed", "verified", "rejected", "queued-c2", "jelle-c3"])
 def test_findings_accept_spec_statuses(tmp_path: Path, status: str) -> None:
     validate_review(
@@ -112,6 +128,16 @@ def test_findings_reject_unknown_status(tmp_path: Path) -> None:
             _complete_manifest(tmp_path),
             _capabilities(tmp_path),
             _findings(tmp_path, capability="CAP-0001", status="accepted"),
+            None,
+        )
+
+
+def test_findings_reject_unknown_pass(tmp_path: Path) -> None:
+    with pytest.raises(DistillationArtifactError, match="PASS.*4"):
+        validate_review(
+            _complete_manifest(tmp_path),
+            _capabilities(tmp_path),
+            _findings(tmp_path, capability="CAP-0001", finding_pass="4"),
             None,
         )
 
@@ -143,9 +169,29 @@ def test_surgery_requires_existing_capability(tmp_path: Path) -> None:
         )
 
 
+def test_surgery_requires_exact_contractual_headings(tmp_path: Path) -> None:
+    surgery = _surgery(tmp_path)
+    text = surgery.read_text(encoding="utf-8").replace("Retained owner", "retained-owner")
+    _write(surgery, text)
+
+    with pytest.raises(DistillationArtifactError, match="missing required surgery table columns"):
+        validate_review(
+            _complete_manifest(tmp_path),
+            _capabilities(tmp_path),
+            _findings(tmp_path),
+            surgery,
+        )
+
+
 def test_condense_requires_nucleus_and_consumer_contracts(tmp_path: Path) -> None:
     surgery = _surgery(tmp_path, disposition="CONDENSE", valuable_nucleus="")
     with pytest.raises(DistillationArtifactError, match="CONDENSE.*valuable nucleus"):
+        validate_review(_complete_manifest(tmp_path), _capabilities(tmp_path), _findings(tmp_path), surgery)
+
+
+def test_absorb_requires_consumer_contracts(tmp_path: Path) -> None:
+    surgery = _surgery(tmp_path, disposition="ABSORB", consumer_contracts="")
+    with pytest.raises(DistillationArtifactError, match="ABSORB.*consumer contracts"):
         validate_review(_complete_manifest(tmp_path), _capabilities(tmp_path), _findings(tmp_path), surgery)
 
 

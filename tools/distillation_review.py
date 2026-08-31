@@ -53,7 +53,19 @@ SURGERY_COLUMNS = (
     "FALSIFIER",
     "RESIDUAL_RISK",
 )
+SURGERY_HEADINGS = (
+    "Capability",
+    "Disposition",
+    "Retained owner",
+    "Valuable nucleus",
+    "Consumer contracts",
+    "Loss argument",
+    "Oracle",
+    "Falsifier",
+    "Residual risk",
+)
 PASS_STATES = frozenset({"not-started", "complete", "stale"})
+FINDING_PASSES = frozenset({"1", "2", "3"})
 SCOPES = frozenset({"included", "excluded"})
 DRIFT_STATES = frozenset({"clean", "stale"})
 FINDING_STATUSES = frozenset({"proposed", "verified", "rejected", "queued-c2", "jelle-c3"})
@@ -79,6 +91,9 @@ def _read_tsv(path: Path, required: tuple[str, ...]) -> list[dict[str, str]]:
         missing = [column for column in required if column not in fields]
         if missing:
             raise DistillationArtifactError(f"{path} missing required columns: {', '.join(missing)}")
+        unexpected = [column for column in fields if column not in required]
+        if unexpected:
+            raise DistillationArtifactError(f"{path} has unexpected columns: {', '.join(unexpected)}")
         rows: list[dict[str, str]] = []
         for line, raw_row in enumerate(reader, start=2):
             if None in raw_row:
@@ -120,33 +135,29 @@ def _markdown_cells(line: str) -> list[str]:
     return [cell.strip() for cell in line.strip().strip("|").split("|")]
 
 
-def _column_name(cell: str) -> str:
-    return re.sub(r"[^A-Z0-9]+", "_", cell.upper()).strip("_")
-
-
-def _read_surgery(path: Path) -> list[dict[str, str]]:
+def _read_surgery(path: Path) -> list[tuple[int, dict[str, str]]]:
     try:
         lines = path.read_text(encoding="utf-8").splitlines()
     except OSError as error:
         raise DistillationArtifactError(f"cannot read {path}: {error}") from error
 
     for index, line in enumerate(lines):
-        columns = tuple(_column_name(cell) for cell in _markdown_cells(line))
-        if columns != SURGERY_COLUMNS:
+        headings = tuple(_markdown_cells(line))
+        if headings != SURGERY_HEADINGS:
             continue
         if index + 1 >= len(lines):
             break
         separator = _markdown_cells(lines[index + 1])
-        if len(separator) != len(columns) or any(re.fullmatch(r":?-{3,}:?", cell) is None for cell in separator):
+        if len(separator) != len(SURGERY_COLUMNS) or any(re.fullmatch(r":?-{3,}:?", cell) is None for cell in separator):
             raise DistillationArtifactError(f"{path} has malformed surgery table separator")
-        rows: list[dict[str, str]] = []
+        rows: list[tuple[int, dict[str, str]]] = []
         for line_number, row_line in enumerate(lines[index + 2 :], start=index + 3):
             if not row_line.lstrip().startswith("|"):
                 break
             cells = _markdown_cells(row_line)
-            if len(cells) != len(columns):
-                raise DistillationArtifactError(f"{path}:{line_number} has {len(cells)} surgery fields; expected {len(columns)}")
-            rows.append(dict(zip(columns, cells, strict=True)))
+            if len(cells) != len(SURGERY_COLUMNS):
+                raise DistillationArtifactError(f"{path}:{line_number} has {len(cells)} surgery fields; expected {len(SURGERY_COLUMNS)}")
+            rows.append((line_number, dict(zip(SURGERY_COLUMNS, cells, strict=True))))
         return rows
     raise DistillationArtifactError(f"{path} missing required surgery table columns")
 
@@ -174,6 +185,7 @@ def _validate_manifest(path: Path) -> list[dict[str, str]]:
 
 def _validate_findings(path: Path, capabilities: set[str]) -> list[dict[str, str]]:
     rows = _read_tsv(path, FINDING_COLUMNS)
+    _require_allowed(path, rows, "PASS", FINDING_PASSES)
     _require_allowed(path, rows, "STATUS", FINDING_STATUSES)
     for line, row in enumerate(rows, start=2):
         _require_capability(path, line, row["CAPABILITY"], capabilities)
@@ -193,8 +205,8 @@ def _require_fields(
             raise DistillationArtifactError(f"{path}:{line} {disposition} requires {label}")
 
 
-def _validate_surgery(path: Path, rows: list[dict[str, str]], capabilities: set[str]) -> None:
-    for line, row in enumerate(rows, start=3):
+def _validate_surgery(path: Path, rows: list[tuple[int, dict[str, str]]], capabilities: set[str]) -> None:
+    for line, row in rows:
         capability = row["CAPABILITY"]
         _require_capability(path, line, capability, capabilities)
         disposition = row["DISPOSITION"]
@@ -209,12 +221,15 @@ def _validate_surgery(path: Path, rows: list[dict[str, str]], capabilities: set[
                 ("VALUABLE_NUCLEUS", "CONSUMER_CONTRACTS"),
             )
         elif disposition in {"ABSORB", "REMOVE"}:
+            fields: tuple[str, ...] = ("RETAINED_OWNER", "LOSS_ARGUMENT", "ORACLE", "FALSIFIER")
+            if disposition == "ABSORB":
+                fields = ("RETAINED_OWNER", "CONSUMER_CONTRACTS", "LOSS_ARGUMENT", "ORACLE", "FALSIFIER")
             _require_fields(
                 path,
                 line,
                 row,
                 disposition,
-                ("RETAINED_OWNER", "LOSS_ARGUMENT", "ORACLE", "FALSIFIER"),
+                fields,
             )
         elif disposition == "UNKNOWN":
             _require_fields(path, line, row, disposition, ("FALSIFIER",))
