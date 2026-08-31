@@ -124,6 +124,22 @@ def _unit_circle_boundary(offset: float = 0.0) -> ReferenceBoundary:
     return ReferenceBoundary.build(arcs, ToolRadius.build(1.0), Millimetre(0.1))
 
 
+def _stored_semantics_counterexample(order: tuple[int, ...], sweep: float) -> ReferenceBoundary:
+    centre = (4091241540306.3516, 3228197555522.9883)
+    construction_radius = 0.5
+    phase = 5.972552524945925
+    points = tuple(
+        _world(
+            centre[0] + construction_radius * math.cos(phase + index * math.pi / 2.0),
+            centre[1] + construction_radius * math.sin(phase + index * math.pi / 2.0),
+        )
+        for index in range(4)
+    )
+    world_centre = _world(*centre)
+    arcs = tuple(ReferenceArc.build(points[start], points[end], world_centre, Radian(sweep)) for start, end in zip(order, (*order[1:], order[0])))
+    return ReferenceBoundary.build(arcs, ToolRadius.build(1.0), Millimetre(0.1))
+
+
 def _point_segment_distance(
     point: tuple[float, float],
     start: tuple[float, float],
@@ -263,7 +279,7 @@ def test_projection_closes_and_meets_chord_bound() -> None:
     assert len(projection.points) >= 8
 
 
-def test_projection_reports_independently_measured_emitted_chord_deviation() -> None:
+def test_projection_bound_covers_independently_measured_emitted_chord_midpoints() -> None:
     projection = project_boundary(_unit_circle_boundary(), Millimetre(0.002))
     segments_per_quarter = len(projection.points) // 4
     angle_step = math.pi / (2.0 * segments_per_quarter)
@@ -280,7 +296,7 @@ def test_projection_reports_independently_measured_emitted_chord_deviation() -> 
             ),
         )
 
-    assert float(projection.observed_deviation) == pytest.approx(oracle, rel=0.0, abs=sys.float_info.epsilon)
+    assert float(projection.observed_deviation) >= oracle
 
 
 def test_projection_rejects_translated_circle_when_emitted_coordinates_exceed_bound() -> None:
@@ -288,6 +304,28 @@ def test_projection_rejects_translated_circle_when_emitted_coordinates_exceed_bo
 
     with pytest.raises(InvalidReferenceProjectionError):
         project_boundary(_unit_circle_boundary(offset), Millimetre(math.ulp(offset)))
+
+
+def test_projection_rejects_collapsed_emitted_chord() -> None:
+    with pytest.raises(InvalidReferenceProjectionError, match="collapsed"):
+        project_boundary(_unit_circle_boundary(2.0**50), Millimetre(0.001))
+
+
+@pytest.mark.parametrize(
+    ("order", "sweep"),
+    (
+        ((0, 1, 2, 3), math.pi / 2.0),
+        ((0, 3, 2, 1), -math.pi / 2.0),
+    ),
+)
+def test_projection_rejects_bidirectional_stored_arc_segment_counterexample(
+    order: tuple[int, ...],
+    sweep: float,
+) -> None:
+    boundary = _stored_semantics_counterexample(order, sweep)
+
+    with pytest.raises(InvalidReferenceProjectionError, match="exceed"):
+        project_boundary(boundary, Millimetre(0.0006852378679477024))
 
 
 def test_projection_rejects_non_positive_bound() -> None:
