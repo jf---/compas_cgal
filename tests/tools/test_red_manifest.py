@@ -13,7 +13,6 @@ import pytest
 
 from tools.red_manifest import MalformedJUnitError
 from tools.red_manifest import MalformedManifestError
-from tools.red_manifest import ManifestViolation
 from tools.red_manifest import check
 
 CaseOutcome = Union[bool, Literal["pass", "failure", "error"]]
@@ -91,7 +90,7 @@ def _run_cli(junit: pathlib.Path, manifest: pathlib.Path) -> subprocess.Complete
     )
 
 
-def _junit_task_command() -> str:
+def _task_command(task_name: str) -> str:
     result = subprocess.run(
         ["pixi", "task", "list", "--json"],
         cwd=PROJECT_ROOT,
@@ -102,11 +101,11 @@ def _junit_task_command() -> str:
     for environment in json.loads(result.stdout):
         for feature in environment["features"]:
             for task in feature["tasks"]:
-                if task["name"] == "_junit-baseline":
+                if task["name"] == task_name:
                     command = task["cmd"]
                     assert isinstance(command, str)
                     return command
-    raise AssertionError("_junit-baseline task is missing")
+    raise AssertionError(f"{task_name} task is missing")
 
 
 def test_exact_match_passes(tmp_path: pathlib.Path) -> None:
@@ -316,10 +315,12 @@ def test_supported_junit_roots_preserve_parameterized_identity(
     assert check(junit, manifest) == []
 
 
-def test_junit_error_child_is_a_red(tmp_path: pathlib.Path) -> None:
+def test_junit_error_child_is_an_infrastructure_failure(tmp_path: pathlib.Path) -> None:
     junit = _junit(tmp_path, [("tests.x", "test_error", "error")])
-    violations = check(junit, _manifest(tmp_path, []))
-    assert violations == [ManifestViolation("unexpected-red", "tests.x::test_error")]
+    with pytest.raises(MalformedJUnitError) as caught:
+        check(junit, _manifest(tmp_path, []))
+    assert "tests.x::test_error" in str(caught.value)
+    assert "<error>" in str(caught.value)
 
 
 @pytest.mark.parametrize(
@@ -387,13 +388,28 @@ def test_cli_malformed_junit_exit(tmp_path: pathlib.Path) -> None:
     assert "malformed-junit:" in result.stderr
 
 
-def test_pixi_junit_baseline_preserves_parallel_fixture_scope() -> None:
+def test_cli_junit_error_exit_is_infrastructure_failure(tmp_path: pathlib.Path) -> None:
+    result = _run_cli(
+        _junit(tmp_path, [("tests.x", "test_error", "error")]),
+        _manifest(tmp_path, []),
+    )
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert "malformed-junit:" in result.stderr
+    assert "tests.x::test_error" in result.stderr
+
+
+@pytest.mark.parametrize("task_name", ["baseline", "_junit-baseline"])
+def test_pixi_baselines_collect_whole_suite_with_group_scheduler(task_name: str) -> None:
     from tests.benchmarks import test_qualityfigures
 
-    command = _junit_task_command()
+    command = _task_command(task_name)
+    assert command.count("pytest tests ") == 1
     assert "-n auto" in command
     assert "--dist=loadgroup" in command
     assert "--dist=loadscope" not in command
+    for selector in ("--ignore", "--deselect", " -k ", " -m ", "--lf", "--last-failed"):
+        assert selector not in command
     assert test_qualityfigures.pytestmark.name == "xdist_group"
     assert test_qualityfigures.pytestmark.args == ("qualityfigures",)
 
@@ -413,7 +429,7 @@ def test_pixi_junit_handoff_preserves_status_contract(
     fake_pytest.chmod(0o755)
     monkeypatch.setenv("PATH", str(tmp_path), prepend=":")
     result = subprocess.run(
-        ["sh", "-c", _junit_task_command()],
+        ["sh", "-c", _task_command("_junit-baseline")],
         cwd=PROJECT_ROOT,
         check=False,
         capture_output=True,

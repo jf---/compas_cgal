@@ -46,13 +46,16 @@ from compas_cgal.toolpath import ToolpathResult
 GATE_TOOL_DIAMETER = 2.0
 
 # Gate-only engagement caps, in degrees. The 120-degree cap remains the corpus
-# default and reporting snapshot; 40 degrees is the attribution product cap.
+# default and reporting snapshot. Forty degrees is the existing tight-cap case
+# and the sole value in the approved 40--100 sweep where every pocket's two
+# generators diverged; at 50--100 degrees L_shape stayed saturated (453/453 at
+# the original 60-degree stop).
 GateCapDegrees = NewType("GateCapDegrees", float)
 
-GATE_DEFAULT_CAP_ID = "cap-120-default"
 GATE_CAP_DEG = GateCapDegrees(120.0)
-GATE_ATTRIBUTION_CAP_ID = "cap-40-attribution"
 GATE_ATTRIBUTION_CAP_DEG = GateCapDegrees(40.0)
+GATE_DEFAULT_CAP_ID = f"cap-{GATE_CAP_DEG:g}-default"
+GATE_ATTRIBUTION_CAP_ID = f"cap-{GATE_ATTRIBUTION_CAP_DEG:g}-attribution"
 GATE_CAP_CASES: Tuple[Tuple[str, GateCapDegrees], ...] = (
     (GATE_DEFAULT_CAP_ID, GATE_CAP_DEG),
     (GATE_ATTRIBUTION_CAP_ID, GATE_ATTRIBUTION_CAP_DEG),
@@ -95,7 +98,10 @@ GATE_GENERATOR_NAMES: Tuple[str, ...] = ("engagement_controlled", "radius_regula
 Generator = Callable[[PocketSpec], ToolpathResult]
 
 
-def gate_pockets(tool_diameter: float = GATE_TOOL_DIAMETER, tea_cap_deg: float = GATE_CAP_DEG) -> List[PocketSpec]:
+def gate_pockets(
+    tool_diameter: float = GATE_TOOL_DIAMETER,
+    tea_cap_deg: GateCapDegrees = GATE_CAP_DEG,
+) -> List[PocketSpec]:
     """The pockets the quality gate is asserted on, in `GATE_POCKET_NAMES` order.
 
     Args:
@@ -131,7 +137,11 @@ def gate_pockets(tool_diameter: float = GATE_TOOL_DIAMETER, tea_cap_deg: float =
     ]
 
 
-def gate_pocket(name: str, tool_diameter: float = GATE_TOOL_DIAMETER, tea_cap_deg: float = GATE_CAP_DEG) -> PocketSpec:
+def gate_pocket(
+    name: str,
+    tool_diameter: float = GATE_TOOL_DIAMETER,
+    tea_cap_deg: GateCapDegrees = GATE_CAP_DEG,
+) -> PocketSpec:
     """One gate pocket by name.
 
     Args:

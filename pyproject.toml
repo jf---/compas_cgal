@@ -203,7 +203,7 @@ docs = { features = ["docs"], no-default-feature = true }
 [tool.pixi.tasks]
 _editable-rebuild = '''python -c "from compas_cgal import _containment_2, _coverage_2, _medial_axis_2, _stock_2, _toolpath"'''
 pytest = { cmd = '''editable_build_dir="$(python -c 'import sys; print(next(f.path for f in sys.meta_path if hasattr(f, "known_wheel_files") and "compas_cgal._stock_2" in f.known_wheel_files))')" && SKBUILD_EDITABLE_SKIP="$editable_build_dir" pytest''', depends-on = ["_editable-rebuild"] }
-baseline = { cmd = '''editable_build_dir="$(python -c 'import sys; print(next(f.path for f in sys.meta_path if hasattr(f, "known_wheel_files") and "compas_cgal._stock_2" in f.known_wheel_files))')" && SKBUILD_EDITABLE_SKIP="$editable_build_dir" pytest tests -n auto -q''', depends-on = ["_editable-rebuild"] }
+baseline = { cmd = '''editable_build_dir="$(python -c 'import sys; print(next(f.path for f in sys.meta_path if hasattr(f, "known_wheel_files") and "compas_cgal._stock_2" in f.known_wheel_files))')" && SKBUILD_EDITABLE_SKIP="$editable_build_dir" pytest tests -n auto --dist=loadgroup -q''', depends-on = ["_editable-rebuild"] }
 # Exit 1 carries deliberate reds in JUnit for the manifest checker to decide.
 # Exit 2+ is infrastructure/collection failure and must stop the task chain.
 # loadgroup co-locates only explicitly marked expensive module fixtures.
@@ -261,7 +261,7 @@ task9-mat-compile-gate = { depends-on = ["_task9-mat-configure", "_task9-mat-bui
 # rests on review.
 [tool.mypy]
 strict = true
-files = ["benchmarks"]
+files = ["benchmarks", "tests/benchmarks/typecheck/gate_contract.py"]
 warn_unused_configs = true
 
 # compas ships no py.typed marker, so its symbols are untyped here. Following its
