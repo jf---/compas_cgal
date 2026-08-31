@@ -175,3 +175,15 @@ class UnresolvedPublishedCurveError(BenchmarkError):
 
 class InvalidReferenceProjectionError(BenchmarkError):
     """A polygon projection violates its declared chord-deviation contract."""
+
+
+class UnsupportedPdfBoundaryOperatorError(BenchmarkError):
+    """A selected publisher path uses an unsupported drawing operator."""
+
+
+class MissingPublishedToolCircleError(BenchmarkError):
+    """A figure crop contains no unambiguous depicted tool circle."""
+
+
+class AmbiguousPublishedBoundaryError(BenchmarkError):
+    """A figure crop contains more than one valid boundary selection."""
