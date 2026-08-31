@@ -48,10 +48,32 @@ _COMMON_KEYS = (
 
 
 def fail_payload(field: str, detail: str) -> None:
+    """Raise the named payload error for one invalid field.
+
+    Args:
+        field: Field path that owns the violation.
+        detail: Human-readable contract violation.
+
+    Raises:
+        InvalidMeasurementClaimPayloadError: Always.
+    """
     raise InvalidMeasurementClaimPayloadError(f"{field}: {detail}")
 
 
 def validate_object(value: object, keys: Sequence[str], field: str) -> Dict[str, object]:
+    """Validate an exact JSON object with one exact key set.
+
+    Args:
+        value: Candidate decoded JSON value.
+        keys: Required object keys.
+        field: Field path used in diagnostics.
+
+    Returns:
+        The validated mutable object view.
+
+    Raises:
+        InvalidMeasurementClaimPayloadError: The value or keys differ.
+    """
     if type(value) is not dict:
         fail_payload(field, "must be an exact JSON object")
     result = cast(Dict[str, object], value)
@@ -61,18 +83,55 @@ def validate_object(value: object, keys: Sequence[str], field: str) -> Dict[str,
 
 
 def validate_array(value: object, field: str) -> List[object]:
+    """Validate one exact decoded JSON array.
+
+    Args:
+        value: Candidate decoded JSON value.
+        field: Field path used in diagnostics.
+
+    Returns:
+        The validated mutable list view.
+
+    Raises:
+        InvalidMeasurementClaimPayloadError: The value is not an exact list.
+    """
     if type(value) is not list:
         fail_payload(field, "must be an exact JSON array")
     return cast(List[object], value)
 
 
-def _integer(value: object, field: str) -> int:
+def validate_integer(value: object, field: str) -> int:
+    """Validate one non-negative exact integer.
+
+    Args:
+        value: Candidate decoded JSON value.
+        field: Field path used in diagnostics.
+
+    Returns:
+        The validated integer.
+
+    Raises:
+        InvalidMeasurementClaimPayloadError: The value is negative or not an int.
+    """
     if type(value) is not int or value < 0:
         fail_payload(field, "must be a non-negative exact integer")
     return cast(int, value)
 
 
-def _number(value: object, field: str, *, optional: bool = False) -> Optional[float]:
+def validate_float(value: object, field: str, *, optional: bool = False) -> Optional[float]:
+    """Validate one finite exact float, optionally allowing null.
+
+    Args:
+        value: Candidate decoded JSON value.
+        field: Field path used in diagnostics.
+        optional: Whether ``None`` is accepted.
+
+    Returns:
+        The validated float, or ``None`` when allowed.
+
+    Raises:
+        InvalidMeasurementClaimPayloadError: The value is not finite float data.
+    """
     if optional and value is None:
         return None
     if type(value) is not float or not math.isfinite(value):
@@ -89,11 +148,31 @@ def _boolean(value: object, field: str, *, optional: bool = False) -> Optional[b
 
 
 def validate_literal(value: object, expected: object, field: str) -> None:
+    """Require exact runtime type and value equality.
+
+    Args:
+        value: Candidate decoded JSON value.
+        expected: Canonical literal.
+        field: Field path used in diagnostics.
+
+    Raises:
+        InvalidMeasurementClaimPayloadError: Type or value differs.
+    """
     if type(value) is not type(expected) or value != expected:
         fail_payload(field, f"must equal {expected!r}")
 
 
 def validate_same(value: object, expected: object, field: str) -> None:
+    """Recursively require exact JSON-tree equality.
+
+    Args:
+        value: Candidate decoded JSON tree.
+        expected: Canonical JSON tree.
+        field: Field path used in diagnostics.
+
+    Raises:
+        InvalidMeasurementClaimPayloadError: Shape, type, or value differs.
+    """
     if type(value) is not type(expected):
         fail_payload(field, f"type differs from canonical {type(expected).__name__}")
     if type(value) is dict:
@@ -115,6 +194,15 @@ def validate_same(value: object, expected: object, field: str) -> None:
 
 
 def validate_finite_tree(value: object, field: str) -> None:
+    """Reject non-finite floats anywhere in a decoded tree.
+
+    Args:
+        value: Candidate decoded JSON tree.
+        field: Field path used in diagnostics.
+
+    Raises:
+        InvalidMeasurementClaimPayloadError: A non-finite float is present.
+    """
     measurement_claim_json.validate_finite(value, field, InvalidMeasurementClaimPayloadError)
 
 
@@ -242,9 +330,9 @@ def _expected_provenance(radial: bool) -> Dict[str, object]:
 
 def _counts(value: object, field: str) -> Dict[str, object]:
     counts = validate_object(value, ("observations", "accepted", "exceeded"), field)
-    observations = _integer(counts["observations"], f"{field}.observations")
-    accepted = _integer(counts["accepted"], f"{field}.accepted")
-    exceeded = _integer(counts["exceeded"], f"{field}.exceeded")
+    observations = validate_integer(counts["observations"], f"{field}.observations")
+    accepted = validate_integer(counts["accepted"], f"{field}.accepted")
+    exceeded = validate_integer(counts["exceeded"], f"{field}.exceeded")
     if observations != accepted + exceeded:
         fail_payload(field, "observations must equal accepted + exceeded")
     return counts
@@ -271,17 +359,17 @@ def _station_case(case: Dict[str, object], field: str) -> None:
     if len(centre) != 2:
         fail_payload(f"{field}.reconstruction.target_centre", "must contain two world coordinates")
     for index, value in enumerate(centre):
-        _number(value, f"{field}.reconstruction.target_centre[{index}]")
+        validate_float(value, f"{field}.reconstruction.target_centre[{index}]")
     for name in ("centre_decimal_places", "radius_decimal_places", "occurrence_count"):
-        _integer(reconstruction[name], f"{field}.reconstruction.{name}")
+        validate_integer(reconstruction[name], f"{field}.reconstruction.{name}")
     for name in ("target_maximal_radius", "coarse_step"):
-        _number(reconstruction[name], f"{field}.reconstruction.{name}")
+        validate_float(reconstruction[name], f"{field}.reconstruction.{name}")
     coarse_rungs = validate_array(reconstruction["coarse_rungs"], f"{field}.reconstruction.coarse_rungs")
     for index, value in enumerate(coarse_rungs):
-        _integer(value, f"{field}.reconstruction.coarse_rungs[{index}]")
+        validate_integer(value, f"{field}.reconstruction.coarse_rungs[{index}]")
     sequence = validate_array(reconstruction["refined_radius_sequence"], f"{field}.reconstruction.refined_radius_sequence")
     for index, value in enumerate(sequence):
-        _number(value, f"{field}.reconstruction.refined_radius_sequence[{index}]")
+        validate_float(value, f"{field}.reconstruction.refined_radius_sequence[{index}]")
 
     native = validate_object(
         case["native_sampled_decisions"],
@@ -295,7 +383,7 @@ def _station_case(case: Dict[str, object], field: str) -> None:
         fail_payload(field, "refined candidates must align with refined radius sequence")
     for index, value in enumerate(refined):
         row = validate_object(value, ("radius", "cap_exceeded", "cuts_material"), f"{field}.native_sampled_decisions.refined_candidates[{index}]")
-        _number(row["radius"], f"{field}.native_sampled_decisions.refined_candidates[{index}].radius")
+        validate_float(row["radius"], f"{field}.native_sampled_decisions.refined_candidates[{index}].radius")
         validate_literal(row["radius"], sequence[index], f"{field}.native_sampled_decisions.refined_candidates[{index}].radius")
         _boolean(row["cap_exceeded"], f"{field}.native_sampled_decisions.refined_candidates[{index}].cap_exceeded")
         _boolean(row["cuts_material"], f"{field}.native_sampled_decisions.refined_candidates[{index}].cuts_material")
@@ -328,7 +416,7 @@ def _station_case(case: Dict[str, object], field: str) -> None:
         "forced_peak",
         "rescued_peak",
     ):
-        _number(reporting[name], f"{field}.reporting_values.{name}", optional=True)
+        validate_float(reporting[name], f"{field}.reporting_values.{name}", optional=True)
     validate_literal(reporting["angle_unit"], "degree", f"{field}.reporting_values.angle_unit")
     validate_literal(reporting["length_unit"], "mm", f"{field}.reporting_values.length_unit")
 
@@ -340,9 +428,9 @@ def _sweep_case(case: Dict[str, object], field: str, discriminator: str, report_
         f"{field}.reconstruction",
     )
     validate_literal(reconstruction["stock_model"], "generator-faithful-radial-pre-bridge/v1", f"{field}.reconstruction.stock_model")
-    audit_count = _integer(reconstruction["audit_position_count"], f"{field}.reconstruction.audit_position_count")
+    audit_count = validate_integer(reconstruction["audit_position_count"], f"{field}.reconstruction.audit_position_count")
     selected_counts = [
-        _integer(value, f"{field}.reconstruction.non_entry_circle_counts[{index}]")
+        validate_integer(value, f"{field}.reconstruction.non_entry_circle_counts[{index}]")
         for index, value in enumerate(validate_array(reconstruction["non_entry_circle_counts"], f"{field}.reconstruction.non_entry_circle_counts"))
     ]
     validate_literal(reconstruction["audit_includes_entry_phase"], True, f"{field}.reconstruction.audit_includes_entry_phase")
@@ -360,7 +448,7 @@ def _sweep_case(case: Dict[str, object], field: str, discriminator: str, report_
         native = validate_object(native_rows[index], (discriminator, "selected_circles", "observations"), f"{field}.native_sampled_decisions[{index}]")
         validate_literal(native[discriminator], expected, f"{field}.native_sampled_decisions[{index}].{discriminator}")
         validate_literal(
-            _integer(native["selected_circles"], f"{field}.native_sampled_decisions[{index}].selected_circles"),
+            validate_integer(native["selected_circles"], f"{field}.native_sampled_decisions[{index}].selected_circles"),
             selected_count,
             f"{field}.native_sampled_decisions[{index}].selected_circles",
         )
@@ -368,14 +456,14 @@ def _sweep_case(case: Dict[str, object], field: str, discriminator: str, report_
         validate_literal(observations["observations"], selected_count * audit_count, f"{field}.native_sampled_decisions[{index}].observations.observations")
         report = validate_object(report_rows[index], report_keys, f"{field}.reporting_values[{index}]")
         validate_literal(report[discriminator], expected, f"{field}.reporting_values[{index}].{discriminator}")
-        _number(report["worst_peak"], f"{field}.reporting_values[{index}].worst_peak")
-        circles_over_cap = _integer(report["circles_over_cap"], f"{field}.reporting_values[{index}].circles_over_cap")
+        validate_float(report["worst_peak"], f"{field}.reporting_values[{index}].worst_peak")
+        circles_over_cap = validate_integer(report["circles_over_cap"], f"{field}.reporting_values[{index}].circles_over_cap")
         exceeded_positions = cast(int, observations["exceeded"])
         if circles_over_cap > selected_count or circles_over_cap > exceeded_positions or (circles_over_cap == 0) != (exceeded_positions == 0):
             fail_payload(f"{field}.reporting_values[{index}].circles_over_cap", "must be sound for selected circles and exceeded audit positions")
         validate_literal(report["angle_unit"], "degree", f"{field}.reporting_values[{index}].angle_unit")
         if discriminator == "refinement_margin":
-            _number(report["cutting_length"], f"{field}.reporting_values[{index}].cutting_length")
+            validate_float(report["cutting_length"], f"{field}.reporting_values[{index}].cutting_length")
             validate_literal(report["length_unit"], "mm", f"{field}.reporting_values[{index}].length_unit")
 
 
@@ -390,7 +478,7 @@ def _advance_reconstruction(case: Dict[str, object], field: str, audit_count: in
     validate_literal(reconstruction["original_calls_per_wrapper"], 1, f"{field}.reconstruction.original_calls_per_wrapper")
     validate_literal(reconstruction["generator_prepends_entry_probe"], True, f"{field}.reconstruction.generator_prepends_entry_probe")
     validate_literal(reconstruction["audit_excludes_entry_probe"], True, f"{field}.reconstruction.audit_excludes_entry_probe")
-    selected = _integer(reconstruction["selected_circle_count"], f"{field}.reconstruction.selected_circle_count")
+    selected = validate_integer(reconstruction["selected_circle_count"], f"{field}.reconstruction.selected_circle_count")
     config = cast(Dict[str, object], case["config"])
     validate_literal(audit_count, len(cast(List[object], cast(Dict[str, object], config["audit"])["probe_offsets"])), f"{field}.audit count")
     return reconstruction, selected
@@ -416,26 +504,26 @@ def _advance_placement(case: Dict[str, object], field: str) -> None:
         for name in ("cap", "climb"):
             validate_literal(native[name], call["tea_cap" if name == "cap" else name], f"{field}.native_sampled_decisions[{index}].{name}")
             validate_literal(report[name], native[name], f"{field}.reporting_values[{index}].{name}")
-        selected = _integer(native["selected_circles"], f"{field}.native_sampled_decisions[{index}].selected_circles")
+        selected = validate_integer(native["selected_circles"], f"{field}.native_sampled_decisions[{index}].selected_circles")
         selected_sum += selected
         validate_literal(
-            _integer(report["selected_circles"], f"{field}.reporting_values[{index}].selected_circles"), selected, f"{field}.reporting_values[{index}].selected_circles"
+            validate_integer(report["selected_circles"], f"{field}.reporting_values[{index}].selected_circles"), selected, f"{field}.reporting_values[{index}].selected_circles"
         )
         observations = _counts(native["observations"], f"{field}.native_sampled_decisions[{index}].observations")
         validate_literal(observations["observations"], selected * 32, f"{field}.native_sampled_decisions[{index}].observations.observations")
-        over_cap = _integer(report["positions_over_cap"], f"{field}.reporting_values[{index}].positions_over_cap")
+        over_cap = validate_integer(report["positions_over_cap"], f"{field}.reporting_values[{index}].positions_over_cap")
         validate_literal(over_cap, observations["exceeded"], f"{field}.reporting_values[{index}].positions_over_cap")
         for name in ("worst_peak", "worst_peak_offset", "old_probe_peak"):
-            _number(report[name], f"{field}.reporting_values[{index}].{name}")
+            validate_float(report[name], f"{field}.reporting_values[{index}].{name}")
         validate_literal(report["angle_unit"], "degree", f"{field}.reporting_values[{index}].angle_unit")
         bins = validate_array(report["offset_bin_counts"], f"{field}.reporting_values[{index}].offset_bin_counts")
         offsets: List[object] = []
         bin_sum = 0
         for bin_index, bin_value in enumerate(bins):
             bin_row = validate_object(bin_value, ("offset", "positions_over_cap", "angle_unit"), f"{field}.reporting_values[{index}].offset_bin_counts[{bin_index}]")
-            _number(bin_row["offset"], f"{field}.reporting_values[{index}].offset_bin_counts[{bin_index}].offset")
+            validate_float(bin_row["offset"], f"{field}.reporting_values[{index}].offset_bin_counts[{bin_index}].offset")
             offsets.append(bin_row["offset"])
-            bin_sum += _integer(bin_row["positions_over_cap"], f"{field}.reporting_values[{index}].offset_bin_counts[{bin_index}].positions_over_cap")
+            bin_sum += validate_integer(bin_row["positions_over_cap"], f"{field}.reporting_values[{index}].offset_bin_counts[{bin_index}].positions_over_cap")
             validate_literal(bin_row["angle_unit"], "degree", f"{field}.reporting_values[{index}].offset_bin_counts[{bin_index}].angle_unit")
         validate_same(offsets, _PLACEMENT_BIN_CENTRES, f"{field}.reporting_values[{index}].offset_bin_counts offsets")
         validate_literal(bin_sum, over_cap, f"{field}.reporting_values[{index}].offset_bin_counts")
@@ -463,16 +551,30 @@ def _advance_probe_count(case: Dict[str, object], field: str) -> None:
         for name, expected_value in zip(("label", "probe_count", "cap"), discriminants):
             validate_literal(native[name], expected_value, f"{field}.native_sampled_decisions[{index}].{name}")
             validate_literal(report[name], expected_value, f"{field}.reporting_values[{index}].{name}")
-        selected = _integer(native["selected_circles"], f"{field}.native_sampled_decisions[{index}].selected_circles")
+        selected = validate_integer(native["selected_circles"], f"{field}.native_sampled_decisions[{index}].selected_circles")
         selected_sum += selected
         observations = _counts(native["observations"], f"{field}.native_sampled_decisions[{index}].observations")
         validate_literal(observations["observations"], selected * 60, f"{field}.native_sampled_decisions[{index}].observations.observations")
-        _number(report["worst_peak"], f"{field}.reporting_values[{index}].worst_peak")
+        validate_float(report["worst_peak"], f"{field}.reporting_values[{index}].worst_peak")
         validate_literal(report["angle_unit"], "degree", f"{field}.reporting_values[{index}].angle_unit")
     validate_literal(selected_sum, total_selected, f"{field}.reconstruction.selected_circle_count")
 
 
 def validate_case(value: object, expected_case: str, index: int) -> Dict[str, object]:
+    """Validate one generator case against its canonical case contract.
+
+    Args:
+        value: Candidate decoded case.
+        expected_case: Canonical case discriminator.
+        index: Position in the ordered generator batch.
+
+    Returns:
+        The validated case object.
+
+    Raises:
+        InvalidMeasurementClaimConfigError: Canonical configuration differs.
+        InvalidMeasurementClaimPayloadError: Result structure or values differ.
+    """
     field = f"cases[{index}]"
     case = validate_object(value, _COMMON_KEYS, field)
     validate_literal(case["case"], expected_case, f"{field}.case")

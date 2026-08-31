@@ -8,6 +8,7 @@ from typing import Tuple
 
 from tools.measurement_claim_artifact_validation import validate_benchmark_claim_artifact
 from tools.measurement_claim_artifact_validation import validate_claim_artifact
+from tools.measurement_claim_benchmark_history import validate_benchmark_history
 from tools.measurement_claim_benchmark_schema import BenchmarkClaimPayload
 from tools.measurement_claim_benchmark_validation import render_benchmark_ledger_evidence
 from tools.measurement_claim_schema import GeneratorClaimPayload
@@ -29,7 +30,7 @@ def _require_claim_union(generator_payload: GeneratorClaimPayload, benchmark_pay
     claims = [*generator_payload["claims"], *benchmark_payload["claims"]]
     identifiers = [claim["claim_id"] for claim in claims]
     expected = [f"MC-{index:03d}" for index in range(1, 15)]
-    if identifiers != expected or len(set(identifiers)) != 14:
+    if identifiers != expected:
         raise InvalidMeasurementClaimLedgerError("artifact claim union must be the exact disjoint MC-001..MC-014 sequence")
 
 
@@ -40,6 +41,8 @@ def _compare_rows(
     generator_evidence: Dict[str, str],
     benchmark_evidence: Dict[str, str],
 ) -> None:
+    if len(rows) != 14:
+        raise InvalidMeasurementClaimLedgerError(f"joint ledger acceptance requires exactly 14 rows, got {len(rows)}")
     _require_claim_union(generator_payload, benchmark_payload)
     claims = [*generator_payload["claims"], *benchmark_payload["claims"]]
     evidence = {**generator_evidence, **benchmark_evidence}
@@ -63,7 +66,7 @@ def validate_ledger_evidence(ledger: pathlib.Path, artifact_directories: ClaimAr
     rows = validate_ledger_structure(ledger)
     generator_payload, generator_envelope, generator_started, generator_artifact = validate_claim_artifact(generator_directory)
     mc007 = next(claim for claim in generator_payload["claims"] if claim["claim_id"] == "MC-007")
-    generator_repository = generator_directory.absolute().parent.parent.parent
+    generator_repository = generator_directory.resolve().parent.parent.parent
     validate_task6_source_correction(
         generator_repository,
         str(generator_payload["source_correction_commit"]),
@@ -76,9 +79,10 @@ def validate_ledger_evidence(ledger: pathlib.Path, artifact_directories: ClaimAr
         mc007_disposition=mc007["disposition"],
     )
     benchmark_payload, benchmark_envelope, benchmark_started, benchmark_artifact = validate_benchmark_claim_artifact(benchmark_directory)
-    benchmark_repository = benchmark_directory.absolute().parent.parent.parent
+    benchmark_repository = benchmark_directory.resolve().parent.parent.parent
     if generator_repository != benchmark_repository:
         raise InvalidMeasurementClaimLedgerError("generator and benchmark artifacts must belong to the same repository root")
+    validate_benchmark_history(benchmark_repository, benchmark_payload)
     _require_claim_union(generator_payload, benchmark_payload)
     generator_evidence = dict(
         render_generator_ledger_evidence(
@@ -103,6 +107,3 @@ def validate_ledger_evidence(ledger: pathlib.Path, artifact_directories: ClaimAr
         generator_evidence,
         benchmark_evidence,
     )
-    status_lines = [line for line in ledger.read_text(encoding="utf-8").splitlines() if line.startswith("> **status:")]
-    if status_lines != [COMPLETE_STATUS]:
-        raise InvalidMeasurementClaimLedgerError("joint ledger requires the exact complete status")

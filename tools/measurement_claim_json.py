@@ -44,3 +44,23 @@ def decode_strict(data: bytes, field: str, error: type[ErrorT]) -> object:
         raise error(f"{field}: not strict UTF-8 JSON") from exc
     validate_finite(value, field, error)
     return value
+
+
+def canonical_text(value: object, field: str, error: type[ErrorT]) -> str:
+    """Encode one finite value as canonical compact JSON.
+
+    Args:
+        value: JSON-compatible value to encode.
+        field: Human-readable owner used in diagnostics.
+        error: Named exception type for the consumer boundary.
+
+    Returns:
+        Canonical JSON text with sorted keys and no insignificant whitespace.
+
+    Raises:
+        ErrorT: The value is not representable as strict finite JSON.
+    """
+    try:
+        return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False)
+    except (TypeError, ValueError) as exc:
+        raise error(f"{field}: must be canonical finite JSON") from exc

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import datetime
-import json
 import pathlib
 import re
 
@@ -15,6 +14,7 @@ from benchmarks.measurement import MeasurementRecord
 from benchmarks.report import JSON_NAME
 from benchmarks.report import MARKDOWN_NAME
 from tools import measurement_artifact
+from tools import measurement_claim_json
 from tools.measurement_artifact import ArtifactKind
 from tools.measurement_artifact import InvalidMeasurementEnvelopeError
 from tools.measurement_artifact import MeasurementArtifactError
@@ -108,10 +108,7 @@ def _validate_corpus_payloads(result: pathlib.Path) -> None:
         raise InvalidMeasuredResultError(f"corpus Markdown is not UTF-8: {markdown_path}") from exc
     if not markdown.startswith("# Benchmark corpus result"):
         raise InvalidMeasuredResultError(f"corpus Markdown has the wrong heading: {markdown_path}")
-    try:
-        records = json.loads(json_path.read_text(encoding="utf-8"), parse_constant=measurement_artifact._reject_json_constant)
-    except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
-        raise InvalidMeasuredResultError(f"corpus JSON is not strict UTF-8 JSON: {json_path}") from exc
+    records = measurement_claim_json.decode_strict(json_path.read_bytes(), str(json_path), InvalidMeasuredResultError)
     if type(records) is not list or not records:
         raise InvalidMeasuredResultError(f"corpus JSON must be a non-empty exact list: {json_path}")
     for row in records:

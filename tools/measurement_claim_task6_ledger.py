@@ -22,6 +22,9 @@ from typing import cast
 
 from tools.measurement_artifact import ValidatedEnvelope
 from tools.measurement_claim_artifact_validation import validate_claim_artifact
+from tools.measurement_claim_json import canonical_text
+from tools.measurement_claim_markdown import parse_pipe_table
+from tools.measurement_claim_markdown import require_markdown_safe
 from tools.measurement_claim_payload import validate_generator_payload
 from tools.measurement_claim_schema import GeneratorCasePayload
 from tools.measurement_claim_schema import GeneratorClaimPayload
@@ -772,23 +775,19 @@ def _unwrap_code(value: str, *, row: int, field: str) -> str:
 
 
 def _parse_table(lines: Sequence[str]) -> tuple[LedgerRow, ...]:
-    header_index = _unique_line_index(lines, _LEDGER_HEADER, field="ledger table heading")
-    if header_index + 1 >= len(lines) or lines[header_index + 1] != _LEDGER_SEPARATOR:
-        raise InvalidMeasurementClaimLedgerError("ledger table separator is missing or malformed")
-    body: list[str] = []
-    for line in lines[header_index + 2 :]:
-        if not line.startswith("|"):
-            break
-        body.append(line)
+    ledger_section = _section(lines, "## Ledger", "## Frozen matched lines")
+    body = parse_pipe_table(
+        ledger_section,
+        header=_LEDGER_HEADER,
+        rule=_LEDGER_SEPARATOR,
+        columns=7,
+        field="ledger table",
+        error=InvalidMeasurementClaimLedgerError,
+    )
     if len(body) != _ROW_COUNT:
         raise InvalidMeasurementClaimLedgerError(f"ledger table must contain {_ROW_COUNT} body rows, got {len(body)}")
     rows: list[LedgerRow] = []
-    for expected, line in enumerate(body, start=1):
-        if not line.endswith("|"):
-            raise InvalidMeasurementClaimLedgerError(f"ledger row {expected:03d} is not pipe-delimited")
-        cells = [cell.strip() for cell in line[1:-1].split("|")]
-        if len(cells) != 7:
-            raise InvalidMeasurementClaimLedgerError(f"ledger row {expected:03d} column count must be 7, got {len(cells)}")
+    for expected, cells in enumerate(body, start=1):
         ordinal, claim_id, location_cell, anchor_cell, anchor_match, disposition_text, evidence = cells
         expected_ordinal = f"{expected:03d}"
         expected_id = f"MC-{expected:03d}"
@@ -907,17 +906,11 @@ def _artifact_text(
     )
     if type(artifact_directory) is not pathlib.PurePosixPath or artifact_directory != expected:
         raise InvalidMeasurementClaimLedgerError(f"Task-6 artifact directory must equal the authenticated repository-relative path: {expected}")
-    text = artifact_directory.as_posix()
-    if any(token in text for token in ("|", "\r", "\n", "\u2028", "\u2029")):
-        raise InvalidMeasurementClaimLedgerError("Task-6 artifact directory is not Markdown-table-safe")
-    return text
+    return require_markdown_safe(artifact_directory.as_posix(), "Task-6 artifact directory", InvalidMeasurementClaimLedgerError)
 
 
 def _canonical_json(value: object, *, field: str) -> str:
-    try:
-        return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False)
-    except (TypeError, ValueError) as exc:
-        raise InvalidMeasurementClaimLedgerError(f"Task-6 {field} is not canonical finite JSON") from exc
+    return canonical_text(value, f"Task-6 {field}", InvalidMeasurementClaimLedgerError)
 
 
 def _render_validated_ledger_evidence(
@@ -942,9 +935,7 @@ def _render_validated_ledger_evidence(
             f"selection={_canonical_json(claim['selection_decision_provenance'], field=f'{claim_id} selection')}; "
             "continuous_certificate=null"
         )
-        if any(token in cell for token in ("|", "\r", "\n", "\u2028", "\u2029")):
-            raise InvalidMeasurementClaimLedgerError(f"Task-6 {claim_id} evidence must be Markdown-safe and one physical line")
-        rendered[claim_id] = cell
+        rendered[claim_id] = require_markdown_safe(cell, f"Task-6 {claim_id} evidence", InvalidMeasurementClaimLedgerError)
     return rendered
 
 
