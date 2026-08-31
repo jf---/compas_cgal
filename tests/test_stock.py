@@ -397,7 +397,7 @@ def _query_pathological_overlap_station(sender: Connection) -> None:
         PATHOLOGICAL_MATERIAL_X,
         PATHOLOGICAL_STATION_Y,
         PATHOLOGICAL_TOOL_RADIUS,
-        cap_ratio(math.radians(120.0)),
+        cap_ratio(math.radians(PATHOLOGICAL_CAP_DEGREES)),
     )
     sender.send(result)
     sender.close()
