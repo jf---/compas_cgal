@@ -21,6 +21,14 @@ from tools.measurement_claim_schema import RadialSubdivisionsCasePayload
 
 
 def generator_semantic_input(payload: GeneratorClaimPayload) -> GeneratorClaimInputPayload:
+    """Project a generator result onto its stage-free semantic input.
+
+    Args:
+        payload: Validated generator result payload.
+
+    Returns:
+        Typed input payload used by the authenticated envelope.
+    """
     cases = payload["cases"]
     s = cast(RadialStationCasePayload, cases[0])
     d = cast(RadialSubdivisionsCasePayload, cases[1])

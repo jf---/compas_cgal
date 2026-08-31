@@ -89,6 +89,31 @@ def test_list_prints_only_fixed_case_order(capsys: pytest.CaptureFixture[str]) -
     assert capsys.readouterr().out.splitlines() == list(EXPECTED_CASE_ORDER)
 
 
+def test_benchmark_cli_dispatches_the_named_case(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: pathlib.Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    probes = _probes()
+    monkeypatch.chdir(tmp_path)
+    calls: list[tuple[str, pathlib.Path, pathlib.Path]] = []
+    result = tmp_path / "benchmarks" / "measurement_claim_results" / "result"
+    monkeypatch.setattr(
+        probes,
+        "_run_benchmark_case",
+        lambda case, repository, results_root: calls.append((case, repository, results_root)) or result,
+    )
+    assert probes.main(["run-benchmark", "--case", "figure6-spacing"]) == 0
+    assert calls == [
+        (
+            "figure6-spacing",
+            tmp_path.resolve(),
+            tmp_path.resolve() / "benchmarks" / "measurement_claim_results",
+        )
+    ]
+    assert capsys.readouterr().out == "benchmarks/measurement_claim_results/result\n"
+
+
 def test_generator_preflight_failure_stops_before_any_runner(monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path) -> None:
     probes = _probes()
     calls: list[str] = []

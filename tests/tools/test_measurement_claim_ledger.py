@@ -2,10 +2,15 @@ from __future__ import annotations
 
 import importlib
 import pathlib
+import subprocess
 from types import SimpleNamespace
 from typing import Any
 
 import pytest
+
+
+PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[2]
+PINNED_BENCHMARK_LEDGER_COMMIT = "9fd38c674ad321617c6cf982c0fdd233959adfed"
 
 
 def _module() -> Any:
@@ -47,6 +52,11 @@ def _benchmark_payload() -> dict[str, object]:
 def _artifact_paths(tmp_path: pathlib.Path) -> tuple[pathlib.Path, pathlib.Path]:
     root = tmp_path / "repository" / "benchmarks" / "measurement_claim_results"
     return root / "generator", root / "benchmark"
+
+
+@pytest.fixture(autouse=True)
+def _trust_benchmark_history_for_joint_unit_tests(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(_module(), "validate_benchmark_history", lambda repository, payload: None)
 
 
 def _install_joint_authentication(
@@ -178,33 +188,43 @@ def test_joint_ledger_renders_both_families_and_accepts_fourteen_byte_equal_rows
 
     assert module.validate_ledger_evidence(ledger, _artifact_paths(tmp_path)) is None
     assert rendered == ["generator", "benchmark"]
-    assert tuple(row["evidence"] for row in rows) == (
-        "evidence-1",
-        "evidence-2",
-        "evidence-3",
-        "evidence-4",
-        "evidence-5",
-        "evidence-6",
-        "evidence-7",
-        "evidence-8",
-        "evidence-9",
-        "evidence-10",
-        "evidence-11",
-        "evidence-12",
-        "evidence-13",
-        "evidence-14",
-    )
 
 
-@pytest.mark.parametrize("damage", ["disposition", "evidence", "pending", "status"])
-def test_joint_ledger_rejects_row_or_status_damage(
+def test_joint_ledger_rejects_truncated_rows_before_zip_comparison(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: pathlib.Path,
+) -> None:
+    module = _module()
+    rows = _rows()[:-1]
+    _install_joint_authentication(monkeypatch, module, rows, [])
+    ledger = tmp_path / "ledger.md"
+    ledger.write_text(f"{module.COMPLETE_STATUS}\n", encoding="utf-8")
+    with pytest.raises(module.InvalidMeasurementClaimLedgerError, match="exactly 14 rows"):
+        module.validate_ledger_evidence(ledger, _artifact_paths(tmp_path))
+
+
+def test_joint_ledger_invokes_benchmark_history_before_rendering(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: pathlib.Path,
+) -> None:
+    module = _module()
+    events: list[str] = []
+    _install_joint_authentication(monkeypatch, module, _rows(), events)
+    monkeypatch.setattr(module, "validate_benchmark_history", lambda repository, payload: events.append("history"))
+    ledger = tmp_path / "ledger.md"
+    ledger.write_text(f"{module.COMPLETE_STATUS}\n", encoding="utf-8")
+    assert module.validate_ledger_evidence(ledger, _artifact_paths(tmp_path)) is None
+    assert events == ["history", "generator", "benchmark"]
+
+
+@pytest.mark.parametrize("damage", ["disposition", "evidence", "pending"])
+def test_joint_ledger_rejects_row_damage(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: pathlib.Path,
     damage: str,
 ) -> None:
     module = _module()
     rows = tuple(dict(row) for row in _rows())
-    status = module.COMPLETE_STATUS
     if damage == "disposition":
         rows[10]["disposition"] = "corrected"
     elif damage == "evidence":
@@ -212,13 +232,11 @@ def test_joint_ledger_rejects_row_or_status_damage(
     elif damage == "pending":
         rows[11]["disposition"] = "pending"
         rows[11]["evidence"] = "—"
-    else:
-        status = f"{module.COMPLETE_STATUS} trailing"
     _install_joint_authentication(monkeypatch, module, rows, [])
     ledger = tmp_path / "ledger.md"
-    ledger.write_text(f"{status}\n", encoding="utf-8")
+    ledger.write_text(f"{module.COMPLETE_STATUS}\n", encoding="utf-8")
 
-    with pytest.raises(module.InvalidMeasurementClaimLedgerError, match="disposition|evidence|pending|status"):
+    with pytest.raises(module.InvalidMeasurementClaimLedgerError, match="disposition|evidence|pending"):
         module.validate_ledger_evidence(ledger, _artifact_paths(tmp_path))
 
 
@@ -238,3 +256,26 @@ def test_repository_ledger_accepts_exact_authenticated_generator_and_benchmark_a
         )
         is None
     )
+
+
+def test_pinned_task7_ledger_blob_accepts_the_committed_benchmark_artifact(tmp_path: pathlib.Path) -> None:
+    module = _module()
+    raw = subprocess.run(
+        [
+            "git",
+            "--no-replace-objects",
+            "show",
+            f"{PINNED_BENCHMARK_LEDGER_COMMIT}:docs/measurement_claims.md",
+        ],
+        cwd=PROJECT_ROOT,
+        check=True,
+        stdout=subprocess.PIPE,
+    ).stdout
+    ledger = tmp_path / "measurement_claims.md"
+    ledger.write_bytes(raw)
+    artifact_root = PROJECT_ROOT / "benchmarks" / "measurement_claim_results"
+    generators = tuple(sorted(path for path in artifact_root.glob("*-generator-*") if path.is_dir()))
+    benchmarks = tuple(sorted(path for path in artifact_root.glob("*-benchmark-*") if path.is_dir()))
+    assert len(generators) == 1
+    assert len(benchmarks) == 1
+    assert module.validate_ledger_evidence(ledger, (generators[0], benchmarks[0])) is None

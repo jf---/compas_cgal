@@ -239,6 +239,19 @@ def test_markdown_rejects_gap_after_rule_but_allows_prose_after_completed_rows(t
     assert module.validate_benchmark_payload(_payload(module), figure6_payload=_raw(), figure6_markdown=valid)
 
 
+@pytest.mark.parametrize("table", ["comparison", "trials"])
+def test_markdown_rejects_a_second_pipe_table_in_the_owning_section(table: str) -> None:
+    module = _module()
+    markdown = _markdown()
+    forged = b"\nprose after the owned rows\n\n| forged | table | outside | the | owned | grammar |\n"
+    if table == "comparison":
+        markdown = markdown.replace(b"\n## Constant-spacing trials", forged + b"\n## Constant-spacing trials", 1)
+    else:
+        markdown += forged
+    with pytest.raises(module.InvalidMeasurementClaimPayloadError, match="pipe|table|remainder"):
+        module.validate_benchmark_payload(_payload(module), figure6_payload=_raw(), figure6_markdown=markdown)
+
+
 def test_result_facade_contains_reexports_only() -> None:
     path = pathlib.Path(importlib.import_module("tools.measurement_claim_result").__file__)
     tree = ast.parse(path.read_text(encoding="utf-8"))
@@ -326,6 +339,11 @@ def test_commit1_python_modules_parse_at_the_python39_grammar_floor() -> None:
     for relative in (
         "tools/measurement_claim_artifact_validation.py",
         "tools/measurement_claim_benchmark_identity.py",
+        "tools/measurement_claim_benchmark_evidence.py",
+        "tools/measurement_claim_benchmark_figure6.py",
+        "tools/measurement_claim_benchmark_history.py",
+        "tools/measurement_claim_benchmark_markdown.py",
+        "tools/measurement_claim_benchmark_payload.py",
         "tools/measurement_claim_benchmark_schema.py",
         "tools/measurement_claim_benchmark_semantic_input.py",
         "tools/measurement_claim_benchmark_validation.py",
@@ -407,6 +425,12 @@ def test_benchmark_semantic_projection_uses_returned_payload_fields(field: str) 
         assert projected[field] == payload[field]
 
 
+def test_benchmark_semantic_input_and_payload_projection_are_directly_equal() -> None:
+    module = _module()
+    payload = _payload(module)
+    assert module.benchmark_payload_semantic_input(payload) == module.benchmark_semantic_input(payload["source_commit"])
+
+
 def test_benchmark_ledger_evidence_projects_authenticated_command_and_config() -> None:
     module = _module()
     validation = importlib.import_module("tools.measurement_claim_benchmark_validation")
@@ -432,18 +456,77 @@ def test_benchmark_ledger_evidence_projects_authenticated_command_and_config() -
     assert all("\n" not in cell and "\r" not in cell and "|" not in cell for cell in cells.values())
 
 
-def test_figure6_world_point_contract_is_strict_mypy_checked(tmp_path: pathlib.Path) -> None:
+@pytest.mark.parametrize(
+    "damage",
+    [
+        "claim-source",
+        "started-naive",
+        "started-offset",
+        "started-after-finish",
+        "artifact-date",
+        "artifact-absolute",
+        "non-finite-config",
+    ],
+)
+def test_benchmark_renderer_rejects_unbound_or_unsafe_seam_values(damage: str) -> None:
+    module = _module()
+    validation = importlib.import_module("tools.measurement_claim_benchmark_validation")
+    artifact = importlib.import_module("tools.measurement_artifact")
+    payload = _payload(module)
+    started = datetime.datetime(2026, 8, 29, 12, 0, 0, tzinfo=datetime.timezone.utc)
+    envelope = artifact.ValidatedEnvelope.build(
+        finished=started + datetime.timedelta(seconds=1),
+        commit=SOURCE,
+        input_sha256="b" * 64,
+        result_sha256="c" * 64,
+        payload_sha256={"figure6.md": "d" * 64, "figure6.json": "e" * 64, "benchmark-claims.json": "f" * 64},
+    )
+    directory = pathlib.PurePosixPath("benchmarks/measurement_claim_results/2026-08-29-aaaaaaaaaaaa-benchmark-bbbbbbbbbbbb")
+    if damage == "claim-source":
+        payload["claims"][0]["source_commit"] = "9" * 40
+    elif damage == "started-naive":
+        started = started.replace(tzinfo=None)
+    elif damage == "started-offset":
+        started = started.astimezone(datetime.timezone(datetime.timedelta(hours=1)))
+    elif damage == "started-after-finish":
+        started = envelope.finished + datetime.timedelta(microseconds=1)
+    elif damage == "artifact-date":
+        directory = pathlib.PurePosixPath("benchmarks/measurement_claim_results/2026-08-28-aaaaaaaaaaaa-benchmark-bbbbbbbbbbbb")
+    elif damage == "artifact-absolute":
+        directory = pathlib.PurePosixPath("/benchmarks/measurement_claim_results/2026-08-29-aaaaaaaaaaaa-benchmark-bbbbbbbbbbbb")
+    else:
+        payload["config"]["width"] = float("nan")
+    with pytest.raises(module.InvalidMeasurementClaimPayloadError, match="source|started|artifact|finite JSON"):
+        validation.render_benchmark_ledger_evidence(
+            payload,
+            envelope,
+            started=started,
+            artifact_directory=directory,
+        )
+
+
+def test_benchmark_validation_module_is_a_reexport_facade() -> None:
+    path = pathlib.Path(importlib.import_module("tools.measurement_claim_benchmark_validation").__file__)
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    assert not [node for node in tree.body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))]
+
+
+def test_figure6_wire_points_and_nominal_units_are_strict_mypy_checked(tmp_path: pathlib.Path) -> None:
     positive = tmp_path / "positive.py"
     negative = tmp_path / "negative.py"
     positive.write_text(
-        """from tools.measurement_claim_benchmark_schema import Figure6ConfigPayload
-from tools.measurement_claim_schema import Degrees, Millimetres, ToolDiameters, WorldMillimetres, WorldPointMillimetres
+        """from typing import Tuple
+from tools.measurement_claim_benchmark_schema import Figure6ConfigPayload, WorldPointMillimetresPayload
+from tools.measurement_claim_benchmark_semantic_input import FIGURE6_CAPS, FIGURE6_SPACINGS
+from tools.measurement_claim_schema import Degrees, Millimetres, ToolDiameters, WorldMillimetres
 
-point: WorldPointMillimetres = (
+point: WorldPointMillimetresPayload = [
     WorldMillimetres(0.0),
     WorldMillimetres(1.0),
     WorldMillimetres(2.0),
-)
+]
+caps: Tuple[Degrees, ...] = FIGURE6_CAPS
+spacings: Tuple[ToolDiameters, ...] = FIGURE6_SPACINGS
 config: Figure6ConfigPayload = {
     "width": Millimetres(20.0),
     "height": Millimetres(12.0),
@@ -460,20 +543,23 @@ config: Figure6ConfigPayload = {
         encoding="utf-8",
     )
     negative.write_text(
-        """from tools.measurement_claim_schema import Millimetres, WorldMillimetres, WorldPointMillimetres
+        """from typing import Tuple
+from tools.measurement_claim_benchmark_schema import WorldPointMillimetresPayload
+from tools.measurement_claim_benchmark_semantic_input import FIGURE6_CAPS, FIGURE6_SPACINGS
+from tools.measurement_claim_schema import Degrees, Millimetres, ToolDiameters, WorldMillimetres
 
-too_short: WorldPointMillimetres = (WorldMillimetres(0.0), WorldMillimetres(1.0))
-too_long: WorldPointMillimetres = (
+tuple_point: WorldPointMillimetresPayload = (
     WorldMillimetres(0.0),
     WorldMillimetres(1.0),
     WorldMillimetres(2.0),
-    WorldMillimetres(3.0),
 )
-wrong_unit: WorldPointMillimetres = (
+wrong_unit: WorldPointMillimetresPayload = [
     WorldMillimetres(0.0),
     WorldMillimetres(1.0),
     Millimetres(2.0),
-)
+]
+wrong_caps: Tuple[Degrees, ...] = FIGURE6_SPACINGS
+wrong_spacings: Tuple[ToolDiameters, ...] = FIGURE6_CAPS
 """,
         encoding="utf-8",
     )
@@ -494,4 +580,5 @@ wrong_unit: WorldPointMillimetres = (
     assert positive_result.returncode == 0, positive_result.stdout + positive_result.stderr
     assert negative_result.returncode != 0
     diagnostics = negative_result.stdout + negative_result.stderr
-    assert diagnostics.count("Incompatible types in assignment") == 3
+    assert diagnostics.count("[assignment]") == 3
+    assert diagnostics.count("[list-item]") == 1

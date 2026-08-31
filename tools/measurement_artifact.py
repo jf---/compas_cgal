@@ -25,6 +25,8 @@ from typing import NewType
 from typing import Optional
 from typing import Sequence
 
+from tools import measurement_claim_json
+
 GitObjectId = NewType("GitObjectId", str)
 Sha256Hex = NewType("Sha256Hex", str)
 ArtifactKind = NewType("ArtifactKind", str)
@@ -249,22 +251,11 @@ def publication_stage(results_root: pathlib.Path, logical_name: str) -> Iterator
 
 
 def _canonical_json_bytes(value: object) -> bytes:
-    try:
-        encoded = json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")
-    except (TypeError, ValueError) as exc:
-        raise InvalidMeasurementEnvelopeError("identity payload is not strict JSON") from exc
-    return encoded
-
-
-def _reject_json_constant(value: str) -> object:
-    raise ValueError(f"non-standard JSON constant {value}")
+    return measurement_claim_json.canonical_text(value, "identity payload", InvalidMeasurementEnvelopeError).encode("utf-8")
 
 
 def _decode_strict_json_bytes(data: bytes, *, field: str) -> object:
-    try:
-        return json.loads(data.decode("utf-8"), parse_constant=_reject_json_constant)
-    except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
-        raise InvalidMeasurementEnvelopeError(f"{field} is not strict UTF-8 JSON") from exc
+    return measurement_claim_json.decode_strict(data, field, InvalidMeasurementEnvelopeError)
 
 
 def _sha256(data: bytes) -> Sha256Hex:

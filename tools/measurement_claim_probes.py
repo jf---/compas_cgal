@@ -57,6 +57,7 @@ GENERATOR_CASE_ORDER: Tuple[GeneratorCase, ...] = (
     "advance-placement",
     "advance-probe-count",
 )
+BENCHMARK_CASE = "figure6-spacing"
 
 
 def _selected_cases(selected: Sequence[str]) -> Tuple[GeneratorCase, ...]:
@@ -192,6 +193,12 @@ def _produce_benchmark(repository: pathlib.Path, results_root: pathlib.Path) -> 
     return published
 
 
+def _run_benchmark_case(case: str, repository: pathlib.Path, results_root: pathlib.Path) -> pathlib.Path:
+    if case != BENCHMARK_CASE:
+        raise InvalidMeasurementClaimConfigError(f"unknown benchmark measurement-claim case: {case!r}")
+    return _produce_benchmark(repository, results_root)
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     """List or run the fixed generator measurement-claim cases."""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -202,7 +209,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     selection.add_argument("--all", action="store_true", help="run the canonical authenticated batch")
     selection.add_argument("--case", action="append", default=[], help="run one or more cases in canonical order as diagnostics")
     benchmark_parser = subparsers.add_parser("run-benchmark", help="run the fixed Figure-6 benchmark claim batch")
-    benchmark_parser.add_argument("--case", choices=("figure6-spacing",), required=True)
+    benchmark_parser.add_argument("--case", choices=(BENCHMARK_CASE,), required=True)
     validate_parser = subparsers.add_parser("validate", help="validate one generator claim artifact")
     validate_parser.add_argument("artifact", type=pathlib.Path)
     ledger_parser = subparsers.add_parser("validate-ledger", help="validate the ledger against generator and benchmark artifacts")
@@ -228,7 +235,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
     if arguments.command == "run-benchmark":
         repository = pathlib.Path.cwd().resolve()
-        result = _produce_benchmark(repository, repository / "benchmarks" / "measurement_claim_results")
+        result = _run_benchmark_case(arguments.case, repository, repository / "benchmarks" / "measurement_claim_results")
         print(result.relative_to(repository).as_posix())
         return 0
     if arguments.command == "validate-ledger":

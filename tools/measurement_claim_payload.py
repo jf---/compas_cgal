@@ -22,8 +22,10 @@ from tools.measurement_claim_case_validation import validate_generator_cases
 from tools.measurement_claim_case_validation import validate_literal
 from tools.measurement_claim_case_validation import validate_object
 from tools.measurement_claim_case_validation import validate_same
+from tools.measurement_claim_errors import InvalidMeasurementClaimPayloadError
 from tools.measurement_claim_identity import EXTRACTION_COMMIT
 from tools.measurement_claim_identity import SOURCE_CORRECTION_COMMIT
+from tools.measurement_claim_markdown import require_markdown_safe
 from tools.measurement_claim_schema import AdvancePlacementCasePayload
 from tools.measurement_claim_schema import AdvanceProbeCountCasePayload
 from tools.measurement_claim_schema import Degrees
@@ -74,6 +76,14 @@ ClaimEvidencePayloads = Tuple[
 
 
 def claim_evidence(cases: Sequence[GeneratorCasePayload]) -> ClaimEvidencePayloads:
+    """Project six validated cases into the ten claim evidence payloads.
+
+    Args:
+        cases: Canonical ordered generator cases.
+
+    Returns:
+        Ten typed evidence payloads in claim order.
+    """
     station = cast(RadialStationCasePayload, cases[0])
     subdivisions = cast(RadialSubdivisionsCasePayload, cases[1])
     floor = cast(RadialFloorCasePayload, cases[2])
@@ -249,8 +259,7 @@ def _validate_claim(
     if type(claim["disposition"]) is not str or claim["disposition"] not in permitted:
         fail_payload(f"{field}.disposition", f"not permitted for {claim_id}")
     reason = claim["reason"]
-    if type(reason) is not str or not reason or any(token in reason for token in ("|", "\r", "\n", "\u2028", "\u2029")):
-        fail_payload(f"{field}.reason", "must be non-empty and Markdown-table-safe")
+    require_markdown_safe(reason, f"{field}.reason", InvalidMeasurementClaimPayloadError)
     validate_same(claim["selection_decision_provenance"], case["selection_decision_provenance"], f"{field}.selection_decision_provenance")
     validate_same(claim["evidence"], expected_evidence, f"{field}.evidence")
     return claim
