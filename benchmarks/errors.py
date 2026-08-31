@@ -177,6 +177,10 @@ class InvalidReferenceProjectionError(BenchmarkError):
     """A polygon projection violates its declared chord-deviation contract."""
 
 
+class InvalidReferenceReconstructionError(BenchmarkError):
+    """A reference reconstruction is empty, disconnected, or carries an invalid proof bound."""
+
+
 class UnsupportedPdfBoundaryOperatorError(BenchmarkError):
     """A selected publisher path uses an unsupported drawing operator."""
 

@@ -265,7 +265,7 @@ If `types-benchmarks` does not yet exist, add this Pixi task in the same commit:
 types-benchmarks = "mypy --strict --warn-unused-ignores benchmarks/held_reference_geometry.py tests/benchmarks/typecheck/held_reference_contract.py"
 ```
 
-- [ ] **Step 8: Repair corpus-level biarc validation and retain its proof**
+- [x] **Step 8: Repair corpus-level biarc validation and retain its proof**
 
 Solve equal-distance biarcs in a chord-normalized, start-local frame and form
 both child arcs there before one final scale/translation. Replace the fixed
@@ -278,7 +278,7 @@ Regression-test all four live publisher cycles at their exact quarter-stroke
 limits. The formerly rejected root biarcs must close without source
 subdivision; do not increase a limit or depth.
 
-- [ ] **Step 9: Add certified path reconstruction and canonicalization**
+- [x] **Step 9: Add certified path reconstruction and canonicalization**
 
 Add `ReferenceReconstruction`, `reconstruct_cubic_certified`, and
 `reconstruct_source_path`. Preserve `reconstruct_cubic` as a thin primitive

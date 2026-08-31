@@ -12,7 +12,20 @@ from typing import overload
 from benchmarks.errors import DisconnectedPublishedBoundaryError
 from benchmarks.errors import InvalidPublishedPrimitiveError
 from benchmarks.errors import InvalidReferenceProjectionError
+from benchmarks.errors import InvalidReferenceReconstructionError
 from benchmarks.errors import UnresolvedPublishedCurveError
+from benchmarks.held_reference_certification import BINARY64_UNIT_ROUNDOFF
+from benchmarks.held_reference_certification import certify_biarc_root
+from benchmarks.held_reference_certification import control_hull_radius_bounds
+from benchmarks.held_reference_certification import exact_reflection
+from benchmarks.held_reference_certification import exact_segment_distance_squared
+from benchmarks.held_reference_certification import exact_vector_error
+from benchmarks.held_reference_certification import fraction_xy
+from benchmarks.held_reference_certification import gamma
+from benchmarks.held_reference_certification import maximum_arc_segment_distance
+from benchmarks.held_reference_certification import outward_product
+from benchmarks.held_reference_certification import outward_sqrt_fraction
+from benchmarks.held_reference_certification import outward_sum
 from compas_cgal.adaptive.units import Millimetre
 from compas_cgal.adaptive.units import Point2
 from compas_cgal.adaptive.units import Radian
@@ -27,6 +40,7 @@ MillimetresPerPdfPoint = NewType("MillimetresPerPdfPoint", float)
 ROUNDOFF_FACTOR = 128.0
 NORMALIZED_ROUNDOFF = ROUNDOFF_FACTOR * sys.float_info.epsilon
 MAX_RECONSTRUCTION_SUBDIVISIONS = 24
+BIARC_JOIN_COMPONENT_OPERATION_COUNT = 3
 
 _XY: TypeAlias = tuple[float, float]
 
@@ -118,6 +132,7 @@ class SourceToWorld:
     source_origin: PdfPoint2
     world_origin: Point2[WorldXY]
     scale: MillimetresPerPdfPoint
+    reflect_source_y: bool = False
 
     def __post_init__(self) -> None:
         scale = float(self.scale)
@@ -131,13 +146,15 @@ class SourceToWorld:
         source_origin: PdfPoint2,
         world_origin: Point2[WorldXY],
         scale: MillimetresPerPdfPoint,
+        reflect_source_y: bool = False,
     ) -> Self:
-        return cls(source_origin, world_origin, scale)
+        return cls(source_origin, world_origin, scale, reflect_source_y)
 
     def point(self, source: PdfPoint2) -> Point2[WorldXY]:
+        y_direction = -1.0 if self.reflect_source_y else 1.0
         return Point2[WorldXY].build(
             float(self.world_origin.x) + (float(source.x) - float(self.source_origin.x)) * float(self.scale),
-            float(self.world_origin.y) + (float(source.y) - float(self.source_origin.y)) * float(self.scale),
+            float(self.world_origin.y) + y_direction * (float(source.y) - float(self.source_origin.y)) * float(self.scale),
         )
 
 
@@ -186,6 +203,45 @@ class ReferenceArc:
 
 
 ReferencePrimitive: TypeAlias = ReferenceLine | ReferenceArc
+SourcePrimitive: TypeAlias = SourceLine | SourceCubic
+
+
+@dataclass(frozen=True)
+class ReferenceReconstruction:
+    primitives: tuple[ReferencePrimitive, ...]
+    deviation_upper_bound: Millimetre
+
+    def __post_init__(self) -> None:
+        if not self.primitives:
+            raise InvalidReferenceReconstructionError("A reference reconstruction cannot be empty.")
+        for current, following in zip(self.primitives, self.primitives[1:]):
+            if current.end != following.start:
+                raise InvalidReferenceReconstructionError("Reference reconstruction primitives are disconnected.")
+        upper_bound = float(self.deviation_upper_bound)
+        if not math.isfinite(upper_bound) or upper_bound < 0.0:
+            raise InvalidReferenceReconstructionError("Reference reconstruction bound must be finite and non-negative.")
+
+    @classmethod
+    def build(
+        cls,
+        primitives: Sequence[ReferencePrimitive],
+        deviation_upper_bound: Millimetre,
+    ) -> Self:
+        return cls(tuple(primitives), deviation_upper_bound)
+
+
+@dataclass(frozen=True)
+class _CertifiedSpan:
+    control_points: tuple[_XY, _XY, _XY, _XY]
+    primitives: tuple[ReferencePrimitive, ...]
+    deviation_upper_bound: float
+
+
+@dataclass(frozen=True)
+class _MergeEntry:
+    primitive: ReferencePrimitive
+    source_witnesses: tuple[tuple[_XY, _XY, _XY, _XY], ...] | None
+    deviation_upper_bound: float
 
 
 @dataclass(frozen=True)
@@ -289,7 +345,7 @@ def project_boundary(
                 )
             actual_start_radius = _subtract(_point_xy(points[-1]), centre)
             actual_end_radius = _subtract(_point_xy(emitted_end), centre)
-            emitted_chord_deviation = _maximum_arc_segment_distance(
+            emitted_chord_deviation = maximum_arc_segment_distance(
                 start_radius,
                 float(primitive.sweep) * (index - 1) / segment_count,
                 float(primitive.sweep) * index / segment_count,
@@ -318,7 +374,15 @@ def reconstruct_cubic(
     source: SourceCubic,
     transform: SourceToWorld,
     deviation_limit: Millimetre,
-) -> tuple[ReferenceArc, ...]:
+) -> tuple[ReferencePrimitive, ...]:
+    return reconstruct_cubic_certified(source, transform, deviation_limit).primitives
+
+
+def reconstruct_cubic_certified(
+    source: SourceCubic,
+    transform: SourceToWorld,
+    deviation_limit: Millimetre,
+) -> ReferenceReconstruction:
     limit = float(deviation_limit)
     if not math.isfinite(limit) or limit <= 0.0:
         raise InvalidPublishedPrimitiveError("Published-curve deviation limit must be finite and positive.")
@@ -328,7 +392,98 @@ def reconstruct_cubic(
         _point_xy(transform.point(source.control2)),
         _point_xy(transform.point(source.end)),
     )
-    return _reconstruct_control_points(control_points, limit, depth=0)
+    spans = _reconstruct_control_points(control_points, limit, depth=0)
+    primitives = tuple(primitive for span in spans for primitive in span.primitives)
+    return ReferenceReconstruction.build(
+        primitives,
+        Millimetre(max(span.deviation_upper_bound for span in spans)),
+    )
+
+
+def reconstruct_source_path(
+    sources: Sequence[SourcePrimitive],
+    transform: SourceToWorld,
+    deviation_limit: Millimetre,
+) -> ReferenceReconstruction:
+    limit = float(deviation_limit)
+    if not math.isfinite(limit) or limit <= 0.0:
+        raise InvalidPublishedPrimitiveError("Published-path deviation limit must be finite and positive.")
+    entries: list[_MergeEntry] = []
+    for source in sources:
+        if isinstance(source, SourceLine):
+            primitive = ReferenceLine.build(transform.point(source.start), transform.point(source.end))
+            entries.append(_MergeEntry(primitive, None, 0.0))
+            continue
+        control_points = (
+            _point_xy(transform.point(source.start)),
+            _point_xy(transform.point(source.control1)),
+            _point_xy(transform.point(source.control2)),
+            _point_xy(transform.point(source.end)),
+        )
+        for span in _reconstruct_control_points(control_points, limit, depth=0):
+            merge_witnesses = (span.control_points,) if len(span.primitives) == 1 and isinstance(span.primitives[0], ReferenceArc) else None
+            entries.extend(_MergeEntry(primitive, merge_witnesses, span.deviation_upper_bound) for primitive in span.primitives)
+    if not entries:
+        raise InvalidReferenceReconstructionError("A source path cannot be empty.")
+
+    merged: list[_MergeEntry] = []
+    for entry in entries:
+        candidate = _merge_arc_entries(merged[-1], entry, limit) if merged else None
+        if candidate is None:
+            merged.append(entry)
+        else:
+            merged[-1] = candidate
+    return ReferenceReconstruction.build(
+        tuple(entry.primitive for entry in merged),
+        Millimetre(max(entry.deviation_upper_bound for entry in merged)),
+    )
+
+
+def _merge_arc_entries(
+    first: _MergeEntry,
+    second: _MergeEntry,
+    deviation_limit: float,
+) -> _MergeEntry | None:
+    if not isinstance(first.primitive, ReferenceArc) or not isinstance(second.primitive, ReferenceArc):
+        return None
+    if first.source_witnesses is None or second.source_witnesses is None:
+        return None
+    if first.primitive.end != second.primitive.start:
+        return None
+    first_sweep = float(first.primitive.sweep)
+    second_sweep = float(second.primitive.sweep)
+    if first_sweep * second_sweep <= 0.0:
+        return None
+    combined_sweep = first_sweep + second_sweep
+    if abs(combined_sweep) > math.tau:
+        return None
+    try:
+        combined = ReferenceArc.build(
+            first.primitive.start,
+            second.primitive.end,
+            first.primitive.centre,
+            Radian(combined_sweep),
+        )
+    except InvalidPublishedPrimitiveError:
+        return None
+
+    centre = _point_xy(combined.centre)
+    candidate = centre, combined_sweep
+    bounds: list[float] = []
+    witnesses = (*first.source_witnesses, *second.source_witnesses)
+    for control_points in witnesses:
+        if not _cubic_has_monotone_polar_angle(
+            control_points,
+            centre,
+            1.0 if combined_sweep > 0.0 else -1.0,
+            depth=0,
+        ):
+            return None
+        bound = _cubic_within_circle(control_points, candidate, deviation_limit, depth=0)
+        if bound is None:
+            return None
+        bounds.append(bound)
+    return _MergeEntry(combined, witnesses, max(bounds))
 
 
 def _reconstruct_control_points(
@@ -336,42 +491,53 @@ def _reconstruct_control_points(
     deviation_limit: float,
     *,
     depth: int,
-) -> tuple[ReferenceArc, ...]:
+) -> tuple[_CertifiedSpan, ...]:
     circle = _single_circle_candidate(control_points)
-    if (
-        circle is not None
-        and _cubic_has_monotone_polar_angle(
-            control_points,
-            circle[0],
-            1.0 if circle[1] > 0.0 else -1.0,
-            depth=0,
-        )
-        and _cubic_within_circle(
+    circle_bound = None
+    if circle is not None and _cubic_has_monotone_polar_angle(
+        control_points,
+        circle[0],
+        1.0 if circle[1] > 0.0 else -1.0,
+        depth=0,
+    ):
+        circle_bound = _cubic_within_circle(
             control_points,
             circle,
             deviation_limit,
             depth=0,
         )
-    ):
+    if circle is not None and circle_bound is not None:
         centre, sweep = circle
         return (
-            ReferenceArc.build(
-                _world_point(control_points[0]),
-                _world_point(control_points[3]),
-                _world_point(centre),
-                Radian(sweep),
+            _CertifiedSpan(
+                control_points,
+                (
+                    ReferenceArc.build(
+                        _world_point(control_points[0]),
+                        _world_point(control_points[3]),
+                        _world_point(centre),
+                        Radian(sweep),
+                    ),
+                ),
+                circle_bound,
             ),
         )
     biarc = _equal_distance_biarc(control_points)
-    if biarc is not None and _cubic_within_biarc(
-        control_points,
-        biarc,
-        deviation_limit,
-        start_parameter=0.0,
-        end_parameter=1.0,
-        depth=0,
-    ):
-        return biarc
+    if biarc is not None:
+        biarc_bound = _cubic_within_biarc(
+            control_points,
+            biarc,
+            deviation_limit,
+            start_parameter=0.0,
+            end_parameter=1.0,
+            depth=0,
+        )
+        if biarc_bound is not None:
+            return (_CertifiedSpan(control_points, biarc, biarc_bound),)
+    line = _certified_line(control_points, deviation_limit)
+    if line is not None:
+        primitive, line_bound = line
+        return (_CertifiedSpan(control_points, (primitive,), line_bound),)
     if depth >= MAX_RECONSTRUCTION_SUBDIVISIONS:
         raise UnresolvedPublishedCurveError("Published cubic did not admit a bounded circular reconstruction.")
     if _control_points_are_collinear(control_points):
@@ -422,15 +588,19 @@ def _equal_distance_biarc(
     start_tangent = _unit(_subtract(control1, start))
     end_tangent = _unit(_subtract(end, control2))
     chord = _subtract(end, start)
+    chord_length = _length(chord)
+    if not math.isfinite(chord_length) or chord_length < sys.float_info.min:
+        return None
+    local_end = _scale(chord, 1.0 / chord_length)
     tangent_dot = _dot(start_tangent, end_tangent)
     denominator = 2.0 * (1.0 - tangent_dot)
     tangent_sum = _add(start_tangent, end_tangent)
-    chord_dot_tangents = _dot(chord, tangent_sum)
-    chord_squared = _dot(chord, chord)
+    chord_dot_tangents = _dot(local_end, tangent_sum)
+    chord_squared = _dot(local_end, local_end)
 
     if denominator <= NORMALIZED_ROUNDOFF:
-        chord_dot_end_tangent = _dot(chord, end_tangent)
-        if abs(chord_dot_end_tangent) <= NORMALIZED_ROUNDOFF * _length(chord) and _tangents_align(start_tangent, end_tangent):
+        chord_dot_end_tangent = _dot(local_end, end_tangent)
+        if abs(chord_dot_end_tangent) <= NORMALIZED_ROUNDOFF and _tangents_align(start_tangent, end_tangent):
             return _opposed_semicircle_biarc(start, end, end_tangent)
     if denominator == 0.0:
         return None
@@ -441,24 +611,203 @@ def _equal_distance_biarc(
         distance = chord_squared / stable_divisor
     else:
         distance = (-chord_dot_tangents + root) / denominator
-    if not math.isfinite(distance) or distance <= 0.0:
+    root_uncertainty = certify_biarc_root(
+        denominator,
+        chord_dot_tangents,
+        chord_squared,
+        distance,
+    )
+    if root_uncertainty is None:
         return None
 
-    join = _scale(
-        _add(_add(start, end), _scale(_subtract(start_tangent, end_tangent), distance)),
+    local_start = (0.0, 0.0)
+    local_join = _scale(
+        _add(local_end, _scale(_subtract(start_tangent, end_tangent), distance)),
         0.5,
     )
-    first = _arc_from_start_tangent(start, join, start_tangent)
-    second = _arc_from_end_tangent(join, end, end_tangent)
-    if first is None or second is None:
+    first_local = _arc_from_start_tangent(local_start, local_join, start_tangent)
+    second_local = _arc_from_end_tangent(local_join, local_end, end_tangent)
+    if first_local is None or second_local is None:
         return None
+    local_tangent_bounds = _biarc_tangent_bounds(
+        local_end,
+        local_join,
+        start_tangent,
+        end_tangent,
+        distance,
+        root_uncertainty,
+        first_local,
+        second_local,
+    )
+    if local_tangent_bounds is None:
+        return None
+    first, second = _map_local_biarc(
+        first_local,
+        second_local,
+        start,
+        end,
+        chord_length,
+    )
+    storage_bounds = _mapped_biarc_tangent_bounds(
+        (first_local, second_local),
+        (first, second),
+        chord_length,
+    )
     if not (
-        _tangents_align(_arc_tangent(first, at_end=False), start_tangent)
-        and _tangents_align(_arc_tangent(first, at_end=True), _arc_tangent(second, at_end=False))
-        and _tangents_align(_arc_tangent(second, at_end=True), end_tangent)
+        _distance(_arc_tangent(first, at_end=False), start_tangent) <= local_tangent_bounds[0] + storage_bounds[0]
+        and _distance(_arc_tangent(first, at_end=True), _arc_tangent(second, at_end=False)) <= local_tangent_bounds[1] + storage_bounds[1]
+        and _distance(_arc_tangent(second, at_end=True), end_tangent) <= local_tangent_bounds[2] + storage_bounds[2]
     ):
         return None
     return first, second
+
+
+def _biarc_tangent_bounds(
+    local_end: _XY,
+    local_join: _XY,
+    start_tangent: _XY,
+    end_tangent: _XY,
+    distance: float,
+    root_uncertainty: float,
+    first_arc: ReferenceArc,
+    second_arc: ReferenceArc,
+) -> tuple[float, float, float] | None:
+    tangent_difference = _subtract(start_tangent, end_tangent)
+    component_bounds = tuple(
+        math.nextafter(
+            0.5 * abs(tangent_difference[index]) * root_uncertainty
+            + gamma(BIARC_JOIN_COMPONENT_OPERATION_COUNT) * 0.5 * (abs(local_end[index]) + abs(distance * tangent_difference[index])),
+            math.inf,
+        )
+        for index in range(2)
+    )
+    join_error = math.nextafter(math.hypot(*component_bounds), math.inf)
+    first_lower = _length(local_join) - join_error
+    second_lower = _distance(local_end, local_join) - join_error
+    if min(first_lower, second_lower) < sys.float_info.min:
+        return None
+
+    first_chord = local_join
+    second_chord = _subtract(local_end, local_join)
+    first_exact_join = exact_reflection(start_tangent, first_chord)
+    second_exact_join = exact_reflection(end_tangent, second_chord)
+    start_evaluation = exact_vector_error(_arc_tangent(first_arc, at_end=False), fraction_xy(start_tangent))
+    first_join_evaluation = exact_vector_error(_arc_tangent(first_arc, at_end=True), first_exact_join)
+    second_join_evaluation = exact_vector_error(_arc_tangent(second_arc, at_end=False), second_exact_join)
+    end_evaluation = exact_vector_error(_arc_tangent(second_arc, at_end=True), fraction_xy(end_tangent))
+    geometric_join = 2.0 * join_error / first_lower + 2.0 * join_error / second_lower
+    return (
+        start_evaluation,
+        math.nextafter(geometric_join + first_join_evaluation + second_join_evaluation, math.inf),
+        end_evaluation,
+    )
+
+
+def _map_local_point(point: Point2[WorldXY], origin: _XY, scale: float) -> Point2[WorldXY]:
+    return _world_point(_add(origin, _scale(_point_xy(point), scale)))
+
+
+def _map_local_biarc(
+    first: ReferenceArc,
+    second: ReferenceArc,
+    start: _XY,
+    end: _XY,
+    scale: float,
+) -> tuple[ReferenceArc, ReferenceArc]:
+    join = _map_local_point(first.end, start, scale)
+    return (
+        ReferenceArc.build(
+            _world_point(start),
+            join,
+            _map_local_point(first.centre, start, scale),
+            first.sweep,
+        ),
+        ReferenceArc.build(
+            join,
+            _world_point(end),
+            _map_local_point(second.centre, start, scale),
+            second.sweep,
+        ),
+    )
+
+
+def _mapped_coordinate_error(local_coordinate: float, mapped_coordinate: float, scale: float) -> float:
+    product_error = BINARY64_UNIT_ROUNDOFF * abs(scale * local_coordinate)
+    addition_error = math.ulp(mapped_coordinate) / 2.0
+    return math.nextafter(product_error + addition_error, math.inf)
+
+
+def _mapped_arc_tangent_bound(
+    local_arc: ReferenceArc,
+    mapped_arc: ReferenceArc,
+    scale: float,
+    *,
+    at_end: bool,
+) -> float | None:
+    local_point = local_arc.end if at_end else local_arc.start
+    mapped_point = mapped_arc.end if at_end else mapped_arc.start
+    point_errors = tuple(
+        _mapped_coordinate_error(
+            _point_xy(local_point)[index],
+            _point_xy(mapped_point)[index],
+            scale,
+        )
+        for index in range(2)
+    )
+    centre_errors = tuple(
+        _mapped_coordinate_error(
+            _point_xy(local_arc.centre)[index],
+            _point_xy(mapped_arc.centre)[index],
+            scale,
+        )
+        for index in range(2)
+    )
+    radius_error = math.hypot(*(point_errors[index] + centre_errors[index] for index in range(2)))
+    radius_lower = scale * _distance(_point_xy(local_point), _point_xy(local_arc.centre)) - radius_error
+    if radius_lower < sys.float_info.min:
+        return None
+    return math.nextafter(2.0 * radius_error / radius_lower, math.inf)
+
+
+def _mapped_biarc_tangent_bounds(
+    local_biarc: tuple[ReferenceArc, ReferenceArc],
+    mapped_biarc: tuple[ReferenceArc, ReferenceArc],
+    scale: float,
+) -> tuple[float, float, float]:
+    bounds = (
+        _mapped_arc_tangent_bound(local_biarc[0], mapped_biarc[0], scale, at_end=False),
+        _mapped_arc_tangent_bound(local_biarc[0], mapped_biarc[0], scale, at_end=True),
+        _mapped_arc_tangent_bound(local_biarc[1], mapped_biarc[1], scale, at_end=False),
+        _mapped_arc_tangent_bound(local_biarc[1], mapped_biarc[1], scale, at_end=True),
+    )
+    if any(bound is None for bound in bounds):
+        return math.inf, math.inf, math.inf
+    finite = tuple(bound for bound in bounds if bound is not None)
+    return finite[0], finite[1] + finite[2], finite[3]
+
+
+def _certified_line(
+    control_points: tuple[_XY, _XY, _XY, _XY],
+    deviation_limit: float,
+) -> tuple[ReferenceLine, float] | None:
+    start, control1, control2, end = control_points
+    start_exact = fraction_xy(start)
+    end_exact = fraction_xy(end)
+    control1_exact = fraction_xy(control1)
+    control2_exact = fraction_xy(control2)
+    chord = end_exact[0] - start_exact[0], end_exact[1] - start_exact[1]
+    start_direction = control1_exact[0] - start_exact[0], control1_exact[1] - start_exact[1]
+    end_direction = end_exact[0] - control2_exact[0], end_exact[1] - control2_exact[1]
+    if start_direction[0] * chord[0] + start_direction[1] * chord[1] <= 0:
+        return None
+    if end_direction[0] * chord[0] + end_direction[1] * chord[1] <= 0:
+        return None
+    squared_bound = max(exact_segment_distance_squared(point, start, end) for point in control_points)
+    exact_limit = fraction_xy((deviation_limit, deviation_limit))[0]
+    if squared_bound > exact_limit**2:
+        return None
+    upper_bound = outward_sqrt_fraction(squared_bound)
+    return ReferenceLine.build(_world_point(start), _world_point(end)), upper_bound
 
 
 def _opposed_semicircle_biarc(start: _XY, end: _XY, tangent: _XY) -> tuple[ReferenceArc, ReferenceArc] | None:
@@ -534,29 +883,37 @@ def _cubic_within_biarc(
     start_parameter: float,
     end_parameter: float,
     depth: int,
-) -> bool:
+) -> float | None:
     midpoint_parameter = (start_parameter + end_parameter) / 2.0
     cubic_point = _evaluate_cubic(control_points, midpoint_parameter)
     biarc_point = _evaluate_biarc(biarc, midpoint_parameter)
-    observed = _distance(cubic_point, biarc_point)
+    observed = math.nextafter(_distance(cubic_point, biarc_point), math.inf)
     if observed > deviation_limit:
-        return False
+        return None
 
     half_width = (end_parameter - start_parameter) / 2.0
-    cubic_speed_bound = 3.0 * max(_distance(control_points[index], control_points[index + 1]) for index in range(3))
-    biarc_speed = sum(_arc_length(arc) for arc in biarc)
-    if observed + half_width * (cubic_speed_bound + biarc_speed) <= deviation_limit:
-        return True
+    cubic_speed_bound = outward_product(
+        3.0,
+        max(math.nextafter(_distance(control_points[index], control_points[index + 1]), math.inf) for index in range(3)),
+    )
+    biarc_speed = outward_sum(*(_arc_length_upper(arc) for arc in biarc))
+    enclosure = outward_sum(
+        observed,
+        outward_product(half_width, outward_sum(cubic_speed_bound, biarc_speed)),
+    )
+    if enclosure <= deviation_limit:
+        return enclosure
     if depth >= MAX_RECONSTRUCTION_SUBDIVISIONS:
-        return False
-    return _cubic_within_biarc(
+        return None
+    left_bound = _cubic_within_biarc(
         control_points,
         biarc,
         deviation_limit,
         start_parameter=start_parameter,
         end_parameter=midpoint_parameter,
         depth=depth + 1,
-    ) and _cubic_within_biarc(
+    )
+    right_bound = _cubic_within_biarc(
         control_points,
         biarc,
         deviation_limit,
@@ -564,6 +921,9 @@ def _cubic_within_biarc(
         end_parameter=end_parameter,
         depth=depth + 1,
     )
+    if left_bound is None or right_bound is None:
+        return None
+    return max(left_bound, right_bound)
 
 
 def _evaluate_biarc(biarc: tuple[ReferenceArc, ReferenceArc], parameter: float) -> _XY:
@@ -588,6 +948,13 @@ def _arc_length(arc: ReferenceArc) -> float:
     return _distance(_point_xy(arc.start), _point_xy(arc.centre)) * abs(float(arc.sweep))
 
 
+def _arc_length_upper(arc: ReferenceArc) -> float:
+    return outward_product(
+        math.nextafter(_distance(_point_xy(arc.start), _point_xy(arc.centre)), math.inf),
+        abs(float(arc.sweep)),
+    )
+
+
 def _arc_tangent(arc: ReferenceArc, *, at_end: bool) -> _XY:
     point = arc.end if at_end else arc.start
     radius = _subtract(_point_xy(point), _point_xy(arc.centre))
@@ -605,20 +972,30 @@ def _cubic_within_circle(
     deviation_limit: float,
     *,
     depth: int,
-) -> bool:
+) -> float | None:
     centre, _ = candidate
     radius = _distance(control_points[0], centre)
     midpoint = _evaluate_cubic(control_points, 0.5)
-    if abs(_distance(midpoint, centre) - radius) > deviation_limit:
-        return False
+    midpoint_deviation = math.nextafter(abs(_distance(midpoint, centre) - radius), math.inf)
+    if midpoint_deviation > deviation_limit:
+        return None
 
-    minimum_radius, maximum_radius = _control_hull_radius_bounds(control_points, centre)
-    if max(radius - minimum_radius, maximum_radius - radius) <= deviation_limit:
-        return True
+    minimum_radius, maximum_radius = control_hull_radius_bounds(control_points, centre)
+    radius_lower = math.nextafter(radius, -math.inf)
+    radius_upper = math.nextafter(radius, math.inf)
+    minimum_lower = max(0.0, math.nextafter(minimum_radius, -math.inf))
+    maximum_upper = math.nextafter(maximum_radius, math.inf)
+    enclosure = math.nextafter(max(radius_upper - minimum_lower, maximum_upper - radius_lower, midpoint_deviation), math.inf)
+    if enclosure <= deviation_limit:
+        return enclosure
     if depth >= MAX_RECONSTRUCTION_SUBDIVISIONS:
-        return False
+        return None
     left, right = _split_cubic(control_points)
-    return _cubic_within_circle(left, candidate, deviation_limit, depth=depth + 1) and _cubic_within_circle(right, candidate, deviation_limit, depth=depth + 1)
+    left_bound = _cubic_within_circle(left, candidate, deviation_limit, depth=depth + 1)
+    right_bound = _cubic_within_circle(right, candidate, deviation_limit, depth=depth + 1)
+    if left_bound is None or right_bound is None:
+        return None
+    return max(left_bound, right_bound)
 
 
 def _cubic_has_monotone_polar_angle(
@@ -676,116 +1053,6 @@ def _evaluate_cubic_derivative(control_points: tuple[_XY, _XY, _XY, _XY], parame
             _scale(edges[2], parameter**2),
         ),
         3.0,
-    )
-
-
-def _control_hull_radius_bounds(control_points: tuple[_XY, _XY, _XY, _XY], centre: _XY) -> tuple[float, float]:
-    hull = _convex_hull(control_points)
-    maximum = max(_distance(point, centre) for point in hull)
-    if _point_in_convex_polygon(centre, hull):
-        return 0.0, maximum
-    minimum = min(_point_segment_distance(centre, start, end) for start, end in zip(hull, (*hull[1:], hull[0])))
-    return minimum, maximum
-
-
-def _convex_hull(points: Sequence[_XY]) -> tuple[_XY, ...]:
-    ordered = sorted(set(points))
-    if len(ordered) <= 1:
-        return tuple(ordered)
-
-    def half(sequence: Sequence[_XY]) -> list[_XY]:
-        result: list[_XY] = []
-        for point in sequence:
-            while len(result) >= 2 and _cross(_subtract(result[-1], result[-2]), _subtract(point, result[-1])) <= 0.0:
-                result.pop()
-            result.append(point)
-        return result
-
-    return tuple(half(ordered)[:-1] + half(tuple(reversed(ordered)))[:-1])
-
-
-def _point_in_convex_polygon(point: _XY, polygon: Sequence[_XY]) -> bool:
-    if len(polygon) < 3:
-        return False
-    signs = [_cross(_subtract(end, start), _subtract(point, start)) for start, end in zip(polygon, (*polygon[1:], polygon[0]))]
-    return all(value >= 0.0 for value in signs) or all(value <= 0.0 for value in signs)
-
-
-def _point_segment_distance(point: _XY, start: _XY, end: _XY) -> float:
-    segment = _subtract(end, start)
-    length_squared = _dot(segment, segment)
-    if length_squared == 0.0:
-        return _distance(point, start)
-    parameter = max(0.0, min(1.0, _dot(_subtract(point, start), segment) / length_squared))
-    return _distance(point, _add(start, _scale(segment, parameter)))
-
-
-def _linear_circle_root_offsets(
-    start_radius: _XY,
-    normal: _XY,
-    value: float,
-    start_offset: float,
-    end_offset: float,
-) -> tuple[float, ...]:
-    quarter_turn = (-start_radius[1], start_radius[0])
-    cosine_coefficient = _dot(normal, start_radius)
-    sine_coefficient = _dot(normal, quarter_turn)
-    amplitude = math.hypot(cosine_coefficient, sine_coefficient)
-    if amplitude == 0.0 or value < -amplitude or value > amplitude:
-        return ()
-
-    phase = math.atan2(sine_coefficient, cosine_coefficient)
-    root_offset = math.acos(max(-1.0, min(1.0, value / amplitude)))
-    lower = min(start_offset, end_offset)
-    upper = max(start_offset, end_offset)
-    roots: set[float] = set()
-    for base in (phase - root_offset, phase + root_offset):
-        minimum_turn = math.ceil((lower - base) / math.tau)
-        maximum_turn = math.floor((upper - base) / math.tau)
-        roots.update(base + turn * math.tau for turn in range(minimum_turn, maximum_turn + 1))
-    return tuple(sorted(roots))
-
-
-def _maximum_arc_segment_distance(
-    start_radius: _XY,
-    start_offset: float,
-    end_offset: float,
-    segment_start: _XY,
-    segment_end: _XY,
-) -> float:
-    segment = _subtract(segment_end, segment_start)
-    if _dot(segment, segment) == 0.0:
-        raise InvalidReferenceProjectionError("An emitted projection chord collapsed to one point.")
-
-    segment_quarter_turn = (-segment[1], segment[0])
-    start_quarter_turn = (-segment_start[1], segment_start[0])
-    end_quarter_turn = (-segment_end[1], segment_end[0])
-    candidates = {start_offset, end_offset}
-    equations = (
-        (segment, _dot(segment, segment_start)),
-        (segment, _dot(segment, segment_end)),
-        (start_quarter_turn, 0.0),
-        (end_quarter_turn, 0.0),
-        (segment_quarter_turn, _dot(segment_quarter_turn, segment_start)),
-        (segment, 0.0),
-    )
-    for normal, value in equations:
-        candidates.update(
-            _linear_circle_root_offsets(
-                start_radius,
-                normal,
-                value,
-                start_offset,
-                end_offset,
-            )
-        )
-    return max(
-        _point_segment_distance(
-            _rotate_vector(start_radius, offset),
-            segment_start,
-            segment_end,
-        )
-        for offset in candidates
     )
 
 
