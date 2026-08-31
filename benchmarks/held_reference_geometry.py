@@ -166,12 +166,12 @@ class ReferenceArc:
         sweep = float(self.sweep)
         if not math.isfinite(sweep) or sweep == 0.0 or abs(sweep) > math.tau:
             raise InvalidPublishedPrimitiveError("A reference arc sweep must be finite, non-zero, and at most one turn.")
-        start_radius = _distance(_point_xy(self.start), _point_xy(self.centre))
-        end_radius = _distance(_point_xy(self.end), _point_xy(self.centre))
-        if start_radius == 0.0 or not _roundoff_close(start_radius, end_radius):
+        start_radius = _subtract(_point_xy(self.start), _point_xy(self.centre))
+        end_radius = _subtract(_point_xy(self.end), _point_xy(self.centre))
+        if _length(start_radius) == 0.0:
             raise InvalidPublishedPrimitiveError("A reference arc requires distinct endpoints on one circle.")
-        predicted_end = _rotate_about(_point_xy(self.start), _point_xy(self.centre), sweep)
-        if not (_roundoff_close(predicted_end[0], float(self.end.x)) and _roundoff_close(predicted_end[1], float(self.end.y))):
+        predicted_end_radius = _rotate_vector(start_radius, sweep)
+        if not _vectors_align(predicted_end_radius, end_radius):
             raise InvalidPublishedPrimitiveError("A reference arc sweep does not terminate at its declared endpoint.")
 
     @classmethod
@@ -253,7 +253,7 @@ def project_boundary(
         raise InvalidReferenceProjectionError("Projection deviation limit must be finite and positive.")
 
     points = [boundary.primitives[0].start]
-    maximum_sagitta = 0.0
+    maximum_deviation = 0.0
     for primitive in boundary.primitives:
         if isinstance(primitive, ReferenceLine):
             points.append(primitive.end)
@@ -272,21 +272,45 @@ def project_boundary(
             segment_count += 1
             segment_angle = abs(float(primitive.sweep)) / segment_count
             sagitta = radius * (1.0 - math.cos(segment_angle / 2.0))
-        maximum_sagitta = max(maximum_sagitta, sagitta)
-
+        centre = _point_xy(primitive.centre)
+        start_radius = _subtract(_point_xy(primitive.start), centre)
         for index in range(1, segment_count + 1):
             if index == segment_count:
-                points.append(primitive.end)
+                emitted_end = primitive.end
             else:
-                points.append(
-                    _world_point(
-                        _rotate_about(
-                            _point_xy(primitive.start),
-                            _point_xy(primitive.centre),
+                emitted_end = _world_point(
+                    _add(
+                        centre,
+                        _rotate_vector(
+                            start_radius,
                             float(primitive.sweep) * index / segment_count,
-                        )
+                        ),
                     )
                 )
+            actual_start_radius = _subtract(_point_xy(points[-1]), centre)
+            actual_end_radius = _subtract(_point_xy(emitted_end), centre)
+            ideal_end_radius = _rotate_vector(
+                start_radius,
+                float(primitive.sweep) * index / segment_count,
+            )
+            ideal_midpoint_radius = _rotate_vector(
+                start_radius,
+                float(primitive.sweep) * (index - 0.5) / segment_count,
+            )
+            emitted_coordinate_error = _distance(ideal_end_radius, actual_end_radius)
+            emitted_chord_deviation = _point_segment_distance(
+                ideal_midpoint_radius,
+                actual_start_radius,
+                actual_end_radius,
+            )
+            maximum_deviation = max(
+                maximum_deviation,
+                emitted_coordinate_error,
+                emitted_chord_deviation,
+            )
+            if maximum_deviation > limit:
+                raise InvalidReferenceProjectionError("Emitted polygon coordinates exceed the projection deviation limit.")
+            points.append(emitted_end)
 
     if points[-1] != points[0]:
         raise InvalidReferenceProjectionError("Projected primitives did not preserve the analytic cycle closure.")
@@ -294,7 +318,7 @@ def project_boundary(
     return PolygonProjection.build(
         points,
         deviation_limit,
-        Millimetre(maximum_sagitta),
+        Millimetre(maximum_deviation),
     )
 
 
@@ -414,17 +438,17 @@ def _equal_distance_biarc(
 
     if denominator <= NORMALIZED_ROUNDOFF:
         chord_dot_end_tangent = _dot(chord, end_tangent)
-        if abs(chord_dot_end_tangent) <= NORMALIZED_ROUNDOFF * _length(chord):
+        if abs(chord_dot_end_tangent) <= NORMALIZED_ROUNDOFF * _length(chord) and _tangents_align(start_tangent, end_tangent):
             return _opposed_semicircle_biarc(start, end, end_tangent)
-        distance = chord_squared / (4.0 * chord_dot_end_tangent)
+    if denominator == 0.0:
+        return None
+    discriminant = chord_dot_tangents**2 + denominator * chord_squared
+    root = math.sqrt(discriminant)
+    stable_divisor = root + chord_dot_tangents
+    if stable_divisor > NORMALIZED_ROUNDOFF * root:
+        distance = chord_squared / stable_divisor
     else:
-        discriminant = chord_dot_tangents**2 + denominator * chord_squared
-        root = math.sqrt(discriminant)
-        stable_divisor = root + chord_dot_tangents
-        if stable_divisor > NORMALIZED_ROUNDOFF * root:
-            distance = chord_squared / stable_divisor
-        else:
-            distance = (-chord_dot_tangents + root) / denominator
+        distance = (-chord_dot_tangents + root) / denominator
     if not math.isfinite(distance) or distance <= 0.0:
         return None
 
@@ -436,7 +460,11 @@ def _equal_distance_biarc(
     second = _arc_from_end_tangent(join, end, end_tangent)
     if first is None or second is None:
         return None
-    if not _tangents_align(_arc_tangent(first, at_end=True), _arc_tangent(second, at_end=False)):
+    if not (
+        _tangents_align(_arc_tangent(first, at_end=False), start_tangent)
+        and _tangents_align(_arc_tangent(first, at_end=True), _arc_tangent(second, at_end=False))
+        and _tangents_align(_arc_tangent(second, at_end=True), end_tangent)
+    ):
         return None
     return first, second
 
@@ -576,7 +604,7 @@ def _arc_tangent(arc: ReferenceArc, *, at_end: bool) -> _XY:
 
 
 def _tangents_align(left: _XY, right: _XY) -> bool:
-    return _dot(left, right) >= 1.0 - NORMALIZED_ROUNDOFF
+    return _distance(left, right) <= NORMALIZED_ROUNDOFF
 
 
 def _cubic_within_circle(
@@ -732,19 +760,21 @@ def _control_points_are_collinear(
     )
 
 
-def _roundoff_close(left: float, right: float) -> bool:
-    scale = max(abs(left), abs(right), 1.0)
-    return abs(left - right) <= NORMALIZED_ROUNDOFF * scale
+def _vectors_align(left: _XY, right: _XY) -> bool:
+    local_scale = max(_length(left), _length(right))
+    return _distance(left, right) <= NORMALIZED_ROUNDOFF * local_scale
+
+
+def _rotate_vector(vector: _XY, angle: float) -> _XY:
+    cosine = math.cos(angle)
+    sine = math.sin(angle)
+    return cosine * vector[0] - sine * vector[1], sine * vector[0] + cosine * vector[1]
 
 
 def _rotate_about(point: _XY, centre: _XY, angle: float) -> _XY:
     radius = _subtract(point, centre)
-    cosine = math.cos(angle)
-    sine = math.sin(angle)
-    return (
-        centre[0] + cosine * radius[0] - sine * radius[1],
-        centre[1] + sine * radius[0] + cosine * radius[1],
-    )
+    rotated = _rotate_vector(radius, angle)
+    return centre[0] + rotated[0], centre[1] + rotated[1]
 
 
 def _point_xy(point: Point2[WorldXY]) -> _XY:
