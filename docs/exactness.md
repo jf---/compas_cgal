@@ -393,6 +393,24 @@ Exact arithmetic makes the policy *deterministic*; it does not replace it.
 `radial_clearance` and the TEA cap are early instances — deliberate domain
 margins, exactly represented, never numerical repair.
 
+### Exact arithmetic does not discharge topology preconditions
+
+An exact locator or predicate is correct only on the topology its algorithm
+supports. Arrangement faces may have multiple outer CCBs; a point locator that
+assumes one outer boundary can return the wrong face, and a walk locator whose
+progress guard exists only as an assertion can loop forever when `NDEBUG`
+removes that guard. Neither failure involves rounding, an epsilon, or an
+inexact construction. Numeric exactness review alone therefore cannot exclude
+it.
+
+Every deciding point-location path must use a locator whose documented
+preconditions cover the arrangement actually produced, including
+multi-outer-CCB faces. Release behavior must not depend on a debug assertion for
+correctness or progress. Consumer-boundary tests must exercise both the returned
+classification and bounded termination on a fixed multi-outer-CCB fixture; a
+certificate that returns quickly but names the wrong face is more dangerous
+than an overt failure.
+
 ## Case study: the deflation constant that wasn't needed
 
 The incident that produced this page, in three acts:
@@ -414,7 +432,7 @@ The incident that produced this page, in three acts:
 
 ## Review checklist
 
-Run every exact-kernel change through these fourteen questions:
+Run every exact-kernel change through these sixteen questions:
 
 1. Is the kernel appropriate for every construction whose result is reused?
 2. Does any `to_double()` result affect control flow or topology?
@@ -436,6 +454,10 @@ Run every exact-kernel change through these fourteen questions:
     without minimal-polynomial factoring?
 14. Does every normalization used by a sign predicate preserve the original
     polynomial's sign, not merely its zero set?
+15. Do all point-location and traversal algorithms support every face topology
+    the producer can emit, including multiple outer CCBs?
+16. Does release-mode correctness and progress survive with every debug
+    assertion removed, with bounded termination and classification both tested?
 
 ## References
 

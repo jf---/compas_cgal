@@ -277,7 +277,10 @@ code:
     The quality gate now crosses all three pockets with both registered
     generators at 120° and 40°. At 120° their complete emitted operation streams
     are structurally identical on every pocket; at 40° they diverge on every
-    pocket. The bit-preserving witness retains defining Line/Circle binary64
+    pocket. Forty degrees was the sole value in the approved 40–100° sweep with
+    that three-pocket property: at every tested cap from 50° through 100°, the
+    L-shape streams remained identical (453/453 operations at the original 60°
+    stop). The bit-preserving witness retains defining Line/Circle binary64
     geometry, operation kind, `path_index`, `clockwise`, both tangents, order,
     and duplicates. This is bounded evidence about emitted binary64 objects,
     not an exact-kernel certificate, geometric-equivalence proof, or proof of

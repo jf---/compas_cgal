@@ -1,8 +1,10 @@
 # Coherence Wave 1 Implementation Plan
 
-> **status: landed** — Tasks 1–11; local final-tree gates green; measured
-> artifact: `benchmarks/results/2026-08-28-9c41a7cab375`. Claim-audit scope is
-> the frozen Task-5 population; CI enforcement remains Wave 2/P4.
+> **status: landed** — Tasks 1–11; close evidence: `pixi run red-manifest`,
+> `pixi run plan-headers`, `pixi run -e docs docs`, `pixi run lint`, and
+> `pixi run mypy --strict tools` all exited 0. Measured artifact:
+> `benchmarks/results/2026-08-28-9c41a7cab375`. Claim-audit scope is the frozen
+> Task-5 population; CI enforcement remains Wave 2/P4.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use
 > superpowers:subagent-driven-development (recommended) or
@@ -733,7 +735,12 @@ Header: `Landed: …, 9`.
 > pins complete two-cap streams and executes the 12-cell quality product.
 > The original block below remains planning history.
 
-- [x] **Step 1: the test** (expected GREEN — it asserts a measured fact, and
+- [x] **Corrected execution outcome:** cap-40 attribution and the twelve-cell
+  two-cap quality product landed in `4b741af`; exact stream identity/divergence,
+  collection, and red-manifest reconciliation passed. The cap-60 attempt below
+  is retained only as superseded planning history.
+
+- **Superseded Step 1: the test** (expected GREEN — it asserts a measured fact, and
   it turns the known cap-120 identity from a footnote into a pinned property):
 
 ```python
@@ -770,12 +777,12 @@ def test_below_saturation_the_generators_diverge_so_the_gate_can_attribute():
     assert _operations("engagement_controlled", ATTRIBUTION_CAP_DEG) != _operations("radius_regulated", ATTRIBUTION_CAP_DEG)
 ```
 
-- [x] **Step 2:** run: `pixi run pytest tests/benchmarks/test_gate_attribution.py -q`
+- **Superseded Step 2:** run: `pixi run pytest tests/benchmarks/test_gate_attribution.py -q`
 Expected: 2 passed. If the second test FAILS, that is a genuine finding
 (the ladder never fires at 60 either) — STOP and report; do not weaken the
 assertion.
-- [x] **Step 3:** `pixi run red-manifest` still exit 0 (nothing new red).
-- [x] **Step 4:** commit:
+- **Superseded Step 3:** `pixi run red-manifest` still exit 0 (nothing new red).
+- **Superseded Step 4:** commit:
 `git commit -m "test(gate): generators identical at saturated cap, divergent at 60 -- attribution pinned (C3)" -- tests/benchmarks/test_gate_attribution.py`
 Header: `Landed: …, 10`.
 

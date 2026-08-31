@@ -3,7 +3,7 @@
     {
       "match": "^tests\\.benchmarks\\.test_quality::test_the_generated_path_is_worth_running\\[cap-120-default-(?:engagement_controlled|radius_regulated)-(?:rect_12x8|rect_20x12|L_shape)\\]$",
       "count": 6,
-      "reason": "default-cap product gate: both registered generators emit identical streams and fail 5-7 criteria per pocket",
+      "reason": "default-cap product gate: both registered generators emit identical streams and fail 6-7 criteria per pocket",
       "closes_with": "generator work (parked lane C4/C5 feeds this)"
     },
     {
