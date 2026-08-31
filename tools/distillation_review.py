@@ -259,15 +259,23 @@ def validate_review(manifest: Path, capabilities: Path, findings: Path, surgery:
     _validated_counts(manifest, capabilities, findings, surgery)
 
 
+def validate_manifest(manifest: Path) -> None:
+    """Validate the manifest-stage structural and row contracts."""
+    _validate_manifest(manifest)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Validate distillation review artifacts")
-    parser.add_argument("command", choices=("validate",))
+    parser.add_argument("command", choices=("validate", "validate-manifest"))
+    parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
     args = parser.parse_args(argv)
-    if args.command != "validate":
-        return 2
+    if args.command == "validate-manifest":
+        manifest_rows = _validate_manifest(args.manifest)
+        print(f"validated variants={len(manifest_rows)}")
+        return 0
 
     surgery = DEFAULT_SURGERY if DEFAULT_SURGERY.exists() else None
-    counts = _validated_counts(DEFAULT_MANIFEST, DEFAULT_CAPABILITIES, DEFAULT_FINDINGS, surgery)
+    counts = _validated_counts(args.manifest, DEFAULT_CAPABILITIES, DEFAULT_FINDINGS, surgery)
     print(f"validated variants={counts[0]} capabilities={counts[1]} findings={counts[2]} surgery={counts[3]}")
     return 0
 

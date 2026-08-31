@@ -3,6 +3,8 @@ from pathlib import Path
 import pytest
 
 from tools.distillation_review import DistillationArtifactError
+from tools.distillation_review import main
+from tools.distillation_review import validate_manifest
 from tools.distillation_review import validate_review
 
 
@@ -79,6 +81,31 @@ def test_manifest_requires_unique_variant_and_three_pass_states(tmp_path: Path) 
     manifest = _manifest(tmp_path, duplicate_variant=True)
     with pytest.raises(DistillationArtifactError, match="duplicate variant"):
         validate_review(manifest, _capabilities(tmp_path), _findings(tmp_path), None)
+
+
+def test_manifest_stage_accepts_valid_manifest_without_later_artifacts(tmp_path: Path) -> None:
+    validate_manifest(_manifest(tmp_path))
+
+
+def test_manifest_stage_rejects_invalid_manifest(tmp_path: Path) -> None:
+    with pytest.raises(DistillationArtifactError, match="duplicate variant"):
+        validate_manifest(_manifest(tmp_path, duplicate_variant=True))
+
+
+def test_manifest_stage_cli_accepts_explicit_path(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["validate-manifest", "--manifest", str(_manifest(tmp_path))]) == 0
+    assert capsys.readouterr().out == "validated variants=1\n"
+
+
+def test_full_validation_rejects_missing_later_artifacts(tmp_path: Path) -> None:
+    missing_capabilities = tmp_path / "missing-capabilities.md"
+    with pytest.raises(DistillationArtifactError, match="cannot read.*missing-capabilities"):
+        validate_review(
+            _manifest(tmp_path),
+            missing_capabilities,
+            tmp_path / "missing-findings.tsv",
+            None,
+        )
 
 
 @pytest.mark.parametrize("state", ["not-started", "complete", "stale"])
