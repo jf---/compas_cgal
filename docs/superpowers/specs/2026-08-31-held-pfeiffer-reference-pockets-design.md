@@ -82,6 +82,11 @@ The resulting outer boundary is counter-clockwise. No case contains an island:
 the crossed skis and Monstera slots are concavities in a single Jordan boundary,
 consistent with the paper's simply-connected input scope.
 
+`SourceToWorld` carries the PDF Y-reflection choice explicitly; source scale
+remains a positive `MillimetresPerPdfPoint`. This keeps handedness conversion
+separate from physical scale and prevents normalized millimetres from being
+mislabelled as PDF points.
+
 ### Source primitives
 
 The extractor retains only boundary paths within the approved figure crops.
@@ -120,17 +125,27 @@ decision sequence:
 4. Accept the single arc only when that bound is no greater than one quarter of
    the normalized boundary stroke width.
 5. Otherwise construct an equal-distance G1 biarc from the two endpoint
-   positions and tangents, measure it by a closed continuous-correspondence
-   bound, and subdivide the source cubic recursively until every accepted
-   biarc meets the same bound.
+   positions and tangents in a chord-normalized local frame. Certify the
+   represented construction with operation-derived backward and forward error
+   bounds, measure it by a closed continuous-correspondence bound, and accept
+   it only when both certificates close.
+6. If no circle or biarc certificate closes, certify the endpoint chord as a
+   straight-line limiting case using the cubic control hull and authored
+   endpoint directions. Only then subdivide the source cubic recursively.
 
 The quarter-stroke rule is a publication-resolution limit: the reconstruction's
 centreline must remain well inside the printed boundary stroke. It scales with
 the figure and tool rather than embedding an unexplained numerical tolerance.
 
-Adjacent recovered arcs are merged only when they have the same supporting
-circle under the closed reconstruction measurement and their common endpoint
-and tangent agree. An arbitrary cubic is never labelled an exact circular arc.
+Reconstruction returns the analytic primitives together with the certified
+continuous-deviation upper bound proved by the same traversal. It does not
+discard that evidence or relabel it as a sampled maximum.
+
+Adjacent recovered arcs are merged only while their source spans remain
+available and those combined spans re-certify against one candidate supporting
+circle under the original limit. Their common endpoint and sweep direction
+must also agree. An arbitrary cubic is never labelled an exact circular arc,
+and a cubic becomes a line only through the control-hull certificate above.
 Failure to close the measurement bound raises
 `UnresolvedPublishedCurveError`; there is no permissive fallback.
 
@@ -154,7 +169,8 @@ Each committed JSON document contains:
 - ordered polygon-projection vertices;
 - normalized source stroke width;
 - reconstruction and projection deviation limits;
-- measured reconstruction and projection deviations; and
+- certified reconstruction deviation upper bound and measured projection
+  deviation; and
 - Figure 7 cross-check error for Figure 5 only.
 
 The JSON must round-trip through `json.loads`, validate against the repository's
