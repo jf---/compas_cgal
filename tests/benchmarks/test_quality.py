@@ -808,18 +808,22 @@ def _report(pocket: str, generator: str, quality: PathQuality, violations: list)
     return "\n".join(lines) + "\n"
 
 
-QUALITY_GATE_ARGUMENTS = tuple(
-    (tea_cap_deg, generator_name, pocket_name) for _, tea_cap_deg in GATE_CAP_CASES for generator_name in GATE_GENERATOR_NAMES for pocket_name in GATE_POCKET_NAMES
-)
-QUALITY_GATE_IDS = tuple(
-    f"{cap_id}-{generator_name}-{pocket_name}" for cap_id, _ in GATE_CAP_CASES for generator_name in GATE_GENERATOR_NAMES for pocket_name in GATE_POCKET_NAMES
+QUALITY_GATE_CASES = tuple(
+    pytest.param(
+        tea_cap_deg,
+        generator_name,
+        pocket_name,
+        id=f"{cap_id}-{generator_name}-{pocket_name}",
+    )
+    for cap_id, tea_cap_deg in GATE_CAP_CASES
+    for generator_name in GATE_GENERATOR_NAMES
+    for pocket_name in GATE_POCKET_NAMES
 )
 
 
 @pytest.mark.parametrize(
     ("tea_cap_deg", "generator_name", "pocket_name"),
-    QUALITY_GATE_ARGUMENTS,
-    ids=QUALITY_GATE_IDS,
+    QUALITY_GATE_CASES,
 )
 def test_the_generated_path_is_worth_running(
     tea_cap_deg: GateCapDegrees,

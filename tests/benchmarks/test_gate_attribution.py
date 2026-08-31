@@ -112,8 +112,6 @@ def _geometry_witness(geometry: Union[Line, Arc, Circle]) -> GateGeometryWitness
             _binary64_vector3(geometry.frame.yaxis, field="circle-frame y-axis"),
             _binary64_bits(geometry.radius),
         )
-    if type(geometry) is Arc:
-        raise _unsupported_geometry(geometry)
     raise _unsupported_geometry(geometry)
 
 
@@ -176,7 +174,7 @@ def test_attribution_cap_operation_streams_diverge(pocket_name: str) -> None:
     """Catch a cap-40 change that leaves the radius ladder inert on one pocket."""
     first = _generated_stream(_FIRST_GENERATOR, pocket_name, GATE_ATTRIBUTION_CAP_DEG)
     second = _generated_stream(_SECOND_GENERATOR, pocket_name, GATE_ATTRIBUTION_CAP_DEG)
-    assert first != second
+    assert first and second and any(a != b for a, b in zip(first, second))
 
 
 def test_arc_geometry_is_rejected_by_named_error() -> None:

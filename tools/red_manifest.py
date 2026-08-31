@@ -1,4 +1,9 @@
-"""Invariant I3: compare deliberate suite reds with their manifest."""
+"""Invariant I3: compare deliberate assertion failures with their manifest.
+
+A manifest-owned red has exactly one meaning: a JUnit ``<failure>``. A JUnit
+``<error>`` is broken test execution and invalidates the report instead of
+being accepted as evidence for a known product failure.
+"""
 
 from __future__ import annotations
 
@@ -101,7 +106,12 @@ class ManifestViolation:
 
 
 def _failed_ids(junit: Path) -> List[str]:
-    """Return ``classname::name`` for each testcase with a failure or error."""
+    """Return ``classname::name`` for each assertion failure.
+
+    Raises:
+        MalformedJUnitError: The report is malformed, lacks testcase identity,
+            or contains a test execution error.
+    """
     try:
         root = ET.parse(junit).getroot()
     except ET.ParseError as error:
@@ -115,8 +125,11 @@ def _failed_ids(junit: Path) -> List[str]:
         if not classname or not name:
             context = ET.tostring(case, encoding="unicode")
             raise MalformedJUnitError(f"{junit}: testcase requires non-empty classname and name: {context}")
-        if any(child.tag in ("failure", "error") for child in case):
-            out.append(f"{classname}::{name}")
+        identity = f"{classname}::{name}"
+        if any(child.tag == "error" for child in case):
+            raise MalformedJUnitError(f"{junit}: {identity} contains <error>; only assertion <failure> elements may be manifest-owned reds")
+        if any(child.tag == "failure" for child in case):
+            out.append(identity)
     return out
 
 
