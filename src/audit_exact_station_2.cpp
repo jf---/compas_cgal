@@ -144,7 +144,7 @@ using Arrangement = Gps::Arrangement_2;
 // CCBs. The walk and naive locators assume one outer CCB in paths used here;
 // trapezoidal point location supports the valid topology and seeds the same
 // exact arrangement-zone traversal without a floating-point decision.
-using PointLocation = CGAL::Arr_trapezoid_ric_point_location<Arrangement>;
+using PointLocation = GpsPointLocation;
 
 struct ExactEngagementVisitor2 {
     using X_monotone_curve_2 = Arrangement::X_monotone_curve_2;
@@ -187,7 +187,7 @@ std::vector<ExactRimArc2> exact_engaged_arcs(
 {
     Arrangement& arrangement =
         const_cast<Gps&>(stock.set()).arrangement();
-    PointLocation point_location(arrangement);
+    PointLocation& point_location = stock.point_location();
     const GpsTraits::Curve_2 cutter(
         ECircle(center, tool_radius * tool_radius));
     GpsTraits traits;

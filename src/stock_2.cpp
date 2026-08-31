@@ -17,8 +17,6 @@
 #include <variant>
 #include <vector>
 
-#include <CGAL/Arr_trapezoid_ric_point_location.h>
-
 namespace {
 
 // Convert an Nx3 double matrix (rationals by construction) to a linear
@@ -170,22 +168,44 @@ Stock2::Stock2(Eigen::Ref<const compas::RowMatrixXd> boundary,
     }
 }
 
-Stock2::Stock2(std::unique_ptr<Gps> set) noexcept
+Stock2::Stock2(std::unique_ptr<Gps> set)
     : set_(std::move(set))
 {
+}
+
+Stock2::Stock2(Stock2&& other) noexcept
+    : set_(std::move(other.set_)),
+      point_location_(std::move(other.point_location_))
+{
+}
+
+Stock2& Stock2::operator=(Stock2&& other) noexcept
+{
+    if (this != &other) {
+        point_location_.reset();
+        set_.reset();
+        set_ = std::move(other.set_);
+        point_location_ = std::move(other.point_location_);
+    }
+    return *this;
 }
 
 bool Stock2::contains(double x, double y) const
 {
     using Arrangement = Gps::Arrangement_2;
-    using PointLocation = CGAL::Arr_trapezoid_ric_point_location<Arrangement>;
-
-    const Arrangement& arrangement = set_->arrangement();
-    const PointLocation point_location(arrangement);
-    const auto located = point_location.locate(
+    const auto located = point_location().locate(
         GpsPoint(Epeck::FT(x), Epeck::FT(y)));
     const auto* face = std::get_if<Arrangement::Face_const_handle>(&located);
     return face != nullptr && (*face)->contained();
+}
+
+GpsPointLocation& Stock2::point_location() const
+{
+    if (!point_location_) {
+        point_location_ =
+            std::make_unique<GpsPointLocation>(set_->arrangement());
+    }
+    return *point_location_;
 }
 
 bool Stock2::is_empty() const
@@ -205,6 +225,15 @@ void Stock2::swap(Stock2& other) noexcept
     note_audit_trial_stock_swap_for_test();
     note_audit_replay_stock_swap_for_test();
     set_.swap(other.set_);
+    point_location_.swap(other.point_location_);
+}
+
+void Stock2::replace_set(std::unique_ptr<Gps> replacement)
+{
+    // Detach before replacing the observed arrangement. The replacement starts
+    // a new read-only epoch and acquires a locator lazily on its first query.
+    point_location_.reset();
+    set_.swap(replacement);
 }
 
 bool Stock2::is_subset_of(const Stock2& other) const
@@ -227,7 +256,7 @@ void Stock2::subtract_disk(double cx, double cy, double radius)
     if (radius <= 0.0) throw std::invalid_argument("radius should be positive.");
     Gps region;
     region.insert(disk_polygon(EPoint(cx, cy), Epeck::FT(radius)));
-    set_->difference(region);
+    set().difference(region);
 }
 
 // Exact swept region of a disk of radius r carried about a circular guide of
@@ -273,7 +302,7 @@ void Stock2::subtract_annulus_exact(
             "subtract_annulus requires outer_radius > inner_radius.");
     }
     Gps region = exact_annulus_region(center, inner_radius, outer_radius);
-    set_->difference(region);
+    set().difference(region);
 }
 
 // --- Local depletion ---------------------------------------------------------
@@ -284,7 +313,7 @@ void Stock2::subtract_annulus_exact(
 void Stock2::subtract_disk_local(double cx, double cy, double radius)
 {
     if (radius <= 0.0) throw std::invalid_argument("radius should be positive.");
-    subtract_region_local(*set_, local_disk_region(EPoint(cx, cy), Epeck::FT(radius)));
+    subtract_region_local(set(), local_disk_region(EPoint(cx, cy), Epeck::FT(radius)));
 }
 
 void Stock2::subtract_annulus_local(double cx, double cy,
@@ -319,7 +348,7 @@ void Stock2::subtract_annulus_exact_local(
         throw InvalidAnnulusRadiiError(
             "subtract_annulus requires outer_radius > inner_radius.");
     }
-    subtract_region_local(*set_, local_annulus_region(center, inner_radius, outer_radius));
+    subtract_region_local(set(), local_annulus_region(center, inner_radius, outer_radius));
 }
 
 void Stock2::subtract_arc_sweep_local(double cx, double cy, double sx, double sy,
@@ -359,7 +388,7 @@ void Stock2::subtract_point_chain(const std::vector<std::pair<double, double>>& 
     }
     Gps region;
     region.join(disks.begin(), disks.end());
-    set_->difference(region);
+    set().difference(region);
 }
 
 void Stock2::subtract_capsule(double x0, double y0, double x1, double y1, double radius)
@@ -511,7 +540,7 @@ void Stock2::subtract_capsule_quad(double x0, double y0, double x1, double y1, d
     parts.push_back(exact_linear_polygon(corners));
     Gps region;
     region.join(parts.begin(), parts.end());
-    set_->difference(region);
+    set().difference(region);
 }
 
 void Stock2::subtract_arc_sweep(double cx, double cy, double sx, double sy,
@@ -584,7 +613,7 @@ DepletionTrace Stock2::subtract_exact_segment(
     Gps removal = exact_disk_union(construction.centers, tool_radius);
     trial->difference(removal);
     validate_depletion_trace(construction.trace);
-    set_.swap(trial);
+    replace_set(std::move(trial));
     return std::move(construction.trace);
 }
 
@@ -603,7 +632,7 @@ DepletionTrace Stock2::subtract_exact_full_circle(
     Gps removal = exact_disk_union(construction.centers, tool_radius);
     trial->difference(removal);
     validate_depletion_trace(construction.trace);
-    set_.swap(trial);
+    replace_set(std::move(trial));
     return std::move(construction.trace);
 }
 
@@ -633,7 +662,7 @@ ExactArcDepletionTrace2 Stock2::subtract_exact_arc(
         throw ExactArcForgedTraceError(
             "exact arc depletion failed atomic trace validation");
     }
-    set_.swap(trial);
+    replace_set(std::move(trial));
     return std::move(construction.trace);
 }
 

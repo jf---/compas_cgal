@@ -10,6 +10,7 @@
 #include <utility>
 #include <vector>
 
+#include <CGAL/Arr_trapezoid_ric_point_location.h>
 #include <CGAL/Boolean_set_operations_2.h>
 #include <CGAL/General_polygon_set_2.h>
 #include <CGAL/Gps_circle_segment_traits_2.h>
@@ -25,6 +26,8 @@ typedef GpsTraits::Polygon_2 GpsPolygon;             // circle-segment general p
 typedef GpsTraits::Polygon_with_holes_2 GpsPolygonWithHoles;
 typedef GpsTraits::Point_2 GpsPoint;                 // one-root coordinates
 typedef GpsTraits::X_monotone_curve_2 GpsXCurve;
+typedef CGAL::Arr_trapezoid_ric_point_location<Gps::Arrangement_2>
+    GpsPointLocation;
 
 // One named exception per failure mode of the annulus sweep, so a caller can
 // tell a malformed radius pair from a non-finite coordinate without parsing
@@ -68,8 +71,8 @@ class Stock2 {
 public:
     Stock2(Eigen::Ref<const compas::RowMatrixXd> boundary,
            const std::vector<compas::RowMatrixXd>& holes);
-    Stock2(Stock2&&) noexcept = default;
-    Stock2& operator=(Stock2&&) noexcept = default;
+    Stock2(Stock2&& other) noexcept;
+    Stock2& operator=(Stock2&& other) noexcept;
     Stock2(const Stock2&) = delete;
     Stock2& operator=(const Stock2&) = delete;
 
@@ -167,7 +170,15 @@ public:
         std::size_t center_count_limit);
 
     const Gps& set() const { return *set_; }          // engagement kernel reads this
-    Gps& set() { return *set_; }
+    // Any mutable access starts a new arrangement epoch. Detach the CGAL
+    // observer before returning the set because the caller may rebuild it.
+    Gps& set()
+    {
+        point_location_.reset();
+        return *set_;
+    }
+    // Built once per read-only arrangement epoch, then reused by every station.
+    GpsPointLocation& point_location() const;
 
     // --- Instrumentation (diagnostics only) ----------------------------------
     // Neither accessor participates in any decision: they report the SIZE and the
@@ -203,14 +214,16 @@ public:
     CoordinateDigits coordinate_digits() const;
 
 private:
-    explicit Stock2(std::unique_ptr<Gps> set) noexcept;
+    explicit Stock2(std::unique_ptr<Gps> set);
 
     // Subtract the union of exact tool disks of the given radius centred at the
     // listed points — the one chain implementation shared by capsule and arc.
     void subtract_point_chain(const std::vector<std::pair<double, double>>& centers,
                               double radius);
+    void replace_set(std::unique_ptr<Gps> replacement);
 
     std::unique_ptr<Gps> set_;
+    mutable std::unique_ptr<GpsPointLocation> point_location_;
 };
 
 bool exact_segment_undercover_holds(
