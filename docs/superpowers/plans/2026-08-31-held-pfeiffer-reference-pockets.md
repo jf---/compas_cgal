@@ -292,7 +292,7 @@ git commit -m "feat(bench): reconstruct published curves"
   - `extract_reference_sources(pdf_path: Path) -> tuple[ExtractedCase, ...]`
   - Pixi task `held-reference-extract -- <publisher-pdf>`
 
-- [ ] **Step 1: Add extraction-specific failures**
+- [x] **Step 1: Add extraction-specific failures**
 
 ```python
 class UnsupportedPdfBoundaryOperatorError(BenchmarkError):
@@ -307,7 +307,7 @@ class AmbiguousPublishedBoundaryError(BenchmarkError):
     """A figure crop contains more than one valid boundary selection."""
 ```
 
-- [ ] **Step 2: Write RED parser tests from minimal SVG fragments**
+- [x] **Step 2: Write RED parser tests from minimal SVG fragments**
 
 Use literal fragments matching Poppler's `M ... L ...` and `M ... C ...`
 output, including the six-value affine matrix:
@@ -331,7 +331,7 @@ def test_parser_rejects_close_operator() -> None:
 
 Run and observe the missing-module RED.
 
-- [ ] **Step 3: Implement the limited path grammar**
+- [x] **Step 3: Implement the limited path grammar**
 
 Parse only the exact absolute operator forms emitted by the publisher PDF:
 
@@ -344,7 +344,7 @@ relative operators, mixed line/cubic compounds, closure operators, malformed
 token counts, and non-finite numbers. Apply the SVG affine matrix at ingestion
 so no downstream component sees nested transforms.
 
-- [ ] **Step 4: Write RED crop-selection tests**
+- [x] **Step 4: Write RED crop-selection tests**
 
 Fixture SVGs contain green distractors outside the crop, wrong stroke widths,
 and disconnected lines inside it. Tests require selection by crop, stroke,
@@ -358,7 +358,7 @@ def test_crop_rejects_colour_only_distractor(tmp_path: Path) -> None:
     assert all(path.stroke_width == pytest.approx(2.0) for path in selected)
 ```
 
-- [ ] **Step 5: Implement page conversion and approved crop records**
+- [x] **Step 5: Implement page conversion and approved crop records**
 
 Run Poppler through `subprocess.run(..., check=True)` with explicit argument
 lists:
@@ -386,7 +386,7 @@ Canonicalize only unique degree-one endpoint pairs within the named `1/256 pt`
 PDF coordinate quantum. Tests cover the two crossed-skis seams and one
 Monstera seam and prove the next-nearest endpoints remain outside that bound.
 
-- [ ] **Step 6: Add the Pixi entry point and integration test**
+- [x] **Step 6: Add the Pixi entry point and integration test**
 
 Add Poppler as a hard Pixi dependency and a forwardable task:
 
@@ -407,7 +407,7 @@ pixi run lint
 pixi run types-benchmarks
 ```
 
-- [ ] **Step 7: Commit Task 2**
+- [x] **Step 7: Commit Task 2**
 
 ```bash
 git add tools/held_reference_extractor.py \
