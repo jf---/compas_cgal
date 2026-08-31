@@ -64,7 +64,7 @@ consumers of those case documents.
   `compas_cgal.adaptive.units`.
 - Produces:
   - `PdfPointUnit = NewType("PdfPointUnit", float)`
-  - `ToolRadiusRatio = NewType("ToolRadiusRatio", float)`
+  - `MillimetresPerPdfPoint = NewType("MillimetresPerPdfPoint", float)`
   - `PdfPoint2.build(x: float, y: float) -> PdfPoint2`
   - `SourceLine.build(start: PdfPoint2, end: PdfPoint2) -> SourceLine`
   - `SourceCubic.build(start: PdfPoint2, control1: PdfPoint2,
@@ -79,7 +79,7 @@ consumers of those case documents.
   - `project_boundary(boundary: ReferenceBoundary,
     deviation_limit: Millimetre) -> PolygonProjection`
 
-- [ ] **Step 1: Add named geometry failures**
+- [x] **Step 1: Add named geometry failures**
 
 Append these independent failures to `benchmarks/errors.py`:
 
@@ -100,7 +100,7 @@ class InvalidReferenceProjectionError(BenchmarkError):
     """A polygon projection violates its declared chord-deviation contract."""
 ```
 
-- [ ] **Step 2: Write RED tests for unit/frame and factory invariants**
+- [x] **Step 2: Write RED tests for unit/frame and factory invariants**
 
 Create `tests/benchmarks/test_held_reference_geometry.py` with focused tests:
 
@@ -135,7 +135,7 @@ pixi run pytest -- tests/benchmarks/test_held_reference_geometry.py -n auto -q
 
 Expected: collection fails because the module and named failures do not exist.
 
-- [ ] **Step 3: Implement typed source and reference primitives**
+- [x] **Step 3: Implement typed source and reference primitives**
 
 Use frozen domain dataclasses with validating `build(...)` factories. Keep the
 union explicit:
@@ -166,7 +166,7 @@ Raw constructors must only store already-typed values; validation belongs in
 the factories. Equality at primitive junctions is direct typed-coordinate
 equality, not a tolerance decision.
 
-- [ ] **Step 4: Write RED circle-recovery and recursive-pair tests**
+- [x] **Step 4: Write RED circle-recovery and recursive-pair tests**
 
 Construct one standard cubic approximation of a quarter circle and one cubic
 that cannot meet the whole-span circle bound:
@@ -195,18 +195,20 @@ def test_non_circular_cubic_splits_into_g1_arc_pairs() -> None:
 Run the focused module and confirm these tests fail because reconstruction is
 absent.
 
-- [ ] **Step 5: Implement circle-first recursive reconstruction**
+- [x] **Step 5: Implement circle-first recursive reconstruction**
 
 For a source cubic:
 
 1. transform endpoints and controls into `WorldXY`;
 2. derive endpoint tangents from control differences;
-3. intersect endpoint normals to obtain the circle candidate;
-4. determine sweep direction from endpoint tangents;
+3. construct the equal-radius circle through both endpoints tangent at the
+   start and validate the end tangent;
+4. determine sweep direction from the validated endpoint tangents;
 5. bound radial separation by recursively subdividing the cubic with de
    Casteljau until each control hull closes the bound;
 6. accept the candidate if the closed bound is within the declared limit;
-7. otherwise split the cubic at `t = 1/2` and recurse on both halves; and
+7. otherwise fit an equal-distance G1 biarc, prove its continuous
+   correspondence bound, or split the cubic at `t = 1/2` and recurse; and
 8. raise `UnresolvedPublishedCurveError` when the named maximum subdivision
    depth is reached without closure.
 
@@ -215,7 +217,7 @@ The subdivision depth is a named structural limit derived from binary halving:
 parameter cells before refusal. It prevents non-termination; it is not a
 geometric tolerance.
 
-- [ ] **Step 6: Write RED projection tests**
+- [x] **Step 6: Write RED projection tests**
 
 ```python
 def test_projection_closes_and_meets_chord_bound() -> None:
@@ -231,7 +233,7 @@ def test_projection_rejects_non_positive_bound() -> None:
         project_boundary(_rounded_rectangle_boundary(), Millimetre(0.0))
 ```
 
-- [ ] **Step 7: Implement analytic projection and run gates**
+- [x] **Step 7: Implement analytic projection and run gates**
 
 Lines contribute their end point once. Arcs choose the smallest segment count
 whose sagitta is within the supplied length bound:
@@ -261,7 +263,7 @@ types-benchmarks = "mypy --strict --warn-unused-ignores benchmarks/held_referenc
 
 The type-contract file uses `assert_type` for every public return type.
 
-- [ ] **Step 8: Commit Task 1**
+- [x] **Step 8: Commit Task 1**
 
 ```bash
 git add benchmarks/errors.py benchmarks/held_reference_geometry.py \
@@ -334,11 +336,13 @@ Run and observe the missing-module RED.
 Parse only the exact absolute operator forms emitted by the publisher PDF:
 
 - `M x y L x y`
-- `M x y C x1 y1 x2 y2 x3 y3`
+- `M x y` followed by one through four consecutive
+  `C x1 y1 x2 y2 x3 y3` operators.
 
-Reject relative operators, compound paths, closure operators, malformed token
-counts, and non-finite numbers. Apply the SVG affine matrix at ingestion so no
-downstream component sees nested transforms.
+Split compound cubic paths into consecutive `SourceCubic` values. Reject
+relative operators, mixed line/cubic compounds, closure operators, malformed
+token counts, and non-finite numbers. Apply the SVG affine matrix at ingestion
+so no downstream component sees nested transforms.
 
 - [ ] **Step 4: Write RED crop-selection tests**
 
@@ -374,8 +378,13 @@ copied from the publisher page frame and documented beside each record.
 
 Identify tool circles as closed four-cubic red paths with equal transformed
 width and height. Select the isolated circle outside the boundary where
-present; verify in-figure start circles have the same radius rather than using
-them as independent scale estimates.
+present. Record in-figure start markers as observations only; the crossed-skis
+start marker differs from its isolated scale circle and must not be treated as
+an independent scale estimate.
+
+Canonicalize only unique degree-one endpoint pairs within the named `1/256 pt`
+PDF coordinate quantum. Tests cover the two crossed-skis seams and one
+Monstera seam and prove the next-nearest endpoints remain outside that bound.
 
 - [ ] **Step 6: Add the Pixi entry point and integration test**
 
@@ -589,13 +598,13 @@ Test PNG dimensions and mode after rendering; do not compare encoded bytes.
 
 Render PDF page 14 through Poppler at a named 600-DPI resolution. Use the plot
 axes and the Figure 5 boundary bounds to solve one similarity transform for
-each Figure 7 panel. Probe the registered analytic boundary along its normals
-against the outer coloured envelope. Record the maximum centreline distance in
-normalized millimetres.
+each Figure 7 panel. Register the coloured tool-centre samples against the
+one-tool-radius inward offset of the Figure 5 analytic boundary. Render the
+three panels as shape-only falsification evidence.
 
-The measurement accepts only when the distance is no greater than the
-normalized Figure 7 boundary stroke width. Missing axes, an empty colour mask,
-or a non-closing bound raises a named error; no manual numeric value enters the
+Figure 7 has no independent boundary stroke, so it supplies no numeric
+boundary-fidelity acceptance value. Missing axes, an empty colour mask, or an
+invalid inward offset raises a named error; no manual numeric value enters the
 case file.
 
 - [ ] **Step 3: Render the four overlays**

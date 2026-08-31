@@ -159,3 +159,19 @@ class InvalidMachineModelError(BenchmarkError):
 
 class NoCornerDefectError(BenchmarkError):
     """A figure that annotates the corner defect found no degenerate loop to annotate."""
+
+
+class InvalidPublishedPrimitiveError(BenchmarkError):
+    """A published vector primitive is non-finite or degenerate."""
+
+
+class DisconnectedPublishedBoundaryError(BenchmarkError):
+    """Published boundary primitives do not form one closed cycle."""
+
+
+class UnresolvedPublishedCurveError(BenchmarkError):
+    """A published cubic cannot be reconstructed inside its fidelity bound."""
+
+
+class InvalidReferenceProjectionError(BenchmarkError):
+    """A polygon projection violates its declared chord-deviation contract."""
