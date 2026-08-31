@@ -394,10 +394,7 @@ def test_exact_station_query_terminates_on_depleted_dyadic_stock():
         if process.is_alive():
             process.terminate()
             process.join()
-            pytest.fail(
-                "exact engagement query did not terminate within "
-                f"{EXACT_STATION_QUERY_BUDGET_SECONDS:.0f} seconds"
-            )
+            pytest.fail(f"exact engagement query did not terminate within {EXACT_STATION_QUERY_BUDGET_SECONDS:.0f} seconds")
         assert process.exitcode == 0
         assert receiver.poll(), "exact engagement child returned no result"
         assert receiver.recv() == (0.0, 0.0, False)
