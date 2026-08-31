@@ -289,23 +289,15 @@ def project_boundary(
                 )
             actual_start_radius = _subtract(_point_xy(points[-1]), centre)
             actual_end_radius = _subtract(_point_xy(emitted_end), centre)
-            ideal_end_radius = _rotate_vector(
+            emitted_chord_deviation = _maximum_arc_segment_distance(
                 start_radius,
+                float(primitive.sweep) * (index - 1) / segment_count,
                 float(primitive.sweep) * index / segment_count,
-            )
-            ideal_midpoint_radius = _rotate_vector(
-                start_radius,
-                float(primitive.sweep) * (index - 0.5) / segment_count,
-            )
-            emitted_coordinate_error = _distance(ideal_end_radius, actual_end_radius)
-            emitted_chord_deviation = _point_segment_distance(
-                ideal_midpoint_radius,
                 actual_start_radius,
                 actual_end_radius,
             )
             maximum_deviation = max(
                 maximum_deviation,
-                emitted_coordinate_error,
                 emitted_chord_deviation,
             )
             if maximum_deviation > limit:
@@ -726,6 +718,75 @@ def _point_segment_distance(point: _XY, start: _XY, end: _XY) -> float:
         return _distance(point, start)
     parameter = max(0.0, min(1.0, _dot(_subtract(point, start), segment) / length_squared))
     return _distance(point, _add(start, _scale(segment, parameter)))
+
+
+def _linear_circle_root_offsets(
+    start_radius: _XY,
+    normal: _XY,
+    value: float,
+    start_offset: float,
+    end_offset: float,
+) -> tuple[float, ...]:
+    quarter_turn = (-start_radius[1], start_radius[0])
+    cosine_coefficient = _dot(normal, start_radius)
+    sine_coefficient = _dot(normal, quarter_turn)
+    amplitude = math.hypot(cosine_coefficient, sine_coefficient)
+    if amplitude == 0.0 or value < -amplitude or value > amplitude:
+        return ()
+
+    phase = math.atan2(sine_coefficient, cosine_coefficient)
+    root_offset = math.acos(max(-1.0, min(1.0, value / amplitude)))
+    lower = min(start_offset, end_offset)
+    upper = max(start_offset, end_offset)
+    roots: set[float] = set()
+    for base in (phase - root_offset, phase + root_offset):
+        minimum_turn = math.ceil((lower - base) / math.tau)
+        maximum_turn = math.floor((upper - base) / math.tau)
+        roots.update(base + turn * math.tau for turn in range(minimum_turn, maximum_turn + 1))
+    return tuple(sorted(roots))
+
+
+def _maximum_arc_segment_distance(
+    start_radius: _XY,
+    start_offset: float,
+    end_offset: float,
+    segment_start: _XY,
+    segment_end: _XY,
+) -> float:
+    segment = _subtract(segment_end, segment_start)
+    if _dot(segment, segment) == 0.0:
+        raise InvalidReferenceProjectionError("An emitted projection chord collapsed to one point.")
+
+    segment_quarter_turn = (-segment[1], segment[0])
+    start_quarter_turn = (-segment_start[1], segment_start[0])
+    end_quarter_turn = (-segment_end[1], segment_end[0])
+    candidates = {start_offset, end_offset}
+    equations = (
+        (segment, _dot(segment, segment_start)),
+        (segment, _dot(segment, segment_end)),
+        (start_quarter_turn, 0.0),
+        (end_quarter_turn, 0.0),
+        (segment_quarter_turn, _dot(segment_quarter_turn, segment_start)),
+        (segment, 0.0),
+    )
+    for normal, value in equations:
+        candidates.update(
+            _linear_circle_root_offsets(
+                start_radius,
+                normal,
+                value,
+                start_offset,
+                end_offset,
+            )
+        )
+    return max(
+        _point_segment_distance(
+            _rotate_vector(start_radius, offset),
+            segment_start,
+            segment_end,
+        )
+        for offset in candidates
+    )
 
 
 def _split_cubic(
