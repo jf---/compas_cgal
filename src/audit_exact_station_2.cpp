@@ -1,7 +1,7 @@
 #include "audit_certification_2.h"
 #include "engagement_2.h"
 
-#include <CGAL/Arr_naive_point_location.h>
+#include <CGAL/Arr_trapezoid_ric_point_location.h>
 #include <CGAL/Arrangement_zone_2.h>
 #include <CGAL/enum.h>
 #include <CGAL/number_utils.h>
@@ -141,9 +141,10 @@ struct ExactRimArc2 {
 
 using Arrangement = Gps::Arrangement_2;
 // Regularized stock can place a cutter endpoint in a face with multiple outer
-// CCBs. The walk-along-line locator's connected-component path requires one;
-// the naive locator supports this valid topology and seeds the same exact zone.
-using PointLocation = CGAL::Arr_naive_point_location<Arrangement>;
+// CCBs. The walk and naive locators assume one outer CCB in paths used here;
+// trapezoidal point location supports the valid topology and seeds the same
+// exact arrangement-zone traversal without a floating-point decision.
+using PointLocation = CGAL::Arr_trapezoid_ric_point_location<Arrangement>;
 
 struct ExactEngagementVisitor2 {
     using X_monotone_curve_2 = Arrangement::X_monotone_curve_2;

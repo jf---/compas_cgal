@@ -6,7 +6,7 @@
 #include <variant>
 
 #include <CGAL/Arr_observer.h>
-#include <CGAL/Arr_walk_along_line_point_location.h>
+#include <CGAL/Arr_trapezoid_ric_point_location.h>
 #include <CGAL/Arrangement_2.h>
 
 // ----------------------------------------------------------------------------
@@ -67,7 +67,7 @@
 namespace {
 
 using Arr = Gps::Arrangement_2;
-using PL = CGAL::Arr_walk_along_line_point_location<Arr>;
+using PL = CGAL::Arr_trapezoid_ric_point_location<Arr>;
 
 // Restores I1 across the face splits incremental insertion causes. Both pieces
 // of a split are subsets of one original face and therefore carry its

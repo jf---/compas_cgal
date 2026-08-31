@@ -14,7 +14,10 @@
 #include <string>
 #include <tuple>
 #include <utility>
+#include <variant>
 #include <vector>
+
+#include <CGAL/Arr_trapezoid_ric_point_location.h>
 
 namespace {
 
@@ -174,7 +177,15 @@ Stock2::Stock2(std::unique_ptr<Gps> set) noexcept
 
 bool Stock2::contains(double x, double y) const
 {
-    return set_->oriented_side(GpsPoint(Epeck::FT(x), Epeck::FT(y))) == CGAL::ON_POSITIVE_SIDE;
+    using Arrangement = Gps::Arrangement_2;
+    using PointLocation = CGAL::Arr_trapezoid_ric_point_location<Arrangement>;
+
+    const Arrangement& arrangement = set_->arrangement();
+    const PointLocation point_location(arrangement);
+    const auto located = point_location.locate(
+        GpsPoint(Epeck::FT(x), Epeck::FT(y)));
+    const auto* face = std::get_if<Arrangement::Face_const_handle>(&located);
+    return face != nullptr && (*face)->contained();
 }
 
 bool Stock2::is_empty() const
