@@ -7,11 +7,15 @@ from benchmarks.held_reference_geometry import PolygonProjection
 from benchmarks.held_reference_geometry import ReferenceArc
 from benchmarks.held_reference_geometry import ReferenceBoundary
 from benchmarks.held_reference_geometry import ReferenceLine
+from benchmarks.held_reference_geometry import ReferencePrimitive
+from benchmarks.held_reference_geometry import ReferenceReconstruction
 from benchmarks.held_reference_geometry import SourceCubic
 from benchmarks.held_reference_geometry import SourceLine
 from benchmarks.held_reference_geometry import SourceToWorld
 from benchmarks.held_reference_geometry import project_boundary
 from benchmarks.held_reference_geometry import reconstruct_cubic
+from benchmarks.held_reference_geometry import reconstruct_cubic_certified
+from benchmarks.held_reference_geometry import reconstruct_source_path
 from compas_cgal.adaptive.units import Millimetre
 from compas_cgal.adaptive.units import Point2
 from compas_cgal.adaptive.units import Radian
@@ -32,6 +36,15 @@ transform = assert_type(
         source_origin=PdfPoint2.build(0.0, 0.0),
         world_origin=Point2[WorldXY].build(0.0, 0.0),
         scale=MillimetresPerPdfPoint(1.0),
+    ),
+    SourceToWorld,
+)
+reflected_transform = assert_type(
+    SourceToWorld.build(
+        source_origin=PdfPoint2.build(0.0, 0.0),
+        world_origin=Point2[WorldXY].build(0.0, 0.0),
+        scale=MillimetresPerPdfPoint(1.0),
+        reflect_source_y=True,
     ),
     SourceToWorld,
 )
@@ -73,5 +86,13 @@ polygon_projection = assert_type(
 projection = assert_type(project_boundary(boundary, Millimetre(0.01)), PolygonProjection)
 arcs = assert_type(
     reconstruct_cubic(source_cubic, transform, Millimetre(0.01)),
-    tuple[ReferenceArc, ...],
+    tuple[ReferencePrimitive, ...],
+)
+certified = assert_type(
+    reconstruct_cubic_certified(source_cubic, transform, Millimetre(0.01)),
+    ReferenceReconstruction,
+)
+path = assert_type(
+    reconstruct_source_path((source_cubic,), transform, Millimetre(0.01)),
+    ReferenceReconstruction,
 )
