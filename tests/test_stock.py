@@ -410,6 +410,15 @@ def _query_pathological_contains(sender: Connection) -> None:
     sender.close()
 
 
+def _query_after_stock_mutation(sender: Connection) -> None:
+    """Build a locator, mutate its arrangement, then query the new epoch."""
+    stock = _stock_2.Stock2(SQUARE, [])
+    before = stock.contains(5.0, 5.0)
+    stock.subtract_disk(5.0, 5.0, 1.0)
+    sender.send((before, stock.contains(5.0, 5.0)))
+    sender.close()
+
+
 def _query_pathological_local_depletion(sender: Connection) -> None:
     """Compare local and global removal inside the pathological void face."""
     reference = _pathological_stock()
@@ -472,6 +481,11 @@ def test_exact_station_reports_material_on_multi_outer_ccb_stock():
 def test_contains_returns_void_on_multi_outer_ccb_stock():
     """Point containment must terminate and classify a strict annulus point."""
     assert _bounded_pathological_query(_query_pathological_contains) is False
+
+
+def test_point_location_rebuilds_after_stock_mutation():
+    """A query accelerator from an earlier arrangement must be detached."""
+    assert _bounded_pathological_query(_query_after_stock_mutation) == (True, False)
 
 
 def test_local_depletion_terminates_on_multi_outer_ccb_stock():
