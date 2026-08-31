@@ -334,10 +334,14 @@ PATHOLOGICAL_CIRCLES = (
     (-2.5, 2.5),
     (-1.625, 2.25),
 )
+PATHOLOGICAL_MATERIAL_X = 2.5
+PATHOLOGICAL_VOID_POINT = (0.0, 0.0)
+PATHOLOGICAL_CAP_DEGREES = 120.0
+PATHOLOGICAL_LOCAL_DISK_RADIUS = 0.125
 
 
-def _query_pathological_exact_station(sender: Connection) -> None:
-    """Rebuild and query the minimal native hang in an independently killable process."""
+def _pathological_stock():
+    """Build the multi-outer-CCB stock recovered from the native stall."""
     stock = _stock_2.Stock2(PATHOLOGICAL_STOCK_BOUNDARY, [])
     first_x = PATHOLOGICAL_CIRCLES[0][0]
     stock.subtract_disk(
@@ -366,11 +370,31 @@ def _query_pathological_exact_station(sender: Connection) -> None:
                 PATHOLOGICAL_STATION_Y,
                 PATHOLOGICAL_TOOL_RADIUS,
             )
+    return stock
+
+
+def _query_pathological_exact_station(sender: Connection) -> None:
+    """Query the original zero-engagement station in a killable process."""
+    stock = _pathological_stock()
 
     query_x = PATHOLOGICAL_CIRCLES[-1][0]
     result = _stock_2.engagement_at(
         stock,
         query_x,
+        PATHOLOGICAL_STATION_Y,
+        PATHOLOGICAL_TOOL_RADIUS,
+        cap_ratio(math.radians(PATHOLOGICAL_CAP_DEGREES)),
+    )
+    sender.send(result)
+    sender.close()
+
+
+def _query_pathological_overlap_station(sender: Connection) -> None:
+    """Query a cutter whose rim is mostly in material on the pathological stock."""
+    stock = _pathological_stock()
+    result = _stock_2.engagement_at(
+        stock,
+        PATHOLOGICAL_MATERIAL_X,
         PATHOLOGICAL_STATION_Y,
         PATHOLOGICAL_TOOL_RADIUS,
         cap_ratio(math.radians(120.0)),
@@ -379,12 +403,35 @@ def _query_pathological_exact_station(sender: Connection) -> None:
     sender.close()
 
 
-def test_exact_station_query_terminates_on_depleted_dyadic_stock():
-    """A small regularized stock must not strand exact point location."""
+def _query_pathological_contains(sender: Connection) -> None:
+    """Query a point strictly inside the removed annulus."""
+    stock = _pathological_stock()
+    sender.send(stock.contains(*PATHOLOGICAL_VOID_POINT))
+    sender.close()
+
+
+def _query_pathological_local_depletion(sender: Connection) -> None:
+    """Compare local and global removal inside the pathological void face."""
+    reference = _pathological_stock()
+    local = _pathological_stock()
+    reference.subtract_disk(*PATHOLOGICAL_VOID_POINT, PATHOLOGICAL_LOCAL_DISK_RADIUS)
+    local.subtract_disk_local(*PATHOLOGICAL_VOID_POINT, PATHOLOGICAL_LOCAL_DISK_RADIUS)
+    sender.send(
+        (
+            local.exactly_equals(reference),
+            reference.exactly_equals(local),
+            local.representation_is_valid(),
+        )
+    )
+    sender.close()
+
+
+def _bounded_pathological_query(target):
+    """Return one native result or fail if the child stalls."""
     context = multiprocessing.get_context("spawn")
     receiver, sender = context.Pipe(duplex=False)
     process = context.Process(
-        target=_query_pathological_exact_station,
+        target=target,
         args=(sender,),
     )
     process.start()
@@ -394,15 +441,46 @@ def test_exact_station_query_terminates_on_depleted_dyadic_stock():
         if process.is_alive():
             process.terminate()
             process.join()
-            pytest.fail(f"exact engagement query did not terminate within {EXACT_STATION_QUERY_BUDGET_SECONDS:.0f} seconds")
+            pytest.fail(f"exact stock query did not terminate within {EXACT_STATION_QUERY_BUDGET_SECONDS:.0f} seconds")
         assert process.exitcode == 0
-        assert receiver.poll(), "exact engagement child returned no result"
-        assert receiver.recv() == (0.0, 0.0, False)
+        assert receiver.poll(), "exact stock child returned no result"
+        return receiver.recv()
     finally:
         if process.is_alive():
             process.terminate()
             process.join()
         receiver.close()
+
+
+def test_exact_station_query_terminates_on_depleted_dyadic_stock():
+    """The original zero-engagement station must terminate and remain clear."""
+    assert _bounded_pathological_query(_query_pathological_exact_station) == (
+        0.0,
+        0.0,
+        False,
+    )
+
+
+def test_exact_station_reports_material_on_multi_outer_ccb_stock():
+    """A locator must not certify zero when the cutter rim crosses material."""
+    total, max_run, exceeded = _bounded_pathological_query(_query_pathological_overlap_station)
+    assert total > math.pi
+    assert max_run > math.radians(PATHOLOGICAL_CAP_DEGREES)
+    assert exceeded
+
+
+def test_contains_returns_void_on_multi_outer_ccb_stock():
+    """Point containment must terminate and classify a strict annulus point."""
+    assert _bounded_pathological_query(_query_pathological_contains) is False
+
+
+def test_local_depletion_terminates_on_multi_outer_ccb_stock():
+    """Local removal must preserve the reference set on a multi-outer-CCB face."""
+    assert _bounded_pathological_query(_query_pathological_local_depletion) == (
+        True,
+        True,
+        True,
+    )
 
 
 def test_engagement_full_material():
