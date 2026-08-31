@@ -187,3 +187,7 @@ class MissingPublishedToolCircleError(BenchmarkError):
 
 class AmbiguousPublishedBoundaryError(BenchmarkError):
     """A figure crop contains more than one valid boundary selection."""
+
+
+class MissingPublishedBoundaryMarkerError(BenchmarkError):
+    """A selected boundary endpoint has no unique published marker."""

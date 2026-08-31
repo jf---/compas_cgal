@@ -22,6 +22,7 @@ from typing import TypeAlias
 from benchmarks.errors import AmbiguousPublishedBoundaryError
 from benchmarks.errors import DisconnectedPublishedBoundaryError
 from benchmarks.errors import InvalidPublishedPrimitiveError
+from benchmarks.errors import MissingPublishedBoundaryMarkerError
 from benchmarks.errors import MissingPublishedToolCircleError
 from benchmarks.errors import UnsupportedPdfBoundaryOperatorError
 from benchmarks.held_reference_geometry import PdfPoint2
@@ -39,15 +40,17 @@ _MATRIX_PATTERN = re.compile(
 
 BOUNDARY_GREEN = "rgb(17.999268%, 54.499817%, 34.098816%)"
 TOOL_RED = "rgb(100%, 0%, 0%)"
-BOUNDARY_STROKE_WIDTH = 2.0
-TOOL_CIRCLE_STROKE_WIDTH = 0.8
+BOUNDARY_STROKE_WIDTH = PdfPointUnit(2.0)
+TOOL_CIRCLE_STROKE_WIDTH = PdfPointUnit(0.8)
 # Poppler emits page coordinates on the PDF's 1/256-point coordinate grid.
-PDF_COORDINATE_QUANTUM_PT = 1.0 / 256.0
+PDF_COORDINATE_QUANTUM_PT = PdfPointUnit(1.0 / 256.0)
 # Six-decimal Poppler affine coefficients contribute at most half a printed
 # decimal unit when a one-quantum local seam enters the page frame.
-PDF_AFFINE_EXPORT_ROUNDOFF_PT = 0.5 / 1_000_000.0
+PDF_AFFINE_EXPORT_ROUNDOFF_PT = PdfPointUnit(0.5 / 1_000_000.0)
 # A diameter compares two independently quantized extrema on each axis.
-PDF_DIAMETER_EXTREMA_BOUND_PT = 2.0 * PDF_COORDINATE_QUANTUM_PT
+PDF_DIAMETER_EXTREMA_BOUND_PT = PdfPointUnit(2.0 * float(PDF_COORDINATE_QUANTUM_PT))
+# Endpoint and marker coordinates are independently quantized in both axes.
+PDF_BOUNDARY_MARKER_ASSOCIATION_PT = PdfPointUnit(math.sqrt(2.0) * float(PDF_COORDINATE_QUANTUM_PT) + float(PDF_AFFINE_EXPORT_ROUNDOFF_PT))
 
 
 @dataclass(frozen=True)
@@ -58,11 +61,11 @@ class AffineTransform:
     b: float
     c: float
     d: float
-    e: float
-    f: float
+    e: PdfPointUnit
+    f: PdfPointUnit
 
     def __post_init__(self) -> None:
-        coefficients = (self.a, self.b, self.c, self.d, self.e, self.f)
+        coefficients = (self.a, self.b, self.c, self.d, float(self.e), float(self.f))
         if not all(math.isfinite(value) for value in coefficients):
             raise InvalidPublishedPrimitiveError("An SVG affine transform requires six finite coefficients.")
         if self.a * self.d - self.b * self.c == 0.0:
@@ -75,20 +78,20 @@ class AffineTransform:
         b: float,
         c: float,
         d: float,
-        e: float,
-        f: float,
+        e: PdfPointUnit,
+        f: PdfPointUnit,
         /,
     ) -> Self:
         return cls(a, b, c, d, e, f)
 
     @classmethod
     def identity(cls) -> Self:
-        return cls.build(1.0, 0.0, 0.0, 1.0, 0.0, 0.0)
+        return cls.build(1.0, 0.0, 0.0, 1.0, PdfPointUnit(0.0), PdfPointUnit(0.0))
 
-    def point(self, x: float, y: float) -> PdfPoint2:
+    def point(self, x: PdfPointUnit, y: PdfPointUnit) -> PdfPoint2:
         return PdfPoint2.build(
-            self.a * x + self.c * y + self.e,
-            self.b * x + self.d * y + self.f,
+            self.a * float(x) + self.c * float(y) + float(self.e),
+            self.b * float(x) + self.d * float(y) + float(self.f),
         )
 
 
@@ -104,7 +107,14 @@ class PdfCrop:
             raise InvalidPublishedPrimitiveError("A PDF crop requires strictly increasing page-coordinate bounds.")
 
     @classmethod
-    def build(cls, minimum_x: float, minimum_y: float, maximum_x: float, maximum_y: float, /) -> Self:
+    def build(
+        cls,
+        minimum_x: PdfPointUnit,
+        minimum_y: PdfPointUnit,
+        maximum_x: PdfPointUnit,
+        maximum_y: PdfPointUnit,
+        /,
+    ) -> Self:
         return cls(PdfPoint2.build(minimum_x, minimum_y), PdfPoint2.build(maximum_x, maximum_y))
 
     def contains(self, point: PdfPoint2) -> bool:
@@ -151,7 +161,7 @@ class FigureCrop:
         expected_line_count: int,
         expected_cubic_count: int,
         expected_tool_circle_count: int,
-        normalization_radius_local: float,
+        normalization_radius_local: PdfPointUnit,
     ) -> Self:
         return cls(
             name,
@@ -161,7 +171,7 @@ class FigureCrop:
             expected_line_count,
             expected_cubic_count,
             expected_tool_circle_count,
-            PdfPointUnit(normalization_radius_local),
+            normalization_radius_local,
         )
 
 
@@ -169,16 +179,16 @@ class FigureCrop:
 class SvgPath:
     """One selected SVG path with transforms already applied."""
 
-    stroke_width: float
+    stroke_width: PdfPointUnit
     primitives: tuple[SourcePrimitive, ...]
 
     @classmethod
-    def build(cls, stroke_width: float, primitives: Sequence[SourcePrimitive]) -> Self:
+    def build(cls, stroke_width: PdfPointUnit, primitives: Sequence[SourcePrimitive]) -> Self:
         numeric_width = float(stroke_width)
         ordered = tuple(primitives)
         if not math.isfinite(numeric_width) or numeric_width <= 0.0 or not ordered:
             raise InvalidPublishedPrimitiveError("A selected SVG path requires positive width and source geometry.")
-        return cls(numeric_width, ordered)
+        return cls(PdfPointUnit(numeric_width), ordered)
 
 
 @dataclass(frozen=True)
@@ -189,10 +199,10 @@ class PublishedToolCircle:
     radius: PdfPointUnit
 
     @classmethod
-    def build(cls, centre: PdfPoint2, radius: float) -> Self:
-        if not math.isfinite(radius) or radius <= 0.0:
+    def build(cls, centre: PdfPoint2, radius: PdfPointUnit) -> Self:
+        if not math.isfinite(float(radius)) or float(radius) <= 0.0:
             raise InvalidPublishedPrimitiveError("A depicted tool circle requires a finite positive radius.")
-        return cls(centre, PdfPointUnit(radius))
+        return cls(centre, radius)
 
 
 @dataclass(frozen=True)
@@ -203,6 +213,7 @@ class ExtractedCase:
     page: int
     sources: tuple[SourcePrimitive, ...]
     tool_circle: PublishedToolCircle
+    boundary_markers: tuple[PublishedToolCircle, ...]
     start_markers: tuple[PublishedToolCircle, ...]
     boundary_stroke_width: PdfPointUnit
 
@@ -214,21 +225,23 @@ class ExtractedCase:
         page: int,
         sources: Sequence[SourcePrimitive],
         tool_circle: PublishedToolCircle,
+        boundary_markers: Sequence[PublishedToolCircle],
         start_markers: Sequence[PublishedToolCircle],
-        boundary_stroke_width: float,
+        boundary_stroke_width: PdfPointUnit,
     ) -> Self:
         ordered = tuple(sources)
         if not ordered or not all(current.end == following.start for current, following in zip(ordered, (*ordered[1:], ordered[0]))):
             raise DisconnectedPublishedBoundaryError("An extracted case requires one exactly closed ordered source cycle.")
-        if not math.isfinite(boundary_stroke_width) or boundary_stroke_width <= 0.0:
+        if not math.isfinite(float(boundary_stroke_width)) or float(boundary_stroke_width) <= 0.0:
             raise InvalidPublishedPrimitiveError("Extracted boundary stroke width must be finite and positive.")
         return cls(
             name,
             page,
             ordered,
             tool_circle,
+            tuple(boundary_markers),
             tuple(start_markers),
-            PdfPointUnit(boundary_stroke_width),
+            boundary_stroke_width,
         )
 
 
@@ -237,42 +250,42 @@ FIGURE_CROPS = (
     FigureCrop.build(
         name="figure-5",
         page=12,
-        crop=PdfCrop.build(40.0, 70.0, 265.0, 223.0),
-        transform=AffineTransform.build(0.476643, 0.0, 0.0, -0.476643, 40.067609, 229.645005),
+        crop=PdfCrop.build(PdfPointUnit(40.0), PdfPointUnit(70.0), PdfPointUnit(265.0), PdfPointUnit(223.0)),
+        transform=AffineTransform.build(0.476643, 0.0, 0.0, -0.476643, PdfPointUnit(40.067609), PdfPointUnit(229.645005)),
         expected_line_count=5,
         expected_cubic_count=10,
         expected_tool_circle_count=1,
-        normalization_radius_local=6.769349,
+        normalization_radius_local=PdfPointUnit(6.769349),
     ),
     FigureCrop.build(
         name="figure-8-upper",
         page=16,
-        crop=PdfCrop.build(132.0, 70.0, 410.0, 259.0),
-        transform=AffineTransform.build(0.604974, 0.0, 0.0, -0.604974, 92.657287, 274.411007),
+        crop=PdfCrop.build(PdfPointUnit(132.0), PdfPointUnit(70.0), PdfPointUnit(410.0), PdfPointUnit(259.0)),
+        transform=AffineTransform.build(0.604974, 0.0, 0.0, -0.604974, PdfPointUnit(92.657287), PdfPointUnit(274.411007)),
         expected_line_count=4,
         expected_cubic_count=22,
         expected_tool_circle_count=1,
-        normalization_radius_local=5.977675,
+        normalization_radius_local=PdfPointUnit(5.977675),
     ),
     FigureCrop.build(
         name="figure-8-skis",
         page=16,
-        crop=PdfCrop.build(132.0, 253.0, 407.0, 322.0),
-        transform=AffineTransform.build(0.485758, 0.0, 0.0, -0.485758, 123.390035, 354.2883),
+        crop=PdfCrop.build(PdfPointUnit(132.0), PdfPointUnit(253.0), PdfPointUnit(407.0), PdfPointUnit(322.0)),
+        transform=AffineTransform.build(0.485758, 0.0, 0.0, -0.485758, PdfPointUnit(123.390035), PdfPointUnit(354.2883)),
         expected_line_count=2,
         expected_cubic_count=28,
         expected_tool_circle_count=1,
-        normalization_radius_local=5.118423,
+        normalization_radius_local=PdfPointUnit(5.118423),
     ),
     FigureCrop.build(
         name="figure-8-monstera",
         page=16,
-        crop=PdfCrop.build(133.0, 329.0, 407.0, 617.0),
-        transform=AffineTransform.build(0.581077, 0.0, 0.0, -0.581077, 120.141587, 620.884297),
+        crop=PdfCrop.build(PdfPointUnit(133.0), PdfPointUnit(329.0), PdfPointUnit(407.0), PdfPointUnit(617.0)),
+        transform=AffineTransform.build(0.581077, 0.0, 0.0, -0.581077, PdfPointUnit(120.141587), PdfPointUnit(620.884297)),
         expected_line_count=103,
         expected_cubic_count=107,
         expected_tool_circle_count=1,
-        normalization_radius_local=4.863683,
+        normalization_radius_local=PdfPointUnit(4.863683),
     ),
 )
 
@@ -313,6 +326,14 @@ def parse_pdf_svg_path(
 
 def select_boundary_paths(svg_path: Path, crop: FigureCrop) -> tuple[SvgPath, ...]:
     """Select the unique closed boundary component matching an approved crop."""
+    paths, _ = _select_boundary_with_markers(svg_path, crop)
+    return paths
+
+
+def _select_boundary_with_markers(
+    svg_path: Path,
+    crop: FigureCrop,
+) -> tuple[tuple[SvgPath, ...], tuple[PublishedToolCircle, ...]]:
     candidates = _styled_paths(
         svg_path,
         crop,
@@ -322,11 +343,19 @@ def select_boundary_paths(svg_path: Path, crop: FigureCrop) -> tuple[SvgPath, ..
     canonical = _canonicalized_paths(candidates)
     components = _path_components(canonical)
     matches = tuple(component for component in components if _matches_boundary_family(component, crop))
-    if len(matches) > 1:
-        raise AmbiguousPublishedBoundaryError(f"Crop {crop.name!r} contains more than one matching closed boundary.")
     if not matches:
         raise DisconnectedPublishedBoundaryError(f"Crop {crop.name!r} contains no matching closed boundary.")
-    return matches[0]
+    published_markers = _select_boundary_marker_circles(svg_path, crop)
+    associated: list[tuple[tuple[SvgPath, ...], tuple[PublishedToolCircle, ...]]] = []
+    for component in matches:
+        markers = _associated_boundary_markers(component, published_markers)
+        if markers is not None:
+            associated.append((component, markers))
+    if len(associated) > 1:
+        raise AmbiguousPublishedBoundaryError(f"Crop {crop.name!r} contains more than one matching closed boundary.")
+    if not associated:
+        raise MissingPublishedBoundaryMarkerError(f"Crop {crop.name!r} has no boundary with uniquely associated black markers.")
+    return associated[0]
 
 
 def select_tool_circle(svg_path: Path, crop: FigureCrop) -> PublishedToolCircle:
@@ -336,15 +365,15 @@ def select_tool_circle(svg_path: Path, crop: FigureCrop) -> PublishedToolCircle:
         raise MissingPublishedToolCircleError(f"Crop {crop.name!r} requires one unambiguous normalization circle; found {len(candidates)}.")
     observed = candidates[0]
     scale = math.sqrt(abs(crop.transform.a * crop.transform.d - crop.transform.b * crop.transform.c))
-    measured_radius = float(crop.normalization_radius_local) * scale
-    if abs(float(observed.radius) - measured_radius) > PDF_DIAMETER_EXTREMA_BOUND_PT:
+    measured_radius = PdfPointUnit(float(crop.normalization_radius_local) * scale)
+    if abs(float(observed.radius) - float(measured_radius)) > float(PDF_DIAMETER_EXTREMA_BOUND_PT):
         raise MissingPublishedToolCircleError(f"Crop {crop.name!r} normalization circle disagrees with its measured radius.")
     return PublishedToolCircle.build(observed.centre, measured_radius)
 
 
 def extract_case_from_svg(svg_path: Path, crop: FigureCrop) -> ExtractedCase:
     """Extract one approved case from a Poppler SVG page."""
-    selected_paths = select_boundary_paths(svg_path, crop)
+    selected_paths, boundary_markers = _select_boundary_with_markers(svg_path, crop)
     sources = _order_cycle(tuple(primitive for path in selected_paths for primitive in path.primitives))
     scale = math.sqrt(abs(crop.transform.a * crop.transform.d - crop.transform.b * crop.transform.c))
     return ExtractedCase.build(
@@ -352,8 +381,9 @@ def extract_case_from_svg(svg_path: Path, crop: FigureCrop) -> ExtractedCase:
         page=crop.page,
         sources=sources,
         tool_circle=select_tool_circle(svg_path, crop),
+        boundary_markers=boundary_markers,
         start_markers=_select_circles(svg_path, crop, BOUNDARY_STROKE_WIDTH),
-        boundary_stroke_width=BOUNDARY_STROKE_WIDTH * scale,
+        boundary_stroke_width=PdfPointUnit(float(BOUNDARY_STROKE_WIDTH) * scale),
     )
 
 
@@ -389,7 +419,7 @@ def extract_reference_sources(pdf_path: Path) -> tuple[ExtractedCase, ...]:
 def _select_circles(
     svg_path: Path,
     crop: FigureCrop,
-    stroke_width: float,
+    stroke_width: PdfPointUnit,
 ) -> tuple[PublishedToolCircle, ...]:
     candidates: list[PublishedToolCircle] = []
     for path in _styled_paths(
@@ -398,23 +428,167 @@ def _select_circles(
         stroke=TOOL_RED,
         stroke_width=stroke_width,
     ):
-        if len(path.primitives) != 4 or not all(isinstance(primitive, SourceCubic) for primitive in path.primitives):
-            continue
-        endpoints = tuple(primitive.start for primitive in path.primitives)
-        if path.primitives[-1].end != path.primitives[0].start:
-            continue
-        centre_x = sum(float(point.x) for point in endpoints) / len(endpoints)
-        centre_y = sum(float(point.y) for point in endpoints) / len(endpoints)
-        radii = tuple(math.hypot(float(point.x) - centre_x, float(point.y) - centre_y) for point in endpoints)
-        if max(radii) - min(radii) > PDF_DIAMETER_EXTREMA_BOUND_PT:
-            continue
-        candidates.append(
-            PublishedToolCircle.build(
-                PdfPoint2.build(centre_x, centre_y),
-                min(radii),
-            )
-        )
+        circle = _validated_circle(path.primitives)
+        if circle is not None:
+            candidates.append(circle)
     return tuple(candidates)
+
+
+def _select_boundary_marker_circles(
+    svg_path: Path,
+    crop: FigureCrop,
+) -> tuple[PublishedToolCircle, ...]:
+    root = ET.parse(svg_path).getroot()
+    markers: list[PublishedToolCircle] = []
+    for element in root.iter():
+        if element.tag.rsplit("}", 1)[-1] != "path":
+            continue
+        if element.get("fill") != "rgb(0%, 0%, 0%)" or element.get("stroke") not in (None, "none"):
+            continue
+        path_data = element.get("d")
+        if path_data is None:
+            continue
+        transform_text = element.get("transform")
+        transform = AffineTransform.identity() if transform_text is None else _parse_transform(transform_text)
+        try:
+            primitives = parse_pdf_svg_path(path_data, transform)
+        except (InvalidPublishedPrimitiveError, UnsupportedPdfBoundaryOperatorError):
+            continue
+        circle = _validated_circle(primitives)
+        if circle is not None and crop.crop.contains(circle.centre):
+            markers.append(circle)
+    return tuple(markers)
+
+
+def _associated_boundary_markers(
+    paths: Sequence[SvgPath],
+    markers: Sequence[PublishedToolCircle],
+) -> Optional[tuple[PublishedToolCircle, ...]]:
+    associated_indexes: set[int] = set()
+    for path in paths:
+        for endpoint in (path.primitives[0].start, path.primitives[-1].end):
+            matching = tuple(index for index, marker in enumerate(markers) if _point_distance(endpoint, marker.centre) <= float(PDF_BOUNDARY_MARKER_ASSOCIATION_PT))
+            if len(matching) != 1:
+                return None
+            associated_indexes.add(matching[0])
+    return tuple(markers[index] for index in sorted(associated_indexes))
+
+
+def _validated_circle(
+    primitives: Sequence[SourcePrimitive],
+) -> Optional[PublishedToolCircle]:
+    if len(primitives) != 4 or not all(isinstance(primitive, SourceCubic) for primitive in primitives):
+        return None
+    cubics = tuple(primitive for primitive in primitives if isinstance(primitive, SourceCubic))
+    if cubics[-1].end != cubics[0].start:
+        return None
+
+    minimum_x, maximum_x = _cubic_family_extrema(cubics, axis="x")
+    minimum_y, maximum_y = _cubic_family_extrema(cubics, axis="y")
+    publication_bound = float(PDF_DIAMETER_EXTREMA_BOUND_PT)
+    if abs((maximum_x - minimum_x) - (maximum_y - minimum_y)) > publication_bound:
+        return None
+
+    junctions = tuple(cubic.start for cubic in cubics)
+    first_centre = _midpoint(junctions[0], junctions[2])
+    second_centre = _midpoint(junctions[1], junctions[3])
+    if _point_distance(first_centre, second_centre) > publication_bound:
+        return None
+    centre = _midpoint(first_centre, second_centre)
+    radius_vectors = tuple(_point_vector(centre, junction) for junction in junctions)
+    radii = tuple(math.hypot(*vector) for vector in radius_vectors)
+    if min(radii) == 0.0 or max(radii) - min(radii) > publication_bound:
+        return None
+
+    crosses = tuple(_cross(current, following) for current, following in zip(radius_vectors, (*radius_vectors[1:], radius_vectors[0])))
+    if crosses[0] == 0.0:
+        return None
+    sweep_direction = 1.0 if crosses[0] > 0.0 else -1.0
+    angular_bound = 2.0 * math.asin(min(1.0, publication_bound / (2.0 * min(radii))))
+    for current, following, cross in zip(radius_vectors, (*radius_vectors[1:], radius_vectors[0]), crosses):
+        if cross * sweep_direction <= 0.0:
+            return None
+        turn = math.atan2(sweep_direction * cross, _dot(current, following))
+        if abs(turn - math.pi / 2.0) > angular_bound:
+            return None
+
+    for cubic, start_radius, end_radius in zip(cubics, radius_vectors, (*radius_vectors[1:], radius_vectors[0])):
+        start_handle = _point_vector(cubic.start, cubic.control1)
+        end_handle = _point_vector(cubic.control2, cubic.end)
+        if math.hypot(*start_handle) == 0.0 or math.hypot(*end_handle) == 0.0:
+            return None
+        if abs(_dot(start_radius, start_handle)) / math.hypot(*start_radius) > publication_bound:
+            return None
+        if abs(_dot(end_radius, end_handle)) / math.hypot(*end_radius) > publication_bound:
+            return None
+        if _cross(start_radius, start_handle) * sweep_direction <= 0.0:
+            return None
+        if _cross(end_radius, end_handle) * sweep_direction <= 0.0:
+            return None
+    return PublishedToolCircle.build(centre, PdfPointUnit(sum(radii) / len(radii)))
+
+
+def _cubic_family_extrema(
+    cubics: Sequence[SourceCubic],
+    *,
+    axis: str,
+) -> tuple[float, float]:
+    values: list[float] = []
+    for cubic in cubics:
+        coordinates = tuple(float(getattr(point, axis)) for point in (cubic.start, cubic.control1, cubic.control2, cubic.end))
+        parameters = (0.0, 1.0, *_cubic_derivative_roots(*coordinates))
+        values.extend(_cubic_coordinate(coordinates[0], coordinates[1], coordinates[2], coordinates[3], parameter) for parameter in parameters)
+    return min(values), max(values)
+
+
+def _cubic_derivative_roots(p0: float, p1: float, p2: float, p3: float) -> tuple[float, ...]:
+    quadratic = 3.0 * (-p0 + 3.0 * p1 - 3.0 * p2 + p3)
+    linear = 6.0 * (p0 - 2.0 * p1 + p2)
+    constant = 3.0 * (p1 - p0)
+    if quadratic == 0.0:
+        if linear == 0.0:
+            return ()
+        root = -constant / linear
+        return (root,) if 0.0 < root < 1.0 else ()
+    discriminant = linear * linear - 4.0 * quadratic * constant
+    if discriminant < 0.0:
+        return ()
+    square_root = math.sqrt(discriminant)
+    roots = ((-linear - square_root) / (2.0 * quadratic), (-linear + square_root) / (2.0 * quadratic))
+    return tuple(root for root in roots if 0.0 < root < 1.0)
+
+
+def _cubic_coordinate(p0: float, p1: float, p2: float, p3: float, parameter: float) -> float:
+    complement = 1.0 - parameter
+    return (
+        complement * complement * complement * p0
+        + 3.0 * complement * complement * parameter * p1
+        + 3.0 * complement * parameter * parameter * p2
+        + parameter * parameter * parameter * p3
+    )
+
+
+def _midpoint(first: PdfPoint2, second: PdfPoint2) -> PdfPoint2:
+    return PdfPoint2.build(
+        (float(first.x) + float(second.x)) / 2.0,
+        (float(first.y) + float(second.y)) / 2.0,
+    )
+
+
+def _point_vector(start: PdfPoint2, end: PdfPoint2) -> tuple[float, float]:
+    return float(end.x) - float(start.x), float(end.y) - float(start.y)
+
+
+def _point_distance(first: PdfPoint2, second: PdfPoint2) -> float:
+    return math.hypot(float(first.x) - float(second.x), float(first.y) - float(second.y))
+
+
+def _dot(first: tuple[float, float], second: tuple[float, float]) -> float:
+    return first[0] * second[0] + first[1] * second[1]
+
+
+def _cross(first: tuple[float, float], second: tuple[float, float]) -> float:
+    return first[0] * second[1] - first[1] * second[0]
 
 
 def canonicalize_degree_one_endpoints(
@@ -446,7 +620,7 @@ def _styled_paths(
     crop: FigureCrop,
     *,
     stroke: str,
-    stroke_width: float,
+    stroke_width: PdfPointUnit,
 ) -> tuple[SvgPath, ...]:
     root = ET.parse(svg_path).getroot()
     selected: list[SvgPath] = []
@@ -461,7 +635,7 @@ def _styled_paths(
             width = float(element.get("stroke-width", ""))
         except ValueError:
             continue
-        if width != stroke_width:
+        if width != float(stroke_width):
             continue
         transform_text = element.get("transform")
         path_data = element.get("d")
@@ -473,7 +647,7 @@ def _styled_paths(
         primitives = parse_pdf_svg_path(path_data, transform)
         if not all(crop.crop.contains(point) for primitive in primitives for point in _primitive_points(primitive)):
             continue
-        selected.append(SvgPath.build(width, primitives))
+        selected.append(SvgPath.build(PdfPointUnit(width), primitives))
     return tuple(selected)
 
 
@@ -481,7 +655,15 @@ def _parse_transform(value: str) -> AffineTransform:
     match = _MATRIX_PATTERN.fullmatch(value)
     if match is None:
         raise UnsupportedPdfBoundaryOperatorError("A selected publisher path has an unsupported SVG transform.")
-    return AffineTransform.build(*(float(coefficient) for coefficient in match.groups()))
+    coefficients = tuple(float(coefficient) for coefficient in match.groups())
+    return AffineTransform.build(
+        coefficients[0],
+        coefficients[1],
+        coefficients[2],
+        coefficients[3],
+        PdfPointUnit(coefficients[4]),
+        PdfPointUnit(coefficients[5]),
+    )
 
 
 def _primitive_points(primitive: SourcePrimitive) -> tuple[PdfPoint2, ...]:
@@ -540,8 +722,8 @@ def _matches_boundary_family(paths: Sequence[SvgPath], crop: FigureCrop) -> bool
 
 
 def _within_coordinate_quantum(first: PdfPoint2, second: PdfPoint2) -> bool:
-    page_quantum_bound = PDF_COORDINATE_QUANTUM_PT + PDF_AFFINE_EXPORT_ROUNDOFF_PT
-    return abs(float(first.x) - float(second.x)) <= page_quantum_bound and abs(float(first.y) - float(second.y)) <= page_quantum_bound
+    page_quantum_bound = float(PDF_COORDINATE_QUANTUM_PT) + float(PDF_AFFINE_EXPORT_ROUNDOFF_PT)
+    return _point_distance(first, second) <= page_quantum_bound
 
 
 def _replace_primitive_endpoints(
@@ -588,6 +770,7 @@ def _case_payload(case: ExtractedCase) -> dict[str, object]:
         "cubic_count": sum(isinstance(source, SourceCubic) for source in case.sources),
         "tool_radius_pdf_points": float(case.tool_circle.radius),
         "boundary_stroke_width_pdf_points": float(case.boundary_stroke_width),
+        "boundary_marker_count": len(case.boundary_markers),
         "start_marker_count": len(case.start_markers),
     }
 
@@ -614,13 +797,13 @@ def _tokens(path_data: str) -> tuple[str, ...]:
     return tuple(tokens)
 
 
-def _number(token: str) -> float:
+def _number(token: str) -> PdfPointUnit:
     if re.fullmatch(_NUMBER_PATTERN, token) is None:
         raise UnsupportedPdfBoundaryOperatorError("A publisher path coordinate is malformed.")
     value = float(token)
     if not math.isfinite(value):
         raise UnsupportedPdfBoundaryOperatorError("A publisher path coordinate must be finite.")
-    return value
+    return PdfPointUnit(value)
 
 
 if __name__ == "__main__":
