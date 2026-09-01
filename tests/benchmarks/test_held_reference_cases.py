@@ -198,6 +198,107 @@ def test_loader_applies_directional_one_step_bound_contract(
             load_held_reference_case("figure5")
 
 
+@pytest.mark.parametrize(
+    ("side", "coordinate", "direction", "steps", "accepted"),
+    [
+        ("minimum", 0, -math.inf, 1, True),
+        ("minimum", 0, math.inf, 1, False),
+        ("minimum", 0, -math.inf, 2, False),
+        ("minimum", 1, -math.inf, 1, True),
+        ("minimum", 1, math.inf, 1, False),
+        ("minimum", 1, -math.inf, 2, False),
+        ("maximum", 0, math.inf, 1, True),
+        ("maximum", 0, -math.inf, 1, False),
+        ("maximum", 0, math.inf, 2, False),
+        ("maximum", 1, math.inf, 1, True),
+        ("maximum", 1, -math.inf, 1, False),
+        ("maximum", 1, math.inf, 2, False),
+    ],
+)
+def test_source_bounds_allow_one_outward_representation_step_only(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    side: str,
+    coordinate: int,
+    direction: float,
+    steps: int,
+    accepted: bool,
+) -> None:
+    payload = _payload()
+    source = payload["source"]
+    assert isinstance(source, dict)
+    bounds = source["bounds"]
+    assert isinstance(bounds, dict)
+    point = bounds[side]
+    assert isinstance(point, list)
+    point[coordinate] = _next_float(float(point[coordinate]), direction, steps)
+    _install_payload(monkeypatch, tmp_path, payload)
+
+    if accepted:
+        load_held_reference_case("figure5")
+    else:
+        with pytest.raises(MalformedHeldReferenceCaseError):
+            load_held_reference_case("figure5")
+
+
+@pytest.mark.parametrize("coordinate", [0, 1])
+@pytest.mark.parametrize("direction", [-math.inf, math.inf])
+@pytest.mark.parametrize(("steps", "accepted"), [(1, True), (2, False)])
+def test_source_origin_allows_one_symmetric_representation_step_only(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    coordinate: int,
+    direction: float,
+    steps: int,
+    accepted: bool,
+) -> None:
+    payload = _payload()
+    normalization = payload["normalization"]
+    assert isinstance(normalization, dict)
+    origin = normalization["source_origin"]
+    assert isinstance(origin, list)
+    origin[coordinate] = _next_float(float(origin[coordinate]), direction, steps)
+    _install_payload(monkeypatch, tmp_path, payload)
+
+    if accepted:
+        load_held_reference_case("figure5")
+    else:
+        with pytest.raises(MalformedHeldReferenceCaseError):
+            load_held_reference_case("figure5")
+
+
+@pytest.mark.parametrize(
+    ("section", "field"),
+    [
+        ("normalization", "millimetres_per_pdf_point"),
+        ("analytic_boundary", "normalized_stroke_width_mm"),
+        ("polygon_projection", "deviation_limit_mm"),
+    ],
+)
+@pytest.mark.parametrize("direction", [-math.inf, math.inf])
+@pytest.mark.parametrize(("steps", "accepted"), [(1, True), (2, False)])
+def test_derived_scalars_allow_one_symmetric_representation_step_only(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    section: str,
+    field: str,
+    direction: float,
+    steps: int,
+    accepted: bool,
+) -> None:
+    payload = _payload()
+    record = payload[section]
+    assert isinstance(record, dict)
+    record[field] = _next_float(float(record[field]), direction, steps)
+    _install_payload(monkeypatch, tmp_path, payload)
+
+    if accepted:
+        load_held_reference_case("figure5")
+    else:
+        with pytest.raises(MalformedHeldReferenceCaseError):
+            load_held_reference_case("figure5")
+
+
 def test_public_factory_rejects_mixed_boundary_and_reconstruction() -> None:
     figure5 = load_held_reference_case("figure5")
     upper = load_held_reference_case("figure8_upper")

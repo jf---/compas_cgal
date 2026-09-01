@@ -6,6 +6,7 @@ from benchmarks.held_reference_cases import HeldReferenceCase
 from benchmarks.held_reference_cases import load_all_held_reference_cases
 from benchmarks.held_reference_cases import load_held_reference_case
 from benchmarks.spec import PocketSpec
+from compas_cgal.adaptive.units import Millimetre
 from compas_cgal.adaptive.units import Point2
 from compas_cgal.adaptive.units import WorldXY
 
@@ -14,6 +15,7 @@ assert_type(load_all_held_reference_cases(), tuple[HeldReferenceCase, ...])
 assert_type(case.pocket_spec(), PocketSpec)
 assert_type(case.tea_cap, Degree)
 assert_type(case.start_marker, Point2[WorldXY] | None)
+assert_type(case.start_marker_radius, Millimetre | None)
 assert_type(case.figure7_observation, Figure7Observation | None)
 assert_type(
     Figure7Observation.build(

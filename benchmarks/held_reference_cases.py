@@ -484,9 +484,32 @@ def _matches_within_one_binary64_representation_step(recorded: float, computed: 
     return math.nextafter(computed, -math.inf) <= recorded <= math.nextafter(computed, math.inf)
 
 
+def _outward_lower_bound_matches_one_binary64_step(recorded: float, computed: float) -> bool:
+    """Require a lower-bound record no higher than truth and at most one representation below."""
+    return math.nextafter(computed, -math.inf) <= recorded <= computed
+
+
 def _directional_upper_bound_matches_one_binary64_step(recorded: float, computed: float) -> bool:
     """Require an upper-bound record no lower than proof and at most one representation above."""
     return computed <= recorded <= math.nextafter(computed, math.inf)
+
+
+def _pdf_points_match_within_one_binary64_step(recorded: PdfPoint2, computed: PdfPoint2) -> bool:
+    return _matches_within_one_binary64_representation_step(float(recorded.x), float(computed.x)) and _matches_within_one_binary64_representation_step(
+        float(recorded.y), float(computed.y)
+    )
+
+
+def _pdf_lower_bound_matches_one_binary64_step(recorded: PdfPoint2, computed: PdfPoint2) -> bool:
+    return _outward_lower_bound_matches_one_binary64_step(float(recorded.x), float(computed.x)) and _outward_lower_bound_matches_one_binary64_step(
+        float(recorded.y), float(computed.y)
+    )
+
+
+def _pdf_upper_bound_matches_one_binary64_step(recorded: PdfPoint2, computed: PdfPoint2) -> bool:
+    return _directional_upper_bound_matches_one_binary64_step(float(recorded.x), float(computed.x)) and _directional_upper_bound_matches_one_binary64_step(
+        float(recorded.y), float(computed.y)
+    )
 
 
 def _points_match_within_one_binary64_step(recorded: Point2[WorldXY], computed: Point2[WorldXY]) -> bool:
@@ -721,10 +744,6 @@ def _parse_reference(values: object) -> tuple[ReferencePrimitive, ...]:
     return tuple(parsed)
 
 
-def _same_float(recorded: object, computed: float) -> bool:
-    return _number(recorded) == computed
-
-
 def validate_case_payload(payload: object, *, expected_name: str) -> HeldReferenceCase:
     document = _mapping(payload)
     _require_finite_json(document)
@@ -753,25 +772,30 @@ def validate_case_payload(payload: object, *, expected_name: str) -> HeldReferen
             raise MalformedHeldReferenceCaseError("Publisher source cycle must be clockwise before Y reflection.")
         source_bounds = _mapping(source["bounds"])
         minimum, maximum = _source_bounds(sources)
-        if (_point_pdf(source_bounds["minimum"]), _point_pdf(source_bounds["maximum"])) != (minimum, maximum):
+        recorded_minimum = _point_pdf(source_bounds["minimum"])
+        recorded_maximum = _point_pdf(source_bounds["maximum"])
+        if not _pdf_lower_bound_matches_one_binary64_step(recorded_minimum, minimum) or not _pdf_upper_bound_matches_one_binary64_step(recorded_maximum, maximum):
             raise MalformedHeldReferenceCaseError("Recorded source bounds differ from the true cubic extrema.")
         required_origin = PdfPoint2.build(minimum.x, maximum.y)
-        if _point_pdf(normalization["source_origin"]) != required_origin or _point_world(normalization["world_origin"]) != Point2[WorldXY].build(0.0, 0.0):
+        recorded_source_origin = _point_pdf(normalization["source_origin"])
+        world_origin = _point_world(normalization["world_origin"])
+        if not _pdf_points_match_within_one_binary64_step(recorded_source_origin, required_origin) or world_origin != Point2[WorldXY].build(0.0, 0.0):
             raise MalformedHeldReferenceCaseError("Normalization must place the reflected source bounds at the world origin.")
-        transform = SourceToWorld.build(
-            source_origin=_point_pdf(normalization["source_origin"]),
-            world_origin=_point_world(normalization["world_origin"]),
-            scale=MillimetresPerPdfPoint(_number(normalization["millimetres_per_pdf_point"])),
-            reflect_source_y=bool(normalization["reflect_source_y"]),
-        )
         source_tool = _mapping(normalization["source_tool"])
         source_tool_centre = _point_pdf(source_tool["centre"])
         source_tool_radius = _positive_pdf_length(source_tool["radius_pdf_point"], "source tool radius")
-        if not _same_float(normalization["millimetres_per_pdf_point"], 1.0 / float(source_tool_radius)):
+        required_scale = 1.0 / float(source_tool_radius)
+        if not _matches_within_one_binary64_representation_step(_number(normalization["millimetres_per_pdf_point"]), required_scale):
             raise MalformedHeldReferenceCaseError("Normalization scale does not make the depicted radius one millimetre.")
-        if not _same_float(analytic["normalized_stroke_width_mm"], 4.0 * _number(analytic["reconstruction_limit_mm"])):
+        transform = SourceToWorld.build(
+            source_origin=required_origin,
+            world_origin=world_origin,
+            scale=MillimetresPerPdfPoint(required_scale),
+            reflect_source_y=bool(normalization["reflect_source_y"]),
+        )
+        if not _matches_within_one_binary64_representation_step(_number(analytic["normalized_stroke_width_mm"]), 4.0 * _number(analytic["reconstruction_limit_mm"])):
             raise MalformedHeldReferenceCaseError("Reconstruction limit must equal one quarter of the normalized stroke width.")
-        if not _same_float(projection_record["deviation_limit_mm"], _number(analytic["reconstruction_limit_mm"]) / 2.0):
+        if not _matches_within_one_binary64_representation_step(_number(projection_record["deviation_limit_mm"]), _number(analytic["reconstruction_limit_mm"]) / 2.0):
             raise MalformedHeldReferenceCaseError("Projection limit must be half the reconstruction limit.")
         reconstruction = reconstruct_source_path(sources, transform, Millimetre(_number(analytic["reconstruction_limit_mm"])))
         recorded_primitives = _parse_reference(analytic["primitives"])
