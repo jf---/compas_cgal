@@ -6,6 +6,8 @@ from fractions import Fraction
 
 import pytest
 
+import benchmarks.held_reference_certification as certification
+import benchmarks.held_reference_geometry as geometry
 from benchmarks.errors import DisconnectedPublishedBoundaryError
 from benchmarks.errors import InvalidPublishedPrimitiveError
 from benchmarks.errors import InvalidReferenceProjectionError
@@ -139,6 +141,24 @@ def _monstera_transform() -> SourceToWorld:
         source_origin=PdfPoint2.build(0.0, 0.0),
         world_origin=_world(0.0, 0.0),
         scale=MillimetresPerPdfPoint(1.0 / 2.826174326591),
+    )
+
+
+def _figure5_proof_hard_source() -> SourceCubic:
+    return SourceCubic.build(
+        PdfPoint2.build(170.574243138248, 93.339818109552),
+        PdfPoint2.build(152.20705251096499, 116.695291267899),
+        PdfPoint2.build(118.38673357500198, 120.738260606424),
+        PdfPoint2.build(95.031260416655, 102.37106950249799),
+    )
+
+
+def _figure5_transform() -> SourceToWorld:
+    return SourceToWorld.build(
+        source_origin=PdfPoint2.build(261.69535427191397, 146.761702919259),
+        world_origin=_world(0.0, 0.0),
+        scale=MillimetresPerPdfPoint(1.0 / 3.226562815407),
+        reflect_source_y=True,
     )
 
 
@@ -328,21 +348,120 @@ def test_monstera_source_125_recovers_root_biarc_without_subdivision() -> None:
     assert all(isinstance(primitive, ReferenceArc) for primitive in primitives)
 
 
+def test_figure5_proof_hard_source_closes_with_bounded_certificate_nodes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    node_limit = 2_048
+    calls = 0
+    original = geometry.biarc_correspondence_node_bound
+
+    def counted(*args: object, **kwargs: object) -> float | None:
+        nonlocal calls
+        calls += 1
+        assert calls <= node_limit
+        return original(*args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(geometry, "biarc_correspondence_node_bound", counted)
+
+    reconstruction = reconstruct_cubic_certified(
+        _figure5_proof_hard_source(),
+        _figure5_transform(),
+        Millimetre(0.07386234629061081),
+    )
+
+    assert reconstruction.primitives
+    assert float(reconstruction.deviation_upper_bound) <= 0.07386234629061081
+    assert calls <= node_limit
+
+
+def test_figure5_biarc_children_retain_honest_merge_witnesses(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = _figure5_proof_hard_source()
+    transform = _figure5_transform()
+    limit = Millimetre(0.07386234629061081)
+    witnessed_intervals: list[tuple[Fraction, Fraction]] = []
+    original = geometry._merge_arc_entries
+
+    def capture(first: object, second: object, deviation_limit: float) -> object:
+        for entry in (first, second):
+            witnesses = entry.source_witnesses  # type: ignore[attr-defined]
+            if witnesses is not None:
+                witnessed_intervals.extend((start, end) for _, start, end in witnesses)
+        return original(first, second, deviation_limit)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(geometry, "_merge_arc_entries", capture)
+
+    merged = reconstruct_source_path((source,), transform, limit)
+
+    assert witnessed_intervals
+    assert any(start == 0 and end < 1 for start, end in witnessed_intervals)
+    assert any(start > 0 and end == 1 for start, end in witnessed_intervals)
+    assert float(merged.deviation_upper_bound) <= float(limit)
+
+
 def test_represented_biarc_root_perturbation_exceeds_exact_backward_certificate() -> None:
+    start_tangent = (1.0, 0.0)
+    end_tangent = (0.0, 1.0)
+    chord = (math.sqrt(0.5), -math.sqrt(0.5))
     represented_root = math.sqrt(0.5) + math.sqrt(sys.float_info.epsilon)
     exact_root = Fraction.from_float(represented_root)
-    exact_residual = abs(2 * exact_root**2 - 1)
-    absolute_sum = 2 * exact_root**2 + 1
+    exact_chord = tuple(Fraction.from_float(value) for value in chord)
+    exact_chord_squared = exact_chord[0] ** 2 + exact_chord[1] ** 2
+    exact_residual = abs(2 * exact_root**2 - exact_chord_squared)
+    absolute_sum = 2 * exact_root**2 + exact_chord_squared
     unit_roundoff = Fraction.from_float(BINARY64_UNIT_ROUNDOFF)
     accumulated = BIARC_POLYNOMIAL_OPERATION_COUNT * unit_roundoff
     exact_backward_bound = accumulated / (1 - accumulated) * absolute_sum
 
     assert exact_residual > exact_backward_bound
-    assert certify_biarc_root(2.0, 0.0, 1.0, represented_root) is None
+    assert certify_biarc_root(start_tangent, end_tangent, chord, represented_root) is None
+
+
+def test_biarc_root_certificate_uses_exact_stored_vectors() -> None:
+    start_tangent = (-0.4849139190664588, -0.8745618852291746)
+    end_tangent = (-0.4618103023613498, -0.8869787171251172)
+    chord = (0.8852837220510297, -0.4650513213307486)
+
+    assert certify_biarc_root(start_tangent, end_tangent, chord, 74.49504729012146) is None
+    assert certify_biarc_root(start_tangent, end_tangent, chord, 74.49504729012952) is not None
 
 
 def test_biarc_root_certificate_refuses_subnormal_conditioning() -> None:
-    assert certify_biarc_root(sys.float_info.min / 2.0, 1.0, 1.0, 1.0) is None
+    assert certify_biarc_root((sys.float_info.min / 2.0, 0.0), (0.0, 1.0), (1.0, 0.0), 1.0) is None
+
+
+def test_mapped_g1_bound_never_uses_infinity_as_acceptance_slack() -> None:
+    local_biarc = (
+        ReferenceArc.build(_world(0.0, 0.0), _world(1.0, 1.0), _world(0.0, 1.0), Radian(math.pi / 2.0)),
+        ReferenceArc.build(_world(1.0, 1.0), _world(2.0, 2.0), _world(2.0, 1.0), Radian(-math.pi / 2.0)),
+    )
+    origin = (2.0**50, 2.0**50)
+    mapped = geometry._map_local_biarc(
+        *local_biarc,
+        origin,
+        (origin[0] + 0.5, origin[1] + 0.5),
+        0.2,
+    )
+
+    bounds = geometry._mapped_biarc_tangent_bounds(local_biarc, mapped, 0.2)
+
+    assert bounds is None or all(math.isfinite(bound) for bound in bounds)
+
+
+def test_equal_distance_biarc_refuses_unclosable_mapping(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(geometry, "_mapped_biarc_tangent_bounds", lambda *_args: None)
+    controls = tuple(
+        (float(point.x), float(point.y))
+        for point in (
+            _monstera_transform().point(_monstera_source_125().start),
+            _monstera_transform().point(_monstera_source_125().control1),
+            _monstera_transform().point(_monstera_source_125().control2),
+            _monstera_transform().point(_monstera_source_125().end),
+        )
+    )
+
+    assert geometry._equal_distance_biarc(controls) is None
 
 
 @pytest.mark.parametrize(
@@ -382,6 +501,158 @@ def test_source_transform_reflects_y_explicitly() -> None:
     )
 
     assert transform.point(PdfPoint2.build(14.0, 26.0)) == _world(4.0, 0.0)
+
+
+@pytest.mark.parametrize("invalid", (1, "false"))
+def test_source_transform_requires_runtime_bool(invalid: object) -> None:
+    with pytest.raises(InvalidPublishedPrimitiveError):
+        SourceToWorld.build(
+            source_origin=PdfPoint2.build(0.0, 0.0),
+            world_origin=_world(0.0, 0.0),
+            scale=MillimetresPerPdfPoint(1.0),
+            reflect_source_y=invalid,  # type: ignore[arg-type]
+        )
+
+
+def test_exact_control_hull_preserves_cancellation_sensitive_turn() -> None:
+    magnitude = 2.0**52
+    points = ((0.0, 0.0), (magnitude, magnitude - 1.0), (magnitude + 1.0, magnitude), (0.0, 1.0))
+
+    hull = certification.exact_convex_hull(points)
+
+    assert (magnitude, magnitude - 1.0) in hull
+
+
+@pytest.mark.parametrize(
+    ("controls", "centre", "expected"),
+    (
+        (((1.0, 0.0), (0.0, 2.0), (-1.0, 0.0), (0.0, -2.0)), (0.0, 0.0), (Fraction(0), Fraction(4))),
+        (((0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)), (3.0, 0.0), (Fraction(4), Fraction(10))),
+    ),
+)
+def test_exact_control_hull_radius_squared_oracle(
+    controls: tuple[tuple[float, float], ...],
+    centre: tuple[float, float],
+    expected: tuple[Fraction, Fraction],
+) -> None:
+    assert certification.exact_control_hull_radius_squared_bounds(controls, centre) == expected
+
+
+def test_circle_certificate_refuses_limit_one_ulp_below_exact_radial_bound() -> None:
+    controls = ((1.0, 0.0), (2.0, 0.0), (2.0, 1.0), (0.0, 1.0))
+    bound = certification.circle_deviation_upper_bound(controls, (0.0, 0.0), controls[0])
+
+    assert bound is not None
+    assert (
+        geometry._cubic_within_circle(
+            controls,
+            ((0.0, 0.0), math.pi / 2.0),
+            math.nextafter(bound, -math.inf),
+            depth=geometry.MAX_RECONSTRUCTION_SUBDIVISIONS,
+        )
+        is None
+    )
+
+
+def test_exact_cubic_midpoint_survives_large_translation() -> None:
+    magnitude = 2.0**52
+    controls = ((magnitude, 0.0), (magnitude + 1.0, 1.0), (magnitude + 2.0, 1.0), (magnitude + 3.0, 0.0))
+
+    assert certification.exact_cubic_point(controls, Fraction(1, 2)) == (
+        Fraction.from_float(magnitude) + Fraction(3, 2),
+        Fraction(3, 4),
+    )
+
+
+def test_exact_biarc_breakpoint_branch_uses_squared_lengths() -> None:
+    assert (
+        certification.biarc_branch_at_parameter(
+            Fraction(1, 4),
+            Fraction(4),
+            Fraction(1),
+            Fraction(1),
+            Fraction(2, 3),
+        )
+        == 2
+    )
+
+
+def test_biarc_certificate_refuses_limit_one_ulp_below_node_bound() -> None:
+    source = _monstera_source_125()
+    transform = _monstera_transform()
+    controls = tuple(geometry._point_xy(transform.point(point)) for point in (source.start, source.control1, source.control2, source.end))
+    biarc = geometry._equal_distance_biarc(controls)
+    assert biarc is not None
+    proof_biarc = tuple(
+        (
+            geometry._point_xy(arc.start),
+            geometry._point_xy(arc.end),
+            geometry._point_xy(arc.centre),
+            float(arc.sweep),
+        )
+        for arc in biarc
+    )
+    bound = certification.biarc_correspondence_node_bound(
+        controls,
+        (proof_biarc[0], proof_biarc[1]),
+        Fraction(0),
+        Fraction(1),
+    )
+
+    assert bound is not None
+    assert (
+        geometry._cubic_within_biarc(
+            controls,
+            biarc,
+            math.nextafter(bound, -math.inf),
+            start_parameter=Fraction(0),
+            end_parameter=Fraction(1),
+            depth=geometry.MAX_RECONSTRUCTION_SUBDIVISIONS,
+        )
+        is None
+    )
+
+
+def test_finite_biased_trig_enlarges_audited_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    angle = Fraction(1, 3)
+    baseline = certification.audited_sin_cos(angle)
+    original_sin = math.sin
+    original_cos = math.cos
+    monkeypatch.setattr(certification.math, "sin", lambda value: original_sin(value) + 0.000001)
+    monkeypatch.setattr(certification.math, "cos", lambda value: original_cos(value) - 0.000001)
+
+    biased = certification.audited_sin_cos(angle)
+
+    assert biased[1] > baseline[1]
+
+
+def test_auxiliary_arc_paths_share_stored_join_exactly() -> None:
+    join = (1.0, 1.0)
+    first = ((0.0, 0.0), join, (0.0, 1.0), math.pi / 2.0)
+    second = (join, (2.0, 2.0), (2.0, 1.0), -math.pi / 2.0)
+
+    assert certification.closed_arc_point_box(first, Fraction(1)) == (
+        (Fraction(1), Fraction(1)),
+        (Fraction(1), Fraction(1)),
+    )
+    assert certification.closed_arc_point_box(second, Fraction(0)) == (
+        (Fraction(1), Fraction(1)),
+        (Fraction(1), Fraction(1)),
+    )
+
+
+def test_exact_polar_coefficients_detect_negative_cancellation_turn() -> None:
+    magnitude = 2.0**52
+    controls = (
+        (magnitude, magnitude),
+        (2.0 * magnitude, 2.0 * magnitude - 1.0),
+        (2.0 * magnitude + 2.0, 2.0 * magnitude),
+        (2.0 * magnitude + 4.0, 2.0 * magnitude + 1.0),
+    )
+
+    coefficients = certification.exact_polar_bernstein_coefficients(controls, (0.0, 0.0))
+
+    assert coefficients[1] < 0
 
 
 def test_certified_reconstruction_carries_proved_upper_bound() -> None:

@@ -61,8 +61,8 @@ def test_live_publisher_cycles_close_the_reconstruction_contract(
         )
 
     assert tuple(census) == (
-        ("figure-5", 5, 26, 31),
-        ("figure-8-upper", 4, 66, 70),
-        ("figure-8-skis", 2, 56, 58),
-        ("figure-8-monstera", 103, 214, 317),
+        ("figure-5", 5, 44, 49),
+        ("figure-8-upper", 4, 76, 80),
+        ("figure-8-skis", 2, 58, 60),
+        ("figure-8-monstera", 103, 216, 319),
     )
