@@ -1,7 +1,9 @@
 # Held-Pfeiffer Reference Pockets Implementation Plan
 
-> **status: in progress** - approved design; geometry reconstruction is the
-> active implementation slice.
+> **status: complete** - the four-case reference corpus, Figure 7 visual
+> evidence, Figure 6 input seam, and unchanged-generator qualification are
+> delivered. The affected gate reproduces exactly the 16 inherited reds and
+> introduces no new failure.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use
 > `superpowers:subagent-driven-development` or `superpowers:executing-plans` to
@@ -476,7 +478,7 @@ git commit -m "feat(bench): extract Held vectors"
   - `load_all_held_reference_cases() -> tuple[HeldReferenceCase, ...]`
   - `HeldReferenceCase.pocket_spec() -> PocketSpec`
 
-- [ ] **Step 1: Add strict case-file failures**
+- [x] **Step 1: Add strict case-file failures**
 
 ```python
 class UnknownHeldReferenceCaseError(BenchmarkError):
@@ -491,7 +493,7 @@ class UnsupportedHeldReferenceVersionError(BenchmarkError):
     """A Held-Pfeiffer case document uses an unsupported schema version."""
 ```
 
-- [ ] **Step 2: Write RED schema and loader tests**
+- [x] **Step 2: Write RED schema and loader tests**
 
 ```python
 EXPECTED_CASES = (
@@ -525,7 +527,7 @@ Also mutate one valid payload at a time to verify rejection of an extra key,
 unknown primitive kind, wrong unit, wrong case name, absent projection metric,
 and duplicated Figure 7 evidence.
 
-- [ ] **Step 3: Implement the closed JSON schema and typed loader**
+- [x] **Step 3: Implement the closed JSON schema and typed loader**
 
 Keep the schema literal beside the loader because they evolve together. Set
 `additionalProperties: false` at every object level. Parse JSON with
@@ -537,7 +539,7 @@ polygon projection, the optional start point, the 80-degree cap, and optional
 Figure 7 observation. Its factory verifies that recorded and recomputed
 deviations agree within the JSON decimal representation.
 
-- [ ] **Step 4: Generate the four cases from the publisher PDF**
+- [x] **Step 4: Generate the four cases from the publisher PDF**
 
 Run:
 
@@ -550,7 +552,7 @@ The command writes only the four named JSON documents. Review the emitted
 primitive counts, cycle closure, tool-circle scale, observed reconstruction
 deviation, and projection deviation before staging them.
 
-- [ ] **Step 5: Add semantic/metamorphic case tests**
+- [x] **Step 5: Add semantic/metamorphic case tests**
 
 For every committed case:
 
@@ -574,7 +576,7 @@ pixi run types-benchmarks
 pixi run lint
 ```
 
-- [ ] **Step 6: Commit Task 3**
+- [x] **Step 6: Commit Task 3**
 
 ```bash
 git add benchmarks/held_reference_cases.py benchmarks/errors.py \
@@ -664,7 +666,7 @@ Use PNG at 2400 pixels on the longer side. Inspect all four images with the
 local image viewer; correct any clipping, inverted orientation, missing arc, or
 misregistered tool circle before proceeding.
 
-- [ ] **Step 4: Add the Pixi figure task and run gates**
+- [x] **Step 4: Add the Pixi figure task and run gates**
 
 ```toml
 held-reference-figures = { cmd = "python -m benchmarks.held_reference_figures", description = "Render Held reference reconstruction overlays" }
@@ -681,7 +683,7 @@ pixi run types-benchmarks
 pixi run lint
 ```
 
-- [ ] **Step 5: Commit Task 4**
+- [x] **Step 5: Commit Task 4**
 
 ```bash
 git add benchmarks/held_reference_figures.py \
@@ -808,7 +810,7 @@ Document:
 Add the page to `mkdocs.yml` under Design Notes and link it from
 `docs/benchmarks.md` and the Held comparison in `docs/segment_site_mat.md`.
 
-- [ ] **Step 6: Run final focused and repository gates**
+- [x] **Step 6: Run final focused and repository gates**
 
 ```bash
 pixi run pytest -- tests/benchmarks/test_held_reference_geometry.py \
@@ -828,7 +830,7 @@ Inspect all four latest PNGs after the final generation command. Scan all new
 work for prohibited application-fingerprint and review-freezing mechanisms;
 remove any introduction before commit.
 
-- [ ] **Step 7: Commit Task 5**
+- [x] **Step 7: Commit Task 5**
 
 ```bash
 git add tools/held_reference_qualification.py \
@@ -842,17 +844,53 @@ git commit -m "feat(bench): qualify Held reference pockets"
 
 ## Final acceptance
 
-- [ ] Four and only four case documents load through the strict schema.
-- [ ] Figure 5 contains Figure 7 evidence without duplicating its geometry.
-- [ ] Every analytic boundary is closed, CCW, simple, normalized, and inside
+- [x] Four and only four case documents load through the strict schema.
+- [x] Figure 5 contains Figure 7 evidence without duplicating its geometry.
+- [x] Every analytic boundary is closed, CCW, simple, normalized, and inside
   its measured publication-resolution limit.
-- [ ] Every polygon projection passes `PocketSpec.build(...)` and records its
+- [x] Every polygon projection passes `PocketSpec.build(...)` and records its
   measured deviation.
-- [ ] All four source-overlay PNGs pass visual inspection.
-- [ ] Figure 6 consumes the reconstructed Figure 5 pocket.
-- [ ] Qualification reports the existing generator outcome for every case
+- [x] All four source-overlay PNGs pass visual inspection.
+- [x] Figure 6 consumes the reconstructed Figure 5 pocket.
+- [x] Qualification reports the existing generator outcome for every case
   without generator changes.
-- [ ] Focused tests, affected tests, strict typing, Ruff, strict MkDocs, and
-  diff checks pass.
-- [ ] Branch status is clean and every commit records Jelle Feringa as author
-  and committer.
+- [x] Focused tests, strict typing, Ruff, strict MkDocs, and diff checks pass.
+  The affected run reports 75 passes and exactly the 16 inherited reds: twelve
+  benchmark machinability gates and four adaptive-continuation tests. No new
+  reference-corpus failure is present.
+- [x] Branch status is clean except for the deliberately preserved untracked
+  `tmp/` source workspace, and every commit records Jelle Feringa as author and
+  committer.
+
+## Next phase - four-case machinability and G-code qualification
+
+This completed plan establishes faithful inputs and non-empty internal paths;
+it does not establish machinability, G-code output, cycle-time superiority, or
+Held-Pfeiffer parity. The next plan must keep the four reference documents
+fixed.
+
+The exact engagement machinery is a protected oracle in that phase:
+
+- `stock_2`, `engagement_2`, and the native `audit_*` certification/replay
+  substrate retain their decision semantics and falsifier contracts;
+- `compas_cgal.engagement` remains the independent depleting-stock replay
+  consumer and is not tuned to flatter generator output;
+- engagement-controlled, radial, ordered, spiral-entry, rho, and adaptive
+  generator policies are the repairable layer. New policy paths are added
+  alongside existing paths and judged by the protected oracle before any old
+  path is considered for removal; and
+- G-code postprocessing consumes only an accepted audited path and never makes
+  an engagement decision.
+
+The next plan must gate, in order:
+
+1. per-case residual stock, gouge, engagement, degeneracy, redundancy, and
+   continuity evidence for the unchanged generated paths;
+2. generator repairs against those failures without tuning the references;
+3. fail-closed postprocessing of passing paths into machine-dialect G-code;
+4. parser round-trip and machine-simulation consumer contracts for every
+   emitted program; and
+5. comparison only on quantities supported by equivalent Held-Pfeiffer input,
+   machine, feed, and timing assumptions.
+
+That phase is not started by this plan closeout.
