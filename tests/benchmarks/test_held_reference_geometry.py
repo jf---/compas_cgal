@@ -381,9 +381,16 @@ def test_figure5_biarc_children_do_not_invent_rational_breakpoint_witnesses(
     transform = _figure5_transform()
     limit = Millimetre(0.07386234629061081)
     witnessed_intervals: list[tuple[Fraction, Fraction]] = []
+    merge_witnesses: list[tuple[object | None, object | None]] = []
     original = geometry._merge_arc_entries
 
     def capture(first: object, second: object, deviation_limit: float) -> object:
+        merge_witnesses.append(
+            (
+                first.source_witnesses,  # type: ignore[attr-defined]
+                second.source_witnesses,  # type: ignore[attr-defined]
+            )
+        )
         for entry in (first, second):
             witnesses = entry.source_witnesses  # type: ignore[attr-defined]
             if witnesses is not None:
@@ -394,6 +401,7 @@ def test_figure5_biarc_children_do_not_invent_rational_breakpoint_witnesses(
 
     merged = reconstruct_source_path((source,), transform, limit)
 
+    assert (None, None) in merge_witnesses
     assert all(start == 0 and end == 1 for start, end in witnessed_intervals)
     assert float(merged.deviation_upper_bound) <= float(limit)
 
