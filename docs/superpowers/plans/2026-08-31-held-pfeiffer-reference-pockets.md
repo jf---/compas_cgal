@@ -609,7 +609,7 @@ git commit -m "feat(bench): add Held reference cases"
   - `measure_figure7_observation(...) -> Figure7Observation`
   - Pixi task `held-reference-figures -- <publisher-pdf>`
 
-- [ ] **Step 1: Write RED overlay-content tests**
+- [x] **Step 1: Write RED overlay-content tests**
 
 Avoid screenshot-only tests. Expose the overlay marks before rendering:
 
@@ -628,16 +628,19 @@ def test_overlay_contains_every_evidence_layer() -> None:
 
 Test PNG dimensions and mode after rendering; do not compare encoded bytes.
 
-- [ ] **Step 2: Implement Figure 7 registration measurement**
+- [x] **Step 2: Implement Figure 7 registration measurement**
 
 Render PDF page 14 through Poppler at a named 600-DPI resolution. Use the plot
 axes and the Figure 5 boundary bounds to solve one typed axis-aligned display
 affine for each Figure 7 panel, with independently derived X/Y scales and Y
 reflection. The measured publisher plots are not similarity-scaled: their
 sample-envelope aspect is `1.43624`, versus `1.47931` for the analytic
-one-radius inward support. A forced similarity leaves tens-of-pixels residual
-in every panel and must fail. Register the coloured tool-centre samples against
-the inward offset and render the three panels as shape-only falsification
+one-radius inward support bounds. A forced similarity leaves tens-of-pixels
+residual in every panel and must fail. Use those analytic extrema as
+registration support. Render the CGAL one-radius inward offset of the certified
+polygon projection as a separately typed and labelled comparator; direct
+parallel offsets of the stored line/arcs leave noncoincident joins and have no
+Task 4 trim/join policy. Render the three panels as shape-only falsification
 evidence.
 
 Figure 7 has no independent boundary stroke, so it supplies no numeric
@@ -645,7 +648,7 @@ boundary-fidelity acceptance value. Missing axes, an empty colour mask, or an
 invalid inward offset raises a named error; no manual numeric value enters the
 case file.
 
-- [ ] **Step 3: Render the four overlays**
+- [x] **Step 3: Render the four overlays**
 
 Each PNG contains:
 

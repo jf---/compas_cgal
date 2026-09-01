@@ -207,3 +207,23 @@ class AmbiguousPublishedBoundaryError(BenchmarkError):
 
 class MissingPublishedBoundaryMarkerError(BenchmarkError):
     """A selected boundary endpoint has no unique published marker."""
+
+
+class InvalidReferenceOverlayError(BenchmarkError):
+    """A Held reference overlay lacks valid, case-matched semantic geometry."""
+
+
+class MissingFigureAxesError(BenchmarkError):
+    """A publisher plot lacks the axes required for geometric registration."""
+
+
+class EmptyFigureColourSamplesError(BenchmarkError):
+    """A publisher panel contains no coloured tool-centre samples."""
+
+
+class InvalidFigureInwardOffsetError(BenchmarkError):
+    """A certified projection has no valid one-radius comparator component."""
+
+
+class AmbiguousFigurePanelRegistrationError(BenchmarkError):
+    """Publisher axes admit no unique panel-to-world registration."""

@@ -1309,10 +1309,10 @@ normalized printed boundary stroke:
 
 | Publisher pocket | Lines | Arcs | Total | Certified deviation upper bound |
 | --- | ---: | ---: | ---: | ---: |
-| Figure 5 | 5 | 44 | 49 | 0.07380041260306111 |
-| Figure 8 upper | 4 | 76 | 80 | 0.08300467787418957 |
-| Figure 8 crossed skis | 2 | 58 | 60 | 0.09647539567877145 |
-| Figure 8 Monstera | 103 | 216 | 319 | 0.10228407943079104 |
+| Figure 5 | 5 | 26 | 31 | 0.07380041260305974 |
+| Figure 8 upper | 4 | 66 | 70 | 0.08131110669521248 |
+| Figure 8 crossed skis | 2 | 56 | 58 | 0.09647539567868524 |
+| Figure 8 Monstera | 103 | 214 | 317 | 0.10228407943078435 |
 
 The certificate treats every stored binary64 coordinate exactly, proves
 circle and biarc fidelity with outward enclosures, and admits a reconstructed
@@ -1325,6 +1325,29 @@ ratio cannot authorize a partial-source witness.
 Corpus loading, Figure 6 integration, and generator qualification remain the
 separate Tasks 3–5; these reconstruction results are not a complete toolpath
 or a Held runtime comparison.
+
+The committed reference-corpus overlays make that reconstruction inspectable.
+Each PNG layers the publisher centreline, recovered analytic primitives,
+primitive junctions, polygonal projection, and the published tool and start
+markers in normalized millimetres. The Figure 5 image additionally embeds all
+three Figure 7 tool-centre panels rendered from the publisher PDF at 600 DPI.
+Their coloured supports are registered to the analytic one-radius inward
+support bounds with a typed axis-aligned display affine: X and Y scales are
+derived independently and raster Y is necessarily reflected. The green
+one-radius comparator is separately derived by applying CGAL's inward offset
+to the certified polygon projection. Direct line/arc offset is not claimed:
+its noncoincident parallel joins require a trim/join policy outside this visual
+stage. Figure 7 is shape-only falsification evidence; it supplies no
+boundary-fidelity scalar or acceptance gate. Missing axes, colour samples, a
+unique projection-derived comparator component, or unambiguous panel
+registration fails with a named error.
+
+Regenerate the four 2400-pixel-long-side PNGs from the local publisher PDF
+with:
+
+```bash
+pixi run held-reference-figures -- path/to/held-pfeiffer-2025.pdf
+```
 
 Measured on axis-parallel pockets only; `center_domain()` is ~3,500× slower
 on oblique geometry with the mechanism not yet established — see
