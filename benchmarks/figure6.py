@@ -10,8 +10,8 @@ unreproducible timing figure into a like-for-like curve a reader can regenerate.
 WHAT IS AND IS NOT REPRODUCED. The paper's three curves are its own standard,
 contour-aware, and MATHSM generators on its own pocket; none of those are
 available here, and no curve below is claimed to be one of them. What is
-reproduced is the PROTOCOL and the axes, on a pocket of ours, with two generators
-of ours:
+reproduced is the PROTOCOL and the axes on the reconstructed Figure 5 polygon
+projection, with two generators of ours:
 
 * **engagement-controlled** -- `engagement_controlled_toolpath`, whose advance is
   regulated by the exact engagement predicate against the depleting stock. Its cap
@@ -48,7 +48,7 @@ from typing import Optional
 from typing import Sequence
 from typing import Tuple
 
-from benchmarks.families.analytic import rectangle
+from benchmarks.held_reference_cases import load_held_reference_case
 from benchmarks.mathsm import SPACING_SWEEP_TOOL_DIAMETERS
 from benchmarks.mathsm import MathsmPoint
 from benchmarks.mathsm import shortest_within_cap
@@ -70,16 +70,6 @@ JSON_NAME = "figure6.json"
 # precisely so the report can say that; the upper end stays inside the exact
 # kernel's contract of a half turn (`benchmarks.spec.MAX_CAP_DEG`).
 FIGURE6_CAPS: Tuple[float, ...] = (20.0, 40.0, 60.0, 80.0, 100.0, 120.0, 140.0, 160.0)
-
-# The pocket the figure is reported on. It is OURS, not the paper's, whose pocket
-# is not published in a reconstructible form. Ten tool diameters by six: wide
-# enough that the skeleton carries several chains and therefore bridge cuts
-# between them -- which is where the controlled generator's worst engagement
-# actually lives, so a narrower pocket would flatter it -- and small enough that a
-# full run is minutes.
-FIGURE6_WIDTH = 20.0
-FIGURE6_HEIGHT = 12.0
-FIGURE6_TOOL_DIAMETER = 2.0
 
 # Emitted verbatim under the conclusion. A reader meeting these two curves cold
 # must not be able to mistake either for one of the paper's own.
@@ -161,7 +151,16 @@ def reference_pocket(tea_cap_deg: float = REFERENCE_CAP_DEG) -> PocketSpec:
     Returns:
         The spec.
     """
-    return rectangle(width=FIGURE6_WIDTH, height=FIGURE6_HEIGHT, tool_diameter=FIGURE6_TOOL_DIAMETER, tea_cap_deg=tea_cap_deg)
+    reconstructed = load_held_reference_case("figure5").pocket_spec()
+    return PocketSpec.build(
+        name=reconstructed.name,
+        family=reconstructed.family,
+        polygon=reconstructed.polygon,
+        tool_diameter=reconstructed.tool_diameter,
+        tea_cap_deg=tea_cap_deg,
+        holes=reconstructed.holes,
+        params=reconstructed.params,
+    )
 
 
 def controlled_path(spec: PocketSpec, cap_deg: float) -> ToolpathResult:

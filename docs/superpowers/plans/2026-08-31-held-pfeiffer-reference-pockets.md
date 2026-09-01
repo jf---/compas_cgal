@@ -719,7 +719,7 @@ git commit -m "docs(bench): render Held reconstructions"
   - one concise qualification report naming success or the existing named
     product failure for each case.
 
-- [ ] **Step 1: Write RED Figure 6 consumer tests**
+- [x] **Step 1: Write RED Figure 6 consumer tests**
 
 Replace rectangle assertions with the reconstructed case contract:
 
@@ -735,7 +735,7 @@ def test_figure6_uses_the_reconstructed_figure5_pocket() -> None:
 
 Observe RED while `reference_pocket()` still returns `rect_20x12`.
 
-- [ ] **Step 2: Replace only the Figure 6 input seam**
+- [x] **Step 2: Replace only the Figure 6 input seam**
 
 Change `benchmarks.figure6.reference_pocket` to load Figure 5 and rebuild its
 `PocketSpec` with the requested cap. Do not change generator parameters,
@@ -747,7 +747,7 @@ Run:
 pixi run pytest -- tests/benchmarks/test_figure6.py -n auto -q
 ```
 
-- [ ] **Step 3: Write RED qualification-report tests**
+- [x] **Step 3: Write RED qualification-report tests**
 
 Use injected generator callables so the renderer is tested without expensive
 native runs:
@@ -768,7 +768,7 @@ def test_qualification_preserves_named_product_failure() -> None:
 Ordinary unexpected exceptions propagate; the qualification command may record
 only the explicit existing product failures approved in its closed tuple.
 
-- [ ] **Step 4: Implement and run real qualification**
+- [x] **Step 4: Implement and run real qualification**
 
 Add:
 
@@ -791,7 +791,7 @@ pixi run held-reference-qualify
 Retain failures as truthful product evidence. Do not edit case geometry or
 generator code in response during this plan.
 
-- [ ] **Step 5: Write the MkDocs reference page**
+- [x] **Step 5: Write the MkDocs reference page**
 
 Document:
 
