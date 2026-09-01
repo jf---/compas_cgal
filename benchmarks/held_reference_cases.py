@@ -58,10 +58,46 @@ _CITATION_AUTHORS = ("Martin Held", "Josef Pfeiffer")
 _CITATION_TITLE = "Trochoidal Tool Paths for Pocket Machining with Full Control of the Tool Engagement Angle"
 _CITATION_DOI = "10.14733/cadaps.2025.731-747"
 _CASE_METADATA = {
-    "figure5": (742, 12, "5", None, (40.0, 70.0, 265.0, 223.0), (5, 10)),
-    "figure8_upper": (746, 16, "8", "upper", (132.0, 70.0, 410.0, 259.0), (4, 22)),
-    "figure8_crossed_skis": (746, 16, "8", "crossed_skis", (132.0, 253.0, 407.0, 322.0), (2, 28)),
-    "figure8_monstera": (746, 16, "8", "monstera_deliciosa", (133.0, 329.0, 407.0, 617.0), (103, 107)),
+    "figure5": (
+        742,
+        12,
+        "5",
+        None,
+        (40.0, 70.0, 265.0, 223.0),
+        (5, 10),
+        (59.29687891678625, 81.00485482270125, 3.226562815407),
+        (52.803612197583874, 1.8728815725116186, 1.0012107515803956),
+    ),
+    "figure8_upper": (
+        746,
+        16,
+        "8",
+        "upper",
+        (132.0, 70.0, 410.0, 259.0),
+        (4, 22),
+        (262.4952035855125, 85.6434587942795, 3.6163379554499997),
+        (22.161370967229104, 40.964982888284666, 1.0005074333661435),
+    ),
+    "figure8_crossed_skis": (
+        746,
+        16,
+        "8",
+        "crossed_skis",
+        (132.0, 253.0, 407.0, 322.0),
+        (2, 28),
+        (265.691407871021, 265.847654672511, 2.486314919634),
+        (104.63938829531304, 21.892848182586153, 0.9491582873851768),
+    ),
+    "figure8_monstera": (
+        746,
+        16,
+        "8",
+        "monstera_deliciosa",
+        (133.0, 329.0, 407.0, 617.0),
+        (103, 107),
+        (164.1435861699925, 350.7527353143587, 2.826174326591),
+        (9.73462194184941, 81.52684806321106, 0.9996543556200589),
+    ),
 }
 
 _POINT = {
@@ -284,12 +320,15 @@ class HeldReferenceCase:
     figure: str
     subfigure: str | None
     source_crop: tuple[PdfPoint2, PdfPoint2]
+    source_tool_centre: PdfPoint2
+    source_tool_radius: PdfPointUnit
     boundary: ReferenceBoundary
     reconstruction: ReferenceReconstruction
     projection: PolygonProjection
     tool_radius: ToolRadius
     tea_cap: Degree
     start_marker: Point2[WorldXY] | None
+    start_marker_radius: Millimetre | None
     figure7_observation: Figure7Observation | None
 
     @classmethod
@@ -305,18 +344,75 @@ class HeldReferenceCase:
         figure: str,
         subfigure: str | None,
         source_crop: tuple[PdfPoint2, PdfPoint2],
+        source_tool_centre: PdfPoint2,
+        source_tool_radius: PdfPointUnit,
         boundary: ReferenceBoundary,
         reconstruction: ReferenceReconstruction,
         projection: PolygonProjection,
         tool_radius: ToolRadius,
         tea_cap: Degree,
         start_marker: Point2[WorldXY] | None,
+        start_marker_radius: Millimetre | None,
         figure7_observation: Figure7Observation | None,
     ) -> Self:
         if name not in CANONICAL_CASE_NAMES or not authors or not title or not doi:
             raise MalformedHeldReferenceCaseError("Reference case publication identity is incomplete.")
-        if publication_page < 1 or pdf_page < 1 or not figure:
-            raise MalformedHeldReferenceCaseError("Reference case publication location is invalid.")
+        source_tool_radius = _positive_pdf_length(source_tool_radius, "source tool radius")
+        if start_marker_radius is not None:
+            start_marker_radius = _positive_millimetre(start_marker_radius, "start marker radius")
+        (
+            canonical_page,
+            canonical_pdf_page,
+            canonical_figure,
+            canonical_subfigure,
+            crop_coordinates,
+            _,
+            source_tool_observation,
+            start_marker_observation,
+        ) = _CASE_METADATA[name]
+        if (authors, title, doi) != (_CITATION_AUTHORS, _CITATION_TITLE, _CITATION_DOI):
+            raise MalformedHeldReferenceCaseError("Reference case citation differs from the canonical publication.")
+        if (publication_page, pdf_page, figure, subfigure) != (
+            canonical_page,
+            canonical_pdf_page,
+            canonical_figure,
+            canonical_subfigure,
+        ):
+            raise MalformedHeldReferenceCaseError("Reference case publication location differs from the canonical figure.")
+        if (
+            float(source_crop[0].x),
+            float(source_crop[0].y),
+            float(source_crop[1].x),
+            float(source_crop[1].y),
+        ) != crop_coordinates:
+            raise MalformedHeldReferenceCaseError("Reference case crop differs from the canonical publisher crop.")
+        if boundary.primitives != reconstruction.primitives:
+            raise MalformedHeldReferenceCaseError("Boundary and reconstruction primitives differ.")
+        if boundary.tool_radius != tool_radius or float(tool_radius.value) != 1.0:
+            raise MalformedHeldReferenceCaseError("Reference case requires the canonical one-millimetre tool radius.")
+        if float(tea_cap) != 80.0:
+            raise MalformedHeldReferenceCaseError("Reference case requires the canonical 80-degree engagement cap.")
+        canonical_source_tool = PdfPoint2.build(source_tool_observation[:2])
+        if source_tool_centre != canonical_source_tool or float(source_tool_radius) != source_tool_observation[2]:
+            raise MalformedHeldReferenceCaseError("Source-tool observation differs from the canonical publisher observation.")
+        canonical_start = Point2[WorldXY].build(start_marker_observation[:2])
+        if start_marker != canonical_start or start_marker_radius is None or float(start_marker_radius) != start_marker_observation[2]:
+            raise MalformedHeldReferenceCaseError("Start-marker observation differs from the canonical publisher observation.")
+        computed_projection = project_boundary(boundary, projection.deviation_limit)
+        if not _projection_matches_within_one_binary64_step(projection, computed_projection):
+            raise MalformedHeldReferenceCaseError("Polygon projection differs from deterministic boundary evidence.")
+        expected_figure7 = None
+        if name == "figure5":
+            expected_figure7 = Figure7Observation.build(
+                publication_page=744,
+                pdf_page=14,
+                panels=("a", "b", "c"),
+                role="shape_only_tool_centre_observation",
+                boundary_authority=False,
+                numeric_fidelity_gate=False,
+            )
+        if figure7_observation != expected_figure7:
+            raise MalformedHeldReferenceCaseError("Figure 7 observation differs from the canonical shape-only evidence.")
         case = cls(
             name,
             authors,
@@ -327,18 +423,19 @@ class HeldReferenceCase:
             figure,
             subfigure,
             source_crop,
+            source_tool_centre,
+            source_tool_radius,
             boundary,
             reconstruction,
             projection,
             tool_radius,
             tea_cap,
             start_marker,
+            start_marker_radius,
             figure7_observation,
         )
         if case.analytic_signed_area <= 0.0 or case.polygon_signed_area <= 0.0:
             raise MalformedHeldReferenceCaseError(f"{name}: analytic and polygon boundaries must both be CCW.")
-        if (figure7_observation is not None) != (name == "figure5"):
-            raise MalformedHeldReferenceCaseError("Figure 7 metadata belongs only to Figure 5.")
         return case
 
     @property
@@ -382,6 +479,64 @@ def _arc_radius_squared(arc: ReferenceArc) -> float:
     return (float(arc.start.x) - float(arc.centre.x)) ** 2 + (float(arc.start.y) - float(arc.centre.y)) ** 2
 
 
+def _matches_within_one_binary64_representation_step(recorded: float, computed: float) -> bool:
+    """Accept only the computed binary64 value or one adjacent representation."""
+    return math.nextafter(computed, -math.inf) <= recorded <= math.nextafter(computed, math.inf)
+
+
+def _directional_upper_bound_matches_one_binary64_step(recorded: float, computed: float) -> bool:
+    """Require an upper-bound record no lower than proof and at most one representation above."""
+    return computed <= recorded <= math.nextafter(computed, math.inf)
+
+
+def _points_match_within_one_binary64_step(recorded: Point2[WorldXY], computed: Point2[WorldXY]) -> bool:
+    return _matches_within_one_binary64_representation_step(float(recorded.x), float(computed.x)) and _matches_within_one_binary64_representation_step(
+        float(recorded.y), float(computed.y)
+    )
+
+
+def _primitive_matches_within_one_binary64_step(recorded: ReferencePrimitive, computed: ReferencePrimitive) -> bool:
+    if isinstance(recorded, ReferenceLine) and isinstance(computed, ReferenceLine):
+        return _points_match_within_one_binary64_step(recorded.start, computed.start) and _points_match_within_one_binary64_step(recorded.end, computed.end)
+    if isinstance(recorded, ReferenceArc) and isinstance(computed, ReferenceArc):
+        return (
+            _points_match_within_one_binary64_step(recorded.start, computed.start)
+            and _points_match_within_one_binary64_step(recorded.end, computed.end)
+            and _points_match_within_one_binary64_step(recorded.centre, computed.centre)
+            and _matches_within_one_binary64_representation_step(float(recorded.sweep), float(computed.sweep))
+        )
+    return False
+
+
+def _reconstruction_matches_within_one_binary64_step(
+    recorded: ReferenceReconstruction,
+    computed: ReferenceReconstruction,
+) -> bool:
+    return (
+        len(recorded.primitives) == len(computed.primitives)
+        and all(
+            _primitive_matches_within_one_binary64_step(recorded_primitive, computed_primitive)
+            for recorded_primitive, computed_primitive in zip(recorded.primitives, computed.primitives)
+        )
+        and _directional_upper_bound_matches_one_binary64_step(
+            float(recorded.deviation_upper_bound),
+            float(computed.deviation_upper_bound),
+        )
+    )
+
+
+def _projection_matches_within_one_binary64_step(recorded: PolygonProjection, computed: PolygonProjection) -> bool:
+    return (
+        recorded.deviation_limit == computed.deviation_limit
+        and len(recorded.points) == len(computed.points)
+        and all(_points_match_within_one_binary64_step(recorded_point, computed_point) for recorded_point, computed_point in zip(recorded.points, computed.points))
+        and _directional_upper_bound_matches_one_binary64_step(
+            float(recorded.observed_deviation),
+            float(computed.observed_deviation),
+        )
+    )
+
+
 def _reject_duplicate_pairs(pairs: list[tuple[str, JsonValue]]) -> dict[str, JsonValue]:
     result: dict[str, JsonValue] = {}
     for key, value in pairs:
@@ -410,13 +565,30 @@ def _sequence(value: object) -> list[JsonValue]:
 def _number(value: object) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise MalformedHeldReferenceCaseError("Expected a JSON number.")
-    return float(value)
+    numeric = float(value)
+    if not math.isfinite(numeric):
+        raise MalformedHeldReferenceCaseError("Expected a finite JSON number.")
+    return numeric
 
 
 def _integer(value: object) -> int:
     if isinstance(value, bool) or not isinstance(value, int):
         raise MalformedHeldReferenceCaseError("Expected a JSON integer.")
     return value
+
+
+def _positive_pdf_length(value: object, name: str) -> PdfPointUnit:
+    numeric = _number(value)
+    if numeric <= 0.0:
+        raise MalformedHeldReferenceCaseError(f"{name} must be positive.")
+    return PdfPointUnit(numeric)
+
+
+def _positive_millimetre(value: object, name: str) -> Millimetre:
+    numeric = _number(value)
+    if numeric <= 0.0:
+        raise MalformedHeldReferenceCaseError(f"{name} must be positive.")
+    return Millimetre(numeric)
 
 
 def _require_finite_json(value: JsonValue) -> None:
@@ -571,16 +743,7 @@ def validate_case_payload(payload: object, *, expected_name: str) -> HeldReferen
         publication = _mapping(document["publication"])
         sources = _parse_sources(source["primitives"])
         name = str(document["name"])
-        publication_page, pdf_page, figure, subfigure, crop_coordinates, source_census = _CASE_METADATA[name]
-        if tuple(str(author) for author in _sequence(citation["authors"])) != _CITATION_AUTHORS or citation["title"] != _CITATION_TITLE or citation["doi"] != _CITATION_DOI:
-            raise MalformedHeldReferenceCaseError("Citation differs from the approved publication.")
-        if (
-            publication["publication_page"],
-            publication["pdf_page"],
-            publication["figure"],
-            publication["subfigure"],
-        ) != (publication_page, pdf_page, figure, subfigure):
-            raise MalformedHeldReferenceCaseError("Publication location differs from the approved figure.")
+        source_census = _CASE_METADATA[name][5]
         if (
             sum(isinstance(source_primitive, SourceLine) for source_primitive in sources),
             sum(isinstance(source_primitive, SourceCubic) for source_primitive in sources),
@@ -602,7 +765,9 @@ def validate_case_payload(payload: object, *, expected_name: str) -> HeldReferen
             reflect_source_y=bool(normalization["reflect_source_y"]),
         )
         source_tool = _mapping(normalization["source_tool"])
-        if not _same_float(normalization["millimetres_per_pdf_point"], 1.0 / _number(source_tool["radius_pdf_point"])):
+        source_tool_centre = _point_pdf(source_tool["centre"])
+        source_tool_radius = _positive_pdf_length(source_tool["radius_pdf_point"], "source tool radius")
+        if not _same_float(normalization["millimetres_per_pdf_point"], 1.0 / float(source_tool_radius)):
             raise MalformedHeldReferenceCaseError("Normalization scale does not make the depicted radius one millimetre.")
         if not _same_float(analytic["normalized_stroke_width_mm"], 4.0 * _number(analytic["reconstruction_limit_mm"])):
             raise MalformedHeldReferenceCaseError("Reconstruction limit must equal one quarter of the normalized stroke width.")
@@ -614,7 +779,7 @@ def validate_case_payload(payload: object, *, expected_name: str) -> HeldReferen
             recorded_primitives,
             Millimetre(_number(analytic["certified_deviation_upper_bound_mm"])),
         )
-        if reconstruction != recorded_reconstruction:
+        if not _reconstruction_matches_within_one_binary64_step(recorded_reconstruction, reconstruction):
             raise MalformedHeldReferenceCaseError("Recorded analytic reconstruction differs from deterministic source evidence.")
         line_count = sum(isinstance(primitive, ReferenceLine) for primitive in recorded_primitives)
         arc_count = sum(isinstance(primitive, ReferenceArc) for primitive in recorded_primitives)
@@ -630,15 +795,14 @@ def validate_case_payload(payload: object, *, expected_name: str) -> HeldReferen
             tool_radius,
             Millimetre(_number(analytic["normalized_stroke_width_mm"])),
         )
-        computed_projection = project_boundary(boundary, Millimetre(_number(projection_record["deviation_limit_mm"])))
         recorded_points = tuple(_point_world(point) for point in _sequence(projection_record["points"]))
         recorded_projection = PolygonProjection.build(
             recorded_points,
             Millimetre(_number(projection_record["deviation_limit_mm"])),
             Millimetre(_number(projection_record["observed_deviation_mm"])),
         )
-        if computed_projection != recorded_projection or len(recorded_points) != projection_record["vertex_count"]:
-            raise MalformedHeldReferenceCaseError("Recorded polygon differs from deterministic projection evidence.")
+        if len(recorded_points) != projection_record["vertex_count"]:
+            raise MalformedHeldReferenceCaseError("Recorded polygon vertex count is inconsistent.")
         figure7_record = document["figure7_observation"]
         figure7 = None
         if figure7_record is not None:
@@ -651,15 +815,16 @@ def validate_case_payload(payload: object, *, expected_name: str) -> HeldReferen
                 boundary_authority=bool(observed["boundary_authority"]),
                 numeric_fidelity_gate=bool(observed["numeric_fidelity_gate"]),
             )
-            if (figure7.publication_page, figure7.pdf_page, figure7.panels) != (744, 14, ("a", "b", "c")):
-                raise MalformedHeldReferenceCaseError("Figure 7 location or panels differ from the approved observation.")
         marker_record = machining["start_marker"]
-        start_marker = None if marker_record is None else _point_world(_mapping(marker_record)["centre"])
+        start_marker = None
+        start_marker_radius = None
+        if marker_record is not None:
+            marker = _mapping(marker_record)
+            start_marker = _point_world(marker["centre"])
+            start_marker_radius = _positive_millimetre(marker["radius_mm"], "start marker radius")
         crop = _mapping(source["crop"])
         crop_minimum = _point_pdf(crop["minimum"])
         crop_maximum = _point_pdf(crop["maximum"])
-        if (float(crop_minimum.x), float(crop_minimum.y), float(crop_maximum.x), float(crop_maximum.y)) != crop_coordinates:
-            raise MalformedHeldReferenceCaseError("Source crop differs from the approved publisher-page crop.")
         return HeldReferenceCase.build(
             name=str(document["name"]),
             authors=tuple(str(author) for author in _sequence(citation["authors"])),
@@ -670,12 +835,15 @@ def validate_case_payload(payload: object, *, expected_name: str) -> HeldReferen
             figure=str(publication["figure"]),
             subfigure=None if publication["subfigure"] is None else str(publication["subfigure"]),
             source_crop=(crop_minimum, crop_maximum),
+            source_tool_centre=source_tool_centre,
+            source_tool_radius=source_tool_radius,
             boundary=boundary,
             reconstruction=recorded_reconstruction,
             projection=recorded_projection,
             tool_radius=tool_radius,
             tea_cap=Degree(_number(machining["tea_cap_deg"])),
             start_marker=start_marker,
+            start_marker_radius=start_marker_radius,
             figure7_observation=figure7,
         )
     except (jsonschema.ValidationError, BenchmarkError, InvalidUnitValueError, KeyError, TypeError, ValueError, OverflowError) as error:
