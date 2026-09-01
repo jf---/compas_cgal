@@ -1318,9 +1318,10 @@ The certificate treats every stored binary64 coordinate exactly, proves
 circle and biarc fidelity with outward enclosures, and admits a reconstructed
 line only for an exactly collinear stored cubic whose authored directions
 advance along its chord. No live source cubic takes that line branch; the line
-counts above are publisher-authored source lines. Biarc children retain exact
-source-parameter interval witnesses for any later merge, but the current
-conservative reconstruction does not merge them merely to reduce the census.
+counts above are publisher-authored source lines. Merge certification retains
+only whole-cubic source witnesses. Biarc children are merge-ineligible because
+their arc-length correspondence breakpoint is generally irrational; a rounded
+ratio cannot authorize a partial-source witness.
 Corpus loading, Figure 6 integration, and generator qualification remain the
 separate Tasks 3–5; these reconstruction results are not a complete toolpath
 or a Held runtime comparison.
