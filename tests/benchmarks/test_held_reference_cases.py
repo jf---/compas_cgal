@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 
 import pytest
@@ -10,12 +11,20 @@ from benchmarks.errors import MalformedHeldReferenceCaseError
 from benchmarks.errors import UnknownHeldReferenceCaseError
 from benchmarks.errors import UnsupportedHeldReferenceVersionError
 from benchmarks.held_reference_cases import CANONICAL_CASE_NAMES
+from benchmarks.held_reference_cases import Figure7Observation
+from benchmarks.held_reference_cases import HeldReferenceCase
 from benchmarks.held_reference_cases import load_all_held_reference_cases
 from benchmarks.held_reference_cases import load_held_reference_case
 from benchmarks.held_reference_geometry import ReferenceArc
+from benchmarks.held_reference_geometry import ReferenceBoundary
 from benchmarks.held_reference_geometry import ReferenceLine
+from benchmarks.held_reference_geometry import ReferenceReconstruction
+from benchmarks.held_reference_geometry import PolygonProjection
 from benchmarks.held_reference_geometry import project_boundary
 from compas_cgal.adaptive.units import Millimetre
+from compas_cgal.adaptive.units import Point2
+from compas_cgal.adaptive.units import ToolRadius
+from compas_cgal.adaptive.units import WorldXY
 
 
 def _payload(name: str = "figure5") -> dict[str, object]:
@@ -36,6 +45,258 @@ def _install_payload(
     directory.mkdir()
     (directory / f"{name}.json").write_text(json.dumps(payload))
     monkeypatch.setattr(cases_module, "DATA_DIRECTORY", directory)
+
+
+def _factory_kwargs(case: HeldReferenceCase) -> dict[str, object]:
+    return {
+        "name": case.name,
+        "authors": case.authors,
+        "title": case.title,
+        "doi": case.doi,
+        "publication_page": case.publication_page,
+        "pdf_page": case.pdf_page,
+        "figure": case.figure,
+        "subfigure": case.subfigure,
+        "source_crop": case.source_crop,
+        "source_tool_centre": case.source_tool_centre,
+        "source_tool_radius": case.source_tool_radius,
+        "boundary": case.boundary,
+        "reconstruction": case.reconstruction,
+        "projection": case.projection,
+        "tool_radius": case.tool_radius,
+        "tea_cap": case.tea_cap,
+        "start_marker": case.start_marker,
+        "start_marker_radius": case.start_marker_radius,
+        "figure7_observation": case.figure7_observation,
+    }
+
+
+def _next_float(value: float, direction: float, steps: int) -> float:
+    for _ in range(steps):
+        value = math.nextafter(value, direction)
+    return value
+
+
+def _reconstruction_with_shifted_centre(case: HeldReferenceCase, steps: int) -> ReferenceReconstruction:
+    primitives = list(case.reconstruction.primitives)
+    first = primitives[0]
+    assert isinstance(first, ReferenceArc)
+    primitives[0] = ReferenceArc.build(
+        first.start,
+        first.end,
+        Point2[WorldXY].build(_next_float(float(first.centre.x), math.inf, steps), float(first.centre.y)),
+        first.sweep,
+    )
+    return ReferenceReconstruction.build(primitives, case.reconstruction.deviation_upper_bound)
+
+
+def _projection_with_shifted_point(case: HeldReferenceCase, steps: int) -> PolygonProjection:
+    points = list(case.projection.points)
+    first = points[0]
+    points[0] = Point2[WorldXY].build(_next_float(float(first.x), math.inf, steps), float(first.y))
+    return PolygonProjection.build(points, case.projection.deviation_limit, case.projection.observed_deviation)
+
+
+def test_reconstruction_componentwise_comparison_accepts_one_representation_step_only() -> None:
+    case = load_held_reference_case("figure5")
+
+    assert cases_module._reconstruction_matches_within_one_binary64_step(
+        _reconstruction_with_shifted_centre(case, 1),
+        case.reconstruction,
+    )
+    assert not cases_module._reconstruction_matches_within_one_binary64_step(
+        _reconstruction_with_shifted_centre(case, 2),
+        case.reconstruction,
+    )
+
+
+def test_projection_componentwise_comparison_accepts_one_representation_step_only() -> None:
+    case = load_held_reference_case("figure5")
+
+    assert cases_module._projection_matches_within_one_binary64_step(
+        _projection_with_shifted_point(case, 1),
+        case.projection,
+    )
+    assert not cases_module._projection_matches_within_one_binary64_step(
+        _projection_with_shifted_point(case, 2),
+        case.projection,
+    )
+
+
+@pytest.mark.parametrize("evidence", ["reconstruction", "projection"])
+def test_evidence_upper_bounds_accept_one_upward_representation_step(evidence: str) -> None:
+    case = load_held_reference_case("figure5")
+    if evidence == "reconstruction":
+        computed = case.reconstruction
+        recorded = ReferenceReconstruction.build(
+            computed.primitives,
+            Millimetre(math.nextafter(float(computed.deviation_upper_bound), math.inf)),
+        )
+        assert cases_module._reconstruction_matches_within_one_binary64_step(recorded, computed)
+    else:
+        computed_projection = case.projection
+        recorded_projection = PolygonProjection.build(
+            computed_projection.points,
+            computed_projection.deviation_limit,
+            Millimetre(math.nextafter(float(computed_projection.observed_deviation), math.inf)),
+        )
+        assert cases_module._projection_matches_within_one_binary64_step(recorded_projection, computed_projection)
+
+
+@pytest.mark.parametrize(("direction", "steps"), [(math.inf, 2), (-math.inf, 1)])
+@pytest.mark.parametrize("evidence", ["reconstruction", "projection"])
+def test_evidence_upper_bounds_reject_two_steps_or_downward_records(
+    evidence: str,
+    direction: float,
+    steps: int,
+) -> None:
+    case = load_held_reference_case("figure5")
+    if evidence == "reconstruction":
+        computed = case.reconstruction
+        recorded = ReferenceReconstruction.build(
+            computed.primitives,
+            Millimetre(_next_float(float(computed.deviation_upper_bound), direction, steps)),
+        )
+        assert not cases_module._reconstruction_matches_within_one_binary64_step(recorded, computed)
+    else:
+        computed_projection = case.projection
+        recorded_projection = PolygonProjection.build(
+            computed_projection.points,
+            computed_projection.deviation_limit,
+            Millimetre(_next_float(float(computed_projection.observed_deviation), direction, steps)),
+        )
+        assert not cases_module._projection_matches_within_one_binary64_step(recorded_projection, computed_projection)
+
+
+@pytest.mark.parametrize(
+    ("section", "field"),
+    [
+        ("analytic_boundary", "certified_deviation_upper_bound_mm"),
+        ("polygon_projection", "observed_deviation_mm"),
+    ],
+)
+@pytest.mark.parametrize(("direction", "steps", "accepted"), [(math.inf, 1, True), (math.inf, 2, False), (-math.inf, 1, False)])
+def test_loader_applies_directional_one_step_bound_contract(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    section: str,
+    field: str,
+    direction: float,
+    steps: int,
+    accepted: bool,
+) -> None:
+    payload = _payload()
+    evidence = payload[section]
+    assert isinstance(evidence, dict)
+    evidence[field] = _next_float(float(evidence[field]), direction, steps)
+    _install_payload(monkeypatch, tmp_path, payload)
+
+    if accepted:
+        load_held_reference_case("figure5")
+    else:
+        with pytest.raises(MalformedHeldReferenceCaseError):
+            load_held_reference_case("figure5")
+
+
+def test_public_factory_rejects_mixed_boundary_and_reconstruction() -> None:
+    figure5 = load_held_reference_case("figure5")
+    upper = load_held_reference_case("figure8_upper")
+    kwargs = _factory_kwargs(figure5)
+    kwargs["reconstruction"] = upper.reconstruction
+
+    with pytest.raises(MalformedHeldReferenceCaseError):
+        HeldReferenceCase.build(**kwargs)  # type: ignore[arg-type]
+
+
+def test_public_factory_rejects_mixed_boundary_projection() -> None:
+    figure5 = load_held_reference_case("figure5")
+    upper = load_held_reference_case("figure8_upper")
+    kwargs = _factory_kwargs(figure5)
+    kwargs["projection"] = upper.projection
+
+    with pytest.raises(MalformedHeldReferenceCaseError):
+        HeldReferenceCase.build(**kwargs)  # type: ignore[arg-type]
+
+
+def test_public_factory_rejects_boundary_tool_mismatch() -> None:
+    figure5 = load_held_reference_case("figure5")
+    kwargs = _factory_kwargs(figure5)
+    kwargs["boundary"] = ReferenceBoundary.build(
+        figure5.boundary.primitives,
+        ToolRadius.build(2.0),
+        figure5.boundary.boundary_stroke_width,
+    )
+
+    with pytest.raises(MalformedHeldReferenceCaseError):
+        HeldReferenceCase.build(**kwargs)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("authors", ("Wrong",)),
+        ("publication_page", 741),
+        ("source_crop", (cases_module.PdfPoint2.build(0.0, 0.0), cases_module.PdfPoint2.build(1.0, 1.0))),
+        ("tool_radius", ToolRadius.build(2.0)),
+        ("tea_cap", cases_module.Degree(79.0)),
+        ("start_marker", Point2[WorldXY].build(0.0, 0.0)),
+        (
+            "figure7_observation",
+            Figure7Observation.build(
+                publication_page=743,
+                pdf_page=14,
+                panels=("a", "b", "c"),
+                role="shape_only_tool_centre_observation",
+                boundary_authority=False,
+                numeric_fidelity_gate=False,
+            ),
+        ),
+    ],
+)
+def test_public_factory_rejects_noncanonical_scalar_metadata(field: str, value: object) -> None:
+    kwargs = _factory_kwargs(load_held_reference_case("figure5"))
+    kwargs[field] = value
+
+    with pytest.raises(MalformedHeldReferenceCaseError):
+        HeldReferenceCase.build(**kwargs)  # type: ignore[arg-type]
+
+
+def test_public_factory_rejects_noncanonical_publisher_observations() -> None:
+    kwargs = _factory_kwargs(load_held_reference_case("figure5"))
+    kwargs.update(
+        source_tool_centre=cases_module.PdfPoint2.build(0.0, 0.0),
+        source_tool_radius=cases_module.PdfPointUnit(3.226562815407),
+        start_marker_radius=Millimetre(1.0012107515803956),
+    )
+
+    with pytest.raises(MalformedHeldReferenceCaseError):
+        HeldReferenceCase.build(**kwargs)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    ("section", "field", "value"),
+    [
+        ("source_tool", "centre", [1e300, 81.00485482270125]),
+        ("start_marker", "radius_mm", 999.0),
+    ],
+)
+def test_loader_rejects_noncanonical_publisher_observations(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    section: str,
+    field: str,
+    value: object,
+) -> None:
+    payload = _payload()
+    parent = payload["normalization"] if section == "source_tool" else payload["machining"]
+    assert isinstance(parent, dict)
+    observation = parent[section]
+    assert isinstance(observation, dict)
+    observation[field] = value
+    _install_payload(monkeypatch, tmp_path, payload)
+
+    with pytest.raises(MalformedHeldReferenceCaseError):
+        load_held_reference_case("figure5")
 
 
 def test_all_cases_load_in_canonical_order() -> None:
