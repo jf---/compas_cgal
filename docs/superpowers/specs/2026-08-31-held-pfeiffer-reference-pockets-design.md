@@ -178,7 +178,7 @@ Each committed JSON document contains:
 - reconstruction and projection deviation limits;
 - certified reconstruction deviation upper bound and measured projection
   deviation; and
-- Figure 7 cross-check error for Figure 5 only.
+- Figure 7 shape-only observation metadata for Figure 5 only.
 
 The JSON must round-trip through `json.loads`, validate against the repository's
 schema, and build both the typed analytic boundary and a `PocketSpec`. Unknown
@@ -265,6 +265,13 @@ identifies the next product blocker.
   junctions, projected vertices, start marker, and normalized tool circle; and
 - the Figure 7 overlay registers its coloured tool-centre samples against the
   one-tool-radius inward offset of the Figure 5 analytic reconstruction.
+
+The publisher plots use independent horizontal and vertical display scales:
+at 600 DPI their sample-envelope aspect ratio is `1.43624`, while the analytic
+one-radius inward support is `1.47931`. Registration therefore uses a typed
+axis-aligned display affine with independently derived X/Y scales and PDF-to-
+world Y reflection. A uniform similarity is rejected because it leaves
+tens-of-pixels residual consistently in all three panels.
 
 Figure 7 contains no independently drawn boundary stroke: its thousands of
 coloured paths are tool-centre samples. It is therefore retained as a

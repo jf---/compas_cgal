@@ -631,10 +631,14 @@ Test PNG dimensions and mode after rendering; do not compare encoded bytes.
 - [ ] **Step 2: Implement Figure 7 registration measurement**
 
 Render PDF page 14 through Poppler at a named 600-DPI resolution. Use the plot
-axes and the Figure 5 boundary bounds to solve one similarity transform for
-each Figure 7 panel. Register the coloured tool-centre samples against the
-one-tool-radius inward offset of the Figure 5 analytic boundary. Render the
-three panels as shape-only falsification evidence.
+axes and the Figure 5 boundary bounds to solve one typed axis-aligned display
+affine for each Figure 7 panel, with independently derived X/Y scales and Y
+reflection. The measured publisher plots are not similarity-scaled: their
+sample-envelope aspect is `1.43624`, versus `1.47931` for the analytic
+one-radius inward support. A forced similarity leaves tens-of-pixels residual
+in every panel and must fail. Register the coloured tool-centre samples against
+the inward offset and render the three panels as shape-only falsification
+evidence.
 
 Figure 7 has no independent boundary stroke, so it supplies no numeric
 boundary-fidelity acceptance value. Missing axes, an empty colour mask, or an
