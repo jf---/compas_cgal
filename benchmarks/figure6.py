@@ -26,10 +26,9 @@ projection, with two generators of ours:
 THE COMPARISON IS NOT SYMMETRIC, and the report says so on every row. The baseline
 is SELECTED to meet the cap, so it meets it by construction. The controlled
 generator is ASKED to meet the cap and may fail -- its bridge cuts between
-machining circles are not regulated, and on the reference pocket they hold its
-worst engagement near 127 degrees however tight the cap. Its measured maximum is
-therefore printed beside its length, and a length ratio at a cap it misses is
-comparing a compliant path against one that is not.
+machining circles are not regulated. Its measured maximum is therefore printed
+beside its length, and a length ratio at a cap it misses is comparing a compliant
+path against one that is not.
 
 Engagement is read after the entry cut for both curves, for the reason given in
 `benchmarks.pathmetrics`: the first circle after a plunge is a full slot for any
