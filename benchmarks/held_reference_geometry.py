@@ -438,27 +438,7 @@ def reconstruct_source_path(
                     )
                 )
             elif len(span.primitives) == 2 and all(isinstance(primitive, ReferenceArc) for primitive in span.primitives):
-                first_arc = span.primitives[0]
-                second_arc = span.primitives[1]
-                assert isinstance(first_arc, ReferenceArc) and isinstance(second_arc, ReferenceArc)
-                first_length = _distance(
-                    _point_xy(first_arc.start),
-                    _point_xy(first_arc.centre),
-                ) * abs(float(first_arc.sweep))
-                second_length = _distance(
-                    _point_xy(second_arc.start),
-                    _point_xy(second_arc.centre),
-                ) * abs(float(second_arc.sweep))
-                breakpoint = Fraction.from_float(first_length / (first_length + second_length))
-                intervals = ((Fraction(0), breakpoint), (breakpoint, Fraction(1)))
-                entries.extend(
-                    _MergeEntry(
-                        primitive,
-                        ((span.control_points, *interval),),
-                        span.deviation_upper_bound,
-                    )
-                    for primitive, interval in zip(span.primitives, intervals)
-                )
+                entries.extend(_MergeEntry(primitive, None, span.deviation_upper_bound) for primitive in span.primitives)
             else:
                 entries.extend(_MergeEntry(primitive, None, span.deviation_upper_bound) for primitive in span.primitives)
     if not entries:
@@ -485,6 +465,8 @@ def _merge_arc_entries(
     if not isinstance(first.primitive, ReferenceArc) or not isinstance(second.primitive, ReferenceArc):
         return None
     if first.source_witnesses is None or second.source_witnesses is None:
+        return None
+    if any(start_parameter != 0 or end_parameter != 1 for _, start_parameter, end_parameter in (*first.source_witnesses, *second.source_witnesses)):
         return None
     if first.primitive.end != second.primitive.start:
         return None

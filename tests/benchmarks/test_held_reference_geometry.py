@@ -374,7 +374,7 @@ def test_figure5_proof_hard_source_closes_with_bounded_certificate_nodes(
     assert calls <= node_limit
 
 
-def test_figure5_biarc_children_retain_honest_merge_witnesses(
+def test_figure5_biarc_children_do_not_invent_rational_breakpoint_witnesses(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     source = _figure5_proof_hard_source()
@@ -394,10 +394,33 @@ def test_figure5_biarc_children_retain_honest_merge_witnesses(
 
     merged = reconstruct_source_path((source,), transform, limit)
 
-    assert witnessed_intervals
-    assert any(start == 0 and end < 1 for start, end in witnessed_intervals)
-    assert any(start > 0 and end == 1 for start, end in witnessed_intervals)
+    assert all(start == 0 and end == 1 for start, end in witnessed_intervals)
     assert float(merged.deviation_upper_bound) <= float(limit)
+
+
+def test_partial_source_witness_cannot_authorize_adjacent_arc_merge(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    midpoint = math.sqrt(0.5)
+    first_arc = ReferenceArc.build(
+        _world(1.0, 0.0),
+        _world(midpoint, midpoint),
+        _world(0.0, 0.0),
+        Radian(math.pi / 4.0),
+    )
+    second_arc = ReferenceArc.build(
+        _world(midpoint, midpoint),
+        _world(0.0, 1.0),
+        _world(0.0, 0.0),
+        Radian(math.pi / 4.0),
+    )
+    source = _quarter_circle_source()
+    controls = tuple(geometry._point_xy(_identity_transform().point(point)) for point in (source.start, source.control1, source.control2, source.end))
+    first = geometry._MergeEntry(first_arc, ((controls, Fraction(0), Fraction(1, 2)),), 0.0)
+    second = geometry._MergeEntry(second_arc, ((controls, Fraction(1, 2), Fraction(1)),), 0.0)
+    monkeypatch.setattr(geometry, "certify_cubic_interval_circle", lambda *_args: 0.0)
+
+    assert geometry._merge_arc_entries(first, second, 0.01) is None
 
 
 def test_represented_biarc_root_perturbation_exceeds_exact_backward_certificate() -> None:

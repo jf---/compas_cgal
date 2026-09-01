@@ -144,8 +144,10 @@ Implemented exact stored-polynomial residual/sign certification, fail-closed
 local and mapped G1 perturbation bounds, exact rational hull/polar predicates,
 audited trigonometric interval evaluation, stored-endpoint-corrected biarc
 correspondence, second-order same-child node bounds, and an exact pointwise
-lower witness for early invalid-biarc rejection. Biarc children retain honest
-exact source-parameter interval witnesses. Circle recursion retains the stored
+lower witness for early invalid-biarc rejection. Merge candidates retain only
+whole-cubic witnesses; biarc children remain merge-ineligible because their
+generally irrational correspondence breakpoint cannot be replaced by a
+rounded rational witness. Circle recursion retains the stored
 candidate radius. A source cubic becomes a line only when its stored controls
 are exactly collinear and advance along the authored chord; no live source
 cubic takes that branch, so there are no cubic line-hull bounds to report.
@@ -169,3 +171,17 @@ Verification:
 Concern: the conservative corrected proof increases the primitive census; it
 is not tuned toward the earlier unsound count. Certificate-review status stays
 pending until independent re-review.
+
+### Final witness correction
+
+RED: Figure 5 biarc children exposed partial source witnesses split at
+`Fraction.from_float(L1 / (L1 + L2))`, and a compatible adjacent pair could
+merge using those subsets. That rounded value does not satisfy the exact
+squared-length breakpoint equation.
+
+GREEN: every two-arc biarc span now emits merge-ineligible children with no
+source witness. The merger additionally refuses any partial-interval witness;
+only complete `[0, 1]` cubic witnesses may authorize a combined-circle proof.
+The focused suite passes 54 tests, and the unchanged live census/bounds pass
+the publisher oracle in 51.07 seconds. Strict mypy, Ruff, MkDocs, and diff
+checks pass.
