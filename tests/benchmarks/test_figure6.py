@@ -11,10 +11,12 @@ from benchmarks.figure6 import Figure6Run
 from benchmarks.figure6 import figure6_payload
 from benchmarks.figure6 import figure6_points
 from benchmarks.figure6 import render_figure6_markdown
+from benchmarks.figure6 import reference_pocket
 from benchmarks.figure6 import run_figure6
 from benchmarks.figure6 import write_figure6
 from benchmarks.mathsm import MathsmPoint
 from benchmarks.pathmetrics import PathMetrics
+from benchmarks.held_reference_cases import load_held_reference_case
 
 # Small enough to run both generators several times per test, large enough that
 # the generator emits more than one chain and therefore more than one entry cut.
@@ -33,6 +35,21 @@ TEST_SPACINGS = (0.2, 0.4)
 # Banned as literal text: the practice is to ORDER the document conclusion-first,
 # not to announce that you have (CLAUDE.md, documentation format).
 BANNED_LABELS = ("BLUF", "TL;DR", "Bottom Line", "## Summary")
+
+
+def test_figure6_uses_the_reconstructed_figure5_pocket() -> None:
+    spec = reference_pocket()
+    expected = load_held_reference_case("figure5").pocket_spec()
+
+    assert tuple(tuple(point) for point in spec.polygon.points) == tuple(tuple(point) for point in expected.polygon.points)
+    assert spec.tool_diameter == pytest.approx(2.0)
+
+
+def test_figure6_reference_pocket_rebuilds_the_requested_cap() -> None:
+    spec = reference_pocket(tea_cap_deg=140.0)
+
+    assert spec.tea_cap_deg == pytest.approx(140.0)
+    assert spec.name == "figure5"
 
 
 def _spec(cap_deg: float = 120.0):

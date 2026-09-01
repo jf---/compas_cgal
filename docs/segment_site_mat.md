@@ -1322,8 +1322,11 @@ counts above are publisher-authored source lines. Merge certification retains
 only whole-cubic source witnesses. Biarc children are merge-ineligible because
 their arc-length correspondence breakpoint is generally irrational; a rounded
 ratio cannot authorize a partial-source witness.
-Corpus loading, Figure 6 integration, and generator qualification remain the
-separate Tasks 3–5; these reconstruction results are not a complete toolpath
+The [Held–Pfeiffer reference-pocket page](held_pfeiffer_reference_pockets.md)
+documents the committed corpus, overlays, and generator boundary. Figure 6 now
+uses the reconstructed Figure 5 projection at its input seam. A serial product
+qualification produced non-empty paths for all four cases; its operation counts
+and timings are evidence about this generator run, not complete certification
 or a Held runtime comparison.
 
 The committed reference-corpus overlays make that reconstruction inspectable.
