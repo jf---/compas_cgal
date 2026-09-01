@@ -669,13 +669,16 @@ def _equal_distance_biarc(
     )
     if local_tangent_bounds is None:
         return None
-    first, second = _map_local_biarc(
+    mapped = _map_local_biarc(
         first_local,
         second_local,
         start,
         end,
         chord_length,
     )
+    if mapped is None:
+        return None
+    first, second = mapped
     storage_bounds = _mapped_biarc_tangent_bounds(
         (first_local, second_local),
         (first, second),
@@ -745,22 +748,21 @@ def _map_local_biarc(
     start: _XY,
     end: _XY,
     scale: float,
-) -> tuple[ReferenceArc, ReferenceArc]:
+) -> tuple[ReferenceArc, ReferenceArc] | None:
     join = _map_local_point(first.end, start, scale)
-    return (
-        ReferenceArc.build(
-            _world_point(start),
-            join,
-            _map_local_point(first.centre, start, scale),
-            first.sweep,
-        ),
-        ReferenceArc.build(
-            join,
-            _world_point(end),
-            _map_local_point(second.centre, start, scale),
-            second.sweep,
-        ),
+    mapped_first = _arc_from_start_tangent(
+        start,
+        _point_xy(join),
+        _arc_tangent(first, at_end=False),
     )
+    mapped_second = _arc_from_end_tangent(
+        _point_xy(join),
+        end,
+        _arc_tangent(second, at_end=True),
+    )
+    if mapped_first is None or mapped_second is None:
+        return None
+    return mapped_first, mapped_second
 
 
 def _mapped_arc_tangent_bound(

@@ -474,10 +474,41 @@ def test_mapped_g1_bound_never_uses_infinity_as_acceptance_slack() -> None:
         (origin[0] + 0.5, origin[1] + 0.5),
         0.2,
     )
+    assert mapped is not None
 
     bounds = geometry._mapped_biarc_tangent_bounds(local_biarc, mapped, 0.2)
 
     assert bounds is None or all(math.isfinite(bound) for bound in bounds)
+
+
+def test_mapped_biarc_represents_translated_monstera_span() -> None:
+    first_local = ReferenceArc.build(
+        _world(0.0, 0.0),
+        _world(0.4972530763159755, -0.05234051714369421),
+        _world(0.6823356797078767, 4.094217093925403),
+        Radian(0.1205350011602675),
+    )
+    second_local = ReferenceArc.build(
+        first_local.end,
+        _world(0.9945053249276352, -0.10468600045172481),
+        _world(0.31220140960575804, -4.19820502831822),
+        Radian(-0.12055510326399266),
+    )
+    start = (70.3883793927359, 66.9390824234685)
+    end = (70.41464056148396, 66.93631805745204)
+
+    mapped = geometry._map_local_biarc(
+        first_local,
+        second_local,
+        start,
+        end,
+        0.026406262580821436,
+    )
+
+    assert mapped is not None
+    assert mapped[0].start == _world(*start)
+    assert mapped[0].end == mapped[1].start
+    assert mapped[1].end == _world(*end)
 
 
 def test_equal_distance_biarc_refuses_unclosable_mapping(monkeypatch: pytest.MonkeyPatch) -> None:
