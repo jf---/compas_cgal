@@ -129,9 +129,10 @@ decision sequence:
    represented construction with operation-derived backward and forward error
    bounds, measure it by a closed continuous-correspondence bound, and accept
    it only when both certificates close.
-6. If no circle or biarc certificate closes, certify the endpoint chord as a
-   straight-line limiting case using the cubic control hull and authored
-   endpoint directions. Only then subdivide the source cubic recursively.
+6. If no circle or biarc certificate closes, accept the endpoint chord only
+   when the stored cubic control polygon is exactly collinear and its authored
+   endpoint directions advance along that chord. Subdivide every non-collinear
+   source cubic recursively.
 
 The quarter-stroke rule is a publication-resolution limit: the reconstruction's
 centreline must remain well inside the printed boundary stroke. It scales with
@@ -141,11 +142,17 @@ Reconstruction returns the analytic primitives together with the certified
 continuous-deviation upper bound proved by the same traversal. It does not
 discard that evidence or relabel it as a sampled maximum.
 
+The biarc proof closes stored-endpoint continuity with an auxiliary linear
+endpoint correction and adds that correction's complete distance to the ideal
+circular locus to the bound. The emitted primitives remain circular arcs; the
+auxiliary path is proof machinery, not replacement geometry.
+
 Adjacent recovered arcs are merged only while their source spans remain
 available and those combined spans re-certify against one candidate supporting
 circle under the original limit. Their common endpoint and sweep direction
 must also agree. An arbitrary cubic is never labelled an exact circular arc,
-and a cubic becomes a line only through the control-hull certificate above.
+and a cubic becomes a line only through the exact-collinearity certificate
+above.
 Failure to close the measurement bound raises
 `UnresolvedPublishedCurveError`; there is no permissive fallback.
 

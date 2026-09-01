@@ -1302,6 +1302,29 @@ published paths and runtime measurements. Phase 1 is not yet a competing
 end-to-end result; it is a stricter certification architecture under
 construction.
 
+The publisher-pocket reconstruction checkpoint is implemented but remains
+**certificate-review pending**. The live PDF oracle currently reconstructs the
+four approved outer cycles as follows; each bound is below one quarter of the
+normalized printed boundary stroke:
+
+| Publisher pocket | Lines | Arcs | Total | Certified deviation upper bound |
+| --- | ---: | ---: | ---: | ---: |
+| Figure 5 | 5 | 44 | 49 | 0.07380041260306111 |
+| Figure 8 upper | 4 | 76 | 80 | 0.08300467787418957 |
+| Figure 8 crossed skis | 2 | 58 | 60 | 0.09647539567877145 |
+| Figure 8 Monstera | 103 | 216 | 319 | 0.10228407943079104 |
+
+The certificate treats every stored binary64 coordinate exactly, proves
+circle and biarc fidelity with outward enclosures, and admits a reconstructed
+line only for an exactly collinear stored cubic whose authored directions
+advance along its chord. No live source cubic takes that line branch; the line
+counts above are publisher-authored source lines. Biarc children retain exact
+source-parameter interval witnesses for any later merge, but the current
+conservative reconstruction does not merge them merely to reduce the census.
+Corpus loading, Figure 6 integration, and generator qualification remain the
+separate Tasks 3–5; these reconstruction results are not a complete toolpath
+or a Held runtime comparison.
+
 Measured on axis-parallel pockets only; `center_domain()` is ~3,500× slower
 on oblique geometry with the mechanism not yet established — see
 *The Oblique-Edge Cliff*. Treat every figure on this page as best-case with

@@ -275,8 +275,9 @@ the represented G1 join. Return the continuous-correspondence proof upper bound
 instead of a boolean.
 
 Regression-test all four live publisher cycles at their exact quarter-stroke
-limits. The formerly rejected root biarcs must close without source
-subdivision; do not increase a limit or depth.
+limits. A numerically valid root construction must reach the independent
+fidelity proof, which may still reject it and trigger source subdivision. Do
+not increase a limit or depth to force root acceptance.
 
 - [x] **Step 9: Add certified path reconstruction and canonicalization**
 
@@ -284,10 +285,10 @@ Add `ReferenceReconstruction`, `reconstruct_cubic_certified`, and
 `reconstruct_source_path`. Preserve `reconstruct_cubic` as a thin primitive
 projection over the certified path while broadening its return union.
 
-When neither circle nor biarc closes, accept the endpoint chord only when an
-exact finite-segment control-hull calculation proves the cubic within the same
-limit and both authored endpoint directions advance along the chord. This is
-the straight-line analytic limit, not a polygon fallback.
+When neither circle nor biarc closes, accept the endpoint chord only when exact
+rational predicates prove the stored control polygon collinear and both
+authored endpoint directions advance along the chord. Every non-collinear
+cubic subdivides rather than being simplified to a line.
 
 Merge adjacent arcs only inside path reconstruction, while their source spans
 are retained. Re-certify the combined spans against one candidate circle and

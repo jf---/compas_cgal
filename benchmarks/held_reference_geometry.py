@@ -4,6 +4,7 @@ import math
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
+from fractions import Fraction
 from typing import NewType
 from typing import Self
 from typing import TypeAlias
@@ -14,18 +15,23 @@ from benchmarks.errors import InvalidPublishedPrimitiveError
 from benchmarks.errors import InvalidReferenceProjectionError
 from benchmarks.errors import InvalidReferenceReconstructionError
 from benchmarks.errors import UnresolvedPublishedCurveError
-from benchmarks.held_reference_certification import BINARY64_UNIT_ROUNDOFF
+from benchmarks.held_reference_certification import affine_join_error
+from benchmarks.held_reference_certification import biarc_correspondence_node_bound
+from benchmarks.held_reference_certification import biarc_correspondence_sample_exceeds
+from benchmarks.held_reference_certification import biarc_solver_coefficients
 from benchmarks.held_reference_certification import certify_biarc_root
-from benchmarks.held_reference_certification import control_hull_radius_bounds
+from benchmarks.held_reference_certification import certify_cubic_interval_circle
+from benchmarks.held_reference_certification import certify_monotone_polar_angle
+from benchmarks.held_reference_certification import circle_deviation_upper_bound
 from benchmarks.held_reference_certification import exact_reflection
 from benchmarks.held_reference_certification import exact_segment_distance_squared
 from benchmarks.held_reference_certification import exact_vector_error
 from benchmarks.held_reference_certification import fraction_xy
-from benchmarks.held_reference_certification import gamma
+from benchmarks.held_reference_certification import mapped_radius_tangent_bound
 from benchmarks.held_reference_certification import maximum_arc_segment_distance
-from benchmarks.held_reference_certification import outward_product
 from benchmarks.held_reference_certification import outward_sqrt_fraction
 from benchmarks.held_reference_certification import outward_sum
+from benchmarks.held_reference_certification import reflection_perturbation_bound
 from compas_cgal.adaptive.units import Millimetre
 from compas_cgal.adaptive.units import Point2
 from compas_cgal.adaptive.units import Radian
@@ -40,9 +46,9 @@ MillimetresPerPdfPoint = NewType("MillimetresPerPdfPoint", float)
 ROUNDOFF_FACTOR = 128.0
 NORMALIZED_ROUNDOFF = ROUNDOFF_FACTOR * sys.float_info.epsilon
 MAX_RECONSTRUCTION_SUBDIVISIONS = 24
-BIARC_JOIN_COMPONENT_OPERATION_COUNT = 3
 
 _XY: TypeAlias = tuple[float, float]
+_CubicWitness: TypeAlias = tuple[tuple[_XY, _XY, _XY, _XY], Fraction, Fraction]
 
 
 def _pdf_coordinate(value: object, name: str) -> PdfPointUnit:
@@ -138,6 +144,8 @@ class SourceToWorld:
         scale = float(self.scale)
         if not math.isfinite(scale) or scale <= 0.0:
             raise InvalidPublishedPrimitiveError("Source-to-world scale must be finite and positive.")
+        if not isinstance(self.reflect_source_y, bool):
+            raise InvalidPublishedPrimitiveError("Source-to-world Y reflection must be a bool.")
 
     @classmethod
     def build(
@@ -240,7 +248,7 @@ class _CertifiedSpan:
 @dataclass(frozen=True)
 class _MergeEntry:
     primitive: ReferencePrimitive
-    source_witnesses: tuple[tuple[_XY, _XY, _XY, _XY], ...] | None
+    source_witnesses: tuple[_CubicWitness, ...] | None
     deviation_upper_bound: float
 
 
@@ -421,8 +429,38 @@ def reconstruct_source_path(
             _point_xy(transform.point(source.end)),
         )
         for span in _reconstruct_control_points(control_points, limit, depth=0):
-            merge_witnesses = (span.control_points,) if len(span.primitives) == 1 and isinstance(span.primitives[0], ReferenceArc) else None
-            entries.extend(_MergeEntry(primitive, merge_witnesses, span.deviation_upper_bound) for primitive in span.primitives)
+            if len(span.primitives) == 1 and isinstance(span.primitives[0], ReferenceArc):
+                entries.append(
+                    _MergeEntry(
+                        span.primitives[0],
+                        ((span.control_points, Fraction(0), Fraction(1)),),
+                        span.deviation_upper_bound,
+                    )
+                )
+            elif len(span.primitives) == 2 and all(isinstance(primitive, ReferenceArc) for primitive in span.primitives):
+                first_arc = span.primitives[0]
+                second_arc = span.primitives[1]
+                assert isinstance(first_arc, ReferenceArc) and isinstance(second_arc, ReferenceArc)
+                first_length = _distance(
+                    _point_xy(first_arc.start),
+                    _point_xy(first_arc.centre),
+                ) * abs(float(first_arc.sweep))
+                second_length = _distance(
+                    _point_xy(second_arc.start),
+                    _point_xy(second_arc.centre),
+                ) * abs(float(second_arc.sweep))
+                breakpoint = Fraction.from_float(first_length / (first_length + second_length))
+                intervals = ((Fraction(0), breakpoint), (breakpoint, Fraction(1)))
+                entries.extend(
+                    _MergeEntry(
+                        primitive,
+                        ((span.control_points, *interval),),
+                        span.deviation_upper_bound,
+                    )
+                    for primitive, interval in zip(span.primitives, intervals)
+                )
+            else:
+                entries.extend(_MergeEntry(primitive, None, span.deviation_upper_bound) for primitive in span.primitives)
     if not entries:
         raise InvalidReferenceReconstructionError("A source path cannot be empty.")
 
@@ -468,18 +506,19 @@ def _merge_arc_entries(
         return None
 
     centre = _point_xy(combined.centre)
-    candidate = centre, combined_sweep
     bounds: list[float] = []
     witnesses = (*first.source_witnesses, *second.source_witnesses)
-    for control_points in witnesses:
-        if not _cubic_has_monotone_polar_angle(
+    for control_points, start_parameter, end_parameter in witnesses:
+        bound = certify_cubic_interval_circle(
             control_points,
+            start_parameter,
+            end_parameter,
             centre,
+            _point_xy(combined.start),
             1.0 if combined_sweep > 0.0 else -1.0,
-            depth=0,
-        ):
-            return None
-        bound = _cubic_within_circle(control_points, candidate, deviation_limit, depth=0)
+            deviation_limit,
+            MAX_RECONSTRUCTION_SUBDIVISIONS,
+        )
         if bound is None:
             return None
         bounds.append(bound)
@@ -528,20 +567,20 @@ def _reconstruct_control_points(
             control_points,
             biarc,
             deviation_limit,
-            start_parameter=0.0,
-            end_parameter=1.0,
+            start_parameter=Fraction(0),
+            end_parameter=Fraction(1),
             depth=0,
         )
         if biarc_bound is not None:
             return (_CertifiedSpan(control_points, biarc, biarc_bound),)
-    line = _certified_line(control_points, deviation_limit)
-    if line is not None:
-        primitive, line_bound = line
-        return (_CertifiedSpan(control_points, (primitive,), line_bound),)
+    if _control_points_are_exactly_collinear(control_points):
+        line = _certified_line(control_points, deviation_limit)
+        if line is not None:
+            primitive, line_bound = line
+            return (_CertifiedSpan(control_points, (primitive,), line_bound),)
+        raise UnresolvedPublishedCurveError("A collinear published cubic must advance along its authored chord.")
     if depth >= MAX_RECONSTRUCTION_SUBDIVISIONS:
         raise UnresolvedPublishedCurveError("Published cubic did not admit a bounded circular reconstruction.")
-    if _control_points_are_collinear(control_points):
-        raise UnresolvedPublishedCurveError("A collinear published cubic must be represented as a source line.")
     left, right = _split_cubic(control_points)
     return (
         *_reconstruct_control_points(left, deviation_limit, depth=depth + 1),
@@ -592,11 +631,10 @@ def _equal_distance_biarc(
     if not math.isfinite(chord_length) or chord_length < sys.float_info.min:
         return None
     local_end = _scale(chord, 1.0 / chord_length)
-    tangent_dot = _dot(start_tangent, end_tangent)
-    denominator = 2.0 * (1.0 - tangent_dot)
-    tangent_sum = _add(start_tangent, end_tangent)
-    chord_dot_tangents = _dot(local_end, tangent_sum)
-    chord_squared = _dot(local_end, local_end)
+    solver_coefficients = biarc_solver_coefficients(start_tangent, end_tangent, local_end)
+    if solver_coefficients is None:
+        return None
+    denominator, chord_dot_tangents, chord_squared = solver_coefficients
 
     if denominator <= NORMALIZED_ROUNDOFF:
         chord_dot_end_tangent = _dot(local_end, end_tangent)
@@ -605,16 +643,24 @@ def _equal_distance_biarc(
     if denominator == 0.0:
         return None
     discriminant = chord_dot_tangents**2 + denominator * chord_squared
+    if not _finite_normal_or_zero(discriminant) or discriminant < 0.0:
+        return None
     root = math.sqrt(discriminant)
+    if not _finite_normal_or_zero(root):
+        return None
     stable_divisor = root + chord_dot_tangents
+    if not _finite_normal_or_zero(stable_divisor):
+        return None
     if stable_divisor > NORMALIZED_ROUNDOFF * root:
         distance = chord_squared / stable_divisor
     else:
         distance = (-chord_dot_tangents + root) / denominator
+    if not _finite_normal_or_zero(distance) or distance <= 0.0:
+        return None
     root_uncertainty = certify_biarc_root(
-        denominator,
-        chord_dot_tangents,
-        chord_squared,
+        start_tangent,
+        end_tangent,
+        local_end,
         distance,
     )
     if root_uncertainty is None:
@@ -653,6 +699,8 @@ def _equal_distance_biarc(
         (first, second),
         chord_length,
     )
+    if storage_bounds is None:
+        return None
     if not (
         _distance(_arc_tangent(first, at_end=False), start_tangent) <= local_tangent_bounds[0] + storage_bounds[0]
         and _distance(_arc_tangent(first, at_end=True), _arc_tangent(second, at_end=False)) <= local_tangent_bounds[1] + storage_bounds[1]
@@ -673,32 +721,34 @@ def _biarc_tangent_bounds(
     second_arc: ReferenceArc,
 ) -> tuple[float, float, float] | None:
     tangent_difference = _subtract(start_tangent, end_tangent)
-    component_bounds = tuple(
-        math.nextafter(
-            0.5 * abs(tangent_difference[index]) * root_uncertainty
-            + gamma(BIARC_JOIN_COMPONENT_OPERATION_COUNT) * 0.5 * (abs(local_end[index]) + abs(distance * tangent_difference[index])),
-            math.inf,
-        )
-        for index in range(2)
+    join_error = affine_join_error(
+        local_join,
+        local_end,
+        tangent_difference,
+        distance,
+        root_uncertainty,
     )
-    join_error = math.nextafter(math.hypot(*component_bounds), math.inf)
-    first_lower = _length(local_join) - join_error
-    second_lower = _distance(local_end, local_join) - join_error
-    if min(first_lower, second_lower) < sys.float_info.min:
+    if join_error is None:
         return None
 
     first_chord = local_join
     second_chord = _subtract(local_end, local_join)
+    first_geometric = reflection_perturbation_bound(join_error, first_chord)
+    second_geometric = reflection_perturbation_bound(join_error, second_chord)
+    if first_geometric is None or second_geometric is None:
+        return None
     first_exact_join = exact_reflection(start_tangent, first_chord)
     second_exact_join = exact_reflection(end_tangent, second_chord)
     start_evaluation = exact_vector_error(_arc_tangent(first_arc, at_end=False), fraction_xy(start_tangent))
     first_join_evaluation = exact_vector_error(_arc_tangent(first_arc, at_end=True), first_exact_join)
     second_join_evaluation = exact_vector_error(_arc_tangent(second_arc, at_end=False), second_exact_join)
     end_evaluation = exact_vector_error(_arc_tangent(second_arc, at_end=True), fraction_xy(end_tangent))
-    geometric_join = 2.0 * join_error / first_lower + 2.0 * join_error / second_lower
     return (
         start_evaluation,
-        math.nextafter(geometric_join + first_join_evaluation + second_join_evaluation, math.inf),
+        outward_sum(
+            outward_sum(first_geometric, second_geometric),
+            outward_sum(first_join_evaluation, second_join_evaluation),
+        ),
         end_evaluation,
     )
 
@@ -731,12 +781,6 @@ def _map_local_biarc(
     )
 
 
-def _mapped_coordinate_error(local_coordinate: float, mapped_coordinate: float, scale: float) -> float:
-    product_error = BINARY64_UNIT_ROUNDOFF * abs(scale * local_coordinate)
-    addition_error = math.ulp(mapped_coordinate) / 2.0
-    return math.nextafter(product_error + addition_error, math.inf)
-
-
 def _mapped_arc_tangent_bound(
     local_arc: ReferenceArc,
     mapped_arc: ReferenceArc,
@@ -746,34 +790,20 @@ def _mapped_arc_tangent_bound(
 ) -> float | None:
     local_point = local_arc.end if at_end else local_arc.start
     mapped_point = mapped_arc.end if at_end else mapped_arc.start
-    point_errors = tuple(
-        _mapped_coordinate_error(
-            _point_xy(local_point)[index],
-            _point_xy(mapped_point)[index],
-            scale,
-        )
-        for index in range(2)
+    return mapped_radius_tangent_bound(
+        _point_xy(local_point),
+        _point_xy(local_arc.centre),
+        _point_xy(mapped_point),
+        _point_xy(mapped_arc.centre),
+        scale,
     )
-    centre_errors = tuple(
-        _mapped_coordinate_error(
-            _point_xy(local_arc.centre)[index],
-            _point_xy(mapped_arc.centre)[index],
-            scale,
-        )
-        for index in range(2)
-    )
-    radius_error = math.hypot(*(point_errors[index] + centre_errors[index] for index in range(2)))
-    radius_lower = scale * _distance(_point_xy(local_point), _point_xy(local_arc.centre)) - radius_error
-    if radius_lower < sys.float_info.min:
-        return None
-    return math.nextafter(2.0 * radius_error / radius_lower, math.inf)
 
 
 def _mapped_biarc_tangent_bounds(
     local_biarc: tuple[ReferenceArc, ReferenceArc],
     mapped_biarc: tuple[ReferenceArc, ReferenceArc],
     scale: float,
-) -> tuple[float, float, float]:
+) -> tuple[float, float, float] | None:
     bounds = (
         _mapped_arc_tangent_bound(local_biarc[0], mapped_biarc[0], scale, at_end=False),
         _mapped_arc_tangent_bound(local_biarc[0], mapped_biarc[0], scale, at_end=True),
@@ -781,9 +811,12 @@ def _mapped_biarc_tangent_bounds(
         _mapped_arc_tangent_bound(local_biarc[1], mapped_biarc[1], scale, at_end=True),
     )
     if any(bound is None for bound in bounds):
-        return math.inf, math.inf, math.inf
+        return None
     finite = tuple(bound for bound in bounds if bound is not None)
-    return finite[0], finite[1] + finite[2], finite[3]
+    combined = finite[0], outward_sum(finite[1], finite[2]), finite[3]
+    if any(not math.isfinite(bound) for bound in combined):
+        return None
+    return combined
 
 
 def _certified_line(
@@ -880,27 +913,35 @@ def _cubic_within_biarc(
     biarc: tuple[ReferenceArc, ReferenceArc],
     deviation_limit: float,
     *,
-    start_parameter: float,
-    end_parameter: float,
+    start_parameter: Fraction,
+    end_parameter: Fraction,
     depth: int,
 ) -> float | None:
-    midpoint_parameter = (start_parameter + end_parameter) / 2.0
-    cubic_point = _evaluate_cubic(control_points, midpoint_parameter)
-    biarc_point = _evaluate_biarc(biarc, midpoint_parameter)
-    observed = math.nextafter(_distance(cubic_point, biarc_point), math.inf)
-    if observed > deviation_limit:
+    proof_biarc = tuple(
+        (
+            _point_xy(arc.start),
+            _point_xy(arc.end),
+            _point_xy(arc.centre),
+            float(arc.sweep),
+        )
+        for arc in biarc
+    )
+    midpoint_parameter = (start_parameter + end_parameter) / 2
+    if biarc_correspondence_sample_exceeds(
+        control_points,
+        (proof_biarc[0], proof_biarc[1]),
+        midpoint_parameter,
+        deviation_limit,
+    ):
         return None
-
-    half_width = (end_parameter - start_parameter) / 2.0
-    cubic_speed_bound = outward_product(
-        3.0,
-        max(math.nextafter(_distance(control_points[index], control_points[index + 1]), math.inf) for index in range(3)),
+    enclosure = biarc_correspondence_node_bound(
+        control_points,
+        (proof_biarc[0], proof_biarc[1]),
+        start_parameter,
+        end_parameter,
     )
-    biarc_speed = outward_sum(*(_arc_length_upper(arc) for arc in biarc))
-    enclosure = outward_sum(
-        observed,
-        outward_product(half_width, outward_sum(cubic_speed_bound, biarc_speed)),
-    )
+    if enclosure is None:
+        return None
     if enclosure <= deviation_limit:
         return enclosure
     if depth >= MAX_RECONSTRUCTION_SUBDIVISIONS:
@@ -913,6 +954,8 @@ def _cubic_within_biarc(
         end_parameter=midpoint_parameter,
         depth=depth + 1,
     )
+    if left_bound is None:
+        return None
     right_bound = _cubic_within_biarc(
         control_points,
         biarc,
@@ -921,38 +964,9 @@ def _cubic_within_biarc(
         end_parameter=end_parameter,
         depth=depth + 1,
     )
-    if left_bound is None or right_bound is None:
+    if right_bound is None:
         return None
     return max(left_bound, right_bound)
-
-
-def _evaluate_biarc(biarc: tuple[ReferenceArc, ReferenceArc], parameter: float) -> _XY:
-    first_length = _arc_length(biarc[0])
-    second_length = _arc_length(biarc[1])
-    total_length = first_length + second_length
-    travelled = parameter * total_length
-    if travelled <= first_length:
-        return _evaluate_arc(biarc[0], travelled / first_length)
-    return _evaluate_arc(biarc[1], (travelled - first_length) / second_length)
-
-
-def _evaluate_arc(arc: ReferenceArc, parameter: float) -> _XY:
-    return _rotate_about(
-        _point_xy(arc.start),
-        _point_xy(arc.centre),
-        float(arc.sweep) * parameter,
-    )
-
-
-def _arc_length(arc: ReferenceArc) -> float:
-    return _distance(_point_xy(arc.start), _point_xy(arc.centre)) * abs(float(arc.sweep))
-
-
-def _arc_length_upper(arc: ReferenceArc) -> float:
-    return outward_product(
-        math.nextafter(_distance(_point_xy(arc.start), _point_xy(arc.centre)), math.inf),
-        abs(float(arc.sweep)),
-    )
 
 
 def _arc_tangent(arc: ReferenceArc, *, at_end: bool) -> _XY:
@@ -973,26 +987,46 @@ def _cubic_within_circle(
     *,
     depth: int,
 ) -> float | None:
-    centre, _ = candidate
-    radius = _distance(control_points[0], centre)
-    midpoint = _evaluate_cubic(control_points, 0.5)
-    midpoint_deviation = math.nextafter(abs(_distance(midpoint, centre) - radius), math.inf)
-    if midpoint_deviation > deviation_limit:
-        return None
+    return _cubic_within_stored_circle(
+        control_points,
+        candidate,
+        control_points[0],
+        deviation_limit,
+        depth=depth,
+    )
 
-    minimum_radius, maximum_radius = control_hull_radius_bounds(control_points, centre)
-    radius_lower = math.nextafter(radius, -math.inf)
-    radius_upper = math.nextafter(radius, math.inf)
-    minimum_lower = max(0.0, math.nextafter(minimum_radius, -math.inf))
-    maximum_upper = math.nextafter(maximum_radius, math.inf)
-    enclosure = math.nextafter(max(radius_upper - minimum_lower, maximum_upper - radius_lower, midpoint_deviation), math.inf)
+
+def _cubic_within_stored_circle(
+    control_points: tuple[_XY, _XY, _XY, _XY],
+    candidate: tuple[_XY, float],
+    radius_point: _XY,
+    deviation_limit: float,
+    *,
+    depth: int,
+) -> float | None:
+    centre, _ = candidate
+    enclosure = circle_deviation_upper_bound(control_points, centre, radius_point)
+    if enclosure is None:
+        return None
     if enclosure <= deviation_limit:
         return enclosure
     if depth >= MAX_RECONSTRUCTION_SUBDIVISIONS:
         return None
     left, right = _split_cubic(control_points)
-    left_bound = _cubic_within_circle(left, candidate, deviation_limit, depth=depth + 1)
-    right_bound = _cubic_within_circle(right, candidate, deviation_limit, depth=depth + 1)
+    left_bound = _cubic_within_stored_circle(
+        left,
+        candidate,
+        radius_point,
+        deviation_limit,
+        depth=depth + 1,
+    )
+    right_bound = _cubic_within_stored_circle(
+        right,
+        candidate,
+        radius_point,
+        deviation_limit,
+        depth=depth + 1,
+    )
     if left_bound is None or right_bound is None:
         return None
     return max(left_bound, right_bound)
@@ -1005,54 +1039,11 @@ def _cubic_has_monotone_polar_angle(
     *,
     depth: int,
 ) -> bool:
-    coefficients = _polar_derivative_bernstein_coefficients(control_points, centre)
-    directed = tuple(direction * coefficient for coefficient in coefficients)
-    if min(directed) >= 0.0:
-        return True
-
-    midpoint = _evaluate_cubic(control_points, 0.5)
-    midpoint_derivative = _evaluate_cubic_derivative(control_points, 0.5)
-    if direction * _cross(_subtract(midpoint, centre), midpoint_derivative) < 0.0:
-        return False
-    if depth >= MAX_RECONSTRUCTION_SUBDIVISIONS:
-        return False
-    left, right = _split_cubic(control_points)
-    return _cubic_has_monotone_polar_angle(left, centre, direction, depth=depth + 1) and _cubic_has_monotone_polar_angle(right, centre, direction, depth=depth + 1)
-
-
-def _polar_derivative_bernstein_coefficients(control_points: tuple[_XY, _XY, _XY, _XY], centre: _XY) -> tuple[float, float, float, float, float, float]:
-    relative = tuple(_subtract(point, centre) for point in control_points)
-    derivatives = tuple(_scale(_subtract(control_points[index + 1], control_points[index]), 3.0) for index in range(3))
-    coefficients: list[float] = []
-    for degree in range(6):
-        coefficient = 0.0
-        for cubic_index in range(max(0, degree - 2), min(3, degree) + 1):
-            derivative_index = degree - cubic_index
-            weight = math.comb(3, cubic_index) * math.comb(2, derivative_index) / math.comb(5, degree)
-            coefficient += weight * _cross(relative[cubic_index], derivatives[derivative_index])
-        coefficients.append(coefficient)
-    return (
-        coefficients[0],
-        coefficients[1],
-        coefficients[2],
-        coefficients[3],
-        coefficients[4],
-        coefficients[5],
-    )
-
-
-def _evaluate_cubic_derivative(control_points: tuple[_XY, _XY, _XY, _XY], parameter: float) -> _XY:
-    complement = 1.0 - parameter
-    edges = tuple(_subtract(control_points[index + 1], control_points[index]) for index in range(3))
-    return _scale(
-        _add(
-            _add(
-                _scale(edges[0], complement**2),
-                _scale(edges[1], 2.0 * complement * parameter),
-            ),
-            _scale(edges[2], parameter**2),
-        ),
-        3.0,
+    return certify_monotone_polar_angle(
+        control_points,
+        centre,
+        direction,
+        MAX_RECONSTRUCTION_SUBDIVISIONS - depth,
     )
 
 
@@ -1078,14 +1069,12 @@ def _evaluate_cubic(control_points: tuple[_XY, _XY, _XY, _XY], parameter: float)
     )
 
 
-def _control_points_are_collinear(
+def _control_points_are_exactly_collinear(
     control_points: tuple[_XY, _XY, _XY, _XY],
 ) -> bool:
-    chord = _subtract(control_points[3], control_points[0])
-    chord_length = _length(chord)
-    return all(
-        abs(_cross(chord, _subtract(point, control_points[0]))) <= NORMALIZED_ROUNDOFF * chord_length * _distance(point, control_points[0]) for point in control_points[1:3]
-    )
+    exact = tuple(fraction_xy(point) for point in control_points)
+    chord = exact[3][0] - exact[0][0], exact[3][1] - exact[0][1]
+    return all(chord[0] * (point[1] - exact[0][1]) - chord[1] * (point[0] - exact[0][0]) == 0 for point in exact[1:3])
 
 
 def _vectors_align(left: _XY, right: _XY) -> bool:
@@ -1150,3 +1139,7 @@ def _unit(vector: _XY) -> _XY:
 
 def _distance(left: _XY, right: _XY) -> float:
     return _length(_subtract(left, right))
+
+
+def _finite_normal_or_zero(value: float) -> bool:
+    return math.isfinite(value) and (value == 0.0 or abs(value) >= sys.float_info.min)
