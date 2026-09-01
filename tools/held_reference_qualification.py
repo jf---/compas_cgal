@@ -9,6 +9,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
+from typing import NewType
 from typing import Protocol
 from typing import TypeAlias
 
@@ -25,6 +26,7 @@ EXPECTED_CASES = CANONICAL_CASE_NAMES
 DEFAULT_REPORT_PATH = Path("docs/benchmarks/held_reference_qualification.md")
 
 QualificationStatus = Literal["passed", "failed"]
+Seconds = NewType("Seconds", float)
 
 
 class GeneratedPath(Protocol):
@@ -35,7 +37,7 @@ class GeneratedPath(Protocol):
 
 
 Generator: TypeAlias = Callable[[PocketSpec], GeneratedPath]
-Clock: TypeAlias = Callable[[], float]
+Clock: TypeAlias = Callable[[], Seconds]
 
 # These are the existing, closed product failures qualification may preserve.
 # Everything else is a broken run and deliberately propagates.
@@ -44,6 +46,11 @@ RECORDED_PRODUCT_FAILURES = (
     EmptyToolpathError,
     DegeneratePrimitiveError,
 )
+APPROVED_FAILURE_NAMES = tuple(error_type.__name__ for error_type in RECORDED_PRODUCT_FAILURES)
+
+
+def _monotonic_seconds() -> Seconds:
+    return Seconds(time.perf_counter())
 
 
 @dataclass(frozen=True)
@@ -55,11 +62,14 @@ class QualificationOutcome:
     projection_count: int
     status: QualificationStatus
     operation_count: int
-    generation_seconds: float
+    generation_seconds: Seconds
     failure_type: str | None
     failure_message: str | None
 
     def __post_init__(self) -> None:
+        self._validate()
+
+    def _validate(self) -> None:
         if self.case_name not in EXPECTED_CASES:
             raise MalformedRecordError(f"Unknown qualification case: {self.case_name!r}.")
         counts = (self.primitive_count, self.projection_count, self.operation_count)
@@ -67,11 +77,16 @@ class QualificationOutcome:
             raise MalformedRecordError("Qualification counts must be non-negative.")
         if not math.isfinite(self.generation_seconds) or self.generation_seconds < 0.0:
             raise MalformedRecordError("Qualification generation time must be finite and non-negative.")
+        if self.status not in ("passed", "failed"):
+            raise MalformedRecordError(f"Unknown qualification status: {self.status!r}.")
         if self.status == "passed":
             if self.operation_count == 0 or self.failure_type is not None or self.failure_message is not None:
                 raise MalformedRecordError("A passed qualification needs operations and no failure.")
-        elif self.operation_count != 0 or not self.failure_type or not self.failure_message:
-            raise MalformedRecordError("A failed qualification needs one named failure and no operations.")
+        else:
+            if self.operation_count != 0 or self.failure_message is None:
+                raise MalformedRecordError("A failed qualification needs one named failure and no operations.")
+            if self.failure_type not in APPROVED_FAILURE_NAMES:
+                raise MalformedRecordError(f"A failed qualification needs an approved product failure, got {self.failure_type!r}.")
 
     @classmethod
     def passed(
@@ -81,7 +96,7 @@ class QualificationOutcome:
         primitive_count: int,
         projection_count: int,
         operation_count: int,
-        generation_seconds: float,
+        generation_seconds: Seconds,
     ) -> QualificationOutcome:
         """Build a successful qualification outcome."""
         return cls(
@@ -102,10 +117,12 @@ class QualificationOutcome:
         case_name: str,
         primitive_count: int,
         projection_count: int,
-        generation_seconds: float,
+        generation_seconds: Seconds,
         error: Exception,
     ) -> QualificationOutcome:
         """Build an outcome for one approved named product failure."""
+        if type(error) not in RECORDED_PRODUCT_FAILURES:
+            raise MalformedRecordError(f"Qualification cannot record unapproved product failure {type(error).__name__}.")
         return cls(
             case_name=case_name,
             primitive_count=primitive_count,
@@ -121,7 +138,7 @@ class QualificationOutcome:
 def qualify_cases(
     generator: Generator,
     *,
-    clock: Clock = time.perf_counter,
+    clock: Clock = _monotonic_seconds,
 ) -> tuple[QualificationOutcome, ...]:
     """Run the injected generator serially on exactly four canonical cases."""
     cases = load_all_held_reference_cases()
@@ -138,12 +155,14 @@ def qualify_cases(
             if operation_count == 0:
                 raise EmptyToolpathError(f"{case.name}: existing generator returned no operations.")
         except RECORDED_PRODUCT_FAILURES as error:
+            if type(error) not in RECORDED_PRODUCT_FAILURES:
+                raise
             outcomes.append(
                 QualificationOutcome.failed(
                     case_name=case.name,
                     primitive_count=len(case.boundary.primitives),
                     projection_count=case.projection_vertex_count,
-                    generation_seconds=clock() - started,
+                    generation_seconds=Seconds(clock() - started),
                     error=error,
                 )
             )
@@ -155,7 +174,7 @@ def qualify_cases(
                 primitive_count=len(case.boundary.primitives),
                 projection_count=case.projection_vertex_count,
                 operation_count=operation_count,
-                generation_seconds=clock() - started,
+                generation_seconds=Seconds(clock() - started),
             )
         )
     return tuple(outcomes)
@@ -176,12 +195,14 @@ def render_qualification_markdown(outcomes: Sequence[QualificationOutcome]) -> s
         "| --- | ---: | ---: | --- | ---: | ---: | --- |",
     ]
     for outcome in outcomes:
+        outcome._validate()
         failure = "—"
         if outcome.failure_type is not None:
-            failure = f"`{outcome.failure_type}`: {outcome.failure_message}"
+            failure_message = _markdown_table_cell(outcome.failure_message or "")
+            failure = f"`{outcome.failure_type}`: {failure_message}"
         lines.append(
             f"| {outcome.case_name} | {outcome.primitive_count} | {outcome.projection_count} "
-            f"| {outcome.status} | {outcome.operation_count} | {outcome.generation_seconds:.6f} | {failure} |"
+            f"| {outcome.status} | {outcome.operation_count} | {float(outcome.generation_seconds):.6f} | {failure} |"
         )
     lines.extend(
         [
@@ -191,6 +212,11 @@ def render_qualification_markdown(outcomes: Sequence[QualificationOutcome]) -> s
         ]
     )
     return "\n".join(lines)
+
+
+def _markdown_table_cell(value: str) -> str:
+    normalized = value.replace("\r\n", "\n").replace("\r", "\n")
+    return normalized.replace("\n", "<br>").replace("|", r"\|")
 
 
 def write_qualification_report(

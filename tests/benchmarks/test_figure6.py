@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
+import benchmarks.figure6 as figure6_module
 from benchmarks.families.analytic import rectangle
 from benchmarks.figure6 import NO_BASELINE_CELL
 from benchmarks.figure6 import Figure6Point
@@ -50,6 +52,19 @@ def test_figure6_reference_pocket_rebuilds_the_requested_cap() -> None:
 
     assert spec.tea_cap_deg == pytest.approx(140.0)
     assert spec.name == "figure5"
+
+
+def test_figure6_source_description_does_not_retain_rectangle_only_measurements() -> None:
+    assert "127 degrees" not in (figure6_module.__doc__ or "")
+
+
+def test_benchmark_docs_mark_the_old_rectangle_figures_as_historical() -> None:
+    text = Path("docs/benchmarks.md").read_text(encoding="utf-8")
+    normalized = " ".join(text.split())
+
+    assert "historical rectangle evidence" in normalized
+    assert "predates the current Figure 5 input seam" in normalized
+    assert "not reproducible by the current Figure 6 CLI" in normalized
 
 
 def _spec(cap_deg: float = 120.0):

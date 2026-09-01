@@ -76,30 +76,37 @@ horizontal line through the cutter centre and is therefore sensitive to precisel
 
 ## Findings this corpus produced
 
-### Figure 6 reproduced
+### Historical Figure 6 rectangle study
 
-Held & Pfeiffer's Figure 6 plots path length against the engagement cap. It is the only directly
-reproducible published result in the paper, and reproducing it turns a performance claim into a
-comparison a reader can check.
+The material in this section is **historical rectangle evidence** produced on
+`rect_20x12`. It predates the current Figure 5 input seam.
+It is not reproducible by the current Figure 6 CLI, which now resolves the
+reconstructed Figure 5 projection. The plots are retained to preserve the
+earlier measured finding; they are not evidence about the reconstructed
+publisher pocket.
 
-![Path length against engagement cap, this project's reproduction](assets/images/fig6_ours.svg){ width="100%" }
+Held & Pfeiffer's Figure 6 plots path length against the engagement cap. The
+historical study reproduced its protocol and axes with two generators from this
+repository, not the paper's curves.
+
+![Historical rectangle path length against engagement cap](assets/images/fig6_ours.svg){ width="100%" }
 
 /// caption
-Our reproduction on `rect_20x12`, tool ⌀2. The engagement-controlled generator's path is shorter
+Historical rectangle run on `rect_20x12`, tool ⌀2. The engagement-controlled generator's path is shorter
 everywhere the comparison exists — **0.31× at a 120° cap**. Constant spacing has no compliant
 result below a 100° cap, so those rows are marked rather than dropped.
 ///
 
-### The shape diff against Held
+### Historical rectangle shape diff against Held
 
 Held's absolute lengths are in his own pocket's units, so overlaying them on ours would compare
 nothing. Dividing each curve by its own length at a 160° cap removes the units and leaves the
 comparable quantity: **how steeply the path has to grow as the cap tightens.**
 
-![Normalised path-length growth, ours against Held's digitised curves](assets/images/fig6_diff_vs_held.svg){ width="100%" }
+![Historical normalized rectangle path-length growth against Held's digitized curves](assets/images/fig6_diff_vs_held.svg){ width="100%" }
 
 /// caption
-Held's curves are **digitised by eye** from the paper's log-scale plot — no values are tabulated
+Historical rectangle comparison. Held's curves are **digitised by eye** from the paper's log-scale plot — no values are tabulated
 there — so they are usable for shape, not for absolute length. His paths grow **40–60×** as the cap
 tightens from 160° to 20°. Ours grows **6.8×**, and that flatness is not an advantage: it is the
 saturation above, seen from a second direction. A generator that genuinely honoured a 20° cap would
@@ -107,13 +114,13 @@ have to work much harder, and its curve would climb like Held's.
 ///
 
 
-!!! success "Engagement control shortens the path 2–5×"
+!!! success "Historical rectangle result: engagement control shortened the path 2–5×"
 
-    Figure 6 reproduction, `rect_20x12`, tool ⌀2: the engagement-controlled generator's path is
+    Historical Figure 6 rectangle run, `rect_20x12`, tool ⌀2: the engagement-controlled generator's path is
     **0.19–0.43×** the length of the best compliant constant-spacing path. Same direction and rough
     magnitude as Held's own claim against MATHSM.
 
-!!! warning "Engagement control saturates near 141° and cannot deliver tighter caps"
+!!! warning "Historical rectangle result: engagement control saturated near 141°"
 
     Asking for a 20° cap yields the same measured maximum as asking for 140°:
 
