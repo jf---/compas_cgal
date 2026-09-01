@@ -181,6 +181,18 @@ class InvalidReferenceReconstructionError(BenchmarkError):
     """A reference reconstruction is empty, disconnected, or carries an invalid proof bound."""
 
 
+class UnknownHeldReferenceCaseError(BenchmarkError):
+    """A requested Held-Pfeiffer case has no committed corpus document."""
+
+
+class MalformedHeldReferenceCaseError(BenchmarkError):
+    """A Held-Pfeiffer document violates its closed schema or geometric evidence."""
+
+
+class UnsupportedHeldReferenceVersionError(BenchmarkError):
+    """A Held-Pfeiffer document uses an unsupported schema version."""
+
+
 class UnsupportedPdfBoundaryOperatorError(BenchmarkError):
     """A selected publisher path uses an unsupported drawing operator."""
 

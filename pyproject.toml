@@ -179,6 +179,7 @@ hypothesis = "*"
 ruff = "*"
 mypy = "*"
 jsonschema = "*"
+types-jsonschema = "*"
 # Figures only. `benchmarks.plotting` is the one importer; nothing under `src`
 # depends on it, so the wheel never sees it.
 matplotlib = ">=3.8"
@@ -223,8 +224,9 @@ figures = { cmd = '''editable_build_dir="$(python -c 'import sys; print(next(f.p
 format-adaptive = "ruff format src/compas_cgal/adaptive tests/adaptive"
 types-adaptive = "mypy --strict --warn-unused-ignores src/compas_cgal/adaptive tests/adaptive/typecheck/consumer_contract.py"
 types-audit = "mypy --strict --warn-unused-ignores src/compas_cgal/engagement_audit src/compas_cgal/adaptive/motion.py tests/adaptive/typecheck/auditor_contract.py"
-types-benchmarks = "mypy --strict --warn-unused-ignores benchmarks/held_reference_certification.py benchmarks/held_reference_geometry.py tools/held_reference_extractor.py tests/benchmarks/typecheck/held_reference_contract.py tests/tools/typecheck/held_reference_extractor_contract.py"
+types-benchmarks = "mypy --strict --warn-unused-ignores benchmarks/held_reference_certification.py benchmarks/held_reference_geometry.py benchmarks/held_reference_cases.py tools/held_reference_extractor.py tools/held_reference_case_generator.py tests/benchmarks/typecheck/held_reference_contract.py tests/benchmarks/typecheck/held_reference_cases_contract.py tests/tools/typecheck/held_reference_extractor_contract.py"
 held-reference-extract = { cmd = "python -m tools.held_reference_extractor", description = "Extract Held-Pfeiffer reference vectors" }
+held-reference-generate = { cmd = "python -m tools.held_reference_case_generator", description = "Generate Held-Pfeiffer reference cases" }
 held-reference-live = { cmd = '''editable_build_dir="$(python -c 'import sys; print(next(f.path for f in sys.meta_path if hasattr(f, "known_wheel_files") and "compas_cgal._stock_2" in f.known_wheel_files))')" && SKBUILD_EDITABLE_SKIP="$editable_build_dir" pytest tests/tools/held_reference_live_pdf_oracle.py -n auto -q''', depends-on = ["_editable-rebuild"], description = "Verify Held-Pfeiffer vectors against the local publisher PDF" }
 held-reference-reconstruct-live = { cmd = '''editable_build_dir="$(python -c 'import sys; print(next(f.path for f in sys.meta_path if hasattr(f, "known_wheel_files") and "compas_cgal._stock_2" in f.known_wheel_files))')" && SKBUILD_EDITABLE_SKIP="$editable_build_dir" pytest tests/benchmarks/held_reference_live_reconstruction_oracle.py -n auto -q''', depends-on = ["_editable-rebuild"], description = "Reconstruct Held-Pfeiffer reference cycles from the local publisher PDF" }
 schema = { cmd = '''editable_build_dir="$(python -c 'import sys; print(next(f.path for f in sys.meta_path if hasattr(f, "known_wheel_files") and "compas_cgal._stock_2" in f.known_wheel_files))')" && SKBUILD_EDITABLE_SKIP="$editable_build_dir" pytest tests/adaptive/test_schema.py -n auto -q''', depends-on = ["_editable-rebuild"] }
