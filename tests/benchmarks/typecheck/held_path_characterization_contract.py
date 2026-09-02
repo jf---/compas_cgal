@@ -1,4 +1,4 @@
-from typing import assert_type
+from typing_extensions import assert_type
 
 from benchmarks.units import Degrees
 from benchmarks.units import MotionCount
