@@ -411,7 +411,20 @@ class PathQualityAttribution:
         ):
             if step is not None and type(step) is not MeasuredStep:
                 raise InvalidHeldPathEvidenceError(f"{name} must be one validated measured step or None.")
+            if step is not None:
+                OperationPair.build(
+                    previous=step.pair.previous,
+                    current=step.pair.current,
+                    operation_count=operation_count,
+                )
             checked[name] = step
+        tangent_pairs = set(tangent_break_pairs)
+        reversal_pair_set = set(reversal_pairs)
+        curvature_pairs = set(curvature_break_pairs)
+        if not reversal_pair_set <= tangent_pairs:
+            raise InvalidHeldPathEvidenceError("every reversal pair must also be attributed as a tangent break.")
+        if not tangent_pairs.isdisjoint(curvature_pairs):
+            raise InvalidHeldPathEvidenceError("tangent-break and curvature-break pairs must be disjoint.")
         return _build_record(cls, checked)
 
 
