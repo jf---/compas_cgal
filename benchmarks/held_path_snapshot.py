@@ -309,12 +309,15 @@ class HeldCircleSnapshot:
 HeldOperationSnapshot: TypeAlias = Union[HeldLineSnapshot, HeldArcSnapshot, HeldCircleSnapshot]
 
 
-def _tangent(value: object, *, name: str) -> TangentSnapshot:
+def _tangent(value: object, *, name: str, operation: object) -> TangentSnapshot:
     if value is None:
         return None
     if type(value) is not np.ndarray or value.shape != (3,):
         raise InvalidHeldOperationSnapshotError(f"{name} must be None or an exact three-component ndarray.")
     tangent = _direction3(value, name=name)
+    if operation is OperationType.PLUNGE or operation is OperationType.RETRACT:
+        if tangent.x == 0.0 and tangent.y == 0.0 and tangent.z == 0.0:
+            return None
     _validate_direction(tangent, name=name)
     return tangent
 
@@ -327,8 +330,8 @@ def _metadata(
     operation = source.operation
     path_index = source.path_index
     clockwise = source.clockwise
-    start_tangent = _tangent(source.start_tangent, name="start tangent")
-    end_tangent = _tangent(source.end_tangent, name="end tangent")
+    start_tangent = _tangent(source.start_tangent, name="start tangent", operation=operation)
+    end_tangent = _tangent(source.end_tangent, name="end tangent", operation=operation)
     _validate_metadata(ordinal, operation, path_index, clockwise, start_tangent, end_tangent)
     return operation, path_index, clockwise, start_tangent, end_tangent
 
