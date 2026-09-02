@@ -28,7 +28,9 @@ from compas.geometry import Frame
 from compas.geometry import Line
 from compas.geometry import Polygon
 
+import benchmarks.quality as quality_module
 from benchmarks.coverage import CoarseCoverageGridError
+from benchmarks.coverage import CoverageEstimate
 from benchmarks.coverage import measure_coverage
 from benchmarks.errors import EmptyReachableRegionError
 from benchmarks.errors import InvalidGridResolutionError
@@ -45,6 +47,7 @@ from benchmarks.gate import GATE_GENERATORS
 from benchmarks.gate import GATE_POCKET_NAMES
 from benchmarks.gate import GateCapDegrees
 from benchmarks.gate import gate_pocket
+from benchmarks.held_path_snapshot import snapshot_toolpath
 from benchmarks.models import MachineModel
 from benchmarks.models import MaterialModel
 from benchmarks.quality import CHIP_PLATEAU_DEG
@@ -64,9 +67,14 @@ from benchmarks.quality import machine_outcome
 from benchmarks.quality import material_outcome
 from benchmarks.quality import measure_quality
 from benchmarks.quality import tool_life_outcome
+from benchmarks.quality_observations import OperationPair
+from benchmarks.quality_observations import PathQualityAssessment
+from benchmarks.quality_observations import assess_path_quality
 from benchmarks.spec import PocketSpec
 from benchmarks.survey import _swept_area
+from benchmarks.survey import PathSurvey
 from benchmarks.survey import survey_path
+from benchmarks.units import OperationIndex
 from compas_cgal import _stock_2
 from compas_cgal.engagement import _cap_chord_ratio
 from compas_cgal.stock import Stock
@@ -419,6 +427,29 @@ def test_air_counts_the_retract_and_never_the_plunge() -> None:
     assert quality.speed.air_fraction == pytest.approx(retract_length / (plunge_length + retract_length + circle_length))
 
 
+def test_attributed_gate_observations_match_old_reducers_on_a_synthetic_path() -> None:
+    result = _result(
+        [
+            _plunge(0.0, 0.0),
+            _circle(0.0, 0.0, 1.0),
+            _link_line(1.0, 0.0, 2.0, 0.0),
+            _circle(-1.0, 0.0, 3.0),
+        ]
+    )
+    quality = measure_quality(SYNTHETIC, result, samples_per_motion=FAST_SAMPLES, grid=SYNTHETIC_GRID)
+    survey = survey_path(SYNTHETIC, result, samples_per_motion=FAST_SAMPLES)
+    coverage = measure_coverage(SYNTHETIC, survey.final_stock, grid=SYNTHETIC_GRID)
+    assessment = assess_path_quality(SYNTHETIC, snapshot_toolpath(result), survey, coverage)
+
+    _assert_quality_parity(SYNTHETIC, quality, assessment)
+    engagement_maximum = assessment.attribution.max_engagement_step
+    loop_maximum = assessment.attribution.max_loop_radius_step
+    assert engagement_maximum is not None
+    assert engagement_maximum.pair == OperationPair.build(previous=OperationIndex(2), current=OperationIndex(3), operation_count=4)
+    assert loop_maximum is not None
+    assert loop_maximum.pair == OperationPair.build(previous=OperationIndex(1), current=OperationIndex(3), operation_count=4)
+
+
 # ---------------------------------------------------------------------------
 # The model boundary: a coefficient is never guessed.
 # ---------------------------------------------------------------------------
@@ -682,6 +713,79 @@ def test_the_named_empty_reachable_error_exists_for_a_pocket_a_grid_cannot_see()
 # ---------------------------------------------------------------------------
 
 
+def _assert_quality_parity(spec: PocketSpec, quality: PathQuality, assessment: PathQualityAssessment) -> None:
+    """Prove the additive observations reproduce every existing gate input."""
+    old_and_new = (
+        (quality.elementary.uncut_fraction, assessment.uncut_fraction.measured),
+        (quality.elementary.gouging_motions, assessment.gouging_motions.measured),
+        (quality.elementary.unsafe_rapids, assessment.unsafe_rapids.measured),
+        (quality.elementary.continuity_breaks, assessment.continuity_breaks.measured),
+        (quality.elementary.zero_length_motions, assessment.zero_length_motions.measured),
+        (quality.elementary.degenerate_loops, assessment.degenerate_loops.measured),
+        (quality.elementary.redundant_operations, assessment.redundant_operations.measured),
+        (quality.cut.cap_exceedances, assessment.cap_exceedances.measured),
+        (quality.cut.slotting_motions, assessment.slotting_motions.measured),
+        (quality.cut.max_engagement_step_deg, assessment.max_engagement_step.measured),
+        (quality.cut.max_loop_radius_step, assessment.max_loop_radius_step.measured),
+        (quality.speed.tangent_breaks, assessment.tangent_breaks.measured),
+    )
+    assert all(old == new for old, new in old_and_new)
+
+    required = (
+        assessment.uncut_fraction.required,
+        assessment.gouging_motions.required,
+        assessment.unsafe_rapids.required,
+        assessment.continuity_breaks.required,
+        assessment.zero_length_motions.required,
+        assessment.degenerate_loops.required,
+        assessment.redundant_operations.required,
+        assessment.cap_exceedances.required,
+        assessment.slotting_motions.required,
+        assessment.max_engagement_step.required,
+        assessment.max_loop_radius_step.required,
+        assessment.tangent_breaks.required,
+    )
+    assert required == (
+        REQUIRED_UNCUT_FRACTION,
+        REQUIRED_GOUGING_MOTIONS,
+        REQUIRED_UNSAFE_RAPIDS,
+        REQUIRED_CONTINUITY_BREAKS,
+        REQUIRED_ZERO_LENGTH_MOTIONS,
+        REQUIRED_DEGENERATE_LOOPS,
+        REQUIRED_REDUNDANT_OPERATIONS,
+        REQUIRED_CAP_EXCEEDANCES,
+        REQUIRED_SLOTTING_MOTIONS,
+        REQUIRED_ENGAGEMENT_STEP_CAP_MULTIPLE * spec.tea_cap_deg,
+        REQUIRED_MAX_LOOP_RADIUS_STEP_TOOL_RADII,
+        REQUIRED_TANGENT_BREAKS,
+    )
+
+    attribution = assessment.attribution
+    count_and_sources = (
+        (assessment.gouging_motions.measured, attribution.gouging_operations),
+        (assessment.unsafe_rapids.measured, attribution.unsafe_rapid_operations),
+        (assessment.continuity_breaks.measured, attribution.continuity_break_pairs),
+        (assessment.zero_length_motions.measured, attribution.zero_length_operations),
+        (assessment.degenerate_loops.measured, attribution.degenerate_loop_operations),
+        (assessment.redundant_operations.measured, attribution.redundant_operations),
+        (assessment.cap_exceedances.measured, attribution.cap_exceeded_operations),
+        (assessment.slotting_motions.measured, attribution.slotting_operations),
+        (assessment.tangent_breaks.measured, attribution.tangent_break_pairs),
+    )
+    assert all(count == len(sources) for count, sources in count_and_sources)
+    assert attribution.uncut_operations == ()
+
+    for old_maximum, observation in (
+        (quality.cut.max_engagement_step_deg, attribution.max_engagement_step),
+        (quality.cut.max_loop_radius_step, attribution.max_loop_radius_step),
+    ):
+        if old_maximum == 0.0:
+            assert observation is None
+        else:
+            assert observation is not None
+            assert observation.value == old_maximum
+
+
 def _violations(spec: PocketSpec, quality: PathQuality) -> list:
     """Every gate criterion *quality* fails, as ``measured against required`` lines.
 
@@ -829,6 +933,7 @@ def test_the_generated_path_is_worth_running(
     tea_cap_deg: GateCapDegrees,
     generator_name: str,
     pocket_name: str,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Every machining-quality criterion, on one pocket and one generator.
 
@@ -837,6 +942,29 @@ def test_the_generated_path_is_worth_running(
     rather than a boolean.
     """
     spec = gate_pocket(pocket_name, tea_cap_deg=tea_cap_deg)
-    quality = measure_quality(spec, GATE_GENERATORS[generator_name](spec))
+    result = GATE_GENERATORS[generator_name](spec)
+    snapshot = snapshot_toolpath(result)
+    surveys: list[PathSurvey] = []
+    coverages: list[CoverageEstimate] = []
+    original_survey_path = quality_module.survey_path
+    original_measure_coverage = quality_module.measure_coverage
+
+    def capture_survey(spec_arg: PocketSpec, result_arg: ToolpathResult, *, samples_per_motion: int) -> PathSurvey:
+        survey = original_survey_path(spec_arg, result_arg, samples_per_motion=samples_per_motion)
+        surveys.append(survey)
+        return survey
+
+    def capture_coverage(spec_arg: PocketSpec, stock: Stock, *, grid: int) -> CoverageEstimate:
+        coverage = original_measure_coverage(spec_arg, stock, grid=grid)
+        coverages.append(coverage)
+        return coverage
+
+    monkeypatch.setattr(quality_module, "survey_path", capture_survey)
+    monkeypatch.setattr(quality_module, "measure_coverage", capture_coverage)
+    quality = measure_quality(spec, result)
+    assert len(surveys) == 1
+    assert len(coverages) == 1
+    assessment = assess_path_quality(spec, snapshot, surveys[0], coverages[0])
+    _assert_quality_parity(spec, quality, assessment)
     violations = _violations(spec, quality)
     assert not violations, _report(pocket_name, generator_name, quality, violations)

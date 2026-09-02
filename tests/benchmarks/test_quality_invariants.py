@@ -48,11 +48,15 @@ from hypothesis import strategies as st
 
 import numpy as np
 
+from benchmarks.coverage import CoverageEstimate
+from benchmarks.held_path_snapshot import snapshot_toolpath
 from benchmarks.quality import _cut
 from benchmarks.quality import _elementary
 from benchmarks.quality import _program
 from benchmarks.quality import _speed
 from benchmarks.quality import radial_immersion
+from benchmarks.quality_observations import PathQualityAssessment
+from benchmarks.quality_observations import assess_path_quality
 from benchmarks.survey import survey_path
 from benchmarks.spec import PocketSpec
 from compas_cgal.toolpath import OperationType
@@ -350,6 +354,59 @@ class _Groups:
         self.cut = _cut(spec, survey, 0.0, chain_of)
         self.speed = _speed(survey)
         self.program = _program(survey)
+        coverage = CoverageEstimate(
+            nx=1,
+            ny=1,
+            cell_area=1.0,
+            reachable_samples=1,
+            uncut_reachable_samples=0,
+            remaining_samples=0,
+            wall_scallop_height=0.0,
+        )
+        self.assessment = assess_path_quality(spec, snapshot_toolpath(result), survey, coverage)
+        _assert_invariant_quality_parity(self, self.assessment)
+
+
+def _assert_invariant_quality_parity(quality: _Groups, assessment: PathQualityAssessment) -> None:
+    """Keep every invariant example on both the old and attributed reducers."""
+    old_and_new = (
+        (quality.elementary.uncut_fraction, assessment.uncut_fraction.measured),
+        (quality.elementary.gouging_motions, assessment.gouging_motions.measured),
+        (quality.elementary.unsafe_rapids, assessment.unsafe_rapids.measured),
+        (quality.elementary.continuity_breaks, assessment.continuity_breaks.measured),
+        (quality.elementary.zero_length_motions, assessment.zero_length_motions.measured),
+        (quality.elementary.degenerate_loops, assessment.degenerate_loops.measured),
+        (quality.elementary.redundant_operations, assessment.redundant_operations.measured),
+        (quality.cut.cap_exceedances, assessment.cap_exceedances.measured),
+        (quality.cut.slotting_motions, assessment.slotting_motions.measured),
+        (quality.cut.max_engagement_step_deg, assessment.max_engagement_step.measured),
+        (quality.cut.max_loop_radius_step, assessment.max_loop_radius_step.measured),
+        (quality.speed.tangent_breaks, assessment.tangent_breaks.measured),
+    )
+    assert all(old == new for old, new in old_and_new)
+
+    attribution = assessment.attribution
+    count_and_sources = (
+        (assessment.gouging_motions.measured, attribution.gouging_operations),
+        (assessment.unsafe_rapids.measured, attribution.unsafe_rapid_operations),
+        (assessment.continuity_breaks.measured, attribution.continuity_break_pairs),
+        (assessment.zero_length_motions.measured, attribution.zero_length_operations),
+        (assessment.degenerate_loops.measured, attribution.degenerate_loop_operations),
+        (assessment.redundant_operations.measured, attribution.redundant_operations),
+        (assessment.cap_exceedances.measured, attribution.cap_exceeded_operations),
+        (assessment.slotting_motions.measured, attribution.slotting_operations),
+        (assessment.tangent_breaks.measured, attribution.tangent_break_pairs),
+    )
+    assert all(count == len(sources) for count, sources in count_and_sources)
+    for old_maximum, observation in (
+        (quality.cut.max_engagement_step_deg, attribution.max_engagement_step),
+        (quality.cut.max_loop_radius_step, attribution.max_loop_radius_step),
+    ):
+        if old_maximum == 0.0:
+            assert observation is None
+        else:
+            assert observation is not None
+            assert observation.value == old_maximum
 
 
 def _measure(spec: PocketSpec, result: ToolpathResult) -> _Groups:
