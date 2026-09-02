@@ -39,13 +39,17 @@ and pins the observation threshold to the existing gate constant:
 For each of the nine count observations, the test independently checks that the
 measured count equals the complete attributed operation or pair tuple length.
 Uncut stock remains spatial aggregate evidence and has no invented operation.
-Each nonzero engagement-step and loop-radius maximum carries a validated source
-pair whose value equals the old maximum; a zero maximum must carry `None`.
-The synthetic distinct-maximum case pins the engagement winner to operation
-pair `2 -> 3` and the loop-radius winner to operation pair `1 -> 3`. The full
-run also executes the Task 4 first-tie contracts, which pin engagement pair
-`0 -> 1`, loop pair `0 -> 2`, every over-threshold pair, and the no-pair result
-for a zero engagement maximum.
+For every synthetic, invariant-generated, and gate invocation, a test-side
+oracle independently reconstructs adjacent engagement candidates and loop
+runs from the raw survey and operation snapshot. It resets loop succession at
+rapid and path-chain boundaries, retains the first occurrence of a tied
+maximum, and requires the attributed maximum to name that exact pair; a zero
+maximum must carry `None`. It does not call the attributed reducer. The
+synthetic distinct-maximum case additionally pins the engagement winner to
+operation pair `2 -> 3` and the loop-radius winner to operation pair `1 -> 3`.
+The focused run also executes the Task 4 first-tie contracts, which pin
+engagement pair `0 -> 1`, loop pair `0 -> 2`, every over-threshold pair, and
+the no-pair result for a zero engagement maximum.
 
 ## Commands and results
 
@@ -53,17 +57,17 @@ for a zero engagement maximum.
 pixi run pytest -- tests/benchmarks/test_quality.py tests/benchmarks/test_quality_invariants.py -k 'not test_the_generated_path_is_worth_running and not test_moving_the_pocket_across_the_table_changes_no_metric' -n auto --testmon -q
 ```
 
-Fresh final result: exit 0, `42 passed in 8.96s`.
+Fix-round-1 result: exit 0, `43 passed in 11.75s`.
 
 ```text
 pixi run pytest -- tests/benchmarks/test_quality.py::test_the_generated_path_is_worth_running -n auto -q
 ```
 
-Fresh result: required exit 1, `12 failed, 12 warnings in 176.54s`. Every cell
-reached the unchanged final assertion after field parity and the local spies had
-proved exactly one `PathSurvey` and one `CoverageEstimate`. There were no parity,
-spy, snapshot, collection, configuration, interruption, or infrastructure
-failures.
+Fix-round-1 result: required exit 1, `12 failed, 12 warnings in 170.58s`.
+Every cell reached the unchanged final assertion after field, exact winning-pair
+parity, and the local spies had proved exactly one `PathSurvey` and one
+`CoverageEstimate`. There were no parity, spy, snapshot, collection,
+configuration, interruption, or infrastructure failures.
 
 The exact quality-red membership and unchanged criterion messages were:
 
