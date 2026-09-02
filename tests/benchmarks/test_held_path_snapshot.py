@@ -32,6 +32,16 @@ from compas_cgal.toolpath import ToolpathResult
 ResultMutation = Callable[[ToolpathResult], None]
 
 
+class _DeclaredToolpathResult(ToolpathResult):
+    pass
+
+
+class _ToolpathResultDuck:
+    def __init__(self, operations: list[ToolpathOperation], polyline: np.ndarray) -> None:
+        self.operations = operations
+        self.polyline = polyline
+
+
 def _operation(
     geometry: Line | Arc | Circle,
     *,
@@ -166,6 +176,25 @@ def test_structural_comparison_accepts_unchanged_toolpath() -> None:
     result = _representative_result()
 
     assert_toolpath_matches_snapshot(result, snapshot_toolpath(result))
+
+
+def test_declared_toolpath_result_subclass_snapshots_as_canonical_base_state() -> None:
+    operations = [_operation(Line([0.0, 0.0, 0.0], [1.0, 0.0, 0.0]))]
+    polyline = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]])
+    base = ToolpathResult(operations=operations, polyline=polyline)
+    subtype = _DeclaredToolpathResult(operations=operations, polyline=polyline)
+
+    assert snapshot_toolpath(subtype) == snapshot_toolpath(base)
+
+
+def test_toolpath_result_duck_is_rejected() -> None:
+    duck = _ToolpathResultDuck(
+        operations=[_operation(Line([0.0, 0.0, 0.0], [1.0, 0.0, 0.0]))],
+        polyline=np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]]),
+    )
+
+    with pytest.raises(InvalidHeldOperationSnapshotError, match="ToolpathResult"):
+        snapshot_toolpath(cast(ToolpathResult, duck))
 
 
 def _reverse_operations(result: ToolpathResult) -> None:

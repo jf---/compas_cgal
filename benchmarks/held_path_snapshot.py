@@ -391,8 +391,8 @@ def _snapshot_operation(
 
 def snapshot_toolpath(result: ToolpathResult) -> tuple[HeldOperationSnapshot, ...]:
     """Read a mutable toolpath once into behavior-complete immutable records."""
-    if type(result) is not ToolpathResult:
-        raise InvalidHeldOperationSnapshotError("result must be an exact ToolpathResult, not a subclass.")
+    if not isinstance(result, ToolpathResult):
+        raise InvalidHeldOperationSnapshotError("result must be a ToolpathResult.")
     if type(result.operations) is not list:
         raise InvalidHeldOperationSnapshotError("result operations must be one exact list.")
     operations = tuple(result.operations)
