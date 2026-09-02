@@ -1,7 +1,7 @@
 # Held Figure 5 2D Path Characterization Design
 
-> **status: draft for approval** - implementation starts only after this revised
-> written design is approved.
+> **status: approved** - approved for implementation planning on 2026-09-02;
+> generator repair and G-code remain outside Phase 1.
 
 ## Goal
 
@@ -214,13 +214,13 @@ not falsely attributed to one motion.
 
 ### `benchmarks/units.py`
 
-Owns the small shared benchmark unit vocabulary. It defines
-`BenchmarkMillimetres`, `Radians`, `Degrees`, `Seconds`, `UnitFraction`,
-`MotionCount`, `ToolRadiusMultiple`, `OperationIndex`, validated
-`Point2Millimetres[WorldXY]`, and validated
-`Point3Millimetres[WorldXYZ]`. Newly retained positions therefore carry both
-their frame and benchmark-normalized unit; frame axes and tangents use the
-existing unit-direction types.
+Owns the small shared benchmark observation-unit vocabulary. It defines
+`Degrees`, `Seconds`, `UnitFraction`, `MotionCount`, `ToolRadiusMultiple`, and
+`OperationIndex`. Geometry reuses the canonical `Millimetre`, `Radian`,
+`Point2[WorldXY]`, `Point3[WorldXYZ]`, and `Direction3[WorldXYZ]` types from
+`compas_cgal.adaptive.units`; no parallel point or length vocabulary is added.
+The report contract, rather than a duplicate physical unit, records that these
+millimetres are benchmark-normalized.
 
 ### `benchmarks/survey.py`
 
@@ -310,18 +310,25 @@ used to construct the corresponding `PathQuality` field.
 ### `benchmarks/held_path_evidence.py`
 
 Owns `EngagementDispositionCounts`, `EngagementExceedanceWitness` with
-`Point2Millimetres[WorldXY]`, and `HeldFigure5Characterization.build(...)`.
+`Point2[WorldXY]`, and `HeldFigure5Characterization.build(...)`.
 Its factory validates exact case name, complete operation classification,
-operation bounds, witness coordinates, mutually exclusive dispositions, and
-cross-consumer consistency. A characterization exists only after every consumer
-returns complete typed evidence.
+operation bounds, finite witness coordinates, mutually exclusive dispositions,
+and cross-consumer consistency. Witness positions are not required to lie inside
+the pocket or legal cutter-centre domain: an outside-domain sample is valid gouge
+evidence. A characterization exists only after every consumer returns complete
+typed evidence.
+
+The factory copies only immutable derived values into the characterization. It
+retains no `EngagementReport`, `PathSurvey`, `Stock`, `ToolpathResult`, COMPAS
+geometry object, NumPy array, or mutable collection supplied by a consumer.
 
 ### `benchmarks/held_post_qualification.py`
 
-Owns frozen, `init=False` `HeldPostQualificationCandidate` and
+Owns frozen, `init=False` `HeldPostQualificationCandidate`, the pure
+`post_qualification_failures(...) -> tuple[str, ...]` decision function, and
 `require_post_qualification_candidate(...)`. The candidate's only public
 construction path is `HeldPostQualificationCandidate.build(characterization)`,
-which re-evaluates every post-entry condition and raises
+which consumes that one decision function and raises
 `HeldPathNotEligibleForPostQualificationError` if one is open. A successful
 candidate owns both the closed characterization and its exact immutable
 operation snapshot. The retained characterization carries the exact Figure 5
@@ -331,6 +338,8 @@ Measured failure still yields a complete characterization, but never a
 candidate.
 `require_post_qualification_candidate` is the functional spelling of that same
 factory and delegates to it; it is not a second gate implementation.
+The Markdown renderer consumes `post_qualification_failures(...)` to state the
+same verdict without constructing or catching a candidate.
 
 All new invariant-bearing public records in this design are frozen with direct
 initialization disabled and expose `.build(...)` as their validated construction
@@ -369,6 +378,7 @@ def characterize_figure5(
     path_surveyor: PathSurveyor,
     quality_evidence_reducer: QualityEvidenceReducer,
     *,
+    phase_observer: Callable[[CharacterizationPhase], None],
     clock: Clock = _monotonic_seconds,
 ) -> HeldFigure5Characterization:
     ...
@@ -387,10 +397,13 @@ successful report or an empty result.
 It changes no values or decisions. `generate_toolpath`, `survey_path`, and
 `reduce_quality_evidence` already satisfy their respective protocols directly.
 
-`Clock = Callable[[], Seconds]`; `_monotonic_seconds()` is the typed wrapper
-around `time.perf_counter`. Characterization contains no optional consumer
-fields: a consumer returns its complete typed evidence or raises. There is no
-partially constructed characterization state.
+`CharacterizationPhase` is the closed literal vocabulary `generation`,
+`guarded_audit`, `survey`, and `quality_reduction`; the required observer is
+called immediately before each stage so a supervised live run exposes where it
+stopped. `Clock = Callable[[], Seconds]`; `_monotonic_seconds()` is the typed
+wrapper around `time.perf_counter`. Characterization contains no optional
+consumer fields: a consumer returns its complete typed evidence or raises. There
+is no partially constructed characterization state.
 
 ### `benchmarks/held_path_report.py`
 
@@ -398,18 +411,23 @@ Owns frozen, validated `HeldPathReportContext` with an aware UTC generation
 instant, exact Pixi invocation string, and generator policy name. It renders
 deterministic Markdown from `(HeldFigure5Characterization,
 HeldPathReportContext)`. It does not run geometry, decide criteria, read a clock,
-or write files.
+or write files; it obtains the post-entry verdict from
+`post_qualification_failures(...)` rather than duplicating its conditions.
 
 ### `tools/held_path_characterization.py`
 
 Owns only CLI argument handling, production wiring, and the write to
 `docs/benchmarks/held_figure5_2d_path.md`.
 
-The CLI constructs `HeldPathReportContext` using its injected UTC wall clock and
-the fixed `pixi run held-figure5-characterize` task invocation. This wall clock
-is distinct from the monotonic timing clock and is injected in tests as
-`UtcClock = Callable[[], datetime]`; `_utc_now()` returns an aware UTC
-`datetime`.
+The report writer requires the actual Pixi invocation as an argument. The normal
+CLI supplies `pixi run held-figure5-characterize`; the explicit live oracle
+supplies `pixi run held-figure5-characterize-live`. It constructs
+`HeldPathReportContext` using its injected UTC wall clock. This wall clock is
+distinct from the monotonic timing clock and is injected in tests as `UtcClock =
+Callable[[], datetime]`; `_utc_now()` returns an aware UTC `datetime`.
+The normal CLI passes `_print_phase` to orchestration and emits all four phase
+markers in order. The live oracle instead passes its ledger-writing observer;
+there is no omitted or no-op production observer path.
 
 Characterization itself exits successfully when complete even if the path is
 not eligible: its product is truthful evidence. A separate
@@ -443,6 +461,13 @@ The live oracle:
   any criterion or unresolved operation remains; and
 - records generation, guarded-audit, survey, and coverage-plus-reduction timings
   separately.
+
+Before generation, it writes the run start to
+`docs/superpowers/state/held-figure5-live-run.md`; the phase observer updates the
+same ledger before each stage. A report is current evidence only when its UTC
+generation instant postdates that run start. On operator-budget exhaustion, the
+ledger's last phase remains durable and any older report is explicitly prior,
+stale evidence rather than proof of this run.
 
 There is no arbitrary timeout in the product contract. If the protected audit
 cannot complete in the available execution window, Phase 1 reports a measured
@@ -526,6 +551,8 @@ New named failures are independent:
 - `InvalidHeldOperationSnapshotError`: a primitive contains non-finite,
   non-positive, non-unit, non-orthogonal, or otherwise malformed geometric
   fields;
+- `InvalidHeldPathReportContextError`: report invocation metadata is empty,
+  non-UTC, or otherwise malformed;
 - `InvalidHeldPathEvidenceError`: typed counts, units, or operation
   coverage are inconsistent;
 - `ContradictoryEngagementEvidenceError`: a certified operation also has an
