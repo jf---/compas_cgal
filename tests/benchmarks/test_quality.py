@@ -47,6 +47,7 @@ from benchmarks.gate import GATE_GENERATORS
 from benchmarks.gate import GATE_POCKET_NAMES
 from benchmarks.gate import GateCapDegrees
 from benchmarks.gate import gate_pocket
+from benchmarks.held_path_snapshot import HeldOperationSnapshot
 from benchmarks.held_path_snapshot import snapshot_toolpath
 from benchmarks.models import MachineModel
 from benchmarks.models import MaterialModel
@@ -72,6 +73,7 @@ from benchmarks.quality_observations import PathQualityAssessment
 from benchmarks.quality_observations import assess_path_quality
 from benchmarks.spec import PocketSpec
 from benchmarks.survey import _swept_area
+from benchmarks.survey import MotionKind
 from benchmarks.survey import PathSurvey
 from benchmarks.survey import survey_path
 from benchmarks.units import OperationIndex
@@ -439,15 +441,42 @@ def test_attributed_gate_observations_match_old_reducers_on_a_synthetic_path() -
     quality = measure_quality(SYNTHETIC, result, samples_per_motion=FAST_SAMPLES, grid=SYNTHETIC_GRID)
     survey = survey_path(SYNTHETIC, result, samples_per_motion=FAST_SAMPLES)
     coverage = measure_coverage(SYNTHETIC, survey.final_stock, grid=SYNTHETIC_GRID)
-    assessment = assess_path_quality(SYNTHETIC, snapshot_toolpath(result), survey, coverage)
+    snapshot = snapshot_toolpath(result)
+    assessment = assess_path_quality(SYNTHETIC, snapshot, survey, coverage)
 
-    _assert_quality_parity(SYNTHETIC, quality, assessment)
+    _assert_quality_parity(SYNTHETIC, quality, assessment, snapshot, survey)
     engagement_maximum = assessment.attribution.max_engagement_step
     loop_maximum = assessment.attribution.max_loop_radius_step
     assert engagement_maximum is not None
     assert engagement_maximum.pair == OperationPair.build(previous=OperationIndex(2), current=OperationIndex(3), operation_count=4)
     assert loop_maximum is not None
     assert loop_maximum.pair == OperationPair.build(previous=OperationIndex(1), current=OperationIndex(3), operation_count=4)
+
+
+def test_quality_parity_rejects_a_wrong_in_bounds_maximum_pair() -> None:
+    result = _result(
+        [
+            _plunge(0.0, 0.0),
+            _circle(0.0, 0.0, 1.0),
+            _link_line(1.0, 0.0, 2.0, 0.0),
+            _circle(-1.0, 0.0, 3.0),
+        ]
+    )
+    quality = measure_quality(SYNTHETIC, result, samples_per_motion=FAST_SAMPLES, grid=SYNTHETIC_GRID)
+    survey = survey_path(SYNTHETIC, result, samples_per_motion=FAST_SAMPLES)
+    coverage = measure_coverage(SYNTHETIC, survey.final_stock, grid=SYNTHETIC_GRID)
+    snapshot = snapshot_toolpath(result)
+    assessment = assess_path_quality(SYNTHETIC, snapshot, survey, coverage)
+    maximum = assessment.attribution.max_engagement_step
+    assert maximum is not None
+    object.__setattr__(
+        maximum,
+        "pair",
+        OperationPair.build(previous=OperationIndex(0), current=OperationIndex(1), operation_count=4),
+    )
+
+    with pytest.raises(AssertionError):
+        _assert_quality_parity(SYNTHETIC, quality, assessment, snapshot, survey)
 
 
 # ---------------------------------------------------------------------------
@@ -713,7 +742,67 @@ def test_the_named_empty_reachable_error_exists_for_a_pocket_a_grid_cannot_see()
 # ---------------------------------------------------------------------------
 
 
-def _assert_quality_parity(spec: PocketSpec, quality: PathQuality, assessment: PathQualityAssessment) -> None:
+def _expected_maximum_pairs(
+    spec: PocketSpec,
+    snapshot: tuple[HeldOperationSnapshot, ...],
+    survey: PathSurvey,
+) -> tuple[OperationPair | None, OperationPair | None]:
+    """Select the first maximum pairs directly from source observations."""
+    operation_count = len(snapshot)
+    engagement_pair: OperationPair | None = None
+    engagement_value = 0.0
+    for previous, current in zip(survey.motions, survey.motions[1:]):
+        if current.index != previous.index + 1:
+            continue
+        value = abs(current.peak_engagement_deg - previous.peak_engagement_deg)
+        if value > engagement_value:
+            engagement_value = value
+            engagement_pair = OperationPair.build(
+                previous=OperationIndex(previous.index),
+                current=OperationIndex(current.index),
+                operation_count=operation_count,
+            )
+
+    chain_by_index = {int(operation.ordinal): operation.path_index for operation in snapshot}
+    rapid_indices = sorted(rapid.index for rapid in survey.rapids)
+    rapid_position = 0
+    current_chain: int | None = None
+    previous_loop: tuple[int, float] | None = None
+    loop_pair: OperationPair | None = None
+    loop_value = 0.0
+    for motion in survey.motions:
+        boundary = False
+        while rapid_position < len(rapid_indices) and rapid_indices[rapid_position] < motion.index:
+            rapid_position += 1
+            boundary = True
+        motion_chain = chain_by_index.get(motion.index, current_chain)
+        if current_chain is not None and motion_chain != current_chain:
+            boundary = True
+        current_chain = motion_chain
+        if boundary:
+            previous_loop = None
+        if motion.kind is not MotionKind.LOOP or motion.loop_radius is None:
+            continue
+        if previous_loop is not None:
+            value = abs(motion.loop_radius - previous_loop[1]) / spec.tool_radius
+            if value > loop_value:
+                loop_value = value
+                loop_pair = OperationPair.build(
+                    previous=OperationIndex(previous_loop[0]),
+                    current=OperationIndex(motion.index),
+                    operation_count=operation_count,
+                )
+        previous_loop = (motion.index, motion.loop_radius)
+    return engagement_pair, loop_pair
+
+
+def _assert_quality_parity(
+    spec: PocketSpec,
+    quality: PathQuality,
+    assessment: PathQualityAssessment,
+    snapshot: tuple[HeldOperationSnapshot, ...],
+    survey: PathSurvey,
+) -> None:
     """Prove the additive observations reproduce every existing gate input."""
     old_and_new = (
         (quality.elementary.uncut_fraction, assessment.uncut_fraction.measured),
@@ -761,6 +850,11 @@ def _assert_quality_parity(spec: PocketSpec, quality: PathQuality, assessment: P
     )
 
     attribution = assessment.attribution
+    expected_engagement_pair, expected_loop_pair = _expected_maximum_pairs(spec, snapshot, survey)
+    actual_engagement_pair = None if attribution.max_engagement_step is None else attribution.max_engagement_step.pair
+    actual_loop_pair = None if attribution.max_loop_radius_step is None else attribution.max_loop_radius_step.pair
+    assert actual_engagement_pair == expected_engagement_pair
+    assert actual_loop_pair == expected_loop_pair
     count_and_sources = (
         (assessment.gouging_motions.measured, attribution.gouging_operations),
         (assessment.unsafe_rapids.measured, attribution.unsafe_rapid_operations),
@@ -965,6 +1059,6 @@ def test_the_generated_path_is_worth_running(
     assert len(surveys) == 1
     assert len(coverages) == 1
     assessment = assess_path_quality(spec, snapshot, surveys[0], coverages[0])
-    _assert_quality_parity(spec, quality, assessment)
+    _assert_quality_parity(spec, quality, assessment, snapshot, surveys[0])
     violations = _violations(spec, quality)
     assert not violations, _report(pocket_name, generator_name, quality, violations)

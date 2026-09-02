@@ -49,16 +49,21 @@ from hypothesis import strategies as st
 import numpy as np
 
 from benchmarks.coverage import CoverageEstimate
+from benchmarks.held_path_snapshot import HeldOperationSnapshot
 from benchmarks.held_path_snapshot import snapshot_toolpath
 from benchmarks.quality import _cut
 from benchmarks.quality import _elementary
 from benchmarks.quality import _program
 from benchmarks.quality import _speed
 from benchmarks.quality import radial_immersion
+from benchmarks.quality_observations import OperationPair
 from benchmarks.quality_observations import PathQualityAssessment
 from benchmarks.quality_observations import assess_path_quality
+from benchmarks.survey import MotionKind
+from benchmarks.survey import PathSurvey
 from benchmarks.survey import survey_path
 from benchmarks.spec import PocketSpec
+from benchmarks.units import OperationIndex
 from compas_cgal.toolpath import OperationType
 from compas_cgal.toolpath import ToolpathOperation
 from compas_cgal.toolpath import ToolpathResult
@@ -363,11 +368,72 @@ class _Groups:
             remaining_samples=0,
             wall_scallop_height=0.0,
         )
-        self.assessment = assess_path_quality(spec, snapshot_toolpath(result), survey, coverage)
-        _assert_invariant_quality_parity(self, self.assessment)
+        snapshot = snapshot_toolpath(result)
+        self.assessment = assess_path_quality(spec, snapshot, survey, coverage)
+        _assert_invariant_quality_parity(spec, self, self.assessment, snapshot, survey)
 
 
-def _assert_invariant_quality_parity(quality: _Groups, assessment: PathQualityAssessment) -> None:
+def _expected_maximum_pairs(
+    spec: PocketSpec,
+    snapshot: tuple[HeldOperationSnapshot, ...],
+    survey: PathSurvey,
+) -> tuple[OperationPair | None, OperationPair | None]:
+    """Select the first maximum pairs directly from source observations."""
+    operation_count = len(snapshot)
+    engagement_pair: OperationPair | None = None
+    engagement_value = 0.0
+    for previous, current in zip(survey.motions, survey.motions[1:]):
+        if current.index != previous.index + 1:
+            continue
+        value = abs(current.peak_engagement_deg - previous.peak_engagement_deg)
+        if value > engagement_value:
+            engagement_value = value
+            engagement_pair = OperationPair.build(
+                previous=OperationIndex(previous.index),
+                current=OperationIndex(current.index),
+                operation_count=operation_count,
+            )
+
+    chain_by_index = {int(operation.ordinal): operation.path_index for operation in snapshot}
+    rapid_indices = sorted(rapid.index for rapid in survey.rapids)
+    rapid_position = 0
+    current_chain: int | None = None
+    previous_loop: tuple[int, float] | None = None
+    loop_pair: OperationPair | None = None
+    loop_value = 0.0
+    for motion in survey.motions:
+        boundary = False
+        while rapid_position < len(rapid_indices) and rapid_indices[rapid_position] < motion.index:
+            rapid_position += 1
+            boundary = True
+        motion_chain = chain_by_index.get(motion.index, current_chain)
+        if current_chain is not None and motion_chain != current_chain:
+            boundary = True
+        current_chain = motion_chain
+        if boundary:
+            previous_loop = None
+        if motion.kind is not MotionKind.LOOP or motion.loop_radius is None:
+            continue
+        if previous_loop is not None:
+            value = abs(motion.loop_radius - previous_loop[1]) / spec.tool_radius
+            if value > loop_value:
+                loop_value = value
+                loop_pair = OperationPair.build(
+                    previous=OperationIndex(previous_loop[0]),
+                    current=OperationIndex(motion.index),
+                    operation_count=operation_count,
+                )
+        previous_loop = (motion.index, motion.loop_radius)
+    return engagement_pair, loop_pair
+
+
+def _assert_invariant_quality_parity(
+    spec: PocketSpec,
+    quality: _Groups,
+    assessment: PathQualityAssessment,
+    snapshot: tuple[HeldOperationSnapshot, ...],
+    survey: PathSurvey,
+) -> None:
     """Keep every invariant example on both the old and attributed reducers."""
     old_and_new = (
         (quality.elementary.uncut_fraction, assessment.uncut_fraction.measured),
@@ -386,6 +452,11 @@ def _assert_invariant_quality_parity(quality: _Groups, assessment: PathQualityAs
     assert all(old == new for old, new in old_and_new)
 
     attribution = assessment.attribution
+    expected_engagement_pair, expected_loop_pair = _expected_maximum_pairs(spec, snapshot, survey)
+    actual_engagement_pair = None if attribution.max_engagement_step is None else attribution.max_engagement_step.pair
+    actual_loop_pair = None if attribution.max_loop_radius_step is None else attribution.max_loop_radius_step.pair
+    assert actual_engagement_pair == expected_engagement_pair
+    assert actual_loop_pair == expected_loop_pair
     count_and_sources = (
         (assessment.gouging_motions.measured, attribution.gouging_operations),
         (assessment.unsafe_rapids.measured, attribution.unsafe_rapid_operations),
