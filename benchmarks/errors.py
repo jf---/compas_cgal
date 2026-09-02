@@ -227,3 +227,35 @@ class InvalidFigureInwardOffsetError(BenchmarkError):
 
 class AmbiguousFigurePanelRegistrationError(BenchmarkError):
     """Publisher axes admit no unique panel-to-world registration."""
+
+
+class InvalidHeldOperationSnapshotError(BenchmarkError):
+    """A snapshotted operation contains malformed geometric or motion data."""
+
+
+class InvalidHeldPathEvidenceError(BenchmarkError):
+    """Typed values or operation coverage in Held path evidence are invalid."""
+
+
+class InvalidHeldPathReportContextError(BenchmarkError):
+    """Held report invocation metadata is empty, non-UTC, or malformed."""
+
+
+class ContradictoryEngagementEvidenceError(BenchmarkError):
+    """Guarded replay and sampled exact-predicate evidence contradict."""
+
+
+class ContradictoryPathQualityEvidenceError(BenchmarkError):
+    """Path-quality attribution does not reduce to its aggregate value."""
+
+
+class MutatedHeldToolpathError(BenchmarkError):
+    """A path-replay consumer changed the generated operation stream."""
+
+
+class HeldPathNotEligibleForPostQualificationError(BenchmarkError):
+    """A complete characterization has at least one open Phase 1 criterion."""
+
+
+class UnexpectedHeldPathCaseError(BenchmarkError):
+    """Characterization received a Held case other than Figure 5."""
