@@ -8,6 +8,8 @@ from benchmarks.held_path_snapshot import HeldLineSnapshot
 from benchmarks.held_path_snapshot import HeldOperationSnapshot
 from benchmarks.held_path_snapshot import assert_toolpath_matches_snapshot
 from benchmarks.held_path_snapshot import snapshot_toolpath
+from benchmarks.survey import EngagementSample
+from benchmarks.survey import MotionQuality
 from benchmarks.units import Degrees
 from benchmarks.units import MotionCount
 from benchmarks.units import OperationIndex
@@ -45,6 +47,12 @@ index = seconds  # type: ignore[assignment]
 
 point = assert_type(Point2[WorldXY].build(1.0, 2.0), Point2[WorldXY])
 assert_type(Point3[WorldXYZ].build(1.0, 2.0, 0.0), Point3[WorldXYZ])
+
+
+def _survey_contract(sample: EngagementSample, motion: MotionQuality) -> None:
+    assert_type(sample.position, Point2[WorldXY])
+    assert_type(sample.cap_exceeded, bool)
+    assert_type(motion.cap_exceeded, bool)
 
 
 def _snapshot_contract(

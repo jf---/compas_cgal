@@ -44,6 +44,8 @@ from benchmarks.errors import UnsampleableMotionError
 from benchmarks.spec import PocketSpec
 from compas_cgal import _coverage_2
 from compas_cgal import _stock_2
+from compas_cgal.adaptive.units import Point2
+from compas_cgal.adaptive.units import WorldXY
 from compas_cgal.engagement import _cap_chord_ratio
 from compas_cgal.engagement import _infer_cut_height
 from compas_cgal.engagement import _subtract_operation
@@ -99,14 +101,22 @@ class EngagementSample:
 
     Attributes:
         distance: Arc length from the motion's start to this position.
+        position: Cutter-centre position in the world XY frame.
         engagement_deg: The largest engaged run of the cutter rim, in degrees.
-            The exact predicate's verdict at this position.
+            REPORTING ONLY: this value never decides cap exceedance.
+        cap_exceeded: The exact cap predicate's verdict at this position.
         inside_centre_domain: Whether the cutter centre lies where a tool of this
             radius may legally be. False is a demonstrated gouge.
+
+    Each retained ``cap_exceeded`` verdict is exact. Absence of exceedance across
+    this finite station set remains sampled-negative evidence, not a certificate
+    for the continuous motion.
     """
 
     distance: float
+    position: Point2[WorldXY]
     engagement_deg: float
+    cap_exceeded: bool
     inside_centre_domain: bool
 
 
@@ -312,16 +322,22 @@ def _measure_motion(
     straight = isinstance(geometry, Line)
     samples: List[EngagementSample] = []
     slot_exceeded = False
-    cap_exceeded = False
     for distance, x, y in _motion_samples(motion, samples_per_motion):
         _total_tea, max_run_tea, exceeded = _stock_2.engagement_at(raw, x, y, tool_radius, cap_ratio, NO_GAP_CLOSURE)
-        cap_exceeded = cap_exceeded or exceeded
         if straight and not slot_exceeded:
             # A second exact verdict, asked only of straight motions, because
             # the slot threshold decides `slot_exceeded` and nothing else.
             _t, _m, over_slot = _stock_2.engagement_at(raw, x, y, tool_radius, slot_ratio, NO_GAP_CLOSURE)
             slot_exceeded = over_slot
-        samples.append(EngagementSample(distance=distance, engagement_deg=math.degrees(max_run_tea), inside_centre_domain=centre_domain.contains(x, y)))
+        samples.append(
+            EngagementSample(
+                distance=distance,
+                position=Point2[WorldXY].build(x, y),
+                engagement_deg=math.degrees(max_run_tea),
+                cap_exceeded=exceeded,
+                inside_centre_domain=centre_domain.contains(x, y),
+            )
+        )
 
     probe = motion.stock.clone()
     _subtract_operation(probe, motion.operation, tool_radius)
@@ -340,7 +356,7 @@ def _measure_motion(
         start_tangent=start_tangent,
         end_tangent=end_tangent,
         samples=tuple(samples),
-        cap_exceeded=cap_exceeded,
+        cap_exceeded=any(sample.cap_exceeded for sample in samples),
         slot_exceeded=straight and slot_exceeded,
         removes_material=not probe.exactly_equals(motion.stock),
     )
