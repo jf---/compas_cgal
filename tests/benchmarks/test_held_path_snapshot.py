@@ -350,6 +350,31 @@ def test_arc_factory_rejects_invalid_angles(angle: float) -> None:
 
 
 @pytest.mark.parametrize(
+    ("start_angle", "end_angle"),
+    [
+        (-math.ulp(1.0), 1.0),
+        (0.0, math.nextafter(math.tau, math.inf)),
+    ],
+)
+def test_arc_factory_rejects_angle_outside_compas_domain(start_angle: float, end_angle: float) -> None:
+    with pytest.raises(InvalidHeldOperationSnapshotError, match="angle"):
+        HeldArcSnapshot.build(
+            ordinal=OperationIndex(0),
+            operation=OperationType.CUT,
+            path_index=0,
+            clockwise=False,
+            centre=Point3[WorldXYZ].build(0.0, 0.0, 0.0),
+            xaxis=Direction3[WorldXYZ].build(1.0, 0.0, 0.0),
+            yaxis=Direction3[WorldXYZ].build(0.0, 1.0, 0.0),
+            radius=Millimetre(1.0),
+            start_angle=Radian(start_angle),
+            end_angle=Radian(end_angle),
+            start_tangent=None,
+            end_tangent=None,
+        )
+
+
+@pytest.mark.parametrize(
     "tangent",
     [
         np.array([1.0, 0.0]),

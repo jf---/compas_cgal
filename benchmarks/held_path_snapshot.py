@@ -132,8 +132,13 @@ def _validate_curve(
 
 
 def _validate_angles(start_angle: object, end_angle: object) -> None:
-    _finite(start_angle, name="snapshot start angle")
-    _finite(end_angle, name="snapshot end angle")
+    for value, name in (
+        (start_angle, "snapshot start angle"),
+        (end_angle, "snapshot end angle"),
+    ):
+        angle = _finite(value, name=name)
+        if not 0.0 <= angle <= math.tau:
+            raise InvalidHeldOperationSnapshotError(f"{name} must lie in [0, math.tau].")
 
 
 def _build_record(record_type: Type[SnapshotT], values: dict[str, object]) -> SnapshotT:
