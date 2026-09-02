@@ -397,6 +397,80 @@ def test_snapshot_rejects_malformed_tangent(tangent: object) -> None:
         snapshot_toolpath(result)
 
 
+@pytest.mark.parametrize("operation", [OperationType.PLUNGE, OperationType.RETRACT])
+def test_vertical_operation_zero_tangents_snapshot_as_absent(operation: OperationType) -> None:
+    result = _result(
+        [
+            _operation(
+                Line([0.0, 0.0, 5.0], [0.0, 0.0, 0.0]),
+                operation=operation,
+                start_tangent=np.zeros(3),
+                end_tangent=np.zeros(3),
+            )
+        ]
+    )
+
+    snapshot = snapshot_toolpath(result)[0]
+
+    assert isinstance(snapshot, HeldLineSnapshot)
+    assert snapshot.start_tangent is None
+    assert snapshot.end_tangent is None
+
+
+@pytest.mark.parametrize("operation", [OperationType.CUT, OperationType.LINK])
+def test_lateral_operation_zero_tangent_remains_invalid(operation: OperationType) -> None:
+    result = _result(
+        [
+            _operation(
+                Line([0.0, 0.0, 0.0], [1.0, 0.0, 0.0]),
+                operation=operation,
+                start_tangent=np.zeros(3),
+            )
+        ]
+    )
+
+    with pytest.raises(InvalidHeldOperationSnapshotError, match="unit direction"):
+        snapshot_toolpath(result)
+
+
+@pytest.mark.parametrize(
+    "operation",
+    [OperationType.PLUNGE, OperationType.RETRACT, OperationType.CUT, OperationType.LINK],
+)
+def test_nonzero_unit_tangents_remain_retained(operation: OperationType) -> None:
+    tangent = np.array([1.0, 0.0, 0.0])
+    result = _result(
+        [
+            _operation(
+                Line([0.0, 0.0, 5.0], [0.0, 0.0, 0.0]),
+                operation=operation,
+                start_tangent=tangent,
+                end_tangent=tangent,
+            )
+        ]
+    )
+
+    snapshot = snapshot_toolpath(result)[0]
+
+    assert isinstance(snapshot, HeldLineSnapshot)
+    assert snapshot.start_tangent == Direction3[WorldXYZ].build(1.0, 0.0, 0.0)
+    assert snapshot.end_tangent == Direction3[WorldXYZ].build(1.0, 0.0, 0.0)
+
+
+def test_direct_build_rejects_zero_tangent() -> None:
+    with pytest.raises(InvalidHeldOperationSnapshotError, match="unit direction"):
+        HeldLineSnapshot.build(
+            ordinal=OperationIndex(0),
+            operation=OperationType.PLUNGE,
+            path_index=0,
+            clockwise=False,
+            start=Point3[WorldXYZ].build(0.0, 0.0, 5.0),
+            end=Point3[WorldXYZ].build(0.0, 0.0, 0.0),
+            start_tangent=Direction3[WorldXYZ].build(0.0, 0.0, 0.0),
+            end_tangent=None,
+        )
+
+
 def test_snapshot_rejects_unsupported_geometry() -> None:
     operation = _operation(Line([0.0, 0.0, 0.0], [1.0, 0.0, 0.0]))
     operation.geometry = cast(Line | Arc | Circle, object())
