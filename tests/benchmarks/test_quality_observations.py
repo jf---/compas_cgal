@@ -16,6 +16,7 @@ from benchmarks.quality_observations import EVIDENCE_BY_CRITERION
 from benchmarks.quality_observations import CountCriterion
 from benchmarks.quality_observations import DegreesCriterion
 from benchmarks.quality_observations import FractionCriterion
+from benchmarks.quality_observations import MeasuredStep
 from benchmarks.quality_observations import OperationPair
 from benchmarks.quality_observations import PathQualityAttribution
 from benchmarks.quality_observations import ToolRadiusMultipleCriterion
@@ -268,6 +269,66 @@ def test_attribution_factory_rejects_duplicate_indices() -> None:
             curvature_break_pairs=(),
             reversal_pairs=(),
         )
+
+
+def _attribution(
+    *,
+    operation_count: int = 2,
+    max_engagement_step: MeasuredStep[Degrees] | None = None,
+    max_loop_radius_step: MeasuredStep[ToolRadiusMultiple] | None = None,
+    tangent_break_pairs: tuple[OperationPair, ...] = (),
+    curvature_break_pairs: tuple[OperationPair, ...] = (),
+    reversal_pairs: tuple[OperationPair, ...] = (),
+) -> PathQualityAttribution:
+    return PathQualityAttribution.build(
+        operation_count=operation_count,
+        uncut_operations=(),
+        gouging_operations=(),
+        unsafe_rapid_operations=(),
+        continuity_break_pairs=(),
+        zero_length_operations=(),
+        degenerate_loop_operations=(),
+        redundant_operations=(),
+        cap_exceeded_operations=(),
+        slotting_operations=(),
+        max_engagement_step=max_engagement_step,
+        engagement_step_failure_pairs=(),
+        max_loop_radius_step=max_loop_radius_step,
+        loop_radius_step_failure_pairs=(),
+        tangent_break_pairs=tangent_break_pairs,
+        curvature_break_pairs=curvature_break_pairs,
+        reversal_pairs=reversal_pairs,
+    )
+
+
+def test_attribution_factory_revalidates_engagement_maximum_pair_bounds() -> None:
+    larger_stream_pair = OperationPair.build(previous=OperationIndex(2), current=OperationIndex(3), operation_count=4)
+    maximum = MeasuredStep[Degrees].build(value=Degrees(1.0), pair=larger_stream_pair, unit="degrees")
+
+    with pytest.raises(InvalidHeldPathEvidenceError):
+        _attribution(max_engagement_step=maximum)
+
+
+def test_attribution_factory_revalidates_loop_maximum_pair_bounds() -> None:
+    larger_stream_pair = OperationPair.build(previous=OperationIndex(2), current=OperationIndex(3), operation_count=4)
+    maximum = MeasuredStep[ToolRadiusMultiple].build(value=ToolRadiusMultiple(1.0), pair=larger_stream_pair, unit="tool_radius_multiple")
+
+    with pytest.raises(InvalidHeldPathEvidenceError):
+        _attribution(max_loop_radius_step=maximum)
+
+
+def test_attribution_factory_rejects_reversal_without_tangent_break() -> None:
+    pair = OperationPair.build(previous=OperationIndex(0), current=OperationIndex(1), operation_count=2)
+
+    with pytest.raises(InvalidHeldPathEvidenceError):
+        _attribution(reversal_pairs=(pair,))
+
+
+def test_attribution_factory_rejects_tangent_and_curvature_overlap() -> None:
+    pair = OperationPair.build(previous=OperationIndex(0), current=OperationIndex(1), operation_count=2)
+
+    with pytest.raises(InvalidHeldPathEvidenceError):
+        _attribution(tangent_break_pairs=(pair,), curvature_break_pairs=(pair,))
 
 
 def test_simple_findings_retain_exact_unique_operation_indices() -> None:
