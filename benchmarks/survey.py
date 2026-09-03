@@ -33,6 +33,8 @@ from typing import Tuple
 from compas.geometry import Arc
 from compas.geometry import Circle
 from compas.geometry import Line
+from compas.geometry import angle_vectors
+from compas.tolerance import TOL
 
 from benchmarks.depletion import CutMotion
 from benchmarks.depletion import ReplayKind
@@ -40,6 +42,7 @@ from benchmarks.depletion import _replay_kind
 from benchmarks.depletion import replay_cuts
 from benchmarks.errors import InvalidMotionSampleCountError
 from benchmarks.errors import UnmeasurableOperationLengthError
+from benchmarks.errors import UnreplayableOperationError
 from benchmarks.errors import UnsampleableMotionError
 from benchmarks.spec import PocketSpec
 from compas_cgal import _coverage_2
@@ -272,8 +275,9 @@ def survey_path(spec: PocketSpec, result: ToolpathResult, *, samples_per_motion:
 
     stock = Stock(spec.polygon, list(spec.holes))
     motions: List[MotionQuality] = []
+    cut_z = _infer_cut_height(result.operations)
     for motion in replay_cuts(spec, result, stock):
-        motions.append(_measure_motion(motion, spec.tool_radius, cap_ratio, slot_ratio, centre_domain, samples_per_motion))
+        motions.append(_measure_motion(motion, spec.tool_radius, cap_ratio, slot_ratio, centre_domain, samples_per_motion, cut_z))
 
     rapids, plunges, retracts, plunge_area = _classify_non_cutting(result, spec.tool_radius)
     cut_length = sum(motion.length for motion in motions)
@@ -299,6 +303,7 @@ def _measure_motion(
     slot_ratio: float,
     centre_domain: "_coverage_2.ExactRegion2",
     samples_per_motion: int,
+    cut_z: float,
 ) -> MotionQuality:
     """Measure one cut motion against every criterion the groups reduce.
 
@@ -309,16 +314,20 @@ def _measure_motion(
         slot_ratio: Exact squared-chord surrogate of the slotting threshold.
         centre_domain: Where a cutter of this radius may legally be centred.
         samples_per_motion: Cutter positions to probe.
+        cut_z: The inferred cutting-plane height.
 
     Returns:
         The motion's findings.
 
     Raises:
+        UnreplayableOperationError: A circular motion leaves the inferred cut
+            plane.
         UnsampleableMotionError: The motion carries no cutter-centre path.
         UnmeasurableOperationLengthError: The motion's length is undefined.
     """
-    raw = motion.stock.raw
     geometry = motion.operation.geometry
+    _require_cut_plane_curve(motion.index, geometry, cut_z)
+    raw = motion.stock.raw
     straight = isinstance(geometry, Line)
     samples: List[EngagementSample] = []
     slot_exceeded = False
@@ -360,6 +369,31 @@ def _measure_motion(
         slot_exceeded=straight and slot_exceeded,
         removes_material=not probe.exactly_equals(motion.stock),
     )
+
+
+def _require_cut_plane_curve(index: int, geometry: object, cut_z: float) -> None:
+    """Refuse circular geometry that the world-XY depletion cannot represent.
+
+    Args:
+        index: Position of the operation, for the error message.
+        geometry: The motion primitive.
+        cut_z: The inferred cutting-plane height.
+
+    Raises:
+        UnreplayableOperationError: An arc or circle is tilted or centred away
+            from the cutting plane.
+    """
+    if not isinstance(geometry, (Arc, Circle)):
+        return
+
+    axis_angle = angle_vectors(geometry.frame.zaxis, [0.0, 0.0, 1.0])
+    axis_is_world_z = TOL.is_angle_zero(axis_angle) or TOL.is_angles_close(axis_angle, math.pi)
+    centre_z = float(geometry.frame.point[2])
+    centre_is_at_cut_z = TOL.is_between(centre_z, cut_z, cut_z, atol=TOL.absolute)
+    if not axis_is_world_z or not centre_is_at_cut_z:
+        raise UnreplayableOperationError(
+            f"Operation {index} carries {type(geometry).__name__} geometry outside the inferred world-XY cut plane; projecting it to XY would misrepresent material removal."
+        )
 
 
 def _motion_samples(motion: CutMotion, count: int) -> Sequence[Tuple[float, float, float]]:
