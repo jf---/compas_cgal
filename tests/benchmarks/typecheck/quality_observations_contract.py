@@ -28,6 +28,27 @@ def _contract(spec: PocketSpec, snapshot: tuple[HeldOperationSnapshot, ...], sur
     assert_type(assessment.max_loop_radius_step, ToolRadiusMultipleCriterion)
     assert_type(assessment.attribution.max_engagement_step, Optional[MeasuredStep[Degrees]])
     assert_type(assessment.attribution.max_loop_radius_step, Optional[MeasuredStep[ToolRadiusMultiple]])
+    assert_type(
+        PathQualityAssessment.build(
+            spec=spec,
+            snapshot=snapshot,
+            survey=survey,
+            uncut_fraction=assessment.uncut_fraction,
+            gouging_motions=assessment.gouging_motions,
+            unsafe_rapids=assessment.unsafe_rapids,
+            continuity_breaks=assessment.continuity_breaks,
+            zero_length_motions=assessment.zero_length_motions,
+            degenerate_loops=assessment.degenerate_loops,
+            redundant_operations=assessment.redundant_operations,
+            cap_exceedances=assessment.cap_exceedances,
+            slotting_motions=assessment.slotting_motions,
+            max_engagement_step=assessment.max_engagement_step,
+            max_loop_radius_step=assessment.max_loop_radius_step,
+            tangent_breaks=assessment.tangent_breaks,
+            attribution=assessment.attribution,
+        ),
+        PathQualityAssessment,
+    )
     pair = OperationPair.build(previous=OperationIndex(0), current=OperationIndex(1), operation_count=2)
     degrees = assert_type(MeasuredStep.build(value=Degrees(1.0), pair=pair, unit="degrees"), MeasuredStep[Degrees])
     radii = assert_type(

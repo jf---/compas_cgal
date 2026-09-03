@@ -97,6 +97,7 @@ def _sample(engagement: float, *, cap: bool = False, inside: bool = True) -> Eng
 def _motion(
     index: int,
     *,
+    operation: OperationType = OperationType.CUT,
     kind: MotionKind = MotionKind.LINE,
     length: float = 1.0,
     radius: float | None = None,
@@ -110,7 +111,7 @@ def _motion(
 ) -> MotionQuality:
     return MotionQuality(
         index=index,
-        operation=OperationType.CUT,
+        operation=operation,
         kind=kind,
         length=length,
         loop_radius=radius,
@@ -150,12 +151,18 @@ def _snapshot(
     path_indices: dict[int, int] | None = None,
     operation_roles: dict[int, OperationType] | None = None,
     circle_indices: set[int] | None = None,
+    heights: dict[int, float] | None = None,
+    horizontal_role_indices: set[int] | None = None,
 ) -> tuple[HeldOperationSnapshot, ...]:
     paths = path_indices or {}
     roles = operation_roles or {}
     direction = Direction3[WorldXYZ].build(1.0, 0.0, 0.0)
     circles = circle_indices or set()
+    operation_heights = heights or {}
+    horizontal_roles = horizontal_role_indices or set()
     y_direction = Direction3[WorldXYZ].build(0.0, 1.0, 0.0)
+    positive_z = Direction3[WorldXYZ].build(0.0, 0.0, 1.0)
+    negative_z = Direction3[WorldXYZ].build(0.0, 0.0, -1.0)
     snapshots: list[HeldOperationSnapshot] = []
     for index in range(count):
         if index in circles:
@@ -165,7 +172,7 @@ def _snapshot(
                     operation=roles.get(index, OperationType.CUT),
                     path_index=paths.get(index, 0),
                     clockwise=False,
-                    centre=Point3[WorldXYZ].build(float(index), 0.0, 0.0),
+                    centre=Point3[WorldXYZ].build(float(index), 0.0, operation_heights.get(index, 0.0)),
                     xaxis=direction,
                     yaxis=y_direction,
                     radius=Millimetre(1.0),
@@ -174,16 +181,30 @@ def _snapshot(
                 )
             )
         else:
+            role = roles.get(index, OperationType.CUT)
+            height = operation_heights.get(index, 0.0)
+            if role is OperationType.PLUNGE and index not in horizontal_roles:
+                start = Point3[WorldXYZ].build(float(index), 0.0, height + 1.0)
+                end = Point3[WorldXYZ].build(float(index), 0.0, height)
+                tangent = negative_z
+            elif role is OperationType.RETRACT and index not in horizontal_roles:
+                start = Point3[WorldXYZ].build(float(index), 0.0, height)
+                end = Point3[WorldXYZ].build(float(index), 0.0, height + 1.0)
+                tangent = positive_z
+            else:
+                start = Point3[WorldXYZ].build(float(index), 0.0, height)
+                end = Point3[WorldXYZ].build(float(index + 1), 0.0, height)
+                tangent = direction
             snapshots.append(
                 HeldLineSnapshot.build(
                     ordinal=OperationIndex(index),
-                    operation=roles.get(index, OperationType.CUT),
+                    operation=role,
                     path_index=paths.get(index, 0),
                     clockwise=False,
-                    start=Point3[WorldXYZ].build(float(index), 0.0, 0.0),
-                    end=Point3[WorldXYZ].build(float(index + 1), 0.0, 0.0),
-                    start_tangent=direction,
-                    end_tangent=direction,
+                    start=start,
+                    end=end,
+                    start_tangent=tangent,
+                    end_tangent=tangent,
                 )
             )
     return tuple(snapshots)
@@ -196,11 +217,11 @@ def _survey(
     spec: PocketSpec = SPEC,
     plunge_indices: tuple[OperationIndex, ...] = (),
     retract_indices: tuple[OperationIndex, ...] = (),
-    source_snapshot: tuple[HeldOperationSnapshot, ...] | None = None,
+    source_snapshot: tuple[HeldOperationSnapshot, ...],
 ) -> PathSurvey:
     survey = PathSurvey(
         spec=spec,
-        source_snapshot=cast(tuple[HeldOperationSnapshot, ...], source_snapshot),
+        source_snapshot=source_snapshot,
         motions=motions,
         rapids=rapids,
         plunges=len(plunge_indices),
@@ -243,7 +264,7 @@ def _expected_count_sources(
         if dot < 1.0 - TANGENT_CONTINUITY_SLACK:
             tangent.append(pair)
     return (
-        tuple(OperationIndex(motion.index) for motion in survey.motions if motion.gouges),
+        tuple(OperationIndex(motion.index) for motion in survey.motions if any(not sample.inside_centre_domain for sample in motion.samples)),
         tuple(OperationIndex(rapid.index) for rapid in survey.rapids if rapid.horizontal_at_cut_plane),
         tuple(continuity),
         tuple(
@@ -262,6 +283,61 @@ def _expected_count_sources(
     )
 
 
+def _expected_maximum_pairs(
+    spec: PocketSpec,
+    snapshot: tuple[HeldOperationSnapshot, ...],
+    survey: PathSurvey,
+) -> tuple[OperationPair | None, OperationPair | None]:
+    operation_count = len(snapshot)
+    engagement_pair: OperationPair | None = None
+    engagement_value = 0.0
+    for previous, current in zip(survey.motions, survey.motions[1:]):
+        if current.index != previous.index + 1:
+            continue
+        previous_peak = max((sample.engagement_deg for sample in previous.samples), default=0.0)
+        current_peak = max((sample.engagement_deg for sample in current.samples), default=0.0)
+        value = abs(current_peak - previous_peak)
+        if value > engagement_value:
+            engagement_value = value
+            engagement_pair = OperationPair.build(
+                previous=OperationIndex(previous.index),
+                current=OperationIndex(current.index),
+                operation_count=operation_count,
+            )
+
+    chain_by_index = {int(operation.ordinal): operation.path_index for operation in snapshot}
+    rapid_indices = sorted(rapid.index for rapid in survey.rapids)
+    rapid_position = 0
+    current_chain: int | None = None
+    previous_loop: tuple[int, float] | None = None
+    loop_pair: OperationPair | None = None
+    loop_value = 0.0
+    for motion in survey.motions:
+        boundary = False
+        while rapid_position < len(rapid_indices) and rapid_indices[rapid_position] < motion.index:
+            rapid_position += 1
+            boundary = True
+        motion_chain = chain_by_index[motion.index]
+        if current_chain is not None and motion_chain != current_chain:
+            boundary = True
+        current_chain = motion_chain
+        if boundary:
+            previous_loop = None
+        if motion.kind is not MotionKind.LOOP or motion.loop_radius is None:
+            continue
+        if previous_loop is not None:
+            value = abs(motion.loop_radius - previous_loop[1]) / spec.tool_radius
+            if value > loop_value:
+                loop_value = value
+                loop_pair = OperationPair.build(
+                    previous=OperationIndex(previous_loop[0]),
+                    current=OperationIndex(motion.index),
+                    operation_count=operation_count,
+                )
+        previous_loop = (motion.index, motion.loop_radius)
+    return engagement_pair, loop_pair
+
+
 def _assert_exact_count_sources(spec: PocketSpec, snapshot: tuple[HeldOperationSnapshot, ...], survey: PathSurvey, assessment: PathQualityAssessment) -> None:
     attribution = assessment.attribution
     actual = (
@@ -276,6 +352,10 @@ def _assert_exact_count_sources(spec: PocketSpec, snapshot: tuple[HeldOperationS
         attribution.tangent_break_pairs,
     )
     assert actual == _expected_count_sources(spec, snapshot, survey)
+    expected_engagement, expected_loop = _expected_maximum_pairs(spec, snapshot, survey)
+    actual_engagement = None if attribution.max_engagement_step is None else attribution.max_engagement_step.pair
+    actual_loop = None if attribution.max_loop_radius_step is None else attribution.max_loop_radius_step.pair
+    assert (actual_engagement, actual_loop) == (expected_engagement, expected_loop)
 
 
 def _assess(
@@ -284,7 +364,6 @@ def _assess(
     survey: PathSurvey,
     coverage: CoverageEstimate,
 ) -> PathQualityAssessment:
-    object.__setattr__(survey, "source_snapshot", snapshot)
     assessment = assess_path_quality(spec, snapshot, survey, coverage)
     _assert_exact_count_sources(spec, snapshot, survey, assessment)
     return assessment
@@ -299,30 +378,24 @@ def test_quality_assessment_rejects_foreign_survey_spec_binding() -> None:
         tea_cap_deg=SPEC.tea_cap_deg,
     )
     snapshot = _snapshot(1)
-    survey = _survey((_motion(0),), spec=foreign)
-    object.__setattr__(survey, "source_snapshot", snapshot)
+    survey = _survey((_motion(0),), spec=foreign, source_snapshot=snapshot)
 
     with pytest.raises(InvalidHeldPathEvidenceError):
         assess_path_quality(SPEC, snapshot, survey, _coverage())
 
 
-@pytest.mark.parametrize(
-    ("snapshot", "survey"),
-    [
-        (_snapshot(2), _survey((_motion(0),))),
-        (_snapshot(2), _survey((_motion(1), _motion(0)))),
-        (_snapshot(1), _survey((_motion(0, kind=MotionKind.LOOP, radius=2.0),))),
-        (_snapshot(1), _survey((_motion(0),))),
-    ],
-    ids=("omitted-operation", "reordered-operations", "wrong-primitive-kind", "wrong-operation-role"),
-)
-def test_quality_assessment_rejects_snapshot_survey_binding(
-    snapshot: tuple[HeldOperationSnapshot, ...],
-    survey: PathSurvey,
-) -> None:
-    object.__setattr__(survey, "source_snapshot", snapshot)
-    if survey.motions and survey.motions[0].operation is OperationType.CUT and len(snapshot) == 1 and survey.motions[0].kind is MotionKind.LINE:
-        object.__setattr__(survey.motions[0], "operation", OperationType.LINK)
+@pytest.mark.parametrize("case", ["omitted-operation", "reordered-operations", "wrong-primitive-kind", "wrong-operation-role"])
+def test_quality_assessment_rejects_snapshot_survey_binding(case: str) -> None:
+    snapshot = _snapshot(2 if case in {"omitted-operation", "reordered-operations"} else 1)
+    if case == "omitted-operation":
+        motions = (_motion(0),)
+    elif case == "reordered-operations":
+        motions = (_motion(1), _motion(0))
+    elif case == "wrong-primitive-kind":
+        motions = (_motion(0, kind=MotionKind.LOOP, radius=2.0),)
+    else:
+        motions = (_motion(0, operation=OperationType.LINK),)
+    survey = _survey(motions, source_snapshot=snapshot)
 
     with pytest.raises(InvalidHeldPathEvidenceError):
         assess_path_quality(SPEC, snapshot, survey, _coverage())
@@ -338,9 +411,29 @@ def test_quality_assessment_rejects_structurally_foreign_source_snapshot_binding
 
 
 def test_quality_assessment_rejects_wrong_rapid_primitive_kind_binding() -> None:
-    snapshot = _snapshot(1, operation_roles={0: OperationType.LINK})
-    rapid = _rapid(index=0, operation=OperationType.LINK, kind=MotionKind.LOOP, length=1.0, horizontal_at_cut_plane=False)
+    snapshot = _snapshot(2, operation_roles={1: OperationType.LINK}, heights={1: 2.0})
+    rapid = _rapid(index=1, operation=OperationType.LINK, kind=MotionKind.LOOP, length=1.0, horizontal_at_cut_plane=False)
+    survey = _survey((_motion(0),), (rapid,), source_snapshot=snapshot)
+
+    with pytest.raises(InvalidHeldPathEvidenceError):
+        assess_path_quality(SPEC, snapshot, survey, _coverage())
+
+
+def test_quality_assessment_rejects_cut_plane_cut_classified_as_rapid_binding() -> None:
+    snapshot = _snapshot(1)
+    rapid = _rapid(index=0, operation=OperationType.CUT, length=1.0, horizontal_at_cut_plane=True)
     survey = _survey((), (rapid,), source_snapshot=snapshot)
+
+    with pytest.raises(InvalidHeldPathEvidenceError):
+        assess_path_quality(SPEC, snapshot, survey, _coverage())
+
+
+def test_quality_assessment_rejects_clearance_link_classified_as_motion_binding() -> None:
+    snapshot = _snapshot(2, operation_roles={1: OperationType.LINK}, heights={1: 2.0})
+    survey = _survey(
+        (_motion(0), _motion(1, operation=OperationType.LINK)),
+        source_snapshot=snapshot,
+    )
 
     with pytest.raises(InvalidHeldPathEvidenceError):
         assess_path_quality(SPEC, snapshot, survey, _coverage())
@@ -354,6 +447,7 @@ def test_quality_assessment_requires_complete_motion_rapid_plunge_retract_partit
             2: OperationType.RETRACT,
             3: OperationType.LINK,
         },
+        heights={3: 2.0},
     )
     rapids = (
         _rapid(index=2, operation=OperationType.RETRACT, length=1.0, horizontal_at_cut_plane=False),
@@ -362,8 +456,8 @@ def test_quality_assessment_requires_complete_motion_rapid_plunge_retract_partit
     incomplete = _survey(
         (_motion(1),),
         rapids,
-        retract_indices=(OperationIndex(2),),
         source_snapshot=snapshot,
+        retract_indices=(OperationIndex(2),),
     )
 
     with pytest.raises(InvalidHeldPathEvidenceError):
@@ -378,6 +472,7 @@ def test_quality_assessment_accepts_exact_motion_rapid_plunge_retract_partition(
             2: OperationType.RETRACT,
             3: OperationType.LINK,
         },
+        heights={3: 2.0},
     )
     rapids = (
         _rapid(index=2, operation=OperationType.RETRACT, length=1.0, horizontal_at_cut_plane=False),
@@ -386,6 +481,7 @@ def test_quality_assessment_accepts_exact_motion_rapid_plunge_retract_partition(
     survey = _survey(
         (_motion(1),),
         rapids,
+        source_snapshot=snapshot,
         plunge_indices=(OperationIndex(0),),
         retract_indices=(OperationIndex(2),),
     )
@@ -576,6 +672,7 @@ def _rebuild_assessment(
     snapshot: tuple[HeldOperationSnapshot, ...],
     survey: PathSurvey,
     *,
+    spec: PocketSpec,
     attribution: PathQualityAttribution,
     **changes: object,
 ) -> PathQualityAssessment:
@@ -598,11 +695,21 @@ def _rebuild_assessment(
     }
     values.update(changes)
     return PathQualityAssessment.build(
+        spec=spec,
         snapshot=snapshot,
         survey=survey,
         attribution=attribution,
         **values,  # type: ignore[arg-type]
     )
+
+
+def _forge_record(record: object, **changes: object) -> object:
+    forged = object.__new__(type(record))
+    for name, value in vars(record).items():
+        object.__setattr__(forged, name, value)
+    for name, value in changes.items():
+        object.__setattr__(forged, name, value)
+    return forged
 
 
 def test_attribution_operation_count_is_an_exact_non_boolean_integer() -> None:
@@ -643,19 +750,127 @@ def test_attribution_factory_revalidates_measured_step_unit_on_slot_installation
             _attribution(max_loop_radius_step=cast(Any, forged))
 
 
+def test_attribution_factory_revalidates_forged_same_unit_nan_step() -> None:
+    pair = OperationPair.build(previous=OperationIndex(0), current=OperationIndex(1), operation_count=2)
+    forged = MeasuredStep.build(value=Degrees(1.0), pair=pair, unit="degrees")
+    object.__setattr__(forged, "value", math.nan)
+
+    with pytest.raises(InvalidHeldPathEvidenceError):
+        _attribution(max_engagement_step=forged)
+
+
+@pytest.mark.parametrize(
+    ("field", "changes", "error"),
+    [
+        ("uncut_fraction", {"required": UnitFraction(1.0)}, InvalidHeldPathEvidenceError),
+        ("gouging_motions", {"required": MotionCount(1)}, InvalidHeldPathEvidenceError),
+        ("max_engagement_step", {"required": Degrees(119.0)}, ContradictoryPathQualityEvidenceError),
+        ("max_loop_radius_step", {"required": ToolRadiusMultiple(1.0)}, InvalidHeldPathEvidenceError),
+        ("uncut_fraction", {"evidence": "derived_geometry"}, InvalidHeldPathEvidenceError),
+        ("gouging_motions", {"evidence": "derived_geometry"}, InvalidHeldPathEvidenceError),
+        ("max_engagement_step", {"evidence": "derived_geometry"}, InvalidHeldPathEvidenceError),
+        ("max_loop_radius_step", {"evidence": "sampled_diagnostic"}, InvalidHeldPathEvidenceError),
+        ("uncut_fraction", {"outcome": "failure_observed"}, InvalidHeldPathEvidenceError),
+        ("gouging_motions", {"outcome": "failure_observed"}, InvalidHeldPathEvidenceError),
+        ("max_engagement_step", {"outcome": "failure_observed"}, InvalidHeldPathEvidenceError),
+        ("max_loop_radius_step", {"outcome": "criterion_violated"}, InvalidHeldPathEvidenceError),
+    ],
+)
+def test_assessment_rejects_forged_installed_criterion_contradiction(
+    field: str,
+    changes: dict[str, object],
+    error: type[Exception],
+) -> None:
+    snapshot = _snapshot(2, circle_indices={0, 1})
+    survey = _survey(
+        (
+            _motion(0, kind=MotionKind.LOOP, radius=1.0, samples=(_sample(0.0),)),
+            _motion(1, kind=MotionKind.LOOP, radius=2.0, samples=(_sample(10.0),)),
+        ),
+        source_snapshot=snapshot,
+    )
+    assessment = _assess(SPEC, snapshot, survey, _coverage())
+    forged = _forge_record(getattr(assessment, field), **changes)
+
+    with pytest.raises(error):
+        _rebuild_assessment(
+            assessment,
+            snapshot,
+            survey,
+            spec=SPEC,
+            attribution=assessment.attribution,
+            **{field: forged},
+        )
+
+
+def test_assessment_rejects_installed_count_criterion_field_identity_contradiction() -> None:
+    snapshot = _snapshot(1)
+    survey = _survey((_motion(0),), source_snapshot=snapshot)
+    assessment = _assess(SPEC, snapshot, survey, _coverage())
+
+    with pytest.raises(ContradictoryPathQualityEvidenceError):
+        _rebuild_assessment(
+            assessment,
+            snapshot,
+            survey,
+            spec=SPEC,
+            attribution=assessment.attribution,
+            gouging_motions=assessment.unsafe_rapids,
+        )
+
+
+def test_direct_assessment_builder_rejects_foreign_spec_binding() -> None:
+    snapshot = _snapshot(1)
+    survey = _survey((_motion(0),), source_snapshot=snapshot)
+    assessment = _assess(SPEC, snapshot, survey, _coverage())
+    foreign = PocketSpec.build(
+        name="foreign-direct-builder",
+        family=SPEC.family,
+        polygon=SPEC.polygon,
+        tool_diameter=SPEC.tool_diameter,
+        tea_cap_deg=SPEC.tea_cap_deg,
+    )
+    values = {
+        name: getattr(assessment, name)
+        for name in (
+            "uncut_fraction",
+            "gouging_motions",
+            "unsafe_rapids",
+            "continuity_breaks",
+            "zero_length_motions",
+            "degenerate_loops",
+            "redundant_operations",
+            "cap_exceedances",
+            "slotting_motions",
+            "max_engagement_step",
+            "max_loop_radius_step",
+            "tangent_breaks",
+        )
+    }
+
+    with pytest.raises(InvalidHeldPathEvidenceError):
+        PathQualityAssessment.build(
+            spec=foreign,
+            snapshot=snapshot,
+            survey=survey,
+            attribution=assessment.attribution,
+            **values,  # type: ignore[arg-type,call-arg]
+        )
+
+
 def test_assessment_rejects_contradiction_of_violated_engagement_maximum_without_failure_pair() -> None:
     snapshot = _snapshot(2)
-    survey = _survey((_motion(0, samples=(_sample(0.0),)), _motion(1, samples=(_sample(130.0),))))
+    survey = _survey((_motion(0, samples=(_sample(0.0),)), _motion(1, samples=(_sample(130.0),))), source_snapshot=snapshot)
     assessment = _assess(SPEC, snapshot, survey, _coverage())
     attribution = _rebuild_attribution(assessment, operation_count=2, engagement_step_failure_pairs=())
 
     with pytest.raises(ContradictoryPathQualityEvidenceError):
-        _rebuild_assessment(assessment, snapshot, survey, attribution=attribution)
+        _rebuild_assessment(assessment, snapshot, survey, spec=SPEC, attribution=attribution)
 
 
 def test_assessment_rejects_contradiction_of_satisfied_engagement_maximum_with_failure_pair() -> None:
     snapshot = _snapshot(2)
-    survey = _survey((_motion(0, samples=(_sample(0.0),)), _motion(1, samples=(_sample(10.0),))))
+    survey = _survey((_motion(0, samples=(_sample(0.0),)), _motion(1, samples=(_sample(10.0),))), source_snapshot=snapshot)
     assessment = _assess(SPEC, snapshot, survey, _coverage())
     assert assessment.attribution.max_engagement_step is not None
     attribution = _rebuild_attribution(
@@ -665,7 +880,7 @@ def test_assessment_rejects_contradiction_of_satisfied_engagement_maximum_with_f
     )
 
     with pytest.raises(ContradictoryPathQualityEvidenceError):
-        _rebuild_assessment(assessment, snapshot, survey, attribution=attribution)
+        _rebuild_assessment(assessment, snapshot, survey, spec=SPEC, attribution=attribution)
 
 
 def test_assessment_rejects_contradiction_of_violated_maximum_absent_from_failure_pairs() -> None:
@@ -675,7 +890,8 @@ def test_assessment_rejects_contradiction_of_violated_maximum_absent_from_failur
             _motion(0, samples=(_sample(0.0),)),
             _motion(1, samples=(_sample(130.0),)),
             _motion(2, samples=(_sample(0.0),)),
-        )
+        ),
+        source_snapshot=snapshot,
     )
     assessment = _assess(SPEC, snapshot, survey, _coverage())
     assert assessment.attribution.engagement_step_failure_pairs
@@ -686,12 +902,12 @@ def test_assessment_rejects_contradiction_of_violated_maximum_absent_from_failur
     )
 
     with pytest.raises(ContradictoryPathQualityEvidenceError):
-        _rebuild_assessment(assessment, snapshot, survey, attribution=attribution)
+        _rebuild_assessment(assessment, snapshot, survey, spec=SPEC, attribution=attribution)
 
 
 def test_assessment_rejects_contradiction_of_in_bounds_nonadjacent_engagement_pair() -> None:
     snapshot = _snapshot(3)
-    survey = _survey((_motion(0), _motion(1), _motion(2)))
+    survey = _survey((_motion(0), _motion(1), _motion(2)), source_snapshot=snapshot)
     assessment = _assess(SPEC, snapshot, survey, _coverage())
     pair = OperationPair.build(previous=OperationIndex(0), current=OperationIndex(2), operation_count=3)
     maximum = MeasuredStep.build(value=Degrees(1.0), pair=pair, unit="degrees")
@@ -709,6 +925,7 @@ def test_assessment_rejects_contradiction_of_in_bounds_nonadjacent_engagement_pa
             assessment,
             snapshot,
             survey,
+            spec=SPEC,
             attribution=attribution,
             max_engagement_step=criterion,
         )
@@ -726,7 +943,7 @@ def test_assessment_rejects_contradiction_of_loop_pair_crossing_rapid_or_path_ch
     )
     rapids = (_rapid(index=1, operation=OperationType.RETRACT, length=1.0, horizontal_at_cut_plane=False),) if boundary == "rapid" else ()
     retracts = (OperationIndex(1),) if boundary == "rapid" else ()
-    survey = _survey(motions, rapids, retract_indices=retracts)
+    survey = _survey(motions, rapids, source_snapshot=snapshot, retract_indices=retracts)
     assessment = _assess(SPEC, snapshot, survey, _coverage())
     pair = OperationPair.build(
         previous=OperationIndex(0),
@@ -748,6 +965,7 @@ def test_assessment_rejects_contradiction_of_loop_pair_crossing_rapid_or_path_ch
             assessment,
             snapshot,
             survey,
+            spec=SPEC,
             attribution=attribution,
             max_loop_radius_step=criterion,
         )
@@ -777,7 +995,12 @@ def test_assessment_rejects_same_cardinality_wrong_exact_sources(
     field: str,
     wrong_sources: tuple[object, ...],
 ) -> None:
-    snapshot = _snapshot(4, operation_roles={3: OperationType.LINK}, circle_indices={0})
+    snapshot = _snapshot(
+        4,
+        operation_roles={3: OperationType.PLUNGE},
+        circle_indices={0},
+        horizontal_role_indices={3},
+    )
     motions = (
         _motion(
             0,
@@ -792,8 +1015,8 @@ def test_assessment_rejects_same_cardinality_wrong_exact_sources(
         _motion(1, start=(2.0, 0.0), end=(1.0, 0.0), start_tangent=(0.0, 1.0)),
         _motion(2, start=(1.0, 0.0)),
     )
-    rapid = _rapid(index=3, operation=OperationType.LINK, length=1.0, horizontal_at_cut_plane=True)
-    survey = _survey(motions, (rapid,))
+    rapid = _rapid(index=3, operation=OperationType.PLUNGE, length=1.0, horizontal_at_cut_plane=True)
+    survey = _survey(motions, (rapid,), source_snapshot=snapshot)
     assessment = _assess(SPEC, snapshot, survey, _coverage())
     attribution = _rebuild_attribution(
         assessment,
@@ -802,7 +1025,7 @@ def test_assessment_rejects_same_cardinality_wrong_exact_sources(
     )
 
     with pytest.raises(ContradictoryPathQualityEvidenceError):
-        _rebuild_assessment(assessment, snapshot, survey, attribution=attribution)
+        _rebuild_assessment(assessment, snapshot, survey, spec=SPEC, attribution=attribution)
 
 
 def test_attribution_factory_revalidates_engagement_maximum_pair_bounds() -> None:
@@ -842,11 +1065,16 @@ def test_simple_findings_retain_exact_unique_operation_indices() -> None:
         _motion(4, length=0.0),
     )
     rapids = (
-        _rapid(index=1, operation=OperationType.LINK, length=0.0, horizontal_at_cut_plane=True),
+        _rapid(index=1, operation=OperationType.PLUNGE, length=0.0, horizontal_at_cut_plane=True),
         _rapid(index=3, operation=OperationType.RETRACT, length=1.0, horizontal_at_cut_plane=False),
     )
-    snapshot = _snapshot(5, operation_roles={1: OperationType.LINK, 3: OperationType.RETRACT}, circle_indices={2})
-    survey = _survey(motions, rapids, retract_indices=(OperationIndex(3),))
+    snapshot = _snapshot(
+        5,
+        operation_roles={1: OperationType.PLUNGE, 3: OperationType.RETRACT},
+        circle_indices={2},
+        horizontal_role_indices={1},
+    )
+    survey = _survey(motions, rapids, source_snapshot=snapshot, retract_indices=(OperationIndex(3),))
     assessment = _assess(SPEC, snapshot, survey, _coverage(uncut=2))
 
     assert assessment.uncut_fraction.measured == UnitFraction(0.2)
@@ -886,8 +1114,8 @@ def test_junction_findings_preserve_adjacency_and_classification() -> None:
         _motion(2, start=(2.0 + tolerance, 0.0), start_tangent=(1.0, 0.0), end_tangent=(1.0, 0.0), samples=(_sample(40.0),)),
         _motion(4, start=(99.0, 0.0), start_tangent=(0.0, 1.0), samples=(_sample(80.0),)),
     )
-    snapshot = _snapshot(5, operation_roles={3: OperationType.LINK})
-    survey = _survey(motions, (_rapid(index=3, operation=OperationType.LINK, length=1.0, horizontal_at_cut_plane=False),))
+    snapshot = _snapshot(5, operation_roles={3: OperationType.LINK}, heights={3: 2.0})
+    survey = _survey(motions, (_rapid(index=3, operation=OperationType.LINK, length=1.0, horizontal_at_cut_plane=False),), source_snapshot=snapshot)
     assessment = _assess(SPEC, snapshot, survey, _coverage())
 
     assert assessment.attribution.continuity_break_pairs == (OperationPair.build(previous=OperationIndex(1), current=OperationIndex(2), operation_count=5),)
@@ -903,8 +1131,8 @@ def test_engagement_steps_keep_first_maximum_tie_and_every_failure_pair() -> Non
         _motion(2, samples=(_sample(0.0),)),
         _motion(4, samples=(_sample(400.0),)),
     )
-    snapshot = _snapshot(5, operation_roles={3: OperationType.LINK})
-    survey = _survey(motions, (_rapid(index=3, operation=OperationType.LINK, length=1.0, horizontal_at_cut_plane=False),))
+    snapshot = _snapshot(5, operation_roles={3: OperationType.LINK}, heights={3: 2.0})
+    survey = _survey(motions, (_rapid(index=3, operation=OperationType.LINK, length=1.0, horizontal_at_cut_plane=False),), source_snapshot=snapshot)
     assessment = _assess(SPEC, snapshot, survey, _coverage())
     pair_01 = OperationPair.build(previous=OperationIndex(0), current=OperationIndex(1), operation_count=5)
     pair_12 = OperationPair.build(previous=OperationIndex(1), current=OperationIndex(2), operation_count=5)
@@ -918,7 +1146,7 @@ def test_engagement_steps_keep_first_maximum_tie_and_every_failure_pair() -> Non
 def test_zero_steps_have_no_invented_maximum_pair() -> None:
     motions = (_motion(0, samples=(_sample(20.0),)), _motion(1, samples=(_sample(20.0),)))
     snapshot = _snapshot(2)
-    survey = _survey(motions)
+    survey = _survey(motions, source_snapshot=snapshot)
     assessment = _assess(SPEC, snapshot, survey, _coverage())
 
     assert assessment.max_engagement_step.measured == Degrees(0.0)
@@ -931,7 +1159,7 @@ def test_non_reversal_tangent_break_excludes_curvature_break() -> None:
         _motion(1, radius=3.0, start_tangent=(0.0, 1.0)),
     )
     snapshot = _snapshot(2)
-    survey = _survey(motions)
+    survey = _survey(motions, source_snapshot=snapshot)
     assessment = _assess(SPEC, snapshot, survey, _coverage())
     expected = (OperationPair.build(previous=OperationIndex(0), current=OperationIndex(1), operation_count=2),)
 
@@ -957,7 +1185,7 @@ def test_loop_steps_split_on_rapids_and_path_indices() -> None:
         {3: OperationType.RETRACT},
         circle_indices={0, 2, 4, 5, 6, 7},
     )
-    survey = _survey(motions, rapids, retract_indices=(OperationIndex(3),))
+    survey = _survey(motions, rapids, source_snapshot=snapshot, retract_indices=(OperationIndex(3),))
     assessment = _assess(SPEC, snapshot, survey, _coverage())
     pair_02 = OperationPair.build(previous=OperationIndex(0), current=OperationIndex(2), operation_count=8)
     pair_56 = OperationPair.build(previous=OperationIndex(5), current=OperationIndex(6), operation_count=8)

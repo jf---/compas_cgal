@@ -390,7 +390,9 @@ def _expected_maximum_pairs(
     for previous, current in zip(survey.motions, survey.motions[1:]):
         if current.index != previous.index + 1:
             continue
-        value = abs(current.peak_engagement_deg - previous.peak_engagement_deg)
+        previous_peak = max((sample.engagement_deg for sample in previous.samples), default=0.0)
+        current_peak = max((sample.engagement_deg for sample in current.samples), default=0.0)
+        value = abs(current_peak - previous_peak)
         if value > engagement_value:
             engagement_value = value
             engagement_pair = OperationPair.build(
@@ -455,7 +457,7 @@ def _expected_count_sources(
         if dot < 1.0 - TANGENT_CONTINUITY_SLACK:
             tangent.append(pair)
     return (
-        tuple(OperationIndex(motion.index) for motion in survey.motions if motion.gouges),
+        tuple(OperationIndex(motion.index) for motion in survey.motions if any(not sample.inside_centre_domain for sample in motion.samples)),
         tuple(OperationIndex(rapid.index) for rapid in survey.rapids if rapid.horizontal_at_cut_plane),
         tuple(continuity),
         tuple(
