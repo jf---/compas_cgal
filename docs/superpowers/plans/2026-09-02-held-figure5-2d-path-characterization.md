@@ -1,8 +1,10 @@
 # Held Figure 5 2D Path Characterization Implementation Plan
 
-> **status: ready** - the governing design is approved; execution starts at
-> Task 1 and must stop at the Task 5 parity checkpoint for explicit approval
-> before superseded quality reducers are removed.
+> **status: blocked at Task 5** - Tasks 1-5 are implemented and the additive
+> aggregate parity checks pass. Adversarial review found that the exact known-red
+> gate is nondeterministic and that the new evidence boundary accepts malformed
+> or contradictory inputs. Task 5A must close these findings before Task 6 can
+> be presented for explicit removal approval.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use
 > `superpowers:subagent-driven-development` (recommended) or
@@ -52,9 +54,11 @@ pytest-testmon, mypy strict, Ruff, and MkDocs.
   binding by immutable structural values and behavior.
 - Use Pixi exclusively. Every pytest invocation includes `-n auto`; after Python
   changes run an affected `--testmon` gate and Ruff format/check before commit.
-- Preserve the exact known-red membership: twelve quality cells, the benchmark
-  translation-invariance cell, and four adaptive cells. Never edit a reference
-  assertion to make it pass.
+- Preserve the exact known-red membership: twelve quality cells, one
+  deterministic benchmark translation-invariance cell, and four adaptive
+  cells. Generated property examples may extend discovery but may not be the
+  sole authority for declared-red membership. Never edit a reference assertion
+  to make it pass.
 - Leave the user-owned untracked `tmp/` tree untouched and unstaged.
 - Set both Git author and committer to
   `Jelle Feringa <jelleferinga@gmail.com>` for every commit.
@@ -89,7 +93,7 @@ pytest-testmon, mypy strict, Ruff, and MkDocs.
   - `operation_index(value, *, operation_count) -> OperationIndex`
   - the eight named spec failures in `benchmarks.errors`
 
-- [ ] **Step 1: Write RED runtime tests for each observation-unit validator**
+- [x] **Step 1: Write RED runtime tests for each observation-unit validator**
 
 Create tests that accept finite values, reject booleans, NaN, infinities,
 negative seconds/counts, and fractions outside `[0, 1]`:
@@ -105,7 +109,7 @@ def test_motion_count_rejects_bool() -> None:
         motion_count(True, name="gouging motions")
 ```
 
-- [ ] **Step 2: Write the strict type contract**
+- [x] **Step 2: Write the strict type contract**
 
 The contract must prove the six scalar domains remain distinct and geometry
 continues to use the existing unit/frame vocabulary:
@@ -118,7 +122,7 @@ point = assert_type(Point2[WorldXY].build(1.0, 2.0), Point2[WorldXY])
 assert_type(Point3[WorldXYZ].build(1.0, 2.0, 0.0), Point3[WorldXYZ])
 ```
 
-- [ ] **Step 3: Run RED tests**
+- [x] **Step 3: Run RED tests**
 
 Run:
 
@@ -130,7 +134,7 @@ pixi run mypy --strict --warn-unused-ignores tests/benchmarks/typecheck/held_pat
 Expected: collection/type checking fails because `benchmarks.units` and the new
 failures do not exist.
 
-- [ ] **Step 4: Implement the minimal observation-unit module and failures**
+- [x] **Step 4: Implement the minimal observation-unit module and failures**
 
 Use Python 3.9-compatible `NewType` declarations and small functions returning
 the typed values. Append these independent errors to `benchmarks/errors.py`:
@@ -168,7 +172,7 @@ class UnexpectedHeldPathCaseError(BenchmarkError):
     """Characterization received a Held case other than Figure 5."""
 ```
 
-- [ ] **Step 5: Extend the `types-benchmarks` task and run GREEN gates**
+- [x] **Step 5: Extend the `types-benchmarks` task and run GREEN gates**
 
 Add `benchmarks/units.py` and the new type-contract file to the explicit mypy
 file list, then run:
@@ -182,7 +186,7 @@ pixi run ruff check benchmarks/units.py benchmarks/errors.py tests/benchmarks/te
 
 Expected: all named tests and strict typing pass.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add benchmarks/units.py benchmarks/errors.py tests/benchmarks/test_units.py tests/benchmarks/typecheck/held_path_characterization_contract.py pyproject.toml
@@ -212,7 +216,7 @@ GIT_AUTHOR_NAME='Jelle Feringa' GIT_AUTHOR_EMAIL='jelleferinga@gmail.com' GIT_CO
   - `snapshot_toolpath(result: ToolpathResult) -> tuple[HeldOperationSnapshot, ...]`
   - `assert_toolpath_matches_snapshot(result, snapshot) -> None`
 
-- [ ] **Step 1: Write RED factory tests for the closed primitive union**
+- [x] **Step 1: Write RED factory tests for the closed primitive union**
 
 Construct one line, arc, and circle `ToolpathOperation`. Assert each snapshot
 retains ordinal, operation role, `path_index`, clockwise travel, optional
@@ -227,7 +231,7 @@ def test_circle_snapshot_retains_frame_phase() -> None:
     assert snapshot.xaxis == Direction3[WorldXYZ].build(0.0, 1.0, 0.0)
 ```
 
-- [ ] **Step 2: Write RED mutation and malformed-input tests**
+- [x] **Step 2: Write RED mutation and malformed-input tests**
 
 Parameterize one-field changes covering operation order/count, role,
 `path_index`, clockwise, endpoints, centre, Z, frame axes, radius, arc angles,
@@ -236,7 +240,7 @@ must reject non-finite geometry, non-positive radius, non-unit or non-orthogonal
 axes, invalid angles, unsupported geometry, and malformed tangents through
 `InvalidHeldOperationSnapshotError`. Direct construction must raise `TypeError`.
 
-- [ ] **Step 3: Run RED tests**
+- [x] **Step 3: Run RED tests**
 
 ```bash
 pixi run pytest -- tests/benchmarks/test_held_path_snapshot.py -n auto --testmon -q
@@ -244,7 +248,7 @@ pixi run pytest -- tests/benchmarks/test_held_path_snapshot.py -n auto --testmon
 
 Expected: import fails because the snapshot module does not exist.
 
-- [ ] **Step 4: Implement structural snapshot factories**
+- [x] **Step 4: Implement structural snapshot factories**
 
 Use three records rather than optional primitive fields. Build canonical
 `Point3[WorldXYZ]`, `Direction3[WorldXYZ]`, `Millimetre`, and `Radian` values;
@@ -262,7 +266,7 @@ def assert_toolpath_matches_snapshot(
 
 Do not import or extend the existing engagement-audit identity subsystem.
 
-- [ ] **Step 5: Run GREEN runtime, type, and formatting gates**
+- [x] **Step 5: Run GREEN runtime, type, and formatting gates**
 
 ```bash
 pixi run pytest -- tests/benchmarks/test_held_path_snapshot.py -n auto --testmon -q
@@ -271,7 +275,7 @@ pixi run ruff format benchmarks/held_path_snapshot.py tests/benchmarks/test_held
 pixi run ruff check benchmarks/held_path_snapshot.py tests/benchmarks/test_held_path_snapshot.py tests/benchmarks/typecheck/held_path_characterization_contract.py
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add benchmarks/held_path_snapshot.py tests/benchmarks/test_held_path_snapshot.py tests/benchmarks/typecheck/held_path_characterization_contract.py pyproject.toml
@@ -296,7 +300,7 @@ GIT_AUTHOR_NAME='Jelle Feringa' GIT_AUTHOR_EMAIL='jelleferinga@gmail.com' GIT_CO
   `EngagementSample.cap_exceeded: bool`; `MotionQuality.cap_exceeded` becomes
   `any(sample.cap_exceeded for sample in samples)`.
 
-- [ ] **Step 1: Write RED tests for retained sample positions and predicates**
+- [x] **Step 1: Write RED tests for retained sample positions and predicates**
 
 Tests must establish that a circle has 45 seam-unique samples, while open lines
 and arcs have 46 endpoint-inclusive samples at the standard 45 intervals. Assert
@@ -310,7 +314,7 @@ Monkeypatch only the reporting angle in a focused unit test to prove the Boolean
 comes directly from the exact predicate result and is never reconstructed by
 comparing `engagement_deg` with the cap.
 
-- [ ] **Step 2: Run RED tests**
+- [x] **Step 2: Run RED tests**
 
 ```bash
 pixi run pytest -- tests/benchmarks/test_survey.py -n auto --testmon -q
@@ -318,7 +322,7 @@ pixi run pytest -- tests/benchmarks/test_survey.py -n auto --testmon -q
 
 Expected: the new `EngagementSample` fields are absent.
 
-- [ ] **Step 3: Extend `EngagementSample` and `_measure_motion` additively**
+- [x] **Step 3: Extend `EngagementSample` and `_measure_motion` additively**
 
 For each `(distance, x, y)` station, retain the exact returned `exceeded` value
 and `Point2[WorldXY].build(x, y)`. Update the docstring so
@@ -326,7 +330,7 @@ and `Point2[WorldXY].build(x, y)`. Update the docstring so
 and absence across the finite station set remains sampled-negative evidence.
 Do not change `QUALITY_SAMPLES_PER_MOTION` or `_motion_samples`.
 
-- [ ] **Step 4: Prove existing survey/quality behavior is unchanged**
+- [x] **Step 4: Prove existing survey/quality behavior is unchanged**
 
 ```bash
 pixi run pytest -- tests/benchmarks/test_survey.py tests/benchmarks/test_quality.py tests/benchmarks/test_quality_invariants.py -k 'not test_the_generated_path_is_worth_running and not test_moving_the_pocket_across_the_table_changes_no_metric' -n auto --testmon -q
@@ -337,7 +341,7 @@ pixi run ruff check benchmarks/survey.py tests/benchmarks/test_survey.py tests/b
 
 Expected: selected tests pass; no existing metric changes.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add benchmarks/survey.py tests/benchmarks/test_survey.py tests/benchmarks/typecheck/held_path_characterization_contract.py pyproject.toml
@@ -367,7 +371,7 @@ GIT_AUTHOR_NAME='Jelle Feringa' GIT_AUTHOR_EMAIL='jelleferinga@gmail.com' GIT_CO
     `PathQualityAssessment`
   - `assess_path_quality(spec, snapshot, survey, coverage) -> PathQualityAssessment`
 
-- [ ] **Step 1: Write RED criterion-factory tests**
+- [x] **Step 1: Write RED criterion-factory tests**
 
 Pin all twelve criterion names, thresholds, evidence kinds, and outcome
 vocabulary. Required values are exactly `0`, the case cap, and `2` tool radii;
@@ -375,7 +379,7 @@ never infer them from current measurements. A wrong evidence kind, unit domain,
 non-finite value, negative count, invalid index, or inconsistent outcome must
 raise `InvalidHeldPathEvidenceError`.
 
-- [ ] **Step 2: Write RED simple-attribution tests**
+- [x] **Step 2: Write RED simple-attribution tests**
 
 Using synthetic `PathSurvey` values, require:
 
@@ -385,7 +389,7 @@ Using synthetic `PathSurvey` values, require:
 - cap-exceeded indices come from `sample.cap_exceeded`, not reporting degrees;
 - count observations reject attribution cardinality disagreement.
 
-- [ ] **Step 3: Write RED junction and step-attribution tests**
+- [x] **Step 3: Write RED junction and step-attribution tests**
 
 Pin the existing adjacency semantics:
 
@@ -400,7 +404,7 @@ Pin the existing adjacency semantics:
 - failure-pair lists contain every pair over the unchanged threshold, not merely
   one pair reproducing the maximum.
 
-- [ ] **Step 4: Run RED tests**
+- [x] **Step 4: Run RED tests**
 
 ```bash
 pixi run pytest -- tests/benchmarks/test_quality_observations.py -n auto --testmon -q
@@ -409,7 +413,7 @@ pixi run mypy --strict --warn-unused-ignores tests/benchmarks/typecheck/quality_
 
 Expected: import fails because the canonical observation module is absent.
 
-- [ ] **Step 5: Implement the canonical findings and typed assessment**
+- [x] **Step 5: Implement the canonical findings and typed assessment**
 
 Move no existing function yet. Reproduce the current deciding expressions in
 new detailed reducers and construct the assessment from their outputs. The
@@ -435,7 +439,7 @@ EVIDENCE_BY_CRITERION: dict[CriterionName, EvidenceKind] = {
 Use named existing tolerance constants; introduce no numeric literal at a
 decision call site.
 
-- [ ] **Step 6: Run GREEN focused gates**
+- [x] **Step 6: Run GREEN focused gates**
 
 ```bash
 pixi run pytest -- tests/benchmarks/test_quality_observations.py -n auto --testmon -q
@@ -444,7 +448,7 @@ pixi run ruff format benchmarks/quality_observations.py tests/benchmarks/test_qu
 pixi run ruff check benchmarks/quality_observations.py tests/benchmarks/test_quality_observations.py tests/benchmarks/typecheck/quality_observations_contract.py
 ```
 
-- [ ] **Step 7: Commit additive observations**
+- [x] **Step 7: Commit additive observations**
 
 ```bash
 git add benchmarks/quality_observations.py tests/benchmarks/test_quality_observations.py tests/benchmarks/typecheck/quality_observations_contract.py pyproject.toml
@@ -469,7 +473,7 @@ GIT_AUTHOR_NAME='Jelle Feringa' GIT_AUTHOR_EMAIL='jelleferinga@gmail.com' GIT_CO
 - Produces: reviewable proof that the new attributed observations preserve every
   old aggregate, threshold, test ID, and known-red cell.
 
-- [ ] **Step 1: Add parity assertions without changing the old verdict path**
+- [x] **Step 1: Add parity assertions without changing the old verdict path**
 
 Keep `_violations` and the final gate assertion untouched. Add a helper that
 compares every gated `PathQuality` field with its typed observation, then add it
@@ -477,7 +481,7 @@ to synthetic machinery and invariant cases. Counts must reduce from every
 attributed operation/pair; maximum observations must name the exact winning pair
 or `None` when the maximum is zero.
 
-- [ ] **Step 2: Add parity to all twelve `QUALITY_GATE_CASES`**
+- [x] **Step 2: Add parity to all twelve `QUALITY_GATE_CASES`**
 
 In `test_the_generated_path_is_worth_running`, generate once and run the
 unchanged quality path. Test spies capture its single `PathSurvey` and
@@ -487,7 +491,7 @@ additive assessment. Assert parity, then leave the existing
 one survey and one coverage measurement. The twelve tests must remain red for
 the same reasons after the parity assertion passes.
 
-- [ ] **Step 3: Run synthetic and invariant parity GREEN**
+- [x] **Step 3: Run synthetic and invariant parity GREEN**
 
 ```bash
 pixi run pytest -- tests/benchmarks/test_quality.py tests/benchmarks/test_quality_invariants.py -k 'not test_the_generated_path_is_worth_running and not test_moving_the_pocket_across_the_table_changes_no_metric' -n auto --testmon -q
@@ -495,20 +499,27 @@ pixi run pytest -- tests/benchmarks/test_quality.py tests/benchmarks/test_qualit
 
 Expected: all selected tests pass.
 
-- [ ] **Step 4: Run all twelve gate cells and reconcile expected reds**
+- [ ] **Step 4: BLOCKED - make the exact known-red oracle deterministic**
 
 ```bash
 zsh -c 'pixi run pytest -- tests/benchmarks/test_quality.py::test_the_generated_path_is_worth_running -n auto -q; red_status=$?; if [[ $red_status -ne 1 ]]; then exit 2; fi; pixi run red-manifest'
 ```
 
-Expected: exactly twelve `test_the_generated_path_is_worth_running` failures
-with unchanged IDs and criterion messages; `red-manifest` confirms the repository
-still has exactly seventeen declared reds overall: twelve quality, one benchmark
-translation-invariance, and four adaptive.
+Observed on 2026-09-02: exactly twelve
+`test_the_generated_path_is_worth_running` failures retained their IDs and
+criterion messages, but the full suite reported sixteen rather than seventeen
+reds because the generated translation property did not discover its known
+counterexample. A focused invocation on the unchanged code later found two
+counterexamples, including `cap_exceedances` changing from `1` to `2` under a
+pure translation. The defect remains; its discovery is nondeterministic.
+
+Task 5A.1 must pin a minimized example before this step can be checked. The
+required result remains exactly seventeen declared reds overall: twelve quality,
+one deterministic benchmark translation-invariance cell, and four adaptive.
 Exit status `1` is required for the focused expected-red invocation; collection,
 configuration, interruption, and infrastructure statuses are blockers, not reds.
 
-- [ ] **Step 5: Record parity evidence**
+- [x] **Step 5: Record parity evidence**
 
 Write `held-figure5-quality-parity.md` with:
 
@@ -519,7 +530,7 @@ Write `held-figure5-quality-parity.md` with:
 - explicit statement that current production still uses the old reducers; and
 - the removal decision requested from Jelle.
 
-- [ ] **Step 6: Run focused hygiene and commit**
+- [x] **Step 6: Run focused hygiene and commit**
 
 ```bash
 pixi run types-benchmarks
@@ -530,17 +541,347 @@ git add tests/benchmarks/test_quality.py tests/benchmarks/test_quality_invariant
 GIT_AUTHOR_NAME='Jelle Feringa' GIT_AUTHOR_EMAIL='jelleferinga@gmail.com' GIT_COMMITTER_NAME='Jelle Feringa' GIT_COMMITTER_EMAIL='jelleferinga@gmail.com' git commit -m 'test(benchmarks): prove quality observation parity'
 ```
 
-- [ ] **Step 7: STOP and request explicit removal approval**
+- [x] **Step 7: STOP for independent review before removal approval**
 
-Present the committed parity evidence and exact known-red reconciliation. Do not
-start Task 6, remove an old reducer, or redirect `measure_quality` until Jelle
-explicitly approves convergence.
+The committed parity evidence was reviewed by six independent lenses. The
+review converged on the Task 5A findings below. Do not request removal approval,
+start Task 6, remove an old reducer, or redirect `measure_quality` until every
+Task 5A checkpoint passes.
+
+---
+
+### Task 5A.1: Make declared-red membership deterministic
+
+**Files:**
+
+- Modify: `tests/benchmarks/test_quality_invariants.py:502-518`
+- Modify: `docs/superpowers/state/held-figure5-quality-parity.md`
+
+**Interfaces:**
+
+- Consumes: the existing translation-invariance property and its protected
+  quality judge.
+- Produces: one pinned dyadic `@example` under the existing test ID; generated
+  examples remain additional discovery evidence.
+
+- [ ] **Step 1: Pin the minimized translation witness**
+
+Retain the generated property and insert this minimized example between
+`@PROPERTY_SETTINGS` and the existing `@given` decorator:
+
+```python
+@PROPERTY_SETTINGS
+@example(
+    stations=[
+        (0, 0.0, 0.0, 2.125),
+        (0, 0.875, 0.0, 1.0),
+        (1, 0.0, 0.0, 0.375),
+        (1, 0.875, 0.0, 0.375),
+    ],
+    shift=(0.0, 2.0),
+)
+```
+
+Do not mark the property as expected failure. The red manifest continues to own
+the unchanged node ID and the defect remains visible as a normal assertion
+failure.
+
+- [ ] **Step 2: Prove the red is independent of generated examples**
+
+Run the existing test with fixed seeds that previously missed the defect:
+
+```bash
+pixi run pytest -- tests/benchmarks/test_quality_invariants.py::test_moving_the_pocket_across_the_table_changes_no_metric -n auto --hypothesis-seed=1 -q
+pixi run pytest -- tests/benchmarks/test_quality_invariants.py::test_moving_the_pocket_across_the_table_changes_no_metric -n auto --hypothesis-seed=2 -q
+```
+
+Expected: both exit `1` on the pinned translation witness with a machining
+metric changing under translation. Collection, configuration, interruption,
+or process termination is not an expected red.
+
+- [ ] **Step 3: Record the corrected oracle interpretation and commit**
+
+Update the parity state: the 16-red full run was a probabilistic miss, the
+translation defect remains reproducible, and exact manifest membership now has
+a deterministic witness.
+
+```bash
+pixi run ruff format tests/benchmarks/test_quality_invariants.py
+pixi run ruff check tests/benchmarks/test_quality_invariants.py
+git diff --check
+git add tests/benchmarks/test_quality_invariants.py docs/superpowers/state/held-figure5-quality-parity.md
+GIT_AUTHOR_NAME='Jelle Feringa' GIT_AUTHOR_EMAIL='jelleferinga@gmail.com' GIT_COMMITTER_NAME='Jelle Feringa' GIT_COMMITTER_EMAIL='jelleferinga@gmail.com' git commit -m 'test(quality): pin translation defect'
+```
+
+---
+
+### Task 5A.2: Fail closed at the 2D motion boundary
+
+**Files:**
+
+- Modify: `benchmarks/held_path_snapshot.py:97-141, 199-253, 312-387`
+- Modify: `benchmarks/survey.py:237-289, 535-590`
+- Modify: `tests/benchmarks/test_held_path_snapshot.py`
+- Modify: `tests/benchmarks/test_survey.py`
+
+**Interfaces:**
+
+- Consumes: `HeldOperationSnapshot`, COMPAS line/arc/circle geometry, the
+  inferred cut plane, and the shared `TOL` predicates.
+- Produces: snapshots whose curve ranges and retained tangents are internally
+  consistent with the source motion; the cut-plane survey refuses silent XY
+  projection of tilted or vertically displaced curves. The structural snapshot
+  may still record unsupported 3D input so the refusal remains observable.
+
+- [ ] **Step 1: Write RED malformed-motion tests**
+
+Add direct-factory and real-operation tests named
+`test_snapshot_rejects_descending_arc_range`,
+`test_snapshot_retains_zero_sweep_for_zero_length_diagnosis`,
+`test_snapshot_rejects_line_tangent_that_disagrees_with_geometry`,
+`test_snapshot_rejects_arc_tangent_that_disagrees_with_travel`,
+`test_snapshot_rejects_circle_tangent_that_disagrees_with_clockwise`,
+`test_survey_rejects_tilted_cut_circle`, and
+`test_survey_rejects_curve_outside_the_inferred_cut_plane`. Use the existing
+`_operation`, `_result`, and `_survey_motion` fixtures; assert the named
+snapshot or replay exception in every refusal test and structural equality in
+the zero-sweep retention test.
+
+Descending arcs are malformed because COMPAS reports negative length. A zero
+sweep remains admissible so the protected zero-length quality criterion can
+diagnose it. In-plane rotation and translation remain valid.
+
+- [ ] **Step 2: Run the focused RED tests**
+
+```bash
+pixi run pytest -- tests/benchmarks/test_held_path_snapshot.py tests/benchmarks/test_survey.py -k 'descending or zero_sweep or tangent_that_disagrees or tilted or inferred_cut_plane' -n auto --testmon --testmon-noselect -q
+```
+
+Expected: descending ranges, contradictory unit tangents, and non-planar curves
+are accepted when they must fail.
+
+- [ ] **Step 3: Implement the narrow geometric validation**
+
+Keep geometry in typed world coordinates. Enforce `end_angle >= start_angle`;
+do not reject equality. Derive each primitive's expected travel tangent from its
+geometry and clockwise flag, then compare it with retained tangents through the
+shared COMPAS angular tolerance. At the cut-plane replay boundary require arc
+and circle axes to lie in world XY and their centres to lie on the inferred cut
+height. Raise `InvalidHeldOperationSnapshotError` for malformed snapshots and
+the existing `UnreplayableOperationError` when survey input leaves the cut-plane
+model. Introduce no numeric tolerance literal.
+
+- [ ] **Step 4: Run GREEN gates and commit**
+
+```bash
+pixi run pytest -- tests/benchmarks/test_held_path_snapshot.py tests/benchmarks/test_survey.py -n auto --testmon --testmon-noselect -q
+pixi run types-benchmarks
+pixi run ruff format benchmarks/held_path_snapshot.py benchmarks/survey.py tests/benchmarks/test_held_path_snapshot.py tests/benchmarks/test_survey.py
+pixi run ruff check benchmarks/held_path_snapshot.py benchmarks/survey.py tests/benchmarks/test_held_path_snapshot.py tests/benchmarks/test_survey.py
+git diff --check
+git add benchmarks/held_path_snapshot.py benchmarks/survey.py tests/benchmarks/test_held_path_snapshot.py tests/benchmarks/test_survey.py
+GIT_AUTHOR_NAME='Jelle Feringa' GIT_AUTHOR_EMAIL='jelleferinga@gmail.com' GIT_COMMITTER_NAME='Jelle Feringa' GIT_COMMITTER_EMAIL='jelleferinga@gmail.com' git commit -m 'fix(benchmarks): validate 2d path snapshots'
+```
+
+---
+
+### Task 5A.3: Make quality evidence factories bypass-safe
+
+**Files:**
+
+- Modify: `benchmarks/survey.py:129-229, 237-289, 550-588`
+- Modify: `benchmarks/quality_observations.py:300-675`
+- Modify: `tests/benchmarks/test_quality_observations.py`
+- Modify: `tests/benchmarks/test_quality.py:745-880`
+- Modify: `tests/benchmarks/test_quality_invariants.py:371-480`
+- Modify: `tests/benchmarks/typecheck/quality_observations_contract.py`
+
+**Interfaces:**
+
+- Consumes: one `PocketSpec`, complete operation snapshot, survey produced from
+  that same specification and operation stream, and unchanged criterion
+  thresholds.
+- Produces:
+  - operation-level plunge/retract observations sufficient to prove a complete
+    operation partition;
+  - a retained closed unit discriminator on `MeasuredStep[StepUnitT]`;
+  - unconditional validation of `operation_count`;
+  - fail-closed survey/spec/snapshot binding;
+  - criterion outcomes and failure-pair attribution that cannot contradict.
+
+- [ ] **Step 1: Write RED input-binding tests**
+
+Require `InvalidHeldPathEvidenceError` for a foreign `PocketSpec`, omitted or
+reordered operation, mismatched operation role, wrong primitive kind, and
+incomplete motion/rapid/plunge/retract partition. The survey must retain the
+operation indices currently represented only by plunge/retract counts, and the
+validated partition must equal `range(len(snapshot))` exactly.
+
+Task 6's public `reduce_quality_evidence` must compute coverage directly from
+the validated survey's `final_stock`; no public production boundary may accept
+an independently supplied `CoverageEstimate`. The Task 5 transition reducer may
+continue accepting captured coverage only until Task 6 is explicitly approved.
+
+- [ ] **Step 2: Write RED unit and count factory tests**
+
+Add runtime and strict-type contracts for:
+
+```python
+with pytest.raises(InvalidHeldPathEvidenceError):
+    MeasuredStep.build(value=ToolRadiusMultiple(1.0), pair=pair, unit=cast(Any, "seconds"))
+
+with pytest.raises(InvalidHeldPathEvidenceError):
+    PathQualityAttribution.build(operation_count=True, **empty_attribution)
+
+with pytest.raises(InvalidHeldPathEvidenceError):
+    PathQualityAttribution.build(operation_count=-1, **empty_attribution)
+```
+
+Retain `unit: Literal["degrees", "tool_radius_multiple"]` in each constructed
+`MeasuredStep`. Use typed overloads to correlate `Degrees` with `"degrees"` and
+`ToolRadiusMultiple` with `"tool_radius_multiple"`; validate the retained unit
+again when installing a step into its engagement or loop-radius slot. Require an
+exact non-Boolean integer operation count; zero remains valid only for a wholly
+empty standalone attribution and is ineligible for Figure 5.
+
+- [ ] **Step 3: Write RED contradiction and exact-source tests**
+
+Mutation tests must reject:
+
+- a violated maximum with no failure pair;
+- a satisfied maximum with a non-empty failure list;
+- an attributed maximum absent from its failure list;
+- an in-bounds but non-adjacent engagement pair;
+- an in-bounds pair crossing a rapid or path-chain boundary; and
+- replacement of any one of the nine count criteria's source tuples with a
+  same-cardinality wrong tuple.
+
+Raise `ContradictoryPathQualityEvidenceError` when valid component records do not
+form a coherent assessment. Independently reconstruct exact expected source
+tuples from raw survey observations in every synthetic, invariant, and twelve
+gate invocation; aggregate equality and cardinality alone are insufficient.
+
+- [ ] **Step 4: Run RED, implement the smallest validators, and run GREEN**
+
+```bash
+pixi run pytest -- tests/benchmarks/test_quality_observations.py tests/benchmarks/test_quality.py tests/benchmarks/test_quality_invariants.py -k 'binding or partition or operation_count or unit or contradiction or exact_sources' -n auto --testmon --testmon-noselect -q
+```
+
+Expected before implementation: every newly added negative contract reaches the
+factory and is accepted when it must fail. Implement only the validation needed
+by those contracts, then rerun the same command expecting all selected tests to
+pass.
+
+- [ ] **Step 5: Run focused parity, types, Ruff, and commit**
+
+```bash
+pixi run pytest -- tests/benchmarks/test_quality.py tests/benchmarks/test_quality_invariants.py tests/benchmarks/test_quality_observations.py -k 'not test_the_generated_path_is_worth_running and not test_moving_the_pocket_across_the_table_changes_no_metric' -n auto --testmon --testmon-noselect -q
+pixi run types-benchmarks
+pixi run ruff format benchmarks/survey.py benchmarks/quality_observations.py tests/benchmarks/test_quality_observations.py tests/benchmarks/test_quality.py tests/benchmarks/test_quality_invariants.py tests/benchmarks/typecheck/quality_observations_contract.py
+pixi run ruff check benchmarks/survey.py benchmarks/quality_observations.py tests/benchmarks
+git diff --check
+git add benchmarks/survey.py benchmarks/quality_observations.py tests/benchmarks/test_quality_observations.py tests/benchmarks/test_quality.py tests/benchmarks/test_quality_invariants.py tests/benchmarks/typecheck/quality_observations_contract.py
+GIT_AUTHOR_NAME='Jelle Feringa' GIT_AUTHOR_EMAIL='jelleferinga@gmail.com' GIT_COMMITTER_NAME='Jelle Feringa' GIT_COMMITTER_EMAIL='jelleferinga@gmail.com' git commit -m 'fix(benchmarks): bind quality evidence'
+```
+
+---
+
+### Task 5A.4: Establish a semantic transition gate and truthful checkpoint
+
+**Files:**
+
+- Create: `tests/benchmarks/test_quality_transition.py`
+- Modify: `docs/superpowers/state/held-figure5-quality-parity.md`
+- Modify: `docs/superpowers/plans/2026-09-02-held-figure5-2d-path-characterization.md`
+
+**Interfaces:**
+
+- Consumes: all twelve unchanged `QUALITY_GATE_CASES`, the protected old judge,
+  and the validated attributed assessment.
+- Produces: a green transition oracle that authenticates each structured
+  criterion vector before the deliberate product-gate assertion; exact known-red
+  membership remains a separate repository-state gate.
+
+- [ ] **Step 1: Write the permanent twelve-case green transition oracle**
+
+Parameterize the unchanged gate cases without executing the final deliberate
+`assert not violations`. For every case, generate once and require:
+
+- one survey and one coverage evaluation;
+- exact old/new values and thresholds for all twelve criteria;
+- exact structured `ObservationOutcome` values;
+- exact operation and pair attribution, including first-tie maxima; and
+- the expected ordered criterion-message vector later consumed by the red test.
+
+This test must fail if an arbitrary earlier assertion replaces the intended
+product-gate failure, even when the red test ID and count remain unchanged.
+
+- [ ] **Step 2: Prove the transition and known-red oracles separately**
+
+```bash
+pixi run pytest -- tests/benchmarks/test_quality_transition.py -n auto --testmon --testmon-noselect -q
+zsh -c 'pixi run pytest -- tests/benchmarks/test_quality.py::test_the_generated_path_is_worth_running -n auto -q; red_status=$?; if [[ $red_status -ne 1 ]]; then exit 2; fi; pixi run red-manifest'
+```
+
+Expected: the transition module is green; all twelve quality cells fail only at
+the final product assertion; the repository manifest reports the deterministic
+seventeen-red membership.
+
+- [ ] **Step 3: Resolve the prior native-process instability**
+
+Run the previously implicated adaptive files three times under the acceptance
+xdist configuration with Python fault handling enabled:
+
+```bash
+for run in 1 2 3; do
+  PYTHONFAULTHANDLER=1 pixi run pytest -- tests/adaptive/test_generator.py tests/adaptive/test_route_retrace_generator.py -n auto -q || exit $?
+done
+```
+
+Expected: each invocation completes with only the four manifest-owned adaptive
+assertion failures. A segfault, truncated JUnit report, collection error, or
+other process termination blocks Task 6 and starts a focused native-lifetime
+diagnosis; it may not be classified as infrastructure without a concrete
+external failure signature.
+
+- [ ] **Step 4: Reconcile plan and durable evidence**
+
+Correct the parity page so it attributes the Task 4 first-tie contracts to the
+completed full run rather than the narrower focused parity command. Record the
+deterministic translation witness, exact-source mutation coverage, semantic
+transition result, native stability result, and unchanged production routing.
+
+Mark Task 5 Step 4 and Tasks 5A.1-5A.4 complete only after their commands produce
+the stated evidence. Change the plan header to `awaiting Task 6 removal
+approval`; do not mark Task 6 active.
+
+- [ ] **Step 5: Run hygiene and commit the checkpoint**
+
+```bash
+pixi run types-benchmarks
+pixi run ruff format tests/benchmarks/test_quality_transition.py
+pixi run ruff check benchmarks tests/benchmarks
+git diff --check
+git add tests/benchmarks/test_quality_transition.py docs/superpowers/state/held-figure5-quality-parity.md docs/superpowers/plans/2026-09-02-held-figure5-2d-path-characterization.md
+GIT_AUTHOR_NAME='Jelle Feringa' GIT_AUTHOR_EMAIL='jelleferinga@gmail.com' GIT_COMMITTER_NAME='Jelle Feringa' GIT_COMMITTER_EMAIL='jelleferinga@gmail.com' git commit -m 'test(benchmarks): harden quality transition'
+```
+
+- [ ] **Step 6: STOP and request explicit Task 6 approval**
+
+Present the four Task 5A commits, deterministic seventeen-red reconciliation,
+semantic twelve-case transition result, and native stability evidence. Task 6
+remains a separate user decision because it redirects production and removes
+superseded deciding bodies.
 
 ---
 
 ### Task 6: Converge `measure_quality` to the canonical reducers
 
-**Precondition:** Jelle explicitly approved removal after reviewing Task 5.
+**Preconditions:** Every Task 5A checkbox is complete; Task 5 Step 4 reports the
+deterministic seventeen-red set; the permanent twelve-case semantic transition
+oracle is green; the implicated native tests complete stably under xdist; and
+Jelle explicitly approved Task 6 after reviewing that evidence. Approval alone
+cannot override a failed technical precondition.
 
 **Files:**
 
@@ -563,11 +904,14 @@ explicitly approves convergence.
     QUALITY_SAMPLES_PER_MOTION, grid: int = COVERAGE_GRID_SAMPLES) -> PathQuality`
     compatibility API delegating to the single survey/reducer path
 
-- [ ] **Step 1: Write RED single-survey and compatibility tests**
+- [ ] **Step 1: Write RED additive-reducer and compatibility tests**
 
 Instrument `survey_path`, `measure_coverage`, and `assess_path_quality`. Require
-one call each, identical public `PathQuality` output, and the existing named
-exceptions for zero-length paths and invalid grids.
+one call each, coverage computed from the validated survey rather than accepted
+as an argument, identical public `PathQuality` output, and the existing named
+exceptions for zero-length paths and invalid grids. Keep separate tests for the
+new additive reducer and the still-unmodified `measure_quality` compatibility
+route.
 
 - [ ] **Step 2: Run RED focused tests**
 
@@ -575,24 +919,47 @@ exceptions for zero-length paths and invalid grids.
 pixi run pytest -- tests/benchmarks/test_quality.py tests/benchmarks/test_quality_invariants.py -k 'single_survey or compatibility' -n auto --testmon -q
 ```
 
-Expected: the new reducer API does not exist or the compatibility path does not
+Expected: the new reducer API does not exist and the compatibility path does not
 delegate.
 
-- [ ] **Step 3: Add `QualityEvidence` and route `measure_quality` through it**
+- [ ] **Step 3: Add `QualityEvidence` beside the current production path**
 
 `reduce_quality_evidence` measures coverage exactly once, evaluates the
 canonical assessment once, and builds all five existing `PathQuality` groups.
-For the twelve gated fields, take values only from the assessment. Continue to
-compute report-only fields through their existing reducers.
+It first applies the Task 5A survey/spec/snapshot validator and computes coverage
+internally from `survey.final_stock`; no independently supplied coverage record
+enters the public production boundary. For the twelve gated fields, take values
+only from the assessment. Continue to compute report-only fields through their
+existing reducers. Do not redirect `measure_quality` and do not delete an old
+body in this step.
 
-- [ ] **Step 4: Validate the routed path before deletion**
+- [ ] **Step 4: Validate and commit the additive path**
 
-With old bodies present but unused, run the compatibility tests, the non-gate
-quality/invariant set excluding the declared translation red, all twelve gate
-cells, `red-manifest`, strict types, and Ruff. Record that the routed canonical
-path preserves the exact seventeen-red repository set.
+Run the new reducer tests directly while the old production path remains active:
 
-- [ ] **Step 5: Remove only superseded decision bodies**
+```bash
+pixi run pytest -- tests/benchmarks/test_quality.py tests/benchmarks/test_quality_invariants.py tests/benchmarks/test_quality_transition.py -k 'quality_evidence or transition' -n auto --testmon --testmon-noselect -q
+pixi run types-benchmarks
+pixi run ruff format benchmarks/quality.py benchmarks/quality_observations.py tests/benchmarks/test_quality.py tests/benchmarks/test_quality_invariants.py tests/benchmarks/test_quality_transition.py
+pixi run ruff check benchmarks/quality.py benchmarks/quality_observations.py tests/benchmarks
+git diff --check
+git add benchmarks/quality.py benchmarks/quality_observations.py tests/benchmarks/test_quality.py tests/benchmarks/test_quality_invariants.py tests/benchmarks/test_quality_transition.py tests/benchmarks/typecheck/quality_observations_contract.py pyproject.toml
+GIT_AUTHOR_NAME='Jelle Feringa' GIT_AUTHOR_EMAIL='jelleferinga@gmail.com' GIT_COMMITTER_NAME='Jelle Feringa' GIT_COMMITTER_EMAIL='jelleferinga@gmail.com' git commit -m 'feat(benchmarks): add canonical quality evidence'
+```
+
+Expected: the additive path reproduces every structured criterion and source;
+`measure_quality` still uses the old protected path.
+
+- [ ] **Step 5: Redirect production with all old bodies retained**
+
+Make `measure_quality` delegate to `reduce_quality_evidence`. Do not remove the
+old reducers or the temporary transition checks. Run the compatibility tests,
+permanent twelve-case semantic transition oracle, non-gate quality/invariant
+set, all twelve gate cells, `red-manifest`, strict types, and Ruff. The routed
+path must preserve both the structured criterion vectors and the deterministic
+seventeen-red repository set before deletion begins.
+
+- [ ] **Step 6: Remove only superseded decision bodies**
 
 Remove the old continuity, junction, engagement-step, and loop-radius-step
 decision functions after all callers use canonical findings. Remove duplicate
@@ -610,16 +977,18 @@ parametrization, test IDs, literal threshold contract tests, and final
 `assert not violations`; after the approved convergence there must be one survey,
 one coverage evaluation, and one threshold-decision call graph.
 
-- [ ] **Step 6: Replace transition parity hooks with permanent contract tests**
+- [ ] **Step 7: Retire temporary spies and retain permanent transition contracts**
 
-Remove the temporary parity spies from Task 5. Keep literal
-threshold assertions, criterion name/value/evidence tests, unchanged
-`QUALITY_GATE_CASES`, unchanged test IDs, and unchanged final gate assertion.
+Remove the temporary parity spies from Task 5 only after
+`test_quality_transition.py` exercises the routed production path. Keep that
+permanent green module, literal threshold assertions, criterion
+name/value/evidence tests, unchanged `QUALITY_GATE_CASES`, unchanged test IDs,
+and unchanged final gate assertion.
 
-- [ ] **Step 7: Rerun the same quality and type gates after deletion**
+- [ ] **Step 8: Rerun the same quality and type gates after deletion**
 
 ```bash
-pixi run pytest -- tests/benchmarks/test_quality.py tests/benchmarks/test_quality_invariants.py tests/benchmarks/test_qualityfigures.py -k 'not test_the_generated_path_is_worth_running and not test_moving_the_pocket_across_the_table_changes_no_metric' -n auto --testmon -q
+pixi run pytest -- tests/benchmarks/test_quality.py tests/benchmarks/test_quality_invariants.py tests/benchmarks/test_qualityfigures.py tests/benchmarks/test_quality_transition.py -k 'not test_the_generated_path_is_worth_running and not test_moving_the_pocket_across_the_table_changes_no_metric' -n auto --testmon -q
 zsh -c 'pixi run pytest -- tests/benchmarks/test_quality.py::test_the_generated_path_is_worth_running -n auto -q; red_status=$?; if [[ $red_status -ne 1 ]]; then exit 2; fi; pixi run red-manifest'
 pixi run types-benchmarks
 pixi run ruff format benchmarks/quality.py benchmarks/quality_observations.py tests/benchmarks/test_quality.py tests/benchmarks/test_quality_invariants.py
@@ -630,7 +999,7 @@ Expected: non-gate/non-translation tests pass; exactly the same twelve quality
 cells remain red; the repository red manifest still reports exactly seventeen
 declared reds.
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 9: Commit the validated authority transition**
 
 ```bash
 git add benchmarks/quality.py benchmarks/quality_observations.py tests/benchmarks/test_quality.py tests/benchmarks/test_quality_invariants.py tests/benchmarks/typecheck/quality_observations_contract.py pyproject.toml
