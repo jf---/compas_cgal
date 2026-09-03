@@ -32,6 +32,7 @@ file says what the numbers ARE; this one says what they must always OBEY.
 
 from __future__ import annotations
 
+import math
 from typing import List
 from typing import Sequence
 from typing import Tuple
@@ -56,6 +57,9 @@ from benchmarks.quality import _cut
 from benchmarks.quality import _elementary
 from benchmarks.quality import _program
 from benchmarks.quality import _speed
+from benchmarks.quality import CONTINUITY_TOOL_RADIUS_FRACTION
+from benchmarks.quality import DEGENERATE_LOOP_RATIO
+from benchmarks.quality import TANGENT_CONTINUITY_SLACK
 from benchmarks.quality import radial_immersion
 from benchmarks.quality_observations import OperationPair
 from benchmarks.quality_observations import PathQualityAssessment
@@ -428,6 +432,48 @@ def _expected_maximum_pairs(
     return engagement_pair, loop_pair
 
 
+def _expected_count_sources(
+    spec: PocketSpec,
+    snapshot: tuple[HeldOperationSnapshot, ...],
+    survey: PathSurvey,
+) -> tuple[tuple[object, ...], ...]:
+    operation_count = len(snapshot)
+    continuity: list[OperationPair] = []
+    tangent: list[OperationPair] = []
+    tolerance = CONTINUITY_TOOL_RADIUS_FRACTION * spec.tool_radius
+    for previous, current in zip(survey.motions, survey.motions[1:]):
+        if current.index != previous.index + 1:
+            continue
+        pair = OperationPair.build(
+            previous=OperationIndex(previous.index),
+            current=OperationIndex(current.index),
+            operation_count=operation_count,
+        )
+        if math.hypot(current.start[0] - previous.end[0], current.start[1] - previous.end[1]) > tolerance:
+            continuity.append(pair)
+        dot = previous.end_tangent[0] * current.start_tangent[0] + previous.end_tangent[1] * current.start_tangent[1]
+        if dot < 1.0 - TANGENT_CONTINUITY_SLACK:
+            tangent.append(pair)
+    return (
+        tuple(OperationIndex(motion.index) for motion in survey.motions if motion.gouges),
+        tuple(OperationIndex(rapid.index) for rapid in survey.rapids if rapid.horizontal_at_cut_plane),
+        tuple(continuity),
+        tuple(
+            OperationIndex(index)
+            for index in sorted([motion.index for motion in survey.motions if motion.length == 0.0] + [rapid.index for rapid in survey.rapids if rapid.length == 0.0])
+        ),
+        tuple(
+            OperationIndex(motion.index)
+            for motion in survey.motions
+            if motion.kind is MotionKind.LOOP and motion.loop_radius is not None and motion.loop_radius <= DEGENERATE_LOOP_RATIO * spec.tool_radius
+        ),
+        tuple(OperationIndex(motion.index) for motion in survey.motions if not motion.removes_material),
+        tuple(OperationIndex(motion.index) for motion in survey.motions if any(sample.cap_exceeded for sample in motion.samples)),
+        tuple(OperationIndex(motion.index) for motion in survey.motions if motion.slot_exceeded),
+        tuple(tangent),
+    )
+
+
 def _assert_invariant_quality_parity(
     spec: PocketSpec,
     quality: _Groups,
@@ -458,18 +504,18 @@ def _assert_invariant_quality_parity(
     actual_loop_pair = None if attribution.max_loop_radius_step is None else attribution.max_loop_radius_step.pair
     assert actual_engagement_pair == expected_engagement_pair
     assert actual_loop_pair == expected_loop_pair
-    count_and_sources = (
-        (assessment.gouging_motions.measured, attribution.gouging_operations),
-        (assessment.unsafe_rapids.measured, attribution.unsafe_rapid_operations),
-        (assessment.continuity_breaks.measured, attribution.continuity_break_pairs),
-        (assessment.zero_length_motions.measured, attribution.zero_length_operations),
-        (assessment.degenerate_loops.measured, attribution.degenerate_loop_operations),
-        (assessment.redundant_operations.measured, attribution.redundant_operations),
-        (assessment.cap_exceedances.measured, attribution.cap_exceeded_operations),
-        (assessment.slotting_motions.measured, attribution.slotting_operations),
-        (assessment.tangent_breaks.measured, attribution.tangent_break_pairs),
+    actual_sources = (
+        attribution.gouging_operations,
+        attribution.unsafe_rapid_operations,
+        attribution.continuity_break_pairs,
+        attribution.zero_length_operations,
+        attribution.degenerate_loop_operations,
+        attribution.redundant_operations,
+        attribution.cap_exceeded_operations,
+        attribution.slotting_operations,
+        attribution.tangent_break_pairs,
     )
-    assert all(count == len(sources) for count, sources in count_and_sources)
+    assert actual_sources == _expected_count_sources(spec, snapshot, survey)
     for old_maximum, observation in (
         (quality.cut.max_engagement_step_deg, attribution.max_engagement_step),
         (quality.cut.max_loop_radius_step, attribution.max_loop_radius_step),

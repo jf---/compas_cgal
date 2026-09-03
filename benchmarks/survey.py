@@ -44,7 +44,10 @@ from benchmarks.errors import InvalidMotionSampleCountError
 from benchmarks.errors import UnmeasurableOperationLengthError
 from benchmarks.errors import UnreplayableOperationError
 from benchmarks.errors import UnsampleableMotionError
+from benchmarks.held_path_snapshot import HeldOperationSnapshot
+from benchmarks.held_path_snapshot import snapshot_toolpath
 from benchmarks.spec import PocketSpec
+from benchmarks.units import OperationIndex
 from compas_cgal import _coverage_2
 from compas_cgal import _stock_2
 from compas_cgal.adaptive.units import Point2
@@ -200,6 +203,7 @@ class RapidMotion:
 
     index: int
     operation: OperationType
+    kind: MotionKind
     length: float
     horizontal_at_cut_plane: bool
 
@@ -210,10 +214,14 @@ class PathSurvey:
 
     Attributes:
         spec: The instance the path was generated for.
+        source_snapshot: Immutable structure of the exact operation stream that
+            produced this survey.
         motions: One record per cut-plane motion, in toolpath order.
         rapids: One record per non-removing motion, in toolpath order.
         plunges: Downward bores in the path.
         retracts: Upward clearance moves in the path.
+        plunge_indices: Source operation indices of the downward bores.
+        retract_indices: Source operation indices of the upward clearance moves.
         final_stock: The stock after the whole path has been replayed.
         total_length: Analytic length of every operation.
         cut_length: Analytic length of the cut-plane motions.
@@ -222,10 +230,13 @@ class PathSurvey:
     """
 
     spec: PocketSpec
+    source_snapshot: tuple[HeldOperationSnapshot, ...]
     motions: Tuple[MotionQuality, ...]
     rapids: Tuple[RapidMotion, ...]
     plunges: int
     retracts: int
+    plunge_indices: tuple[OperationIndex, ...]
+    retract_indices: tuple[OperationIndex, ...]
     final_stock: Stock
     total_length: float
     cut_length: float
@@ -281,15 +292,18 @@ def survey_path(spec: PocketSpec, result: ToolpathResult, *, samples_per_motion:
     for motion in replay_cuts(spec, result, stock):
         motions.append(_measure_motion(motion, spec.tool_radius, cap_ratio, slot_ratio, centre_domain, samples_per_motion))
 
-    rapids, plunges, retracts, plunge_area = _classify_non_cutting(result, spec.tool_radius)
+    rapids, plunge_indices, retract_indices, plunge_area = _classify_non_cutting(result, spec.tool_radius)
     cut_length = sum(motion.length for motion in motions)
     air_length = sum(rapid.length for rapid in rapids)
     return PathSurvey(
         spec=spec,
+        source_snapshot=snapshot_toolpath(result),
         motions=tuple(motions),
         rapids=tuple(rapids),
-        plunges=plunges,
-        retracts=retracts,
+        plunges=len(plunge_indices),
+        retracts=len(retract_indices),
+        plunge_indices=plunge_indices,
+        retract_indices=retract_indices,
         final_stock=stock,
         total_length=sum(_primitive_length(index, operation) for index, operation in enumerate(result.operations)),
         cut_length=cut_length,
@@ -631,7 +645,10 @@ def _xy(point: Sequence[float]) -> Tuple[float, float]:
     return (float(point[0]), float(point[1]))
 
 
-def _classify_non_cutting(result: ToolpathResult, tool_radius: float) -> Tuple[List[RapidMotion], int, int, float]:
+def _classify_non_cutting(
+    result: ToolpathResult,
+    tool_radius: float,
+) -> tuple[List[RapidMotion], tuple[OperationIndex, ...], tuple[OperationIndex, ...], float]:
     """Record the motions the depletion replay does not yield.
 
     `replay_cuts` skips rapids and swallows plunges, which is right for a
@@ -644,7 +661,8 @@ def _classify_non_cutting(result: ToolpathResult, tool_radius: float) -> Tuple[L
         tool_radius: Tool radius, for the plunges' bored area.
 
     Returns:
-        ``(rapids, plunges, retracts, plunge_swept_area)``.
+        Non-cutting observations, plunge indices, retract indices, and plunge
+        swept area.
 
     Raises:
         UnreplayableOperationError: An operation lies outside the cut-plane model.
@@ -652,26 +670,29 @@ def _classify_non_cutting(result: ToolpathResult, tool_radius: float) -> Tuple[L
     """
     cut_z = _infer_cut_height(result.operations)
     rapids: List[RapidMotion] = []
-    plunges = 0
-    retracts = 0
+    plunge_indices: list[OperationIndex] = []
+    retract_indices: list[OperationIndex] = []
     for index, operation in enumerate(result.operations):
         kind = _replay_kind(index, operation, cut_z)
         if kind is ReplayKind.CUT:
             continue
         if kind is ReplayKind.PLUNGE:
-            plunges += 1
+            plunge_indices.append(OperationIndex(index))
             continue
         if operation.operation is OperationType.RETRACT:
-            retracts += 1
+            retract_indices.append(OperationIndex(index))
         rapids.append(
             RapidMotion(
                 index=index,
                 operation=operation.operation,
+                kind=_motion_kind(operation.geometry),
                 length=_primitive_length(index, operation),
                 horizontal_at_cut_plane=_is_horizontal_at(operation, cut_z),
             )
         )
-    return rapids, plunges, retracts, plunges * math.pi * tool_radius**2
+    typed_plunges = tuple(plunge_indices)
+    typed_retracts = tuple(retract_indices)
+    return rapids, typed_plunges, typed_retracts, len(typed_plunges) * math.pi * tool_radius**2
 
 
 def _is_horizontal_at(operation: ToolpathOperation, cut_z: float) -> bool:

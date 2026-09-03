@@ -17,12 +17,17 @@ from typing import Type
 from typing import TypeVar
 from typing import Union
 from typing import cast
+from typing import overload
 
 from typing_extensions import Self
 from typing_extensions import TypeAlias
 
 from benchmarks.coverage import CoverageEstimate
+from benchmarks.errors import ContradictoryPathQualityEvidenceError
 from benchmarks.errors import InvalidHeldPathEvidenceError
+from benchmarks.held_path_snapshot import HeldArcSnapshot
+from benchmarks.held_path_snapshot import HeldCircleSnapshot
+from benchmarks.held_path_snapshot import HeldLineSnapshot
 from benchmarks.held_path_snapshot import HeldOperationSnapshot
 from benchmarks.quality import CONTINUITY_TOOL_RADIUS_FRACTION
 from benchmarks.quality import DEGENERATE_LOOP_RATIO
@@ -41,6 +46,7 @@ from benchmarks.units import degrees_value
 from benchmarks.units import motion_count
 from benchmarks.units import operation_index
 from benchmarks.units import tool_radius_multiple
+from compas_cgal.toolpath import OperationType
 
 CriterionName: TypeAlias = Literal[
     "uncut fraction",
@@ -316,21 +322,44 @@ class OperationPair:
 class MeasuredStep(Generic[StepUnitT]):
     value: StepUnitT
     pair: OperationPair
+    unit: Literal["degrees", "tool_radius_multiple"]
 
     def __init__(self) -> None:
         raise TypeError("MeasuredStep must be created with MeasuredStep.build().")
 
     @classmethod
-    def build(cls, *, value: StepUnitT, pair: OperationPair, unit: Literal["degrees", "tool_radius_multiple"]) -> Self:
+    @overload
+    def build(cls, *, value: Degrees, pair: OperationPair, unit: Literal["degrees"]) -> MeasuredStep[Degrees]: ...
+
+    @classmethod
+    @overload
+    def build(
+        cls,
+        *,
+        value: ToolRadiusMultiple,
+        pair: OperationPair,
+        unit: Literal["tool_radius_multiple"],
+    ) -> MeasuredStep[ToolRadiusMultiple]: ...
+
+    @classmethod
+    def build(
+        cls,
+        *,
+        value: Union[Degrees, ToolRadiusMultiple],
+        pair: OperationPair,
+        unit: Literal["degrees", "tool_radius_multiple"],
+    ) -> Union[MeasuredStep[Degrees], MeasuredStep[ToolRadiusMultiple]]:
         if type(pair) is not OperationPair:
             raise InvalidHeldPathEvidenceError("a measured step requires one validated operation pair.")
         if unit == "degrees":
             checked_degrees = degrees_value(value, name="measured engagement step")
             if checked_degrees < ZERO_FLOAT:
                 raise InvalidHeldPathEvidenceError("measured engagement step must be non-negative.")
-            return _build_record(cls, {"value": checked_degrees, "pair": pair})
-        checked_multiple = tool_radius_multiple(value, name="measured loop-radius step")
-        return _build_record(cls, {"value": checked_multiple, "pair": pair})
+            return _build_record(cls, {"value": checked_degrees, "pair": pair, "unit": unit})
+        if unit == "tool_radius_multiple":
+            checked_multiple = tool_radius_multiple(value, name="measured loop-radius step")
+            return _build_record(cls, {"value": checked_multiple, "pair": pair, "unit": unit})
+        raise InvalidHeldPathEvidenceError(f"measured step unit {unit!r} is not supported.")
 
 
 StepFinding: TypeAlias = Union[MeasuredStep[Degrees], MeasuredStep[ToolRadiusMultiple]]
@@ -338,6 +367,7 @@ StepFinding: TypeAlias = Union[MeasuredStep[Degrees], MeasuredStep[ToolRadiusMul
 
 @dataclass(frozen=True, init=False)
 class PathQualityAttribution:
+    operation_count: int
     uncut_operations: tuple[OperationIndex, ...]
     gouging_operations: tuple[OperationIndex, ...]
     unsafe_rapid_operations: tuple[OperationIndex, ...]
@@ -380,6 +410,28 @@ class PathQualityAttribution:
         curvature_break_pairs: tuple[OperationPair, ...],
         reversal_pairs: tuple[OperationPair, ...],
     ) -> Self:
+        if type(operation_count) is not int or operation_count < ZERO_COUNT:
+            raise InvalidHeldPathEvidenceError("operation count must be an exact non-negative integer.")
+        component_values = (
+            uncut_operations,
+            gouging_operations,
+            unsafe_rapid_operations,
+            continuity_break_pairs,
+            zero_length_operations,
+            degenerate_loop_operations,
+            redundant_operations,
+            cap_exceeded_operations,
+            slotting_operations,
+            max_engagement_step,
+            engagement_step_failure_pairs,
+            max_loop_radius_step,
+            loop_radius_step_failure_pairs,
+            tangent_break_pairs,
+            curvature_break_pairs,
+            reversal_pairs,
+        )
+        if operation_count == ZERO_COUNT and any(component_values):
+            raise InvalidHeldPathEvidenceError("zero operations require a wholly empty standalone attribution.")
         if uncut_operations:
             raise InvalidHeldPathEvidenceError("uncut stock is spatial aggregate evidence and cannot name operations.")
         index_fields = {
@@ -400,7 +452,7 @@ class PathQualityAttribution:
             "curvature_break_pairs": curvature_break_pairs,
             "reversal_pairs": reversal_pairs,
         }
-        checked: dict[str, object] = {}
+        checked: dict[str, object] = {"operation_count": operation_count}
         for name, indices in index_fields.items():
             checked[name] = _indices(indices, operation_count) if indices else ()
         for name, pairs in pair_fields.items():
@@ -412,6 +464,9 @@ class PathQualityAttribution:
             if step is not None and type(step) is not MeasuredStep:
                 raise InvalidHeldPathEvidenceError(f"{name} must be one validated measured step or None.")
             if step is not None:
+                expected_unit = "degrees" if name == "max_engagement_step" else "tool_radius_multiple"
+                if getattr(step, "unit", None) != expected_unit:
+                    raise InvalidHeldPathEvidenceError(f"{name} requires a measured step in {expected_unit!r}.")
                 OperationPair.build(
                     previous=step.pair.previous,
                     current=step.pair.current,
@@ -451,6 +506,8 @@ class PathQualityAssessment:
     def build(
         cls,
         *,
+        snapshot: tuple[HeldOperationSnapshot, ...],
+        survey: PathSurvey,
         uncut_fraction: FractionCriterion,
         gouging_motions: CountCriterion,
         unsafe_rapids: CountCriterion,
@@ -467,6 +524,7 @@ class PathQualityAssessment:
     ) -> Self:
         if type(attribution) is not PathQualityAttribution:
             raise InvalidHeldPathEvidenceError("an assessment requires one validated attribution record.")
+        _validate_survey_binding(survey.spec, snapshot, survey)
         expected_names = {
             "uncut_fraction": "uncut fraction",
             "gouging_motions": "gouging motions",
@@ -515,13 +573,16 @@ class PathQualityAssessment:
         for field, cardinality in cardinalities.items():
             criterion = cast(CountCriterion, values[field])
             if criterion.measured != cardinality:
-                raise InvalidHeldPathEvidenceError(f"{field} disagrees with the assessment attribution cardinality.")
+                raise ContradictoryPathQualityEvidenceError(f"{field} disagrees with the assessment attribution cardinality.")
         engagement_value = ZERO_FLOAT if attribution.max_engagement_step is None else attribution.max_engagement_step.value
         if max_engagement_step.measured != engagement_value:
-            raise InvalidHeldPathEvidenceError("maximum engagement step disagrees with its attributed extremum.")
+            raise ContradictoryPathQualityEvidenceError("maximum engagement step disagrees with its attributed extremum.")
         loop_value = ZERO_FLOAT if attribution.max_loop_radius_step is None else attribution.max_loop_radius_step.value
         if max_loop_radius_step.measured != loop_value:
-            raise InvalidHeldPathEvidenceError("maximum loop-radius step disagrees with its attributed extremum.")
+            raise ContradictoryPathQualityEvidenceError("maximum loop-radius step disagrees with its attributed extremum.")
+        expected_attribution = _attribution_from_survey(snapshot, survey)
+        if attribution != expected_attribution:
+            raise ContradictoryPathQualityEvidenceError("path-quality attribution disagrees with its exact source observations.")
         values["attribution"] = attribution
         return _build_record(cls, values)
 
@@ -550,6 +611,76 @@ def _pair(previous: MotionQuality, current: MotionQuality, operation_count: int)
 
 def _adjacent_motion_pairs(motions: Sequence[MotionQuality]) -> Sequence[tuple[MotionQuality, MotionQuality]]:
     return [(previous, current) for previous, current in zip(motions, motions[1:]) if current.index == previous.index + NEXT_OPERATION_OFFSET]
+
+
+def _snapshot_kind(operation: HeldOperationSnapshot) -> MotionKind:
+    if type(operation) is HeldLineSnapshot:
+        return MotionKind.LINE
+    if type(operation) is HeldArcSnapshot:
+        return MotionKind.ARC
+    if type(operation) is HeldCircleSnapshot:
+        return MotionKind.LOOP
+    raise InvalidHeldPathEvidenceError("source snapshot contains an unsupported operation record.")
+
+
+def _validate_ordered_indices(values: Sequence[int], operation_count: int, *, name: str) -> tuple[OperationIndex, ...]:
+    checked = _indices(values, operation_count)
+    if tuple(checked) != tuple(sorted(checked)):
+        raise InvalidHeldPathEvidenceError(f"{name} must retain source operation order.")
+    return checked
+
+
+def _validate_survey_binding(
+    spec: PocketSpec,
+    snapshot: tuple[HeldOperationSnapshot, ...],
+    survey: PathSurvey,
+) -> None:
+    if survey.spec is not spec:
+        raise InvalidHeldPathEvidenceError("path survey must retain the exact PocketSpec supplied for assessment.")
+    if type(snapshot) is not tuple or type(survey.source_snapshot) is not tuple or survey.source_snapshot != snapshot:
+        raise InvalidHeldPathEvidenceError("path survey source snapshot disagrees with the supplied operation snapshot.")
+    operation_count = len(snapshot)
+    if operation_count == ZERO_COUNT:
+        raise InvalidHeldPathEvidenceError("a Figure 5 quality assessment requires at least one operation.")
+    for expected, operation in enumerate(snapshot):
+        if operation.ordinal != expected:
+            raise InvalidHeldPathEvidenceError("snapshot ordinals must cover source operations in order.")
+
+    motion_indices = _validate_ordered_indices([motion.index for motion in survey.motions], operation_count, name="survey motions")
+    rapid_indices = _validate_ordered_indices([rapid.index for rapid in survey.rapids], operation_count, name="survey rapids")
+    plunge_indices = _validate_ordered_indices(survey.plunge_indices, operation_count, name="survey plunges")
+    retract_indices = _validate_ordered_indices(survey.retract_indices, operation_count, name="survey retracts")
+    if type(survey.plunges) is not int or survey.plunges != len(plunge_indices):
+        raise InvalidHeldPathEvidenceError("plunge count disagrees with retained plunge operation indices.")
+    if type(survey.retracts) is not int or survey.retracts != len(retract_indices):
+        raise InvalidHeldPathEvidenceError("retract count disagrees with retained retract operation indices.")
+
+    motion_set = set(motion_indices)
+    rapid_set = set(rapid_indices)
+    plunge_set = set(plunge_indices)
+    retract_set = set(retract_indices)
+    if not retract_set <= rapid_set:
+        raise InvalidHeldPathEvidenceError("every retained retract must have one non-cutting motion observation.")
+    pure_rapid_set = rapid_set - retract_set
+    categories = (motion_set, pure_rapid_set, plunge_set, retract_set)
+    for position, category in enumerate(categories):
+        if any(category & later for later in categories[position + NEXT_OPERATION_OFFSET :]):
+            raise InvalidHeldPathEvidenceError("motion, rapid, plunge, and retract observations must be disjoint.")
+    if set().union(*categories) != set(range(operation_count)):
+        raise InvalidHeldPathEvidenceError("motion, rapid, plunge, and retract observations must exactly partition the operation snapshot.")
+
+    for motion in survey.motions:
+        source = snapshot[motion.index]
+        if motion.operation is not source.operation or motion.kind is not _snapshot_kind(source):
+            raise InvalidHeldPathEvidenceError("cut-motion role or primitive kind disagrees with the source snapshot.")
+    for rapid in survey.rapids:
+        source = snapshot[rapid.index]
+        if rapid.operation is not source.operation or rapid.kind is not _snapshot_kind(source):
+            raise InvalidHeldPathEvidenceError("rapid-motion role or primitive kind disagrees with the source snapshot.")
+    if any(snapshot[index].operation is not OperationType.PLUNGE for index in plunge_indices):
+        raise InvalidHeldPathEvidenceError("plunge classification disagrees with the source operation role.")
+    if any(snapshot[index].operation is not OperationType.RETRACT for index in retract_indices):
+        raise InvalidHeldPathEvidenceError("retract classification disagrees with the source operation role.")
 
 
 def _maximum_step(steps: Sequence[tuple[float, OperationPair]], unit: Literal["degrees", "tool_radius_multiple"]) -> Optional[StepFinding]:
@@ -597,37 +728,12 @@ def _loop_steps(
     return steps
 
 
-def _count(
-    name: CountCriterionName,
-    cardinality: int,
-) -> CountCriterion:
-    evidence = EVIDENCE_BY_CRITERION[name]
-    return CountCriterion.build(
-        name=name,
-        measured=MotionCount(cardinality),
-        required=REQUIRED_COUNT,
-        evidence=evidence,
-        outcome=_outcome(evidence, cardinality <= REQUIRED_COUNT),
-        attribution_count=cardinality,
-    )
-
-
-def assess_path_quality(
-    spec: PocketSpec,
+def _attribution_from_survey(
     snapshot: tuple[HeldOperationSnapshot, ...],
     survey: PathSurvey,
-    coverage: CoverageEstimate,
-) -> PathQualityAssessment:
-    """Reproduce the current twelve gate decisions with source attribution."""
+) -> PathQualityAttribution:
     operation_count = len(snapshot)
-    for expected, operation in enumerate(snapshot):
-        if operation.ordinal != expected:
-            raise InvalidHeldPathEvidenceError("snapshot ordinals must cover source operations in order.")
-    all_observed = [motion.index for motion in survey.motions] + [rapid.index for rapid in survey.rapids]
-    if all_observed and operation_count == ZERO_COUNT:
-        raise InvalidHeldPathEvidenceError("survey operations require a non-empty operation snapshot.")
-    _indices(all_observed, operation_count) if all_observed else ()
-
+    spec = survey.spec
     gouging = _indices([motion.index for motion in survey.motions if motion.gouges], operation_count)
     unsafe = _indices([rapid.index for rapid in survey.rapids if rapid.horizontal_at_cut_plane], operation_count)
     zero_length = _indices(
@@ -669,12 +775,9 @@ def assess_path_quality(
     loop_steps = _loop_steps(snapshot, survey, spec.tool_radius, operation_count)
     maximum_engagement = cast(Optional[MeasuredStep[Degrees]], _maximum_step(engagement_steps, "degrees"))
     maximum_loop = cast(Optional[MeasuredStep[ToolRadiusMultiple]], _maximum_step(loop_steps, "tool_radius_multiple"))
-    max_engagement_value = Degrees(ZERO_FLOAT if maximum_engagement is None else maximum_engagement.value)
-    max_loop_value = ToolRadiusMultiple(ZERO_FLOAT if maximum_loop is None else maximum_loop.value)
     engagement_failures = tuple(pair for value, pair in engagement_steps if value > spec.tea_cap_deg)
     loop_failures = tuple(pair for value, pair in loop_steps if value > REQUIRED_LOOP_STEP)
-
-    attribution = PathQualityAttribution.build(
+    return PathQualityAttribution.build(
         operation_count=operation_count,
         uncut_operations=(),
         gouging_operations=gouging,
@@ -693,6 +796,34 @@ def assess_path_quality(
         curvature_break_pairs=tuple(curvature),
         reversal_pairs=tuple(reversals),
     )
+
+
+def _count(
+    name: CountCriterionName,
+    cardinality: int,
+) -> CountCriterion:
+    evidence = EVIDENCE_BY_CRITERION[name]
+    return CountCriterion.build(
+        name=name,
+        measured=MotionCount(cardinality),
+        required=REQUIRED_COUNT,
+        evidence=evidence,
+        outcome=_outcome(evidence, cardinality <= REQUIRED_COUNT),
+        attribution_count=cardinality,
+    )
+
+
+def assess_path_quality(
+    spec: PocketSpec,
+    snapshot: tuple[HeldOperationSnapshot, ...],
+    survey: PathSurvey,
+    coverage: CoverageEstimate,
+) -> PathQualityAssessment:
+    """Reproduce the current twelve gate decisions with source attribution."""
+    _validate_survey_binding(spec, snapshot, survey)
+    attribution = _attribution_from_survey(snapshot, survey)
+    max_engagement_value = Degrees(ZERO_FLOAT if attribution.max_engagement_step is None else attribution.max_engagement_step.value)
+    max_loop_value = ToolRadiusMultiple(ZERO_FLOAT if attribution.max_loop_radius_step is None else attribution.max_loop_radius_step.value)
     uncut = closed_unit_fraction(coverage.uncut_fraction, name="uncut fraction measured")
     uncut_evidence = EVIDENCE_BY_CRITERION["uncut fraction"]
     engagement_evidence = EVIDENCE_BY_CRITERION["max engagement step (deg)"]
@@ -705,14 +836,14 @@ def assess_path_quality(
             evidence=uncut_evidence,
             outcome=_outcome(uncut_evidence, uncut <= REQUIRED_FRACTION),
         ),
-        gouging_motions=_count("gouging motions", len(gouging)),
-        unsafe_rapids=_count("unsafe rapids", len(unsafe)),
-        continuity_breaks=_count("continuity breaks", len(continuity)),
-        zero_length_motions=_count("zero-length motions", len(zero_length)),
-        degenerate_loops=_count("degenerate loops", len(degenerate)),
-        redundant_operations=_count("redundant operations", len(redundant)),
-        cap_exceedances=_count("cap exceedances", len(cap_exceeded)),
-        slotting_motions=_count("slotting motions", len(slotting)),
+        gouging_motions=_count("gouging motions", len(attribution.gouging_operations)),
+        unsafe_rapids=_count("unsafe rapids", len(attribution.unsafe_rapid_operations)),
+        continuity_breaks=_count("continuity breaks", len(attribution.continuity_break_pairs)),
+        zero_length_motions=_count("zero-length motions", len(attribution.zero_length_operations)),
+        degenerate_loops=_count("degenerate loops", len(attribution.degenerate_loop_operations)),
+        redundant_operations=_count("redundant operations", len(attribution.redundant_operations)),
+        cap_exceedances=_count("cap exceedances", len(attribution.cap_exceeded_operations)),
+        slotting_motions=_count("slotting motions", len(attribution.slotting_operations)),
         max_engagement_step=DegreesCriterion.build(
             name="max engagement step (deg)",
             measured=max_engagement_value,
@@ -727,6 +858,8 @@ def assess_path_quality(
             evidence=loop_evidence,
             outcome=_outcome(loop_evidence, max_loop_value <= REQUIRED_LOOP_STEP),
         ),
-        tangent_breaks=_count("tangent breaks", len(tangent)),
+        tangent_breaks=_count("tangent breaks", len(attribution.tangent_break_pairs)),
         attribution=attribution,
+        snapshot=snapshot,
+        survey=survey,
     )
