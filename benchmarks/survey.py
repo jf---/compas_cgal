@@ -49,6 +49,7 @@ from compas_cgal import _coverage_2
 from compas_cgal import _stock_2
 from compas_cgal.adaptive.units import Point2
 from compas_cgal.adaptive.units import WorldXY
+from compas_cgal.engagement import AUDIT_ENGAGED
 from compas_cgal.engagement import _cap_chord_ratio
 from compas_cgal.engagement import _infer_cut_height
 from compas_cgal.engagement import _subtract_operation
@@ -260,6 +261,8 @@ def survey_path(spec: PocketSpec, result: ToolpathResult, *, samples_per_motion:
     if samples_per_motion < 1:
         raise InvalidMotionSampleCountError(f"samples_per_motion must be at least 1, got {samples_per_motion!r}.")
 
+    _validate_cut_plane_curves(result.operations)
+
     # Both thresholds cross into exact-land the way the kernel's own cap does:
     # the transcendental intent (an angle) is converted once, here, to the exact
     # rational surrogate 4*sin^2(theta/2), and the predicate then decides against
@@ -275,9 +278,8 @@ def survey_path(spec: PocketSpec, result: ToolpathResult, *, samples_per_motion:
 
     stock = Stock(spec.polygon, list(spec.holes))
     motions: List[MotionQuality] = []
-    cut_z = _infer_cut_height(result.operations)
     for motion in replay_cuts(spec, result, stock):
-        motions.append(_measure_motion(motion, spec.tool_radius, cap_ratio, slot_ratio, centre_domain, samples_per_motion, cut_z))
+        motions.append(_measure_motion(motion, spec.tool_radius, cap_ratio, slot_ratio, centre_domain, samples_per_motion))
 
     rapids, plunges, retracts, plunge_area = _classify_non_cutting(result, spec.tool_radius)
     cut_length = sum(motion.length for motion in motions)
@@ -303,7 +305,6 @@ def _measure_motion(
     slot_ratio: float,
     centre_domain: "_coverage_2.ExactRegion2",
     samples_per_motion: int,
-    cut_z: float,
 ) -> MotionQuality:
     """Measure one cut motion against every criterion the groups reduce.
 
@@ -314,19 +315,15 @@ def _measure_motion(
         slot_ratio: Exact squared-chord surrogate of the slotting threshold.
         centre_domain: Where a cutter of this radius may legally be centred.
         samples_per_motion: Cutter positions to probe.
-        cut_z: The inferred cutting-plane height.
 
     Returns:
         The motion's findings.
 
     Raises:
-        UnreplayableOperationError: A circular motion leaves the inferred cut
-            plane.
         UnsampleableMotionError: The motion carries no cutter-centre path.
         UnmeasurableOperationLengthError: The motion's length is undefined.
     """
     geometry = motion.operation.geometry
-    _require_cut_plane_curve(motion.index, geometry, cut_z)
     raw = motion.stock.raw
     straight = isinstance(geometry, Line)
     samples: List[EngagementSample] = []
@@ -369,6 +366,30 @@ def _measure_motion(
         slot_exceeded=straight and slot_exceeded,
         removes_material=not probe.exactly_equals(motion.stock),
     )
+
+
+def _validate_cut_plane_curves(operations: Sequence[ToolpathOperation]) -> None:
+    """Validate every engaged circular primitive before replay can mutate stock.
+
+    Lines independently anchor the cut height because their endpoints encode
+    the plunge and clearance structure. A line-free circular stream instead
+    establishes its common plane from its first engaged curve.
+
+    Args:
+        operations: The complete toolpath operation stream.
+
+    Raises:
+        UnreplayableOperationError: An engaged arc or circle is tilted or does
+            not lie on the independently established cutting plane.
+    """
+    line_heights = [float(point[2]) for operation in operations if isinstance(operation.geometry, Line) for point in (operation.geometry.start, operation.geometry.end)]
+    curves = [(index, operation.geometry) for index, operation in enumerate(operations) if operation.operation in AUDIT_ENGAGED and isinstance(operation.geometry, (Arc, Circle))]
+    if not curves:
+        return
+
+    cut_z = min(line_heights) if line_heights else float(curves[0][1].frame.point[2])
+    for index, geometry in curves:
+        _require_cut_plane_curve(index, geometry, cut_z)
 
 
 def _require_cut_plane_curve(index: int, geometry: object, cut_z: float) -> None:
