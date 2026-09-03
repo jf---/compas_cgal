@@ -31,6 +31,7 @@ from compas_cgal.toolpath import ToolpathOperation
 from compas_cgal.toolpath import ToolpathResult
 
 ResultMutation = Callable[[ToolpathResult], None]
+SQUARE_UNDERFLOW_DISPLACEMENT = 1e-200  # Representable IEEE-754 displacement whose square underflows; a numerical-floor probe, not a geometric tolerance.
 
 
 class _DeclaredToolpathResult(ToolpathResult):
@@ -452,6 +453,24 @@ def test_snapshot_retains_correct_tangent_for_nonzero_sub_tolerance_line() -> No
         [
             _operation(
                 Line([0.0, 0.0, 0.0], [line_length, 0.0, 0.0]),
+                start_tangent=np.array([1.0, 0.0, 0.0]),
+                end_tangent=np.array([1.0, 0.0, 0.0]),
+            )
+        ]
+    )
+
+    snapshot = snapshot_toolpath(result)[0]
+
+    assert isinstance(snapshot, HeldLineSnapshot)
+    assert snapshot.start_tangent == Direction3[WorldXYZ].build(1.0, 0.0, 0.0)
+    assert snapshot.end_tangent == Direction3[WorldXYZ].build(1.0, 0.0, 0.0)
+
+
+def test_snapshot_retains_correct_tangent_for_extreme_nonzero_line() -> None:
+    result = _result(
+        [
+            _operation(
+                Line([0.0, 0.0, 0.0], [SQUARE_UNDERFLOW_DISPLACEMENT, 0.0, 0.0]),
                 start_tangent=np.array([1.0, 0.0, 0.0]),
                 end_tangent=np.array([1.0, 0.0, 0.0]),
             )
