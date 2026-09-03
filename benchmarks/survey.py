@@ -382,7 +382,11 @@ def _validate_cut_plane_curves(operations: Sequence[ToolpathOperation]) -> None:
         UnreplayableOperationError: An engaged arc or circle is tilted or does
             not lie on the independently established cutting plane.
     """
-    line_heights = [float(point[2]) for operation in operations if isinstance(operation.geometry, Line) for point in (operation.geometry.start, operation.geometry.end)]
+    line_heights: List[float] = []
+    for operation in operations:
+        anchor = _line_cut_height_anchor(operation)
+        if anchor is not None:
+            line_heights.append(anchor)
     curves = [(index, operation.geometry) for index, operation in enumerate(operations) if operation.operation in AUDIT_ENGAGED and isinstance(operation.geometry, (Arc, Circle))]
     if not curves:
         return
@@ -390,6 +394,34 @@ def _validate_cut_plane_curves(operations: Sequence[ToolpathOperation]) -> None:
     cut_z = min(line_heights) if line_heights else float(curves[0][1].frame.point[2])
     for index, geometry in curves:
         _require_cut_plane_curve(index, geometry, cut_z)
+
+
+def _line_cut_height_anchor(operation: ToolpathOperation) -> Optional[float]:
+    """Return cutting-depth evidence carried by one line, if any.
+
+    The lower foot of a pure vertical move establishes machining depth. A
+    horizontal CUT, LEAD_IN, or LEAD_OUT also declares cutting semantics. A
+    horizontal LINK does not: its height is classified only after the cutting
+    plane is known and may legitimately be clearance travel.
+
+    Args:
+        operation: The line candidate and its declared motion semantics.
+
+    Returns:
+        The evidenced cut height, or `None` when the line cannot anchor it.
+    """
+    geometry = operation.geometry
+    if not isinstance(geometry, Line):
+        return None
+
+    z_start = float(geometry.start[2])
+    z_end = float(geometry.end[2])
+    xy_travel = math.hypot(float(geometry.end[0]) - float(geometry.start[0]), float(geometry.end[1]) - float(geometry.start[1]))
+    if TOL.is_zero(xy_travel) and not TOL.is_zero(z_start - z_end):
+        return min(z_start, z_end)
+    if TOL.is_zero(z_start - z_end) and operation.operation in (OperationType.CUT, OperationType.LEAD_IN, OperationType.LEAD_OUT):
+        return z_start
+    return None
 
 
 def _require_cut_plane_curve(index: int, geometry: object, cut_z: float) -> None:
