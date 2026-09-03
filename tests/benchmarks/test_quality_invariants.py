@@ -42,6 +42,7 @@ from compas.geometry import Frame
 from compas.geometry import Line
 from compas.geometry import Polygon
 from hypothesis import HealthCheck
+from hypothesis import example
 from hypothesis import given
 from hypothesis import settings
 from hypothesis import strategies as st
@@ -503,6 +504,15 @@ PROPERTY_SETTINGS = settings(max_examples=40, deadline=None, suppress_health_che
 
 
 @PROPERTY_SETTINGS
+@example(
+    stations=[
+        (0, 0.0, 0.0, 2.125),
+        (0, 0.875, 0.0, 1.0),
+        (1, 0.0, 0.0, 0.375),
+        (1, 0.875, 0.0, 0.375),
+    ],
+    shift=(0.0, 2.0),
+)
 @given(stations=chained_paths(), shift=st.tuples(st.integers(-400, 400).map(lambda n: n * GRID_STEP), st.integers(-400, 400).map(lambda n: n * GRID_STEP)))
 def test_moving_the_pocket_across_the_table_changes_no_metric(stations: List[Tuple[int, float, float, float]], shift: Tuple[float, float]) -> None:
     """A pocket machined somewhere else is the same machining problem.

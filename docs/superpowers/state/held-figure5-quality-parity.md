@@ -7,9 +7,10 @@ Date: 2026-09-02
 The additive attributed reducer is **equivalent** to the current quality judge
 for every gated field on the synthetic machinery, invariant-generated paths,
 and all twelve `QUALITY_GATE_CASES`. The repository's declared seventeen-red
-acceptance condition is **not satisfied**: the fresh full run contains the
-twelve quality reds and four adaptive reds, while the declared benchmark
-translation-invariance red is green.
+acceptance condition was **not satisfied by the recorded full run**: it found
+the twelve quality reds and four adaptive reds but missed the benchmark
+translation-invariance defect probabilistically. Task 5A.1 now pins that defect
+under the unchanged test ID; a fresh full manifest run remains a Task 5A.4 gate.
 
 Production still calls `measure_quality()` and its existing private reducers.
 No reducer was changed or removed, and `measure_quality()` was not redirected.
@@ -104,11 +105,25 @@ The manifest checker reported:
 expected-red-went-green: tests\.benchmarks\.test_quality_invariants::test_moving_the_pocket_across_the_table_changes_no_metric
 ```
 
-Therefore old/new reducer parity passes, but the repository's exact
-seventeen-red membership does not. This known mismatch is not evidence that the
-new reducer changed a result: the translation-invariance cell is deliberately
-excluded from the focused parity GREEN command and was already unexpectedly
-green in the pre-Task-1 baseline (`16 failed, 2481 passed`).
+That sixteen-red result was a probabilistic miss, not evidence that the defect
+was absent or that the new reducer changed a result. The translation-invariance
+cell is deliberately excluded from the focused parity GREEN command and was
+already unexpectedly green in the pre-Task-1 baseline (`16 failed, 2481
+passed`).
+
+Task 5A.1 retained the generated property and added one explicit dyadic witness.
+Before the witness, fixed Hypothesis seeds 1 and 2 each exited 0 with `1 passed`.
+After the witness, both commands exited 1 at the protected count assertion:
+
+```text
+AssertionError: cut.cap_exceedances moved with the pocket
+assert 1.0 == 2.0
+```
+
+The unchanged manifest-owned node ID therefore now has deterministic failure
+evidence independent of generated examples. This establishes its declared-red
+membership witness; it does not replace the fresh exact seventeen-red full-run
+gate in Task 5A.4.
 
 ## Blocker and resumption history
 
