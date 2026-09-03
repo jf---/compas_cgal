@@ -92,8 +92,8 @@ def _representative_result() -> ToolpathResult:
                 operation=OperationType.LEAD_IN,
                 path_index=3,
                 clockwise=True,
-                start_tangent=np.array([0.0, 1.0, 0.0]),
-                end_tangent=np.array([-1.0, 0.0, 0.0]),
+                start_tangent=np.array([math.sin(0.25), -math.cos(0.25), 0.0]),
+                end_tangent=np.array([math.sin(1.25), -math.cos(1.25), 0.0]),
             ),
             _operation(
                 Circle(
@@ -136,8 +136,8 @@ def test_arc_snapshot_retains_complete_curve_behavior() -> None:
     assert snapshot.radius == Millimetre(2.0)
     assert snapshot.start_angle == Radian(0.25)
     assert snapshot.end_angle == Radian(1.25)
-    assert snapshot.start_tangent == Direction3[WorldXYZ].build(0.0, 1.0, 0.0)
-    assert snapshot.end_tangent == Direction3[WorldXYZ].build(-1.0, 0.0, 0.0)
+    assert snapshot.start_tangent == Direction3[WorldXYZ].build(math.sin(0.25), -math.cos(0.25), 0.0)
+    assert snapshot.end_tangent == Direction3[WorldXYZ].build(math.sin(1.25), -math.cos(1.25), 0.0)
 
 
 def test_circle_snapshot_retains_frame_phase() -> None:
@@ -268,7 +268,7 @@ def _change_arc_end_angle(result: ToolpathResult) -> None:
 
 
 def _change_start_tangent(result: ToolpathResult) -> None:
-    result.operations[0].start_tangent = np.array([0.0, 1.0, 0.0])
+    result.operations[0].start_tangent = None
 
 
 def _change_end_tangent(result: ToolpathResult) -> None:
@@ -403,6 +403,82 @@ def test_arc_factory_rejects_angle_outside_compas_domain(start_angle: float, end
         )
 
 
+def test_snapshot_rejects_descending_arc_range() -> None:
+    result = _result([_operation(Arc(1.0, 1.0, 0.0, frame=Frame.worldXY()))])
+
+    with pytest.raises(InvalidHeldOperationSnapshotError, match="angle"):
+        snapshot_toolpath(result)
+
+
+def test_snapshot_retains_zero_sweep_for_zero_length_diagnosis() -> None:
+    result = _result([_operation(Arc(1.0, 0.5, 0.5, frame=Frame.worldXY()))])
+
+    assert snapshot_toolpath(result) == (
+        HeldArcSnapshot.build(
+            ordinal=OperationIndex(0),
+            operation=OperationType.CUT,
+            path_index=0,
+            clockwise=False,
+            centre=Point3[WorldXYZ].build(0.0, 0.0, 0.0),
+            xaxis=Direction3[WorldXYZ].build(1.0, 0.0, 0.0),
+            yaxis=Direction3[WorldXYZ].build(0.0, 1.0, 0.0),
+            radius=Millimetre(1.0),
+            start_angle=Radian(0.5),
+            end_angle=Radian(0.5),
+            start_tangent=None,
+            end_tangent=None,
+        ),
+    )
+
+
+def test_snapshot_rejects_line_tangent_that_disagrees_with_geometry() -> None:
+    with pytest.raises(InvalidHeldOperationSnapshotError, match="tangent"):
+        HeldLineSnapshot.build(
+            ordinal=OperationIndex(0),
+            operation=OperationType.CUT,
+            path_index=0,
+            clockwise=False,
+            start=Point3[WorldXYZ].build(0.0, 0.0, 0.0),
+            end=Point3[WorldXYZ].build(1.0, 0.0, 0.0),
+            start_tangent=Direction3[WorldXYZ].build(-1.0, 0.0, 0.0),
+            end_tangent=None,
+        )
+
+
+def test_snapshot_rejects_arc_tangent_that_disagrees_with_travel() -> None:
+    with pytest.raises(InvalidHeldOperationSnapshotError, match="tangent"):
+        HeldArcSnapshot.build(
+            ordinal=OperationIndex(0),
+            operation=OperationType.CUT,
+            path_index=0,
+            clockwise=False,
+            centre=Point3[WorldXYZ].build(0.0, 0.0, 0.0),
+            xaxis=Direction3[WorldXYZ].build(1.0, 0.0, 0.0),
+            yaxis=Direction3[WorldXYZ].build(0.0, 1.0, 0.0),
+            radius=Millimetre(1.0),
+            start_angle=Radian(0.0),
+            end_angle=Radian(math.pi / 2.0),
+            start_tangent=Direction3[WorldXYZ].build(0.0, 1.0, 0.0),
+            end_tangent=Direction3[WorldXYZ].build(1.0, 0.0, 0.0),
+        )
+
+
+def test_snapshot_rejects_circle_tangent_that_disagrees_with_clockwise() -> None:
+    with pytest.raises(InvalidHeldOperationSnapshotError, match="tangent"):
+        HeldCircleSnapshot.build(
+            ordinal=OperationIndex(0),
+            operation=OperationType.CUT,
+            path_index=0,
+            clockwise=True,
+            centre=Point3[WorldXYZ].build(0.0, 0.0, 0.0),
+            xaxis=Direction3[WorldXYZ].build(1.0, 0.0, 0.0),
+            yaxis=Direction3[WorldXYZ].build(0.0, 1.0, 0.0),
+            radius=Millimetre(1.0),
+            start_tangent=Direction3[WorldXYZ].build(0.0, 1.0, 0.0),
+            end_tangent=None,
+        )
+
+
 @pytest.mark.parametrize(
     "tangent",
     [
@@ -467,7 +543,7 @@ def test_lateral_operation_zero_tangent_remains_invalid(operation: OperationType
     [OperationType.PLUNGE, OperationType.RETRACT, OperationType.CUT, OperationType.LINK],
 )
 def test_nonzero_unit_tangents_remain_retained(operation: OperationType) -> None:
-    tangent = np.array([1.0, 0.0, 0.0])
+    tangent = np.array([0.0, 0.0, -1.0])
     result = _result(
         [
             _operation(
@@ -482,8 +558,8 @@ def test_nonzero_unit_tangents_remain_retained(operation: OperationType) -> None
     snapshot = snapshot_toolpath(result)[0]
 
     assert isinstance(snapshot, HeldLineSnapshot)
-    assert snapshot.start_tangent == Direction3[WorldXYZ].build(1.0, 0.0, 0.0)
-    assert snapshot.end_tangent == Direction3[WorldXYZ].build(1.0, 0.0, 0.0)
+    assert snapshot.start_tangent == Direction3[WorldXYZ].build(0.0, 0.0, -1.0)
+    assert snapshot.end_tangent == Direction3[WorldXYZ].build(0.0, 0.0, -1.0)
 
 
 def test_direct_build_rejects_zero_tangent() -> None:

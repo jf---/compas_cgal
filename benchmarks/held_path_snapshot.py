@@ -15,6 +15,7 @@ import numpy as np
 from compas.geometry import Arc
 from compas.geometry import Circle
 from compas.geometry import Line
+from compas.geometry import angle_vectors
 from compas.tolerance import TOL
 from typing_extensions import Self
 from typing_extensions import TypeAlias
@@ -132,6 +133,7 @@ def _validate_curve(
 
 
 def _validate_angles(start_angle: object, end_angle: object) -> None:
+    angles: list[float] = []
     for value, name in (
         (start_angle, "snapshot start angle"),
         (end_angle, "snapshot end angle"),
@@ -139,6 +141,59 @@ def _validate_angles(start_angle: object, end_angle: object) -> None:
         angle = _finite(value, name=name)
         if not 0.0 <= angle <= math.tau:
             raise InvalidHeldOperationSnapshotError(f"{name} must lie in [0, math.tau].")
+        angles.append(angle)
+    if angles[1] < angles[0]:
+        raise InvalidHeldOperationSnapshotError("snapshot end angle must not precede its start angle.")
+
+
+def _direction_components(direction: Direction3[WorldXYZ]) -> tuple[float, float, float]:
+    return float(direction.x), float(direction.y), float(direction.z)
+
+
+def _validate_tangent_agreement(
+    tangent: TangentSnapshot,
+    expected: tuple[float, float, float] | None,
+    *,
+    name: str,
+) -> None:
+    if tangent is None:
+        return
+    if expected is None or not TOL.is_angle_zero(angle_vectors(_direction_components(tangent), expected)):
+        raise InvalidHeldOperationSnapshotError(f"{name} disagrees with the primitive's travel direction.")
+
+
+def _line_tangent(
+    start: Point3[WorldXYZ],
+    end: Point3[WorldXYZ],
+) -> tuple[float, float, float] | None:
+    delta = (
+        float(end.x) - float(start.x),
+        float(end.y) - float(start.y),
+        float(end.z) - float(start.z),
+    )
+    length = math.sqrt(sum(component * component for component in delta))
+    if TOL.is_zero(length):
+        return None
+    return delta[0] / length, delta[1] / length, delta[2] / length
+
+
+def _curve_tangent(
+    xaxis: Direction3[WorldXYZ],
+    yaxis: Direction3[WorldXYZ],
+    angle: float,
+    *,
+    clockwise: bool,
+) -> tuple[float, float, float]:
+    turn = -1.0 if clockwise else 1.0
+    sine = math.sin(angle)
+    cosine = math.cos(angle)
+    x_components = _direction_components(xaxis)
+    y_components = _direction_components(yaxis)
+    return (
+        turn * (-sine * x_components[0] + cosine * y_components[0]),
+        turn * (-sine * x_components[1] + cosine * y_components[1]),
+        turn * (-sine * x_components[2] + cosine * y_components[2]),
+    )
 
 
 def _build_record(record_type: Type[SnapshotT], values: dict[str, object]) -> SnapshotT:
@@ -180,6 +235,9 @@ class HeldLineSnapshot:
         _validate_metadata(ordinal, operation, path_index, clockwise, start_tangent, end_tangent)
         _validate_point(start, name="line start")
         _validate_point(end, name="line end")
+        expected_tangent = _line_tangent(start, end)
+        _validate_tangent_agreement(start_tangent, expected_tangent, name="snapshot start tangent")
+        _validate_tangent_agreement(end_tangent, expected_tangent, name="snapshot end tangent")
         return _build_record(
             cls,
             {
@@ -235,6 +293,16 @@ class HeldArcSnapshot:
         _validate_metadata(ordinal, operation, path_index, clockwise, start_tangent, end_tangent)
         _validate_curve(centre, xaxis, yaxis, radius)
         _validate_angles(start_angle, end_angle)
+        _validate_tangent_agreement(
+            start_tangent,
+            _curve_tangent(xaxis, yaxis, float(start_angle), clockwise=clockwise),
+            name="snapshot start tangent",
+        )
+        _validate_tangent_agreement(
+            end_tangent,
+            _curve_tangent(xaxis, yaxis, float(end_angle), clockwise=clockwise),
+            name="snapshot end tangent",
+        )
         return _build_record(
             cls,
             {
@@ -289,6 +357,9 @@ class HeldCircleSnapshot:
     ) -> Self:
         _validate_metadata(ordinal, operation, path_index, clockwise, start_tangent, end_tangent)
         _validate_curve(centre, xaxis, yaxis, radius)
+        expected_tangent = _curve_tangent(xaxis, yaxis, 0.0, clockwise=clockwise)
+        _validate_tangent_agreement(start_tangent, expected_tangent, name="snapshot start tangent")
+        _validate_tangent_agreement(end_tangent, expected_tangent, name="snapshot end tangent")
         return _build_record(
             cls,
             {
@@ -407,6 +478,9 @@ def assert_toolpath_matches_snapshot(
     snapshot: tuple[HeldOperationSnapshot, ...],
 ) -> None:
     """Reject any structural change to the characterized operation stream."""
-    observed = snapshot_toolpath(result)
+    try:
+        observed = snapshot_toolpath(result)
+    except InvalidHeldOperationSnapshotError as error:
+        raise MutatedHeldToolpathError("Generated toolpath differs from the characterized operation snapshot.") from error
     if observed != snapshot:
         raise MutatedHeldToolpathError("Generated toolpath differs from the characterized operation snapshot.")
