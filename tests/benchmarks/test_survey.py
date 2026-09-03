@@ -57,6 +57,28 @@ def test_survey_rejects_curve_outside_the_inferred_cut_plane() -> None:
         _survey_motion(displaced)
 
 
+def test_survey_rejects_curve_below_the_line_inferred_cut_plane() -> None:
+    displaced = Arc(radius=2.0, start_angle=0.0, end_angle=0.5 * math.pi, frame=Frame([0.0, 0.0, -1.0]))
+
+    with pytest.raises(UnreplayableOperationError):
+        _survey_motion(displaced)
+
+
+def test_survey_accepts_a_coherent_circle_only_cut_plane() -> None:
+    operations = [ToolpathOperation(geometry=Circle(radius, frame=Frame([0.0, 0.0, 2.0])), operation=OperationType.CUT, path_index=0) for radius in (2.0, 3.0)]
+    result = ToolpathResult(operations=operations, polyline=np.zeros((0, 3), dtype=float))
+
+    assert len(survey_path(SPEC, result).motions) == 2
+
+
+def test_survey_rejects_mixed_planes_in_a_curve_only_stream() -> None:
+    operations = [ToolpathOperation(geometry=Circle(2.0, frame=Frame([0.0, 0.0, z])), operation=OperationType.CUT, path_index=0) for z in (0.0, 1.0)]
+    result = ToolpathResult(operations=operations, polyline=np.zeros((0, 3), dtype=float))
+
+    with pytest.raises(UnreplayableOperationError):
+        survey_path(SPEC, result)
+
+
 def test_standard_circle_samples_retain_one_typed_seam() -> None:
     motion = _survey_motion(Circle(2.0, frame=Frame([0.0, 0.0, 0.0])))
 
