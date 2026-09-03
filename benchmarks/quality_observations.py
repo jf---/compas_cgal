@@ -19,6 +19,7 @@ from typing import Union
 from typing import cast
 from typing import overload
 
+from compas.tolerance import TOL
 from typing_extensions import Self
 from typing_extensions import TypeAlias
 
@@ -46,6 +47,7 @@ from benchmarks.units import degrees_value
 from benchmarks.units import motion_count
 from benchmarks.units import operation_index
 from benchmarks.units import tool_radius_multiple
+from compas_cgal.engagement import AUDIT_ENGAGED
 from compas_cgal.toolpath import OperationType
 
 CriterionName: TypeAlias = Literal[
@@ -467,12 +469,21 @@ class PathQualityAttribution:
                 expected_unit = "degrees" if name == "max_engagement_step" else "tool_radius_multiple"
                 if getattr(step, "unit", None) != expected_unit:
                     raise InvalidHeldPathEvidenceError(f"{name} requires a measured step in {expected_unit!r}.")
-                OperationPair.build(
+                checked_pair = OperationPair.build(
                     previous=step.pair.previous,
                     current=step.pair.current,
                     operation_count=operation_count,
                 )
-            checked[name] = step
+                if name == "max_engagement_step":
+                    checked[name] = MeasuredStep.build(value=cast(Degrees, step.value), pair=checked_pair, unit="degrees")
+                else:
+                    checked[name] = MeasuredStep.build(
+                        value=cast(ToolRadiusMultiple, step.value),
+                        pair=checked_pair,
+                        unit="tool_radius_multiple",
+                    )
+            else:
+                checked[name] = None
         tangent_pairs = set(tangent_break_pairs)
         reversal_pair_set = set(reversal_pairs)
         curvature_pairs = set(curvature_break_pairs)
@@ -506,6 +517,7 @@ class PathQualityAssessment:
     def build(
         cls,
         *,
+        spec: PocketSpec,
         snapshot: tuple[HeldOperationSnapshot, ...],
         survey: PathSurvey,
         uncut_fraction: FractionCriterion,
@@ -524,41 +536,7 @@ class PathQualityAssessment:
     ) -> Self:
         if type(attribution) is not PathQualityAttribution:
             raise InvalidHeldPathEvidenceError("an assessment requires one validated attribution record.")
-        _validate_survey_binding(survey.spec, snapshot, survey)
-        expected_names = {
-            "uncut_fraction": "uncut fraction",
-            "gouging_motions": "gouging motions",
-            "unsafe_rapids": "unsafe rapids",
-            "continuity_breaks": "continuity breaks",
-            "zero_length_motions": "zero-length motions",
-            "degenerate_loops": "degenerate loops",
-            "redundant_operations": "redundant operations",
-            "cap_exceedances": "cap exceedances",
-            "slotting_motions": "slotting motions",
-            "max_engagement_step": "max engagement step (deg)",
-            "max_loop_radius_step": "max loop radius step (tool radii)",
-            "tangent_breaks": "tangent breaks",
-        }
-        values: dict[str, object] = {
-            "uncut_fraction": uncut_fraction,
-            "gouging_motions": gouging_motions,
-            "unsafe_rapids": unsafe_rapids,
-            "continuity_breaks": continuity_breaks,
-            "zero_length_motions": zero_length_motions,
-            "degenerate_loops": degenerate_loops,
-            "redundant_operations": redundant_operations,
-            "cap_exceedances": cap_exceedances,
-            "slotting_motions": slotting_motions,
-            "max_engagement_step": max_engagement_step,
-            "max_loop_radius_step": max_loop_radius_step,
-            "tangent_breaks": tangent_breaks,
-        }
-        for field, expected_name in expected_names.items():
-            criterion = values[field]
-            if not isinstance(criterion, (FractionCriterion, CountCriterion, DegreesCriterion, ToolRadiusMultipleCriterion)):
-                raise InvalidHeldPathEvidenceError(f"{field} must be one validated criterion record.")
-            if criterion.name != expected_name:
-                raise InvalidHeldPathEvidenceError(f"{field} carries criterion {criterion.name!r}, expected {expected_name!r}.")
+        _validate_survey_binding(spec, snapshot, survey)
         cardinalities = {
             "gouging_motions": len(attribution.gouging_operations),
             "unsafe_rapids": len(attribution.unsafe_rapid_operations),
@@ -570,20 +548,112 @@ class PathQualityAssessment:
             "slotting_motions": len(attribution.slotting_operations),
             "tangent_breaks": len(attribution.tangent_break_pairs),
         }
-        for field, cardinality in cardinalities.items():
-            criterion = cast(CountCriterion, values[field])
-            if criterion.measured != cardinality:
-                raise ContradictoryPathQualityEvidenceError(f"{field} disagrees with the assessment attribution cardinality.")
+        supplied_counts = {
+            "gouging_motions": gouging_motions,
+            "unsafe_rapids": unsafe_rapids,
+            "continuity_breaks": continuity_breaks,
+            "zero_length_motions": zero_length_motions,
+            "degenerate_loops": degenerate_loops,
+            "redundant_operations": redundant_operations,
+            "cap_exceedances": cap_exceedances,
+            "slotting_motions": slotting_motions,
+            "tangent_breaks": tangent_breaks,
+        }
+        count_names: dict[str, CountCriterionName] = {
+            "gouging_motions": "gouging motions",
+            "unsafe_rapids": "unsafe rapids",
+            "continuity_breaks": "continuity breaks",
+            "zero_length_motions": "zero-length motions",
+            "degenerate_loops": "degenerate loops",
+            "redundant_operations": "redundant operations",
+            "cap_exceedances": "cap exceedances",
+            "slotting_motions": "slotting motions",
+            "tangent_breaks": "tangent breaks",
+        }
+        checked_counts: dict[str, CountCriterion] = {}
+        for field, criterion in supplied_counts.items():
+            if type(criterion) is not CountCriterion:
+                raise InvalidHeldPathEvidenceError(f"{field} must be one validated count criterion record.")
+            checked_counts[field] = CountCriterion.build(
+                name=cast(CountCriterionName, criterion.name),
+                measured=criterion.measured,
+                required=criterion.required,
+                evidence=criterion.evidence,
+                outcome=criterion.outcome,
+                attribution_count=criterion.measured,
+            )
+        canonical_counts = {field: _count(count_names[field], cardinalities[field]) for field in supplied_counts}
+        if checked_counts != canonical_counts:
+            raise ContradictoryPathQualityEvidenceError("count criteria disagree with their canonical thresholds, outcomes, or source attribution.")
+
+        if type(uncut_fraction) is not FractionCriterion:
+            raise InvalidHeldPathEvidenceError("uncut_fraction must be one validated fraction criterion record.")
+        checked_uncut = FractionCriterion.build(
+            name=uncut_fraction.name,
+            measured=uncut_fraction.measured,
+            required=uncut_fraction.required,
+            evidence=uncut_fraction.evidence,
+            outcome=uncut_fraction.outcome,
+        )
+        uncut_evidence = EVIDENCE_BY_CRITERION["uncut fraction"]
+        canonical_uncut = FractionCriterion.build(
+            name="uncut fraction",
+            measured=checked_uncut.measured,
+            required=REQUIRED_FRACTION,
+            evidence=uncut_evidence,
+            outcome=_outcome(uncut_evidence, checked_uncut.measured <= REQUIRED_FRACTION),
+        )
+
         engagement_value = ZERO_FLOAT if attribution.max_engagement_step is None else attribution.max_engagement_step.value
-        if max_engagement_step.measured != engagement_value:
-            raise ContradictoryPathQualityEvidenceError("maximum engagement step disagrees with its attributed extremum.")
+        if type(max_engagement_step) is not DegreesCriterion:
+            raise InvalidHeldPathEvidenceError("max_engagement_step must be one validated degrees criterion record.")
+        checked_engagement = DegreesCriterion.build(
+            name=max_engagement_step.name,
+            measured=max_engagement_step.measured,
+            required=max_engagement_step.required,
+            evidence=max_engagement_step.evidence,
+            outcome=max_engagement_step.outcome,
+        )
+        engagement_evidence = EVIDENCE_BY_CRITERION["max engagement step (deg)"]
+        canonical_engagement = DegreesCriterion.build(
+            name="max engagement step (deg)",
+            measured=Degrees(engagement_value),
+            required=Degrees(spec.tea_cap_deg),
+            evidence=engagement_evidence,
+            outcome=_outcome(engagement_evidence, engagement_value <= spec.tea_cap_deg),
+        )
+
         loop_value = ZERO_FLOAT if attribution.max_loop_radius_step is None else attribution.max_loop_radius_step.value
-        if max_loop_radius_step.measured != loop_value:
-            raise ContradictoryPathQualityEvidenceError("maximum loop-radius step disagrees with its attributed extremum.")
+        if type(max_loop_radius_step) is not ToolRadiusMultipleCriterion:
+            raise InvalidHeldPathEvidenceError("max_loop_radius_step must be one validated tool-radius-multiple criterion record.")
+        checked_loop = ToolRadiusMultipleCriterion.build(
+            name=max_loop_radius_step.name,
+            measured=max_loop_radius_step.measured,
+            required=max_loop_radius_step.required,
+            evidence=max_loop_radius_step.evidence,
+            outcome=max_loop_radius_step.outcome,
+        )
+        loop_evidence = EVIDENCE_BY_CRITERION["max loop radius step (tool radii)"]
+        canonical_loop = ToolRadiusMultipleCriterion.build(
+            name="max loop radius step (tool radii)",
+            measured=ToolRadiusMultiple(loop_value),
+            required=REQUIRED_LOOP_STEP,
+            evidence=loop_evidence,
+            outcome=_outcome(loop_evidence, loop_value <= REQUIRED_LOOP_STEP),
+        )
+        if (checked_uncut, checked_engagement, checked_loop) != (canonical_uncut, canonical_engagement, canonical_loop):
+            raise ContradictoryPathQualityEvidenceError("fraction or maximum criterion disagrees with its canonical threshold, outcome, or source attribution.")
+
         expected_attribution = _attribution_from_survey(snapshot, survey)
         if attribution != expected_attribution:
             raise ContradictoryPathQualityEvidenceError("path-quality attribution disagrees with its exact source observations.")
-        values["attribution"] = attribution
+        values: dict[str, object] = {
+            "uncut_fraction": canonical_uncut,
+            **canonical_counts,
+            "max_engagement_step": canonical_engagement,
+            "max_loop_radius_step": canonical_loop,
+            "attribution": attribution,
+        }
         return _build_record(cls, values)
 
 
@@ -621,6 +691,40 @@ def _snapshot_kind(operation: HeldOperationSnapshot) -> MotionKind:
     if type(operation) is HeldCircleSnapshot:
         return MotionKind.LOOP
     raise InvalidHeldPathEvidenceError("source snapshot contains an unsupported operation record.")
+
+
+def _snapshot_cut_height(snapshot: tuple[HeldOperationSnapshot, ...]) -> float:
+    heights: list[float] = []
+    for operation in snapshot:
+        if isinstance(operation, HeldLineSnapshot):
+            heights.extend((float(operation.start.z), float(operation.end.z)))
+        else:
+            heights.append(float(operation.centre.z))
+    return min(heights) if heights else ZERO_FLOAT
+
+
+def _snapshot_category(
+    operation: HeldOperationSnapshot,
+    cut_height: float,
+) -> Literal["motion", "rapid", "plunge", "retract"]:
+    if operation.operation is OperationType.RETRACT:
+        return "retract"
+    if isinstance(operation, HeldLineSnapshot):
+        z_start = float(operation.start.z)
+        z_end = float(operation.end.z)
+        if abs(z_start - z_end) > TOL.absolute:
+            xy_travel = math.hypot(
+                float(operation.end.x) - float(operation.start.x),
+                float(operation.end.y) - float(operation.start.y),
+            )
+            if xy_travel > TOL.absolute:
+                raise InvalidHeldPathEvidenceError("a differing-z source line with XY travel cannot be classified by the cut-plane survey.")
+            return "plunge" if z_end < z_start else "rapid"
+        if z_start > cut_height + TOL.absolute:
+            return "rapid"
+    if operation.operation not in AUDIT_ENGAGED:
+        return "rapid"
+    return "motion"
 
 
 def _validate_ordered_indices(values: Sequence[int], operation_count: int, *, name: str) -> tuple[OperationIndex, ...]:
@@ -669,6 +773,19 @@ def _validate_survey_binding(
     if set().union(*categories) != set(range(operation_count)):
         raise InvalidHeldPathEvidenceError("motion, rapid, plunge, and retract observations must exactly partition the operation snapshot.")
 
+    cut_height = _snapshot_cut_height(snapshot)
+    expected_categories: dict[str, set[OperationIndex]] = {"motion": set(), "rapid": set(), "plunge": set(), "retract": set()}
+    for index, operation in enumerate(snapshot):
+        expected_categories[_snapshot_category(operation, cut_height)].add(OperationIndex(index))
+    observed_categories: dict[str, set[OperationIndex]] = {
+        "motion": motion_set,
+        "rapid": pure_rapid_set,
+        "plunge": plunge_set,
+        "retract": retract_set,
+    }
+    if observed_categories != expected_categories:
+        raise InvalidHeldPathEvidenceError("survey categories disagree with the source snapshot's cut-plane replay classification.")
+
     for motion in survey.motions:
         source = snapshot[motion.index]
         if motion.operation is not source.operation or motion.kind is not _snapshot_kind(source):
@@ -677,10 +794,6 @@ def _validate_survey_binding(
         source = snapshot[rapid.index]
         if rapid.operation is not source.operation or rapid.kind is not _snapshot_kind(source):
             raise InvalidHeldPathEvidenceError("rapid-motion role or primitive kind disagrees with the source snapshot.")
-    if any(snapshot[index].operation is not OperationType.PLUNGE for index in plunge_indices):
-        raise InvalidHeldPathEvidenceError("plunge classification disagrees with the source operation role.")
-    if any(snapshot[index].operation is not OperationType.RETRACT for index in retract_indices):
-        raise InvalidHeldPathEvidenceError("retract classification disagrees with the source operation role.")
 
 
 def _maximum_step(steps: Sequence[tuple[float, OperationPair]], unit: Literal["degrees", "tool_radius_multiple"]) -> Optional[StepFinding]:
@@ -734,7 +847,10 @@ def _attribution_from_survey(
 ) -> PathQualityAttribution:
     operation_count = len(snapshot)
     spec = survey.spec
-    gouging = _indices([motion.index for motion in survey.motions if motion.gouges], operation_count)
+    gouging = _indices(
+        [motion.index for motion in survey.motions if any(not sample.inside_centre_domain for sample in motion.samples)],
+        operation_count,
+    )
     unsafe = _indices([rapid.index for rapid in survey.rapids if rapid.horizontal_at_cut_plane], operation_count)
     zero_length = _indices(
         sorted([motion.index for motion in survey.motions if motion.length == ZERO_FLOAT] + [rapid.index for rapid in survey.rapids if rapid.length == ZERO_FLOAT]),
@@ -770,7 +886,9 @@ def _attribution_from_survey(
             tangent.append(pair)
         elif previous.curvature != current.curvature:
             curvature.append(pair)
-        engagement_steps.append((abs(current.peak_engagement_deg - previous.peak_engagement_deg), pair))
+        previous_peak = max((sample.engagement_deg for sample in previous.samples), default=ZERO_FLOAT)
+        current_peak = max((sample.engagement_deg for sample in current.samples), default=ZERO_FLOAT)
+        engagement_steps.append((abs(current_peak - previous_peak), pair))
 
     loop_steps = _loop_steps(snapshot, survey, spec.tool_radius, operation_count)
     maximum_engagement = cast(Optional[MeasuredStep[Degrees]], _maximum_step(engagement_steps, "degrees"))
@@ -829,6 +947,7 @@ def assess_path_quality(
     engagement_evidence = EVIDENCE_BY_CRITERION["max engagement step (deg)"]
     loop_evidence = EVIDENCE_BY_CRITERION["max loop radius step (tool radii)"]
     return PathQualityAssessment.build(
+        spec=spec,
         uncut_fraction=FractionCriterion.build(
             name="uncut fraction",
             measured=uncut,
