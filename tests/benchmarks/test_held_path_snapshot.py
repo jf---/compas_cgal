@@ -11,6 +11,7 @@ from compas.geometry import Arc
 from compas.geometry import Circle
 from compas.geometry import Frame
 from compas.geometry import Line
+from compas.tolerance import TOL
 
 from benchmarks.errors import InvalidHeldOperationSnapshotError
 from benchmarks.errors import MutatedHeldToolpathError
@@ -443,6 +444,25 @@ def test_snapshot_rejects_line_tangent_that_disagrees_with_geometry() -> None:
             start_tangent=Direction3[WorldXYZ].build(-1.0, 0.0, 0.0),
             end_tangent=None,
         )
+
+
+def test_snapshot_retains_correct_tangent_for_nonzero_sub_tolerance_line() -> None:
+    line_length = TOL.absolute / 2.0
+    result = _result(
+        [
+            _operation(
+                Line([0.0, 0.0, 0.0], [line_length, 0.0, 0.0]),
+                start_tangent=np.array([1.0, 0.0, 0.0]),
+                end_tangent=np.array([1.0, 0.0, 0.0]),
+            )
+        ]
+    )
+
+    snapshot = snapshot_toolpath(result)[0]
+
+    assert isinstance(snapshot, HeldLineSnapshot)
+    assert snapshot.start_tangent == Direction3[WorldXYZ].build(1.0, 0.0, 0.0)
+    assert snapshot.end_tangent == Direction3[WorldXYZ].build(1.0, 0.0, 0.0)
 
 
 def test_snapshot_rejects_arc_tangent_that_disagrees_with_travel() -> None:
