@@ -173,7 +173,7 @@ def _line_tangent(
     )
     if delta == (0.0, 0.0, 0.0):
         return None
-    length = math.sqrt(sum(component * component for component in delta))
+    length = math.hypot(*delta)
     return delta[0] / length, delta[1] / length, delta[2] / length
 
 
