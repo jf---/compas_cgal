@@ -564,7 +564,7 @@ Task 5A checkpoint passes.
 - Produces: one pinned dyadic `@example` under the existing test ID; generated
   examples remain additional discovery evidence.
 
-- [ ] **Step 1: Pin the minimized translation witness**
+- [x] **Step 1: Pin the minimized translation witness**
 
 Retain the generated property and insert this minimized example between
 `@PROPERTY_SETTINGS` and the existing `@given` decorator:
@@ -586,7 +586,7 @@ Do not mark the property as expected failure. The red manifest continues to own
 the unchanged node ID and the defect remains visible as a normal assertion
 failure.
 
-- [ ] **Step 2: Prove the red is independent of generated examples**
+- [x] **Step 2: Prove the red is independent of generated examples**
 
 Run the existing test with fixed seeds that previously missed the defect:
 
@@ -599,7 +599,7 @@ Expected: both exit `1` on the pinned translation witness with a machining
 metric changing under translation. Collection, configuration, interruption,
 or process termination is not an expected red.
 
-- [ ] **Step 3: Record the corrected oracle interpretation and commit**
+- [x] **Step 3: Record the corrected oracle interpretation and commit**
 
 Update the parity state: the 16-red full run was a probabilistic miss, the
 translation defect remains reproducible, and exact manifest membership now has
