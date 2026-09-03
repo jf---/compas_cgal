@@ -633,7 +633,7 @@ GIT_AUTHOR_NAME='Jelle Feringa' GIT_AUTHOR_EMAIL='jelleferinga@gmail.com' GIT_CO
   projection of tilted or vertically displaced curves. The structural snapshot
   may still record unsupported 3D input so the refusal remains observable.
 
-- [ ] **Step 1: Write RED malformed-motion tests**
+- [x] **Step 1: Write RED malformed-motion tests**
 
 Add direct-factory and real-operation tests named
 `test_snapshot_rejects_descending_arc_range`,
@@ -651,7 +651,7 @@ Descending arcs are malformed because COMPAS reports negative length. A zero
 sweep remains admissible so the protected zero-length quality criterion can
 diagnose it. In-plane rotation and translation remain valid.
 
-- [ ] **Step 2: Run the focused RED tests**
+- [x] **Step 2: Run the focused RED tests**
 
 ```bash
 pixi run pytest -- tests/benchmarks/test_held_path_snapshot.py tests/benchmarks/test_survey.py -k 'descending or zero_sweep or tangent_that_disagrees or tilted or inferred_cut_plane' -n auto --testmon --testmon-noselect -q
@@ -660,7 +660,7 @@ pixi run pytest -- tests/benchmarks/test_held_path_snapshot.py tests/benchmarks/
 Expected: descending ranges, contradictory unit tangents, and non-planar curves
 are accepted when they must fail.
 
-- [ ] **Step 3: Implement the narrow geometric validation**
+- [x] **Step 3: Implement the narrow geometric validation**
 
 Keep geometry in typed world coordinates. Enforce `end_angle >= start_angle`;
 do not reject equality. Derive each primitive's expected travel tangent from its
@@ -671,7 +671,7 @@ height. Raise `InvalidHeldOperationSnapshotError` for malformed snapshots and
 the existing `UnreplayableOperationError` when survey input leaves the cut-plane
 model. Introduce no numeric tolerance literal.
 
-- [ ] **Step 4: Run GREEN gates and commit**
+- [x] **Step 4: Run GREEN gates and commit**
 
 ```bash
 pixi run pytest -- tests/benchmarks/test_held_path_snapshot.py tests/benchmarks/test_survey.py -n auto --testmon --testmon-noselect -q
