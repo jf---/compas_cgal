@@ -10,6 +10,7 @@ from compas.geometry import Frame
 from compas.geometry import Line
 from compas.geometry import Polygon
 
+from benchmarks.errors import UnreplayableOperationError
 from benchmarks.spec import PocketSpec
 from benchmarks.survey import QUALITY_SAMPLES_PER_MOTION
 from benchmarks.survey import MotionQuality
@@ -40,6 +41,20 @@ def _survey_motion(geometry: object) -> MotionQuality:
     ]
     result = ToolpathResult(operations=operations, polyline=np.zeros((0, 3), dtype=float))
     return survey_path(SPEC, result).motions[0]
+
+
+def test_survey_rejects_tilted_cut_circle() -> None:
+    tilted = Circle(2.0, frame=Frame([0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]))
+
+    with pytest.raises(UnreplayableOperationError):
+        _survey_motion(tilted)
+
+
+def test_survey_rejects_curve_outside_the_inferred_cut_plane() -> None:
+    displaced = Arc(radius=2.0, start_angle=0.0, end_angle=0.5 * math.pi, frame=Frame([0.0, 0.0, 1.0]))
+
+    with pytest.raises(UnreplayableOperationError):
+        _survey_motion(displaced)
 
 
 def test_standard_circle_samples_retain_one_typed_seam() -> None:
