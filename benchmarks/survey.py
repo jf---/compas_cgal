@@ -54,7 +54,6 @@ from compas_cgal.adaptive.units import WorldXY
 from compas_cgal.engagement import _cap_chord_ratio
 from compas_cgal.engagement import _infer_cut_height
 from compas_cgal.engagement import _subtract_operation
-from compas_cgal.replay_classification import AUDIT_ENGAGED
 from compas_cgal.replay_classification import CutPlaneRampError
 from compas_cgal.replay_classification import OffPlaneReplayCurveError
 from compas_cgal.replay_classification import classify_operation_replay
@@ -398,68 +397,35 @@ def _validate_cut_plane_curves(operations: Sequence[ToolpathOperation]) -> None:
         UnreplayableOperationError: An engaged arc or circle is tilted or does
             not lie on the independently established cutting plane.
     """
-    line_heights: List[float] = []
-    for operation in operations:
-        anchor = _line_cut_height_anchor(operation)
-        if anchor is not None:
-            line_heights.append(anchor)
-    curves = [(index, operation.geometry) for index, operation in enumerate(operations) if operation.operation in AUDIT_ENGAGED and isinstance(operation.geometry, (Arc, Circle))]
+    curves = [(index, operation) for index, operation in enumerate(operations) if isinstance(operation.geometry, (Arc, Circle))]
     if not curves:
         return
 
-    cut_z = min(line_heights) if line_heights else float(curves[0][1].frame.point[2])
-    for index, geometry in curves:
-        _require_cut_plane_curve(index, geometry, cut_z)
+    cut_z = _infer_cut_height(list(operations))
+    for index, operation in curves:
+        _require_world_xy_curve(index, operation.geometry)
+        try:
+            classify_operation_replay(operation, Millimetre(cut_z))
+        except (CutPlaneRampError, OffPlaneReplayCurveError) as error:
+            raise UnreplayableOperationError(f"Operation {index} ({operation.operation.value}) {error}.") from error
 
 
-def _line_cut_height_anchor(operation: ToolpathOperation) -> Optional[float]:
-    """Return cutting-depth evidence carried by one line, if any.
-
-    The lower foot of a pure vertical move establishes machining depth. A
-    horizontal CUT, LEAD_IN, or LEAD_OUT also declares cutting semantics. A
-    horizontal LINK does not: its height is classified only after the cutting
-    plane is known and may legitimately be clearance travel.
-
-    Args:
-        operation: The line candidate and its declared motion semantics.
-
-    Returns:
-        The evidenced cut height, or `None` when the line cannot anchor it.
-    """
-    geometry = operation.geometry
-    if not isinstance(geometry, Line):
-        return None
-
-    z_start = float(geometry.start[2])
-    z_end = float(geometry.end[2])
-    xy_travel = math.hypot(float(geometry.end[0]) - float(geometry.start[0]), float(geometry.end[1]) - float(geometry.start[1]))
-    if TOL.is_zero(xy_travel) and not TOL.is_zero(z_start - z_end):
-        return min(z_start, z_end)
-    if TOL.is_zero(z_start - z_end) and operation.operation in (OperationType.CUT, OperationType.LEAD_IN, OperationType.LEAD_OUT):
-        return z_start
-    return None
-
-
-def _require_cut_plane_curve(index: int, geometry: object, cut_z: float) -> None:
+def _require_world_xy_curve(index: int, geometry: object) -> None:
     """Refuse circular geometry that the world-XY depletion cannot represent.
 
     Args:
         index: Position of the operation, for the error message.
         geometry: The motion primitive.
-        cut_z: The inferred cutting-plane height.
 
     Raises:
-        UnreplayableOperationError: An arc or circle is tilted or centred away
-            from the cutting plane.
+        UnreplayableOperationError: An arc or circle is tilted away from world XY.
     """
     if not isinstance(geometry, (Arc, Circle)):
         return
 
     axis_angle = angle_vectors(geometry.frame.zaxis, [0.0, 0.0, 1.0])
     axis_is_world_z = TOL.is_angle_zero(axis_angle) or TOL.is_angles_close(axis_angle, math.pi)
-    centre_z = float(geometry.frame.point[2])
-    centre_is_at_cut_z = TOL.is_between(centre_z, cut_z, cut_z, atol=TOL.absolute)
-    if not axis_is_world_z or not centre_is_at_cut_z:
+    if not axis_is_world_z:
         raise UnreplayableOperationError(
             f"Operation {index} carries {type(geometry).__name__} geometry outside the inferred world-XY cut plane; projecting it to XY would misrepresent material removal."
         )

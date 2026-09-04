@@ -17,6 +17,7 @@ from compas_cgal.engagement import (
     EngagementReport,
     InvalidEngagementCapError,
     InvalidToolDiameterError,
+    UnexpectedToolpathGeometryError,
     _cap_chord_ratio,
     _certify_arc_engagement,
     _infer_cut_height,
@@ -24,7 +25,7 @@ from compas_cgal.engagement import (
     audit_toolpath_engagement,
 )
 from compas_cgal.stock import Stock
-from compas_cgal.toolpath import OperationType, ToolpathResult, trochoidal_mat_toolpath_circular
+from compas_cgal.toolpath import OperationType, ToolpathOperation, ToolpathResult, trochoidal_mat_toolpath_circular
 
 SQUARE = Polygon([[0, 0, 0], [10, 0, 0], [10, 10, 0], [0, 10, 0]])
 
@@ -70,6 +71,21 @@ def test_audit_is_deterministic():
     # deterministic float arithmetic make two audits of one input agree exactly.
     assert r2.max_tea == pytest.approx(r1.max_tea)
     assert r2.cap_violations == r1.cap_violations
+
+
+def test_audit_rejects_curve_below_line_authorized_cut_plane() -> None:
+    operations = [
+        ToolpathOperation(geometry=Line([1.0, 1.0, 0.0], [5.0, 1.0, 0.0]), operation=OperationType.CUT, path_index=0),
+        ToolpathOperation(
+            geometry=Circle(1.0, frame=Frame([3.0, 3.0, -1.0])),
+            operation=OperationType.CUT,
+            path_index=0,
+        ),
+    ]
+    result = ToolpathResult(operations=operations, polyline=np.empty((0, 3), dtype=np.float64))
+
+    with pytest.raises(UnexpectedToolpathGeometryError):
+        audit_toolpath_engagement(SQUARE, result, tool_diameter=2.0, tea_cap=math.pi)
 
 
 def _empty_result() -> ToolpathResult:

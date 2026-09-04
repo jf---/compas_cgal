@@ -35,6 +35,7 @@ from compas_cgal.replay_classification import CutPlaneRampError
 from compas_cgal.replay_classification import OffPlaneReplayCurveError
 from compas_cgal.replay_classification import ReplayCategory
 from compas_cgal.replay_classification import classify_operation_replay
+from compas_cgal.replay_classification import infer_operation_cut_height
 from compas_cgal.replay_classification import minimum_cut_height
 from compas_cgal.stock import Stock
 from compas_cgal.toolpath import OperationType
@@ -341,15 +342,7 @@ def _infer_cut_height(operations: list[ToolpathOperation]) -> float:
     Returns:
         The cutting-plane z (``0.0`` for an empty operation list).
     """
-    heights: list[float] = []
-    for op in operations:
-        g = op.geometry
-        if isinstance(g, Line):
-            heights.append(float(g.start[2]))
-            heights.append(float(g.end[2]))
-        else:
-            heights.append(float(g.frame.point[2]))
-    return _minimum_cut_height(heights)
+    return float(infer_operation_cut_height(operations))
 
 
 def _replay_line(

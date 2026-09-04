@@ -48,12 +48,14 @@ from benchmarks.units import motion_count
 from benchmarks.units import operation_index
 from benchmarks.units import tool_radius_multiple
 from compas_cgal.adaptive.units import Millimetre
-from compas_cgal.engagement import _minimum_cut_height
 from compas_cgal.replay_classification import CutPlaneRampError
 from compas_cgal.replay_classification import OffPlaneReplayCurveError
 from compas_cgal.replay_classification import ReplayCategory
 from compas_cgal.replay_classification import classify_line_replay
 from compas_cgal.replay_classification import classify_planar_replay
+from compas_cgal.replay_classification import line_cut_height_anchor
+from compas_cgal.replay_classification import minimum_cut_height
+from compas_cgal.toolpath import OperationType
 
 CriterionName: TypeAlias = Literal[
     "uncut fraction",
@@ -699,13 +701,26 @@ def _snapshot_kind(operation: HeldOperationSnapshot) -> MotionKind:
 
 
 def _snapshot_cut_height(snapshot: tuple[HeldOperationSnapshot, ...]) -> float:
-    heights: list[float] = []
+    line_anchors: list[Millimetre] = []
+    curve_heights: list[Millimetre] = []
     for operation in snapshot:
         if isinstance(operation, HeldLineSnapshot):
-            heights.extend((float(operation.start.z), float(operation.end.z)))
-        else:
-            heights.append(float(operation.centre.z))
-    return float(_minimum_cut_height(heights))
+            anchor = line_cut_height_anchor(
+                operation.operation,
+                start_z=Millimetre(float(operation.start.z)),
+                end_z=Millimetre(float(operation.end.z)),
+                xy_travel=Millimetre(
+                    math.hypot(
+                        float(operation.end.x) - float(operation.start.x),
+                        float(operation.end.y) - float(operation.start.y),
+                    )
+                ),
+            )
+            if anchor is not None:
+                line_anchors.append(anchor)
+        elif operation.operation in {OperationType.CUT, OperationType.LEAD_IN, OperationType.LEAD_OUT}:
+            curve_heights.append(Millimetre(float(operation.centre.z)))
+    return float(minimum_cut_height(line_anchors if line_anchors else curve_heights))
 
 
 def _snapshot_replay_category(
