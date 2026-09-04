@@ -41,6 +41,14 @@ class MalformedJUnitError(Exception):
 
 
 @dataclass(frozen=True)
+class JUnitFailure:
+    """One assertion failure retained with its exact JUnit message."""
+
+    identity: str
+    message: str
+
+
+@dataclass(frozen=True)
 class ManifestEntry:
     """One validated expected-red ownership rule."""
 
@@ -105,20 +113,24 @@ class ManifestViolation:
     detail: str
 
 
-def _failed_ids(junit: Path) -> List[str]:
-    """Return ``classname::name`` for each assertion failure.
+def parse_junit_failures(junit: Path) -> tuple[JUnitFailure, ...]:
+    """Return every unique assertion failure with its JUnit message.
 
     Raises:
         MalformedJUnitError: The report is malformed, lacks testcase identity,
-            or contains a test execution error.
+            repeats a testcase, contains multiple failures for one testcase, or
+            contains a test execution error.
     """
     try:
         root = ET.parse(junit).getroot()
+    except OSError as error:
+        raise MalformedJUnitError(f"{junit}: cannot read JUnit XML: {error}") from error
     except ET.ParseError as error:
         raise MalformedJUnitError(f"{junit}: invalid XML: {error}") from error
     if root.tag not in ("testsuite", "testsuites"):
         raise MalformedJUnitError(f"{junit}: root must be <testsuite> or <testsuites>, got <{root.tag}>")
-    out: List[str] = []
+    out: list[JUnitFailure] = []
+    seen: set[str] = set()
     for case in root.iter("testcase"):
         classname = case.get("classname")
         name = case.get("name")
@@ -126,16 +138,26 @@ def _failed_ids(junit: Path) -> List[str]:
             context = ET.tostring(case, encoding="unicode")
             raise MalformedJUnitError(f"{junit}: testcase requires non-empty classname and name: {context}")
         identity = f"{classname}::{name}"
+        if identity in seen:
+            raise MalformedJUnitError(f"{junit}: duplicate testcase identity: {identity}")
+        seen.add(identity)
         if any(child.tag == "error" for child in case):
             raise MalformedJUnitError(f"{junit}: {identity} contains <error>; only assertion <failure> elements may be manifest-owned reds")
-        if any(child.tag == "failure" for child in case):
-            out.append(identity)
-    return out
+        failures = [child for child in case if child.tag == "failure"]
+        if len(failures) > 1:
+            raise MalformedJUnitError(f"{junit}: {identity} must contain exactly one <failure>, saw {len(failures)}")
+        if failures:
+            failure = failures[0]
+            message_parts = [part.strip() for part in (failure.get("message"), failure.text) if part and part.strip()]
+            out.append(JUnitFailure(identity, "\n".join(message_parts)))
+    return tuple(out)
 
 
 def _load_manifest(manifest: Path) -> List[ManifestEntry]:
     try:
         payload: object = json.loads(manifest.read_text())
+    except OSError as error:
+        raise MalformedManifestError(f"{manifest}: cannot read manifest: {error}") from error
     except json.JSONDecodeError as error:
         raise MalformedManifestError(f"{manifest}: invalid JSON: {error}") from error
     if not isinstance(payload, dict):
@@ -171,7 +193,7 @@ def check(junit: Path, manifest: Path) -> List[ManifestViolation]:
             entry.count,
         ),
     )
-    reds = _failed_ids(junit)
+    reds = [failure.identity for failure in parse_junit_failures(junit)]
     violations: List[ManifestViolation] = []
     owners: List[List[ManifestEntry]] = [[] for _ in reds]
     for entry in entries:

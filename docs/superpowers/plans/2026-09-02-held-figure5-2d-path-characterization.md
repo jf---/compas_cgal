@@ -1,10 +1,8 @@
 # Held Figure 5 2D Path Characterization Implementation Plan
 
-> **status: blocked at Task 5** - Tasks 1-5 are implemented and the additive
-> aggregate parity checks pass. Adversarial review found that the exact known-red
-> gate is nondeterministic and that the new evidence boundary accepts malformed
-> or contradictory inputs. Task 5A must close these findings before Task 6 can
-> be presented for explicit removal approval.
+> **status: awaiting Task 6 removal approval** - Tasks 1-5A are implemented,
+> independently reviewed, and verified. Production routing remains unchanged;
+> Task 6 may not start without Jelle's explicit approval.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use
 > `superpowers:subagent-driven-development` (recommended) or
@@ -499,7 +497,7 @@ pixi run pytest -- tests/benchmarks/test_quality.py tests/benchmarks/test_qualit
 
 Expected: all selected tests pass.
 
-- [ ] **Step 4: BLOCKED - make the exact known-red oracle deterministic**
+- [x] **Step 4: make the exact known-red oracle deterministic**
 
 ```bash
 zsh -c 'pixi run pytest -- tests/benchmarks/test_quality.py::test_the_generated_path_is_worth_running -n auto -q; red_status=$?; if [[ $red_status -ne 1 ]]; then exit 2; fi; pixi run red-manifest'
@@ -822,7 +820,7 @@ GIT_AUTHOR_NAME='Jelle Feringa' GIT_AUTHOR_EMAIL='jelleferinga@gmail.com' GIT_CO
   criterion vector before the deliberate product-gate assertion; exact known-red
   membership remains a separate repository-state gate.
 
-- [ ] **Step 1: Write the permanent twelve-case green transition oracle**
+- [x] **Step 1: Write the permanent twelve-case green transition oracle**
 
 Parameterize the unchanged gate cases without executing the final deliberate
 `assert not violations`. For every case, generate once and require:
@@ -840,11 +838,36 @@ both the green transition test and the protected red wrapper. Validate the red
 wrapper behavior from its JUnit failure messages; do not freeze source shape or
 use an AST/grep implementation-structure test.
 
-- [ ] **Step 2: Prove the transition and known-red oracles separately**
+- [x] **Step 2: Prove the transition and known-red oracles separately**
 
 ```bash
 pixi run pytest -- tests/benchmarks/test_quality_transition.py -n auto --testmon --testmon-noselect -q
-zsh -c 'pixi run pytest -- tests/benchmarks/test_quality.py::test_the_generated_path_is_worth_running -n auto -q --junitxml=build/task5a4-quality.xml; red_status=$?; if [[ $red_status -ne 1 ]]; then exit 2; fi; pixi run red-manifest'
+zsh -c 'pixi run pytest -- tests/benchmarks/test_quality.py::test_the_generated_path_is_worth_running -n auto -q --junitxml=build/task5a4-quality.xml; red_status=$?; if [[ $red_status -ne 1 ]]; then exit 2; fi'
+pixi run python - <<'PY'
+from pathlib import Path
+
+from benchmarks.gate import GATE_CAP_CASES, GATE_GENERATOR_NAMES, GATE_POCKET_NAMES
+from tests.benchmarks.test_quality import _expected_quality_gate_violations
+from tools.red_manifest import parse_junit_failures
+
+expected = {
+    f"tests.benchmarks.test_quality::test_the_generated_path_is_worth_running[{cap_id}-{generator}-{pocket}]": _expected_quality_gate_violations(cap, generator, pocket)
+    for cap_id, cap in GATE_CAP_CASES
+    for generator in GATE_GENERATOR_NAMES
+    for pocket in GATE_POCKET_NAMES
+}
+failures = {failure.identity: failure.message for failure in parse_junit_failures(Path("build/task5a4-quality.xml"))}
+assert failures.keys() == expected.keys()
+for identity, violations in expected.items():
+    message = failures[identity]
+    marker = f"E       NOT MACHINABLE -- {len(violations)} criteria failed:\n"
+    assert message.count(marker) == 1
+    reported = tuple(line.removeprefix("E         ") for line in message.split(marker, 1)[1].splitlines() if line.startswith("E         ["))
+    assert reported == violations
+    assert "assert not violations" in message
+print("12 exact quality reds reached the reviewed final violation vectors")
+PY
+pixi run red-manifest
 ```
 
 Expected: the transition module is green; all twelve quality cells fail only at
@@ -855,7 +878,7 @@ criterion-message vectors; errors, duplicates, extra/missing failures, or an
 earlier assertion block the task. Tighten the adaptive manifest entry to the
 four exact node IDs rather than a module-wide count regex.
 
-- [ ] **Step 3: Resolve the prior native-process instability**
+- [x] **Step 3: Resolve the prior native-process instability**
 
 Run the previously implicated adaptive files three times under the acceptance
 xdist configuration with Python fault handling enabled:
@@ -878,7 +901,7 @@ external failure signature.
 The loop must continue after expected pytest exit status `1`; each JUnit report
 must prove the exact same four-member failure set independently.
 
-- [ ] **Step 4: Reconcile plan and durable evidence**
+- [x] **Step 4: Reconcile plan and durable evidence**
 
 Correct the parity page so it attributes the Task 4 first-tie contracts to the
 completed full run rather than the narrower focused parity command. Record the
@@ -889,7 +912,7 @@ Mark Task 5 Step 4 and Tasks 5A.1-5A.4 complete only after their commands produc
 the stated evidence. Change the plan header to `awaiting Task 6 removal
 approval`; do not mark Task 6 active.
 
-- [ ] **Step 5: Run hygiene and commit the checkpoint**
+- [x] **Step 5: Run hygiene and commit the checkpoint**
 
 ```bash
 pixi run types-benchmarks

@@ -13,7 +13,9 @@ import pytest
 
 from tools.red_manifest import MalformedJUnitError
 from tools.red_manifest import MalformedManifestError
+from tools.red_manifest import JUnitFailure
 from tools.red_manifest import check
+from tools.red_manifest import parse_junit_failures
 
 CaseOutcome = Union[bool, Literal["pass", "failure", "error"]]
 JUnitRoot = Literal["testsuite", "testsuites"]
@@ -31,6 +33,24 @@ GATE: ManifestEntry = {
     "reason": "product gate",
     "closes_with": "generators",
 }
+
+ADAPTIVE_RED_IDS = (
+    "tests.adaptive.test_generator::test_task13f_full_continuation",
+    "tests.adaptive.test_generator::test_real_active_family_stops_at_unresolved_exact_event",
+    ("tests.adaptive.test_route_retrace_generator::test_route_retrace_derivation_rejects_unsupported_source_scope[terminal]"),
+    ("tests.adaptive.test_route_retrace_generator::test_continuation_rejects_missing_retrace_commit"),
+)
+TRANSLATION_RED_ID = "tests.benchmarks.test_quality_invariants::test_moving_the_pocket_across_the_table_changes_no_metric"
+
+
+def _repository_red_ids() -> list[str]:
+    quality_ids = [
+        (f"tests.benchmarks.test_quality::test_the_generated_path_is_worth_running[{cap}-{generator}-{pocket}]")
+        for cap in ("cap-120-default", "cap-40-attribution")
+        for generator in ("engagement_controlled", "radius_regulated")
+        for pocket in ("rect_12x8", "rect_20x12", "L_shape")
+    ]
+    return [*quality_ids, TRANSLATION_RED_ID, *ADAPTIVE_RED_IDS]
 
 
 def _junit(
@@ -158,6 +178,56 @@ def test_count_mismatch_is_reported(tmp_path: pathlib.Path) -> None:
     )
     manifest = _manifest(tmp_path, [GATE])
     assert [v.kind for v in check(junit, manifest)] == ["count-mismatch"]
+
+
+def test_repository_manifest_rejects_a_substituted_adaptive_failure(
+    tmp_path: pathlib.Path,
+) -> None:
+    expected_ids = _repository_red_ids()
+    exact_junit = _junit(
+        tmp_path,
+        [(identity.split("::", 1)[0], identity.split("::", 1)[1], "failure") for identity in expected_ids],
+    )
+    manifest = PROJECT_ROOT / "docs" / "red_manifest.json"
+    assert check(exact_junit, manifest) == []
+
+    substituted_junit = _junit(
+        tmp_path,
+        [
+            (identity.split("::", 1)[0], identity.split("::", 1)[1], "failure")
+            for identity in [
+                *expected_ids[:-1],
+                "tests.adaptive.test_route_retrace_generator::test_route_trigger_rejects_foreign_or_noncausal_transitions",
+            ]
+        ],
+    )
+    assert [violation.kind for violation in check(substituted_junit, manifest)] == [
+        "expected-red-went-green",
+        "unexpected-red",
+    ]
+
+
+def test_repository_manifest_rejects_a_substituted_translation_failure(
+    tmp_path: pathlib.Path,
+) -> None:
+    expected_ids = _repository_red_ids()
+    substituted_ids = [f"{identity}-substitute" if identity == TRANSLATION_RED_ID else identity for identity in expected_ids]
+    junit = _junit(
+        tmp_path,
+        [(identity.split("::", 1)[0], identity.split("::", 1)[1], "failure") for identity in substituted_ids],
+    )
+
+    assert [violation.kind for violation in check(junit, PROJECT_ROOT / "docs" / "red_manifest.json")] == ["expected-red-went-green", "unexpected-red"]
+
+
+def test_adaptive_manifest_accepts_only_the_four_exact_failures(
+    tmp_path: pathlib.Path,
+) -> None:
+    junit = _junit(
+        tmp_path,
+        [(identity.split("::", 1)[0], identity.split("::", 1)[1], "failure") for identity in ADAPTIVE_RED_IDS],
+    )
+    assert check(junit, PROJECT_ROOT / "docs" / "red_manifest-adaptive.json") == []
 
 
 def test_a_malformed_manifest_raises_a_named_error(tmp_path: pathlib.Path) -> None:
@@ -323,6 +393,54 @@ def test_junit_error_child_is_an_infrastructure_failure(tmp_path: pathlib.Path) 
     assert "<error>" in str(caught.value)
 
 
+def test_junit_failure_parser_preserves_exact_identity_and_message(
+    tmp_path: pathlib.Path,
+) -> None:
+    junit = tmp_path / "junit.xml"
+    junit.write_text(
+        """<testsuite>
+        <testcase classname="tests.x" name="test_red[case-a]">
+          <failure message="assert not violations">criterion one\ncriterion two</failure>
+        </testcase>
+        <testcase classname="tests.x" name="test_green" />
+        </testsuite>"""
+    )
+    assert parse_junit_failures(junit) == (
+        JUnitFailure(
+            identity="tests.x::test_red[case-a]",
+            message="assert not violations\ncriterion one\ncriterion two",
+        ),
+    )
+
+
+def test_duplicate_junit_identity_is_malformed(tmp_path: pathlib.Path) -> None:
+    junit = _junit(
+        tmp_path,
+        [
+            ("tests.x", "test_red", "failure"),
+            ("tests.x", "test_red", "failure"),
+        ],
+    )
+    with pytest.raises(MalformedJUnitError, match="duplicate testcase identity"):
+        parse_junit_failures(junit)
+
+
+def test_multiple_failures_for_one_testcase_are_malformed(
+    tmp_path: pathlib.Path,
+) -> None:
+    junit = tmp_path / "junit.xml"
+    junit.write_text(
+        """<testsuite>
+        <testcase classname="tests.x" name="test_red">
+          <failure message="first" />
+          <failure message="second" />
+        </testcase>
+        </testsuite>"""
+    )
+    with pytest.raises(MalformedJUnitError, match="exactly one <failure>"):
+        parse_junit_failures(junit)
+
+
 @pytest.mark.parametrize(
     ("classname", "name"),
     [(None, "test_red"), ("tests.x", None), ("", "test_red"), ("tests.x", "")],
@@ -386,6 +504,20 @@ def test_cli_malformed_junit_exit(tmp_path: pathlib.Path) -> None:
     assert result.returncode == 2
     assert result.stdout == ""
     assert "malformed-junit:" in result.stderr
+
+
+def test_cli_missing_junit_exit_is_malformed(tmp_path: pathlib.Path) -> None:
+    result = _run_cli(tmp_path / "missing.xml", _manifest(tmp_path, []))
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert "malformed-junit:" in result.stderr
+
+
+def test_cli_missing_manifest_exit_is_malformed(tmp_path: pathlib.Path) -> None:
+    result = _run_cli(_junit(tmp_path, []), tmp_path / "missing.json")
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert "malformed-manifest:" in result.stderr
 
 
 def test_cli_junit_error_exit_is_infrastructure_failure(tmp_path: pathlib.Path) -> None:
