@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from dataclasses import replace
 from typing import Generic
 from typing import Literal
 from typing import Optional
@@ -1059,37 +1058,10 @@ def reduce_quality_evidence(
     _validate_survey_binding(spec, snapshot, survey)
     coverage = measure_coverage(spec, survey.final_stock, grid=grid)
     assessment = assess_path_quality(spec, snapshot, survey, coverage)
-    chain_of = {int(operation.ordinal): operation.path_index for operation in snapshot}
-
-    elementary = replace(
-        _elementary(spec, survey, coverage.uncut_fraction, coverage.remaining_area),
-        uncut_fraction=float(assessment.uncut_fraction.measured),
-        gouge_free=assessment.gouging_motions.measured == REQUIRED_COUNT,
-        gouging_motions=int(assessment.gouging_motions.measured),
-        rapid_safety=assessment.unsafe_rapids.measured == REQUIRED_COUNT,
-        unsafe_rapids=int(assessment.unsafe_rapids.measured),
-        continuity_breaks=int(assessment.continuity_breaks.measured),
-        zero_length_motions=int(assessment.zero_length_motions.measured),
-        degenerate_loops=int(assessment.degenerate_loops.measured),
-        redundant_operations=int(assessment.redundant_operations.measured),
-    )
-    cut = replace(
-        _cut(spec, survey, coverage.wall_scallop_height, chain_of),
-        cap_exceedances=int(assessment.cap_exceedances.measured),
-        max_engagement_step_deg=float(assessment.max_engagement_step.measured),
-        slotting_motions=int(assessment.slotting_motions.measured),
-        max_loop_radius_step=float(assessment.max_loop_radius_step.measured),
-    )
-    speed = replace(
-        _speed(survey),
-        tangent_breaks=int(assessment.tangent_breaks.measured),
-        curvature_breaks=len(assessment.attribution.curvature_break_pairs),
-        direction_reversals=len(assessment.attribution.reversal_pairs),
-    )
     quality = PathQuality(
-        elementary=elementary,
-        cut=cut,
-        speed=speed,
+        elementary=_elementary(spec, survey, coverage.uncut_fraction, coverage.remaining_area, assessment),
+        cut=_cut(spec, survey, coverage.wall_scallop_height, assessment),
+        speed=_speed(survey, assessment),
         longevity=_longevity(survey, _material_entry_count(survey)),
         program=_program(survey),
         cut_operations=len(survey.motions),

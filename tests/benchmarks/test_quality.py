@@ -74,6 +74,7 @@ from benchmarks.quality import tool_life_outcome
 from benchmarks.quality_observations import OperationPair
 from benchmarks.quality_observations import PathQualityAssessment
 from benchmarks.quality_observations import assess_path_quality
+from benchmarks.quality_observations import reduce_quality_evidence
 from benchmarks.spec import PocketSpec
 from benchmarks.survey import _swept_area
 from benchmarks.survey import MotionKind
@@ -774,6 +775,7 @@ def test_quality_evidence_uses_one_validated_survey_coverage_and_assessment(
     assert calls == {"coverage": 1, "assessment": 1}
     assert evidence.coverage.uncut_fraction == evidence.path_quality.elementary.uncut_fraction
     assert evidence.assessment == original_assessment(SYNTHETIC, snapshot, survey, evidence.coverage)
+    monkeypatch.undo()
     assert evidence.path_quality == measure_quality(
         SYNTHETIC,
         result,
@@ -1063,33 +1065,33 @@ def _assert_quality_parity(
             assert observation.value == old_maximum
 
 
-def _violations(spec: PocketSpec, quality: PathQuality) -> list:
-    """Every gate criterion *quality* fails, as ``measured against required`` lines.
+def _violations(assessment: PathQualityAssessment) -> list[str]:
+    """Every failed canonical criterion as ``measured against required`` lines.
 
     Args:
-        spec: The instance, whose cap scales the engagement-step criterion.
-        quality: The measured quality.
+        assessment: The canonical quality decision and its evidence.
 
     Returns:
         One line per violated criterion, empty when the path is machinable.
     """
-    step_limit = REQUIRED_ENGAGEMENT_STEP_CAP_MULTIPLE * spec.tea_cap_deg
     checks = (
-        ("elementary", "uncut fraction", quality.elementary.uncut_fraction, REQUIRED_UNCUT_FRACTION, "{:.6f}"),
-        ("elementary", "gouging motions", quality.elementary.gouging_motions, REQUIRED_GOUGING_MOTIONS, "{:g}"),
-        ("elementary", "unsafe rapids", quality.elementary.unsafe_rapids, REQUIRED_UNSAFE_RAPIDS, "{:g}"),
-        ("elementary", "continuity breaks", quality.elementary.continuity_breaks, REQUIRED_CONTINUITY_BREAKS, "{:g}"),
-        ("elementary", "zero-length motions", quality.elementary.zero_length_motions, REQUIRED_ZERO_LENGTH_MOTIONS, "{:g}"),
-        ("elementary", "degenerate loops", quality.elementary.degenerate_loops, REQUIRED_DEGENERATE_LOOPS, "{:g}"),
-        ("elementary", "redundant operations", quality.elementary.redundant_operations, REQUIRED_REDUNDANT_OPERATIONS, "{:g}"),
-        ("cut", "cap exceedances", quality.cut.cap_exceedances, REQUIRED_CAP_EXCEEDANCES, "{:g}"),
-        ("cut", "slotting motions", quality.cut.slotting_motions, REQUIRED_SLOTTING_MOTIONS, "{:g}"),
-        ("cut", "max engagement step (deg)", quality.cut.max_engagement_step_deg, step_limit, "{:.2f}"),
-        ("cut", "max loop radius step (tool radii)", quality.cut.max_loop_radius_step, REQUIRED_MAX_LOOP_RADIUS_STEP_TOOL_RADII, "{:.3f}"),
-        ("speed", "tangent breaks", quality.speed.tangent_breaks, REQUIRED_TANGENT_BREAKS, "{:g}"),
+        ("elementary", assessment.uncut_fraction, "{:.6f}"),
+        ("elementary", assessment.gouging_motions, "{:g}"),
+        ("elementary", assessment.unsafe_rapids, "{:g}"),
+        ("elementary", assessment.continuity_breaks, "{:g}"),
+        ("elementary", assessment.zero_length_motions, "{:g}"),
+        ("elementary", assessment.degenerate_loops, "{:g}"),
+        ("elementary", assessment.redundant_operations, "{:g}"),
+        ("cut", assessment.cap_exceedances, "{:g}"),
+        ("cut", assessment.slotting_motions, "{:g}"),
+        ("cut", assessment.max_engagement_step, "{:.2f}"),
+        ("cut", assessment.max_loop_radius_step, "{:.3f}"),
+        ("speed", assessment.tangent_breaks, "{:g}"),
     )
     return [
-        f"[{group}] {name}: measured {fmt.format(measured)}, required <= {fmt.format(required)}" for group, name, measured, required, fmt in checks if not measured <= required
+        f"[{group}] {criterion.name}: measured {fmt.format(criterion.measured)}, required <= {fmt.format(criterion.required)}"
+        for group, criterion, fmt in checks
+        if criterion.measured > criterion.required
     ]
 
 
@@ -1246,35 +1248,16 @@ def _evaluate_quality_gate_case(
     tea_cap_deg: float,
     generator_name: str,
     pocket_name: str,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> tuple[PathQuality, tuple[str, ...]]:
     """Authenticate one gate case up to, but excluding, its product verdict."""
     spec = gate_pocket(pocket_name, tea_cap_deg=tea_cap_deg)
     result = GATE_GENERATORS[generator_name](spec)
     snapshot = snapshot_toolpath(result)
-    surveys: list[PathSurvey] = []
-    coverages: list[CoverageEstimate] = []
-    original_survey_path = quality_module.survey_path
-    original_measure_coverage = quality_module.measure_coverage
-
-    def capture_survey(spec_arg: PocketSpec, result_arg: ToolpathResult, *, samples_per_motion: int) -> PathSurvey:
-        survey = original_survey_path(spec_arg, result_arg, samples_per_motion=samples_per_motion)
-        surveys.append(survey)
-        return survey
-
-    def capture_coverage(spec_arg: PocketSpec, stock: Stock, *, grid: int) -> CoverageEstimate:
-        coverage = original_measure_coverage(spec_arg, stock, grid=grid)
-        coverages.append(coverage)
-        return coverage
-
-    monkeypatch.setattr(quality_module, "survey_path", capture_survey)
-    monkeypatch.setattr(quality_module, "measure_coverage", capture_coverage)
-    quality = measure_quality(spec, result)
-    assert len(surveys) == 1
-    assert len(coverages) == 1
-    assessment = assess_path_quality(spec, snapshot, surveys[0], coverages[0])
-    _assert_quality_parity(spec, quality, assessment, snapshot, surveys[0])
-    violations = tuple(_violations(spec, quality))
+    survey = survey_path(spec, result)
+    evidence = reduce_quality_evidence(spec, snapshot, survey)
+    quality = evidence.path_quality
+    _assert_quality_parity(spec, quality, evidence.assessment, snapshot, survey)
+    violations = tuple(_violations(evidence.assessment))
     assert violations == _expected_quality_gate_violations(
         tea_cap_deg,
         generator_name,
@@ -1291,7 +1274,6 @@ def test_the_generated_path_is_worth_running(
     tea_cap_deg: GateCapDegrees,
     generator_name: str,
     pocket_name: str,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Every machining-quality criterion, on one pocket and one generator.
 
@@ -1303,6 +1285,5 @@ def test_the_generated_path_is_worth_running(
         tea_cap_deg,
         generator_name,
         pocket_name,
-        monkeypatch,
     )
     assert not violations, _report(pocket_name, generator_name, quality, violations)
