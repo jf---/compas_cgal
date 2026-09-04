@@ -17,14 +17,12 @@ def test_quality_gate_reaches_the_intended_product_verdict(
     tea_cap_deg: float,
     generator_name: str,
     pocket_name: str,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Authenticate all evidence before the deliberate product-gate red."""
     _quality, violations = _evaluate_quality_gate_case(
         tea_cap_deg,
         generator_name,
         pocket_name,
-        monkeypatch,
     )
     assert violations == _expected_quality_gate_violations(
         tea_cap_deg,

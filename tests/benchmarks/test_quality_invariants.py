@@ -359,11 +359,6 @@ class _Groups:
             result: The toolpath.
         """
         survey = survey_path(spec, result, samples_per_motion=SAMPLES)
-        chain_of = {index: operation.path_index for index, operation in enumerate(result.operations)}
-        self.elementary = _elementary(spec, survey, 0.0, 0.0)
-        self.cut = _cut(spec, survey, 0.0, chain_of)
-        self.speed = _speed(survey)
-        self.program = _program(survey)
         coverage = CoverageEstimate(
             nx=1,
             ny=1,
@@ -375,6 +370,10 @@ class _Groups:
         )
         snapshot = snapshot_toolpath(result)
         self.assessment = assess_path_quality(spec, snapshot, survey, coverage)
+        self.elementary = _elementary(spec, survey, 0.0, 0.0, self.assessment)
+        self.cut = _cut(spec, survey, 0.0, self.assessment)
+        self.speed = _speed(survey, self.assessment)
+        self.program = _program(survey)
         _assert_invariant_quality_parity(spec, self, self.assessment, snapshot, survey)
 
 

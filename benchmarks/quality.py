@@ -53,28 +53,28 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 from typing import List
-from typing import Mapping
 from typing import Optional
 from typing import Sequence
 from typing import Tuple
 
 from benchmarks.coverage import COVERAGE_GRID_SAMPLES
-from benchmarks.coverage import measure_coverage
 from benchmarks.errors import MissingMachineModelError
 from benchmarks.errors import MissingMaterialModelError
-from benchmarks.errors import ZeroLengthToolpathError
+from benchmarks.held_path_snapshot import snapshot_toolpath
 from benchmarks.models import MachineModel
 from benchmarks.models import MaterialModel
-from benchmarks.pathmetrics import entry_cut_indices
 from benchmarks.spec import PocketSpec
 from benchmarks.survey import QUALITY_SAMPLES_PER_MOTION
 from benchmarks.survey import MotionKind
 from benchmarks.survey import MotionQuality
 from benchmarks.survey import PathSurvey
-from benchmarks.survey import RapidMotion
 from benchmarks.survey import survey_path
 from compas_cgal.toolpath import ToolpathResult
+
+if TYPE_CHECKING:
+    from benchmarks.quality_observations import PathQualityAssessment
 
 # A machining loop must sweep an ANNULUS. A tool of radius r running a circle of
 # radius rho covers the radii [rho - r, rho + r] about the loop centre, so the
@@ -500,23 +500,20 @@ def measure_quality(
         UnsampleableMotionError: A cut motion carries no cutter-centre path.
         UnmeasurableOperationLengthError: An operation's length is undefined.
     """
+    from benchmarks.quality_observations import reduce_quality_evidence
+
     survey = survey_path(spec, result, samples_per_motion=samples_per_motion)
-    if survey.total_length <= 0.0:
-        raise ZeroLengthToolpathError(f"{spec.name}: the toolpath sums to zero length, so no length fraction is defined.")
-    coverage = measure_coverage(spec, survey.final_stock, grid=grid)
-    entries = entry_cut_indices(result)
-    return PathQuality(
-        elementary=_elementary(spec, survey, coverage.uncut_fraction, coverage.remaining_area),
-        cut=_cut(spec, survey, coverage.wall_scallop_height, {index: operation.path_index for index, operation in enumerate(result.operations)}),
-        speed=_speed(survey),
-        longevity=_longevity(survey, len(entries)),
-        program=_program(survey),
-        cut_operations=len(survey.motions),
-        path_length=survey.total_length,
-    )
+    snapshot = snapshot_toolpath(result)
+    return reduce_quality_evidence(spec, snapshot, survey, grid=grid).path_quality
 
 
-def _elementary(spec: PocketSpec, survey: PathSurvey, uncut_fraction: float, remaining_area: float) -> ElementaryQuality:
+def _elementary(
+    spec: PocketSpec,
+    survey: PathSurvey,
+    uncut_fraction: float,
+    remaining_area: float,
+    assessment: PathQualityAssessment,
+) -> ElementaryQuality:
     """Reduce a survey to the validity group.
 
     `recut_fraction` compares the area the tool SWEPT, which is closed-form
@@ -538,20 +535,20 @@ def _elementary(spec: PocketSpec, survey: PathSurvey, uncut_fraction: float, rem
     removed = max(0.0, abs(spec.polygon.area) - remaining_area)
     return ElementaryQuality(
         uncut_fraction=uncut_fraction,
-        gouge_free=not any(motion.gouges for motion in survey.motions),
-        gouging_motions=sum(1 for motion in survey.motions if motion.gouges),
-        rapid_safety=not any(rapid.horizontal_at_cut_plane for rapid in survey.rapids),
-        unsafe_rapids=sum(1 for rapid in survey.rapids if rapid.horizontal_at_cut_plane),
-        continuity_breaks=_continuity_breaks(survey, spec.tool_radius),
-        zero_length_motions=sum(1 for motion in survey.motions if motion.length == 0.0) + sum(1 for rapid in survey.rapids if rapid.length == 0.0),
-        degenerate_loops=sum(1 for radius in loops if radius <= DEGENERATE_LOOP_RATIO * spec.tool_radius),
+        gouge_free=assessment.gouging_motions.measured == 0,
+        gouging_motions=int(assessment.gouging_motions.measured),
+        rapid_safety=assessment.unsafe_rapids.measured == 0,
+        unsafe_rapids=int(assessment.unsafe_rapids.measured),
+        continuity_breaks=int(assessment.continuity_breaks.measured),
+        zero_length_motions=int(assessment.zero_length_motions.measured),
+        degenerate_loops=int(assessment.degenerate_loops.measured),
         marginal_loops=sum(1 for radius in loops if DEGENERATE_LOOP_RATIO * spec.tool_radius < radius <= MARGINAL_LOOP_RATIO * spec.tool_radius),
-        redundant_operations=sum(1 for motion in survey.motions if not motion.removes_material),
+        redundant_operations=int(assessment.redundant_operations.measured),
         recut_fraction=0.0 if swept <= 0.0 else max(0.0, 1.0 - removed / swept),
     )
 
 
-def _cut(spec: PocketSpec, survey: PathSurvey, wall_scallop_height: float, chain_of: Mapping[int, int]) -> CutQuality:
+def _cut(spec: PocketSpec, survey: PathSurvey, wall_scallop_height: float, assessment: PathQualityAssessment) -> CutQuality:
     """Reduce a survey to the cut-mechanics group.
 
     Args:
@@ -566,7 +563,6 @@ def _cut(spec: PocketSpec, survey: PathSurvey, wall_scallop_height: float, chain
     """
     weighted = _weighted_engagement(survey.motions)
     radii = _loop_radii(survey.motions)
-    runs = _loop_runs(survey.motions, survey.rapids, chain_of)
     engaged = [(value, weight) for value, weight in weighted if value > 0.0]
     immersions = [(radial_immersion(value), weight) for value, weight in weighted]
     depths = [(spec.tool_diameter * value, weight) for value, weight in immersions]
@@ -574,14 +570,14 @@ def _cut(spec: PocketSpec, survey: PathSurvey, wall_scallop_height: float, chain
     band = IMMERSION_STEADY_BAND_FRACTION * design
     return CutQuality(
         max_engagement_deg=max((value for value, _ in weighted), default=0.0),
-        cap_exceedances=sum(1 for motion in survey.motions if motion.cap_exceeded),
+        cap_exceedances=int(assessment.cap_exceedances.measured),
         engagement_p95_deg=_weighted_percentile(weighted, ENGAGEMENT_PERCENTILE),
         engagement_variance_deg2=_weighted_variance(weighted),
         max_chip_thickness_ratio=max((chip_thickness_ratio_from_rim(value) for value, _ in weighted), default=0.0),
         low_chip_thickness_ratio=_weighted_percentile([(chip_thickness_ratio_from_rim(value), weight) for value, weight in engaged], LOW_CHIP_PERCENTILE),
         max_engagement_gradient_deg_per_length=_max_engagement_gradient(survey.motions),
-        max_engagement_step_deg=_max_engagement_step(survey.motions),
-        slotting_motions=sum(1 for motion in survey.motions if motion.slot_exceeded),
+        max_engagement_step_deg=float(assessment.max_engagement_step.measured),
+        slotting_motions=int(assessment.slotting_motions.measured),
         immersion_steady_fraction=_immersion_steady_fraction(immersions, band),
         immersion_at_design_fraction=_immersion_at_design_fraction(immersions, design, band),
         immersion_excursions=_immersion_excursions(immersions, band),
@@ -589,11 +585,11 @@ def _cut(spec: PocketSpec, survey: PathSurvey, wall_scallop_height: float, chain
         radial_depth_variance=_weighted_variance(depths),
         wall_scallop_height=wall_scallop_height,
         loop_radius_cv=_loop_radius_cv(radii),
-        max_loop_radius_step=_max_loop_radius_step(runs, spec.tool_radius),
+        max_loop_radius_step=float(assessment.max_loop_radius_step.measured),
     )
 
 
-def _speed(survey: PathSurvey) -> SpeedQuality:
+def _speed(survey: PathSurvey, assessment: PathQualityAssessment) -> SpeedQuality:
     """Reduce a survey to the machine-cost group.
 
     Args:
@@ -602,15 +598,14 @@ def _speed(survey: PathSurvey) -> SpeedQuality:
     Returns:
         The machine-cost group.
     """
-    tangent_breaks, curvature_breaks, reversals = _junction_breaks(survey.motions)
     return SpeedQuality(
         cutting_length=survey.cut_length,
         air_length=survey.air_length,
         air_fraction=survey.air_length / survey.total_length,
         max_curvature=max((motion.curvature for motion in survey.motions), default=0.0),
-        tangent_breaks=tangent_breaks,
-        curvature_breaks=curvature_breaks,
-        direction_reversals=reversals,
+        tangent_breaks=int(assessment.tangent_breaks.measured),
+        curvature_breaks=len(assessment.attribution.curvature_break_pairs),
+        direction_reversals=len(assessment.attribution.reversal_pairs),
         retract_count=survey.retracts,
         reentry_count=survey.plunges,
     )
@@ -1071,27 +1066,6 @@ def _max_engagement_gradient(motions: Sequence[MotionQuality]) -> float:
     return steepest
 
 
-def _max_engagement_step(motions: Sequence[MotionQuality]) -> float:
-    """Largest peak-engagement change between back-to-back cut motions.
-
-    Consecutive means ADJACENT IN THE TOOLPATH. A plunge, a retract, or a link
-    between two cut motions shows up as a gap in the operation indices, and it is
-    also the tool leaving the material -- so the load picked up afterwards is an
-    entry, not a step.
-
-    Args:
-        motions: The cut motions, in toolpath order.
-
-    Returns:
-        The largest step in degrees; ``0.0`` when no two motions are adjacent.
-    """
-    step = 0.0
-    for previous, current in zip(motions, motions[1:]):
-        if current.index == previous.index + 1:
-            step = max(step, abs(current.peak_engagement_deg - previous.peak_engagement_deg))
-    return step
-
-
 def _engagement_histogram(motions: Sequence[MotionQuality]) -> Tuple[Tuple[float, float, float], ...]:
     """Cut length spent in each band of `ENGAGEMENT_BANDS_DEG`.
 
@@ -1129,117 +1103,9 @@ def _cut_air_alternations(survey: PathSurvey) -> int:
     return sum(1 for previous, current in zip(ordered, ordered[1:]) if previous != current)
 
 
-def _continuity_breaks(survey: PathSurvey, tool_radius: float) -> int:
-    """Junctions between cut motions where one does not end where the next begins.
-
-    Only the CUT motions are walked. A rapid deliberately jumps in XY -- that is
-    what a rapid is for -- so counting its endpoints as breaks would report the
-    path's design as a defect.
-
-    Args:
-        survey: The replay's findings.
-        tool_radius: Tool radius, which scales the coincidence tolerance.
-
-    Returns:
-        The number of breaks.
-    """
-    tolerance = CONTINUITY_TOOL_RADIUS_FRACTION * tool_radius
-    breaks = 0
-    for previous, current in zip(survey.motions, survey.motions[1:]):
-        if current.index != previous.index + 1:
-            continue
-        if math.hypot(current.start[0] - previous.end[0], current.start[1] - previous.end[1]) > tolerance:
-            breaks += 1
-    return breaks
-
-
-def _junction_breaks(motions: Sequence[MotionQuality]) -> Tuple[int, int, int]:
-    """Tangent breaks, curvature breaks, and reversals between adjacent cut motions.
-
-    A junction is counted ONCE, in the most severe class it belongs to: a
-    reversal is also a tangent break, and a tangent break is also a curvature
-    break, so reporting all three for one corner would treble-count it.
-
-    Args:
-        motions: The cut motions, in toolpath order.
-
-    Returns:
-        ``(tangent_breaks, curvature_breaks, direction_reversals)``.
-
-    """
-    tangent = 0
-    curvature = 0
-    reversals = 0
-    for previous, current in zip(motions, motions[1:]):
-        if current.index != previous.index + 1:
-            continue
-        dot = previous.end_tangent[0] * current.start_tangent[0] + previous.end_tangent[1] * current.start_tangent[1]
-        if dot < 0.0:
-            reversals += 1
-            tangent += 1
-        elif dot < 1.0 - TANGENT_CONTINUITY_SLACK:
-            tangent += 1
-        elif previous.curvature != current.curvature:
-            curvature += 1
-    return tangent, curvature, reversals
-
-
 def _loop_radii(motions: Sequence[MotionQuality]) -> List[float]:
     """Guide radii of the closed machining circles, in toolpath order."""
     return [motion.loop_radius for motion in motions if motion.kind is MotionKind.LOOP and motion.loop_radius is not None]
-
-
-def _loop_runs(motions: Sequence[MotionQuality], rapids: Sequence[RapidMotion], chain_of: Mapping[int, int]) -> List[List[float]]:
-    """Guide radii grouped into runs over which a radius step is meaningful.
-
-    A run ends at EITHER boundary, because each defeats the comparison for its
-    own reason:
-
-    * A RAPID. The cutter climbs to clearance height, traverses and re-enters, so
-      the difference in guide radius across the gap is not a step the machine
-      ever performs under load.
-    * A CHANGE OF ``path_index``, which is the generator's own chain identity --
-      its operations are emitted grouped by it, one group per skeleton chain.
-      Two loops on different chains lie on DIFFERENT GUIDES, and "the guide
-      radius should vary smoothly" is a statement about one guide. The radius did
-      not jump along a guide; the generator moved elsewhere on the skeleton.
-
-    Neither boundary implies the other, which is why both are tested. A generator
-    that orders its chains so the tool never lifts links them at cutting depth,
-    so a chain change arrives with no rapid to mark it; conversely a retract can
-    occur inside a single chain. Splitting on rapids alone reported 3.988 tool
-    radii on `rect_20x12` for a corner chain's tip loop against the NEXT chain's
-    spine-end loop, separated by a long low-load transit -- which is a real cut,
-    and not the abrupt load change this criterion is aimed at.
-
-    Args:
-        motions: The cut motions, in toolpath order.
-        rapids: The non-cutting motions, whose indices mark one kind of break.
-        chain_of: Operation index to the generator's ``path_index``, which marks
-            the other. A motion whose index is absent is treated as continuing
-            the chain it follows.
-
-    Returns:
-        One list of radii per run, in toolpath order; empty runs are dropped.
-    """
-    breaks = sorted(rapid.index for rapid in rapids)
-    runs: List[List[float]] = [[]]
-    position = 0
-    chain: Optional[int] = None
-    for motion in motions:
-        boundary = False
-        while position < len(breaks) and breaks[position] < motion.index:
-            position += 1
-            boundary = True
-        current = chain_of.get(motion.index, chain)
-        if chain is not None and current != chain:
-            boundary = True
-        chain = current
-        if boundary and runs[-1]:
-            runs.append([])
-        if motion.kind is MotionKind.LOOP and motion.loop_radius is not None:
-            runs[-1].append(motion.loop_radius)
-    return [run for run in runs if run]
 
 
 def _loop_radius_cv(radii: Sequence[float]) -> float:
@@ -1259,28 +1125,3 @@ def _loop_radius_cv(radii: Sequence[float]) -> float:
         return 0.0
     variance = sum((radius - mean) ** 2 for radius in radii) / len(radii)
     return math.sqrt(variance) / mean
-
-
-def _max_loop_radius_step(runs: Sequence[Sequence[float]], tool_radius: float) -> float:
-    """Largest jump in guide radius between loops the tool runs back to back.
-
-    Compared WITHIN a run and never across one, so a retract to clearance height
-    followed by a plunge into a different chain cannot manufacture a step. An
-    earlier form here compared consecutive entries of the flat radius list and
-    did exactly that: on a 12x8 rectangle it reported 2.982 tool radii for the
-    jump from the spine's last loop to a corner chain's first, which the cutter
-    performs in the air.
-
-    Args:
-        runs: Loop radii grouped by `_loop_runs`.
-        tool_radius: Tool radius, which normalises the step.
-
-    Returns:
-        The largest step; ``0.0`` when no run holds two loops.
-    """
-    if tool_radius <= 0.0:
-        return 0.0
-    steps = [abs(later - earlier) for run in runs for earlier, later in zip(run, run[1:])]
-    if not steps:
-        return 0.0
-    return max(steps) / tool_radius

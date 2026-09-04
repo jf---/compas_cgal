@@ -1,8 +1,8 @@
 # Held Figure 5 2D Path Characterization Implementation Plan
 
-> **status: awaiting Task 6 removal approval** - Tasks 1-5A are implemented,
-> independently reviewed, and verified. Production routing remains unchanged;
-> Task 6 may not start without Jelle's explicit approval.
+> **status: complete** - Tasks 1-6 are implemented and verified. The canonical
+> quality assessment is the single decision authority for production reporting
+> and the permanent twelve-case transition contract.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use
 > `superpowers:subagent-driven-development` (recommended) or
@@ -961,7 +961,7 @@ cannot override a failed technical precondition.
     QUALITY_SAMPLES_PER_MOTION, grid: int = COVERAGE_GRID_SAMPLES) -> PathQuality`
     compatibility API delegating to the single survey/reducer path
 
-- [ ] **Step 1: Write RED additive-reducer and compatibility tests**
+- [x] **Step 1: Write RED additive-reducer and compatibility tests**
 
 Instrument `survey_path`, `measure_coverage`, and `assess_path_quality`. Require
 one call each, coverage computed from the validated survey rather than accepted
@@ -970,7 +970,7 @@ exceptions for zero-length paths and invalid grids. Keep separate tests for the
 new additive reducer and the still-unmodified `measure_quality` compatibility
 route.
 
-- [ ] **Step 2: Run RED focused tests**
+- [x] **Step 2: Run RED focused tests**
 
 ```bash
 pixi run pytest -- tests/benchmarks/test_quality.py tests/benchmarks/test_quality_invariants.py -k 'single_survey or compatibility' -n auto --testmon -q
@@ -979,7 +979,7 @@ pixi run pytest -- tests/benchmarks/test_quality.py tests/benchmarks/test_qualit
 Expected: the new reducer API does not exist and the compatibility path does not
 delegate.
 
-- [ ] **Step 3: Add `QualityEvidence` beside the current production path**
+- [x] **Step 3: Add `QualityEvidence` beside the current production path**
 
 `reduce_quality_evidence` measures coverage exactly once, evaluates the
 canonical assessment once, and builds all five existing `PathQuality` groups.
@@ -990,7 +990,7 @@ only from the assessment. Continue to compute report-only fields through their
 existing reducers. Do not redirect `measure_quality` and do not delete an old
 body in this step.
 
-- [ ] **Step 4: Validate and commit the additive path**
+- [x] **Step 4: Validate and commit the additive path**
 
 Run the new reducer tests directly while the old production path remains active:
 
@@ -1007,7 +1007,7 @@ GIT_AUTHOR_NAME='Jelle Feringa' GIT_AUTHOR_EMAIL='jelleferinga@gmail.com' GIT_CO
 Expected: the additive path reproduces every structured criterion and source;
 `measure_quality` still uses the old protected path.
 
-- [ ] **Step 5: Redirect production with all old bodies retained**
+- [x] **Step 5: Redirect production with all old bodies retained**
 
 Make `measure_quality` delegate to `reduce_quality_evidence`. Do not remove the
 old reducers or the temporary transition checks. Run the compatibility tests,
@@ -1016,7 +1016,7 @@ set, all twelve gate cells, `red-manifest`, strict types, and Ruff. The routed
 path must preserve both the structured criterion vectors and the deterministic
 seventeen-red repository set before deletion begins.
 
-- [ ] **Step 6: Remove only superseded decision bodies**
+- [x] **Step 6: Remove only superseded decision bodies**
 
 Remove the old continuity, junction, engagement-step, and loop-radius-step
 decision functions after all callers use canonical findings. Remove duplicate
@@ -1034,7 +1034,7 @@ parametrization, test IDs, literal threshold contract tests, and final
 `assert not violations`; after the approved convergence there must be one survey,
 one coverage evaluation, and one threshold-decision call graph.
 
-- [ ] **Step 7: Retire temporary spies and retain permanent transition contracts**
+- [x] **Step 7: Retire temporary spies and retain permanent transition contracts**
 
 Remove the temporary parity spies from Task 5 only after
 `test_quality_transition.py` exercises the routed production path. Keep that
@@ -1042,7 +1042,7 @@ permanent green module, literal threshold assertions, criterion
 name/value/evidence tests, unchanged `QUALITY_GATE_CASES`, unchanged test IDs,
 and unchanged final gate assertion.
 
-- [ ] **Step 8: Rerun the same quality and type gates after deletion**
+- [x] **Step 8: Rerun the same quality and type gates after deletion**
 
 ```bash
 pixi run pytest -- tests/benchmarks/test_quality.py tests/benchmarks/test_quality_invariants.py tests/benchmarks/test_qualityfigures.py tests/benchmarks/test_quality_transition.py -k 'not test_the_generated_path_is_worth_running and not test_moving_the_pocket_across_the_table_changes_no_metric' -n auto --testmon -q
@@ -1056,7 +1056,7 @@ Expected: non-gate/non-translation tests pass; exactly the same twelve quality
 cells remain red; the repository red manifest still reports exactly seventeen
 declared reds.
 
-- [ ] **Step 9: Commit the validated authority transition**
+- [x] **Step 9: Commit the validated authority transition**
 
 ```bash
 git add benchmarks/quality.py benchmarks/quality_observations.py tests/benchmarks/test_quality.py tests/benchmarks/test_quality_invariants.py tests/benchmarks/typecheck/quality_observations_contract.py pyproject.toml
