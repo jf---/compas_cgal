@@ -10,6 +10,8 @@ from benchmarks.instrument import probe_digits
 from benchmarks.instrument import probe_size
 from benchmarks.runner import generate_toolpath
 from benchmarks.spec import PocketSpec
+from compas.geometry import Circle
+from compas.geometry import Frame
 from compas.geometry import Line
 from compas_cgal.stock import Stock
 from compas_cgal.toolpath import OperationType
@@ -81,3 +83,16 @@ def test_a_ramped_cut_is_refused_rather_than_mis_depleted() -> None:
     ramp = ToolpathOperation(geometry=Line([-2.0, 0.0, LINK_Z], [2.0, 0.0, 0.0]), operation=OperationType.CUT, path_index=0)
     with pytest.raises(UnreplayableOperationError):
         replay_depletion(spec, ToolpathResult(operations=[ramp], polyline=EMPTY_POLYLINE))
+
+
+def test_displaced_cut_curve_cannot_authorize_its_own_plane() -> None:
+    spec = _pocket()
+    displaced = ToolpathOperation(
+        geometry=Circle(1.0, frame=Frame([0.0, 0.0, -1.0])),
+        operation=OperationType.CUT,
+        path_index=0,
+    )
+    result = ToolpathResult(operations=[_cut_across_the_middle(), displaced], polyline=EMPTY_POLYLINE)
+
+    with pytest.raises(UnreplayableOperationError):
+        replay_depletion(spec, result)

@@ -3,6 +3,7 @@
 import math
 from typing import Iterable
 from typing import Literal
+from typing import Optional
 from typing import TypeAlias
 
 from compas.geometry import Line
@@ -35,6 +36,50 @@ class OffPlaneReplayCurveError(ValueError):
 def minimum_cut_height(heights: Iterable[Millimetre]) -> Millimetre:
     """Return the lowest supplied motion height, or zero for no motions."""
     return min(heights, default=Millimetre(0.0))
+
+
+def line_cut_height_anchor(
+    operation: OperationType,
+    *,
+    start_z: Millimetre,
+    end_z: Millimetre,
+    xy_travel: Millimetre,
+) -> Optional[Millimetre]:
+    """Return independent cutting-plane evidence carried by one line."""
+    if xy_travel <= TOL.absolute and abs(start_z - end_z) > TOL.absolute:
+        return min(start_z, end_z)
+    if abs(start_z - end_z) <= TOL.absolute and operation in {
+        OperationType.CUT,
+        OperationType.LEAD_IN,
+        OperationType.LEAD_OUT,
+    }:
+        return start_z
+    return None
+
+
+def infer_operation_cut_height(operations: Iterable[ToolpathOperation]) -> Millimetre:
+    """Infer a cut plane without letting a curve override independent line evidence."""
+    line_anchors: list[Millimetre] = []
+    curve_heights: list[Millimetre] = []
+    for operation in operations:
+        geometry = operation.geometry
+        if isinstance(geometry, Line):
+            anchor = line_cut_height_anchor(
+                operation.operation,
+                start_z=Millimetre(float(geometry.start[2])),
+                end_z=Millimetre(float(geometry.end[2])),
+                xy_travel=Millimetre(
+                    math.hypot(
+                        float(geometry.end[0]) - float(geometry.start[0]),
+                        float(geometry.end[1]) - float(geometry.start[1]),
+                    )
+                ),
+            )
+            if anchor is not None:
+                line_anchors.append(anchor)
+        elif operation.operation in {OperationType.CUT, OperationType.LEAD_IN, OperationType.LEAD_OUT}:
+            curve_heights.append(Millimetre(float(geometry.frame.point[2])))
+    return minimum_cut_height(line_anchors if line_anchors else curve_heights)
 
 
 def classify_line_replay(

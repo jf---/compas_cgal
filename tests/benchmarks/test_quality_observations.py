@@ -451,6 +451,16 @@ def test_toolpath_and_snapshot_share_invalid_ramp_classification() -> None:
     assert "Operation 7 (cut)" in str(exc_info.value)
 
 
+def test_snapshot_curve_cannot_authorize_itself_below_line_cut_plane() -> None:
+    snapshot = _snapshot(2, circle_indices={1}, heights={1: -1.0})
+    cut_height = quality_observations._snapshot_cut_height(snapshot)
+
+    assert cut_height == 0.0
+    with pytest.raises(InvalidHeldPathEvidenceError) as exc_info:
+        quality_observations._snapshot_replay_category(snapshot[1], cut_height)
+    assert isinstance(exc_info.value.__cause__, UnreplayableOperationError)
+
+
 def test_quality_assessment_rejects_foreign_survey_spec_binding() -> None:
     foreign = PocketSpec.build(
         name="foreign-quality-observations",

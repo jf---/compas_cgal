@@ -92,6 +92,19 @@ def test_survey_accepts_cut_circle_with_horizontal_clearance_link() -> None:
     assert len(survey.rapids) == 1
 
 
+def test_survey_accepts_cut_circle_with_curved_clearance_link() -> None:
+    operations = [
+        ToolpathOperation(geometry=Circle(2.0, frame=Frame([0.0, 0.0, 0.0])), operation=OperationType.CUT, path_index=0),
+        ToolpathOperation(geometry=Circle(3.0, frame=Frame([0.0, 0.0, 2.0])), operation=OperationType.LINK, path_index=0),
+    ]
+    result = ToolpathResult(operations=operations, polyline=np.zeros((0, 3), dtype=float))
+
+    survey = survey_path(SPEC, result)
+
+    assert len(survey.motions) == 1
+    assert len(survey.rapids) == 1
+
+
 def test_standard_circle_samples_retain_one_typed_seam() -> None:
     motion = _survey_motion(Circle(2.0, frame=Frame([0.0, 0.0, 0.0])))
 
