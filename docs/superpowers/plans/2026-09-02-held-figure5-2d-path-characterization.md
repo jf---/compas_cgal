@@ -864,8 +864,8 @@ xdist configuration with Python fault handling enabled:
 for run in 1 2 3; do
   report="build/task5a4-adaptive-${run}.xml"
   PYTHONFAULTHANDLER=1 pixi run pytest -- tests/adaptive/test_generator.py tests/adaptive/test_route_retrace_generator.py -n auto --dist=loadgroup -q --junitxml="$report"
-  status=$?
-  if [[ $status -ne 1 ]]; then exit 2; fi
+  pytest_status=$?
+  if [[ $pytest_status -ne 1 ]]; then exit 2; fi
   pixi run python -m tools.red_manifest "$report" --manifest docs/red_manifest-adaptive.json
 done
 ```
