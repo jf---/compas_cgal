@@ -403,11 +403,12 @@ def _validate_cut_plane_curves(operations: Sequence[ToolpathOperation]) -> None:
 
     cut_z = _infer_cut_height(list(operations))
     for index, operation in curves:
-        _require_world_xy_curve(index, operation.geometry)
         try:
-            classify_operation_replay(operation, Millimetre(cut_z))
+            category = classify_operation_replay(operation, Millimetre(cut_z))
         except (CutPlaneRampError, OffPlaneReplayCurveError) as error:
             raise UnreplayableOperationError(f"Operation {index} ({operation.operation.value}) {error}.") from error
+        if category == "motion":
+            _require_world_xy_curve(index, operation.geometry)
 
 
 def _require_world_xy_curve(index: int, geometry: object) -> None:
