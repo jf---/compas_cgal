@@ -1,0 +1,28 @@
+{
+  "expected_red": [
+    {
+      "match": "^tests\\.adaptive\\.test_generator::test_task13f_full_continuation$",
+      "count": 1,
+      "reason": "plan superseded (backlog D1); retirement scheduled through the auditor programme",
+      "closes_with": "backlog S2"
+    },
+    {
+      "match": "^tests\\.adaptive\\.test_generator::test_real_active_family_stops_at_unresolved_exact_event$",
+      "count": 1,
+      "reason": "plan superseded (backlog D1); retirement scheduled through the auditor programme",
+      "closes_with": "backlog S2"
+    },
+    {
+      "match": "^tests\\.adaptive\\.test_route_retrace_generator::test_route_retrace_derivation_rejects_unsupported_source_scope\\[terminal\\]$",
+      "count": 1,
+      "reason": "plan superseded (backlog D1); retirement scheduled through the auditor programme",
+      "closes_with": "backlog S2"
+    },
+    {
+      "match": "^tests\\.adaptive\\.test_route_retrace_generator::test_continuation_rejects_missing_retrace_commit$",
+      "count": 1,
+      "reason": "plan superseded (backlog D1); retirement scheduled through the auditor programme",
+      "closes_with": "backlog S2"
+    }
+  ]
+}

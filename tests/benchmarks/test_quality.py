@@ -895,6 +895,43 @@ def _assert_quality_parity(
         REQUIRED_TANGENT_BREAKS,
     )
 
+    actual_outcomes = (
+        assessment.uncut_fraction.outcome,
+        assessment.gouging_motions.outcome,
+        assessment.unsafe_rapids.outcome,
+        assessment.continuity_breaks.outcome,
+        assessment.zero_length_motions.outcome,
+        assessment.degenerate_loops.outcome,
+        assessment.redundant_operations.outcome,
+        assessment.cap_exceedances.outcome,
+        assessment.slotting_motions.outcome,
+        assessment.max_engagement_step.outcome,
+        assessment.max_loop_radius_step.outcome,
+        assessment.tangent_breaks.outcome,
+    )
+    satisfied = tuple(old <= threshold for (old, _new), threshold in zip(old_and_new, required))
+    expected_outcomes = tuple(
+        clean if passed else failed
+        for passed, (clean, failed) in zip(
+            satisfied,
+            (
+                ("no_failure_observed", "failure_observed"),
+                ("no_failure_observed", "failure_observed"),
+                ("within_declared_tolerance", "outside_declared_tolerance"),
+                ("within_declared_tolerance", "outside_declared_tolerance"),
+                ("criterion_satisfied", "criterion_violated"),
+                ("criterion_satisfied", "criterion_violated"),
+                ("criterion_satisfied", "criterion_violated"),
+                ("no_failure_observed", "failure_observed"),
+                ("no_failure_observed", "failure_observed"),
+                ("no_failure_observed", "failure_observed"),
+                ("criterion_satisfied", "criterion_violated"),
+                ("within_declared_tolerance", "outside_declared_tolerance"),
+            ),
+        )
+    )
+    assert actual_outcomes == expected_outcomes
+
     attribution = assessment.attribution
     expected_engagement_pair, expected_loop_pair = _expected_maximum_pairs(spec, snapshot, survey)
     actual_engagement_pair = None if attribution.max_engagement_step is None else attribution.max_engagement_step.pair
@@ -1065,22 +1102,53 @@ QUALITY_GATE_CASES = tuple(
 )
 
 
-@pytest.mark.parametrize(
-    ("tea_cap_deg", "generator_name", "pocket_name"),
-    QUALITY_GATE_CASES,
-)
-def test_the_generated_path_is_worth_running(
-    tea_cap_deg: GateCapDegrees,
+_EXPECTED_QUALITY_GATE_MEASUREMENTS = {
+    (120.0, "engagement_controlled", "rect_12x8"): (0.008041, 4, 10, 5, 0, 329.49, 24),
+    (120.0, "radius_regulated", "rect_12x8"): (0.008041, 4, 10, 5, 0, 329.49, 24),
+    (120.0, "engagement_controlled", "rect_20x12"): (0.002843, 4, 10, 9, 4, 337.54, 32),
+    (120.0, "radius_regulated", "rect_20x12"): (0.002843, 4, 10, 9, 4, 337.54, 32),
+    (120.0, "engagement_controlled", "L_shape"): (0.006930, 5, 10, 6, 0, 325.42, 22),
+    (120.0, "radius_regulated", "L_shape"): (0.006930, 5, 10, 6, 0, 325.42, 22),
+    (40.0, "engagement_controlled", "rect_12x8"): (0.003186, 80, 26, 145, 40, 356.18, 184),
+    (40.0, "radius_regulated", "rect_12x8"): (0.005462, 124, 311, 54, 41, 349.89, 798),
+    (40.0, "engagement_controlled", "rect_20x12"): (0.000335, 112, 62, 185, 108, 357.19, 400),
+    (40.0, "radius_regulated", "rect_20x12"): (0.000669, 308, 490, 125, 116, 357.19, 1384),
+    (40.0, "engagement_controlled", "L_shape"): (0.006059, 40, 15, 221, 15, 355.04, 92),
+    (40.0, "radius_regulated", "L_shape"): (0.002916, 236, 499, 229, 62, 347.52, 956),
+}
+
+
+def _expected_quality_gate_violations(
+    tea_cap_deg: float,
+    generator_name: str,
+    pocket_name: str,
+) -> tuple[str, ...]:
+    """Return the reviewed failure vector for one unchanged gate case."""
+    uncut, degenerate, redundant, cap, slotting, engagement_step, tangent = _EXPECTED_QUALITY_GATE_MEASUREMENTS[(float(tea_cap_deg), generator_name, pocket_name)]
+    messages = [
+        f"[elementary] uncut fraction: measured {uncut:.6f}, required <= 0.000000",
+        f"[elementary] degenerate loops: measured {degenerate:g}, required <= 0",
+        f"[elementary] redundant operations: measured {redundant:g}, required <= 0",
+        f"[cut] cap exceedances: measured {cap:g}, required <= 0",
+    ]
+    if slotting:
+        messages.append(f"[cut] slotting motions: measured {slotting:g}, required <= 0")
+    messages.extend(
+        (
+            f"[cut] max engagement step (deg): measured {engagement_step:.2f}, required <= {tea_cap_deg:.2f}",
+            f"[speed] tangent breaks: measured {tangent:g}, required <= 0",
+        )
+    )
+    return tuple(messages)
+
+
+def _evaluate_quality_gate_case(
+    tea_cap_deg: float,
     generator_name: str,
     pocket_name: str,
     monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Every machining-quality criterion, on one pocket and one generator.
-
-    All criteria are evaluated and reported together, so the failure message
-    carries the full four-group measurement and the next person reads a diagnosis
-    rather than a boolean.
-    """
+) -> tuple[PathQuality, tuple[str, ...]]:
+    """Authenticate one gate case up to, but excluding, its product verdict."""
     spec = gate_pocket(pocket_name, tea_cap_deg=tea_cap_deg)
     result = GATE_GENERATORS[generator_name](spec)
     snapshot = snapshot_toolpath(result)
@@ -1106,5 +1174,35 @@ def test_the_generated_path_is_worth_running(
     assert len(coverages) == 1
     assessment = assess_path_quality(spec, snapshot, surveys[0], coverages[0])
     _assert_quality_parity(spec, quality, assessment, snapshot, surveys[0])
-    violations = _violations(spec, quality)
+    violations = tuple(_violations(spec, quality))
+    assert violations == _expected_quality_gate_violations(
+        tea_cap_deg,
+        generator_name,
+        pocket_name,
+    )
+    return quality, violations
+
+
+@pytest.mark.parametrize(
+    ("tea_cap_deg", "generator_name", "pocket_name"),
+    QUALITY_GATE_CASES,
+)
+def test_the_generated_path_is_worth_running(
+    tea_cap_deg: GateCapDegrees,
+    generator_name: str,
+    pocket_name: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Every machining-quality criterion, on one pocket and one generator.
+
+    All criteria are evaluated and reported together, so the failure message
+    carries the full four-group measurement and the next person reads a diagnosis
+    rather than a boolean.
+    """
+    quality, violations = _evaluate_quality_gate_case(
+        tea_cap_deg,
+        generator_name,
+        pocket_name,
+        monkeypatch,
+    )
     assert not violations, _report(pocket_name, generator_name, quality, violations)

@@ -7,10 +7,9 @@ Date: 2026-09-02
 The additive attributed reducer is **equivalent** to the current quality judge
 for every gated field on the synthetic machinery, invariant-generated paths,
 and all twelve `QUALITY_GATE_CASES`. The repository's declared seventeen-red
-acceptance condition was **not satisfied by the recorded full run**: it found
-the twelve quality reds and four adaptive reds but missed the benchmark
-translation-invariance defect probabilistically. Task 5A.1 now pins that defect
-under the unchanged test ID; a fresh full manifest run remains a Task 5A.4 gate.
+acceptance condition is now deterministic and satisfied: the full manifest run
+found the twelve quality reds, four exact adaptive reds, and the pinned benchmark
+translation-invariance defect, with no unexpected failures.
 
 Production still calls `measure_quality()` and its existing private reducers.
 No reducer was changed or removed, and `measure_quality()` was not redirected.
@@ -48,11 +47,27 @@ maximum, and requires the attributed maximum to name that exact pair; a zero
 maximum must carry `None`. It does not call the attributed reducer. The
 synthetic distinct-maximum case additionally pins the engagement winner to
 operation pair `2 -> 3` and the loop-radius winner to operation pair `1 -> 3`.
-The focused run also executes the Task 4 first-tie contracts, which pin
+The completed full manifest run also executes the Task 4 first-tie contracts, which pin
 engagement pair `0 -> 1`, loop pair `0 -> 2`, every over-threshold pair, and
 the no-pair result for a zero engagement maximum.
 
 ## Commands and results
+
+### Task 5A.4 final transition evidence (2026-09-04)
+
+- Green transition oracle: `12 passed in 167.02s`; every unchanged case used the
+  shared pre-verdict evaluator and matched its reviewed ordered violation vector.
+- Protected red wrapper: exactly 12 failures in 162.54s, all at the final
+  `assert not violations`; exact JUnit IDs and reviewed messages matched.
+- Exact-source mutation coverage: `12 passed in 2.81s`; the complementary
+  same-cardinality wrong-source rejection gate passed `47 passed in 2.34s`.
+- Full repository reconciliation: `2735 passed, 17 failed`; `red set == manifest,
+  both directions`.
+- Native stability: three independent runs each completed with `21 passed, 4
+  failed`; each JUnit report matched the same four exact adaptive IDs and no
+  process error occurred.
+- Production routing remains unchanged at `measure_quality()`; Task 6 has not
+  started.
 
 ```text
 pixi run pytest -- tests/benchmarks/test_quality.py tests/benchmarks/test_quality_invariants.py -k 'not test_the_generated_path_is_worth_running and not test_moving_the_pocket_across_the_table_changes_no_metric' -n auto --testmon -q

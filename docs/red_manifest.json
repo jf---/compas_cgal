@@ -13,14 +13,32 @@
       "closes_with": "generator work (parked lane C4/C5 feeds this)"
     },
     {
-      "match": "tests\\.benchmarks\\.test_quality_invariants::test_moving_the_pocket_across_the_table_changes_no_metric",
+      "match": "^tests\\.benchmarks\\.test_quality_invariants::test_moving_the_pocket_across_the_table_changes_no_metric$",
       "count": 1,
       "reason": "deliberate: engagement is translation-variant at exact rim-on-boundary tangency (machining_metric_validity.md case 4)",
       "closes_with": "backlog C1"
     },
     {
-      "match": "tests\\.adaptive\\.(test_generator|test_route_retrace_generator)::",
-      "count": 4,
+      "match": "^tests\\.adaptive\\.test_generator::test_task13f_full_continuation$",
+      "count": 1,
+      "reason": "plan superseded (backlog D1); retirement scheduled through the auditor programme",
+      "closes_with": "backlog S2"
+    },
+    {
+      "match": "^tests\\.adaptive\\.test_generator::test_real_active_family_stops_at_unresolved_exact_event$",
+      "count": 1,
+      "reason": "plan superseded (backlog D1); retirement scheduled through the auditor programme",
+      "closes_with": "backlog S2"
+    },
+    {
+      "match": "^tests\\.adaptive\\.test_route_retrace_generator::test_route_retrace_derivation_rejects_unsupported_source_scope\\[terminal\\]$",
+      "count": 1,
+      "reason": "plan superseded (backlog D1); retirement scheduled through the auditor programme",
+      "closes_with": "backlog S2"
+    },
+    {
+      "match": "^tests\\.adaptive\\.test_route_retrace_generator::test_continuation_rejects_missing_retrace_commit$",
+      "count": 1,
       "reason": "plan superseded (backlog D1); retirement scheduled through the auditor programme",
       "closes_with": "backlog S2"
     }
