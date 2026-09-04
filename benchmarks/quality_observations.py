@@ -19,13 +19,14 @@ from typing import Union
 from typing import cast
 from typing import overload
 
-from compas.tolerance import TOL
 from typing_extensions import Self
 from typing_extensions import TypeAlias
 
+import benchmarks.depletion as depletion
 from benchmarks.coverage import CoverageEstimate
 from benchmarks.errors import ContradictoryPathQualityEvidenceError
 from benchmarks.errors import InvalidHeldPathEvidenceError
+from benchmarks.errors import UnreplayableOperationError
 from benchmarks.held_path_snapshot import HeldArcSnapshot
 from benchmarks.held_path_snapshot import HeldCircleSnapshot
 from benchmarks.held_path_snapshot import HeldLineSnapshot
@@ -47,8 +48,7 @@ from benchmarks.units import degrees_value
 from benchmarks.units import motion_count
 from benchmarks.units import operation_index
 from benchmarks.units import tool_radius_multiple
-from compas_cgal.engagement import AUDIT_ENGAGED
-from compas_cgal.toolpath import OperationType
+from compas_cgal.engagement import _minimum_cut_height
 
 CriterionName: TypeAlias = Literal[
     "uncut fraction",
@@ -700,31 +700,40 @@ def _snapshot_cut_height(snapshot: tuple[HeldOperationSnapshot, ...]) -> float:
             heights.extend((float(operation.start.z), float(operation.end.z)))
         else:
             heights.append(float(operation.centre.z))
-    return min(heights) if heights else ZERO_FLOAT
+    return float(_minimum_cut_height(heights))
 
 
-def _snapshot_category(
+def _snapshot_replay_category(
     operation: HeldOperationSnapshot,
     cut_height: float,
-) -> Literal["motion", "rapid", "plunge", "retract"]:
-    if operation.operation is OperationType.RETRACT:
-        return "retract"
-    if isinstance(operation, HeldLineSnapshot):
-        z_start = float(operation.start.z)
-        z_end = float(operation.end.z)
-        if abs(z_start - z_end) > TOL.absolute:
-            xy_travel = math.hypot(
-                float(operation.end.x) - float(operation.start.x),
-                float(operation.end.y) - float(operation.start.y),
+) -> depletion.ReplayCategory:
+    try:
+        if isinstance(operation, HeldLineSnapshot):
+            z_start = float(operation.start.z)
+            z_end = float(operation.end.z)
+            return depletion._classify_replay_category(
+                int(operation.ordinal),
+                operation.operation,
+                cut_height,
+                is_line=True,
+                z_start=z_start,
+                z_end=z_end,
+                xy_travel=math.hypot(
+                    float(operation.end.x) - float(operation.start.x),
+                    float(operation.end.y) - float(operation.start.y),
+                ),
             )
-            if xy_travel > TOL.absolute:
-                raise InvalidHeldPathEvidenceError("a differing-z source line with XY travel cannot be classified by the cut-plane survey.")
-            return "plunge" if z_end < z_start else "rapid"
-        if z_start > cut_height + TOL.absolute:
-            return "rapid"
-    if operation.operation not in AUDIT_ENGAGED:
-        return "rapid"
-    return "motion"
+        return depletion._classify_replay_category(
+            int(operation.ordinal),
+            operation.operation,
+            cut_height,
+            is_line=False,
+            z_start=ZERO_FLOAT,
+            z_end=ZERO_FLOAT,
+            xy_travel=ZERO_FLOAT,
+        )
+    except UnreplayableOperationError as error:
+        raise InvalidHeldPathEvidenceError(str(error)) from error
 
 
 def _validate_ordered_indices(values: Sequence[int], operation_count: int, *, name: str) -> tuple[OperationIndex, ...]:
@@ -767,8 +776,8 @@ def _validate_survey_binding(
         raise InvalidHeldPathEvidenceError("every retained retract must have one non-cutting motion observation.")
     pure_rapid_set = rapid_set - retract_set
     categories = (motion_set, pure_rapid_set, plunge_set, retract_set)
-    for position, category in enumerate(categories):
-        if any(category & later for later in categories[position + NEXT_OPERATION_OFFSET :]):
+    for position, observed_category in enumerate(categories):
+        if any(observed_category & later for later in categories[position + NEXT_OPERATION_OFFSET :]):
             raise InvalidHeldPathEvidenceError("motion, rapid, plunge, and retract observations must be disjoint.")
     if set().union(*categories) != set(range(operation_count)):
         raise InvalidHeldPathEvidenceError("motion, rapid, plunge, and retract observations must exactly partition the operation snapshot.")
@@ -776,7 +785,8 @@ def _validate_survey_binding(
     cut_height = _snapshot_cut_height(snapshot)
     expected_categories: dict[str, set[OperationIndex]] = {"motion": set(), "rapid": set(), "plunge": set(), "retract": set()}
     for index, operation in enumerate(snapshot):
-        expected_categories[_snapshot_category(operation, cut_height)].add(OperationIndex(index))
+        expected_category = _snapshot_replay_category(operation, cut_height)
+        expected_categories[expected_category].add(OperationIndex(index))
     observed_categories: dict[str, set[OperationIndex]] = {
         "motion": motion_set,
         "rapid": pure_rapid_set,

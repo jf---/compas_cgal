@@ -9,13 +9,11 @@ re-creates that final state here -- deliberately after the timed region, because
 `probe_digits` collapses the lazy-exact filter and would otherwise inflate the
 very certification time it exists to explain.
 
-The classification below is a MIRROR of ``_replay_operation`` in
-``src/compas_cgal/engagement.py`` with the measurement removed: retracts and
-clearance-height links are rapid travel and remove nothing, plunges bore a disk,
-and cut-plane motions remove their swept area. The geometry-to-boolean mapping
-and the cut-plane inference are imported from that module rather than re-derived,
-so only the branch structure is duplicated and a change to the audit's cut-plane
-rule cannot silently desynchronise the two.
+The classification below is the shared semantic decision used by depletion and
+quality evidence: retracts and clearance-height links are rapid travel and remove
+nothing, plunges bore a disk, and cut-plane motions remove their swept area. The
+public replay projection deliberately folds retracts into rapid travel; evidence
+consumers retain the four-way source category.
 
 `replay_cuts` is the primitive: it walks the toolpath and hands each cut-plane
 motion to the caller BEFORE that motion removes its own material, which is the
@@ -29,6 +27,8 @@ import enum
 import math
 from dataclasses import dataclass
 from typing import Iterator
+from typing import Literal
+from typing import TypeAlias
 
 from compas.geometry import Line
 from compas.tolerance import TOL
@@ -58,6 +58,9 @@ class ReplayKind(enum.Enum):
     RAPID = "rapid"
     PLUNGE = "plunge"
     CUT = "cut"
+
+
+ReplayCategory: TypeAlias = Literal["motion", "rapid", "plunge", "retract"]
 
 
 @dataclass(frozen=True)
@@ -145,28 +148,60 @@ def _replay_kind(index: int, op: ToolpathOperation, cut_z: float) -> ReplayKind:
         UnreplayableOperationError: The operation is a ramped 3D move, which the
             cut-plane model cannot represent.
     """
-    if op.operation == OperationType.RETRACT:
-        # Rapid clearance-plane up-move: no material interaction, whatever its geometry.
-        return ReplayKind.RAPID
-
     geometry = op.geometry
     if isinstance(geometry, Line):
         z_start = float(geometry.start[2])
         z_end = float(geometry.end[2])
+        xy_travel = math.hypot(float(geometry.end[0]) - float(geometry.start[0]), float(geometry.end[1]) - float(geometry.start[1]))
+        category = _classify_replay_category(
+            index,
+            op.operation,
+            cut_z,
+            is_line=True,
+            z_start=z_start,
+            z_end=z_end,
+            xy_travel=xy_travel,
+        )
+    else:
+        category = _classify_replay_category(
+            index,
+            op.operation,
+            cut_z,
+            is_line=False,
+            z_start=0.0,
+            z_end=0.0,
+            xy_travel=0.0,
+        )
+    if category == "motion":
+        return ReplayKind.CUT
+    if category == "plunge":
+        return ReplayKind.PLUNGE
+    return ReplayKind.RAPID
+
+
+def _classify_replay_category(
+    index: int,
+    operation: OperationType,
+    cut_z: float,
+    *,
+    is_line: bool,
+    z_start: float,
+    z_end: float,
+    xy_travel: float,
+) -> ReplayCategory:
+    """Apply the cut-plane replay decision to geometry facts from any adapter."""
+    if operation is OperationType.RETRACT:
+        return "retract"
+    if is_line:
         if abs(z_start - z_end) > TOL.absolute:
-            xy_travel = math.hypot(float(geometry.end[0]) - float(geometry.start[0]), float(geometry.end[1]) - float(geometry.start[1]))
             if xy_travel > TOL.absolute:
                 raise UnreplayableOperationError(
-                    f"Operation {index} ({op.operation.value}) is a differing-z line with nonzero XY travel (len={xy_travel:.3e}); "
+                    f"Operation {index} ({operation.value}) is a differing-z line with nonzero XY travel (len={xy_travel:.3e}); "
                     f"ramped 3D cutting is outside the cut-plane depletion model."
                 )
-            # Downward: a full-immersion bore. Upward: retract-shaped, removes nothing.
-            return ReplayKind.PLUNGE if z_end < z_start else ReplayKind.RAPID
+            return "plunge" if z_end < z_start else "rapid"
         if z_start > cut_z + TOL.absolute:
-            # Horizontal move above the cutting plane: rapid travel across an
-            # already-cleared corridor, not a cut.
-            return ReplayKind.RAPID
-
-    if op.operation not in AUDIT_ENGAGED:
-        return ReplayKind.RAPID
-    return ReplayKind.CUT
+            return "rapid"
+    if operation not in AUDIT_ENGAGED:
+        return "rapid"
+    return "motion"
