@@ -10,6 +10,7 @@ Seconds = NewType("Seconds", float)
 UnitFraction = NewType("UnitFraction", float)
 MotionCount = NewType("MotionCount", int)
 ToolRadiusMultiple = NewType("ToolRadiusMultiple", float)
+SquareMillimetre = NewType("SquareMillimetre", float)
 OperationIndex = NewType("OperationIndex", int)
 
 
@@ -55,6 +56,10 @@ def motion_count(value: int, *, name: str) -> MotionCount:
 
 def tool_radius_multiple(value: float, *, name: str) -> ToolRadiusMultiple:
     return ToolRadiusMultiple(_non_negative(value, name=name))
+
+
+def square_millimetres_value(value: float, *, name: str) -> SquareMillimetre:
+    return SquareMillimetre(_non_negative(value, name=name))
 
 
 def operation_index(value: int, *, operation_count: int) -> OperationIndex:

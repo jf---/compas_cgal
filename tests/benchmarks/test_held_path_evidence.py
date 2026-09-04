@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from typing import Any
 from typing import cast
 
+import numpy as np
 import pytest
+from compas.geometry import Line
 
 from benchmarks.coverage import CoverageEstimate
 from benchmarks.errors import ContradictoryEngagementEvidenceError
@@ -15,6 +18,7 @@ from benchmarks.held_path_evidence import EngagementExceedanceWitness
 from benchmarks.held_path_evidence import HeldFigure5Characterization
 from benchmarks.held_path_snapshot import HeldLineSnapshot
 from benchmarks.held_path_snapshot import HeldOperationSnapshot
+from benchmarks.held_path_snapshot import snapshot_toolpath
 from benchmarks.held_reference_cases import load_held_reference_case
 from benchmarks.quality import PathQuality
 from benchmarks.quality import _cut
@@ -23,6 +27,8 @@ from benchmarks.quality import _longevity
 from benchmarks.quality import _program
 from benchmarks.quality import _speed
 from benchmarks.quality_observations import QualityEvidence
+from benchmarks.quality_observations import MeasuredStep
+from benchmarks.quality_observations import OperationPair
 from benchmarks.quality_observations import _build_record
 from benchmarks.quality_observations import assess_path_quality
 from benchmarks.survey import EngagementSample
@@ -31,6 +37,7 @@ from benchmarks.survey import MotionQuality
 from benchmarks.survey import PathSurvey
 from benchmarks.survey import RapidMotion
 from benchmarks.units import OperationIndex
+from benchmarks.units import MotionCount
 from benchmarks.units import Seconds
 from compas_cgal.adaptive.units import Direction3
 from compas_cgal.adaptive.units import Point2
@@ -41,6 +48,8 @@ from compas_cgal.engagement import EngagementReport
 from compas_cgal.engagement import OperationEngagement
 from compas_cgal.stock import Stock
 from compas_cgal.toolpath import OperationType
+from compas_cgal.toolpath import ToolpathOperation
+from compas_cgal.toolpath import ToolpathResult
 
 
 def _snapshot() -> tuple[HeldOperationSnapshot, ...]:
@@ -220,6 +229,7 @@ def test_reporting_values_do_not_decide_disposition() -> None:
     audit.operations[1] = replace(audit.operations[1], max_tea=999.0)
     survey = cast(PathSurvey, changed["survey"])
     object.__setattr__(survey.motions[0].samples[0], "engagement_deg", -999.0)
+    changed["quality"] = _quality(cast(tuple[HeldOperationSnapshot, ...], changed["snapshot"]), survey)
     assert _build(baseline).engagement == _build(changed).engagement
 
 
@@ -302,6 +312,68 @@ def test_criterion_vocabulary_is_closed(mutation: str) -> None:
         _build(values)
 
 
+@pytest.mark.parametrize("field", ["required", "outcome"])
+def test_assessment_factory_rejects_forged_criterion_contract(field: str) -> None:
+    values = _inputs()
+    quality = cast(QualityEvidence, values["quality"])
+    forged: object = MotionCount(99) if field == "required" else "failure_observed"
+    object.__setattr__(quality.assessment.gouging_motions, field, forged)
+    with pytest.raises(InvalidHeldPathEvidenceError):
+        _build(values)
+
+
+def test_assessment_factory_rejects_forged_pair_attribution() -> None:
+    values = _inputs()
+    quality = cast(QualityEvidence, values["quality"])
+    pair = OperationPair.build(previous=OperationIndex(1), current=OperationIndex(2), operation_count=4)
+    object.__setattr__(quality.assessment.attribution, "continuity_break_pairs", (pair,))
+    with pytest.raises(ContradictoryPathQualityEvidenceError):
+        _build(values)
+
+
+def test_assessment_factory_rejects_forged_extremum_attribution() -> None:
+    values = _inputs()
+    quality = cast(QualityEvidence, values["quality"])
+    pair = OperationPair.build(previous=OperationIndex(1), current=OperationIndex(2), operation_count=4)
+    forged = MeasuredStep.build(value=99.0, pair=pair, unit="degrees")
+    object.__setattr__(quality.assessment.attribution, "max_engagement_step", forged)
+    with pytest.raises(ContradictoryPathQualityEvidenceError):
+        _build(values)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("nx", 10.0),
+        ("reachable_samples", True),
+        ("cell_area", "bad"),
+        ("wall_scallop_height", None),
+    ],
+)
+def test_malformed_coverage_fields_raise_named_error(field: str, value: object) -> None:
+    values = _inputs()
+    quality = cast(QualityEvidence, values["quality"])
+    malformed = replace(quality.coverage, **{field: cast(Any, value)})
+    values["quality"] = _build_record(
+        QualityEvidence,
+        {"path_quality": quality.path_quality, "assessment": quality.assessment, "coverage": malformed},
+    )
+    with pytest.raises(InvalidHeldPathEvidenceError):
+        _build(values)
+
+
+def test_coverage_wall_scallop_must_match_path_quality() -> None:
+    values = _inputs()
+    quality = cast(QualityEvidence, values["quality"])
+    forged_coverage = replace(quality.coverage, wall_scallop_height=1.0)
+    values["quality"] = _build_record(
+        QualityEvidence,
+        {"path_quality": quality.path_quality, "assessment": quality.assessment, "coverage": forged_coverage},
+    )
+    with pytest.raises(ContradictoryPathQualityEvidenceError):
+        _build(values)
+
+
 @pytest.mark.parametrize("mutation", ["missing", "overlap", "out-of-bounds", "reordered", "wrong-role", "wrong-source"])
 def test_survey_requires_complete_ordered_source_partition(mutation: str) -> None:
     values = _inputs()
@@ -371,6 +443,34 @@ def test_inputs_are_not_retained_or_aliased() -> None:
     assert not hasattr(result, "audit")
     assert not hasattr(result, "survey")
     assert not hasattr(result, "case")
+
+
+def test_source_operation_arrays_can_change_without_mutating_characterization() -> None:
+    tangent = np.array([1.0, 0.0, 0.0])
+    operations = [
+        ToolpathOperation(Line([0.0, 0.0, 1.0], [0.0, 0.0, 0.0]), OperationType.PLUNGE, 0),
+        ToolpathOperation(Line([0.0, 0.0, 0.0], [1.0, 0.0, 0.0]), OperationType.CUT, 0, start_tangent=tangent, end_tangent=tangent),
+        ToolpathOperation(Line([1.0, 0.0, 0.0], [2.0, 0.0, 0.0]), OperationType.CUT, 0, start_tangent=tangent, end_tangent=tangent),
+        ToolpathOperation(Line([2.0, 0.0, 0.0], [2.0, 0.0, 1.0]), OperationType.RETRACT, 0),
+    ]
+    source_polyline = np.array([[0.0, 0.0, 0.0], [2.0, 0.0, 0.0]])
+    source = ToolpathResult(operations=operations, polyline=source_polyline)
+    snapshot = snapshot_toolpath(source)
+    survey = _survey(snapshot)
+    values = _inputs()
+    values["snapshot"] = snapshot
+    values["audit"] = _audit(snapshot)
+    values["survey"] = survey
+    values["quality"] = _quality(snapshot, survey)
+    characterization = _build(values)
+    before = characterization.snapshot
+
+    tangent[0] = -1.0
+    source_polyline[0, 0] = 99.0
+    cast(Line, source.operations[1].geometry).start.x = 99.0
+
+    assert characterization.snapshot == before
+    assert characterization.snapshot[1].start == Point3[WorldXYZ].build(0.0, 0.0, 0.0)
 
 
 def test_direct_construction_is_disabled() -> None:

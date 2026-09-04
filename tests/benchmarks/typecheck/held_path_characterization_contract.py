@@ -17,6 +17,7 @@ from benchmarks.units import Degrees
 from benchmarks.units import MotionCount
 from benchmarks.units import OperationIndex
 from benchmarks.units import Seconds
+from benchmarks.units import SquareMillimetre
 from benchmarks.units import ToolRadiusMultiple
 from benchmarks.units import UnitFraction
 from benchmarks.units import closed_unit_fraction
@@ -109,5 +110,9 @@ def _characterization_contract(
     assert_type(characterization.witnesses[0].operation_index, OperationIndex)
     assert_type(characterization.witnesses[0].position, Point2[WorldXY])
     assert_type(characterization.generation_seconds, Seconds)
+    assert_type(characterization.coverage_cell_area, SquareMillimetre)
+    assert_type(characterization.coverage_wall_scallop_height, Millimetre)
+    assert_type(characterization.coverage_uncut_fraction, UnitFraction)
+    assert_type(characterization.coverage_remaining_area, SquareMillimetre)
     assert_type(characterization.path_quality, PathQuality)
     assert_type(characterization.assessment, PathQualityAssessment)
