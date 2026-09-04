@@ -21,6 +21,7 @@ never a geometric truth.
 
 import math
 from dataclasses import dataclass
+from typing import Iterable
 
 from compas.geometry import Arc
 from compas.geometry import Circle
@@ -323,6 +324,11 @@ def _unmeasured(op_index: int, operation: OperationType) -> OperationEngagement:
     return OperationEngagement(op_index=op_index, operation=operation, max_tea=0.0, cap_certified=True, stations=0)
 
 
+def _minimum_cut_height(heights: Iterable[float]) -> float:
+    """Return the lowest motion height, or zero when no heights exist."""
+    return min(heights, default=0.0)
+
+
 def _infer_cut_height(operations: list[ToolpathOperation]) -> float:
     """Infer the single cutting-plane z as the minimum motion height.
 
@@ -346,7 +352,7 @@ def _infer_cut_height(operations: list[ToolpathOperation]) -> float:
             heights.append(float(g.end[2]))
         else:
             heights.append(float(g.frame.point[2]))
-    return min(heights) if heights else 0.0
+    return _minimum_cut_height(heights)
 
 
 def _replay_line(stock: Stock, op_index: int, op: ToolpathOperation, tool_radius: float, tea_cap: float, cut_z: float) -> OperationEngagement:

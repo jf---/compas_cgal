@@ -2,15 +2,21 @@ from __future__ import annotations
 
 import math
 from dataclasses import FrozenInstanceError
+from dataclasses import replace
 from typing import Any
 from typing import cast
 
 import pytest
+from compas.geometry import Line
 from compas.geometry import Polygon
+from compas.tolerance import TOL
 
+import benchmarks.depletion as depletion
+import benchmarks.quality_observations as quality_observations
 from benchmarks.coverage import CoverageEstimate
 from benchmarks.errors import ContradictoryPathQualityEvidenceError
 from benchmarks.errors import InvalidHeldPathEvidenceError
+from benchmarks.errors import UnreplayableOperationError
 from benchmarks.held_path_snapshot import HeldCircleSnapshot
 from benchmarks.held_path_snapshot import HeldLineSnapshot
 from benchmarks.held_path_snapshot import HeldOperationSnapshot
@@ -46,6 +52,7 @@ from compas_cgal.adaptive.units import WorldXY
 from compas_cgal.adaptive.units import WorldXYZ
 from compas_cgal.stock import Stock
 from compas_cgal.toolpath import OperationType
+from compas_cgal.toolpath import ToolpathOperation
 
 EXPECTED_NAMES = (
     "uncut fraction",
@@ -283,6 +290,23 @@ def _expected_count_sources(
     )
 
 
+def _line_snapshot(
+    start: tuple[float, float, float],
+    end: tuple[float, float, float],
+    operation: OperationType,
+) -> HeldLineSnapshot:
+    return HeldLineSnapshot.build(
+        ordinal=OperationIndex(0),
+        operation=operation,
+        path_index=0,
+        clockwise=False,
+        start=Point3[WorldXYZ].build(*start),
+        end=Point3[WorldXYZ].build(*end),
+        start_tangent=None,
+        end_tangent=None,
+    )
+
+
 def _expected_maximum_pairs(
     spec: PocketSpec,
     snapshot: tuple[HeldOperationSnapshot, ...],
@@ -367,6 +391,45 @@ def _assess(
     assessment = assess_path_quality(spec, snapshot, survey, coverage)
     _assert_exact_count_sources(spec, snapshot, survey, assessment)
     return assessment
+
+
+@pytest.mark.parametrize(
+    ("start", "end", "operation", "expected_category", "expected_replay"),
+    [
+        ((0.0, 0.0, 0.0), (1.0, 0.0, 0.0), OperationType.CUT, "motion", depletion.ReplayKind.CUT),
+        ((0.0, 0.0, 2.0), (1.0, 0.0, 2.0), OperationType.LINK, "rapid", depletion.ReplayKind.RAPID),
+        ((0.0, 0.0, 2.0), (0.0, 0.0, 0.0), OperationType.PLUNGE, "plunge", depletion.ReplayKind.PLUNGE),
+        ((0.0, 0.0, 0.0), (0.0, 0.0, 2.0), OperationType.RETRACT, "retract", depletion.ReplayKind.RAPID),
+        ((0.0, 0.0, 0.0), (1.0, 0.0, 0.0), OperationType.PLUNGE, "rapid", depletion.ReplayKind.RAPID),
+        ((0.0, 0.0, 0.0), (0.0, 0.0, TOL.absolute), OperationType.CUT, "motion", depletion.ReplayKind.CUT),
+        ((0.0, 0.0, 0.0), (0.0, 0.0, 2.0 * TOL.absolute), OperationType.CUT, "rapid", depletion.ReplayKind.RAPID),
+    ],
+)
+def test_toolpath_and_snapshot_use_one_replay_classification_decision(
+    start: tuple[float, float, float],
+    end: tuple[float, float, float],
+    operation: OperationType,
+    expected_category: depletion.ReplayCategory,
+    expected_replay: depletion.ReplayKind,
+) -> None:
+    toolpath_operation = ToolpathOperation(geometry=Line(start, end), operation=operation, path_index=0)
+    snapshot = _line_snapshot(start, end, operation)
+
+    assert depletion._replay_kind(0, toolpath_operation, 0.0) is expected_replay
+    assert quality_observations._snapshot_replay_category(snapshot, 0.0) == expected_category
+
+
+def test_toolpath_and_snapshot_share_invalid_ramp_classification() -> None:
+    start = (0.0, 0.0, 2.0)
+    end = (1.0, 0.0, 0.0)
+    toolpath_operation = ToolpathOperation(geometry=Line(start, end), operation=OperationType.CUT, path_index=0)
+    snapshot = _line_snapshot(start, end, OperationType.CUT)
+
+    with pytest.raises(UnreplayableOperationError):
+        depletion._replay_kind(0, toolpath_operation, 0.0)
+    with pytest.raises(InvalidHeldPathEvidenceError) as exc_info:
+        quality_observations._snapshot_replay_category(snapshot, 0.0)
+    assert isinstance(exc_info.value.__cause__, UnreplayableOperationError)
 
 
 def test_quality_assessment_rejects_foreign_survey_spec_binding() -> None:
@@ -1104,6 +1167,134 @@ def test_simple_findings_retain_exact_unique_operation_indices() -> None:
             assessment.tangent_breaks,
         )
     ) == (0.0, 0, 0, 0, 0, 0, 0, 0, 0, SPEC.tea_cap_deg, 2.0, 0)
+
+
+def _source_attributions(assessment: PathQualityAssessment) -> dict[str, tuple[object, ...]]:
+    attribution = assessment.attribution
+    return {
+        "gouging_operations": attribution.gouging_operations,
+        "unsafe_rapid_operations": attribution.unsafe_rapid_operations,
+        "continuity_break_pairs": attribution.continuity_break_pairs,
+        "zero_length_operations": attribution.zero_length_operations,
+        "degenerate_loop_operations": attribution.degenerate_loop_operations,
+        "redundant_operations": attribution.redundant_operations,
+        "cap_exceeded_operations": attribution.cap_exceeded_operations,
+        "slotting_operations": attribution.slotting_operations,
+        "tangent_break_pairs": attribution.tangent_break_pairs,
+    }
+
+
+@pytest.mark.parametrize(
+    ("mutation", "expected_field"),
+    [
+        ("inside-centre-domain", "gouging_operations"),
+        ("horizontal-at-cut-plane", "unsafe_rapid_operations"),
+        ("endpoint-displacement", "continuity_break_pairs"),
+        ("zero-length", "zero_length_operations"),
+        ("loop-radius", "degenerate_loop_operations"),
+        ("removes-material", "redundant_operations"),
+        ("sample-cap", "cap_exceeded_operations"),
+        ("slot-exceeded", "slotting_operations"),
+        ("tangent-dot", "tangent_break_pairs"),
+    ],
+)
+def test_raw_observation_sensitivity_changes_exactly_one_count_source(mutation: str, expected_field: str) -> None:
+    snapshot = _snapshot(
+        4,
+        operation_roles={3: OperationType.PLUNGE},
+        circle_indices={0},
+        horizontal_role_indices={3},
+    )
+    motions = [
+        _motion(0, kind=MotionKind.LOOP, radius=2.0, end=(0.0, 0.0), samples=(_sample(10.0),)),
+        _motion(1, start=(0.0, 0.0), end=(1.0, 0.0), samples=(_sample(10.0),)),
+        _motion(2, start=(1.0, 0.0), samples=(_sample(10.0),)),
+    ]
+    rapids = [_rapid(index=3, operation=OperationType.PLUNGE, length=1.0, horizontal_at_cut_plane=False)]
+    baseline = _assess(SPEC, snapshot, _survey(tuple(motions), tuple(rapids), source_snapshot=snapshot), _coverage())
+
+    if mutation == "inside-centre-domain":
+        motions[2] = replace(motions[2], samples=(replace(motions[2].samples[0], inside_centre_domain=False),))
+    elif mutation == "horizontal-at-cut-plane":
+        rapids[0] = replace(rapids[0], horizontal_at_cut_plane=True)
+    elif mutation == "endpoint-displacement":
+        motions[1] = replace(motions[1], start=(2.0, 0.0))
+    elif mutation == "zero-length":
+        motions[2] = replace(motions[2], length=0.0)
+    elif mutation == "loop-radius":
+        motions[0] = replace(motions[0], loop_radius=SPEC.tool_radius)
+    elif mutation == "removes-material":
+        motions[2] = replace(motions[2], removes_material=False)
+    elif mutation == "sample-cap":
+        motions[2] = replace(motions[2], samples=(replace(motions[2].samples[0], cap_exceeded=True),))
+    elif mutation == "slot-exceeded":
+        motions[2] = replace(motions[2], slot_exceeded=True)
+    else:
+        motions[1] = replace(motions[1], start_tangent=(-1.0, 0.0))
+
+    changed = _assess(SPEC, snapshot, _survey(tuple(motions), tuple(rapids), source_snapshot=snapshot), _coverage())
+    baseline_sources = _source_attributions(baseline)
+    changed_sources = _source_attributions(changed)
+    changed_fields = {name for name in baseline_sources if baseline_sources[name] != changed_sources[name]}
+    assert changed_fields == {expected_field}
+    assert len(set(baseline_sources[expected_field]) ^ set(changed_sources[expected_field])) == 1
+
+
+def test_nonleading_engagement_sample_changes_the_causal_maximum_pair_and_value() -> None:
+    snapshot = _snapshot(3)
+    baseline_motions = (
+        _motion(0, samples=(_sample(0.0),)),
+        _motion(1, samples=(_sample(20.0),)),
+        _motion(2, samples=(_sample(15.0), _sample(15.0))),
+    )
+    changed_motions = (*baseline_motions[:2], replace(baseline_motions[2], samples=(_sample(15.0), _sample(50.0))))
+
+    baseline = _assess(SPEC, snapshot, _survey(baseline_motions, source_snapshot=snapshot), _coverage())
+    changed = _assess(SPEC, snapshot, _survey(changed_motions, source_snapshot=snapshot), _coverage())
+
+    assert baseline.attribution.max_engagement_step == MeasuredStep.build(
+        value=Degrees(20.0),
+        pair=OperationPair.build(previous=OperationIndex(0), current=OperationIndex(1), operation_count=3),
+        unit="degrees",
+    )
+    assert changed.attribution.max_engagement_step == MeasuredStep.build(
+        value=Degrees(30.0),
+        pair=OperationPair.build(previous=OperationIndex(1), current=OperationIndex(2), operation_count=3),
+        unit="degrees",
+    )
+
+
+@pytest.mark.parametrize("mutation", ["radius", "path-boundary"])
+def test_loop_radius_or_path_boundary_changes_the_causal_maximum_pair(mutation: str) -> None:
+    baseline_snapshot = _snapshot(3, circle_indices={0, 1, 2})
+    baseline_motions = (
+        _motion(0, kind=MotionKind.LOOP, radius=2.0),
+        _motion(1, kind=MotionKind.LOOP, radius=5.0),
+        _motion(2, kind=MotionKind.LOOP, radius=6.0),
+    )
+    baseline = _assess(SPEC, baseline_snapshot, _survey(baseline_motions, source_snapshot=baseline_snapshot), _coverage())
+
+    if mutation == "radius":
+        changed_snapshot = baseline_snapshot
+        changed_motions = (baseline_motions[0], replace(baseline_motions[1], loop_radius=3.0), baseline_motions[2])
+    else:
+        changed_snapshot = _snapshot(3, path_indices={1: 1}, circle_indices={0, 1, 2})
+        changed_motions = baseline_motions
+    changed = _assess(SPEC, changed_snapshot, _survey(changed_motions, source_snapshot=changed_snapshot), _coverage())
+
+    assert baseline.attribution.max_loop_radius_step == MeasuredStep.build(
+        value=ToolRadiusMultiple(3.0),
+        pair=OperationPair.build(previous=OperationIndex(0), current=OperationIndex(1), operation_count=3),
+        unit="tool_radius_multiple",
+    )
+    if mutation == "radius":
+        assert changed.attribution.max_loop_radius_step == MeasuredStep.build(
+            value=ToolRadiusMultiple(3.0),
+            pair=OperationPair.build(previous=OperationIndex(1), current=OperationIndex(2), operation_count=3),
+            unit="tool_radius_multiple",
+        )
+    else:
+        assert changed.attribution.max_loop_radius_step is None
 
 
 def test_junction_findings_preserve_adjacency_and_classification() -> None:
