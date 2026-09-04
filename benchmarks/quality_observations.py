@@ -22,7 +22,6 @@ from typing import overload
 from typing_extensions import Self
 from typing_extensions import TypeAlias
 
-import benchmarks.depletion as depletion
 from benchmarks.coverage import CoverageEstimate
 from benchmarks.errors import ContradictoryPathQualityEvidenceError
 from benchmarks.errors import InvalidHeldPathEvidenceError
@@ -48,7 +47,13 @@ from benchmarks.units import degrees_value
 from benchmarks.units import motion_count
 from benchmarks.units import operation_index
 from benchmarks.units import tool_radius_multiple
+from compas_cgal.adaptive.units import Millimetre
 from compas_cgal.engagement import _minimum_cut_height
+from compas_cgal.replay_classification import CutPlaneRampError
+from compas_cgal.replay_classification import OffPlaneReplayCurveError
+from compas_cgal.replay_classification import ReplayCategory
+from compas_cgal.replay_classification import classify_line_replay
+from compas_cgal.replay_classification import classify_planar_replay
 
 CriterionName: TypeAlias = Literal[
     "uncut fraction",
@@ -706,34 +711,32 @@ def _snapshot_cut_height(snapshot: tuple[HeldOperationSnapshot, ...]) -> float:
 def _snapshot_replay_category(
     operation: HeldOperationSnapshot,
     cut_height: float,
-) -> depletion.ReplayCategory:
+) -> ReplayCategory:
     try:
         if isinstance(operation, HeldLineSnapshot):
             z_start = float(operation.start.z)
             z_end = float(operation.end.z)
-            return depletion._classify_replay_category(
-                int(operation.ordinal),
+            return classify_line_replay(
                 operation.operation,
-                cut_height,
-                is_line=True,
-                z_start=z_start,
-                z_end=z_end,
-                xy_travel=math.hypot(
-                    float(operation.end.x) - float(operation.start.x),
-                    float(operation.end.y) - float(operation.start.y),
+                start_z=Millimetre(z_start),
+                end_z=Millimetre(z_end),
+                xy_travel=Millimetre(
+                    math.hypot(
+                        float(operation.end.x) - float(operation.start.x),
+                        float(operation.end.y) - float(operation.start.y),
+                    )
                 ),
+                cut_z=Millimetre(cut_height),
             )
-        return depletion._classify_replay_category(
-            int(operation.ordinal),
+        return classify_planar_replay(
             operation.operation,
-            cut_height,
-            is_line=False,
-            z_start=ZERO_FLOAT,
-            z_end=ZERO_FLOAT,
-            xy_travel=ZERO_FLOAT,
+            motion_z=Millimetre(float(operation.centre.z)),
+            cut_z=Millimetre(cut_height),
         )
-    except UnreplayableOperationError as error:
-        raise InvalidHeldPathEvidenceError(str(error)) from error
+    except (CutPlaneRampError, OffPlaneReplayCurveError) as error:
+        replay_error = UnreplayableOperationError(f"Operation {operation.ordinal} ({operation.operation.value}) {error}.")
+        replay_error.__cause__ = error
+        raise InvalidHeldPathEvidenceError(str(replay_error)) from replay_error
 
 
 def _validate_ordered_indices(values: Sequence[int], operation_count: int, *, name: str) -> tuple[OperationIndex, ...]:

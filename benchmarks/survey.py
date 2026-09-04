@@ -37,8 +37,6 @@ from compas.geometry import angle_vectors
 from compas.tolerance import TOL
 
 from benchmarks.depletion import CutMotion
-from benchmarks.depletion import ReplayKind
-from benchmarks.depletion import _replay_kind
 from benchmarks.depletion import replay_cuts
 from benchmarks.errors import InvalidMotionSampleCountError
 from benchmarks.errors import UnmeasurableOperationLengthError
@@ -50,12 +48,16 @@ from benchmarks.spec import PocketSpec
 from benchmarks.units import OperationIndex
 from compas_cgal import _coverage_2
 from compas_cgal import _stock_2
+from compas_cgal.adaptive.units import Millimetre
 from compas_cgal.adaptive.units import Point2
 from compas_cgal.adaptive.units import WorldXY
-from compas_cgal.engagement import AUDIT_ENGAGED
 from compas_cgal.engagement import _cap_chord_ratio
 from compas_cgal.engagement import _infer_cut_height
 from compas_cgal.engagement import _subtract_operation
+from compas_cgal.replay_classification import AUDIT_ENGAGED
+from compas_cgal.replay_classification import CutPlaneRampError
+from compas_cgal.replay_classification import OffPlaneReplayCurveError
+from compas_cgal.replay_classification import classify_operation_replay
 from compas_cgal.stock import Stock
 from compas_cgal.stock import _polygon_to_ccw_vertices
 from compas_cgal.toolpath import OperationType
@@ -673,13 +675,16 @@ def _classify_non_cutting(
     plunge_indices: list[OperationIndex] = []
     retract_indices: list[OperationIndex] = []
     for index, operation in enumerate(result.operations):
-        kind = _replay_kind(index, operation, cut_z)
-        if kind is ReplayKind.CUT:
+        try:
+            category = classify_operation_replay(operation, Millimetre(cut_z))
+        except (CutPlaneRampError, OffPlaneReplayCurveError) as error:
+            raise UnreplayableOperationError(f"Operation {index} ({operation.operation.value}) {error}.") from error
+        if category == "motion":
             continue
-        if kind is ReplayKind.PLUNGE:
+        if category == "plunge":
             plunge_indices.append(OperationIndex(index))
             continue
-        if operation.operation is OperationType.RETRACT:
+        if category == "retract":
             retract_indices.append(OperationIndex(index))
         rapids.append(
             RapidMotion(
