@@ -1,8 +1,8 @@
 # Held Figure 5 2D Path Characterization Implementation Plan
 
-> **status: complete** - Tasks 1-6 are implemented and verified. The canonical
-> quality assessment is the single decision authority for production reporting
-> and the permanent twelve-case transition contract.
+> **status: in progress** - Tasks 1-7 are implemented and verified. The validated
+> immutable Figure 5 characterization boundary is ready for the Task 8
+> post-qualification gate.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use
 > `superpowers:subagent-driven-development` (recommended) or
@@ -1095,7 +1095,7 @@ HeldFigure5Characterization.build(
 ) -> HeldFigure5Characterization
 ```
 
-- [ ] **Step 1: Write RED engagement-partition tests**
+- [x] **Step 1: Write RED engagement-partition tests**
 
 Cover these falsifiers independently:
 
@@ -1109,7 +1109,7 @@ Cover these falsifiers independently:
   zero; and
 - no `max_tea` or `engagement_deg` reporting comparison changes disposition.
 
-- [ ] **Step 2: Write RED cross-consumer and factory tests**
+- [x] **Step 2: Write RED cross-consumer and factory tests**
 
 Require exact Figure 5 case, complete source-operation partition, in-bounds
 witness indices, finite typed world-XY witness coordinates, non-negative finite
@@ -1130,13 +1130,13 @@ operation records, index tuples, counts, typed timings, `PathQuality`, assessmen
 coverage scalars, and witnesses—not raw `EngagementReport`, `PathSurvey`, `Stock`,
 `ToolpathResult`, COMPAS geometry, NumPy arrays, or mutable collections.
 
-- [ ] **Step 3: Run RED tests**
+- [x] **Step 3: Run RED tests**
 
 ```bash
 pixi run pytest -- tests/benchmarks/test_held_path_evidence.py -n auto --testmon -q
 ```
 
-- [ ] **Step 4: Implement construction from authoritative index sets**
+- [x] **Step 4: Implement construction from authoritative index sets**
 
 The factory derives, never accepts, disposition counts:
 
@@ -1154,7 +1154,7 @@ Witness rows come only from retained survey samples where
 `sample.cap_exceeded` is true. Validate index coverage before constructing the
 record.
 
-- [ ] **Step 5: Run GREEN gates and commit**
+- [x] **Step 5: Run GREEN gates and commit**
 
 ```bash
 pixi run pytest -- tests/benchmarks/test_held_path_evidence.py tests/test_engagement_audit.py -n auto --testmon -q
