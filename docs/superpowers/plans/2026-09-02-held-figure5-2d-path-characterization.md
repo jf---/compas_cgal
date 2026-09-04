@@ -810,6 +810,7 @@ GIT_AUTHOR_NAME='Jelle Feringa' GIT_AUTHOR_EMAIL='jelleferinga@gmail.com' GIT_CO
 - Modify: `tools/red_manifest.py`
 - Modify: `tests/tools/test_red_manifest.py`
 - Modify: `docs/red_manifest.json`
+- Create: `docs/red_manifest-adaptive.json`
 - Modify: `docs/superpowers/state/held-figure5-quality-parity.md`
 - Modify: `docs/superpowers/plans/2026-09-02-held-figure5-2d-path-characterization.md`
 
@@ -892,10 +893,10 @@ approval`; do not mark Task 6 active.
 
 ```bash
 pixi run types-benchmarks
-pixi run ruff format tests/benchmarks/test_quality_transition.py
-pixi run ruff check benchmarks tests/benchmarks
+pixi run ruff format tests/benchmarks/test_quality.py tests/benchmarks/test_quality_transition.py tools/red_manifest.py tests/tools/test_red_manifest.py
+pixi run ruff check benchmarks tests/benchmarks tools/red_manifest.py tests/tools/test_red_manifest.py
 git diff --check
-git add tests/benchmarks/test_quality_transition.py docs/superpowers/state/held-figure5-quality-parity.md docs/superpowers/plans/2026-09-02-held-figure5-2d-path-characterization.md
+git add tests/benchmarks/test_quality.py tests/benchmarks/test_quality_transition.py tools/red_manifest.py tests/tools/test_red_manifest.py docs/red_manifest.json docs/red_manifest-adaptive.json docs/superpowers/state/held-figure5-quality-parity.md docs/superpowers/plans/2026-09-02-held-figure5-2d-path-characterization.md
 GIT_AUTHOR_NAME='Jelle Feringa' GIT_AUTHOR_EMAIL='jelleferinga@gmail.com' GIT_COMMITTER_NAME='Jelle Feringa' GIT_COMMITTER_EMAIL='jelleferinga@gmail.com' git commit -m 'test(benchmarks): harden quality transition'
 ```
 
