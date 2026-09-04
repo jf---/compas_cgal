@@ -35,7 +35,6 @@ from benchmarks.coverage import CoarseCoverageGridError
 from benchmarks.coverage import CoverageEstimate
 from benchmarks.coverage import measure_coverage
 from benchmarks.errors import EmptyReachableRegionError
-from benchmarks.errors import ContradictoryPathQualityEvidenceError
 from benchmarks.errors import InvalidGridResolutionError
 from benchmarks.errors import InvalidMachineModelError
 from benchmarks.errors import InvalidMaterialModelError
@@ -808,7 +807,7 @@ def test_quality_evidence_preserves_named_zero_length_and_invalid_grid_errors() 
         )
 
 
-def test_quality_evidence_rejects_raw_and_contradictory_public_construction() -> None:
+def test_quality_evidence_rejects_raw_and_report_only_public_construction() -> None:
     result = _result([_plunge(0.0, 0.0), _circle(0.0, 0.0, 2.0)])
     snapshot = snapshot_toolpath(result)
     survey = survey_path(SYNTHETIC, result, samples_per_motion=FAST_SAMPLES)
@@ -819,33 +818,33 @@ def test_quality_evidence_rejects_raw_and_contradictory_public_construction() ->
         grid=SYNTHETIC_GRID,
     )
 
-    with pytest.raises(TypeError, match="QualityEvidence.build"):
+    with pytest.raises(TypeError, match="returned only by reduce_quality_evidence"):
         quality_observations_module.QualityEvidence()
+    assert not hasattr(quality_observations_module.QualityEvidence, "build")
 
-    contradictory_uncut = 0.0 if evidence.path_quality.elementary.uncut_fraction != 0.0 else 1.0
     contradictory_quality = replace(
         evidence.path_quality,
-        elementary=replace(
-            evidence.path_quality.elementary,
-            uncut_fraction=contradictory_uncut,
-        ),
+        path_length=evidence.path_quality.path_length + 1.0,
     )
-    with pytest.raises(ContradictoryPathQualityEvidenceError, match="gate fields disagree"):
-        quality_observations_module.QualityEvidence.build(
+    with pytest.raises(TypeError, match="unexpected keyword argument"):
+        quality_observations_module.QualityEvidence(
             path_quality=contradictory_quality,
             assessment=evidence.assessment,
             coverage=evidence.coverage,
         )
 
-    contradictory_coverage = replace(
-        evidence.coverage,
-        wall_scallop_height=evidence.coverage.wall_scallop_height + 1.0,
+    contradictory_program = replace(
+        evidence.path_quality,
+        program=replace(
+            evidence.path_quality.program,
+            block_count=evidence.path_quality.program.block_count + 1,
+        ),
     )
-    with pytest.raises(ContradictoryPathQualityEvidenceError, match="coverage evidence disagrees"):
-        quality_observations_module.QualityEvidence.build(
-            path_quality=evidence.path_quality,
+    with pytest.raises(TypeError, match="unexpected keyword argument"):
+        quality_observations_module.QualityEvidence(
+            path_quality=contradictory_program,
             assessment=evidence.assessment,
-            coverage=contradictory_coverage,
+            coverage=evidence.coverage,
         )
 
 

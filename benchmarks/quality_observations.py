@@ -1030,45 +1030,7 @@ class QualityEvidence:
     coverage: CoverageEstimate
 
     def __init__(self) -> None:
-        raise TypeError("QualityEvidence must be created with QualityEvidence.build().")
-
-    @classmethod
-    def build(
-        cls,
-        *,
-        path_quality: PathQuality,
-        assessment: PathQualityAssessment,
-        coverage: CoverageEstimate,
-    ) -> Self:
-        """Build evidence only when all public projections agree."""
-        if type(path_quality) is not PathQuality or type(assessment) is not PathQualityAssessment or type(coverage) is not CoverageEstimate:
-            raise InvalidHeldPathEvidenceError("quality evidence requires validated path-quality, assessment, and coverage records.")
-        projected = (
-            (path_quality.elementary.uncut_fraction, assessment.uncut_fraction.measured),
-            (path_quality.elementary.gouging_motions, assessment.gouging_motions.measured),
-            (path_quality.elementary.unsafe_rapids, assessment.unsafe_rapids.measured),
-            (path_quality.elementary.continuity_breaks, assessment.continuity_breaks.measured),
-            (path_quality.elementary.zero_length_motions, assessment.zero_length_motions.measured),
-            (path_quality.elementary.degenerate_loops, assessment.degenerate_loops.measured),
-            (path_quality.elementary.redundant_operations, assessment.redundant_operations.measured),
-            (path_quality.cut.cap_exceedances, assessment.cap_exceedances.measured),
-            (path_quality.cut.slotting_motions, assessment.slotting_motions.measured),
-            (path_quality.cut.max_engagement_step_deg, assessment.max_engagement_step.measured),
-            (path_quality.cut.max_loop_radius_step, assessment.max_loop_radius_step.measured),
-            (path_quality.speed.tangent_breaks, assessment.tangent_breaks.measured),
-        )
-        if any(reported != observed for reported, observed in projected):
-            raise ContradictoryPathQualityEvidenceError("path-quality gate fields disagree with their canonical assessment.")
-        if coverage.uncut_fraction != assessment.uncut_fraction.measured or coverage.wall_scallop_height != path_quality.cut.wall_scallop_height:
-            raise ContradictoryPathQualityEvidenceError("coverage evidence disagrees with its canonical quality projections.")
-        return _build_record(
-            cls,
-            {
-                "path_quality": path_quality,
-                "assessment": assessment,
-                "coverage": coverage,
-            },
-        )
+        raise TypeError("QualityEvidence is returned only by reduce_quality_evidence().")
 
 
 def _material_entry_count(survey: PathSurvey) -> int:
@@ -1108,4 +1070,11 @@ def reduce_quality_evidence(
         cut_operations=len(survey.motions),
         path_length=survey.total_length,
     )
-    return QualityEvidence.build(path_quality=quality, assessment=assessment, coverage=coverage)
+    return _build_record(
+        QualityEvidence,
+        {
+            "path_quality": quality,
+            "assessment": assessment,
+            "coverage": coverage,
+        },
+    )
