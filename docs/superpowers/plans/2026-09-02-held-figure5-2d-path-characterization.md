@@ -806,6 +806,10 @@ GIT_AUTHOR_NAME='Jelle Feringa' GIT_AUTHOR_EMAIL='jelleferinga@gmail.com' GIT_CO
 **Files:**
 
 - Create: `tests/benchmarks/test_quality_transition.py`
+- Modify: `tests/benchmarks/test_quality.py`
+- Modify: `tools/red_manifest.py`
+- Modify: `tests/tools/test_red_manifest.py`
+- Modify: `docs/red_manifest.json`
 - Modify: `docs/superpowers/state/held-figure5-quality-parity.md`
 - Modify: `docs/superpowers/plans/2026-09-02-held-figure5-2d-path-characterization.md`
 
@@ -830,17 +834,25 @@ Parameterize the unchanged gate cases without executing the final deliberate
 
 This test must fail if an arbitrary earlier assertion replaces the intended
 product-gate failure, even when the red test ID and count remain unchanged.
+Extract one test-owned pre-verdict evaluator and call that same evaluator from
+both the green transition test and the protected red wrapper. Validate the red
+wrapper behavior from its JUnit failure messages; do not freeze source shape or
+use an AST/grep implementation-structure test.
 
 - [ ] **Step 2: Prove the transition and known-red oracles separately**
 
 ```bash
 pixi run pytest -- tests/benchmarks/test_quality_transition.py -n auto --testmon --testmon-noselect -q
-zsh -c 'pixi run pytest -- tests/benchmarks/test_quality.py::test_the_generated_path_is_worth_running -n auto -q; red_status=$?; if [[ $red_status -ne 1 ]]; then exit 2; fi; pixi run red-manifest'
+zsh -c 'pixi run pytest -- tests/benchmarks/test_quality.py::test_the_generated_path_is_worth_running -n auto -q --junitxml=build/task5a4-quality.xml; red_status=$?; if [[ $red_status -ne 1 ]]; then exit 2; fi; pixi run red-manifest'
 ```
 
 Expected: the transition module is green; all twelve quality cells fail only at
 the final product assertion; the repository manifest reports the deterministic
 seventeen-red membership.
+The quality JUnit must contain the exact twelve IDs and their expected final
+criterion-message vectors; errors, duplicates, extra/missing failures, or an
+earlier assertion block the task. Tighten the adaptive manifest entry to the
+four exact node IDs rather than a module-wide count regex.
 
 - [ ] **Step 3: Resolve the prior native-process instability**
 
@@ -849,7 +861,11 @@ xdist configuration with Python fault handling enabled:
 
 ```bash
 for run in 1 2 3; do
-  PYTHONFAULTHANDLER=1 pixi run pytest -- tests/adaptive/test_generator.py tests/adaptive/test_route_retrace_generator.py -n auto -q || exit $?
+  report="build/task5a4-adaptive-${run}.xml"
+  PYTHONFAULTHANDLER=1 pixi run pytest -- tests/adaptive/test_generator.py tests/adaptive/test_route_retrace_generator.py -n auto --dist=loadgroup -q --junitxml="$report"
+  status=$?
+  if [[ $status -ne 1 ]]; then exit 2; fi
+  pixi run python -m tools.red_manifest "$report" --manifest docs/red_manifest-adaptive.json
 done
 ```
 
@@ -858,6 +874,8 @@ assertion failures. A segfault, truncated JUnit report, collection error, or
 other process termination blocks Task 6 and starts a focused native-lifetime
 diagnosis; it may not be classified as infrastructure without a concrete
 external failure signature.
+The loop must continue after expected pytest exit status `1`; each JUnit report
+must prove the exact same four-member failure set independently.
 
 - [ ] **Step 4: Reconcile plan and durable evidence**
 
