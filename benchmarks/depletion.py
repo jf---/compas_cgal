@@ -27,17 +27,19 @@ import enum
 import math
 from dataclasses import dataclass
 from typing import Iterator
-from typing import Literal
-from typing import TypeAlias
 
 from compas.geometry import Line
-from compas.tolerance import TOL
 
 from benchmarks.errors import UnreplayableOperationError
 from benchmarks.spec import PocketSpec
-from compas_cgal.engagement import AUDIT_ENGAGED
+from compas_cgal.adaptive.units import Millimetre
 from compas_cgal.engagement import _infer_cut_height
 from compas_cgal.engagement import _subtract_operation
+from compas_cgal.replay_classification import CutPlaneRampError
+from compas_cgal.replay_classification import OffPlaneReplayCurveError
+from compas_cgal.replay_classification import ReplayCategory
+from compas_cgal.replay_classification import classify_line_replay
+from compas_cgal.replay_classification import classify_planar_replay
 from compas_cgal.stock import Stock
 from compas_cgal.toolpath import OperationType
 from compas_cgal.toolpath import ToolpathOperation
@@ -58,9 +60,6 @@ class ReplayKind(enum.Enum):
     RAPID = "rapid"
     PLUNGE = "plunge"
     CUT = "cut"
-
-
-ReplayCategory: TypeAlias = Literal["motion", "rapid", "plunge", "retract"]
 
 
 @dataclass(frozen=True)
@@ -163,12 +162,13 @@ def _replay_kind(index: int, op: ToolpathOperation, cut_z: float) -> ReplayKind:
             xy_travel=xy_travel,
         )
     else:
+        motion_z = float(geometry.frame.point[2])
         category = _classify_replay_category(
             index,
             op.operation,
             cut_z,
             is_line=False,
-            z_start=0.0,
+            z_start=motion_z,
             z_end=0.0,
             xy_travel=0.0,
         )
@@ -189,19 +189,16 @@ def _classify_replay_category(
     z_end: float,
     xy_travel: float,
 ) -> ReplayCategory:
-    """Apply the cut-plane replay decision to geometry facts from any adapter."""
-    if operation is OperationType.RETRACT:
-        return "retract"
-    if is_line:
-        if abs(z_start - z_end) > TOL.absolute:
-            if xy_travel > TOL.absolute:
-                raise UnreplayableOperationError(
-                    f"Operation {index} ({operation.value}) is a differing-z line with nonzero XY travel (len={xy_travel:.3e}); "
-                    f"ramped 3D cutting is outside the cut-plane depletion model."
-                )
-            return "plunge" if z_end < z_start else "rapid"
-        if z_start > cut_z + TOL.absolute:
-            return "rapid"
-    if operation not in AUDIT_ENGAGED:
-        return "rapid"
-    return "motion"
+    """Adapt geometry facts to the shared cut-plane replay decision."""
+    try:
+        if is_line:
+            return classify_line_replay(
+                operation,
+                start_z=Millimetre(z_start),
+                end_z=Millimetre(z_end),
+                xy_travel=Millimetre(xy_travel),
+                cut_z=Millimetre(cut_z),
+            )
+        return classify_planar_replay(operation, motion_z=Millimetre(z_start), cut_z=Millimetre(cut_z))
+    except (CutPlaneRampError, OffPlaneReplayCurveError) as error:
+        raise UnreplayableOperationError(f"Operation {index} ({operation.value}) {error}.") from error

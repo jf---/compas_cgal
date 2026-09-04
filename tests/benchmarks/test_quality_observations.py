@@ -294,9 +294,11 @@ def _line_snapshot(
     start: tuple[float, float, float],
     end: tuple[float, float, float],
     operation: OperationType,
+    *,
+    ordinal: int = 0,
 ) -> HeldLineSnapshot:
     return HeldLineSnapshot.build(
-        ordinal=OperationIndex(0),
+        ordinal=OperationIndex(ordinal),
         operation=operation,
         path_index=0,
         clockwise=False,
@@ -403,6 +405,21 @@ def _assess(
         ((0.0, 0.0, 0.0), (1.0, 0.0, 0.0), OperationType.PLUNGE, "rapid", depletion.ReplayKind.RAPID),
         ((0.0, 0.0, 0.0), (0.0, 0.0, TOL.absolute), OperationType.CUT, "motion", depletion.ReplayKind.CUT),
         ((0.0, 0.0, 0.0), (0.0, 0.0, 2.0 * TOL.absolute), OperationType.CUT, "rapid", depletion.ReplayKind.RAPID),
+        (
+            (0.0, 0.0, 2.0 * TOL.absolute),
+            (TOL.absolute, 0.0, 0.0),
+            OperationType.CUT,
+            "plunge",
+            depletion.ReplayKind.PLUNGE,
+        ),
+        ((0.0, 0.0, TOL.absolute), (1.0, 0.0, TOL.absolute), OperationType.CUT, "motion", depletion.ReplayKind.CUT),
+        (
+            (0.0, 0.0, 2.0 * TOL.absolute),
+            (1.0, 0.0, 2.0 * TOL.absolute),
+            OperationType.CUT,
+            "rapid",
+            depletion.ReplayKind.RAPID,
+        ),
     ],
 )
 def test_toolpath_and_snapshot_use_one_replay_classification_decision(
@@ -420,16 +437,18 @@ def test_toolpath_and_snapshot_use_one_replay_classification_decision(
 
 
 def test_toolpath_and_snapshot_share_invalid_ramp_classification() -> None:
-    start = (0.0, 0.0, 2.0)
-    end = (1.0, 0.0, 0.0)
+    ordinal = 7
+    start = (0.0, 0.0, 2.0 * TOL.absolute)
+    end = (2.0 * TOL.absolute, 0.0, 0.0)
     toolpath_operation = ToolpathOperation(geometry=Line(start, end), operation=OperationType.CUT, path_index=0)
-    snapshot = _line_snapshot(start, end, OperationType.CUT)
+    snapshot = _line_snapshot(start, end, OperationType.CUT, ordinal=ordinal)
 
-    with pytest.raises(UnreplayableOperationError):
-        depletion._replay_kind(0, toolpath_operation, 0.0)
+    with pytest.raises(UnreplayableOperationError, match=r"Operation 7 \(cut\)"):
+        depletion._replay_kind(ordinal, toolpath_operation, 0.0)
     with pytest.raises(InvalidHeldPathEvidenceError) as exc_info:
         quality_observations._snapshot_replay_category(snapshot, 0.0)
     assert isinstance(exc_info.value.__cause__, UnreplayableOperationError)
+    assert "Operation 7 (cut)" in str(exc_info.value)
 
 
 def test_quality_assessment_rejects_foreign_survey_spec_binding() -> None:

@@ -27,9 +27,15 @@ from compas.geometry import Arc
 from compas.geometry import Circle
 from compas.geometry import Line
 from compas.geometry import Polygon
-from compas.tolerance import TOL
 
 from compas_cgal import _stock_2  # type: ignore
+from compas_cgal.adaptive.units import Millimetre
+from compas_cgal.replay_classification import AUDIT_ENGAGED as AUDIT_ENGAGED
+from compas_cgal.replay_classification import CutPlaneRampError
+from compas_cgal.replay_classification import OffPlaneReplayCurveError
+from compas_cgal.replay_classification import ReplayCategory
+from compas_cgal.replay_classification import classify_operation_replay
+from compas_cgal.replay_classification import minimum_cut_height
 from compas_cgal.stock import Stock
 from compas_cgal.toolpath import OperationType
 from compas_cgal.toolpath import ToolpathOperation
@@ -44,15 +50,6 @@ AUDIT_ARC_STEP_FRACTION = 0.05
 # measured + subtracted. RETRACT and PLUNGE never contribute a TEA measurement
 # (rapid up-move / plunge-rate-governed bore); links above the cut plane are
 # rapid travel and are skipped by height, not by kind.
-AUDIT_ENGAGED = frozenset(
-    {
-        OperationType.CUT,
-        OperationType.LEAD_IN,
-        OperationType.LEAD_OUT,
-        OperationType.LINK,
-    }
-)
-
 # Explicit integer safety factor on the analytic TEA-growth bound, mirroring
 # TEA_GUARD_SAFETY_FACTOR in src/engagement_2.cpp. Too large a guard only forces
 # a conservative "uncertified" verdict; it can never certify a violating motion.
@@ -326,7 +323,7 @@ def _unmeasured(op_index: int, operation: OperationType) -> OperationEngagement:
 
 def _minimum_cut_height(heights: Iterable[float]) -> float:
     """Return the lowest motion height, or zero when no heights exist."""
-    return min(heights, default=0.0)
+    return float(minimum_cut_height(Millimetre(height) for height in heights))
 
 
 def _infer_cut_height(operations: list[ToolpathOperation]) -> float:
@@ -355,38 +352,22 @@ def _infer_cut_height(operations: list[ToolpathOperation]) -> float:
     return _minimum_cut_height(heights)
 
 
-def _replay_line(stock: Stock, op_index: int, op: ToolpathOperation, tool_radius: float, tea_cap: float, cut_z: float) -> OperationEngagement:
+def _replay_line(
+    stock: Stock,
+    op_index: int,
+    op: ToolpathOperation,
+    tool_radius: float,
+    tea_cap: float,
+    category: ReplayCategory,
+) -> OperationEngagement:
     """Replay a single linear operation: classify by height, measure + subtract if engaged."""
     operation = op.operation
     g = op.geometry
     assert isinstance(g, Line)
-    z0, z1 = float(g.start[2]), float(g.end[2])
-    xy_len = math.hypot(float(g.end[0]) - float(g.start[0]), float(g.end[1]) - float(g.start[1]))
-
-    if abs(z0 - z1) > TOL.absolute:
-        # Differing-z line: a plunge (down) or retract-shaped (up). The generator
-        # emits both as pure-vertical lines; a differing-z line that also travels
-        # in XY is a 3D ramp the cut-plane audit does not model.
-        if xy_len > TOL.absolute:
-            raise UnexpectedToolpathGeometryError(
-                f"Operation {op_index} ({operation.value}) is a differing-z line with nonzero XY travel "
-                f"(len={xy_len:.3e}); ramped 3D cutting is outside the engagement audit's cut-plane model."
-            )
-        if z1 < z0:
-            # Plunge: full-immersion bore. Remove the tool disk at the end point;
-            # plunge feed is governed by plunge-rate limits, not TEA, so the audit
-            # deliberately records no engagement for it.
-            stock.subtract_disk(float(g.end[0]), float(g.end[1]), tool_radius)
-        # Upward (retract-shaped) moves remove no new material.
+    if category == "plunge":
+        stock.subtract_disk(float(g.end[0]), float(g.end[1]), tool_radius)
         return _unmeasured(op_index, operation)
-
-    # Horizontal line at height z0.
-    if z0 > cut_z + TOL.absolute:
-        # Above the cutting plane (a link across an already-cleared corridor at the
-        # clearance height): rapid travel, no material interaction.
-        return _unmeasured(op_index, operation)
-
-    if operation not in AUDIT_ENGAGED:
+    if category != "motion":
         return _unmeasured(op_index, operation)
 
     # Cut-height engaged linear motion. Certify against the material this move
@@ -405,10 +386,17 @@ def _replay_line(stock: Stock, op_index: int, op: ToolpathOperation, tool_radius
     return OperationEngagement(op_index, operation, max_tea, cap_certified, stations)
 
 
-def _replay_arc(stock: Stock, op_index: int, op: ToolpathOperation, tool_radius: float, tea_cap: float) -> OperationEngagement:
+def _replay_arc(
+    stock: Stock,
+    op_index: int,
+    op: ToolpathOperation,
+    tool_radius: float,
+    tea_cap: float,
+    category: ReplayCategory,
+) -> OperationEngagement:
     """Replay a single circular operation: measure (station sampling) + subtract if engaged."""
     operation = op.operation
-    if operation not in AUDIT_ENGAGED:
+    if category != "motion":
         return _unmeasured(op_index, operation)
     geometry = op.geometry
     assert isinstance(geometry, (Arc, Circle))  # guaranteed by _replay_operation's Line dispatch
@@ -419,13 +407,14 @@ def _replay_arc(stock: Stock, op_index: int, op: ToolpathOperation, tool_radius:
 
 def _replay_operation(stock: Stock, op_index: int, op: ToolpathOperation, tool_radius: float, tea_cap: float, cut_z: float) -> OperationEngagement:
     """Replay one operation against the depleting stock, returning its engagement record."""
-    if op.operation == OperationType.RETRACT:
-        # Rapid clearance-plane up-move: no material interaction regardless of geometry.
-        return _unmeasured(op_index, op.operation)
+    try:
+        category = classify_operation_replay(op, Millimetre(cut_z))
+    except (CutPlaneRampError, OffPlaneReplayCurveError) as error:
+        raise UnexpectedToolpathGeometryError(f"Operation {op_index} ({op.operation.value}) {error}.") from error
     if isinstance(op.geometry, Line):
-        return _replay_line(stock, op_index, op, tool_radius, tea_cap, cut_z)
+        return _replay_line(stock, op_index, op, tool_radius, tea_cap, category)
     # Arc / Circle: planar cut motions, always at the cutting plane by construction.
-    return _replay_arc(stock, op_index, op, tool_radius, tea_cap)
+    return _replay_arc(stock, op_index, op, tool_radius, tea_cap, category)
 
 
 def audit_toolpath_engagement(

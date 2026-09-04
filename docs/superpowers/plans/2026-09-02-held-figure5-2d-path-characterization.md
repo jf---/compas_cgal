@@ -689,6 +689,10 @@ GIT_AUTHOR_NAME='Jelle Feringa' GIT_AUTHOR_EMAIL='jelleferinga@gmail.com' GIT_CO
 
 **Files:**
 
+- Create: `src/compas_cgal/replay_classification.py`
+- Create: `tests/test_replay_classification.py`
+- Modify: `src/compas_cgal/engagement.py`
+- Modify: `benchmarks/depletion.py`
 - Modify: `benchmarks/survey.py:129-229, 237-289, 550-588`
 - Modify: `benchmarks/quality_observations.py:300-675`
 - Modify: `tests/benchmarks/test_quality_observations.py`
@@ -702,6 +706,10 @@ GIT_AUTHOR_NAME='Jelle Feringa' GIT_AUTHOR_EMAIL='jelleferinga@gmail.com' GIT_CO
   that same specification and operation stream, and unchanged criterion
   thresholds.
 - Produces:
+  - one dependency-neutral, four-way replay classification shared by production
+    engagement, depletion, survey, and immutable evidence validation;
+  - preserved consumer exceptions with the neutral classification failure as
+    their retained cause;
   - operation-level plunge/retract observations sufficient to prove a complete
     operation partition;
   - a retained closed unit discriminator on `MeasuredStep[StepUnitT]`;
@@ -763,6 +771,12 @@ gate invocation; aggregate equality and cardinality alone are insufficient.
 
 - [ ] **Step 4: Run RED, implement the smallest validators, and run GREEN**
 
+The replay-classification correction must additionally cover strict tolerance
+boundaries, retract precedence, invalid ramps, planar-curve height, and all four
+real consumers. The neutral classifier depends only on toolpath roles, existing
+millimetre types, COMPAS tolerance, and geometry facts; consumer-specific stock
+effects and exception translation remain at their existing boundaries.
+
 ```bash
 pixi run pytest -- tests/benchmarks/test_quality_observations.py tests/benchmarks/test_quality.py tests/benchmarks/test_quality_invariants.py -k 'binding or partition or operation_count or unit or contradiction or exact_sources' -n auto --testmon --testmon-noselect -q
 ```
@@ -777,6 +791,7 @@ pass.
 ```bash
 pixi run pytest -- tests/benchmarks/test_quality.py tests/benchmarks/test_quality_invariants.py tests/benchmarks/test_quality_observations.py -k 'not test_the_generated_path_is_worth_running and not test_moving_the_pocket_across_the_table_changes_no_metric' -n auto --testmon --testmon-noselect -q
 pixi run types-benchmarks
+pixi run pytest -- tests/test_replay_classification.py tests/test_engagement_audit.py tests/benchmarks/test_depletion.py tests/benchmarks/test_survey.py tests/benchmarks/test_quality_observations.py -n auto --testmon --testmon-noselect -q
 pixi run ruff format benchmarks/survey.py benchmarks/quality_observations.py tests/benchmarks/test_quality_observations.py tests/benchmarks/test_quality.py tests/benchmarks/test_quality_invariants.py tests/benchmarks/typecheck/quality_observations_contract.py
 pixi run ruff check benchmarks/survey.py benchmarks/quality_observations.py tests/benchmarks
 git diff --check
