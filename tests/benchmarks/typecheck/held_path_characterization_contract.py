@@ -11,6 +11,9 @@ from benchmarks.held_path_snapshot import snapshot_toolpath
 from benchmarks.held_path_evidence import EngagementDispositionCounts
 from benchmarks.held_path_evidence import EngagementExceedanceWitness
 from benchmarks.held_path_evidence import HeldFigure5Characterization
+from benchmarks.held_post_qualification import HeldPostQualificationCandidate
+from benchmarks.held_post_qualification import post_qualification_failures
+from benchmarks.held_post_qualification import require_post_qualification_candidate
 from benchmarks.survey import EngagementSample
 from benchmarks.survey import MotionQuality
 from benchmarks.units import Degrees
@@ -116,3 +119,14 @@ def _characterization_contract(
     assert_type(characterization.coverage_remaining_area, SquareMillimetre)
     assert_type(characterization.path_quality, PathQuality)
     assert_type(characterization.assessment, PathQualityAssessment)
+    assert_type(post_qualification_failures(characterization), tuple[str, ...])
+    candidate = assert_type(
+        HeldPostQualificationCandidate.build(characterization),
+        HeldPostQualificationCandidate,
+    )
+    assert_type(
+        require_post_qualification_candidate(characterization),
+        HeldPostQualificationCandidate,
+    )
+    assert_type(candidate.characterization, HeldFigure5Characterization)
+    assert_type(candidate.snapshot, tuple[HeldOperationSnapshot, ...])
