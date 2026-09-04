@@ -29,6 +29,7 @@ from compas.geometry import Line
 from compas.geometry import Polygon
 
 import benchmarks.quality as quality_module
+import benchmarks.quality_observations as quality_observations_module
 from benchmarks.coverage import CoarseCoverageGridError
 from benchmarks.coverage import CoverageEstimate
 from benchmarks.coverage import measure_coverage
@@ -732,6 +733,105 @@ def test_a_motion_probed_at_no_positions_is_refused() -> None:
 def test_a_toolpath_with_no_length_is_refused_rather_than_divided_by() -> None:
     with pytest.raises(ZeroLengthToolpathError):
         measure_quality(SYNTHETIC, _result([]), samples_per_motion=FAST_SAMPLES, grid=SYNTHETIC_GRID)
+
+
+def test_quality_evidence_uses_one_validated_survey_coverage_and_assessment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The additive reducer owns coverage and the canonical decision once."""
+    result = _result([_plunge(0.0, 0.0), _circle(0.0, 0.0, 2.0)])
+    snapshot = snapshot_toolpath(result)
+    survey = survey_path(SYNTHETIC, result, samples_per_motion=FAST_SAMPLES)
+    calls = {"coverage": 0, "assessment": 0}
+    original_coverage = quality_observations_module.measure_coverage
+    original_assessment = quality_observations_module.assess_path_quality
+
+    def capture_coverage(spec: PocketSpec, stock: Stock, *, grid: int) -> CoverageEstimate:
+        calls["coverage"] += 1
+        assert stock is survey.final_stock
+        return original_coverage(spec, stock, grid=grid)
+
+    def capture_assessment(
+        spec: PocketSpec,
+        snapshot_arg: tuple[HeldOperationSnapshot, ...],
+        survey_arg: PathSurvey,
+        coverage: CoverageEstimate,
+    ) -> PathQualityAssessment:
+        calls["assessment"] += 1
+        assert snapshot_arg is snapshot
+        assert survey_arg is survey
+        return original_assessment(spec, snapshot_arg, survey_arg, coverage)
+
+    monkeypatch.setattr(quality_observations_module, "measure_coverage", capture_coverage)
+    monkeypatch.setattr(quality_observations_module, "assess_path_quality", capture_assessment)
+    evidence = quality_observations_module.reduce_quality_evidence(
+        SYNTHETIC,
+        snapshot,
+        survey,
+        grid=SYNTHETIC_GRID,
+    )
+
+    assert calls == {"coverage": 1, "assessment": 1}
+    assert evidence.coverage.uncut_fraction == evidence.path_quality.elementary.uncut_fraction
+    assert evidence.assessment == original_assessment(SYNTHETIC, snapshot, survey, evidence.coverage)
+    assert evidence.path_quality == measure_quality(
+        SYNTHETIC,
+        result,
+        samples_per_motion=FAST_SAMPLES,
+        grid=SYNTHETIC_GRID,
+    )
+
+
+def test_quality_evidence_preserves_named_zero_length_and_invalid_grid_errors() -> None:
+    empty_result = _result([])
+    empty_survey = survey_path(SYNTHETIC, empty_result, samples_per_motion=FAST_SAMPLES)
+    with pytest.raises(ZeroLengthToolpathError):
+        quality_observations_module.reduce_quality_evidence(
+            SYNTHETIC,
+            snapshot_toolpath(empty_result),
+            empty_survey,
+            grid=SYNTHETIC_GRID,
+        )
+
+    result = _result([_plunge(0.0, 0.0), _circle(0.0, 0.0, 2.0)])
+    survey = survey_path(SYNTHETIC, result, samples_per_motion=FAST_SAMPLES)
+    with pytest.raises(InvalidGridResolutionError):
+        quality_observations_module.reduce_quality_evidence(
+            SYNTHETIC,
+            snapshot_toolpath(result),
+            survey,
+            grid=0,
+        )
+
+
+def test_measure_quality_compatibility_delegates_to_one_canonical_reduction(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The public compatibility route surveys once and delegates once."""
+    result = _result([_plunge(0.0, 0.0), _circle(0.0, 0.0, 2.0)])
+    calls = {"survey": 0, "reducer": 0}
+    original_survey = quality_module.survey_path
+    original_reducer = quality_observations_module.reduce_quality_evidence
+
+    def capture_survey(spec: PocketSpec, result_arg: ToolpathResult, *, samples_per_motion: int) -> PathSurvey:
+        calls["survey"] += 1
+        return original_survey(spec, result_arg, samples_per_motion=samples_per_motion)
+
+    def capture_reducer(
+        spec: PocketSpec,
+        snapshot: tuple[HeldOperationSnapshot, ...],
+        survey: PathSurvey,
+        *,
+        grid: int,
+    ) -> object:
+        calls["reducer"] += 1
+        return original_reducer(spec, snapshot, survey, grid=grid)
+
+    monkeypatch.setattr(quality_module, "survey_path", capture_survey)
+    monkeypatch.setattr(quality_observations_module, "reduce_quality_evidence", capture_reducer)
+    measure_quality(SYNTHETIC, result, samples_per_motion=FAST_SAMPLES, grid=SYNTHETIC_GRID)
+
+    assert calls == {"survey": 1, "reducer": 1}
 
 
 def test_the_named_empty_reachable_error_exists_for_a_pocket_a_grid_cannot_see() -> None:
