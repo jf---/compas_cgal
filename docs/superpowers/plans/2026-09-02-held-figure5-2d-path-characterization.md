@@ -717,7 +717,7 @@ GIT_AUTHOR_NAME='Jelle Feringa' GIT_AUTHOR_EMAIL='jelleferinga@gmail.com' GIT_CO
   - fail-closed survey/spec/snapshot binding;
   - criterion outcomes and failure-pair attribution that cannot contradict.
 
-- [ ] **Step 1: Write RED input-binding tests**
+- [x] **Step 1: Write RED input-binding tests**
 
 Require `InvalidHeldPathEvidenceError` for a foreign `PocketSpec`, omitted or
 reordered operation, mismatched operation role, wrong primitive kind, and
@@ -730,7 +730,7 @@ the validated survey's `final_stock`; no public production boundary may accept
 an independently supplied `CoverageEstimate`. The Task 5 transition reducer may
 continue accepting captured coverage only until Task 6 is explicitly approved.
 
-- [ ] **Step 2: Write RED unit and count factory tests**
+- [x] **Step 2: Write RED unit and count factory tests**
 
 Add runtime and strict-type contracts for:
 
@@ -752,7 +752,7 @@ again when installing a step into its engagement or loop-radius slot. Require an
 exact non-Boolean integer operation count; zero remains valid only for a wholly
 empty standalone attribution and is ineligible for Figure 5.
 
-- [ ] **Step 3: Write RED contradiction and exact-source tests**
+- [x] **Step 3: Write RED contradiction and exact-source tests**
 
 Mutation tests must reject:
 
@@ -769,7 +769,7 @@ form a coherent assessment. Independently reconstruct exact expected source
 tuples from raw survey observations in every synthetic, invariant, and twelve
 gate invocation; aggregate equality and cardinality alone are insufficient.
 
-- [ ] **Step 4: Run RED, implement the smallest validators, and run GREEN**
+- [x] **Step 4: Run RED, implement the smallest validators, and run GREEN**
 
 The replay-classification correction must additionally cover strict tolerance
 boundaries, retract precedence, invalid ramps, planar-curve height, and all four
@@ -786,7 +786,7 @@ factory and is accepted when it must fail. Implement only the validation needed
 by those contracts, then rerun the same command expecting all selected tests to
 pass.
 
-- [ ] **Step 5: Run focused parity, types, Ruff, and commit**
+- [x] **Step 5: Run focused parity, types, Ruff, and commit**
 
 ```bash
 pixi run pytest -- tests/benchmarks/test_quality.py tests/benchmarks/test_quality_invariants.py tests/benchmarks/test_quality_observations.py -k 'not test_the_generated_path_is_worth_running and not test_moving_the_pocket_across_the_table_changes_no_metric' -n auto --testmon --testmon-noselect -q
