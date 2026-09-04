@@ -20,6 +20,7 @@ silently stopped measuring long before the slow gate noticed.
 from __future__ import annotations
 
 import math
+from dataclasses import replace
 
 import numpy as np
 import pytest
@@ -34,6 +35,7 @@ from benchmarks.coverage import CoarseCoverageGridError
 from benchmarks.coverage import CoverageEstimate
 from benchmarks.coverage import measure_coverage
 from benchmarks.errors import EmptyReachableRegionError
+from benchmarks.errors import ContradictoryPathQualityEvidenceError
 from benchmarks.errors import InvalidGridResolutionError
 from benchmarks.errors import InvalidMachineModelError
 from benchmarks.errors import InvalidMaterialModelError
@@ -806,6 +808,47 @@ def test_quality_evidence_preserves_named_zero_length_and_invalid_grid_errors() 
         )
 
 
+def test_quality_evidence_rejects_raw_and_contradictory_public_construction() -> None:
+    result = _result([_plunge(0.0, 0.0), _circle(0.0, 0.0, 2.0)])
+    snapshot = snapshot_toolpath(result)
+    survey = survey_path(SYNTHETIC, result, samples_per_motion=FAST_SAMPLES)
+    evidence = quality_observations_module.reduce_quality_evidence(
+        SYNTHETIC,
+        snapshot,
+        survey,
+        grid=SYNTHETIC_GRID,
+    )
+
+    with pytest.raises(TypeError, match="QualityEvidence.build"):
+        quality_observations_module.QualityEvidence()
+
+    contradictory_uncut = 0.0 if evidence.path_quality.elementary.uncut_fraction != 0.0 else 1.0
+    contradictory_quality = replace(
+        evidence.path_quality,
+        elementary=replace(
+            evidence.path_quality.elementary,
+            uncut_fraction=contradictory_uncut,
+        ),
+    )
+    with pytest.raises(ContradictoryPathQualityEvidenceError, match="gate fields disagree"):
+        quality_observations_module.QualityEvidence.build(
+            path_quality=contradictory_quality,
+            assessment=evidence.assessment,
+            coverage=evidence.coverage,
+        )
+
+    contradictory_coverage = replace(
+        evidence.coverage,
+        wall_scallop_height=evidence.coverage.wall_scallop_height + 1.0,
+    )
+    with pytest.raises(ContradictoryPathQualityEvidenceError, match="coverage evidence disagrees"):
+        quality_observations_module.QualityEvidence.build(
+            path_quality=evidence.path_quality,
+            assessment=evidence.assessment,
+            coverage=contradictory_coverage,
+        )
+
+
 def test_measure_quality_compatibility_delegates_to_one_canonical_reduction(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1065,6 +1108,15 @@ def _assert_quality_parity(
             assert observation.value == old_maximum
 
 
+_FAILED_QUALITY_OUTCOMES = frozenset(
+    {
+        "failure_observed",
+        "criterion_violated",
+        "outside_declared_tolerance",
+    }
+)
+
+
 def _violations(assessment: PathQualityAssessment) -> list[str]:
     """Every failed canonical criterion as ``measured against required`` lines.
 
@@ -1091,7 +1143,7 @@ def _violations(assessment: PathQualityAssessment) -> list[str]:
     return [
         f"[{group}] {criterion.name}: measured {fmt.format(criterion.measured)}, required <= {fmt.format(criterion.required)}"
         for group, criterion, fmt in checks
-        if criterion.measured > criterion.required
+        if criterion.outcome in _FAILED_QUALITY_OUTCOMES
     ]
 
 
