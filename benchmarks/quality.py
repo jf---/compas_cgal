@@ -510,7 +510,6 @@ def measure_quality(
 def _elementary(
     spec: PocketSpec,
     survey: PathSurvey,
-    uncut_fraction: float,
     remaining_area: float,
     assessment: PathQualityAssessment,
 ) -> ElementaryQuality:
@@ -524,7 +523,6 @@ def _elementary(
     Args:
         spec: The instance, for the pocket area.
         survey: The replay's findings.
-        uncut_fraction: From the coverage grid.
         remaining_area: Estimated area still standing, from the coverage grid.
 
     Returns:
@@ -534,7 +532,7 @@ def _elementary(
     swept = survey.swept_area
     removed = max(0.0, abs(spec.polygon.area) - remaining_area)
     return ElementaryQuality(
-        uncut_fraction=uncut_fraction,
+        uncut_fraction=float(assessment.uncut_fraction.measured),
         gouge_free=assessment.gouging_motions.measured == 0,
         gouging_motions=int(assessment.gouging_motions.measured),
         rapid_safety=assessment.unsafe_rapids.measured == 0,

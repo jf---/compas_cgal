@@ -25,6 +25,14 @@ from benchmarks.units import ToolRadiusMultiple
 def _contract(spec: PocketSpec, snapshot: tuple[HeldOperationSnapshot, ...], survey: PathSurvey, coverage: CoverageEstimate) -> None:
     assessment = assert_type(assess_path_quality(spec, snapshot, survey, coverage), PathQualityAssessment)
     evidence = assert_type(reduce_quality_evidence(spec, snapshot, survey), QualityEvidence)
+    assert_type(
+        QualityEvidence.build(
+            path_quality=evidence.path_quality,
+            assessment=evidence.assessment,
+            coverage=evidence.coverage,
+        ),
+        QualityEvidence,
+    )
     assert_type(evidence.assessment, PathQualityAssessment)
     assert_type(evidence.coverage, CoverageEstimate)
     assert_type(assessment.uncut_fraction, FractionCriterion)

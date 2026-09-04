@@ -370,7 +370,7 @@ class _Groups:
         )
         snapshot = snapshot_toolpath(result)
         self.assessment = assess_path_quality(spec, snapshot, survey, coverage)
-        self.elementary = _elementary(spec, survey, 0.0, 0.0, self.assessment)
+        self.elementary = _elementary(spec, survey, 0.0, self.assessment)
         self.cut = _cut(spec, survey, 0.0, self.assessment)
         self.speed = _speed(survey, self.assessment)
         self.program = _program(survey)
