@@ -11,8 +11,10 @@ from benchmarks.quality_observations import FractionCriterion
 from benchmarks.quality_observations import MeasuredStep
 from benchmarks.quality_observations import OperationPair
 from benchmarks.quality_observations import PathQualityAssessment
+from benchmarks.quality_observations import QualityEvidence
 from benchmarks.quality_observations import ToolRadiusMultipleCriterion
 from benchmarks.quality_observations import assess_path_quality
+from benchmarks.quality_observations import reduce_quality_evidence
 from benchmarks.spec import PocketSpec
 from benchmarks.survey import PathSurvey
 from benchmarks.units import Degrees
@@ -22,6 +24,9 @@ from benchmarks.units import ToolRadiusMultiple
 
 def _contract(spec: PocketSpec, snapshot: tuple[HeldOperationSnapshot, ...], survey: PathSurvey, coverage: CoverageEstimate) -> None:
     assessment = assert_type(assess_path_quality(spec, snapshot, survey, coverage), PathQualityAssessment)
+    evidence = assert_type(reduce_quality_evidence(spec, snapshot, survey), QualityEvidence)
+    assert_type(evidence.assessment, PathQualityAssessment)
+    assert_type(evidence.coverage, CoverageEstimate)
     assert_type(assessment.uncut_fraction, FractionCriterion)
     assert_type(assessment.gouging_motions, CountCriterion)
     assert_type(assessment.max_engagement_step, DegreesCriterion)

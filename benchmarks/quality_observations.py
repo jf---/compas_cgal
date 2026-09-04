@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from dataclasses import replace
 from typing import Generic
 from typing import Literal
 from typing import Optional
@@ -22,10 +23,13 @@ from typing import overload
 from typing_extensions import Self
 from typing_extensions import TypeAlias
 
+from benchmarks.coverage import COVERAGE_GRID_SAMPLES
 from benchmarks.coverage import CoverageEstimate
+from benchmarks.coverage import measure_coverage
 from benchmarks.errors import ContradictoryPathQualityEvidenceError
 from benchmarks.errors import InvalidHeldPathEvidenceError
 from benchmarks.errors import UnreplayableOperationError
+from benchmarks.errors import ZeroLengthToolpathError
 from benchmarks.held_path_snapshot import HeldArcSnapshot
 from benchmarks.held_path_snapshot import HeldCircleSnapshot
 from benchmarks.held_path_snapshot import HeldLineSnapshot
@@ -33,6 +37,12 @@ from benchmarks.held_path_snapshot import HeldOperationSnapshot
 from benchmarks.quality import CONTINUITY_TOOL_RADIUS_FRACTION
 from benchmarks.quality import DEGENERATE_LOOP_RATIO
 from benchmarks.quality import TANGENT_CONTINUITY_SLACK
+from benchmarks.quality import PathQuality
+from benchmarks.quality import _cut
+from benchmarks.quality import _elementary
+from benchmarks.quality import _longevity
+from benchmarks.quality import _program
+from benchmarks.quality import _speed
 from benchmarks.spec import PocketSpec
 from benchmarks.survey import MotionKind
 from benchmarks.survey import MotionQuality
@@ -1010,3 +1020,79 @@ def assess_path_quality(
         snapshot=snapshot,
         survey=survey,
     )
+
+
+@dataclass(frozen=True)
+class QualityEvidence:
+    """One canonical quality reduction and the evidence it was built from."""
+
+    path_quality: PathQuality
+    assessment: PathQualityAssessment
+    coverage: CoverageEstimate
+
+
+def _material_entry_count(survey: PathSurvey) -> int:
+    """Count first cut contacts after plunges from the validated survey."""
+    plunge_indices = set(survey.plunge_indices)
+    motion_indices = {motion.index for motion in survey.motions}
+    armed = False
+    entries = 0
+    for index in range(len(survey.source_snapshot)):
+        if index in plunge_indices:
+            armed = True
+        elif index in motion_indices and armed:
+            entries += NEXT_OPERATION_OFFSET
+            armed = False
+    return entries
+
+
+def reduce_quality_evidence(
+    spec: PocketSpec,
+    snapshot: tuple[HeldOperationSnapshot, ...],
+    survey: PathSurvey,
+    *,
+    grid: int = COVERAGE_GRID_SAMPLES,
+) -> QualityEvidence:
+    """Reduce one validated survey through the canonical quality assessment."""
+    if survey.total_length <= ZERO_FLOAT:
+        raise ZeroLengthToolpathError(f"{spec.name}: the toolpath sums to zero length, so no length fraction is defined.")
+    _validate_survey_binding(spec, snapshot, survey)
+    coverage = measure_coverage(spec, survey.final_stock, grid=grid)
+    assessment = assess_path_quality(spec, snapshot, survey, coverage)
+    chain_of = {int(operation.ordinal): operation.path_index for operation in snapshot}
+
+    elementary = replace(
+        _elementary(spec, survey, coverage.uncut_fraction, coverage.remaining_area),
+        uncut_fraction=float(assessment.uncut_fraction.measured),
+        gouge_free=assessment.gouging_motions.measured == REQUIRED_COUNT,
+        gouging_motions=int(assessment.gouging_motions.measured),
+        rapid_safety=assessment.unsafe_rapids.measured == REQUIRED_COUNT,
+        unsafe_rapids=int(assessment.unsafe_rapids.measured),
+        continuity_breaks=int(assessment.continuity_breaks.measured),
+        zero_length_motions=int(assessment.zero_length_motions.measured),
+        degenerate_loops=int(assessment.degenerate_loops.measured),
+        redundant_operations=int(assessment.redundant_operations.measured),
+    )
+    cut = replace(
+        _cut(spec, survey, coverage.wall_scallop_height, chain_of),
+        cap_exceedances=int(assessment.cap_exceedances.measured),
+        max_engagement_step_deg=float(assessment.max_engagement_step.measured),
+        slotting_motions=int(assessment.slotting_motions.measured),
+        max_loop_radius_step=float(assessment.max_loop_radius_step.measured),
+    )
+    speed = replace(
+        _speed(survey),
+        tangent_breaks=int(assessment.tangent_breaks.measured),
+        curvature_breaks=len(assessment.attribution.curvature_break_pairs),
+        direction_reversals=len(assessment.attribution.reversal_pairs),
+    )
+    quality = PathQuality(
+        elementary=elementary,
+        cut=cut,
+        speed=speed,
+        longevity=_longevity(survey, _material_entry_count(survey)),
+        program=_program(survey),
+        cut_operations=len(survey.motions),
+        path_length=survey.total_length,
+    )
+    return QualityEvidence(path_quality=quality, assessment=assessment, coverage=coverage)
