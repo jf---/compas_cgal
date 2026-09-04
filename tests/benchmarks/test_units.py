@@ -10,6 +10,7 @@ from benchmarks.units import degrees_value
 from benchmarks.units import motion_count
 from benchmarks.units import operation_index
 from benchmarks.units import seconds_value
+from benchmarks.units import square_millimetres_value
 from benchmarks.units import tool_radius_multiple
 
 
@@ -38,6 +39,11 @@ def test_tool_radius_multiple_accepts_non_negative_finite_values(value: float) -
     assert tool_radius_multiple(value, name="step length") == value
 
 
+@pytest.mark.parametrize("value", [0.0, 12.5])
+def test_square_millimetres_accepts_non_negative_finite_area(value: float) -> None:
+    assert square_millimetres_value(value, name="remaining area") == value
+
+
 def test_operation_index_accepts_index_in_operation_stream() -> None:
     assert operation_index(3, operation_count=4) == 3
 
@@ -50,6 +56,7 @@ def test_operation_index_accepts_index_in_operation_stream() -> None:
         (closed_unit_fraction, {"name": "uncut fraction"}),
         (motion_count, {"name": "gouging motions"}),
         (tool_radius_multiple, {"name": "step length"}),
+        (square_millimetres_value, {"name": "remaining area"}),
     ],
 )
 def test_observation_unit_validators_reject_bool(validator: object, kwargs: dict[str, str]) -> None:
@@ -65,6 +72,7 @@ def test_observation_unit_validators_reject_bool(validator: object, kwargs: dict
         (degrees_value, "reported angle"),
         (closed_unit_fraction, "uncut fraction"),
         (tool_radius_multiple, "step length"),
+        (square_millimetres_value, "remaining area"),
     ],
 )
 def test_float_observation_unit_validators_reject_non_finite_values(
@@ -96,6 +104,11 @@ def test_motion_count_rejects_non_count_value(value: object) -> None:
 def test_tool_radius_multiple_rejects_negative_value() -> None:
     with pytest.raises(InvalidHeldPathEvidenceError):
         tool_radius_multiple(-0.01, name="step length")
+
+
+def test_square_millimetres_rejects_negative_area() -> None:
+    with pytest.raises(InvalidHeldPathEvidenceError):
+        square_millimetres_value(-0.01, name="remaining area")
 
 
 @pytest.mark.parametrize(

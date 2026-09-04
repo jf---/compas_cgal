@@ -21,10 +21,7 @@ from benchmarks.held_path_snapshot import HeldLineSnapshot
 from benchmarks.held_path_snapshot import HeldOperationSnapshot
 from benchmarks.held_reference_cases import HeldReferenceCase
 from benchmarks.held_reference_cases import load_held_reference_case
-from benchmarks.quality import DEGENERATE_LOOP_RATIO
 from benchmarks.quality import PathQuality
-from benchmarks.quality_observations import CRITERION_NAMES
-from benchmarks.quality_observations import EVIDENCE_BY_CRITERION
 from benchmarks.quality_observations import PathQualityAssessment
 from benchmarks.quality_observations import QualityEvidence
 from benchmarks.survey import EngagementSample
@@ -35,8 +32,12 @@ from benchmarks.survey import RapidMotion
 from benchmarks.units import Degrees
 from benchmarks.units import OperationIndex
 from benchmarks.units import Seconds
+from benchmarks.units import SquareMillimetre
+from benchmarks.units import UnitFraction
+from benchmarks.units import closed_unit_fraction
 from benchmarks.units import operation_index
 from benchmarks.units import seconds_value
+from benchmarks.units import square_millimetres_value
 from compas_cgal.adaptive.units import Millimetre
 from compas_cgal.adaptive.units import Point2
 from compas_cgal.adaptive.units import WorldXY
@@ -177,13 +178,13 @@ class HeldFigure5Characterization:
     assessment: PathQualityAssessment
     coverage_nx: int
     coverage_ny: int
-    coverage_cell_area: float
+    coverage_cell_area: SquareMillimetre
     coverage_reachable_samples: int
     coverage_uncut_reachable_samples: int
     coverage_remaining_samples: int
-    coverage_wall_scallop_height: float
-    coverage_uncut_fraction: float
-    coverage_remaining_area: float
+    coverage_wall_scallop_height: Millimetre
+    coverage_uncut_fraction: UnitFraction
+    coverage_remaining_area: SquareMillimetre
 
     def __init__(self) -> None:
         raise TypeError("HeldFigure5Characterization must be created with HeldFigure5Characterization.build().")
@@ -256,13 +257,13 @@ class HeldFigure5Characterization:
             "assessment": assessment,
             "coverage_nx": coverage.nx,
             "coverage_ny": coverage.ny,
-            "coverage_cell_area": coverage.cell_area,
+            "coverage_cell_area": square_millimetres_value(coverage.cell_area, name="coverage cell area"),
             "coverage_reachable_samples": coverage.reachable_samples,
             "coverage_uncut_reachable_samples": coverage.uncut_reachable_samples,
             "coverage_remaining_samples": coverage.remaining_samples,
-            "coverage_wall_scallop_height": coverage.wall_scallop_height,
-            "coverage_uncut_fraction": coverage.uncut_fraction,
-            "coverage_remaining_area": coverage.remaining_area,
+            "coverage_wall_scallop_height": Millimetre(coverage.wall_scallop_height),
+            "coverage_uncut_fraction": closed_unit_fraction(coverage.uncut_fraction, name="coverage uncut fraction"),
+            "coverage_remaining_area": square_millimetres_value(coverage.remaining_area, name="coverage remaining area"),
         }
         return _build_record(cls, values)
 
@@ -380,41 +381,28 @@ def _validate_quality(
     if type(quality.coverage) is not CoverageEstimate:
         raise InvalidHeldPathEvidenceError("quality evidence requires one exact coverage record.")
     assessment = quality.assessment
-    criteria = tuple(getattr(assessment, name) for name in _CRITERION_FIELDS)
-    if tuple(criterion.name for criterion in criteria) != CRITERION_NAMES:
-        raise InvalidHeldPathEvidenceError("quality assessment must contain all twelve criteria in canonical order.")
-    if tuple(criterion.evidence for criterion in criteria) != tuple(EVIDENCE_BY_CRITERION[name] for name in CRITERION_NAMES):
-        raise InvalidHeldPathEvidenceError("quality assessment evidence kinds disagree with the canonical vocabulary.")
+    canonical_assessment = PathQualityAssessment.build(
+        spec=survey.spec,
+        snapshot=survey.source_snapshot,
+        survey=survey,
+        uncut_fraction=assessment.uncut_fraction,
+        gouging_motions=assessment.gouging_motions,
+        unsafe_rapids=assessment.unsafe_rapids,
+        continuity_breaks=assessment.continuity_breaks,
+        zero_length_motions=assessment.zero_length_motions,
+        degenerate_loops=assessment.degenerate_loops,
+        redundant_operations=assessment.redundant_operations,
+        cap_exceedances=assessment.cap_exceedances,
+        slotting_motions=assessment.slotting_motions,
+        max_engagement_step=assessment.max_engagement_step,
+        max_loop_radius_step=assessment.max_loop_radius_step,
+        tangent_breaks=assessment.tangent_breaks,
+        attribution=assessment.attribution,
+    )
+    if canonical_assessment != assessment:
+        raise ContradictoryPathQualityEvidenceError("quality assessment differs from its canonical validated reconstruction.")
     if assessment.attribution.operation_count != operation_count:
         raise InvalidHeldPathEvidenceError("quality attribution operation count disagrees with the source snapshot.")
-    attribution = assessment.attribution
-    direct_attributions = (
-        attribution.gouging_operations,
-        attribution.unsafe_rapid_operations,
-        attribution.zero_length_operations,
-        attribution.degenerate_loop_operations,
-        attribution.redundant_operations,
-        attribution.cap_exceeded_operations,
-        attribution.slotting_operations,
-    )
-    expected_attributions = (
-        tuple(OperationIndex(motion.index) for motion in survey.motions if any(not sample.inside_centre_domain for sample in motion.samples)),
-        tuple(OperationIndex(rapid.index) for rapid in survey.rapids if rapid.horizontal_at_cut_plane),
-        tuple(
-            OperationIndex(index)
-            for index in sorted([motion.index for motion in survey.motions if motion.length == 0.0] + [rapid.index for rapid in survey.rapids if rapid.length == 0.0])
-        ),
-        tuple(
-            OperationIndex(motion.index)
-            for motion in survey.motions
-            if motion.kind is MotionKind.LOOP and motion.loop_radius is not None and motion.loop_radius <= DEGENERATE_LOOP_RATIO * survey.spec.tool_radius
-        ),
-        tuple(OperationIndex(motion.index) for motion in survey.motions if not motion.removes_material),
-        tuple(OperationIndex(motion.index) for motion in survey.motions if any(sample.cap_exceeded for sample in motion.samples)),
-        tuple(OperationIndex(motion.index) for motion in survey.motions if motion.slot_exceeded),
-    )
-    if direct_attributions != expected_attributions:
-        raise ContradictoryPathQualityEvidenceError("quality attribution disagrees with the supplied survey observations.")
     path_quality = quality.path_quality
     if path_quality.cut_operations != len(survey.motions) or path_quality.path_length != survey.total_length:
         raise ContradictoryPathQualityEvidenceError("PathQuality source counts or path length disagree with the supplied survey.")
@@ -432,7 +420,7 @@ def _validate_quality(
         path_quality.cut.max_loop_radius_step,
         path_quality.speed.tangent_breaks,
     )
-    measured = tuple(criterion.measured for criterion in criteria)
+    measured = tuple(getattr(canonical_assessment, name).measured for name in _CRITERION_FIELDS)
     if projections != measured:
         raise ContradictoryPathQualityEvidenceError("PathQuality values disagree with the twelve assessed criterion values.")
     coverage = quality.coverage
@@ -446,16 +434,18 @@ def _validate_quality(
     scalar_values = (
         coverage.cell_area,
         coverage.wall_scallop_height,
-        coverage.uncut_fraction,
-        coverage.remaining_area,
     )
+    if any(type(value) is not float for value in scalar_values):
+        raise InvalidHeldPathEvidenceError("coverage measurements must be exact floating-point values.")
     if any(not math.isfinite(value) for value in scalar_values):
         raise InvalidHeldPathEvidenceError("coverage scalars must be finite.")
     if coverage.cell_area <= 0.0 or coverage.wall_scallop_height < 0.0:
         raise InvalidHeldPathEvidenceError("coverage cell area must be positive and wall scallop height non-negative.")
     if float(assessment.uncut_fraction.measured) != coverage.uncut_fraction:
         raise ContradictoryPathQualityEvidenceError("coverage uncut fraction disagrees with the assessed value.")
-    return path_quality, assessment, coverage
+    if path_quality.cut.wall_scallop_height != coverage.wall_scallop_height:
+        raise ContradictoryPathQualityEvidenceError("coverage wall scallop height disagrees with PathQuality.")
+    return path_quality, canonical_assessment, coverage
 
 
 _CRITERION_FIELDS = (
