@@ -1346,8 +1346,9 @@ markers only distinguish the two same-named strict type-contract modules.
   - `DEFAULT_REPORT_PATH = Path("docs/benchmarks/held_figure5_2d_path.md")`
   - `_utc_now() -> datetime`
   - `_print_phase(phase: CharacterizationPhase) -> None`
-  - `write_held_figure5_report(*, pixi_command: str, path: Path =
-    DEFAULT_REPORT_PATH) -> HeldFigure5Characterization`
+  - `write_held_figure5_report(*, pixi_command: str, phase_observer:
+    Callable[[CharacterizationPhase], None], path: Path = DEFAULT_REPORT_PATH)
+    -> HeldFigure5Characterization`
   - `main() -> None`
 
 - [x] **Step 1: Write RED report-context and rendering tests**
@@ -1392,12 +1393,20 @@ pixi run pytest -- tests/benchmarks/test_held_path_report.py tests/tools/test_he
 
 - [x] **Step 4: Implement pure rendering and thin CLI wiring**
 
-The renderer performs no geometry, timing, independent gate decision, or write. It
+The renderer rejects non-exact characterization and context objects before
+projection and performs no geometry, timing, independent gate decision, or write. It
 renders the canonical `post_qualification_failures` result. The tool
-alone owns `pathlib.Path`, production dependency wiring, UTC capture, and
+alone owns `pathlib.Path`, production dependency wiring, required observer
+injection, UTC capture, and
 `write_text(markdown, encoding="utf-8")`. It does not call the post-candidate gate;
 the report records the characterization verdict without turning the expected
 current failure into a process failure.
+
+Every timing label states seconds. Every report-only `PathQuality` row carries
+an explicit semantic unit, including count, fraction, ratio,
+benchmark-normalized millimetres, inverse/squared length, and angular units.
+Dynamic cells escape both Markdown table delimiters and HTML-sensitive text;
+only renderer-inserted newline markers remain literal `<br>` elements.
 
 - [x] **Step 5: Add the Pixi CLI task and strict type coverage**
 

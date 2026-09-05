@@ -413,19 +413,25 @@ deterministic Markdown from `(HeldFigure5Characterization,
 HeldPathReportContext)`. It does not run geometry, decide criteria, read a clock,
 or write files; it obtains the post-entry verdict from
 `post_qualification_failures(...)` rather than duplicating its conditions.
+It rejects non-exact characterization and context objects before projection,
+labels every timing and report-only quantity with its semantic unit, and
+escapes Markdown and HTML-sensitive dynamic table content while retaining
+renderer-owned `<br>` newline markers.
 
 ### `tools/held_path_characterization.py`
 
 Owns only CLI argument handling, production wiring, and the write to
 `docs/benchmarks/held_figure5_2d_path.md`.
 
-The report writer requires the actual Pixi invocation as an argument. The normal
+The report writer requires the actual Pixi invocation and a keyword-only
+`Callable[[CharacterizationPhase], None]` observer as arguments. The normal
 CLI supplies `pixi run held-figure5-characterize`; the explicit live oracle
 supplies `pixi run held-figure5-characterize-live`. It constructs
 `HeldPathReportContext` using its injected UTC wall clock. This wall clock is
 distinct from the monotonic timing clock and is injected in tests as `UtcClock =
 Callable[[], datetime]`; `_utc_now()` returns an aware UTC `datetime`.
-The normal CLI passes `_print_phase` to orchestration and emits all four phase
+The normal CLI passes `_print_phase` explicitly to the writer and orchestration
+and emits all four phase
 markers in order. The live oracle instead passes its ledger-writing observer;
 there is no omitted or no-op production observer path.
 
