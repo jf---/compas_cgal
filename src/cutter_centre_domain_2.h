@@ -6,7 +6,7 @@
 
 class CutterCentreDomain2 {
 public:
-    CutterCentreDomain2(
+    static CutterCentreDomain2 build(
         Eigen::Ref<const compas::RowMatrixXd> design_boundary,
         const std::vector<compas::RowMatrixXd>& holes,
         double tool_radius);

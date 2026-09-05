@@ -46,16 +46,16 @@ bool clears_ring_boundary(
 
 } // namespace
 
-CutterCentreDomain2::CutterCentreDomain2(
+CutterCentreDomain2 CutterCentreDomain2::build(
     Eigen::Ref<const compas::RowMatrixXd> design_boundary,
     const std::vector<compas::RowMatrixXd>& holes,
     double tool_radius)
-    : CutterCentreDomain2(
+{
+    return CutterCentreDomain2(
         canonical_reach_input(
             design_boundary,
             holes,
-            tool_radius))
-{
+            tool_radius));
 }
 
 CutterCentreDomain2::CutterCentreDomain2(CanonicalReachInput2 input)

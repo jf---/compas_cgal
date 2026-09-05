@@ -64,12 +64,13 @@ class ReachableDomain2:
 
 
 class CutterCentreDomain2:
-    def __init__(
-        self,
+    @classmethod
+    def build(
+        cls,
         design_boundary: Float64Array,
         holes: Sequence[Float64Array],
         tool_radius: float,
-    ) -> None: ...
+    ) -> CutterCentreDomain2: ...
     def contains(self, x: float, y: float) -> bool: ...
 
 

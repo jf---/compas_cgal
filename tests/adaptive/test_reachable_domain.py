@@ -321,7 +321,7 @@ def test_lightweight_cutter_centre_domain_matches_exact_region(
     holes: tuple[tuple[tuple[float, float], ...], ...],
     queries: tuple[tuple[float, float], ...],
 ) -> None:
-    lightweight = _coverage_2.CutterCentreDomain2(
+    lightweight = _coverage_2.CutterCentreDomain2.build(
         _array(boundary),
         [_array(hole) for hole in holes],
         1.0,
@@ -336,7 +336,7 @@ def test_lightweight_cutter_centre_domain_matches_exact_region(
 
 
 def test_lightweight_cutter_centre_domain_keeps_exact_closed_boundary() -> None:
-    domain = _coverage_2.CutterCentreDomain2(_array(RECTANGLE), [], 1.0)
+    domain = _coverage_2.CutterCentreDomain2.build(_array(RECTANGLE), [], 1.0)
 
     assert domain.contains(5.0, 4.0)
     assert domain.contains(1.0, 4.0)
@@ -346,7 +346,7 @@ def test_lightweight_cutter_centre_domain_keeps_exact_closed_boundary() -> None:
 
 
 def test_lightweight_cutter_centre_domain_keeps_exact_hole_boundary() -> None:
-    domain = _coverage_2.CutterCentreDomain2(_array(RECTANGLE), [_array(ISLAND)], 1.0)
+    domain = _coverage_2.CutterCentreDomain2.build(_array(RECTANGLE), [_array(ISLAND)], 1.0)
 
     assert domain.contains(3.0, 4.0)
     assert not domain.contains(np.nextafter(3.0, 4.0), 4.0)
@@ -369,18 +369,18 @@ def test_lightweight_cutter_centre_domain_preserves_named_input_errors(
     radius: float,
 ) -> None:
     with pytest.raises(InvalidReachableDomainInputError):
-        _coverage_2.CutterCentreDomain2(_array(boundary), [], radius)
+        _coverage_2.CutterCentreDomain2.build(_array(boundary), [], radius)
 
 
 def test_lightweight_cutter_centre_domain_rejects_invalid_hole_relationship() -> None:
     outside_hole = ((11.0, 3.0), (13.0, 3.0), (13.0, 5.0), (11.0, 5.0))
 
     with pytest.raises(InvalidReachableDomainInputError):
-        _coverage_2.CutterCentreDomain2(_array(RECTANGLE), [_array(outside_hole)], 1.0)
+        _coverage_2.CutterCentreDomain2.build(_array(RECTANGLE), [_array(outside_hole)], 1.0)
 
 
 def test_lightweight_predicate_does_not_claim_global_connectivity_certification() -> None:
-    domain = _coverage_2.CutterCentreDomain2(_array(DISCONNECTED_NECK), [], 1.0)
+    domain = _coverage_2.CutterCentreDomain2.build(_array(DISCONNECTED_NECK), [], 1.0)
 
     assert domain.contains(2.0, 3.0)
     assert domain.contains(10.0, 3.0)
@@ -396,10 +396,28 @@ def test_lightweight_predicate_does_not_claim_global_connectivity_certification(
     ),
 )
 def test_lightweight_cutter_centre_domain_rejects_nonfinite_queries(x: float, y: float) -> None:
-    domain = _coverage_2.CutterCentreDomain2(_array(RECTANGLE), [], 1.0)
+    domain = _coverage_2.CutterCentreDomain2.build(_array(RECTANGLE), [], 1.0)
 
     with pytest.raises(InvalidReachableDomainInputError):
         domain.contains(x, y)
+
+
+def test_lightweight_cutter_centre_domain_disables_direct_construction() -> None:
+    with pytest.raises(TypeError):
+        _coverage_2.CutterCentreDomain2(_array(RECTANGLE), [], 1.0)
+
+
+def test_lightweight_cutter_centre_domain_preserves_oblique_exact_tangency() -> None:
+    boundary = ((0.0, 0.0), (4.0, 3.0), (0.0, 3.0))
+    tangent = (1.625, 2.0)
+    adjacent_illegal = (np.nextafter(tangent[0], 4.0), tangent[1])
+    lightweight = _coverage_2.CutterCentreDomain2.build(_array(boundary), [], 0.625)
+    exact_region = _coverage_2.ReachableDomain2(_array(boundary), [], 0.625).center_domain()
+
+    assert lightweight.contains(*tangent)
+    assert exact_region.contains(*tangent)
+    assert not lightweight.contains(*adjacent_illegal)
+    assert not exact_region.contains(*adjacent_illegal)
 
 
 def test_reachable_material_and_residual_are_exact_partition_of_design() -> None:

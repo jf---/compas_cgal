@@ -1502,7 +1502,8 @@ source operations. One first-motion engagement query took 0.000640 seconds.
 Downstream replay cost remains unmeasured and is outside this repair.
 
 **Interface:** Add one lightweight exact native cutter-centre-domain predicate
-that owns canonical validated reach input and exposes only `contains(x, y)`.
+whose public `build(...)` factory owns canonical validated reach input and whose
+instances expose only `contains(x, y)`. Direct Python construction is disabled.
 It requires a finite query to lie inside or on the canonical outer polygon,
 outside every canonical hole interior, and at exact squared distance greater
 than or equal to the exact squared tool radius from every outer and hole
