@@ -420,6 +420,44 @@ def test_lightweight_cutter_centre_domain_preserves_oblique_exact_tangency() -> 
     assert not exact_region.contains(*adjacent_illegal)
 
 
+@pytest.mark.parametrize(
+    ("boundary", "holes"),
+    (
+        pytest.param(RECTANGLE, (), id="convex"),
+        pytest.param(REFLEX, (), id="concave"),
+        pytest.param(RECTANGLE, (ISLAND,), id="holed"),
+        pytest.param(NARROW_NECK, (), id="narrow-bay"),
+    ),
+)
+def test_material_predicate_matches_legacy_exact_reachable_material_pointwise(
+    boundary: tuple[tuple[float, float], ...],
+    holes: tuple[tuple[tuple[float, float], ...], ...],
+) -> None:
+    native_holes = [_array(hole) for hole in holes]
+    expected = _coverage_2.ReachableDomain2(_array(boundary), native_holes, 1.0).reachable_material()
+    actual = _coverage_2.ReachableMaterialPredicate2.build(_array(boundary), native_holes, 1.0)
+    xs = np.linspace(min(x for x, _ in boundary) - 1.0, max(x for x, _ in boundary) + 1.0, 17)
+    ys = np.linspace(min(y for _, y in boundary) - 1.0, max(y for _, y in boundary) + 1.0, 17)
+
+    assert tuple(actual.contains(x, y) for x in xs for y in ys) == tuple(expected.contains(x, y) for x in xs for y in ys)
+
+
+def test_material_predicate_is_factory_only_and_preserves_named_errors() -> None:
+    with pytest.raises(TypeError):
+        _coverage_2.ReachableMaterialPredicate2(_array(RECTANGLE), [], 1.0)
+    with pytest.raises(InvalidReachableDomainInputError):
+        _coverage_2.ReachableMaterialPredicate2.build(_array(RECTANGLE[:2]), [], 1.0)
+    outside_hole = ((11.0, 3.0), (13.0, 3.0), (13.0, 5.0), (11.0, 5.0))
+    with pytest.raises(InvalidReachableDomainInputError):
+        _coverage_2.ReachableMaterialPredicate2.build(_array(RECTANGLE), [_array(outside_hole)], 1.0)
+    with pytest.raises(PocketNotMachinableError):
+        _coverage_2.ReachableMaterialPredicate2.build(_array(DISCONNECTED_NECK), [], 1.0)
+
+    predicate = _coverage_2.ReachableMaterialPredicate2.build(_array(RECTANGLE), [], 1.0)
+    with pytest.raises(InvalidReachableDomainInputError):
+        predicate.contains(float("nan"), 0.0)
+
+
 def test_reachable_material_and_residual_are_exact_partition_of_design() -> None:
     native = _coverage_2.ReachableDomain2(_array(RECTANGLE), [], 1.0)
     center = native.center_domain()

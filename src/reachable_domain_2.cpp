@@ -67,8 +67,10 @@ ReachSet build_reachable_material_once(
          ++hole) {
         append_boundary_sweep_parts(*hole, radius, parts);
     }
+    audit.material_sweep_operands += parts.size();
     ReachSet material = reach_join_parts(parts, {center});
     ++audit.material_batch_unions;
+    ++audit.material_arrangements;
     return material;
 }
 
@@ -136,6 +138,7 @@ ReachableDomain2::State ReachableDomain2::build_state(
 
     ReachableDomainCertificate2 certificate =
         build_reachable_certificate(selected, subset);
+    ++selected.audit.certificate_constructions;
     const std::string input_recipe =
         selected.input.recipe_record;
     const std::string design_recipe = reach_tagged_record(

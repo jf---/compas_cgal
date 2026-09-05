@@ -10,13 +10,13 @@ from pathlib import Path
 from typing_extensions import TypeAlias
 
 from benchmarks.held_consumer_adapters import audit_figure5_engagement
+from benchmarks.held_consumer_adapters import reduce_figure5_quality
 from benchmarks.held_path_characterize import CharacterizationPhase
 from benchmarks.held_path_characterize import characterize_figure5
 from benchmarks.held_path_evidence import HeldFigure5Characterization
 from benchmarks.held_path_report import HeldPathReportContext
 from benchmarks.held_path_report import render_held_figure5_2d_path
 from benchmarks.held_post_qualification import post_qualification_failures
-from benchmarks.quality_observations import reduce_quality_evidence
 from benchmarks.runner import generate_toolpath
 from benchmarks.survey import survey_path
 
@@ -44,7 +44,7 @@ def write_held_figure5_report(
         generate_toolpath,
         audit_figure5_engagement,
         survey_path,
-        reduce_quality_evidence,
+        reduce_figure5_quality,
         phase_observer=phase_observer,
     )
     context = HeldPathReportContext.build(
@@ -53,7 +53,9 @@ def write_held_figure5_report(
         generator_policy_name=GENERATOR_POLICY_NAME,
     )
     markdown = render_held_figure5_2d_path(characterization, context)
-    path.write_text(markdown, encoding="utf-8")
+    pending_path = path.with_suffix(".pending.md")
+    pending_path.write_text(markdown, encoding="utf-8")
+    pending_path.replace(path)
     return characterization
 
 

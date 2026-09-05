@@ -55,6 +55,16 @@ MAX_CELL_TOOL_RADIUS_FRACTION = 0.1
 WALL_BAND_TOOL_DIAMETERS = 1.0
 
 
+def minimum_coverage_grid(spec: PocketSpec) -> int:
+    """Return the smallest longer-axis count accepted for ``spec``."""
+    maximum_cell = MAX_CELL_TOOL_RADIUS_FRACTION * spec.tool_radius
+    width, height = _bounding_box_size(spec)
+    grid = max(1, math.ceil(max(width, height) / maximum_cell))
+    while _grid_shape(width, height, grid)[2] > maximum_cell:
+        grid += 1
+    return grid
+
+
 @dataclass(frozen=True)
 class CoverageEstimate:
     """What one grid pass found.
@@ -112,11 +122,11 @@ def measure_coverage(spec: PocketSpec, stock: Stock, *, grid: int = COVERAGE_GRI
             reachable domain for this pocket and tool.
     """
     xs, ys, cell = _grid_axes(spec, grid)
-    region = _coverage_2.ReachableDomain2(
+    region = _coverage_2.ReachableMaterialPredicate2.build(
         _polygon_to_ccw_vertices(spec.polygon),
         [_polygon_to_ccw_vertices(hole) for hole in spec.holes],
         spec.tool_radius,
-    ).reachable_material()
+    )
     edges = _boundary_edges(spec)
     wall_band = WALL_BAND_TOOL_DIAMETERS * spec.tool_diameter
 
@@ -178,15 +188,8 @@ def _grid_axes(spec: PocketSpec, grid: int) -> Tuple[List[float], List[float], f
     """
     if grid < 1:
         raise InvalidGridResolutionError(f"grid must be at least 1 sample per axis, got {grid!r}.")
-    xs_all = [float(point[0]) for point in spec.polygon.points]
-    ys_all = [float(point[1]) for point in spec.polygon.points]
-    x_min, y_min = min(xs_all), min(ys_all)
-    width, height = max(xs_all) - x_min, max(ys_all) - y_min
-    if width >= height:
-        nx, ny = grid, max(1, round(grid * height / width))
-    else:
-        nx, ny = max(1, round(grid * width / height)), grid
-    cell = max(width / nx, height / ny)
+    x_min, y_min, width, height = _bounding_box(spec)
+    nx, ny, cell = _grid_shape(width, height, grid)
     coarsest = MAX_CELL_TOOL_RADIUS_FRACTION * spec.tool_radius
     if cell > coarsest:
         raise CoarseCoverageGridError(
@@ -198,6 +201,26 @@ def _grid_axes(spec: PocketSpec, grid: int) -> Tuple[List[float], List[float], f
         [y_min + (index + 0.5) * height / ny for index in range(ny)],
         cell,
     )
+
+
+def _bounding_box(spec: PocketSpec) -> tuple[float, float, float, float]:
+    xs = [float(point[0]) for point in spec.polygon.points]
+    ys = [float(point[1]) for point in spec.polygon.points]
+    x_min, y_min = min(xs), min(ys)
+    return x_min, y_min, max(xs) - x_min, max(ys) - y_min
+
+
+def _bounding_box_size(spec: PocketSpec) -> tuple[float, float]:
+    _, _, width, height = _bounding_box(spec)
+    return width, height
+
+
+def _grid_shape(width: float, height: float, grid: int) -> tuple[int, int, float]:
+    if width >= height:
+        nx, ny = grid, max(1, round(grid * height / width))
+    else:
+        nx, ny = max(1, round(grid * width / height)), grid
+    return nx, ny, max(width / nx, height / ny)
 
 
 def _boundary_edges(spec: PocketSpec) -> Tuple[Tuple[float, float, float, float], ...]:

@@ -89,6 +89,71 @@ def test_engagement_adapter_propagates_exception_object(monkeypatch: pytest.Monk
     assert caught.value is failure
 
 
+def test_figure5_quality_adapter_uses_true_minimum_once_and_preserves_identity(monkeypatch: pytest.MonkeyPatch) -> None:
+    adapters = importlib.import_module("benchmarks.held_consumer_adapters")
+    spec = load_held_reference_case("figure5").pocket_spec()
+    snapshot = cast(tuple[HeldOperationSnapshot, ...], (object(),))
+    survey = cast(PathSurvey, object())
+    quality = cast(QualityEvidence, object())
+    minimum_calls: list[object] = []
+    reducer_calls: list[tuple[object, ...]] = []
+
+    def minimum(received_spec: PocketSpec) -> int:
+        minimum_calls.append(received_spec)
+        return 668
+
+    def reduce(
+        received_spec: PocketSpec,
+        received_snapshot: tuple[HeldOperationSnapshot, ...],
+        received_survey: PathSurvey,
+        *,
+        grid: int,
+    ) -> QualityEvidence:
+        reducer_calls.append((received_spec, received_snapshot, received_survey, grid))
+        return quality
+
+    monkeypatch.setattr(adapters, "minimum_coverage_grid", minimum, raising=False)
+    monkeypatch.setattr(adapters, "reduce_quality_evidence", reduce, raising=False)
+
+    actual = adapters.reduce_figure5_quality(spec, snapshot, survey)
+
+    assert actual is quality
+    assert minimum_calls == [spec]
+    assert reducer_calls == [(spec, snapshot, survey, 668)]
+    assert reducer_calls[0][0] is spec
+    assert reducer_calls[0][1] is snapshot
+    assert reducer_calls[0][2] is survey
+
+
+@pytest.mark.parametrize("stage", ("minimum", "reducer"))
+def test_figure5_quality_adapter_propagates_exception_object(monkeypatch: pytest.MonkeyPatch, stage: str) -> None:
+    adapters = importlib.import_module("benchmarks.held_consumer_adapters")
+    failure = RuntimeError(f"sentinel {stage} failure")
+    reducer_calls: list[object] = []
+
+    def minimum(spec: PocketSpec) -> int:
+        if stage == "minimum":
+            raise failure
+        return 199
+
+    def reduce(*args: object, **kwargs: object) -> QualityEvidence:
+        reducer_calls.append((args, kwargs))
+        raise failure
+
+    monkeypatch.setattr(adapters, "minimum_coverage_grid", minimum, raising=False)
+    monkeypatch.setattr(adapters, "reduce_quality_evidence", reduce, raising=False)
+
+    with pytest.raises(RuntimeError) as caught:
+        adapters.reduce_figure5_quality(
+            load_held_reference_case("figure5").pocket_spec(),
+            cast(tuple[HeldOperationSnapshot, ...], (object(),)),
+            cast(PathSurvey, object()),
+        )
+
+    assert caught.value is failure
+    assert len(reducer_calls) == (0 if stage == "minimum" else 1)
+
+
 class _CaseSpy:
     def __init__(self, spec: PocketSpec, events: list[str]) -> None:
         self._spec = spec

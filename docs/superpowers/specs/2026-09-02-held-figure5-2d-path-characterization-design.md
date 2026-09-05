@@ -632,17 +632,50 @@ once and calls it once per cell without changing estimates or errors. A
 stratified projection and the complete 305,944-point Figure 5 predicate batch
 must each finish under an external 120-second bound before production commit.
 
-Immutable `ExactRegion2` storage owns one cached exact point locator. Original
-and cloned regions share the storage and locator, preserving boundary-inclusive
-exact membership without a mutation path. Locator construction auditing is
-native-test-only and is not part of the Python product API.
+The initial `C`-first ordering passed the exact gates but projected 275.731305
+seconds total from an 8,192-point Figure 5 batch. Of those points, 2,517 were
+outside `D`, 5,171 were inside `C`, and only 504 lay in `D` but outside `C`.
+Exploit the already-established subset theorem without new deciding logic:
+retain the validated exact design as an immutable `ExactRegion2` with one
+cached locator and order membership as `q not in D -> false`, `q in C -> true`,
+then exact boundary distance. The center retains its one cached locator. A
+read-only composition of those same exact decisions projected 36.443539
+seconds for all 305,944 queries. Acceptance retains the unchanged 120-second
+stratified and full-batch bounds; no batch API or spatial index is in scope.
+
+The implemented ordering passed both bounds. The identical stratified run took
+0.917544 seconds and projected 35.441826 seconds total including construction.
+The full 668 by 458 batch took 33.795099 seconds for 305,944 exact queries and
+34.963057 seconds total, classifying 211,804 points inside. The implementation
+therefore remains the minimal two-locator decision order; it adds neither a
+batch API nor a spatial index.
+
+Global `ExactRegion2` retains its original exact `oriented_side` membership and
+shared immutable `ReachSet`; Task 11B does not expand its state or concurrency
+contract. Only `ReachableMaterialPredicate2` owns one design and one center RIC
+locator. Each locator is constructed after its final `ReachSet` member, is never
+copied or moved after binding, and is protected by its own mutex for shared const
+queries. Locator construction auditing is native-test-only and is not part of
+the Python product API.
 
 The excluded live-oracle boundary records a terminal failed ledger state if the
 report writer raises: observed phases and elapsed time are retained, report
 generation remains unavailable, qualification is `not evaluated`, and command
 result contains the exact exception type and message. A bare re-raise preserves
-the original exception object and traceback. No characterization or report
+the original exception object and traceback. The elapsed value on failure is
+the recorded entry time of the active phase, not a later exception timestamp.
+Report publication fully writes a sibling `.pending.md` file and then uses
+atomic `Path.replace`. Ordinary `Path.write_text` or `Path.replace` exceptions
+preserve any prior report and may leave pending evidence. This contract makes no
+process-crash or `fsync` durability guarantee. No characterization or report
 producer catches or translates the failure.
+
+Task 11B closes after its final independent review and checkpoint commit. Phase
+1 and live-report acceptance close only after controller-owned Steps 3 and 4:
+geometry claims must remain explicitly projection-only, and the report must
+show raw coverage grid dimensions, reachable and uncut sample counts, and cell
+area. This later acceptance boundary does not pre-authorize report changes
+before live inspection.
 
 ## Post-qualification entry semantics
 

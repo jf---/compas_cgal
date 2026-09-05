@@ -4,6 +4,7 @@
 #include "reachable_arrangement_2.h"
 #include "reachable_domain_2.h"
 #include "reachable_errors_2.h"
+#include "reachable_material_predicate_2.h"
 #include "task3_certificate_gate.h"
 
 #include <algorithm>
@@ -27,6 +28,8 @@ void require(bool condition, const char* message)
     }
 }
 
+compas::RowMatrixXd rectangle_matrix();
+
 void exact_region_storage_gate()
 {
     ReachSet disk;
@@ -40,6 +43,214 @@ void exact_region_storage_gate()
         original.shares_storage_with_for_audit(clone),
         "read-only clone deep-copied exact storage");
     require(clone.contains(2.0, 0.0), "closed disk lost exact boundary");
+    require(!clone.contains(std::nextafter(2.0, 3.0), 0.0), "closed disk accepted adjacent exterior");
+    require(original.contains(0.0, 0.0), "original lost exact interior");
+}
+
+void reachable_material_predicate_owner_gate()
+{
+    const ReachableMaterialPredicate2 predicate =
+        ReachableMaterialPredicate2::build(
+        rectangle_matrix(),
+        {},
+        1.0);
+    const ReachableDomainBuildAudit2& audit =
+        predicate.build_audit_for_native_gate();
+    require(audit.geometry_passes == 1, "material predicate replayed center construction");
+    require(audit.provenance_arrangements == 0, "material predicate built provenance arrangement");
+    require(audit.center_extractions == 1, "material predicate did not extract center once");
+    require(audit.center_predicate_constructions == 1, "material predicate was not constructed once");
+    require(audit.design_point_locators == 1, "material predicate did not own one design locator");
+    require(audit.center_point_locators == 1, "material predicate did not own one center locator");
+    require(audit.material_sweep_operands == 0, "material predicate built material sweep operands");
+    require(audit.material_batch_unions == 0, "material predicate built a material union");
+    require(audit.material_arrangements == 0, "material predicate built a material arrangement");
+    require(audit.subset_decisions == 0, "material predicate performed an eager subset decision");
+    require(audit.residual_differences == 0, "material predicate built residual");
+    require(audit.certificate_constructions == 0, "material predicate built certificate");
+
+    const ExactRegion2 legacy = ReachableDomain2(
+        rectangle_matrix(),
+        {},
+        1.0).reachable_material();
+    for (const std::pair<double, double>& query : {
+             std::pair(5.0, 4.0),
+             std::pair(1.0, 4.0),
+             std::pair(0.0, 4.0),
+             std::pair(-1.0, 4.0),
+         }) {
+        require(
+            predicate.contains(query.first, query.second)
+                == legacy.contains(query.first, query.second),
+            "material predicate disagreed with legacy material");
+    }
+
+    require(
+        predicate.contains(0.0, 4.0),
+        "material predicate rejected exact outer design boundary");
+    require(
+        !predicate.contains(std::nextafter(0.0, -1.0), 4.0),
+        "material predicate accepted adjacent point outside design");
+
+    compas::RowMatrixXd concave(6, 3);
+    concave << 0, 0, 0, 9, 0, 0, 9, 3, 0,
+        4, 3, 0, 4, 9, 0, 0, 9, 0;
+    const ReachableMaterialPredicate2 concave_predicate =
+        ReachableMaterialPredicate2::build(concave, {}, 1.0);
+    require(
+        !concave_predicate.contains(8.0, 8.0),
+        "material predicate treated the concave bbox as design");
+
+    compas::RowMatrixXd island(4, 3);
+    island << 4, 3, 0, 6, 3, 0, 6, 5, 0, 4, 5, 0;
+    const ReachableMaterialPredicate2 holed_predicate =
+        ReachableMaterialPredicate2::build(
+            rectangle_matrix(),
+            {island},
+            1.0);
+    require(
+        holed_predicate.contains(4.0, 4.0),
+        "material predicate rejected exact hole boundary");
+    require(
+        !holed_predicate.contains(std::nextafter(4.0, 5.0), 4.0),
+        "material predicate accepted adjacent point inside hole");
+}
+
+void reachable_material_curve_distance_gate()
+{
+    const ReachXCurve line(
+        ReachKernelPoint(0, 0),
+        ReachKernelPoint(4, 0));
+    require(
+        reach_curve_within_radius(
+            ReachKernelPoint(2, 1), line, ReachFT(1)),
+        "line interior tangency was rejected");
+    require(
+        !reach_curve_within_radius(
+            ReachKernelPoint(2, std::nextafter(1.0, 2.0)),
+            line,
+            ReachFT(1)),
+        "line interior accepted adjacent exterior");
+    require(
+        reach_curve_within_radius(
+            ReachKernelPoint(-1, 0), line, ReachFT(1)),
+        "line endpoint tangency was rejected");
+    require(
+        !reach_curve_within_radius(
+            ReachKernelPoint(std::nextafter(-1.0, -2.0), 0),
+            line,
+            ReachFT(1)),
+        "line endpoint accepted adjacent exterior");
+
+    const auto circle_arcs = [](const ReachFT& radius) {
+        const ReachPolygon disk = reach_disk_polygon(
+            ReachKernelPoint(0, 0), radius);
+        return std::vector<ReachXCurve>(
+            disk.curves_begin(), disk.curves_end());
+    };
+    const std::vector<ReachXCurve> radius_two = circle_arcs(ReachFT(2));
+    require(radius_two.size() == 2, "full circle did not split into two arcs");
+    const auto within_any = [](
+                                const ReachKernelPoint& query,
+                                const std::vector<ReachXCurve>& curves,
+                                const ReachFT& radius) {
+        return std::any_of(
+            curves.begin(), curves.end(),
+            [&](const ReachXCurve& curve) {
+                return reach_curve_within_radius(query, curve, radius);
+            });
+    };
+    require(
+        within_any(ReachKernelPoint(0, 3), radius_two, ReachFT(1)),
+        "arc interior tangency was rejected");
+    require(
+        !within_any(
+            ReachKernelPoint(0, std::nextafter(3.0, 4.0)),
+            radius_two,
+            ReachFT(1)),
+        "arc interior accepted adjacent exterior");
+    require(
+        within_any(ReachKernelPoint(3, 0), radius_two, ReachFT(1)),
+        "arc endpoint tangency was rejected");
+    require(
+        !within_any(
+            ReachKernelPoint(std::nextafter(3.0, 4.0), 0),
+            radius_two,
+            ReachFT(1)),
+        "arc endpoint accepted adjacent exterior");
+    require(
+        within_any(ReachKernelPoint(1, 0), radius_two, ReachFT(1)),
+        "arc inner annulus tangency was rejected");
+    require(
+        !within_any(
+            ReachKernelPoint(std::nextafter(1.0, 0.0), 0),
+            radius_two,
+            ReachFT(1)),
+        "arc inner annulus accepted adjacent interior");
+    require(
+        within_any(ReachKernelPoint(0, 0), circle_arcs(ReachFT(1)), ReachFT(2)),
+        "R below query radius branch was rejected");
+    require(
+        within_any(ReachKernelPoint(0, 0), circle_arcs(ReachFT(1)), ReachFT(1)),
+        "R equal to query radius tangency was rejected");
+    require(
+        !within_any(ReachKernelPoint(0, 0), radius_two, ReachFT(1)),
+        "R above query radius branch was accepted");
+
+    const ReachPoint upper_witness(ReachFT(0), ReachFT(2));
+    const auto upper = std::find_if(
+        radius_two.begin(),
+        radius_two.end(),
+        [&](const ReachXCurve& curve) {
+            return curve.is_in_x_range(upper_witness)
+                && curve.point_position(upper_witness) == CGAL::EQUAL;
+        });
+    require(upper != radius_two.end(), "upper full-circle arc was not found");
+    const auto lower = std::find_if(
+        radius_two.begin(),
+        radius_two.end(),
+        [&](const ReachXCurve& curve) {
+            return &curve != &*upper;
+        });
+    require(lower != radius_two.end(), "lower full-circle arc was not found");
+    const ReachKernelPoint algebraic_projection_query(2, 2);
+    require(
+        reach_curve_within_radius(
+            algebraic_projection_query,
+            *upper,
+            ReachFT(1)),
+        "upper arc rejected algebraic radial projection");
+    require(
+        !reach_curve_within_radius(
+            algebraic_projection_query,
+            *lower,
+            ReachFT(1)),
+        "lower arc accepted algebraic radial projection");
+    const ReachSet upper_sweep = reach_join_parts(
+        reach_arc_sweep_parts(*upper, ReachFT(1)),
+        {});
+    require(
+        upper_sweep.oriented_side(
+            ReachPoint(
+                algebraic_projection_query.x(),
+                algebraic_projection_query.y()))
+            != CGAL::ON_NEGATIVE_SIDE,
+        "algebraic arc predicate disagreed with exact legacy sweep");
+
+    bool degenerate_line_rejected = false;
+    try {
+        static_cast<void>(reach_curve_within_radius(
+            ReachKernelPoint(0, 0),
+            ReachXCurve(),
+            ReachFT(1)));
+    }
+    catch (const ReachableMaterialPredicateGeometryError&) {
+        degenerate_line_rejected = true;
+    }
+    require(
+        degenerate_line_rejected,
+        "degenerate center boundary line did not fail named");
+
 }
 
 void require_counterclockwise_parts(
@@ -847,6 +1058,8 @@ int main()
     full_circle_radius_gate();
     rectangle_reachable_gate();
     reachable_domain_owner_gate();
+    reachable_material_predicate_owner_gate();
+    reachable_material_curve_distance_gate();
     coverage_transition_gate();
     coverage_atomic_failure_gate();
     canonical_input_invariance_gate();
