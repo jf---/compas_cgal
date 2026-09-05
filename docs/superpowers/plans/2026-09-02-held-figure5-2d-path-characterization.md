@@ -1,8 +1,8 @@
 # Held Figure 5 2D Path Characterization Implementation Plan
 
-> **status: in progress** - Tasks 1-7 are implemented and verified. The validated
-> immutable Figure 5 characterization boundary is ready for the Task 8
-> post-qualification gate.
+> **status: in progress** - Tasks 1-9 are implemented and verified. The
+> generate-once Figure 5 characterization is ready for the Task 10 evidence
+> report and thin CLI.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use
 > `superpowers:subagent-driven-development` (recommended) or
@@ -1185,7 +1185,7 @@ GIT_AUTHOR_NAME='Jelle Feringa' GIT_AUTHOR_EMAIL='jelleferinga@gmail.com' GIT_CO
   - `require_post_qualification_candidate(characterization) ->
     HeldPostQualificationCandidate`
 
-- [ ] **Step 1: Write RED refusal tests for every open gate**
+- [x] **Step 1: Write RED refusal tests for every open gate**
 
 Starting from complete constructible synthetic characterizations, vary exactly
 one post-entry condition: one witnessed exceedance, one unresolved motion, or
@@ -1198,7 +1198,7 @@ at the candidate boundary.
 Assert `post_qualification_failures` returns every open condition in stable order
 and an empty tuple only for the closed fixture.
 
-- [ ] **Step 2: Write RED authority tests**
+- [x] **Step 2: Write RED authority tests**
 
 Require direct candidate construction to fail. Successful `.build(...)` must
 retain the closed characterization, exact immutable snapshot, normalized tool
@@ -1206,7 +1206,7 @@ diameter, 80-degree cap, and Figure 5 case context. The functional helper must
 delegate to `.build(...)` and return the candidate, never `None` or a free
 snapshot.
 
-- [ ] **Step 3: Implement one validating construction path**
+- [x] **Step 3: Implement one validating construction path**
 
 Implement one public pure `post_qualification_failures` collector. `.build(...)`
 consumes it and owns the only conversion from an empty failure tuple into a
@@ -1214,7 +1214,7 @@ candidate; the functional helper calls the factory. Do not create a second
 Boolean gate. Failure messages list every open criterion plus
 certified/demonstrated/unresolved counts.
 
-- [ ] **Step 4: Run GREEN gates and commit**
+- [x] **Step 4: Run GREEN gates and commit**
 
 ```bash
 pixi run pytest -- tests/benchmarks/test_held_post_qualification.py -n auto --testmon -q
@@ -1272,14 +1272,14 @@ class QualityEvidenceReducer(Protocol):
     ) -> QualityEvidence: ...
 ```
 
-- [ ] **Step 1: Write RED adapter tests**
+- [x] **Step 1: Write RED adapter tests**
 
 Monkeypatch `audit_toolpath_engagement` and assert the adapter passes exactly
 `spec.polygon`, the same result object, `spec.tool_diameter`,
 `spec.tea_cap_rad`, and `list(spec.holes)`, then returns the same report. No
 exception is caught or rewritten.
 
-- [ ] **Step 2: Write RED orchestration order and identity tests**
+- [x] **Step 2: Write RED orchestration order and identity tests**
 
 Use injected spies and a deterministic typed clock. Require this exact sequence:
 load Figure 5, generate once, snapshot, assert unchanged, audit, assert unchanged,
@@ -1289,19 +1289,19 @@ audit, survey, and coverage/reduction durations independently. The required phas
 observer receives `generation`, `guarded_audit`, `survey`, and
 `quality_reduction` immediately before their corresponding calls.
 
-- [ ] **Step 3: Write RED mutation and exception tests**
+- [x] **Step 3: Write RED mutation and exception tests**
 
 Have each replay consumer mutate one operation before returning; the following
 post-call assertion must raise `MutatedHeldToolpathError`. Verify unexpected
 generator/auditor/survey/reducer exceptions propagate unchanged and no partial
 characterization exists.
 
-- [ ] **Step 4: Implement the adapter and orchestration**
+- [x] **Step 4: Implement the adapter and orchestration**
 
 Keep the adapter as a value-only signature translation. Keep orchestration free
 of rendering, file writes, command-line parsing, and post-candidate construction.
 
-- [ ] **Step 5: Run GREEN gates and commit**
+- [x] **Step 5: Run GREEN gates and commit**
 
 ```bash
 pixi run pytest -- tests/benchmarks/test_held_path_characterize.py -n auto --testmon -q
