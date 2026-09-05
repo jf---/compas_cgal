@@ -293,6 +293,115 @@ def test_island_center_domain_uses_exact_disk_containment_on_hole_boundary() -> 
     assert not center.contains(np.nextafter(7.0, 6.0), 4.0)
 
 
+@pytest.mark.parametrize(
+    ("boundary", "holes", "queries"),
+    (
+        pytest.param(
+            RECTANGLE,
+            (),
+            ((5.0, 4.0), (1.0, 4.0), (0.5, 4.0), (11.0, 4.0)),
+            id="convex",
+        ),
+        pytest.param(
+            REFLEX,
+            (),
+            ((2.0, 2.0), (8.0, 1.5), (4.5, 4.0), (3.0, 8.0)),
+            id="concave",
+        ),
+        pytest.param(
+            RECTANGLE,
+            (ISLAND,),
+            ((2.0, 4.0), (3.0, 4.0), (3.5, 4.0), (5.0, 4.0), (7.0, 4.0), (8.0, 4.0)),
+            id="holed",
+        ),
+    ),
+)
+def test_lightweight_cutter_centre_domain_matches_exact_region(
+    boundary: tuple[tuple[float, float], ...],
+    holes: tuple[tuple[tuple[float, float], ...], ...],
+    queries: tuple[tuple[float, float], ...],
+) -> None:
+    lightweight = _coverage_2.CutterCentreDomain2(
+        _array(boundary),
+        [_array(hole) for hole in holes],
+        1.0,
+    )
+    exact_region = _coverage_2.ReachableDomain2(
+        _array(boundary),
+        [_array(hole) for hole in holes],
+        1.0,
+    ).center_domain()
+
+    assert tuple(lightweight.contains(x, y) for x, y in queries) == tuple(exact_region.contains(x, y) for x, y in queries)
+
+
+def test_lightweight_cutter_centre_domain_keeps_exact_closed_boundary() -> None:
+    domain = _coverage_2.CutterCentreDomain2(_array(RECTANGLE), [], 1.0)
+
+    assert domain.contains(5.0, 4.0)
+    assert domain.contains(1.0, 4.0)
+    assert not domain.contains(np.nextafter(1.0, 0.0), 4.0)
+    assert not domain.contains(0.5, 4.0)
+    assert not domain.contains(-1.0, 4.0)
+
+
+def test_lightweight_cutter_centre_domain_keeps_exact_hole_boundary() -> None:
+    domain = _coverage_2.CutterCentreDomain2(_array(RECTANGLE), [_array(ISLAND)], 1.0)
+
+    assert domain.contains(3.0, 4.0)
+    assert not domain.contains(np.nextafter(3.0, 4.0), 4.0)
+    assert domain.contains(7.0, 4.0)
+    assert not domain.contains(np.nextafter(7.0, 6.0), 4.0)
+    assert not domain.contains(5.0, 4.0)
+
+
+@pytest.mark.parametrize(
+    ("boundary", "radius"),
+    (
+        pytest.param(RECTANGLE[:2], 1.0, id="short-ring"),
+        pytest.param(RECTANGLE, 0.0, id="zero-radius"),
+        pytest.param(RECTANGLE, float("nan"), id="nonfinite-radius"),
+        pytest.param(((0.0, 0.0), (10.0, 0.0), (float("nan"), 8.0), (0.0, 8.0)), 1.0, id="nonfinite-vertex"),
+    ),
+)
+def test_lightweight_cutter_centre_domain_preserves_named_input_errors(
+    boundary: tuple[tuple[float, float], ...],
+    radius: float,
+) -> None:
+    with pytest.raises(InvalidReachableDomainInputError):
+        _coverage_2.CutterCentreDomain2(_array(boundary), [], radius)
+
+
+def test_lightweight_cutter_centre_domain_rejects_invalid_hole_relationship() -> None:
+    outside_hole = ((11.0, 3.0), (13.0, 3.0), (13.0, 5.0), (11.0, 5.0))
+
+    with pytest.raises(InvalidReachableDomainInputError):
+        _coverage_2.CutterCentreDomain2(_array(RECTANGLE), [_array(outside_hole)], 1.0)
+
+
+def test_lightweight_predicate_does_not_claim_global_connectivity_certification() -> None:
+    domain = _coverage_2.CutterCentreDomain2(_array(DISCONNECTED_NECK), [], 1.0)
+
+    assert domain.contains(2.0, 3.0)
+    assert domain.contains(10.0, 3.0)
+
+
+@pytest.mark.parametrize(
+    ("x", "y"),
+    (
+        pytest.param(float("nan"), 4.0, id="nan-x"),
+        pytest.param(5.0, float("nan"), id="nan-y"),
+        pytest.param(float("inf"), 4.0, id="positive-infinity"),
+        pytest.param(float("-inf"), 4.0, id="negative-infinity"),
+    ),
+)
+def test_lightweight_cutter_centre_domain_rejects_nonfinite_queries(x: float, y: float) -> None:
+    domain = _coverage_2.CutterCentreDomain2(_array(RECTANGLE), [], 1.0)
+
+    with pytest.raises(InvalidReachableDomainInputError):
+        domain.contains(x, y)
+
+
 def test_reachable_material_and_residual_are_exact_partition_of_design() -> None:
     native = _coverage_2.ReachableDomain2(_array(RECTANGLE), [], 1.0)
     center = native.center_domain()

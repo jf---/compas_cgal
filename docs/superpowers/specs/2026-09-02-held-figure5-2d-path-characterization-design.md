@@ -487,6 +487,50 @@ operator log because the current consumer exposes no trustworthy partial
 operation count. Budget exhaustion does not authorize sampling reduction,
 consumer removal, or a fallback result.
 
+### Lightweight survey centre-domain predicate
+
+The first live oracle generated 2,289 operations in 0.063150 seconds, completed
+the guarded audit, then exceeded the 30-minute operator budget in `survey`
+without producing a report. Bounded diagnosis isolated the stall before replay:
+the survey constructed the full `ReachableDomain2` state from the 65-vertex
+Figure 5 polygon even though it consumed only centre-domain point membership.
+That constructor exceeded 50 seconds for the full boundary and for surveys
+restricted to 3 and 25 source operations; one first-motion engagement query took
+0.000640 seconds. Downstream replay cost is therefore unmeasured, not presumed
+fast.
+
+The survey instead constructs one lightweight exact cutter-centre-domain
+predicate. It owns the same canonical validated reach input and answers only
+`contains(x, y)`. A finite binary64 query is injected exactly once and is legal
+exactly when all of these conditions hold:
+
+- it lies inside or on the canonical outer polygon;
+- it lies outside every canonical hole interior; and
+- its exact squared distance to every outer and hole boundary segment is greater
+  than or equal to the exact squared tool radius.
+
+Exact tangency is accepted. The adjacent representable point on the illegal side
+is rejected. The implementation uses exact kernel predicates and squared-distance
+comparisons without tolerance, snapping, approximation, or fallback. Canonical
+reach-input validation retains the existing named malformed-ring, non-finite,
+and invalid-radius error boundary. One shared exact polygon-with-holes builder
+also preserves the existing relationship validation for holes outside the outer
+ring, intersecting rings, and otherwise invalid design topology.
+
+This specialized predicate owns pointwise legal-centre semantics only. It does
+not certify that the complete eroded centre domain is nonempty or connected;
+those global construction results and their named failures remain exclusively
+owned by `ReachableDomain2`. Avoiding that arrangement is the measured purpose
+of this repair, so the predicate does not claim full constructor-error
+equivalence.
+
+`ReachableDomain2` remains unchanged for consumers that require reachable
+material, residual, or certificate products. Only `benchmarks.survey.survey_path`
+uses the lightweight predicate. The repair does not change generator behavior,
+survey density, quality thresholds, engagement decisions, stock depletion,
+evidence vocabulary, report semantics, or the unchanged Task 11 live-oracle
+gate.
+
 ## Post-qualification entry semantics
 
 `require_post_qualification_candidate` returns a

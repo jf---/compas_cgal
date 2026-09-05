@@ -1,8 +1,9 @@
 # Held Figure 5 2D Path Characterization Implementation Plan
 
-> **status: blocked** - Tasks 1-10 and Task 11 Steps 1-2 are implemented and
-> verified. The explicit live oracle exceeded its 30-minute operator budget in
-> `survey`; no report was produced, so Phase 1 cannot close under this plan.
+> **status: in progress** - Tasks 1-10 and Task 11 Steps 1-2 are implemented
+> and verified. The first explicit live run exceeded its 30-minute operator
+> budget in `survey`; Task 11A is the approved bounded repair before Step 3 is
+> retried.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use
 > `superpowers:subagent-driven-development` (recommended) or
@@ -1475,6 +1476,76 @@ held-figure5-characterize-live = { cmd = '''editable_build_dir="$(python -c 'imp
 
 One case is logically serial even when xdist is enabled. Do not add a product
 timeout or weaker fallback.
+
+#### Task 11A: Remove the measured centre-domain construction blocker
+
+**Files:**
+
+- Create: `src/cutter_centre_domain_2.h`
+- Create: `src/cutter_centre_domain_2.cpp`
+- Modify: `src/reachable_arrangement_2.h`
+- Modify: `src/reachable_arrangement_2.cpp`
+- Modify: `src/coverage_bindings_2.cpp`
+- Modify: `src/compas_cgal/_coverage_2.pyi`
+- Modify: `benchmarks/survey.py`
+- Modify: `tests/adaptive/test_reachable_domain.py`
+- Modify: `tests/benchmarks/test_survey.py`
+- Modify: `CMakeLists.txt`
+- Modify: this plan and its design spec
+
+**Measured evidence:** Figure 5 generation completed in 0.063150 seconds and
+produced 2,289 operations. The live run entered `survey` and timed out after
+1839.18 seconds without a report. Bounded probes isolated the stall before
+replay: constructing `ReachableDomain2(...).center_domain()` from the 65-vertex
+Figure 5 boundary exceeded 50 seconds, as did surveys restricted to 3 and 25
+source operations. One first-motion engagement query took 0.000640 seconds.
+Downstream replay cost remains unmeasured and is outside this repair.
+
+**Interface:** Add one lightweight exact native cutter-centre-domain predicate
+that owns canonical validated reach input and exposes only `contains(x, y)`.
+It requires a finite query to lie inside or on the canonical outer polygon,
+outside every canonical hole interior, and at exact squared distance greater
+than or equal to the exact squared tool radius from every outer and hole
+boundary segment. Exact tangency is accepted; the next representable point on
+the illegal side is rejected. Reuse the canonical reach-input validator and its
+named input errors, and preserve exact polygon-with-holes relationship
+validation through one shared helper. Keep `ReachableDomain2` unchanged and
+route only `benchmarks.survey.survey_path` through the new predicate. Global
+nonempty/connected erosion certification remains owned by `ReachableDomain2`;
+the specialized point predicate neither rebuilds that arrangement nor claims
+constructor-error equivalence.
+
+- [x] **Step 11A.1: Write and observe focused RED tests**
+
+Cover native/Python equivalence with the existing full centre domain on small
+fast convex, concave, and holed fixtures; interior, exterior, exact tangency,
+and the adjacent binary64 value on the illegal side; existing named invalid
+input and polygon-with-holes errors; the global-certification ownership
+boundary; and the survey boundary. Run the focused Python tests with
+`-n auto --testmon` and observe the missing native API failure before production
+implementation.
+
+- [x] **Step 11A.2: Implement the minimum exact predicate and survey routing**
+
+Use canonical reach input, exact injected binary64 coordinates, kernel polygon
+membership, and exact squared-distance comparisons only. Do not add a tolerance,
+snapping, approximation, alternate result, generator change, replay
+optimization, survey-density change, threshold change, or report change.
+
+- [x] **Step 11A.3: Prove GREEN and bounded Figure 5 construction**
+
+Run the focused native/Python and survey gates, configured strict benchmark
+types, Ruff on touched Python, and diff hygiene. Measure construction of the new
+predicate on the real 65-vertex Figure 5 boundary under a bounded command. This
+gate proves only removal of the constructor stall; it makes no downstream
+runtime claim.
+
+- [ ] **Step 11A.4: Commit the reviewed repair and return to Step 3**
+
+Record RED/GREEN evidence and the bounded measurement in the durable SDD report,
+then commit only Task 11A files with subject
+`perf(benchmarks): bound centre-domain survey`. Independent review precedes the
+unchanged live-oracle retry owned by Task 11 Step 3.
 
 - [ ] **Step 3: Run the live oracle under the operator budget**
 

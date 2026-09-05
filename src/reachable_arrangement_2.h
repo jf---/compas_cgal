@@ -64,6 +64,9 @@ struct ReachableArrangement2 {
 ReachableArrangement2 build_reachable_arrangement(
     CanonicalReachInput2 input);
 
+ReachPolygonWithHoles reachable_design_polygon(
+    const CanonicalReachInput2& input);
+
 void classify_faces_by_primitive_parity(
     ReachArrangement2& arrangement,
     const ReachPrimitiveKinds2& primitive_kinds);

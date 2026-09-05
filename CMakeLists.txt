@@ -198,6 +198,7 @@ function(add_nanobind_module module_name source_file)
 endfunction()
 
 add_library(coverage_exact_core STATIC
+    src/cutter_centre_domain_2.cpp
     src/exact_region_2.cpp
     src/exact_sweep_2.cpp
     src/reachable_input_2.cpp
