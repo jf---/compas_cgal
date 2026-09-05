@@ -163,6 +163,18 @@ def test_standard_open_motion_samples_retain_both_typed_endpoints(
     assert motion.cap_exceeded is any(sample.cap_exceeded for sample in motion.samples)
 
 
+def test_survey_uses_lightweight_exact_cutter_centre_domain(monkeypatch: pytest.MonkeyPatch) -> None:
+    def reject_eager_domain(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("survey constructed the eager reachable domain")
+
+    monkeypatch.setattr("benchmarks.survey._coverage_2.ReachableDomain2", reject_eager_domain)
+
+    motion = _survey_motion(Line([-6.0, 0.0, 0.0], [-5.0, 0.0, 0.0]))
+
+    assert not motion.samples[0].inside_centre_domain
+    assert motion.samples[-1].inside_centre_domain
+
+
 def test_cap_verdict_is_not_reconstructed_from_reporting_degrees(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("benchmarks.survey.math.degrees", lambda _radians: 0.0)
 

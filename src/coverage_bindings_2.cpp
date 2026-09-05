@@ -1,4 +1,5 @@
 #include "coverage_2.h"
+#include "cutter_centre_domain_2.h"
 #include "reachable_domain_2.h"
 #include "reachable_errors_2.h"
 
@@ -133,6 +134,17 @@ NB_MODULE(_coverage_2, m)
             "unreachable_residual",
             &ReachableDomain2::unreachable_residual)
         .def("certificate", &ReachableDomain2::certificate);
+
+    nb::class_<CutterCentreDomain2>(m, "CutterCentreDomain2")
+        .def(
+            nb::init<
+                Eigen::Ref<const compas::RowMatrixXd>,
+                const std::vector<compas::RowMatrixXd>&,
+                double>(),
+            "design_boundary"_a,
+            "holes"_a,
+            "tool_radius"_a)
+        .def("contains", &CutterCentreDomain2::contains, "x"_a, "y"_a);
 
     nb::class_<CoverageSweepRecord2>(m, "CoverageSweepRecord2")
         .def_prop_ro(

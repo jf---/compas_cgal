@@ -63,6 +63,16 @@ class ReachableDomain2:
     def certificate(self) -> ReachableDomainCertificate2: ...
 
 
+class CutterCentreDomain2:
+    def __init__(
+        self,
+        design_boundary: Float64Array,
+        holes: Sequence[Float64Array],
+        tool_radius: float,
+    ) -> None: ...
+    def contains(self, x: float, y: float) -> bool: ...
+
+
 class CoverageSweepRecord2:
     @property
     def strategy_version(self) -> bytes: ...

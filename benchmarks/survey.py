@@ -282,11 +282,11 @@ def survey_path(spec: PocketSpec, result: ToolpathResult, *, samples_per_motion:
     # gets a cap's treatment rather than a comparison of reported degrees.
     cap_ratio = _cap_chord_ratio(spec.tea_cap_rad)
     slot_ratio = _cap_chord_ratio(SLOT_ENGAGEMENT_FRACTION * spec.tea_cap_rad)
-    centre_domain = _coverage_2.ReachableDomain2(
+    centre_domain = _coverage_2.CutterCentreDomain2(
         _polygon_to_ccw_vertices(spec.polygon),
         [_polygon_to_ccw_vertices(hole) for hole in spec.holes],
         spec.tool_radius,
-    ).center_domain()
+    )
 
     stock = Stock(spec.polygon, list(spec.holes))
     motions: List[MotionQuality] = []
@@ -318,7 +318,7 @@ def _measure_motion(
     tool_radius: float,
     cap_ratio: float,
     slot_ratio: float,
-    centre_domain: "_coverage_2.ExactRegion2",
+    centre_domain: "_coverage_2.CutterCentreDomain2",
     samples_per_motion: int,
 ) -> MotionQuality:
     """Measure one cut motion against every criterion the groups reduce.

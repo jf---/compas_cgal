@@ -751,6 +751,12 @@ ReachPolygonWithHoles extract_center_polygon(
 
 } // namespace
 
+ReachPolygonWithHoles reachable_design_polygon(
+    const CanonicalReachInput2& input)
+{
+    return design_polygon(input);
+}
+
 ReachCurveLabels2 MergeReachCurveLabels2::operator()(
     const ReachCurveLabels2& left,
     const ReachCurveLabels2& right) const
@@ -799,7 +805,7 @@ ReachableArrangement2 build_reachable_arrangement(
     result.audit.input_vertex_count = result.input.input_vertex_count_;
     result.audit.ring_rotation_comparisons =
         result.input.ring_rotation_comparisons_;
-    result.design_polygon = design_polygon(result.input);
+    result.design_polygon = reachable_design_polygon(result.input);
 
     std::vector<ReachDataTraits2::X_monotone_curve_2> labelled;
     ReachPrimitiveKinds2 primitive_kinds;
