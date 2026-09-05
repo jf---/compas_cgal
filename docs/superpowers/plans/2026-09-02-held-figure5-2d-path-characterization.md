@@ -1,9 +1,9 @@
 # Held Figure 5 2D Path Characterization Implementation Plan
 
 > **status: in progress** - Tasks 1-10 and Task 11 Steps 1-2 are implemented
-> and verified. The first explicit live run exceeded its 30-minute operator
-> budget in `survey`; the reviewed Task 11A bounded repair is complete and
-> Step 3 is ready for its unchanged retry.
+> and verified. Task 11A removed the first live run's survey blocker. The second
+> live run reached `quality_reduction` and failed on the protected coverage-grid
+> floor; Task 11B is the active bounded repair before Step 3 may resume.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use
 > `superpowers:subagent-driven-development` (recommended) or
@@ -1547,6 +1547,71 @@ Record RED/GREEN evidence and the bounded measurement in the durable SDD report,
 then commit only Task 11A files with subject
 `perf(benchmarks): bound centre-domain survey`. Independent review precedes the
 unchanged live-oracle retry owned by Task 11 Step 3.
+
+#### Task 11B: Close the measured coverage-reduction blockers
+
+**Measured evidence:** The second live run completed generation, guarded audit,
+and survey, then failed after 780.83 seconds with `CoarseCoverageGridError`.
+Figure 5 spans 66.75915853538243 by 45.76553230727174 at tool radius 1.0.
+The unchanged default long-axis count 200 gives a 200 by 137 grid with
+0.3340549803450492 cells. Under the existing shorter-axis rounding, 667 by 457
+is still too coarse at 0.10014339673363619; the exact minimum is 668 by 458 at
+0.09993886008290782, or 305,944 samples. A separate bounded probe found that
+the current full reachable-material owner did not construct within 218 seconds.
+
+**Interface:** Keep `COVERAGE_GRID_SAMPLES = 200`, all public reducer defaults,
+scientific judges, and evidence semantics unchanged. Add
+`minimum_coverage_grid(spec) -> int` in `benchmarks.coverage`, sharing the
+existing aspect-ratio grid calculation, and a Figure 5 quality adapter that
+passes `max(COVERAGE_GRID_SAMPLES, minimum_coverage_grid(spec))` exactly once to
+the canonical reducer. Wire only the production Held report tool to it.
+
+Add one factory-only exact reachable-material owner beside `ReachableDomain2`.
+Its `build(...)` factory owns canonicalization, canonical validation, and
+polygon-with-holes validation; constructs the forbidden boundary band by
+divide-and-conquer union of the existing exact segment-capsule parts; exact-
+differences that band from the design; applies the existing nonempty and
+one-component entry rule; performs exactly one existing exact reachable-
+material subset-of-design containment decision with its named
+`ReachableMaterialContainmentError`; and reuses `build_reachable_material_once`.
+It omits only the provenance arrangement, residual, and certificate products.
+Route only `benchmarks.coverage.measure_coverage` through it.
+
+Give immutable `ExactRegion2` shared storage one cached exact point locator,
+shared by clones without a mutation path. At the excluded live-oracle boundary,
+record terminal `failed` state on any report-writer `Exception`, including
+observed phases, elapsed time, no report completion, qualification not evaluated,
+and exact exception type/message, then bare re-raise.
+
+- [ ] **Step 11B.1: Amend plan/spec and observe focused RED**
+
+Prove the Figure 5 minimum 668, the 667/668 grid boundary, a shorter-axis
+rounding counterexample, one-call adapter behavior and exception identity,
+production wiring, exact material parity on small convex/concave/holed fixtures,
+factory-only and named input/topology errors, exactly one subset decision with
+no residual/certificate construction, one cached locator shared by original and
+clone, and terminal live-ledger failure with identical bare re-raise.
+
+- [ ] **Step 11B.2: Implement only the approved exact paths**
+
+No generator, survey, replay, public default, threshold, reference test,
+approximation, fallback, identity, or report-semantic change is permitted.
+
+- [ ] **Step 11B.3: Prove GREEN and bounded Figure 5 material construction**
+
+Run focused native/Python gates, configured strict types, Ruff, and diff hygiene.
+Measure the real Figure 5 material-only factory under a maximum ten-minute
+external bound. If it does not finish, record the negative result and stop
+before commit. If it finishes, time a bounded representative exact membership
+batch sufficient to project the 305,944-query cost without changing semantics.
+
+- [ ] **Step 11B.4: Correct evidence, report, review, and commit**
+
+Correct the current live ledger to the failed second run while preserving its
+start, phases, and 778.885679-second last phase timestamp; record pytest failure
+at 780.83 seconds, exact `CoarseCoverageGridError`, no report, and qualification
+not evaluated. Preserve the prior timeout in Git history. Commit coherent
+reviewable checkpoints, then return to controller-owned independent review.
 
 - [ ] **Step 3: Run the live oracle under the operator budget**
 
