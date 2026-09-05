@@ -1,19 +1,19 @@
 # Held Paper Figure Reproduction Plan
 
-> **status: in progress** - Figure 5 panel (a) is extracted and rendered in the
-> reconstructed world frame; the additive middle-curve generator seam is active.
+> **status: in progress** - Figure 5 reference-guided circle correspondence is
+> implemented, reviewed, rendered, and truthfully bounded from continuous-path
+> claims. The Figure 6 same-axis repository comparison is the active Task 4 route.
 
 **Goal:** Reproduce the visible Figure 5 toolpath structure and the Figure 6
 comparison protocol and axes, with direct comparisons to publisher evidence.
 
-**Active criterion:** the repository generator must emit a Figure 5 toolpath
-whose paper-derived middle-curve construction satisfies the stated equations
-and whose rendering exposes structural agreement and residual disagreement
-against the publisher panel.
-Characterization, postprocessing, machine validation, and unrelated benchmark
-work do not advance this criterion.
+**Active criterion:** for Task 4, render repository Figure 6 measurements on the
+publisher's labeled axes and compare them directly with digitized graphical
+observations. Do not claim unpublished numeric parity. Characterization beyond
+the figure, postprocessing, machine validation, and unrelated benchmark work do
+not advance this criterion.
 
-**Implementation rule:** keep the legacy generator intact. Add the paper-derived
+**Implementation rule:** keep the current baseline generator intact. Add the paper-derived
 path beside it, prove the new path visually and at its geometry boundary, then
 ask before removing or redirecting established callers.
 
@@ -34,7 +34,7 @@ use transient storage or the user-owned `tmp/` tree.
 **Gate:** one inspectable same-frame image exposes geometric disagreement without
 using page layout, raster registration, or a quality-survey verdict as a proxy.
 
-## Task 2: Add the paper middle-curve construction beside the legacy path
+## Task 2: Add the paper middle-curve construction beside the current baseline
 
 - [x] Write focused RED contracts around the existing `_mathsm_geometry` lane:
   `c != m`, `2 rho = clearance - tool_radius`, boundary-side phase equals `q`,
@@ -42,7 +42,7 @@ using page layout, raster registration, or a quality-survey verdict as a proxy.
 - [x] Expose one additive generator seam that emits maximum-radius, zero-phase
   `MathsmCircleProposal` geometry for a supported MAT edge.
 - [x] Prove on a concave-L integration that emitted centres match proposals and
-  differ from legacy skeleton-station centres.
+  differ from current baseline skeleton-station centres.
 - [x] Run focused `pytest -n auto --testmon`, strict typing, and Ruff gates.
 
 **Gate:** an end-to-end path through the paper-derived middle-curve seam exists
@@ -51,25 +51,70 @@ equations only, not Held implementation or coordinate parity.
 
 ## Task 3: Reproduce Figure 5
 
-- [ ] Attempt Figure 5 through the supported MAT scope first. If it fails, add
-  only the first encountered unsupported site-topology case needed to continue
-  this reproduction; do not expand certificate, replay, coverage, or general
-  MAT scope.
-- [ ] Generate the Figure 5 path through the additive middle-curve seam using
-  the published 1 mm tool radius, 80-degree cap, and start observation.
-- [ ] Render Matplotlib SVG and PNG comparisons against the extracted publisher
-  panels and record visible residual differences without claiming unpublished
-  coordinate parity.
-- [ ] Obtain focused adversarial review from Held, Buchli, Shewchuk, Fogel, and
+- [x] Attempt Figure 5 through the supported exact segment-site MAT seam. It
+  stalls before producing a usable full-pocket station sequence; retain exact
+  MAT traversal as a stated residual and do not expand MAT topology in this
+  reproduction task.
+- [x] Build and render a diagnostic circle-locus adapter over the current
+  baseline station sequence. It exposes the paper `q`/`c`/`rho` construction,
+  but it does not reproduce spacing, transitions, start, or engagement control.
+- [x] Correct panel registration against the publisher boundary. The symmetric
+  boundary consistency check must remain within the recorded reconstruction and
+  projection budget; the old crop-corner transform is rejected.
+- [x] Preserve every pre-engagement-thinning emitted guide-run station and
+  report every projected-boundary site inside the recorded reconstruction and
+  projection distance budget as a `ProjectionAdmissibleBoundaryHypothesis`.
+  Carry its exact side parameter and canonical closed-ring vertex identity; do
+  not present distance admissibility or emitted run IDs as MAT/topology
+  ownership. Retain every distinct hypothesis as a boundary-progress candidate
+  rather than choosing one by phase, distance, or ordinal; merge only identical
+  canonical positions with equivalent geometry, otherwise fail ambiguity. Exact
+  generator ownership remains part of the exact-MAT residual. Preserve this
+  complete set as input evidence; placement may select the unique nearest
+  contact within one cyclically connected boundary neighborhood while retaining
+  disconnected alternatives and exact ties.
+- [x] Implement Figure 5(a) placement in paper order: construct candidate
+  `q`/`c`/`rho` first, then select the next candidate against the requested
+  80-degree engagement on that machining circle using the standard predecessor
+  model, not the contour-aware global-depletion model. Consecutive centres must
+  make strictly positive boundary progress with gradually varying spacing; do
+  not post-process the result into cosmetic uniformity. The approximate guide
+  route remains negative evidence: 1,532 circles versus 265 publisher turns,
+  120 forced over-cap successors, and no publisher-free ownership graph.
+- [x] Decode the publisher's single ordered Figure 5(a) vector stream as typed
+  shape-only evidence: 265 CCW circular turns, connector primitives, and marker
+  proximity to both stream ends. Keep this decoder outside the generator.
+- [x] Associate each ordered publisher turn with an unchanged repository
+  candidate and retain its run/station/boundary provenance. The publisher may
+  choose identity and order only; it must never create, snap, or interpolate
+  repository `q`/`c`/`rho` geometry. Report correspondence and engagement
+  residuals and label the result reference-guided.
+- [x] Preserve the publisher's forward CCW turn order and report its marker as
+  terminal evidence derived from the publisher stream endpoints. Render the
+  associated repository circles without fabricated transitions. Keep continuous
+  radius-one transition recovery open: it requires source-edge-to-offset-edge
+  lineage absent from the approximate guide and must not be replaced by snapping.
+- [x] Render direct Matplotlib SVG and PNG circle-correspondence comparisons. Separate circle and
+  transition residuals, record missing/extra structure, and keep any sampled
+  visual metric explicitly graphical rather than a numeric-parity claim.
+- [x] Obtain focused adversarial review from Held, Buchli, Shewchuk, Fogel, and
   one disconfirming/null reviewer; fix only reproduction blockers.
 
-**Gate:** the comparison shows the same declared path-family structures and
-explicitly displays remaining differences; no unpublished coordinates or
-numeric parity are claimed. Focused geometry/consumer tests pass.
+**Gate:** a durable Figure 5 comparison contains an ordered reference-guided
+circle correspondence and distinguishes publisher shape-only evidence,
+paper-derived repository geometry, approximate guide provenance, and measured
+residuals. The accepted comparison reports the publisher marker as terminal evidence,
+renders the publisher's CCW order with unchanged repository circles, and states
+that both 80-degree engagement and continuous transitions remain diagnostic. Its distribution has no per-run
+restart bunches, missing observed families, or zero-progress circle runs. Do not
+claim a continuous path, independent traversal recovery, exact-MAT, continuous-cap, or unpublished
+coordinate parity. Residual: replace the reference-guided order when a full
+Figure 5 exact segment-site MAT traversal exists. Focused geometry/consumer
+tests pass.
 
 ## Task 4: Reproduce Figure 6 and close
 
-- [ ] Recover the official Figure 6 plot as durable publisher evidence; treat
+- [x] Recover the official Figure 6 plot as durable publisher evidence; treat
   read-off points as digitized graphical observations, not source numbers.
 - [ ] Render repository results on the same labeled axes and overlay or
   juxtapose them without claiming numeric parity.

@@ -13,6 +13,14 @@ class InvalidCapError(BenchmarkError):
     """An engagement cap fell outside the exact kernel's contract of (0, 180] degrees."""
 
 
+class InvalidFigure5ReproductionInputError(BenchmarkError):
+    """A Figure 5 reproduction adapter received a non-canonical case or result."""
+
+
+class InvalidFigure5ApproximateStationError(BenchmarkError):
+    """A straight-skeleton station cannot support the paper-derived geometry."""
+
+
 class DegeneratePocketError(BenchmarkError):
     """A generated pocket has zero area, fewer than three vertices, or no room for the tool."""
 
