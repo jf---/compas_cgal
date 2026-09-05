@@ -172,6 +172,8 @@ def _build(values: dict[str, object]) -> HeldFigure5Characterization:
 
 def test_unmeasured_certified_row_is_excluded_not_certified() -> None:
     result = _build(_inputs())
+    assert result.reference_primitive_count == 31
+    assert result.projection_vertex_count == 65
     assert result.engagement.tea_audited == (OperationIndex(1), OperationIndex(2))
     assert result.engagement.certified == (OperationIndex(1), OperationIndex(2))
     assert result.engagement.excluded == (OperationIndex(0), OperationIndex(3))

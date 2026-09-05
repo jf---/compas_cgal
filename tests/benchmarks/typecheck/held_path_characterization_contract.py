@@ -122,6 +122,8 @@ def _characterization_contract(
         HeldFigure5Characterization,
     )
     assert_type(characterization.snapshot, tuple[HeldOperationSnapshot, ...])
+    assert_type(characterization.reference_primitive_count, int)
+    assert_type(characterization.projection_vertex_count, int)
     assert_type(characterization.engagement, EngagementDispositionCounts)
     assert_type(characterization.witnesses, tuple[EngagementExceedanceWitness, ...])
     assert_type(characterization.witnesses[0].operation_index, OperationIndex)
