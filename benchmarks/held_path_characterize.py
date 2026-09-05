@@ -79,18 +79,21 @@ def characterize_figure5(
 
     phase_observer("guarded_audit")
     started = clock()
+    assert_toolpath_matches_snapshot(result, snapshot)
     audit = engagement_auditor(spec, result)
     audit_seconds = seconds_value(clock() - started, name="guarded audit duration")
     assert_toolpath_matches_snapshot(result, snapshot)
 
     phase_observer("survey")
     started = clock()
+    assert_toolpath_matches_snapshot(result, snapshot)
     survey = path_surveyor(spec, result)
     survey_seconds = seconds_value(clock() - started, name="survey duration")
     assert_toolpath_matches_snapshot(result, snapshot)
 
     phase_observer("quality_reduction")
     started = clock()
+    assert_toolpath_matches_snapshot(result, snapshot)
     quality = quality_evidence_reducer(spec, snapshot, survey)
     reduction_seconds = seconds_value(clock() - started, name="quality reduction duration")
     assert_toolpath_matches_snapshot(result, snapshot)
