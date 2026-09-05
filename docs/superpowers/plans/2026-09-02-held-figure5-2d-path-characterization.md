@@ -1558,6 +1558,11 @@ The unchanged default long-axis count 200 gives a 200 by 137 grid with
 is still too coarse at 0.10014339673363619; the exact minimum is 668 by 458 at
 0.09993886008290782, or 305,944 samples. A separate bounded probe found that
 the current full reachable-material owner did not construct within 218 seconds.
+The first focused material-only implementation passed its exact gates but also
+exceeded the mandatory 600-second Figure 5 bound. A subsequent 10-second stack
+sample placed all 8,424 main-thread samples in the single material-dilation
+`reach_join_parts(parts, {center})` overlay; exact-number arithmetic dominated,
+while the preceding center construction completed within 34.1 seconds.
 
 **Interface:** Keep `COVERAGE_GRID_SAMPLES = 200`, all public reducer defaults,
 scientific judges, and evidence semantics unchanged. Add
@@ -1596,6 +1601,15 @@ clone, and terminal live-ledger failure with identical bare re-raise.
 
 No generator, survey, replay, public default, threshold, reference test,
 approximation, fallback, identity, or report-semantic change is permitted.
+
+The measured fix revision changes only dilation operands. First add a native
+RED audit/equality gate over mixed linear/circular outer and hole boundaries.
+It must prove `boundary_curves == body_operands == vertex_disks`, total parts
+`2C`, one material batch union, and exact equality with the historical `3C`
+construction. Then emit one unchanged sweep body per boundary curve and one
+full endpoint disk per distinct cycle vertex, retaining `center` in the one
+range union. Do not remove unique disks, inward sweep halves, or change set
+semantics.
 
 - [ ] **Step 11B.3: Prove GREEN and bounded Figure 5 material construction**
 

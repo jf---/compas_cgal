@@ -556,6 +556,19 @@ subset-of-design containment decision with the named
 builder. It does not build the provenance arrangement, residual, or certificate.
 `ReachableDomain2` remains unchanged; only coverage uses the additive owner.
 
+The first material-only Figure 5 factory exceeded its 600-second bound. A
+10-second sample attributed all 8,424 main-thread samples to the single
+reachable-material dilation overlay; center construction had already completed
+within 34.1 seconds. The approved measured revision therefore deduplicates only
+the dilation operands. For each closed center-boundary cycle it emits one
+unchanged sweep body per curve and exactly one full disk per distinct cycle
+vertex, reducing the historical three operands per curve to two without
+changing their union. The center remains an operand in the same single range
+union. Exact equality against the historical construction and counts
+`boundary_curves == body_operands == vertex_disks`, total parts `2C`, are native
+acceptance requirements. Unique vertex disks and inward sweep halves remain;
+removing either requires a separate orientation/topology proof.
+
 Immutable `ExactRegion2` storage owns one cached exact point locator. Original
 and cloned regions share the storage and locator, preserving boundary-inclusive
 exact membership without a mutation path. Locator construction auditing is
