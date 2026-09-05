@@ -205,6 +205,7 @@ add_library(coverage_exact_core STATIC
     src/reachable_arrangement_2.cpp
     src/reachable_certificate_2.cpp
     src/reachable_domain_2.cpp
+    src/reachable_material_predicate_2.cpp
     src/coverage_2.cpp
 )
 add_dependencies(coverage_exact_core external_downloads)

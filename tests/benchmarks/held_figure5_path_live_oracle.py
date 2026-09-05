@@ -119,6 +119,7 @@ def test_held_figure5_path_live_oracle() -> None:
     operator_started = time.monotonic()
     prior_report_generated_at = _report_utc(REPORT_PATH.read_text(encoding="utf-8")) if REPORT_PATH.exists() else None
     observed_phases: list[CharacterizationPhase] = []
+    active_phase_elapsed = 0.0
     _write_live_run_ledger(
         run_started_at=run_started_at,
         outcome="pending",
@@ -132,16 +133,18 @@ def test_held_figure5_path_live_oracle() -> None:
     )
 
     def observe_phase(phase: CharacterizationPhase) -> None:
+        nonlocal active_phase_elapsed
         assert len(observed_phases) < len(EXPECTED_PHASES)
         expected_phase = EXPECTED_PHASES[len(observed_phases)]
         assert phase == expected_phase
         observed_phases.append(phase)
         assert tuple(observed_phases) == EXPECTED_PHASES[: len(observed_phases)]
+        active_phase_elapsed = time.monotonic() - operator_started
         _write_live_run_ledger(
             run_started_at=run_started_at,
             outcome="running",
             observed_phases=tuple(observed_phases),
-            elapsed_seconds=time.monotonic() - operator_started,
+            elapsed_seconds=active_phase_elapsed,
             prior_report_generated_at=prior_report_generated_at,
             report_generated_at=None,
             command_result="running",
@@ -149,11 +152,26 @@ def test_held_figure5_path_live_oracle() -> None:
             qualification_failures=None,
         )
 
-    characterization = write_held_figure5_report(
-        pixi_command=LIVE_COMMAND,
-        phase_observer=observe_phase,
-        path=REPORT_PATH,
-    )
+    try:
+        characterization = write_held_figure5_report(
+            pixi_command=LIVE_COMMAND,
+            phase_observer=observe_phase,
+            path=REPORT_PATH,
+        )
+    except Exception as error:
+        command_elapsed = time.monotonic() - operator_started
+        _write_live_run_ledger(
+            run_started_at=run_started_at,
+            outcome="failed",
+            observed_phases=tuple(observed_phases),
+            elapsed_seconds=active_phase_elapsed if observed_phases else time.monotonic() - operator_started,
+            prior_report_generated_at=prior_report_generated_at,
+            report_generated_at=None,
+            command_result=f"pytest failed after {command_elapsed:.6f} seconds: {type(error).__name__}: {error}",
+            qualification_verdict="not evaluated",
+            qualification_failures=None,
+        )
+        raise
     assert tuple(observed_phases) == EXPECTED_PHASES
 
     engagement = characterization.engagement

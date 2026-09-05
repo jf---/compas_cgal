@@ -1582,22 +1582,34 @@ material subset-of-design containment decision with its named
 It omits only the provenance arrangement, residual, and certificate products.
 Route only `benchmarks.coverage.measure_coverage` through it.
 
-Give immutable `ExactRegion2` shared storage one cached exact point locator,
-shared by clones without a mutation path. At the excluded live-oracle boundary,
-record terminal `failed` state on any report-writer `Exception`, including
-observed phases, elapsed time, no report completion, qualification not evaluated,
-and exact exception type/message, then bare re-raise.
+The measured revisions below supersede that initial material-owner design.
+Keep global `ExactRegion2` on its original exact `oriented_side` implementation.
+Only the coverage-private predicate owns cached design and center point
+locators; each is bound to its final `ReachSet`, never copied or moved after
+binding, and mutex-protected for shared const queries. At the excluded live-
+oracle boundary, record terminal `failed` state on any report-writer
+`Exception`, including observed phases, phase-entry elapsed time, no report
+completion, qualification not evaluated, and exact exception type/message,
+then bare re-raise.
 
-- [ ] **Step 11B.1: Amend plan/spec and observe focused RED**
+- [x] **Step 11B.1: Amend plan/spec and observe focused RED**
 
 Prove the Figure 5 minimum 668, the 667/668 grid boundary, a shorter-axis
 rounding counterexample, one-call adapter behavior and exception identity,
 production wiring, exact material parity on small convex/concave/holed fixtures,
-factory-only and named input/topology errors, exactly one subset decision with
-no residual/certificate construction, one cached locator shared by original and
-clone, and terminal live-ledger failure with identical bare re-raise.
+factory-only and named input/topology errors, zero material subset decisions,
+sweeps, unions, arrangements, residuals, or certificates in the private
+predicate, exactly one design locator and one center locator, unchanged legacy
+`ReachableDomain2` material subset decision and
+`ReachableMaterialContainmentError`, and terminal live-ledger failure with
+identical bare re-raise.
 
-- [ ] **Step 11B.2: Implement only the approved exact paths**
+Historical only, not final acceptance: the rejected eager material-owner
+candidate proved exactly one material subset decision and one globally cached
+`ExactRegion2` locator. Revision 4 superseded both choices; they are not
+satisfied or claimed by the final predicate.
+
+- [x] **Step 11B.2: Implement only the approved exact paths**
 
 No generator, survey, replay, public default, threshold, reference test,
 approximation, fallback, identity, or report-semantic change is permitted.
@@ -1663,21 +1675,40 @@ narrow-bay, and mixed-arc fixtures plus exact tangency/adjacent-binary64 and
 radius-branch tests precedes a hard-120-second stratified projection and full
 305,944-query Figure 5 batch. Only `benchmarks.coverage` uses this predicate.
 
-- [ ] **Step 11B.3: Prove GREEN and bounded Figure 5 material construction**
+The first revision-4 ordering passed those exact gates but failed the bounded
+projection: construction took 1.155735 seconds and 8,192 stratified queries
+took 7.352074 seconds, projecting 275.731305 seconds total. The measured cause
+is that every point outside `C`, including the 30.7251 percent outside `D`,
+scans the full center boundary. Because `C + B(r)` is already proven a subset
+of `D`, preserve the validated exact design as a second immutable
+`ExactRegion2` and decide in the exact order `q not in D -> false`, `q in C ->
+true`, then boundary distance. A read-only simulation reduced boundary-scan
+candidates from 3,021 to 504 of 8,192 and projected 36.443539 seconds for the
+full query batch. The audit must prove exactly one design locator and one center
+locator. No batch API or spatial index is permitted unless this measured
+ordering fails the unchanged 120-second gates.
+
+The design-first ordering passed. Its identical 8,192-point stratified run took
+0.917544 seconds after 1.174590 seconds construction, projecting 35.441826
+seconds total. The complete 668 by 458 batch then evaluated all 305,944 points
+in 33.795099 seconds after 1.167958 seconds construction, 34.963057 seconds
+total, and classified 211,804 points inside. No batch API or spatial index was
+needed.
+
+- [x] **Step 11B.3: Prove GREEN and bounded Figure 5 material construction**
 
 Run focused native/Python gates, configured strict types, Ruff, and diff hygiene.
-Measure the real Figure 5 material-only factory under a maximum ten-minute
-external bound. If it does not finish, record the negative result and stop
-before commit. If it finishes, time a bounded representative exact membership
-batch sufficient to project the 305,944-query cost without changing semantics.
+Measure the real Figure 5 predicate construction, a stratified exact membership
+batch, and the complete 305,944-query batch under the revision-4 external
+bounds. Preserve the exact verdict count across locator-hardening changes.
 
-- [ ] **Step 11B.4: Correct evidence, report, review, and commit**
+- [x] **Step 11B.4: Correct evidence, report, review, and commit**
 
 Correct the current live ledger to the failed second run while preserving its
 start, phases, and 778.885679-second last phase timestamp; record pytest failure
 at 780.83 seconds, exact `CoarseCoverageGridError`, no report, and qualification
-not evaluated. Preserve the prior timeout in Git history. Commit coherent
-reviewable checkpoints, then return to controller-owned independent review.
+not evaluated. Preserve the prior timeout in Git history. Complete final Task
+11B independent review and checkpoint commit, then return to Step 3.
 
 - [ ] **Step 3: Run the live oracle under the operator budget**
 
@@ -1693,7 +1724,10 @@ run start and updates the active phase before each consumer in
 `docs/superpowers/state/held-figure5-live-run.md`; record elapsed time and timeout
 there, mark any pre-existing report as prior/stale evidence, leave Phase 1
 blocked, and do not begin generator repair. On success, require the report UTC
-instant to postdate the recorded run start.
+instant to postdate the recorded run start. Report publication must first fully
+write the sibling `.pending.md` file, then atomically `Path.replace` the report;
+ordinary write or replacement exceptions preserve any prior report and may
+leave the pending file as evidence.
 
 - [ ] **Step 4: Inspect the generated report and obtain independent review**
 
@@ -1701,7 +1735,10 @@ Verify the banner, normalized units, separately measured consumer timings, three
 engagement partition, witnesses, all twelve criteria, sampled/certified claim
 boundaries, and refusal verdict against the live objects. Independent review
 must reject any unsupported native-audit, Fanuc, Held-superiority, or
-machine-release claim.
+machine-release claim. Geometry claims must remain explicitly projection-only.
+The report must expose raw coverage `nx`, `ny`, reachable sample count, uncut
+sample count, and cell area; decide any report correction only from this live
+inspection.
 
 - [ ] **Step 5: Integrate durable documentation**
 

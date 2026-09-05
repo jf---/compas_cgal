@@ -2,6 +2,7 @@
 #include "cutter_centre_domain_2.h"
 #include "reachable_domain_2.h"
 #include "reachable_errors_2.h"
+#include "reachable_material_predicate_2.h"
 
 #include <string>
 #include <vector>
@@ -51,6 +52,10 @@ NB_MODULE(_coverage_2, m)
     nb::exception<ReachableMaterialContainmentError>(
         m,
         "ReachableMaterialContainmentError",
+        reachable_error.ptr());
+    nb::exception<ReachableMaterialPredicateGeometryError>(
+        m,
+        "ReachableMaterialPredicateGeometryError",
         reachable_error.ptr());
     nb::exception<InvalidCoverageGeometryError>(
         m,
@@ -143,6 +148,17 @@ NB_MODULE(_coverage_2, m)
             "holes"_a,
             "tool_radius"_a)
         .def("contains", &CutterCentreDomain2::contains, "x"_a, "y"_a);
+
+    nb::class_<ReachableMaterialPredicate2>(
+        m,
+        "ReachableMaterialPredicate2")
+        .def_static(
+            "build",
+            &ReachableMaterialPredicate2::build,
+            "design_boundary"_a,
+            "holes"_a,
+            "tool_radius"_a)
+        .def("contains", &ReachableMaterialPredicate2::contains, "x"_a, "y"_a);
 
     nb::class_<CoverageSweepRecord2>(m, "CoverageSweepRecord2")
         .def_prop_ro(

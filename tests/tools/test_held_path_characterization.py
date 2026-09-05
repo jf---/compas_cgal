@@ -15,13 +15,39 @@ from tests.benchmarks.test_held_post_qualification import _characterization
 UTC_INSTANT = datetime(2026, 9, 5, 8, 9, 10, tzinfo=timezone.utc)
 
 
-class SpyPath:
-    def __init__(self) -> None:
-        self.writes: list[tuple[str, str]] = []
+class PendingSpyPath:
+    def __init__(self, destination: "SpyPath") -> None:
+        self.destination = destination
 
     def write_text(self, markdown: str, *, encoding: str) -> int:
-        self.writes.append((markdown, encoding))
+        self.destination.calls.append(("pending-write", markdown, encoding))
+        self.destination.pending_content = markdown
+        if self.destination.failure_stage == "write":
+            raise self.destination.failure
         return len(markdown)
+
+    def replace(self, destination: object) -> object:
+        assert destination is self.destination
+        self.destination.calls.append(("replace",))
+        if self.destination.failure_stage == "replace":
+            raise self.destination.failure
+        self.destination.content = self.destination.pending_content
+        self.destination.pending_content = None
+        return destination
+
+
+class SpyPath:
+    def __init__(self) -> None:
+        self.content = "prior report\n"
+        self.pending_content: str | None = None
+        self.calls: list[tuple[object, ...]] = []
+        self.failure_stage: str | None = None
+        self.failure = RuntimeError("publication failure")
+
+    def with_suffix(self, suffix: str) -> PendingSpyPath:
+        assert suffix == ".pending.md"
+        self.calls.append(("pending-path", suffix))
+        return PendingSpyPath(self)
 
 
 def test_writer_requires_an_explicit_phase_observer() -> None:
@@ -64,7 +90,7 @@ def test_writer_wires_production_dependencies_observer_context_and_one_write(mon
             tool_module.generate_toolpath,
             tool_module.audit_figure5_engagement,
             tool_module.survey_path,
-            tool_module.reduce_quality_evidence,
+            tool_module.reduce_figure5_quality,
             observer,
         )
     ]
@@ -74,10 +100,16 @@ def test_writer_wires_production_dependencies_observer_context_and_one_write(mon
     assert context.generated_at_utc is UTC_INSTANT
     assert context.pixi_command == "pixi run held-figure5-characterize"
     assert context.generator_policy_name == "benchmarks.runner.generate_toolpath"
-    assert destination.writes == [("report\n", "utf-8")]
+    assert destination.calls == [
+        ("pending-path", ".pending.md"),
+        ("pending-write", "report\n", "utf-8"),
+        ("replace",),
+    ]
+    assert destination.content == "report\n"
+    assert destination.pending_content is None
 
 
-@pytest.mark.parametrize("failure_stage", ["characterize", "clock", "render", "write"])
+@pytest.mark.parametrize("failure_stage", ["characterize", "clock", "render", "write", "replace"])
 def test_boundary_failures_propagate_without_later_side_effects(monkeypatch: pytest.MonkeyPatch, failure_stage: str) -> None:
     characterization = _characterization()
     destination = SpyPath()
@@ -102,13 +134,8 @@ def test_boundary_failures_propagate_without_later_side_effects(monkeypatch: pyt
             raise failure
         return "report\n"
 
-    if failure_stage == "write":
-
-        def write_text(markdown: str, *, encoding: str) -> int:
-            calls.append("write")
-            raise failure
-
-        destination.write_text = write_text  # type: ignore[method-assign]
+    destination.failure_stage = failure_stage
+    destination.failure = failure
 
     monkeypatch.setattr(tool_module, "characterize_figure5", characterize)
     monkeypatch.setattr(tool_module, "_utc_now", clock)
@@ -128,7 +155,9 @@ def test_boundary_failures_propagate_without_later_side_effects(monkeypatch: pyt
     elif failure_stage == "render":
         assert calls == ["characterize", "clock", "render"]
     else:
-        assert calls == ["characterize", "clock", "render", "write"]
+        assert calls == ["characterize", "clock", "render"]
+        assert destination.content == "prior report\n"
+        assert destination.pending_content == "report\n"
 
 
 def test_print_phase_has_closed_stable_spelling(capsys: pytest.CaptureFixture[str]) -> None:

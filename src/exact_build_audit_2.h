@@ -6,9 +6,15 @@ struct ReachableDomainBuildAudit2 {
     std::size_t geometry_passes = 0;
     std::size_t provenance_arrangements = 0;
     std::size_t center_extractions = 0;
+    std::size_t material_sweep_operands = 0;
     std::size_t material_batch_unions = 0;
+    std::size_t material_arrangements = 0;
+    std::size_t center_predicate_constructions = 0;
+    std::size_t design_point_locators = 0;
+    std::size_t center_point_locators = 0;
     std::size_t subset_decisions = 0;
     std::size_t residual_differences = 0;
+    std::size_t certificate_constructions = 0;
     std::size_t source_geometric_rematches = 0;
     std::size_t input_vertex_count = 0;
     std::size_t ring_rotation_comparisons = 0;
