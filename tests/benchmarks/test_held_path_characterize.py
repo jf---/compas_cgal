@@ -214,16 +214,19 @@ def test_characterization_has_exact_order_identities_and_durations(monkeypatch: 
         "assert",
         "phase:guarded_audit",
         "clock",
+        "assert",
         "audit",
         "clock",
         "assert",
         "phase:survey",
         "clock",
+        "assert",
         "survey",
         "clock",
         "assert",
         "phase:quality_reduction",
         "clock",
+        "assert",
         "reduce",
         "clock",
         "assert",
@@ -290,6 +293,76 @@ def test_characterization_rejects_consumer_mutation(
         "reduce": ["generation", "guarded_audit", "survey", "quality_reduction"],
     }
     assert phases == expected_phases[mutating_stage]
+    assert builds == []
+
+
+@pytest.mark.parametrize("mutator", ["observer", "clock"])
+@pytest.mark.parametrize("affected_phase", ["guarded_audit", "survey", "quality_reduction"])
+def test_characterization_rejects_callback_mutation_before_affected_consumer(
+    monkeypatch: pytest.MonkeyPatch,
+    mutator: str,
+    affected_phase: str,
+) -> None:
+    characterize = importlib.import_module("benchmarks.held_path_characterize")
+    result = _result()
+    report = _sentinel_report()
+    survey = cast(PathSurvey, object())
+    quality = cast(QualityEvidence, object())
+    current_phase = ""
+    start_clock_pending = False
+    consumer_calls: list[str] = []
+    builds: list[object] = []
+
+    def mutate() -> None:
+        result.operations[0].operation = OperationType.RETRACT
+
+    def phase_observer(phase: str) -> None:
+        nonlocal current_phase, start_clock_pending
+        current_phase = phase
+        start_clock_pending = True
+        if mutator == "observer" and phase == affected_phase:
+            mutate()
+
+    def clock() -> Seconds:
+        nonlocal start_clock_pending
+        if start_clock_pending:
+            start_clock_pending = False
+            if mutator == "clock" and current_phase == affected_phase:
+                mutate()
+        return Seconds(0.0)
+
+    def audit(spec: PocketSpec, received_result: ToolpathResult) -> EngagementReport:
+        consumer_calls.append("guarded_audit")
+        return report
+
+    def survey_path(spec: PocketSpec, received_result: ToolpathResult) -> PathSurvey:
+        consumer_calls.append("survey")
+        return survey
+
+    def reduce(spec: PocketSpec, snapshot: tuple[HeldOperationSnapshot, ...], received_survey: PathSurvey) -> QualityEvidence:
+        consumer_calls.append("quality_reduction")
+        return quality
+
+    class BuildBoundary:
+        @staticmethod
+        def build(**values: object) -> HeldFigure5Characterization:
+            builds.append(values)
+            return cast(HeldFigure5Characterization, object())
+
+    monkeypatch.setattr(characterize, "HeldFigure5Characterization", BuildBoundary)
+
+    with pytest.raises(MutatedHeldToolpathError):
+        characterize.characterize_figure5(
+            lambda spec: result,
+            audit,
+            survey_path,
+            reduce,
+            phase_observer=phase_observer,
+            clock=clock,
+        )
+
+    ordered_consumers = ["guarded_audit", "survey", "quality_reduction"]
+    assert consumer_calls == ordered_consumers[: ordered_consumers.index(affected_phase)]
     assert builds == []
 
 
