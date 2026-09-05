@@ -523,6 +523,38 @@ def test_mathsm_factory_fails_named_before_reading_untyped_geometry() -> None:
         )
 
 
+def test_maximum_phase_zero_factory_owns_paper_equations() -> None:
+    span, edge, _ = _constant_clearance_span()
+    site = next(
+        span.axis.site_by_id[site_id]
+        for site_id in edge.generator_site_ids
+        if span.axis.site_by_id[site_id].kind == "open-segment" and span.axis.site_by_id[site_id].source.y == 0.0
+    )
+    middle_point = Point2[WorldXY].build(2.5, 1.0)
+
+    proposal = MathsmCircleProposal.build_maximum(
+        generator_site=site,
+        middle_point=middle_point,
+        tool_radius=span.axis.tool_radius,
+        circle_orientation=CircleOrientation.COUNTERCLOCKWISE,
+    )
+
+    assert proposal.motion.center != proposal.middle_point
+    assert 2 * proposal.guide_radius == Fraction.from_float(
+        proposal.middle_point.y - proposal.boundary_footpoint.y - proposal.tool_radius.value,
+    )
+    assert (
+        Point2[WorldXY].build(
+            proposal.motion.center.x + proposal.motion.phase_vector.x,
+            proposal.motion.center.y + proposal.motion.phase_vector.y,
+        )
+        == proposal.mathsm_contact_point
+    )
+    assert proposal.phase_index == 0
+    assert proposal.phase_count == 1
+    assert proposal.guide_radius == proposal.maximum_guide_radius
+
+
 def test_spatial_refinement_follows_point_segment_parabola_not_sample_chord() -> None:
     span = _parabolic_span()
     half_span = float(span.reported_length) / 2.0
