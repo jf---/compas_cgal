@@ -1620,6 +1620,26 @@ range union, one center root join, no center operand below root, and exact
 equality with the flat historical union. Do not reorder operands, introduce a
 custom tree, or remove one-sided sweep geometry.
 
+Revision 2 also exceeded the 600-second Figure 5 bound. Replacing Boost's exact
+number backend with GMP is rejected here: the exact kernel is shared across the
+connected native target, and enabling GMP/MPFR therefore changes repository-wide
+ABI and binary-wheel dependency policy rather than this isolated coverage path.
+
+The user-approved revision 3 is a bounded, falsifiable experiment only. Add a
+candidate beside the historical 3C and current 2C paths that labels every closed
+center and sweep boundary cycle and invokes CGAL Minkowski_sum_2's
+`Union_of_curve_cycles_2` once, producing the same exact reachable set through
+one arrangement. Before routing the material-only factory through the candidate,
+the native gate must prove historical 3C = current 2C = candidate on a mixed
+line/arc outer-and-hole fixture; equal component and hole counts; center subset
+of candidate and candidate subset of a containing design; complete unique
+component/cycle labels; and exactly one candidate arrangement. The class is an
+auxiliary API and its headers are GPL-3.0-or-later or commercially licensed, so
+API fragility and package-license compatibility remain explicit adoption risks.
+No old path is removed and there is no fallback or approximation. A real Figure
+5 factory run has a hard 120-second bound; timeout, assertion, or exact mismatch
+rejects the candidate immediately and forbids a production commit.
+
 - [ ] **Step 11B.3: Prove GREEN and bounded Figure 5 material construction**
 
 Run focused native/Python gates, configured strict types, Ruff, and diff hygiene.
