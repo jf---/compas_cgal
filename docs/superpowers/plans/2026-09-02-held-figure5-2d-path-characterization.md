@@ -1640,6 +1640,10 @@ No old path is removed and there is no fallback or approximation. A real Figure
 5 factory run has a hard 120-second bound; timeout, assertion, or exact mismatch
 rejects the candidate immediately and forbids a production commit.
 
+Revision 3 passed its focused exact and structural gates but produced no factory
+result before the external 120-second Figure 5 bound. It is rejected; no query
+projection, live oracle, or production commit follows from this experiment.
+
 - [ ] **Step 11B.3: Prove GREEN and bounded Figure 5 material construction**
 
 Run focused native/Python gates, configured strict types, Ruff, and diff hygiene.
