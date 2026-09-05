@@ -24,6 +24,11 @@ class SpyPath:
         return len(markdown)
 
 
+def test_writer_requires_an_explicit_phase_observer() -> None:
+    with pytest.raises(TypeError):
+        tool_module.write_held_figure5_report(pixi_command="run")  # type: ignore[call-arg]
+
+
 def test_writer_wires_production_dependencies_observer_context_and_one_write(monkeypatch: pytest.MonkeyPatch) -> None:
     characterization = _characterization(all_open=True)
     destination = SpyPath()
@@ -46,8 +51,10 @@ def test_writer_wires_production_dependencies_observer_context_and_one_write(mon
     monkeypatch.setattr(tool_module, "render_held_figure5_2d_path", render)
     monkeypatch.setattr(tool_module, "_utc_now", lambda: UTC_INSTANT)
 
+    observer = phases.append
     returned = tool_module.write_held_figure5_report(
         pixi_command="pixi run held-figure5-characterize",
+        phase_observer=observer,
         path=cast(Path, destination),
     )
 
@@ -58,7 +65,7 @@ def test_writer_wires_production_dependencies_observer_context_and_one_write(mon
             tool_module.audit_figure5_engagement,
             tool_module.survey_path,
             tool_module.reduce_quality_evidence,
-            phases.append,
+            observer,
         )
     ]
     assert phases == ["generation", "guarded_audit", "survey", "quality_reduction"]
@@ -108,7 +115,11 @@ def test_boundary_failures_propagate_without_later_side_effects(monkeypatch: pyt
     monkeypatch.setattr(tool_module, "render_held_figure5_2d_path", render)
 
     with pytest.raises(RuntimeError) as exc_info:
-        tool_module.write_held_figure5_report(pixi_command="run", path=cast(Path, destination))
+        tool_module.write_held_figure5_report(
+            pixi_command="run",
+            phase_observer=lambda phase: None,
+            path=cast(Path, destination),
+        )
     assert exc_info.value is failure
     if failure_stage == "characterize":
         assert calls == ["characterize"]
@@ -133,11 +144,11 @@ def test_print_phase_has_closed_stable_spelling(capsys: pytest.CaptureFixture[st
 
 def test_main_reports_completion_path_and_canonical_ineligible_verdict(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     characterization = _characterization(all_open=True)
-    writes: list[tuple[str, Path]] = []
+    writes: list[tuple[str, object, Path]] = []
     failure_calls: list[object] = []
 
-    def writer(*, pixi_command: str, path: Path) -> object:
-        writes.append((pixi_command, path))
+    def writer(*, pixi_command: str, phase_observer: object, path: Path) -> object:
+        writes.append((pixi_command, phase_observer, path))
         return characterization
 
     def failures(value: object) -> tuple[str, ...]:
@@ -148,7 +159,7 @@ def test_main_reports_completion_path_and_canonical_ineligible_verdict(monkeypat
     monkeypatch.setattr(tool_module, "post_qualification_failures", failures)
     tool_module.main()
 
-    assert writes == [("pixi run held-figure5-characterize", tool_module.DEFAULT_REPORT_PATH)]
+    assert writes == [("pixi run held-figure5-characterize", tool_module._print_phase, tool_module.DEFAULT_REPORT_PATH)]
     assert failure_calls == [characterization]
     output = capsys.readouterr().out
     assert str(tool_module.DEFAULT_REPORT_PATH) in output

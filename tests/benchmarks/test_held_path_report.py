@@ -3,11 +3,13 @@ from __future__ import annotations
 from datetime import datetime
 from datetime import timedelta
 from datetime import timezone
+from types import SimpleNamespace
 
 import pytest
 
 import benchmarks.held_path_report as report_module
 from benchmarks.errors import InvalidHeldPathReportContextError
+from benchmarks.errors import InvalidHeldPathEvidenceError
 from benchmarks.held_path_report import HeldPathReportContext
 from benchmarks.held_path_report import render_held_figure5_2d_path
 from benchmarks.quality_observations import CRITERION_NAMES
@@ -80,10 +82,10 @@ def test_report_is_deterministic_complete_and_bounded() -> None:
         "| TEA-audited lateral operations | 2 |",
         "| TEA-audit-excluded operations | 1 |",
         "| Sampled material-contact operations |",
-        "| Generation | 1.000000 |",
-        "| Guarded audit | 2.000000 |",
-        "| Survey | 3.000000 |",
-        "| Coverage plus reduction | 4.000000 |",
+        "| Generation (seconds) | 1.000000 |",
+        "| Guarded audit (seconds) | 2.000000 |",
+        "| Survey (seconds) | 3.000000 |",
+        "| Coverage plus reduction (seconds) | 4.000000 |",
         "| certified |",
         "| demonstrated_exceeded |",
         "| unresolved |",
@@ -160,7 +162,49 @@ def test_report_only_rows_are_literal_and_gate_fields_are_not_duplicated() -> No
     )
     for name in report_only_names:
         assert markdown.count(f"| {name} |") == 1
-    assert "engagement_length_histogram[0]" in markdown
+    expected_units = {
+        "gouge_free": "boolean",
+        "rapid_safety": "boolean",
+        "marginal_loops": "count",
+        "recut_fraction": "fraction",
+        "max_engagement_deg": "degrees",
+        "engagement_p95_deg": "degrees",
+        "engagement_variance_deg2": "degrees^2",
+        "max_chip_thickness_ratio": "ratio",
+        "low_chip_thickness_ratio": "ratio",
+        "max_engagement_gradient_deg_per_length": "degrees per benchmark-normalized mm",
+        "immersion_steady_fraction": "fraction",
+        "immersion_at_design_fraction": "fraction",
+        "immersion_excursions": "count",
+        "mean_radial_depth": "benchmark-normalized mm",
+        "radial_depth_variance": "benchmark-normalized mm^2",
+        "wall_scallop_height": "benchmark-normalized mm",
+        "loop_radius_cv": "ratio",
+        "cutting_length": "benchmark-normalized mm",
+        "air_length": "benchmark-normalized mm",
+        "air_fraction": "fraction",
+        "max_curvature": "inverse benchmark-normalized mm",
+        "curvature_breaks": "count",
+        "direction_reversals": "count",
+        "retract_count": "count",
+        "reentry_count": "count",
+        "material_entries": "count",
+        "cut_air_alternations": "count",
+        "alternations_per_length": "inverse benchmark-normalized mm",
+        "block_count": "count",
+        "cut_blocks": "count",
+        "min_block_length": "benchmark-normalized mm",
+        "median_block_length": "benchmark-normalized mm",
+        "short_block_length": "benchmark-normalized mm",
+        "block_length_cv": "ratio",
+        "blocks_per_unit_length": "inverse benchmark-normalized mm",
+        "arc_length_fraction": "fraction",
+        "cut_operations": "count",
+        "path_length": "benchmark-normalized mm",
+    }
+    for name, unit in expected_units.items():
+        assert f"| {name} | {unit} |" in markdown
+    assert "| engagement_length_histogram[0] | band: degrees; length: benchmark-normalized mm |" in markdown
     for name in (
         "uncut_fraction",
         "gouging_motions",
@@ -199,13 +243,35 @@ def test_renderer_uses_canonical_failure_collector_once(monkeypatch: pytest.Monk
     assert "This verdict is not a manufacturing release." in eligible
 
 
-def test_dynamic_cells_escape_backslash_pipe_and_newlines(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize(
+    ("characterization", "context", "expected_error"),
+    [
+        (SimpleNamespace(), _context(), InvalidHeldPathEvidenceError),
+        (_characterization(), SimpleNamespace(), InvalidHeldPathReportContextError),
+    ],
+)
+def test_renderer_rejects_impostors_before_projection(
+    monkeypatch: pytest.MonkeyPatch,
+    characterization: object,
+    context: object,
+    expected_error: type[Exception],
+) -> None:
+    calls: list[object] = []
+    monkeypatch.setattr(report_module, "post_qualification_failures", calls.append)
+
+    with pytest.raises(expected_error):
+        render_held_figure5_2d_path(characterization, context)  # type: ignore[arg-type]
+
+    assert calls == []
+
+
+def test_dynamic_cells_escape_markdown_html_and_newlines(monkeypatch: pytest.MonkeyPatch) -> None:
     characterization = _characterization()
     monkeypatch.setattr(report_module, "post_qualification_failures", lambda value: ("bad\\pipe|one\r\ntwo\rthree\nfour",))
-    context = _context(command="run\\this|now\r\nnext", policy="policy|name")
+    context = _context(command="run\\this|now<&\r\nnext", policy='policy|"name"')
 
     markdown = render_held_figure5_2d_path(characterization, context)
 
-    assert "run\\\\this\\|now<br>next" in markdown
-    assert "policy\\|name" in markdown
+    assert "run\\\\this\\|now&lt;&amp;<br>next" in markdown
+    assert "policy\\|&quot;name&quot;" in markdown
     assert "bad\\\\pipe\\|one<br>two<br>three<br>four" in markdown

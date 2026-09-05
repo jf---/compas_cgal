@@ -36,6 +36,7 @@ def _print_phase(phase: CharacterizationPhase) -> None:
 def write_held_figure5_report(
     *,
     pixi_command: str,
+    phase_observer: Callable[[CharacterizationPhase], None],
     path: Path = DEFAULT_REPORT_PATH,
 ) -> HeldFigure5Characterization:
     """Characterize once and write exactly one report."""
@@ -44,7 +45,7 @@ def write_held_figure5_report(
         audit_figure5_engagement,
         survey_path,
         reduce_quality_evidence,
-        phase_observer=_print_phase,
+        phase_observer=phase_observer,
     )
     context = HeldPathReportContext.build(
         generated_at_utc=_utc_now(),
@@ -59,6 +60,7 @@ def write_held_figure5_report(
 def main() -> None:
     characterization = write_held_figure5_report(
         pixi_command="pixi run held-figure5-characterize",
+        phase_observer=_print_phase,
         path=DEFAULT_REPORT_PATH,
     )
     failures = post_qualification_failures(characterization)

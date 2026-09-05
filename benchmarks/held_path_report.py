@@ -5,12 +5,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from datetime import timedelta
+from html import escape
 from typing import Callable
 from typing import Union
 
 from typing_extensions import Self
 from typing_extensions import TypeAlias
 
+from benchmarks.errors import InvalidHeldPathEvidenceError
 from benchmarks.errors import InvalidHeldPathReportContextError
 from benchmarks.held_path_evidence import HeldFigure5Characterization
 from benchmarks.held_post_qualification import post_qualification_failures
@@ -37,51 +39,66 @@ _CRITERION_ACCESSORS: tuple[tuple[str, Callable[[PathQualityAssessment], Criteri
     ("tangent breaks", lambda assessment: assessment.tangent_breaks),
 )
 
-_REPORT_ONLY_FIELDS: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("elementary", ("gouge_free", "rapid_safety", "marginal_loops", "recut_fraction")),
+_REPORT_ONLY_FIELDS: tuple[tuple[str, tuple[tuple[str, str], ...]], ...] = (
+    (
+        "elementary",
+        (
+            ("gouge_free", "boolean"),
+            ("rapid_safety", "boolean"),
+            ("marginal_loops", "count"),
+            ("recut_fraction", "fraction"),
+        ),
+    ),
     (
         "cut",
         (
-            "max_engagement_deg",
-            "engagement_p95_deg",
-            "engagement_variance_deg2",
-            "max_chip_thickness_ratio",
-            "low_chip_thickness_ratio",
-            "max_engagement_gradient_deg_per_length",
-            "immersion_steady_fraction",
-            "immersion_at_design_fraction",
-            "immersion_excursions",
-            "mean_radial_depth",
-            "radial_depth_variance",
-            "wall_scallop_height",
-            "loop_radius_cv",
+            ("max_engagement_deg", "degrees"),
+            ("engagement_p95_deg", "degrees"),
+            ("engagement_variance_deg2", "degrees^2"),
+            ("max_chip_thickness_ratio", "ratio"),
+            ("low_chip_thickness_ratio", "ratio"),
+            ("max_engagement_gradient_deg_per_length", "degrees per benchmark-normalized mm"),
+            ("immersion_steady_fraction", "fraction"),
+            ("immersion_at_design_fraction", "fraction"),
+            ("immersion_excursions", "count"),
+            ("mean_radial_depth", "benchmark-normalized mm"),
+            ("radial_depth_variance", "benchmark-normalized mm^2"),
+            ("wall_scallop_height", "benchmark-normalized mm"),
+            ("loop_radius_cv", "ratio"),
         ),
     ),
     (
         "speed",
         (
-            "cutting_length",
-            "air_length",
-            "air_fraction",
-            "max_curvature",
-            "curvature_breaks",
-            "direction_reversals",
-            "retract_count",
-            "reentry_count",
+            ("cutting_length", "benchmark-normalized mm"),
+            ("air_length", "benchmark-normalized mm"),
+            ("air_fraction", "fraction"),
+            ("max_curvature", "inverse benchmark-normalized mm"),
+            ("curvature_breaks", "count"),
+            ("direction_reversals", "count"),
+            ("retract_count", "count"),
+            ("reentry_count", "count"),
         ),
     ),
-    ("longevity", ("material_entries", "cut_air_alternations", "alternations_per_length")),
+    (
+        "longevity",
+        (
+            ("material_entries", "count"),
+            ("cut_air_alternations", "count"),
+            ("alternations_per_length", "inverse benchmark-normalized mm"),
+        ),
+    ),
     (
         "program",
         (
-            "block_count",
-            "cut_blocks",
-            "min_block_length",
-            "median_block_length",
-            "short_block_length",
-            "block_length_cv",
-            "blocks_per_unit_length",
-            "arc_length_fraction",
+            ("block_count", "count"),
+            ("cut_blocks", "count"),
+            ("min_block_length", "benchmark-normalized mm"),
+            ("median_block_length", "benchmark-normalized mm"),
+            ("short_block_length", "benchmark-normalized mm"),
+            ("block_length_cv", "ratio"),
+            ("blocks_per_unit_length", "inverse benchmark-normalized mm"),
+            ("arc_length_fraction", "fraction"),
         ),
     ),
 )
@@ -115,7 +132,8 @@ class HeldPathReportContext:
 
 def _markdown_table_cell(value: object) -> str:
     text = str(value).replace("\r\n", "\n").replace("\r", "\n")
-    return text.replace("\\", "\\\\").replace("|", "\\|").replace("\n", "<br>")
+    escaped = escape(text, quote=True)
+    return escaped.replace("\\", "\\\\").replace("|", "\\|").replace("\n", "<br>")
 
 
 def _number(value: object) -> str:
@@ -134,6 +152,10 @@ def _row(label: object, value: object) -> str:
 
 def render_held_figure5_2d_path(characterization: HeldFigure5Characterization, context: HeldPathReportContext) -> str:
     """Render validated evidence without geometry, clocks, writes, or new decisions."""
+    if type(characterization) is not HeldFigure5Characterization:
+        raise InvalidHeldPathEvidenceError("Held report rendering requires one validated HeldFigure5Characterization.")
+    if type(context) is not HeldPathReportContext:
+        raise InvalidHeldPathReportContextError("Held report rendering requires one validated HeldPathReportContext.")
     failures = post_qualification_failures(characterization)
     lines = [
         "# Held Figure 5 2D path characterization",
@@ -173,10 +195,10 @@ def render_held_figure5_2d_path(characterization: HeldFigure5Characterization, c
         _row("TEA-audited lateral operations", _number(characterization.tea_audited_operation_count)),
         _row("TEA-audit-excluded operations", _number(characterization.excluded_operation_count)),
         _row("Sampled material-contact operations", _number(characterization.sampled_material_contact_operations)),
-        _row("Generation", _number(characterization.generation_seconds)),
-        _row("Guarded audit", _number(characterization.audit_seconds)),
-        _row("Survey", _number(characterization.survey_seconds)),
-        _row("Coverage plus reduction", _number(characterization.reduction_seconds)),
+        _row("Generation (seconds)", _number(characterization.generation_seconds)),
+        _row("Guarded audit (seconds)", _number(characterization.audit_seconds)),
+        _row("Survey (seconds)", _number(characterization.survey_seconds)),
+        _row("Coverage plus reduction (seconds)", _number(characterization.reduction_seconds)),
         "",
         "## Engagement dispositions",
         "",
@@ -216,18 +238,21 @@ def render_held_figure5_2d_path(characterization: HeldFigure5Characterization, c
             f"{_markdown_table_cell(_number(criterion.required))} | {_markdown_table_cell(criterion.evidence)} | "
             f"{_markdown_table_cell(criterion.outcome)} |"
         )
-    lines.extend(["", "## Report-only PathQuality", "", "| Group | Field | Value |", "| --- | --- | --- |"])
+    lines.extend(["", "## Report-only PathQuality", "", "| Group | Field | Unit | Value |", "| --- | --- | --- | --- |"])
     quality = characterization.path_quality
-    for group_name, field_names in _REPORT_ONLY_FIELDS:
+    for group_name, fields in _REPORT_ONLY_FIELDS:
         group = getattr(quality, group_name)
-        for field_name in field_names:
-            lines.append(f"| {_markdown_table_cell(group_name)} | {_markdown_table_cell(field_name)} | {_markdown_table_cell(_number(getattr(group, field_name)))} |")
+        for field_name, unit in fields:
+            lines.append(
+                f"| {_markdown_table_cell(group_name)} | {_markdown_table_cell(field_name)} | "
+                f"{_markdown_table_cell(unit)} | {_markdown_table_cell(_number(getattr(group, field_name)))} |"
+            )
         if group_name == "longevity":
             for index, (low, high, length) in enumerate(group.engagement_length_histogram):
                 value = f"{_number(low)} to {_number(high)} degrees: {_number(length)}"
-                lines.append(f"| longevity | engagement_length_histogram[{index}] | {_markdown_table_cell(value)} |")
-    lines.append(f"| top_level | cut_operations | {_markdown_table_cell(_number(quality.cut_operations))} |")
-    lines.append(f"| top_level | path_length | {_markdown_table_cell(_number(quality.path_length))} |")
+                lines.append(f"| longevity | engagement_length_histogram[{index}] | band: degrees; length: benchmark-normalized mm | {_markdown_table_cell(value)} |")
+    lines.append(f"| top_level | cut_operations | count | {_markdown_table_cell(_number(quality.cut_operations))} |")
+    lines.append(f"| top_level | path_length | benchmark-normalized mm | {_markdown_table_cell(_number(quality.path_length))} |")
     lines.extend(["", "## Post-qualification entry verdict", ""])
     if failures:
         lines.append("**not eligible for postprocessor qualification**")
