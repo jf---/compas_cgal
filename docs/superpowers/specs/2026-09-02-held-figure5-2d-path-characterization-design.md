@@ -499,9 +499,11 @@ restricted to 3 and 25 source operations; one first-motion engagement query took
 0.000640 seconds. Downstream replay cost is therefore unmeasured, not presumed
 fast.
 
-The survey instead constructs one lightweight exact cutter-centre-domain
-predicate. It owns the same canonical validated reach input and answers only
-`contains(x, y)`. A finite binary64 query is injected exactly once and is legal
+The survey instead builds one lightweight exact cutter-centre-domain predicate
+through `CutterCentreDomain2.build(...)`. The public factory owns the same
+canonical validated reach input; direct Python construction is disabled, and the
+result answers only `contains(x, y)`. A finite binary64 query is injected exactly
+once and is legal
 exactly when all of these conditions hold:
 
 - it lies inside or on the canonical outer polygon;

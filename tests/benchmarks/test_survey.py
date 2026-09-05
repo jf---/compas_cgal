@@ -10,6 +10,8 @@ from compas.geometry import Frame
 from compas.geometry import Line
 from compas.geometry import Polygon
 
+from compas_cgal import _coverage_2
+
 from benchmarks.errors import UnreplayableOperationError
 from benchmarks.spec import PocketSpec
 from benchmarks.survey import QUALITY_SAMPLES_PER_MOTION
@@ -164,13 +166,47 @@ def test_standard_open_motion_samples_retain_both_typed_endpoints(
 
 
 def test_survey_uses_lightweight_exact_cutter_centre_domain(monkeypatch: pytest.MonkeyPatch) -> None:
+    native_domain = _coverage_2.CutterCentreDomain2
+    constructions: list[tuple[np.ndarray, list[np.ndarray], float]] = []
+    membership_queries: list[tuple[float, float]] = []
+
+    class RecordingCutterCentreDomain:
+        def __init__(self, delegate: object) -> None:
+            self._delegate = delegate
+
+        @classmethod
+        def build(
+            cls,
+            boundary: np.ndarray,
+            holes: list[np.ndarray],
+            tool_radius: float,
+        ) -> "RecordingCutterCentreDomain":
+            constructions.append((boundary.copy(), [hole.copy() for hole in holes], tool_radius))
+            return cls(native_domain.build(boundary, holes, tool_radius))
+
+        def contains(self, x: float, y: float) -> bool:
+            membership_queries.append((x, y))
+            return self._delegate.contains(x, y)
+
     def reject_eager_domain(*_args: object, **_kwargs: object) -> None:
         raise AssertionError("survey constructed the eager reachable domain")
 
+    monkeypatch.setattr("benchmarks.survey._coverage_2.CutterCentreDomain2", RecordingCutterCentreDomain)
     monkeypatch.setattr("benchmarks.survey._coverage_2.ReachableDomain2", reject_eager_domain)
 
     motion = _survey_motion(Line([-6.0, 0.0, 0.0], [-5.0, 0.0, 0.0]))
 
+    assert len(constructions) == 1
+    boundary, holes, tool_radius = constructions[0]
+    np.testing.assert_array_equal(
+        boundary,
+        np.asarray(((-6.0, -4.0, 0.0), (6.0, -4.0, 0.0), (6.0, 4.0, 0.0), (-6.0, 4.0, 0.0))),
+    )
+    assert holes == []
+    assert tool_radius == 1.0
+    assert len(membership_queries) == QUALITY_SAMPLES_PER_MOTION + 1
+    assert membership_queries[0] == (-6.0, 0.0)
+    assert membership_queries[-1] == (-5.0, 0.0)
     assert not motion.samples[0].inside_centre_domain
     assert motion.samples[-1].inside_centre_domain
 

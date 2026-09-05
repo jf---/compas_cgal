@@ -136,11 +136,9 @@ NB_MODULE(_coverage_2, m)
         .def("certificate", &ReachableDomain2::certificate);
 
     nb::class_<CutterCentreDomain2>(m, "CutterCentreDomain2")
-        .def(
-            nb::init<
-                Eigen::Ref<const compas::RowMatrixXd>,
-                const std::vector<compas::RowMatrixXd>&,
-                double>(),
+        .def_static(
+            "build",
+            &CutterCentreDomain2::build,
             "design_boundary"_a,
             "holes"_a,
             "tool_radius"_a)
