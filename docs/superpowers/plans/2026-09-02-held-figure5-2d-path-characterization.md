@@ -1,8 +1,8 @@
 # Held Figure 5 2D Path Characterization Implementation Plan
 
-> **status: in progress** - Tasks 1-9 are implemented and verified. The
-> generate-once Figure 5 characterization is ready for the Task 10 evidence
-> report and thin CLI.
+> **status: in progress** - Tasks 1-10 are implemented and verified. The
+> deterministic report and thin CLI are ready for the Task 11 explicit live
+> oracle and durable evidence run.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use
 > `superpowers:subagent-driven-development` (recommended) or
@@ -1323,7 +1323,17 @@ GIT_AUTHOR_NAME='Jelle Feringa' GIT_AUTHOR_EMAIL='jelleferinga@gmail.com' GIT_CO
 - Create: `tests/benchmarks/test_held_path_report.py`
 - Create: `tests/tools/test_held_path_characterization.py`
 - Create: `tests/tools/typecheck/held_path_characterization_contract.py`
+- Create: empty package markers under `tests/`, `tests/benchmarks/`,
+  `tests/benchmarks/typecheck/`, `tests/tools/`, and `tests/tools/typecheck/`
+- Modify: `benchmarks/held_path_evidence.py`
+- Modify: `tests/benchmarks/test_held_path_evidence.py`
+- Modify: `tests/benchmarks/typecheck/held_path_characterization_contract.py`
 - Modify: `pyproject.toml:227-233`
+
+The additive source-count dependency repair is checkpointed separately as
+`fix(benchmarks): retain Held source counts`; the renderer consumes those
+validated scalar projections and never reloads the case. The empty package
+markers only distinguish the two same-named strict type-contract modules.
 
 **Interfaces:**
 
@@ -1340,7 +1350,7 @@ GIT_AUTHOR_NAME='Jelle Feringa' GIT_AUTHOR_EMAIL='jelleferinga@gmail.com' GIT_CO
     DEFAULT_REPORT_PATH) -> HeldFigure5Characterization`
   - `main() -> None`
 
-- [ ] **Step 1: Write RED report-context and rendering tests**
+- [x] **Step 1: Write RED report-context and rendering tests**
 
 Reject naive/non-UTC datetimes, empty command, and empty policy name. With a
 fixed context, assert deterministic output begins with the historical/non-release
@@ -1360,7 +1370,7 @@ The outcome vocabulary is exact: sampled evidence uses
 use `criterion_satisfied`/`criterion_violated`; tolerance diagnostics use
 `within_declared_tolerance`/`outside_declared_tolerance`.
 
-- [ ] **Step 2: Write RED CLI boundary tests**
+- [x] **Step 2: Write RED CLI boundary tests**
 
 Monkeypatch the module-local production characterization, renderer, UTC clock,
 and destination seams. Assert exactly one write, exact content, the fixed invocation
@@ -1374,13 +1384,13 @@ Assert the normal CLI passes `_print_phase` into `characterize_figure5` and emit
 the four closed phase names in order. The explicit live oracle replaces this with
 its ledger-writing observer; neither caller may omit or silently ignore progress.
 
-- [ ] **Step 3: Run RED tests**
+- [x] **Step 3: Run RED tests**
 
 ```bash
 pixi run pytest -- tests/benchmarks/test_held_path_report.py tests/tools/test_held_path_characterization.py -n auto --testmon -q
 ```
 
-- [ ] **Step 4: Implement pure rendering and thin CLI wiring**
+- [x] **Step 4: Implement pure rendering and thin CLI wiring**
 
 The renderer performs no geometry, timing, independent gate decision, or write. It
 renders the canonical `post_qualification_failures` result. The tool
@@ -1389,7 +1399,7 @@ alone owns `pathlib.Path`, production dependency wiring, UTC capture, and
 the report records the characterization verdict without turning the expected
 current failure into a process failure.
 
-- [ ] **Step 5: Add the Pixi CLI task and strict type coverage**
+- [x] **Step 5: Add the Pixi CLI task and strict type coverage**
 
 Add:
 
@@ -1400,14 +1410,14 @@ held-figure5-characterize = { cmd = "python -m tools.held_path_characterization"
 Extend `types-benchmarks` with every new/modified benchmark, tool, and typecheck
 file from Tasks 1-10.
 
-- [ ] **Step 6: Run GREEN gates and commit**
+- [x] **Step 6: Run GREEN gates and commit**
 
 ```bash
 pixi run pytest -- tests/benchmarks/test_held_path_report.py tests/tools/test_held_path_characterization.py -n auto --testmon -q
 pixi run types-benchmarks
 pixi run ruff format benchmarks/held_path_report.py tools/held_path_characterization.py tests/benchmarks/test_held_path_report.py tests/tools/test_held_path_characterization.py tests/tools/typecheck/held_path_characterization_contract.py
 pixi run ruff check benchmarks/held_path_report.py tools/held_path_characterization.py tests/benchmarks/test_held_path_report.py tests/tools/test_held_path_characterization.py tests/tools/typecheck/held_path_characterization_contract.py
-git add benchmarks/held_path_report.py tools/held_path_characterization.py tests/benchmarks/test_held_path_report.py tests/tools/test_held_path_characterization.py tests/tools/typecheck/held_path_characterization_contract.py pyproject.toml
+git add benchmarks/held_path_report.py tools/held_path_characterization.py tests/benchmarks/test_held_path_report.py tests/tools/test_held_path_characterization.py tests/tools/typecheck/held_path_characterization_contract.py tests/__init__.py tests/benchmarks/__init__.py tests/benchmarks/typecheck/__init__.py tests/tools/__init__.py tests/tools/typecheck/__init__.py pyproject.toml
 GIT_AUTHOR_NAME='Jelle Feringa' GIT_AUTHOR_EMAIL='jelleferinga@gmail.com' GIT_COMMITTER_NAME='Jelle Feringa' GIT_COMMITTER_EMAIL='jelleferinga@gmail.com' git commit -m 'feat(benchmarks): report Held Figure 5 evidence'
 ```
 
