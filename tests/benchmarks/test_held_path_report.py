@@ -92,6 +92,7 @@ def test_report_is_deterministic_complete_and_bounded() -> None:
         "## Report-only PathQuality",
         "not eligible for postprocessor qualification",
         "This verdict is not a manufacturing release.",
+        "Exit zero means evidence completion, not path eligibility or machine release.",
     ):
         assert required in first
     assert "G-code" not in first
