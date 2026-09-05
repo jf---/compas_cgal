@@ -1,8 +1,8 @@
 # Held Paper Figure Reproduction Plan
 
-> **status: complete** - Figures 5 and 6 are implemented, reviewed, rendered,
-> and truthfully bounded from continuous-path, cap-compliance, and numeric-parity
-> claims.
+> **status: in progress** - The bounded visual-comparison study is committed,
+> but the completion audit found that it does not yet reproduce continuous
+> Figure 5 toolpaths or the Figure 6 three-algorithm comparison. Task 5 is active.
 
 **Goal:** Reproduce the visible Figure 5 toolpath structure and the Figure 6
 comparison protocol and axes, with direct comparisons to publisher evidence.
@@ -136,3 +136,62 @@ tests pass.
 
 **Gate:** Figures 5 and 6 have truthful publisher/repository visual comparisons,
 the additive implementation is verified, and every checkbox above is closed.
+
+## Completion audit: why the toolpath goal remains open
+
+The committed Figure 5 result is a publisher-ordered association of 265
+repository circles, not a generated toolpath: every one of its 264 transitions
+is unresolved, 137 successor relationships exceed the requested 80-degree
+diagnostic limit, and publisher observations select and order the circles from
+30,684 candidates. The publisher-free approximate route emits 1,532 circles and
+120 forced successors. Figure 6 measures the separate existing controlled
+generator at three requested caps, includes non-planar/restart operations in its
+length, does not establish cap compliance, and lacks the contour-aware and
+constant-spacing peers shown by the paper. Its publisher ordinate and repository
+millimetres also have no established common scale. Those truthful limitations
+contradict completion of the actual toolpath-reproduction goal even though the
+earlier bounded comparison tasks are complete.
+
+## Task 5: Generate the continuous Figure 5 standard path
+
+- [ ] Complete publisher-free traversal and boundary-site ownership over the
+  reconstructed Figure 5 segment/arc medial axis. Publisher evidence may be
+  loaded only after generation for comparison.
+- [ ] Place machining circles in traversal order with the paper's standard
+  predecessor engagement construction at 80 degrees; do not retain forced
+  over-cap successors or per-guide-run restarts.
+- [ ] Emit one continuous planar path with an explicit start, every full CCW
+  machining circle, every source-lineage CCW offset transition, and a terminal
+  point. Preserve the current generator beside it until this path is verified.
+- [ ] Render every repository motion over the publisher Figure 5 path and report
+  circle-distribution, transition, continuity, start/end, and engagement
+  residuals without publisher-assisted identity or ordering.
+- [ ] Run focused tests, strict typing, Ruff, docs/plan gates, and diff hygiene;
+  obtain the approved Held, Buchli, Shewchuk, Fogel, and null-panel review.
+
+**Gate:** the repository independently emits one continuous Figure 5(a)
+standard toolpath whose visible circle families and connectors agree with the
+publisher evidence, whose consecutive motions share endpoints, and whose
+non-entry machining moves respect the requested 80-degree predecessor limit.
+
+## Task 6: Reproduce the Figure 6 protocol from the Figure 5 generator
+
+- [ ] Sweep the Figure 5 standard generator over the publisher engagement axis
+  and record achieved maximum engagement rather than requested-cap labels.
+- [ ] Add the paper's contour-aware spacing peer and constant-spacing MATHSM
+  sweep on the same pocket, tool, start, traversal, and planar motion grammar.
+- [ ] Measure only the paper's planar straight and circular path elements;
+  exclude clearance, retract, restart, and other machine-routing motions.
+- [ ] Establish a common dimensionless length normalization from publisher
+  Figure 5 geometry and the depicted tool radius; do not compare graphical
+  publisher ordinates directly with repository millimetres.
+- [ ] Render the three repository curves with the publisher curves on the
+  identical axes, report curve residuals and missing samples, and visually
+  inspect PNG output.
+- [ ] Run focused tests, strict typing, Ruff, docs/plan gates, diff hygiene, and
+  commit the completed toolpath reproduction as Jelle Feringa without staging
+  `tmp/`.
+
+**Gate:** Figure 6 is generated from the completed Figure 5 path family and
+contains standard, contour-aware, and MATHSM curves compared under common
+engagement, length, scale, pocket, tool, start, and traversal semantics.
