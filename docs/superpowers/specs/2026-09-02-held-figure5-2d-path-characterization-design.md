@@ -604,6 +604,34 @@ constructing a factory result. Revision 3 is therefore rejected despite focused
 exact equality and structural success. Its candidate remains uncommitted
 diagnostic work and supplies no query-cost or live-oracle evidence.
 
+Revision 4 replaces that uncommitted owner on the coverage path with a private
+factory-only `ReachableMaterialPredicate2`. Its factory validates the canonical
+polygon-with-holes input, constructs the exact erosion center once, enforces the
+existing nonempty and one-component entry rule, and owns one exact center point
+locator. Membership uses the closed-set identity
+`q in C + B(r)` iff `q in C` or `distance(q, boundary(C)) <= r`. Line segments
+use exact squared distance; circular arcs use exact endpoint and radial-
+projection branch membership. All outer and hole cycles participate.
+
+Because `C` is exactly the set of points whose closed radius-`r` disk lies in
+the validated design `D`, `C + B(r)` is a subset of `D` by the erosion
+definition. That theorem replaces material construction and its eager global
+subset decision only for this coverage-private predicate. The legacy
+`ReachableDomain2` material set, explicit subset decision, audit, and
+`ReachableMaterialContainmentError` remain unchanged. The predicate builds zero
+material sweeps, unions, or material arrangements and adds no tolerance,
+fallback, approximation, or spatial index.
+
+Acceptance requires exact pointwise parity with the legacy material set on
+convex, concave, holed, narrow-bay, and mixed line/arc fixtures; line and arc
+interior/endpoint tangency plus adjacent binary64 witnesses; radius branches
+below, equal to, and above the arc radius including split full circles; named
+input/topology/query failures; and an audit proving one center construction and
+locator with zero material construction work. Coverage constructs the predicate
+once and calls it once per cell without changing estimates or errors. A
+stratified projection and the complete 305,944-point Figure 5 predicate batch
+must each finish under an external 120-second bound before production commit.
+
 Immutable `ExactRegion2` storage owns one cached exact point locator. Original
 and cloned regions share the storage and locator, preserving boundary-inclusive
 exact membership without a mutation path. Locator construction auditing is

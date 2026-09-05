@@ -1644,6 +1644,25 @@ Revision 3 passed its focused exact and structural gates but produced no factory
 result before the external 120-second Figure 5 bound. It is rejected; no query
 projection, live oracle, or production commit follows from this experiment.
 
+Revision 4 supersedes the rejected uncommitted material-region owner only for
+coverage. Add a factory-only `ReachableMaterialPredicate2` that constructs the
+same validated exact center set once, enforces its nonempty/one-component rule,
+owns one cached exact center locator, and answers
+`q in C or exact_distance(q, boundary(C)) <= r`. For a nonempty closed erosion
+`C = D eroded by B(r)`, this is exactly membership in `C + B(r)`, while the
+erosion definition proves `C + B(r)` is a subset of `D`. This theorem replaces
+the eager material construction and global subset decision only on the private
+coverage path. Legacy `ReachableDomain2` retains its material set, explicit
+subset decision, and `ReachableMaterialContainmentError` unchanged.
+
+The predicate scans every outer and hole x-monotone center-boundary curve with
+exact line squared distance or exact circular-arc endpoint/radial-projection
+tests. No tolerance, fallback, spatial index, or material sweep/union/arrangement
+is permitted. Native parity with legacy material on convex, concave, holed,
+narrow-bay, and mixed-arc fixtures plus exact tangency/adjacent-binary64 and
+radius-branch tests precedes a hard-120-second stratified projection and full
+305,944-query Figure 5 batch. Only `benchmarks.coverage` uses this predicate.
+
 - [ ] **Step 11B.3: Prove GREEN and bounded Figure 5 material construction**
 
 Run focused native/Python gates, configured strict types, Ruff, and diff hygiene.
