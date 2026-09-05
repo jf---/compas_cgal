@@ -51,19 +51,19 @@ CutterCentreDomain2 CutterCentreDomain2::build(
     const std::vector<compas::RowMatrixXd>& holes,
     double tool_radius)
 {
-    return CutterCentreDomain2(
-        canonical_reach_input(
-            design_boundary,
-            holes,
-            tool_radius));
+    CanonicalReachInput2 input = canonical_reach_input(
+        design_boundary,
+        holes,
+        tool_radius);
+    validate_canonical_reach_input(input);
+    static_cast<void>(reachable_design_polygon(input));
+    return CutterCentreDomain2(std::move(input));
 }
 
 CutterCentreDomain2::CutterCentreDomain2(CanonicalReachInput2 input)
     : input_(std::move(input))
     , squared_radius_(input_.radius * input_.radius)
 {
-    validate_canonical_reach_input(input_);
-    static_cast<void>(reachable_design_polygon(input_));
 }
 
 bool CutterCentreDomain2::contains(double x, double y) const
