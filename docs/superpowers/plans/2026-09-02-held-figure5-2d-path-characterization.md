@@ -1611,6 +1611,15 @@ full endpoint disk per distinct cycle vertex, retaining `center` in the one
 range union. Do not remove unique disks, inward sweep halves, or change set
 semantics.
 
+That exact 2C revision passed its focused equality/count gates but again
+exceeded the 600-second Figure 5 bound. Revision 2 preserves the interleaved 2C
+sweep operand order and CGAL range tree, range-unions only those sweep operands,
+then performs one binary exact join with the already-completed center set at the
+root. Before production, extend the native RED/equality gate to prove one sweep
+range union, one center root join, no center operand below root, and exact
+equality with the flat historical union. Do not reorder operands, introduce a
+custom tree, or remove one-sided sweep geometry.
+
 - [ ] **Step 11B.3: Prove GREEN and bounded Figure 5 material construction**
 
 Run focused native/Python gates, configured strict types, Ruff, and diff hygiene.
