@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from typing import Optional
 
 from typing_extensions import assert_type
@@ -11,6 +12,15 @@ from benchmarks.held_path_snapshot import snapshot_toolpath
 from benchmarks.held_path_evidence import EngagementDispositionCounts
 from benchmarks.held_path_evidence import EngagementExceedanceWitness
 from benchmarks.held_path_evidence import HeldFigure5Characterization
+from benchmarks.held_consumer_adapters import audit_figure5_engagement
+from benchmarks.held_path_characterize import CharacterizationPhase
+from benchmarks.held_path_characterize import Clock
+from benchmarks.held_path_characterize import EngagementAuditor
+from benchmarks.held_path_characterize import Generator
+from benchmarks.held_path_characterize import PathSurveyor
+from benchmarks.held_path_characterize import QualityEvidenceReducer
+from benchmarks.held_path_characterize import _monotonic_seconds
+from benchmarks.held_path_characterize import characterize_figure5
 from benchmarks.held_post_qualification import HeldPostQualificationCandidate
 from benchmarks.held_post_qualification import post_qualification_failures
 from benchmarks.held_post_qualification import require_post_qualification_candidate
@@ -41,6 +51,10 @@ from benchmarks.held_reference_cases import HeldReferenceCase
 from benchmarks.quality import PathQuality
 from benchmarks.quality_observations import PathQualityAssessment
 from benchmarks.quality_observations import QualityEvidence
+from benchmarks.quality_observations import reduce_quality_evidence
+from benchmarks.runner import generate_toolpath
+from benchmarks.spec import PocketSpec
+from benchmarks.survey import survey_path
 from benchmarks.survey import PathSurvey
 from compas_cgal.engagement import EngagementReport
 
@@ -130,3 +144,41 @@ def _characterization_contract(
     )
     assert_type(candidate.characterization, HeldFigure5Characterization)
     assert_type(candidate.snapshot, tuple[HeldOperationSnapshot, ...])
+
+
+def _orchestration_contract(spec: PocketSpec, result: ToolpathResult) -> None:
+    generation_phase: CharacterizationPhase = "generation"
+    audit_phase: CharacterizationPhase = "guarded_audit"
+    survey_phase: CharacterizationPhase = "survey"
+    reduction_phase: CharacterizationPhase = "quality_reduction"
+    invalid_phase: CharacterizationPhase = "render"  # type: ignore[assignment]
+    assert_type(generation_phase, CharacterizationPhase)
+    assert_type(audit_phase, CharacterizationPhase)
+    assert_type(survey_phase, CharacterizationPhase)
+    assert_type(reduction_phase, CharacterizationPhase)
+    assert_type(invalid_phase, CharacterizationPhase)
+
+    def observer(phase: CharacterizationPhase) -> None:
+        pass
+
+    typed_observer: Callable[[CharacterizationPhase], None] = observer
+    clock: Clock = _monotonic_seconds
+    generator: Generator = generate_toolpath
+    auditor: EngagementAuditor = audit_figure5_engagement
+    surveyor: PathSurveyor = survey_path
+    reducer: QualityEvidenceReducer = reduce_quality_evidence
+
+    assert_type(_monotonic_seconds(), Seconds)
+    assert_type(clock(), Seconds)
+    assert_type(audit_figure5_engagement(spec, result), EngagementReport)
+    assert_type(
+        characterize_figure5(
+            generator,
+            auditor,
+            surveyor,
+            reducer,
+            phase_observer=typed_observer,
+            clock=clock,
+        ),
+        HeldFigure5Characterization,
+    )
