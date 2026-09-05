@@ -9,7 +9,10 @@ comparison protocol and axes, with direct comparisons to publisher evidence.
 
 **Active criterion:** for Task 4, render repository Figure 6 measurements on the
 publisher's labeled axes and compare them directly with digitized graphical
-observations. Do not claim unpublished numeric parity. Characterization beyond
+observations. Use bounded requested-cap path-length measurements at 80, 120, and
+160 degrees; label cap compliance unaudited and omit the audit-bound
+constant-spacing series rather than waiting on the multi-hour replay route. Do
+not claim unpublished numeric parity. Characterization beyond
 the figure, postprocessing, machine validation, and unrelated benchmark work do
 not advance this criterion.
 
@@ -116,9 +119,18 @@ tests pass.
 
 - [x] Recover the official Figure 6 plot as durable publisher evidence; treat
   read-off points as digitized graphical observations, not source numbers.
-- [ ] Render repository results on the same labeled axes and overlay or
-  juxtapose them without claiming numeric parity.
-- [ ] Run affected tests, strict typing, Ruff, docs/plan gates, and diff hygiene.
+- [x] Render repository results on the same labeled axes and overlay or
+  juxtapose them without claiming numeric parity. The bounded reproduction uses
+  controlled path lengths at requested caps 80, 120, and 160 degrees; it labels
+  cap compliance unaudited and the constant-spacing repository curve unavailable
+  because the exact audit/replay route is outside this figure-only task. The
+  measured repository lengths are respectively 29,146.462, 22,333.767, and
+  20,142.432 mm; the tracked PNG and SVG retain the publisher's 0--200 degree,
+  20-degree-tick, log-10 path-length axes and distinguish the publisher's
+  graphical unit from repository millimetres. A second tracked PNG places the
+  repository points directly over the unchanged publisher pixels for literal
+  registration inspection while preserving the same claim boundary.
+- [x] Run affected tests, strict typing, Ruff, docs/plan gates, and diff hygiene.
 - [ ] Update this ledger with measured results and commit the focused work as
   Jelle Feringa without staging `tmp/`.
 
