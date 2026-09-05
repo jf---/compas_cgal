@@ -2,8 +2,8 @@
 
 > **status: in progress** - Tasks 1-10 and Task 11 Steps 1-2 are implemented
 > and verified. The first explicit live run exceeded its 30-minute operator
-> budget in `survey`; Task 11A is the approved bounded repair before Step 3 is
-> retried.
+> budget in `survey`; the reviewed Task 11A bounded repair is complete and
+> Step 3 is ready for its unchanged retry.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use
 > `superpowers:subagent-driven-development` (recommended) or
@@ -1541,7 +1541,7 @@ predicate on the real 65-vertex Figure 5 boundary under a bounded command. This
 gate proves only removal of the constructor stall; it makes no downstream
 runtime claim.
 
-- [ ] **Step 11A.4: Commit the reviewed repair and return to Step 3**
+- [x] **Step 11A.4: Commit the reviewed repair and return to Step 3**
 
 Record RED/GREEN evidence and the bounded measurement in the durable SDD report,
 then commit only Task 11A files with subject
