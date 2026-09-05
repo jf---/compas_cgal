@@ -579,6 +579,26 @@ flat historical union, exactly one sweep range union, exactly one center root
 join, and zero center operands below the root. Custom spatial trees, operand
 reordering, and orientation-aware one-sided sweeps remain outside this revision.
 
+Revision 2 also failed the 600-second Figure 5 bound. A GMP-backed exact kernel
+is not a local remedy: the kernel types cross the connected native target, so the
+change would alter repository-wide ABI and require GMP/MPFR availability and
+wheel redistribution policy. That broader build-policy decision is outside this
+focused repair.
+
+Revision 3 is approved only as a bounded single-arrangement experiment. It
+retains the historical 3C and current 2C implementations, converts each closed
+center and 2C sweep boundary cycle into uniquely component-labelled curves, and
+passes all cycles once to CGAL Minkowski_sum_2's auxiliary
+`Union_of_curve_cycles_2`. Acceptance requires exact three-way set equality on a
+mixed line/arc outer-and-hole fixture, unchanged component and hole counts,
+`center subset candidate subset containing design`, complete cycle/label counts,
+and one arrangement construction. The auxiliary API is not a stable public
+coverage abstraction, and the vendored headers declare GPL-3.0-or-later or a
+commercial licence; both API stability and package-licence compatibility must be
+resolved before adoption. There is no fallback or approximate result. Timeout,
+assertion, or mismatch in the hard-120-second Figure 5 factory gate rejects the
+candidate and prevents committing production changes.
+
 Immutable `ExactRegion2` storage owns one cached exact point locator. Original
 and cloned regions share the storage and locator, preserving boundary-inclusive
 exact membership without a mutation path. Locator construction auditing is
