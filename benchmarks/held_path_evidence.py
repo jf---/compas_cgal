@@ -163,6 +163,8 @@ class HeldFigure5Characterization:
     case_name: str
     tool_diameter: Millimetre
     tea_cap: Degrees
+    reference_primitive_count: int
+    projection_vertex_count: int
     snapshot: tuple[HeldOperationSnapshot, ...]
     engagement: EngagementDispositionCounts
     witnesses: tuple[EngagementExceedanceWitness, ...]
@@ -245,6 +247,8 @@ class HeldFigure5Characterization:
             "case_name": case.name,
             "tool_diameter": Millimetre(2.0 * float(case.tool_radius.value)),
             "tea_cap": Degrees(float(case.tea_cap)),
+            "reference_primitive_count": len(case.boundary.primitives),
+            "projection_vertex_count": case.projection_vertex_count,
             "snapshot": tuple(snapshot),
             "engagement": engagement,
             "witnesses": witnesses,
