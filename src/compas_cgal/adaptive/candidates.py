@@ -129,9 +129,7 @@ def _mathsm_geometry(
     guide_radius: Fraction,
 ) -> tuple[Point2[WorldXY], Point2[WorldXY], Fraction]:
     distance = _distance(boundary_footpoint, middle_point)
-    if distance < tool_radius.value:
-        raise InvalidMathsmProposalError("MAT reporting station lies inside the tool-radius boundary.")
-    maximum = Fraction.from_float((distance - tool_radius.value) / 2.0)
+    maximum = _maximum_guide_radius(distance, tool_radius)
     if guide_radius <= 0 or guide_radius > maximum:
         raise InvalidMathsmProposalError("guide radius lies outside the positive one-sided MATHSM interval.")
     if distance == 0.0:
@@ -148,6 +146,22 @@ def _mathsm_geometry(
         contact_point.y + radius * direction_y,
     )
     return contact_point, center, maximum
+
+
+def _maximum_guide_radius(
+    boundary_distance: float,
+    tool_radius: ToolRadius,
+) -> Fraction:
+    if boundary_distance < tool_radius.value:
+        raise InvalidMathsmProposalError(
+            "MAT reporting station lies inside the tool-radius boundary.",
+        )
+    maximum = Fraction.from_float((boundary_distance - tool_radius.value) / 2.0)
+    if maximum <= 0:
+        raise InvalidMathsmProposalError(
+            "MAT reporting station has no positive one-sided MATHSM radius.",
+        )
+    return maximum
 
 
 def _phase_vector(
@@ -352,6 +366,43 @@ class MathsmCircleProposal:
             phase_count,
             circle_orientation,
             motion,
+        )
+
+    @classmethod
+    def build_maximum(
+        cls,
+        *,
+        generator_site: MatSite,
+        middle_point: Point2[WorldXY],
+        tool_radius: ToolRadius,
+        circle_orientation: CircleOrientation,
+    ) -> Self:
+        """Build the paper-derived maximum-radius, boundary-phase proposal."""
+        if type(generator_site) is not MatSite:
+            raise InvalidMathsmProposalError(
+                "MATHSM maximum-radius factory requires one exact generator site.",
+            )
+        if type(middle_point) is not Point2:
+            raise InvalidMathsmProposalError(
+                "MATHSM maximum-radius factory requires one world-XY middle point.",
+            )
+        if type(tool_radius) is not ToolRadius:
+            raise InvalidMathsmProposalError(
+                "MATHSM maximum-radius factory requires one typed tool radius.",
+            )
+        boundary_footpoint = _boundary_footpoint(middle_point, generator_site)
+        maximum = _maximum_guide_radius(
+            _distance(boundary_footpoint, middle_point),
+            tool_radius,
+        )
+        return cls.build(
+            generator_site=generator_site,
+            middle_point=middle_point,
+            tool_radius=tool_radius,
+            guide_radius=ExactMillimetre(maximum),
+            phase_index=0,
+            phase_count=1,
+            circle_orientation=circle_orientation,
         )
 
     @property

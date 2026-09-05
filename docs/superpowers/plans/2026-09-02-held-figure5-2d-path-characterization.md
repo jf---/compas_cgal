@@ -1,9 +1,11 @@
 # Held Figure 5 2D Path Characterization Implementation Plan
 
-> **status: in progress** - Tasks 1-10 and Task 11 Steps 1-2 are implemented
-> and verified. Task 11A removed the first live run's survey blocker. The second
-> live run reached `quality_reduction` and failed on the protected coverage-grid
-> floor; Task 11B is the active bounded repair before Step 3 may resume.
+> **status: stopped on 2026-09-05** - Tasks 1-10, Task 11 Steps 1-2, Task 11A,
+> and Task 11B are implemented and preserved. The operator stopped Task 11
+> Step 3 after 412.91 seconds and retired Steps 3-7 because characterization had
+> become a detour from reproducing the paper figures. They are historical open
+> work, not the active queue. Continue only with
+> `2026-09-05-held-paper-figure-reproduction.md`.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use
 > `superpowers:subagent-driven-development` (recommended) or
@@ -1712,6 +1714,10 @@ not evaluated. Preserve the prior timeout in Git history. Complete final Task
 
 - [ ] **Step 3: Run the live oracle under the operator budget**
 
+**Retired on 2026-09-05:** do not run this step under the active paper-figure
+mission. The interrupted run and reason are recorded in
+`docs/superpowers/state/held-figure5-live-run.md`.
+
 Run:
 
 ```bash
@@ -1731,6 +1737,8 @@ leave the pending file as evidence.
 
 - [ ] **Step 4: Inspect the generated report and obtain independent review**
 
+**Retired on 2026-09-05:** no generated report exists from the interrupted run.
+
 Verify the banner, normalized units, separately measured consumer timings, three-way
 engagement partition, witnesses, all twelve criteria, sampled/certified claim
 boundaries, and refusal verdict against the live objects. Independent review
@@ -1742,6 +1750,8 @@ inspection.
 
 - [ ] **Step 5: Integrate durable documentation**
 
+**Retired on 2026-09-05:** this documentation integration depended on Step 3.
+
 Link the report from the Held reference page and benchmark index; add it to
 MkDocs navigation. Update `docs/machining_quality.md` with the single canonical
 reducer/evidence vocabulary. Update `docs/segment_site_mat.md` with exact maturity:
@@ -1750,6 +1760,9 @@ target-specific Fanuc translation, machine setup, and Held superiority still
 unproven.
 
 - [ ] **Step 6: Run final repository gates**
+
+**Retired on 2026-09-05:** these are characterization closeout gates, not the
+paper-figure reproduction gate.
 
 ```bash
 pixi run affected
@@ -1766,6 +1779,9 @@ Expected: affected tests introduce no new failure, strict types/Ruff/docs pass,
 and the red manifest reports exactly the inherited seventeen reds.
 
 - [ ] **Step 7: Close the plan and commit Phase 1 evidence**
+
+**Retired on 2026-09-05:** preserve the implemented checkpoints; do not present
+the uncompleted live characterization as complete.
 
 Mark completed tasks and the plan status truthfully. Commit only the named
 production, test, report, documentation, configuration, spec, and plan files;
