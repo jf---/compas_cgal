@@ -533,6 +533,41 @@ survey density, quality thresholds, engagement decisions, stock depletion,
 evidence vocabulary, report semantics, or the unchanged Task 11 live-oracle
 gate.
 
+### Coverage-reduction execution path
+
+The second live run completed survey and entered quality reduction, then failed
+after 780.83 seconds because the protected 0.1-tool-radius coverage-cell limit
+rejected the default 200 by 137 grid. Figure 5 requires a 668 by 458 grid under
+the existing aspect-ratio rounding; 667 by 457 remains too coarse. The public
+default `COVERAGE_GRID_SAMPLES = 200` remains the general cost floor. Coverage
+owns `minimum_coverage_grid(spec)`, which uses the same grid-shape and cell-size
+calculation to find the smallest legal longer-axis count. Only the named Figure
+5 quality adapter raises the effective count to the greater of that minimum and
+the unchanged default, and the production Held report tool alone uses it.
+
+Coverage also owns a focused exact reachable-material factory. Its single public
+`build(...)` entry canonicalizes and validates reach input, validates the exact
+polygon-with-holes design, forms the forbidden boundary band from the existing
+exact segment-capsule parts through the existing divide-and-conquer union,
+exact-differences it from the design, enforces the existing nonempty and
+one-component entry rule, performs exactly one existing exact reachable-material
+subset-of-design containment decision with the named
+`ReachableMaterialContainmentError`, and calls the existing reachable-material
+builder. It does not build the provenance arrangement, residual, or certificate.
+`ReachableDomain2` remains unchanged; only coverage uses the additive owner.
+
+Immutable `ExactRegion2` storage owns one cached exact point locator. Original
+and cloned regions share the storage and locator, preserving boundary-inclusive
+exact membership without a mutation path. Locator construction auditing is
+native-test-only and is not part of the Python product API.
+
+The excluded live-oracle boundary records a terminal failed ledger state if the
+report writer raises: observed phases and elapsed time are retained, report
+generation remains unavailable, qualification is `not evaluated`, and command
+result contains the exact exception type and message. A bare re-raise preserves
+the original exception object and traceback. No characterization or report
+producer catches or translates the failure.
+
 ## Post-qualification entry semantics
 
 `require_post_qualification_candidate` returns a
