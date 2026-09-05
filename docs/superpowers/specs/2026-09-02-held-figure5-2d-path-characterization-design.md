@@ -599,6 +599,11 @@ resolved before adoption. There is no fallback or approximate result. Timeout,
 assertion, or mismatch in the hard-120-second Figure 5 factory gate rejects the
 candidate and prevents committing production changes.
 
+The bounded Figure 5 experiment reached that external 120-second limit without
+constructing a factory result. Revision 3 is therefore rejected despite focused
+exact equality and structural success. Its candidate remains uncommitted
+diagnostic work and supplies no query-cost or live-oracle evidence.
+
 Immutable `ExactRegion2` storage owns one cached exact point locator. Original
 and cloned regions share the storage and locator, preserving boundary-inclusive
 exact membership without a mutation path. Locator construction auditing is
