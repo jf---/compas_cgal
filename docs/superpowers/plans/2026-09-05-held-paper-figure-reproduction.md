@@ -1,8 +1,8 @@
 # Held Paper Figure Reproduction Plan
 
-> **status: in progress** - Figure 5 reference-guided circle correspondence is
-> implemented, reviewed, rendered, and truthfully bounded from continuous-path
-> claims. The Figure 6 same-axis repository comparison is the active Task 4 route.
+> **status: complete** - Figures 5 and 6 are implemented, reviewed, rendered,
+> and truthfully bounded from continuous-path, cap-compliance, and numeric-parity
+> claims.
 
 **Goal:** Reproduce the visible Figure 5 toolpath structure and the Figure 6
 comparison protocol and axes, with direct comparisons to publisher evidence.
@@ -131,8 +131,8 @@ tests pass.
   repository points directly over the unchanged publisher pixels for literal
   registration inspection while preserving the same claim boundary.
 - [x] Run affected tests, strict typing, Ruff, docs/plan gates, and diff hygiene.
-- [ ] Update this ledger with measured results and commit the focused work as
-  Jelle Feringa without staging `tmp/`.
+- [x] Update this ledger with measured results and commit the focused work as
+  Jelle Feringa without staging `tmp/` (`bcfc1a1`).
 
 **Gate:** Figures 5 and 6 have truthful publisher/repository visual comparisons,
 the additive implementation is verified, and every checkbox above is closed.
