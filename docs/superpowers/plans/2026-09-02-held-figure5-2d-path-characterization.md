@@ -1,8 +1,8 @@
 # Held Figure 5 2D Path Characterization Implementation Plan
 
-> **status: in progress** - Tasks 1-10 are implemented and verified. The
-> deterministic report and thin CLI are ready for the Task 11 explicit live
-> oracle and durable evidence run.
+> **status: blocked** - Tasks 1-10 and Task 11 Steps 1-2 are implemented and
+> verified. The explicit live oracle exceeded its 30-minute operator budget in
+> `survey`; no report was produced, so Phase 1 cannot close under this plan.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use
 > `superpowers:subagent-driven-development` (recommended) or
@@ -1453,7 +1453,7 @@ GIT_AUTHOR_NAME='Jelle Feringa' GIT_AUTHOR_EMAIL='jelleferinga@gmail.com' GIT_CO
 - Produces: `held-figure5-characterize-live` Pixi task, the committed real report,
   documentation links/claim boundaries, and Phase 1 closeout evidence.
 
-- [ ] **Step 1: Write the explicit live-oracle assertions**
+- [x] **Step 1: Write the explicit live-oracle assertions**
 
 The explicitly named file must load strict Figure 5, call production
 characterization exactly once, require exactly 2,289 source operations, validate
@@ -1465,7 +1465,7 @@ criterion is open or any TEA-audited operation is unresolved. Pass
 rendered invocation to match. Print the report path, `CHARACTERIZATION COMPLETED`,
 the explicit refusal/eligibility verdict, and the exit-zero claim boundary.
 
-- [ ] **Step 2: Add the explicit serial live task**
+- [x] **Step 2: Add the explicit serial live task**
 
 Use the established editable-build environment and include `-n auto`:
 

@@ -261,5 +261,11 @@ def render_held_figure5_2d_path(characterization: HeldFigure5Characterization, c
             lines.append(f"| {_markdown_table_cell(failure)} |")
     else:
         lines.append("**eligible for postprocessor qualification evidence entry**")
-    lines.extend(["", "This verdict is not a manufacturing release."])
+    lines.extend(
+        [
+            "",
+            "This verdict is not a manufacturing release.",
+            "Exit zero means evidence completion, not path eligibility or machine release.",
+        ]
+    )
     return "\n".join(lines) + "\n"
