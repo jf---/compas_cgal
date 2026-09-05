@@ -569,6 +569,16 @@ union. Exact equality against the historical construction and counts
 acceptance requirements. Unique vertex disks and inward sweep halves remain;
 removing either requires a separate orientation/topology proof.
 
+The exact 2C construction also exceeded 600 seconds. Its center polygon was the
+last operand in CGAL's five-way range tree and therefore entered below the root.
+The second measured revision retains the interleaved 2C sweep order and performs
+their existing range union unchanged, then executes one binary exact join with
+the already-completed center set at the root. The represented set remains
+`center union all sweeps`. Native acceptance requires exact equality with the
+flat historical union, exactly one sweep range union, exactly one center root
+join, and zero center operands below the root. Custom spatial trees, operand
+reordering, and orientation-aware one-sided sweeps remain outside this revision.
+
 Immutable `ExactRegion2` storage owns one cached exact point locator. Original
 and cloned regions share the storage and locator, preserving boundary-inclusive
 exact membership without a mutation path. Locator construction auditing is
