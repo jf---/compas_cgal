@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 import re
+from types import SimpleNamespace
 from typing import cast
 
 import pytest
@@ -9,6 +10,7 @@ import pytest
 import benchmarks.held_post_qualification as post_qualification_module
 from benchmarks.coverage import CoverageEstimate
 from benchmarks.errors import HeldPathNotEligibleForPostQualificationError
+from benchmarks.errors import InvalidHeldPathEvidenceError
 from benchmarks.held_path_evidence import HeldFigure5Characterization
 from benchmarks.held_path_snapshot import HeldOperationSnapshot
 from benchmarks.held_post_qualification import HeldPostQualificationCandidate
@@ -227,6 +229,31 @@ def test_closed_characterization_builds_snapshot_bound_candidate() -> None:
 def test_direct_candidate_construction_is_disabled() -> None:
     with pytest.raises(TypeError):
         HeldPostQualificationCandidate()
+
+
+def test_candidate_factory_rejects_mutable_duck_type_with_free_snapshot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    closed = _characterization()
+    collector_calls: list[HeldFigure5Characterization] = []
+    impostor = SimpleNamespace(
+        engagement=closed.engagement,
+        assessment=closed.assessment,
+        snapshot=(),
+    )
+
+    def failures(value: HeldFigure5Characterization) -> tuple[str, ...]:
+        collector_calls.append(value)
+        return ()
+
+    monkeypatch.setattr(post_qualification_module, "post_qualification_failures", failures)
+
+    with pytest.raises(
+        InvalidHeldPathEvidenceError,
+        match="validated HeldFigure5Characterization",
+    ):
+        HeldPostQualificationCandidate.build(cast(HeldFigure5Characterization, impostor))
+    assert collector_calls == []
 
 
 def test_functional_helper_delegates_to_candidate_factory(monkeypatch: pytest.MonkeyPatch) -> None:

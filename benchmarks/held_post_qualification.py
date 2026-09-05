@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing_extensions import Self
 
 from benchmarks.errors import HeldPathNotEligibleForPostQualificationError
+from benchmarks.errors import InvalidHeldPathEvidenceError
 from benchmarks.held_path_evidence import HeldFigure5Characterization
 from benchmarks.held_path_snapshot import HeldOperationSnapshot
 from benchmarks.quality_observations import CRITERION_NAMES
@@ -63,6 +64,8 @@ class HeldPostQualificationCandidate:
     @classmethod
     def build(cls, characterization: HeldFigure5Characterization) -> Self:
         """Build only when the sole public failure collector reports no open gate."""
+        if type(characterization) is not HeldFigure5Characterization:
+            raise InvalidHeldPathEvidenceError("post qualification requires one validated HeldFigure5Characterization.")
         failures = post_qualification_failures(characterization)
         if failures:
             engagement = characterization.engagement
