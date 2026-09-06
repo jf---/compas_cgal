@@ -160,6 +160,19 @@ earlier bounded comparison tasks are complete.
 
 ## Task 5: Generate the continuous Figure 5 standard path
 
+**Engagement checkpoint (September 6):** the additive polygon refinement
+resolves the tagged baseline's 108 over-cap successors: 2,013 circles, maximum
+79.992 degrees, 2,012 connectors, and all source family/contact mappings
+retained. It repairs convex-corner radii, adds concave contact fans, and carries
+one predecessor through final order. Reproduce with
+`pixi run held-figure5-toolpath-progress --refine`. The focused suite passes
+21 tests and focused review found no new defect. This closes the measured
+engagement violation set for the approximate circle model; it does not close
+the full criteria below. Exact containment still rejects 1,013 near-tangent
+float representations (largest reported excess about 6.7e-15 mm), and the
+publisher-derived start, analytic ownership, entry/connector engagement, and
+depleted-stock qualification remain open.
+
 **Connector checkpoint (September 6):** native-owned boundary contacts and
 `ccw_transition` expose exact line/arc connectors with preserved source lineage.
 The consumer handles irrational coordinates without a reporting-double

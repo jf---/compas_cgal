@@ -208,12 +208,20 @@ def maximum_predecessor_engagement(
         cosine = (b_coordinate * b_coordinate - tool * tool - radius * radius) / (2.0 * tool * radius)
         return Radian(math.acos(_clamped_unit(cosine)))
 
-    if distance > previous_outer_radius + current_outer_radius or distance < abs(previous_outer_radius - current_outer_radius):
-        raise StandardPlacementFragmentationError("Paper overlap correction requires intersecting predecessor/current swept disks.")
-    w_x = (previous_outer_radius * previous_outer_radius - current_outer_radius * current_outer_radius - distance * distance) / (2.0 * distance)
-    w_y_squared = current_outer_radius * current_outer_radius - w_x * w_x
-    if w_y_squared < 0.0:
+    # Near internal tangency, subtracting the two float squares can produce a
+    # negative height for intersecting circles. Construct the intersection
+    # height exactly from the injected center/radius values; no epsilon clamp.
+    exact_dx = Fraction(float(candidate.center.x)) - Fraction(float(predecessor.center.x))
+    exact_dy = Fraction(float(candidate.center.y)) - Fraction(float(predecessor.center.y))
+    spacing_squared = exact_dx * exact_dx + exact_dy * exact_dy
+    previous_squared = (Fraction(previous_radius) + Fraction(tool)) ** 2
+    current_squared = (Fraction(radius) + Fraction(tool)) ** 2
+    numerator = previous_squared - current_squared - spacing_squared
+    height_squared = current_squared - numerator * numerator / (4 * spacing_squared)
+    if height_squared < 0:
         raise StandardPlacementFragmentationError("Paper overlap correction has no real swept-disk intersection.")
+    w_x = float(numerator) / (2.0 * distance)
+    w_y_squared = float(height_squared)
     q_scale = radius / current_outer_radius
     q_corrected_x = q_scale * w_x
     q_corrected_y_squared = q_scale * q_scale * w_y_squared
