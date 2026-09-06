@@ -1331,6 +1331,51 @@ as a repair while the source circles themselves fail containment.
 
 ![Complete Figure 5 motion and remaining engagement failures](assets/images/held_figure5_toolpath_current.png)
 
+### Corner-aware engagement refinement
+
+`pixi run held-figure5-toolpath-progress --refine` adds an isolated polygon-path
+repair beside the tagged `held-like-v1` baseline. It preserves all 1,532 source
+contacts, station order, and guide-family attribution. It reconstructs circle
+normals against the active side, limits radii at convex corners, inserts
+shared-contact fans at concave corners, and subdivides offending intervals by
+physical boundary distance. Every final adjacent circle pair is checked with
+one carried predecessor; depth or circle-budget exhaustion raises instead of
+forcing a successor. The output has an explicit first/last contact and 2,012
+connectors, without adding an unchecked closing motion.
+
+| Measured property | Tagged baseline | Refined polygon proposal |
+| --- | ---: | ---: |
+| Full CCW circles | 1,532 | 2,013 |
+| Successors above 80 degrees | 108 | 0 |
+| Maximum predecessor engagement | 180 degrees | 79.992 degrees |
+| Largest reported radius/clearance excess | 0.057 mm | 6.7e-15 mm |
+| Exact full-disk containment rejections | 801 | 1,013 |
+
+The initial vector-interpolation proposal eliminated engagement violations but
+introduced local corner protrusions of 0.013 mm. The retained construction
+repairs source circles as well as added circles. At concave corners a fan is
+necessary: taking the next side's normal abruptly cannot converge by merely
+reducing station spacing. Near internal swept-disk tangency, the predecessor
+model also needs an exact rational intersection-height construction; direct
+subtraction of float squares falsely produced a negative height.
+
+The focused suite passes 21 tests, including complete Figure 5 final-order
+engagement, retained family/contact mapping, connector joints, convex limits,
+concave fans, bounded failure, and the near-tangency witness. Ruff and strict
+typing pass; a focused independent review found no new defect in these bounds,
+ordering, or intersection formula. The command above reproduces the plot and
+strict containment count.
+
+**Maturity: incomplete.** Zero violations establish the existing approximate
+predecessor model's limit on these circles. They do not establish depleted-stock
+engagement, safe entry/connector cutting, analytic segment/arc ownership, or
+machining qualification. Exact native containment still rejects 1,013
+float-backed near-tangent circles; the small reported excess must not be used
+as a tolerance to turn those failures into passes. The publisher-derived start
+and source guide selection also remain. Full Task 5 acceptance stays open.
+
+![Refined Figure 5 motion and engagement below the requested cap](assets/images/held_figure5_engagement_refined.png)
+
 ## Figure 5 exact connector checkpoint
 
 Python consumers can now retain native world-XY millimetre contacts through
@@ -1343,8 +1388,8 @@ not accepted as transition input.
 
 This completes a connector interface, not the Figure 5 toolpath. The native
 cycle still comes from the 65-edge polygon projection. Its offset arcs do not
-establish an analytic segment/arc MAT. Full-circle placement, predecessor
-engagement, traversal, and continuous circle/connector integration remain open.
+establish an analytic segment/arc MAT. Integrating the refined machining circles
+with these native exact connectors remains open.
 
 ![Figure 5 native connector and exact line/arc junctions](assets/images/held_figure5_exact_connector.png)
 

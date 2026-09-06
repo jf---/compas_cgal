@@ -46,3 +46,19 @@ def test_displaced_successor_inside_predecessor_swept_disk_has_zero_engagement(o
     )
     actual = maximum_predecessor_engagement(_circle(2.0), successor, ToolRadius.build(1.0))
     assert float(actual) == 0.0
+
+
+def test_nearly_nested_figure5_successor_has_real_overlap() -> None:
+    contact = Point2[WorldXY].build(18.64105353440953, 33.68442958521705)
+    predecessor = PaperCircleCandidate.build(
+        center=Point2[WorldXY].build(16.847395307512397, 28.211893255992088),
+        guide_radius=GuideRadius.build(5.758981134680233),
+        contact_point=contact,
+    )
+    successor = PaperCircleCandidate.build(
+        center=Point2[WorldXY].build(16.85127854510552, 28.22374119808311),
+        guide_radius=GuideRadius.build(5.746513044770512),
+        contact_point=contact,
+    )
+    angle = maximum_predecessor_engagement(predecessor, successor, ToolRadius.build(1))
+    assert 0 <= float(angle) < math.radians(80)
