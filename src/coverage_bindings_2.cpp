@@ -1,10 +1,13 @@
+#include "boundary_normal_circle_2.h"
 #include "coverage_2.h"
+#include <type_traits>
 #include "cutter_centre_domain_2.h"
 #include "reachable_arrangement_2.h"
 #include "reachable_domain_2.h"
 #include "reachable_errors_2.h"
 #include "reachable_input_2.h"
 #include "reachable_material_predicate_2.h"
+#include "remaining_material_2.h"
 
 #include <algorithm>
 #include <string>
@@ -138,6 +141,16 @@ NB_MODULE(_coverage_2, m)
             },
             nb::is_operator());
 
+    static_assert(std::is_same_v<boundary_normal::Kernel, ReachKernel>);
+    m.def(
+        "boundary_circle_contact",
+        [](const boundary_normal::BoundaryNormalCircleProposal2& proposal) {
+            const auto& q = proposal.exact_contact();
+            return ReachPoint(q.x(), q.y());
+        },
+        "proposal"_a,
+        "Retain the proposal's exact contact for native boundary transitions.");
+
     nb::class_<ReachableBoundaryCurve2>(
         m,
         "ReachableBoundaryPrimitive2")
@@ -236,12 +249,32 @@ NB_MODULE(_coverage_2, m)
         "CoverageTransitionError",
         PyExc_RuntimeError);
     nb::class_<ExactRegion2>(m, "ExactRegion2")
+        .def_static(
+            "from_polygon",
+            [](Eigen::Ref<const compas::RowMatrixXd> boundary,
+               const std::vector<compas::RowMatrixXd>& holes) {
+                // The shared input validator requires a positive radius.
+                // Design construction uses only its validated rings: no offset
+                // or reachable-material construction consumes this value.
+                constexpr double UNUSED_VALIDATION_RADIUS_MM = 1.0;
+                const CanonicalReachInput2 input = canonical_reach_input(
+                    boundary, holes, UNUSED_VALIDATION_RADIUS_MM);
+                return ExactRegion2::build(
+                    ReachSet(reachable_design_polygon(input)),
+                    ExactRegionRole2::Design,
+                    input.recipe_record);
+            },
+            "boundary"_a,
+            "holes"_a)
         .def("clone", &ExactRegion2::clone)
         .def("contains", &ExactRegion2::contains, "x"_a, "y"_a)
         .def("is_empty", &ExactRegion2::is_empty)
         .def("component_count", &ExactRegion2::component_count)
         .def("is_subset_of", &ExactRegion2::is_subset_of, "other"_a)
         .def("exactly_equals", &ExactRegion2::exactly_equals, "other"_a);
+
+    m.def("remaining_material", &remaining_material,
+          "target"_a, "circles"_a, "segments"_a, "disks"_a, "tool_radius"_a);
 
     nb::class_<ReachableDomainCertificate2>(
         m,
@@ -365,6 +398,9 @@ NB_MODULE(_coverage_2, m)
             "tool_radius"_a);
 
     nb::class_<Coverage2>(m, "Coverage2")
+        .def_static("from_uncut", &Coverage2::from_uncut, "target"_a)
+        .def("add_disk_sweep", &Coverage2::add_disk_sweep,
+             "center_x"_a, "center_y"_a, "tool_radius"_a)
         .def(
             nb::init<
                 const ExactRegion2&,

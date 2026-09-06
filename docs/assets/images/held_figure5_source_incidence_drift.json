@@ -1,0 +1,6 @@
+{
+  "retained_original_stations": 386,
+  "maximum_drift_mm": 5.510226289242181,
+  "median_drift_mm": 0.03170982469198108,
+  "scope": "Reporting only; compares original skeleton point with reconstructed diameter endpoint; excludes inserted refinement circles."
+}

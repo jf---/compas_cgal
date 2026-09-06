@@ -4,6 +4,7 @@
 #include "exact_depletion_2.h"
 #include "exact_motion_2.h"
 
+#include <array>
 #include <cstddef>
 #include <memory>
 #include <stdexcept>
@@ -57,6 +58,11 @@ public:
     using std::runtime_error::runtime_error;
 };
 
+class InvalidCircleRemovalInputError : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
+
 // Full disk of the given radius centred at `center`, as a two-arc CCW general
 // polygon (split at its x-extreme vertical-tangency points). Shared by the
 // stock-subtraction paths and the engagement query (which intersects the stock
@@ -82,6 +88,17 @@ public:
     void swap(Stock2& other) noexcept;
     bool is_subset_of(const Stock2& other) const;
     bool exactly_equals(const Stock2& other) const;
+
+    // Sufficient deletion test on this remaining stock, which may conservatively
+    // include material already cleared by an emitted path. Circle triples are
+    // world-XY (center x, center y, guide radius) in mm. Connector samples must
+    // be the preserved old route: this test authorizes removing a circle only.
+    bool can_remove_circle(
+        const std::array<double, 3>& previous,
+        const std::array<double, 3>& current,
+        const std::array<double, 3>& next,
+        Eigen::Ref<const compas::RowMatrixXd> connector_samples,
+        double tool_radius) const;
 
     // Remove the exact disk of the given radius centred at (cx, cy).
     void subtract_disk(double cx, double cy, double radius);
@@ -218,6 +235,9 @@ public:
     CoordinateDigits coordinate_digits() const;
 
 private:
+    // Inputs validated by can_remove_circle before any local geometry changes.
+    void intersect_circle_sweep(double cx, double cy,
+                                double guide_radius, double tool_radius);
     explicit Stock2(std::unique_ptr<Gps> set);
 
     // Subtract the union of exact tool disks of the given radius centred at the

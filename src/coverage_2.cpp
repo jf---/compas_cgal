@@ -249,9 +249,51 @@ Coverage2::State Coverage2::build_initial_state(
     }
 }
 
+Coverage2 Coverage2::from_uncut(const ExactRegion2& target)
+{
+    if (target.role() != ExactRegionRole2::Design
+        && target.role() != ExactRegionRole2::ReachableMaterial) {
+        throw CoverageTransitionError(
+            "uncut coverage requires a design or reachable-material region.");
+    }
+    return Coverage2(State{
+        target.clone(),
+        ExactRegion2::build(
+            ReachSet{}, ExactRegionRole2::AccumulatedSweeps, "uncut"),
+        ExactRegion2::build(
+            ReachSet(target.set()), ExactRegionRole2::CoverageResidual,
+            target.recipe_record()),
+        {},
+        true,
+    });
+}
+
 Coverage2 Coverage2::clone() const
 {
     return *this;
+}
+
+void Coverage2::add_disk_sweep(double cx, double cy, double tool_radius)
+{
+    cx = finite_coordinate(cx, "disk center x");
+    cy = finite_coordinate(cy, "disk center y");
+    const ReachFT radius = exact_positive(tool_radius, "disk tool radius");
+    const std::string record = reach_tagged_record(
+        "coverage-disk-sweep-v2",
+        {point_record(cx, cy), reach_binary64_record(tool_radius)});
+    CoverageTransitionAudit2 audit;
+    try {
+        ReachSet sweep;
+        sweep.insert(reach_disk_polygon(ReachKernelPoint(cx, cy), radius));
+        ++audit.sweep_constructions;
+        apply_sweep(std::move(sweep), record, audit);
+    }
+    catch (const CoverageTransitionError&) {
+        throw;
+    }
+    catch (const std::exception& error) {
+        throw_transition_error("exact disk coverage transition", error);
+    }
 }
 
 CoverageSweepRecord2 Coverage2::add_segment_sweep(

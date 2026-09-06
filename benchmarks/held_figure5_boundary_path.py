@@ -239,7 +239,9 @@ def _transition(
         progress += float(end_parameter) * lengths[end_side]
     else:
         progress = float(end_parameter - start_parameter) * lengths[start_side]
-    if end.contact_point != samples[-1] or wraps:
+    # Distinct source sites may round to one contact. Preserve both emitted
+    # endpoints even for stationary motion, as required by coverage replay.
+    if end.contact_point != samples[-1] or wraps or len(samples) == 1:
         samples.append(end.contact_point)
     if progress <= 0.0:
         raise AmbiguousFigure5BoundaryPathError("Figure 5 transition requires strictly positive CCW boundary progress.")

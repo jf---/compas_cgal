@@ -1,5 +1,6 @@
 // Exact circle decisions for the approximate predecessor-placement consumer.
 #include "boundary_contact_projection_2.h"
+#include "boundary_normal_circle_2.h"
 #include <CGAL/Exact_predicates_exact_constructions_kernel.h>
 #include <CGAL/squared_distance_2.h>
 #include <nanobind/nanobind.h>
@@ -115,6 +116,29 @@ double corrected_engagement_cosine_squared(
 
 NB_MODULE(_circle_geometry_2, m)
 {
+    using Boundary = boundary_normal::BoundaryNormalCircle2;
+    using Proposal = boundary_normal::BoundaryNormalCircleProposal2;
+    nb::exception<boundary_normal::InvalidBoundaryPolygonError>(m, "InvalidBoundaryPolygonError");
+    nb::exception<boundary_normal::InvalidBoundaryNormalInputError>(m, "InvalidBoundaryNormalInputError");
+    nb::exception<boundary_normal::BoundaryVertexQueryUnsupportedError>(m, "BoundaryVertexQueryUnsupportedError");
+    nb::exception<boundary_normal::InvalidBoundaryVertexDirectionError>(m, "InvalidBoundaryVertexDirectionError");
+    nb::exception<boundary_normal::NoPositiveBoundaryCircleError>(m, "NoPositiveBoundaryCircleError");
+    nb::exception<boundary_normal::BoundaryNormalConstructionError>(m, "BoundaryNormalConstructionError");
+    nb::class_<Proposal>(m, "BoundaryNormalCircleProposal2")
+        .def_prop_ro("p_mm", [](const Proposal& p) { const auto xy = p.p_mm(); return nb::make_tuple(xy[0], xy[1]); })
+        .def_prop_ro("m_mm", [](const Proposal& p) { const auto xy = p.m_mm(); return nb::make_tuple(xy[0], xy[1]); })
+        .def_prop_ro("q_mm", [](const Proposal& p) { const auto xy = p.q_mm(); return nb::make_tuple(xy[0], xy[1]); })
+        .def_prop_ro("center_mm", [](const Proposal& p) { const auto xy = p.center_mm(); return nb::make_tuple(xy[0], xy[1]); })
+        .def_prop_ro("guide_radius_mm", &Proposal::guide_radius_mm)
+        .def_prop_ro("clearance_mm", &Proposal::clearance_mm)
+        .def_prop_ro("competing_vertex_indices", &Proposal::competing_vertex_indices)
+        .def_prop_ro("competing_segment_indices", &Proposal::competing_segment_indices);
+    nb::class_<Boundary>(m, "BoundaryNormalCircle2")
+        .def(nb::init<const std::vector<XY>&>())
+        .def("query", &Boundary::query,
+             nb::arg("segment_index"), nb::arg("parameter"), nb::arg("tool_radius"))
+        .def("query_vertex", &Boundary::query_vertex,
+             nb::arg("vertex_index"), nb::arg("inward_direction"), nb::arg("tool_radius"));
     nb::exception<boundary_contact_projection::InvalidBoundaryProjectionError>(m, "InvalidBoundaryProjectionError");
     nb::exception<boundary_contact_projection::AmbiguousBoundaryProjectionError>(m, "AmbiguousBoundaryProjectionError");
     nb::exception<boundary_contact_projection::BoundaryProjectionDistanceError>(m, "BoundaryProjectionDistanceError");

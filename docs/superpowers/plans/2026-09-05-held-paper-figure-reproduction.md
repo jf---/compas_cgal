@@ -324,6 +324,114 @@ establish Held-level performance by itself.
 
 **Active step.** Complete breadth of draft coverage before Task 7 optimization.
 
+**Visual feedback requirement (September 6):** at each generation milestone,
+render and show the actual toolpath and residual comparisons before prolonged
+validation. Show partial and failed outcomes promptly with explicit labels;
+do not leave the user waiting through a long validation run for plots. Preserve
+the images and measured outcomes in the stage record, including negative results.
+
+**Coverage requirement (September 6, user correction):** coverage is an
+algorithm-level acceptance condition for **every generated machining figure,
+case, and variant**, not a Monstera-specific repair. A passing engagement
+bound, retained guide-run families, or zero sampled loss against another draft
+does not establish complete material removal.
+
+- [ ] Apply one shared full-motion coverage gate to Figure 5 and all three
+  Figure 8 pockets, across each implemented placement variant. Missing variants
+  remain explicitly blocked; they cannot disappear from the workload matrix.
+- [ ] Replay actual circle sweeps and connectors against the declared target
+  pocket. Account for entry/preclearing explicitly; never silently substitute
+  filled outer disks for the swept material.
+- [ ] Require continuous native-CGAL evidence for a complete-coverage claim.
+  Conservative replay may establish success when its residual is empty;
+  nonempty conservative residual requires diagnosis before calling it a true
+  gap. Sampling and residual plots are diagnostic evidence, not acceptance.
+- [ ] Add regression cases for interior islands, inter-circle gaps, branch
+  transitions, and boundary slivers, plus the complete figure workload matrix.
+  Verify both absolute coverage and preservation under circle thinning.
+- [ ] Correct demonstrated failures in the shared placement/traversal logic;
+  no figure-specific coordinate patches. Regenerate residual-stock plots for
+  every workload and retain failures visibly until resolved.
+
+**Current evidence:** the contour-bound selector checks engagement and source
+family retention, but does not enforce this coverage requirement. Task 8 and
+coverage acceptance remain open; shorter paths are not yet qualified gains.
+
+**Shared gate checkpoint:** Figure 5/8 generation and Figure 6 measurement
+consumers now require native exact full-motion coverage. The dedicated
+`held-coverage-corpus` task contains twelve pocket/algorithm workloads plus a
+three-scale thinning regression. Thirty-three focused checker/adapter tests
+pass. The thinning regression fails at every scale: source material is lost
+despite engagement and source-family checks. Full corpus execution is not yet
+complete. See [motion coverage](../../held_motion_coverage.md) for evidence,
+runtime limits, and the preserved failing reference-test assumption.
+
+**Next algorithm criterion (corrected September 7 after visual feedback):**
+first restore the paper's coverage assumptions. Sections 2.1–2.4 and 3.1 require
+a machinable target, true medial-axis incidence, qm as each circle's diameter,
+paired boundary/medial traversal, and suitable incremental overlap. Our draft
+uses straight-skeleton guides and later moves circles without preserving that
+incidence. Audit these relationships at the measured gap before implementing
+a generic residual-repair layer. See the source diagrams and code comparison
+in [How Held establishes coverage](../../held_motion_coverage.md#how-held-establishes-coverage).
+
+The current exposed native MAT builder supports only its canonical L-shape
+fixture. Do not claim that swapping the guide call restores Held: generic native
+medial construction and oriented boundary/site-side progression must first be
+implemented and checked on the actual figure pockets. Reuse existing native
+geometry machinery; do not add a parallel Python exact-arithmetic layer.
+
+**Active implementation slice:** query the first true medial contact along a
+boundary normal in native CGAL and construct the q–m diameter circle there.
+Check analytic rectangle/oblique/reflex cases and scale invariance, then plot
+actual Figure 5/8 source geometry before connecting adaptive placement. Preserve
+explicit segment-interior versus reflex-vertex ownership. This is a prerequisite
+to the Held baseline, not completion of the whole traversal or coverage gate.
+The measured original-station diameter drift (Figure 5: maximum 5.5102 mm,
+median 0.0317 mm) and its diagram are kept in the coverage page.
+
+**Native construction checkpoint:** the generic simple-polygon normal query now
+handles segment interiors and explicit reflex point-site sectors in CGAL.
+Twenty-seven new tests and seven existing circle-geometry tests pass. The Figure 5
+probe performs 65 queries in 1.87 s: 64 positive-radius constructions and one
+explicit rejection; its diagram and JSON are embedded in MkDocs. Next integrate
+this exact geometry with oriented line/arc boundary progression and adaptive
+circle placement, including machinable-target/zero-radius events. Do not route
+these proposals through the old contact translation or side-normal reconstruction.
+Held-level geometry, coverage, engagement, and efficiency are the minimum
+baseline; this construction checkpoint alone does not meet that baseline.
+
+Then
+retain the compact contour-bound baseline and repair uncovered **reachable**
+material locally. Identify residuals for every machining case, distinguish
+unreachable boundary remnants explicitly, select source circles by their
+contribution to the deficient regions, and revalidate actual connectors,
+coverage, and engagement globally. No hard-coded Monstera coordinate or circle.
+Show the changed region and total path-length cost before expanding the repair.
+Do not preserve every dense-source sweep: that solves a stricter, different
+problem and causes unacceptable global densification.
+
+**Rejected approach:** dense-source coverage preservation raised Figure 8 upper
+from 738 to 3,065 circles and from 13,874.3 to 36,238.5 mm (+161.2%). Jelle
+rejected this as a disproportionate response to localized deficits. Monstera
+and crossed-skis densification runs were stopped; the compact baselines remain
+the next iteration's starting point. The experimental implementation and plots
+are retained as negative evidence, not the accepted solution.
+
+**Residual classification:** Jelle accepted the Figure 5 boundary-residual
+diagnosis as more reasonable: native CGAL classifies its remaining sample as
+unreachable by a contained radius-1 mm cutter; approximate gap is 2.04 µm.
+Report such remnants separately from reachable interior gaps. This feedback
+does not establish global coverage or authorize an arbitrary gap tolerance.
+
+**Figure 5 preservation checkpoint:** local native deletion retains 1,558 of
+1,619 repaired source circles, versus the earlier 468-circle engagement-only
+draft. The inspected [comparison](../../assets/images/held_figure5_coverage_preserving.png)
+shows 23,822.7 mm versus 13,086.7 mm (+82.0%), maximum reported bound 79.992°,
+and 68.74 s native generation. Conservative stock remains nonempty, with one
+quarter-tool-radius grid residual. Preserving source coverage does not establish
+complete pocket removal; absolute coverage acceptance remains open.
+
 **Contour-aware contact checkpoint (September 6):** native
 `HeldDiskContour2` maintains the paper's filled outer-disk union and corrects
 the standard critical point clockwise to the exposed predecessor arc.

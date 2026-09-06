@@ -1,5 +1,8 @@
 #include "held_disk_contour_2.h"
 
+#include <algorithm>
+#include <cmath>
+
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/array.h>
 #include <nanobind/stl/pair.h>
@@ -39,10 +42,20 @@ void register_held_disk_contour_2(nb::module_& module)
     nb::exception<InvalidHeldContourInputError>(module, "InvalidHeldContourInputError", PyExc_ValueError);
     nb::exception<UndefinedPredecessorDirectionError>(module, "UndefinedPredecessorDirectionError", PyExc_ValueError);
     nb::exception<NoExposedPredecessorArcError>(module, "NoExposedPredecessorArcError", PyExc_RuntimeError);
+    nb::exception<BrokenHeldContourBoundaryError>(module, "BrokenHeldContourBoundaryError", PyExc_RuntimeError);
     nb::class_<HeldDiskContour2>(module, "HeldDiskContour2")
         .def(nb::init<const HeldDiskContour2::XY&, double, double>(),
              "center"_a, "guide_radius"_a, "tool_radius"_a)
         .def("append", &HeldDiskContour2::append, "center"_a, "guide_radius"_a)
+        .def("engagement_bound", [](const HeldDiskContour2& contour,
+                                     const HeldDiskContour2::XY& center,
+                                     double guide_radius, double cap_chord_ratio) {
+            const auto [cosine, exceeded] = contour.engagement_bound(center, guide_radius, cap_chord_ratio);
+            // The native cosine lies exactly in [-1,1]. Clamp only its display
+            // conversion for acos; the exact cap decision above never uses it.
+            const double angle = std::acos(std::clamp(report_coordinate(cosine), -1.0, 1.0));
+            return std::pair{angle, exceeded};
+        }, "candidate_center"_a, "guide_radius"_a, "cap_chord_ratio"_a)
         .def("contact_toward", [](const HeldDiskContour2& contour,
                                    const HeldDiskContour2::XY& center) {
             const auto [point, moved] = contour.contact_toward(center);

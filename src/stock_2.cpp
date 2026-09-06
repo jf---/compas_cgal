@@ -320,6 +320,13 @@ void Stock2::subtract_circle_sweep(double cx, double cy,
     subtract_annulus_exact(EPoint(cx, cy), inner, outer);
 }
 
+void Stock2::intersect_circle_sweep(double cx, double cy,
+                                  double guide_radius, double tool_radius)
+{
+    const auto [inner, outer] = full_turn_annulus_bounds(guide_radius, tool_radius);
+    set().intersection(exact_annulus_region(EPoint(cx, cy), inner, outer));
+}
+
 // --- Local depletion ---------------------------------------------------------
 // Same argument validation, same exact region, different removal mechanism: the
 // arrangement is edited around the region instead of being rebuilt by an overlay

@@ -10,6 +10,7 @@ from benchmarks.errors import BenchmarkError
 from benchmarks.figure6 import controlled_path
 from benchmarks.figure6 import reference_pocket
 from benchmarks.pathmetrics import path_length
+from benchmarks.toolpath_coverage import require_toolpath_coverage
 from benchmarks.units import Degrees
 from compas_cgal.adaptive.units import Millimetre
 
@@ -49,7 +50,15 @@ class RepositoryFigure6Comparison:
 
 
 def measure_repository_figure6() -> RepositoryFigure6Comparison:
-    """Generate three real paths and measure analytic length without any audit."""
+    """Measure three lengths only after exact full design-pocket coverage.
+
+    Engagement compliance remains unaudited. Unsupported motions or a nonempty
+    residual raise before any comparison is returned.
+    """
     spec = reference_pocket()
-    points = tuple(RepositoryFigure6Point.build(cap, Millimetre(path_length(controlled_path(spec, float(cap))))) for cap in REPOSITORY_FIGURE6_CAPS)
-    return RepositoryFigure6Comparison.build(points)
+    points = []
+    for cap in REPOSITORY_FIGURE6_CAPS:
+        result = controlled_path(spec, float(cap))
+        require_toolpath_coverage(spec, result)
+        points.append(RepositoryFigure6Point.build(cap, Millimetre(path_length(result))))
+    return RepositoryFigure6Comparison.build(tuple(points))

@@ -58,6 +58,7 @@ from benchmarks.pathmetrics import PathMetrics
 from benchmarks.pathmetrics import demonstrated_exceedances_after_entry
 from benchmarks.pathmetrics import measure_path
 from benchmarks.spec import PocketSpec
+from benchmarks.toolpath_coverage import require_toolpath_coverage
 from compas_cgal.engagement_toolpath import engagement_controlled_toolpath
 from compas_cgal.toolpath import ToolpathResult
 
@@ -237,6 +238,10 @@ def run_figure6(spec: PocketSpec, caps: Sequence[float] = FIGURE6_CAPS, spacings
 def figure6_points(spec: PocketSpec, caps: Sequence[float], trials: Sequence[MathsmPoint]) -> List[Figure6Point]:
     """Measure the controlled curve at every cap against an already-swept baseline.
 
+    Exact design-pocket coverage is mandatory before accepting each path's
+    metrics. Unsupported motions and nonempty residuals raise; engagement
+    failures remain reported independently on coverage-qualified paths.
+
     Args:
         spec: The pocket and tool. Its own cap is replaced per point.
         caps: Engagement caps in degrees, in plotting order.
@@ -260,6 +265,7 @@ def figure6_points(spec: PocketSpec, caps: Sequence[float], trials: Sequence[Mat
             params=spec.params,
         )
         result = controlled_path(at_cap, cap_deg)
+        require_toolpath_coverage(at_cap, result)
         points.append(
             Figure6Point(
                 cap_deg=cap_deg,

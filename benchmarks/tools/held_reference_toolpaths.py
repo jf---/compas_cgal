@@ -8,6 +8,7 @@ import math
 from pathlib import Path
 
 from benchmarks.held_boundary_order_spacing import refine_boundary_ordered_path
+from benchmarks.held_exact_motion_coverage import require_full_motion_coverage
 from benchmarks.held_figure5_boundary_path import _side_lengths
 from benchmarks.held_figure5_boundary_path import _transition
 from benchmarks.held_figure5_engagement_refinement import refine_figure5_engagement
@@ -92,6 +93,7 @@ def main() -> None:
         title=f"{case.name.replace('_', ' ')} · standard-model {args.stage} draft · {args.spacing} spacing",
         scope="Publisher-start polygon guide · standard predecessor model · contour-aware reproduction and containment unqualified.",
     )
+    require_full_motion_coverage(case, circles, transitions, output.with_suffix(".exact-coverage.json"))
     print(output, flush=True)
 
 

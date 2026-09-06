@@ -39,6 +39,7 @@ from benchmarks.pathmetrics import CLEARANCE_Z_TOOL_DIAMETERS
 from benchmarks.pathmetrics import PathMetrics
 from benchmarks.pathmetrics import measure_path
 from benchmarks.spec import PocketSpec
+from benchmarks.toolpath_coverage import require_toolpath_coverage
 from compas_cgal.toolpath import ToolpathResult
 from compas_cgal.toolpath import trochoidal_mat_toolpath_circular
 
@@ -89,7 +90,10 @@ def constant_spacing_path(spec: PocketSpec, spacing_tool_diameters: float) -> To
 
 
 def measure_constant_spacing(spec: PocketSpec, spacing_tool_diameters: float) -> MathsmPoint:
-    """Generate and measure one trial.
+    """Generate and measure one trial after exact full design-pocket coverage.
+
+    Unsupported motions and nonempty residuals raise before trial selection;
+    sampled engagement compliance remains a separate measurement.
 
     Args:
         spec: The pocket and tool.
@@ -98,7 +102,9 @@ def measure_constant_spacing(spec: PocketSpec, spacing_tool_diameters: float) ->
     Returns:
         The trial.
     """
-    return MathsmPoint(spacing_tool_diameters=spacing_tool_diameters, metrics=measure_path(spec, constant_spacing_path(spec, spacing_tool_diameters)))
+    result = constant_spacing_path(spec, spacing_tool_diameters)
+    require_toolpath_coverage(spec, result)
+    return MathsmPoint(spacing_tool_diameters=spacing_tool_diameters, metrics=measure_path(spec, result))
 
 
 def sweep_spacing(spec: PocketSpec, spacings_tool_diameters: Sequence[float]) -> List[MathsmPoint]:

@@ -12,6 +12,7 @@ from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.collections import LineCollection
 from matplotlib.figure import Figure
 
+from benchmarks.held_exact_motion_coverage import require_full_motion_coverage
 from benchmarks.held_figure5_boundary_path import Figure5BoundaryTransition
 from benchmarks.held_figure5_boundary_path import Figure5CounterclockwiseCircle
 from benchmarks.held_figure5_boundary_path import _side_lengths
@@ -198,6 +199,7 @@ def main() -> None:
         title=title,
         scope=scope,
     )
+    require_full_motion_coverage(case, circles, transitions, output.with_suffix(".exact-coverage.json"))
     print(output)
 
 

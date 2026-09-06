@@ -1,0 +1,27 @@
+{
+  "case": "figure8_monstera",
+  "grid_pitch_mm": 0.25,
+  "inside_samples": 92963,
+  "standard_remaining_xy_mm": [
+    [
+      33.999999443798416,
+      71.50042887052072
+    ],
+    [
+      60.749999443798416,
+      6.500428870520725
+    ]
+  ],
+  "draft_remaining_xy_mm": [
+    [
+      33.999999443798416,
+      71.50042887052072
+    ],
+    [
+      60.749999443798416,
+      6.500428870520725
+    ]
+  ],
+  "newly_uncovered_xy_mm": [],
+  "scope": "Native exact circle annuli plus conservative connector capsules; initially uncut; sampled residual, not continuous proof."
+}

@@ -45,6 +45,9 @@ struct CoverageSweepRecord2 {
 
 class Coverage2 {
 public:
+    // Start from the complete supplied target, without inventing an entry cut.
+    static Coverage2 from_uncut(const ExactRegion2& target);
+
     Coverage2(
         const ExactRegion2& reachable_material,
         double precleared_x,
@@ -52,6 +55,8 @@ public:
         double precleared_radius);
 
     Coverage2 clone() const;
+    // An actual stationary cutter/plunge, not an assumed precleared seed.
+    void add_disk_sweep(double cx, double cy, double tool_radius);
     CoverageSweepRecord2 add_segment_sweep(
         double x0,
         double y0,
