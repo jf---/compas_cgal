@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from fractions import Fraction
 from typing import Self
 from typing import Sequence
 
@@ -103,6 +104,17 @@ def _center_spacing(first: PaperCircleCandidate, second: PaperCircleCandidate) -
     )
 
 
+def _successor_disk_is_cleared(predecessor: PaperCircleCandidate, candidate: PaperCircleCandidate) -> bool:
+    # The common tool radius cancels. Compare squared distances on the exact
+    # rational values injected at this Python boundary, including tangency.
+    radius_difference = Fraction(_radius(predecessor)) - Fraction(_radius(candidate))
+    if radius_difference < 0:
+        return False
+    dx = Fraction(float(candidate.center.x)) - Fraction(float(predecessor.center.x))
+    dy = Fraction(float(candidate.center.y)) - Fraction(float(predecessor.center.y))
+    return dx * dx + dy * dy <= radius_difference * radius_difference
+
+
 def _resolvability_floor(
     first: PaperCircleCandidate,
     second: PaperCircleCandidate,
@@ -164,9 +176,9 @@ def maximum_predecessor_engagement(
     tool = float(tool_radius.value)
     previous_radius = _radius(predecessor)
     radius = _radius(candidate)
+    if _successor_disk_is_cleared(predecessor, candidate):
+        return Radian(0.0)
     if distance == 0.0:
-        if radius <= previous_radius:
-            return Radian(0.0)
         previous_outer_radius = previous_radius + tool
         if radius - tool >= previous_outer_radius:
             return Radian(math.pi)

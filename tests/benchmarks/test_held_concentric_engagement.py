@@ -35,3 +35,14 @@ def test_concentric_engagement_respects_successor_radius(previous_radius: float,
     # tool=1, the cosine-law intersection has cosine (4-2.25-1)/3=1/4.
     actual = maximum_predecessor_engagement(_circle(previous_radius), _circle(next_radius), ToolRadius.build(1.0))
     assert float(actual) == pytest.approx(expected)
+
+
+@pytest.mark.parametrize("offset", (0.5, 1.0))
+def test_displaced_successor_inside_predecessor_swept_disk_has_zero_engagement(offset: float) -> None:
+    successor = PaperCircleCandidate.build(
+        center=Point2[WorldXY].build(offset, 0.0),
+        guide_radius=GuideRadius.build(1.0),
+        contact_point=Point2[WorldXY].build(offset + 1.0, 0.0),
+    )
+    actual = maximum_predecessor_engagement(_circle(2.0), successor, ToolRadius.build(1.0))
+    assert float(actual) == 0.0

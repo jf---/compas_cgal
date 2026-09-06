@@ -1308,10 +1308,28 @@ every concentric successor. It now distinguishes already cleared circles from
 radius growth: with tool radius 1 mm, machining radii 1 → 1.5 mm produce
 75.52 degrees by Equation 7, while 1 → 4 mm produces 180 degrees because the
 cutter disk no longer overlaps the preceding swept disk. Equal and shrinking
-circles retain zero engagement under this model. Five new concentric cases and
-the existing placement tests pass (14 tests); strict typing and Ruff pass.
+circles retain zero engagement under this model. A displaced successor whose
+whole swept disk lies inside the predecessor's cleared disk also has zero
+engagement. That containment branch compares exact rational squared distances;
+it previously produced false 180-degree values or an intersection error.
+Seven new cases and the existing placement tests pass (16 tests), as do the
+13 Figure 5 integration tests; strict typing and Ruff pass.
 This repairs the approximate predecessor model, not the native certification
 pipeline, and does not establish complete toolpath acceptance.
+
+`pixi run held-figure5-toolpath-progress` renders every current circle and
+connector, plus engagement recomputed in final emission order. The measured
+1,532-circle path still has 108 over-cap successors and a 180-degree maximum.
+The earlier model reported 114 over-cap and two unresolved adjacencies on the
+same geometry; correcting those classifications does not improve the physical
+path. It still uses 187 placement lanes, 120 forced placement records, and a
+publisher-derived start. Native whole-disk checks against the polygon
+cutter-center boundary reject 801 circles; the largest reported penetration is
+about 0.057 mm. That count includes near-tangent representation discrepancies,
+so it must not be read as 801 material gouges. Bridge insertion is not accepted
+as a repair while the source circles themselves fail containment.
+
+![Complete Figure 5 motion and remaining engagement failures](assets/images/held_figure5_toolpath_current.png)
 
 ## Figure 5 exact connector checkpoint
 
