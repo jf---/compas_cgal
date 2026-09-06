@@ -14,6 +14,14 @@ is comparison-only and may not choose identities, ordering, or geometry.
 Characterization beyond Figures 5 and 6, postprocessing, machine validation,
 and unrelated benchmark work do not advance this criterion.
 
+**User-directed execution order (September 6): toolpath first.** Land and plot
+one publisher-independent continuous path on the existing Figure 5 input before
+improving original-arc fidelity. Reuse the current guide and placement machinery;
+carry the last circle across guide boundaries, reject forced over-cap moves,
+and join every emitted motion. A connector-only plot does not satisfy this
+milestone. Keep the input approximation explicit; do not promote this first
+working path into full analytic segment/arc acceptance.
+
 **Implementation rule:** keep the current baseline generator intact. Add the paper-derived
 path beside it, prove the new path visually and at its geometry boundary, then
 ask before removing or redirecting established callers.
@@ -158,13 +166,14 @@ The consumer handles irrational coordinates without a reporting-double
 round-trip. `pixi run held-figure5-exact-connector` plots this bounded milestone.
 This interface does not yet integrate machining circles or close a checkbox.
 
-**Input-contract blocker:** all 26 reconstructed arcs have unequal exact
+**Deferred input-fidelity issue:** all 26 reconstructed arcs have unequal exact
 endpoint radii around their stored centres (largest radial discrepancy about
 `8.54e-16 mm`); all primitive joins share endpoints. An exact-arc construction
-policy and renewed reconstruction bounds are needed before literal segment/arc
-MAT input. An amendment preserving endpoints and revalidating exact supports
-has been proposed; it is not yet approved. Polygon or sampled-point Voronoi
-geometry does not satisfy this criterion.
+policy and renewed reconstruction bounds will be needed for literal segment/arc
+MAT input. The user explicitly prioritized the working toolpath over this
+refinement. Do not make exactification a prerequisite for the first continuous
+path on existing input. Polygon or sampled-point Voronoi geometry still does
+not close the full analytic ownership criterion below.
 
 - [ ] Complete publisher-free traversal and boundary-site ownership over the
   reconstructed Figure 5 segment/arc medial axis. Publisher evidence may be

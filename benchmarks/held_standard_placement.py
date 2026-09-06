@@ -161,12 +161,21 @@ def maximum_predecessor_engagement(
     if type(predecessor) is not PaperCircleCandidate or type(candidate) is not PaperCircleCandidate or type(tool_radius) is not ToolRadius:
         raise InvalidStandardPlacementInputError("Predecessor engagement requires two paper circles and a tool radius.")
     distance = _center_spacing(predecessor, candidate)
-    if distance == 0.0:
-        return Radian(0.0)
-
     tool = float(tool_radius.value)
     previous_radius = _radius(predecessor)
     radius = _radius(candidate)
+    if distance == 0.0:
+        if radius <= previous_radius:
+            return Radian(0.0)
+        previous_outer_radius = previous_radius + tool
+        if radius - tool >= previous_outer_radius:
+            return Radian(math.pi)
+        # Concentric growth still cuts a new band. Equation 7 applies directly
+        # with b = previous swept radius; the displaced-circle correction below
+        # would divide by the zero center spacing.
+        cosine = (previous_outer_radius * previous_outer_radius - tool * tool - radius * radius) / (2.0 * tool * radius)
+        return Radian(math.acos(_clamped_unit(cosine)))
+
     if _overlap_margin(predecessor, candidate, tool_radius) <= 0.0:
         return Radian(math.pi)
 
