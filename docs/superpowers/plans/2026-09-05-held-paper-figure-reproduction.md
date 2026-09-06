@@ -22,6 +22,11 @@ and join every emitted motion. A connector-only plot does not satisfy this
 milestone. Keep the input approximation explicit; do not promote this first
 working path into full analytic segment/arc acceptance.
 
+**Approved next step (September 6): Task 7 performance baseline.** With the
+engagement checkpoint established, instrument and visualize the current Figure 5
+generator before optimizing it. Task 7 runs next despite its appended numbering;
+the outstanding Task 5 and Task 6 acceptance criteria remain unchanged.
+
 **Implementation rule:** keep the current baseline generator intact. Add the paper-derived
 path beside it, prove the new path visually and at its geometry boundary, then
 ask before removing or redirecting established callers.
@@ -235,3 +240,67 @@ non-entry machining moves respect the requested 80-degree predecessor limit.
 **Gate:** Figure 6 is generated from the completed Figure 5 path family and
 contains standard, contour-aware, and MATHSM curves compared under common
 engagement, length, scale, pocket, tool, start, and traversal semantics.
+
+## Task 7: Track Figure 5 performance with heatmaps
+
+**Scope:** the current repaired Figure 5 path at 80 degrees. Extend the existing
+benchmark and plotting flow. First establish where time and work accumulate;
+then optimize one demonstrated cause and compare before/after. Exact geometric
+arithmetic belongs in CGAL; Python orchestrates measurement and visualization.
+
+**Starting evidence:** one in-process Apple M1 Max run at `1a4db8e`, with the
+guide loaded before timing, measured 19.067 s: 19.010 s in the initial path
+builder, 0.048 s in refinement, and 0.009 s in connectors. The initial builder
+includes hypothesis generation, ownership, ordering, and circle selection;
+this measurement does not isolate the bottleneck. Imports, I/O, guide
+construction, plotting, and containment auditing were excluded. The local
+measurement and plot live in `build/held-performance/`; these are diagnostic
+artifacts, not yet the reproducible benchmark deliverable below.
+
+- [ ] Record timings for boundary projections/hypothesis generation, ownership,
+  ordering, lane assembly, candidate selection, refinement, and connectors.
+  Use disjoint stage timings and an explicit unattributed remainder so their
+  accounting reconciles with total planner time without double-counting.
+  Report guide construction and correctness validation on separate clocks.
+- [ ] Record structural counts alongside time: stations, boundary projections,
+  candidates examined, engagement evaluations, emitted circles, and planar
+  path length. Inspect the observed all-boundary station projections, lane
+  scans, and candidate-suffix validation as suspects; do not label them
+  bottlenecks before measurement. Use profiling only to test a remaining
+  explicit performance hypothesis after structural counts are understood.
+- [ ] Attribute local work to existing guide runs/stations. Render a spatial
+  heatmap over the toolpath, retaining global work in a separate bucket.
+  Show total cost and cost per station/candidate separately; do not fabricate
+  spatial attribution or infer redundant cutting without stock evidence.
+- [ ] Render a stages-by-successive-runs heatmap with absolute timings and
+  changes from the baseline. Keep color scales and units fixed across compared
+  runs; label any logarithmic scale. Preserve run order and source attribution.
+- [ ] Separate diagnostic instrumentation from uninstrumented timing runs and
+  measure instrumentation overhead. Define the warm-up and repeat protocol
+  before collecting comparisons; report samples, median, spread, hardware,
+  build, input, cap, and timing exclusions. Save ordinary run records and
+  machine-readable measurements through a reproducible Pixi task in durable
+  project paths. Held's published timing remains an external reference, not
+  a same-machine speedup claim.
+- [ ] Keep engagement violations, connector continuity, containment failures,
+  source coverage, and path length beside performance results. Do not obtain
+  speed gains by dropping required motion, weakening predicates, or converting
+  existing containment failures into accepted results.
+- [ ] Verify timing/count aggregation and source attribution with focused
+  consumer tests; run strict typing, Ruff, docs/plan gates, and visually inspect
+  the PNG heatmaps. Document measurement scope and limitations in
+  `docs/segment_site_mat.md`.
+
+**First gate:** reproduce the Figure 5/80-degree baseline, account for planner
+time without double-counting, identify the dominant stage and its work count,
+and produce both heatmaps with correctness results alongside them. Satisfy
+this gate before choosing an optimization.
+
+- [ ] From that evidence, select one demonstrated cause, state its mechanism
+  and smallest correction, implement and validate it, and show before/after
+  timings, counts, heatmaps, and correctness results under the same protocol.
+
+**Completion gate:** the reproducible tracking command exposes the measured
+cause and the effect of one targeted optimization, with unchanged correctness
+requirements and explicit remaining failures. This does not close Task 5/6 or
+establish Held-level performance by itself.
