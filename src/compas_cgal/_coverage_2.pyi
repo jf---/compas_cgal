@@ -1,11 +1,11 @@
 from collections.abc import Sequence
 from typing import Literal
+from typing import NoReturn
 
 import numpy as np
 import numpy.typing as npt
 
 Float64Array = npt.NDArray[np.float64]
-
 
 class ReachableDomainConstructionError(RuntimeError): ...
 class InvalidReachableDomainInputError(ReachableDomainConstructionError): ...
@@ -16,8 +16,22 @@ class ReachableMaterialPredicateGeometryError(ReachableDomainConstructionError):
 class InvalidCoverageGeometryError(RuntimeError): ...
 class CoverageTransitionError(RuntimeError): ...
 
+class WorldXYBoundaryPointMm:
+    """Native exact world-XY millimetre contact; obtained from primitives only."""
+
+    def __new__(cls, _native_only: NoReturn) -> WorldXYBoundaryPointMm: ...
+    def __eq__(self, other: object) -> bool: ...
+    def __ne__(self, other: object) -> bool: ...
+    @property
+    def reporting_xy_mm(self) -> tuple[float, float]:
+        """Approximate reporting view; cannot be used as transition input."""
+        ...
 
 class ReachableBoundaryPrimitive2:
+    @property
+    def start(self) -> WorldXYBoundaryPointMm: ...
+    @property
+    def end(self) -> WorldXYBoundaryPointMm: ...
     @property
     def kind(self) -> Literal["line", "arc"]: ...
     @property
@@ -33,19 +47,17 @@ class ReachableBoundaryPrimitive2:
     @property
     def arc_counterclockwise(self) -> bool: ...
 
-
 class ReachableBoundaryCycle2:
     @property
     def counterclockwise(self) -> bool: ...
     primitives: Sequence[ReachableBoundaryPrimitive2]
-
+    def ccw_transition(self, start: WorldXYBoundaryPointMm, end: WorldXYBoundaryPointMm) -> Sequence[ReachableBoundaryPrimitive2]: ...
 
 def build_center_boundary_cycle(
     design_boundary: Float64Array,
     holes: Sequence[Float64Array],
     tool_radius: float,
 ) -> ReachableBoundaryCycle2: ...
-
 
 class ExactRegion2:
     def clone(self) -> ExactRegion2: ...
@@ -54,7 +66,6 @@ class ExactRegion2:
     def component_count(self) -> int: ...
     def is_subset_of(self, other: ExactRegion2) -> bool: ...
     def exactly_equals(self, other: ExactRegion2) -> bool: ...
-
 
 class ReachableDomainCertificate2:
     @property
@@ -80,7 +91,6 @@ class ReachableDomainCertificate2:
         tool_radius: float,
     ) -> bool: ...
 
-
 class ReachableDomain2:
     def __init__(
         self,
@@ -94,7 +104,6 @@ class ReachableDomain2:
     def unreachable_residual(self) -> ExactRegion2: ...
     def certificate(self) -> ReachableDomainCertificate2: ...
 
-
 class CutterCentreDomain2:
     @classmethod
     def build(
@@ -105,7 +114,6 @@ class CutterCentreDomain2:
     ) -> CutterCentreDomain2: ...
     def contains(self, x: float, y: float) -> bool: ...
 
-
 class ReachableMaterialPredicate2:
     @classmethod
     def build(
@@ -115,7 +123,6 @@ class ReachableMaterialPredicate2:
         tool_radius: float,
     ) -> ReachableMaterialPredicate2: ...
     def contains(self, x: float, y: float) -> bool: ...
-
 
 class CoverageSweepRecord2:
     @property
@@ -150,7 +157,6 @@ class CoverageSweepRecord2:
         phase_y: float,
         tool_radius: float,
     ) -> bool: ...
-
 
 class Coverage2:
     def __init__(
