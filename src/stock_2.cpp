@@ -305,6 +305,21 @@ void Stock2::subtract_annulus_exact(
     set().difference(region);
 }
 
+void Stock2::subtract_circle_sweep(double cx, double cy,
+                                 double guide_radius, double tool_radius)
+{
+    if (!std::isfinite(cx) || !std::isfinite(cy)
+        || !std::isfinite(guide_radius) || !std::isfinite(tool_radius)) {
+        throw NonFiniteAnnulusInputError("Circle sweep requires finite centre and radii.");
+    }
+    if (CGAL::sign(Epeck::FT(guide_radius)) == CGAL::NEGATIVE
+        || CGAL::sign(Epeck::FT(tool_radius)) != CGAL::POSITIVE) {
+        throw InvalidAnnulusRadiiError("Circle sweep requires a nonnegative guide radius and positive tool radius.");
+    }
+    const auto [inner, outer] = full_turn_annulus_bounds(guide_radius, tool_radius);
+    subtract_annulus_exact(EPoint(cx, cy), inner, outer);
+}
+
 // --- Local depletion ---------------------------------------------------------
 // Same argument validation, same exact region, different removal mechanism: the
 // arrangement is edited around the region instead of being rebuilt by an overlay

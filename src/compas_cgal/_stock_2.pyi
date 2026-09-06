@@ -366,6 +366,8 @@ class Stock2:
         center_count_limit: int,
     ) -> ExactArcDepletionTrace2: ...
     def subtract_disk(self, cx: float, cy: float, radius: float) -> None: ...
+    def subtract_circle_sweep(self, cx: float, cy: float, guide_radius: float, tool_radius: float) -> None:
+        """Subtract the exact full-circle sweep of separately injected radii."""
     def subtract_annulus(
         self,
         cx: float,

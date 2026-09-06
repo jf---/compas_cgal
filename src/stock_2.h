@@ -95,6 +95,10 @@ public:
     // structurally, not by a tolerance.
     void subtract_annulus(double cx, double cy, double inner_radius, double outer_radius);
 
+    // Full machining-circle sweep: add/subtract the separately injected guide
+    // and cutter radii in the exact kernel, retaining an uncut centre if rho > r.
+    void subtract_circle_sweep(double cx, double cy, double guide_radius, double tool_radius);
+
     // Exact core of the above. Callers that already hold exact radii use this
     // rather than round-tripping them through doubles: rho + r and rho - r are
     // exact rationals, and rounding them to the nearest double would be a snap at
