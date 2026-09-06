@@ -43,3 +43,20 @@ def test_invalid_native_input_fails_loudly() -> None:
         geometry.disk_contains_disk((math.nan, 0), 2, (0, 0), 1)
     with pytest.raises(geometry.InvalidCircleGeometryError):
         geometry.disk_contains_disk((0, 0), -1, (0, 0), 1)
+
+
+def test_offset_projection_uses_geometry_and_canonicalizes_shared_vertex() -> None:
+    boundary = [(1.0, 1.0), (9.0, 1.0), (9.0, 9.0), (1.0, 9.0)]
+    side, parameter = geometry.project_boundary_contact(boundary, (9, 5), 0.01)
+    assert (side, parameter) == (1, 0.5)
+    assert geometry.project_boundary_contact(boundary, (9, 9), 0.01) == (2, 0)
+    with pytest.raises(geometry.AmbiguousBoundaryProjectionError):
+        geometry.project_boundary_contact(boundary, (5, 5), 5)
+    with pytest.raises(geometry.BoundaryProjectionDistanceError):
+        geometry.project_boundary_contact(boundary, (10, 5), 0.01)
+
+
+def test_corrected_engagement_uses_exact_squared_chord_geometry() -> None:
+    assert geometry.corrected_engagement_cosine_squared((0, 0), 2, (1, 0), 2, 1) == pytest.approx(121 / 156)
+    with pytest.raises(geometry.NoCircleIntersectionError):
+        geometry.corrected_engagement_cosine_squared((0, 0), 1, (5, 0), 1, 1)

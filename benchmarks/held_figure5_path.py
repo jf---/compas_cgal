@@ -15,12 +15,14 @@ from benchmarks.held_figure5_raw_guide import Figure5RawGuide
 from benchmarks.held_figure5_raw_guide import GuideRunId
 from benchmarks.held_figure5_raw_guide import GuideRunStationOrdinal
 from benchmarks.held_figure5_raw_guide import ProjectionAdmissibleBoundaryHypothesis
+from benchmarks.held_figure5_raw_guide import ProjectionBoundarySegmentId
 from benchmarks.held_figure5_raw_guide import ProjectionBoundarySite
 from benchmarks.held_figure5_raw_guide import build_distance_admissible_hypotheses
 from benchmarks.held_standard_placement import PaperCircleCandidate
 from benchmarks.held_standard_placement import StandardPlacement
 from benchmarks.held_standard_placement import predecessor_overlap_margin
 from benchmarks.held_standard_placement import select_next_standard_candidate
+from compas_cgal import _circle_geometry_2
 from compas_cgal.adaptive.motion import EngagementCap
 from compas_cgal.adaptive.units import Millimetre
 from compas_cgal.adaptive.units import Point2
@@ -348,6 +350,8 @@ def build_hypothesis_figure5_path(
     start_evidence_bound: Millimetre,
     tool_radius: ToolRadius,
     cap: EngagementCap,
+    offset_sites: dict[ProjectionAdmissibleBoundaryHypothesis, ProjectionBoundarySite] | None = None,
+    preserve_source_runs: bool = False,
 ) -> HypothesisFigure5Path:
     """Place distinct admissible hypotheses and emit one CCW boundary path."""
     if not hypotheses or not reached_run_ids:
@@ -379,6 +383,7 @@ def build_hypothesis_figure5_path(
         tool_radius=tool_radius,
         boundary_evidence_bound=boundary_evidence_bound,
         start_evidence_bound=start_evidence_bound,
+        offset_sites=offset_sites,
     )
     selected_items_list = []
     placements = []
@@ -397,24 +402,35 @@ def build_hypothesis_figure5_path(
         )
         paper_candidates = tuple(_paper_candidate(circle) for circle in lane_circles)
         selected_items_list.append(lane_items[0])
+        # Joining lanes must not let a spacing jump erase a whole source run.
+        # The corpus draft anchors each run before engagement refinement.
+        stops = []
+        represented: set[GuideRunId] = set(lane_items[0].source_run_ids)
+        if preserve_source_runs:
+            for index, item in enumerate(lane_items[1:], start=1):
+                if any(run not in represented for run in item.source_run_ids):
+                    stops.append(index)
+                    represented.update(item.source_run_ids)
+        stops.append(len(paper_candidates) - 1)
         cursor = 0
-        while cursor < len(paper_candidates) - 1:
-            placement = select_next_standard_candidate(
-                paper_candidates[cursor],
-                paper_candidates[cursor + 1 :],
-                tool_radius,
-                cap,
-            )
-            cursor += placement.candidate_advance
-            selected_item = lane_items[cursor]
-            selected_items_list.append(selected_item)
-            placements.append(
-                Figure5PlacementRecord(
-                    selected_item.hypothesis.projected_boundary_site,
-                    selected_item.source_run_ids,
-                    placement,
+        for stop in stops:
+            while cursor < stop:
+                placement = select_next_standard_candidate(
+                    paper_candidates[cursor],
+                    paper_candidates[cursor + 1 : stop + 1],
+                    tool_radius,
+                    cap,
                 )
-            )
+                cursor += placement.candidate_advance
+                selected_item = lane_items[cursor]
+                selected_items_list.append(selected_item)
+                placements.append(
+                    Figure5PlacementRecord(
+                        selected_item.hypothesis.projected_boundary_site,
+                        selected_item.source_run_ids,
+                        placement,
+                    )
+                )
 
     selected_items = tuple(selected_items_list)
     selected_runs = frozenset(run_id for item in selected_items for run_id in item.source_run_ids)
@@ -431,6 +447,7 @@ def build_hypothesis_figure5_path(
         tool_radius=tool_radius,
         boundary_evidence_bound=boundary_evidence_bound,
         start_evidence_bound=start_evidence_bound,
+        offset_sites=offset_sites,
     )
     sources_by_origin = {
         _origin_key(
@@ -467,11 +484,41 @@ def build_figure5_approximate_path(
     """Build Figure 5(a) from every pre-thinning raw-guide hypothesis."""
     if type(guide) is not Figure5RawGuide or guide.case.name != "figure5":
         raise Figure5PathIntegrationError("Approximate path construction requires the canonical Figure 5 raw guide.")
+    return build_held_reference_path(guide, inward_components, project_contacts=False)
+
+
+def build_held_reference_path(
+    guide: Figure5RawGuide,
+    inward_components: tuple[tuple[Point2[WorldXY], ...], ...],
+    *,
+    project_contacts: bool = True,
+) -> HypothesisFigure5Path:
+    """Generate the standard polygon draft on a prepared Held reference guide.
+
+    Uses the case's publisher-derived start; does not claim contour awareness.
+    """
+    if type(guide) is not Figure5RawGuide:
+        raise Figure5PathIntegrationError("Held path construction requires a reference raw guide.")
     start = guide.case.start_marker
     start_radius = guide.case.start_marker_radius
     if start is None or start_radius is None:
         raise Figure5PathIntegrationError("Canonical Figure 5 requires its published start-circle evidence.")
     hypotheses = tuple(hypothesis for run in guide.runs for station in run.stations for hypothesis in build_distance_admissible_hypotheses(guide, station))
+    offset_sites = None
+    if project_contacts:
+        if len(inward_components) != 1:
+            raise Figure5PathIntegrationError("Reference draft requires one connected inward boundary.")
+        component = inward_components[0]
+        boundary = [(float(p.x), float(p.y)) for p in component]
+        offset_sites = {}
+        for hypothesis in hypotheses:
+            side, parameter = _circle_geometry_2.project_boundary_contact(
+                boundary,
+                (float(hypothesis.contact_point.x), float(hypothesis.contact_point.y)),
+                float(guide.site_budget.admissible_distance_gap),
+            )
+            # Existing site representation; all projection decisions belong to CGAL.
+            offset_sites[hypothesis] = ProjectionBoundarySite.build(ProjectionBoundarySegmentId(side), Fraction(parameter), len(component))
     reached = frozenset(run.run_id for run in guide.runs)
     start_evidence_bound = Millimetre(float(guide.site_budget.reconstruction_bound) + float(guide.site_budget.projection_bound))
     return build_hypothesis_figure5_path(
@@ -484,4 +531,6 @@ def build_figure5_approximate_path(
         start_evidence_bound=start_evidence_bound,
         tool_radius=guide.case.tool_radius,
         cap=EngagementCap.build(math.radians(float(guide.case.tea_cap))),
+        offset_sites=offset_sites,
+        preserve_source_runs=project_contacts,
     )

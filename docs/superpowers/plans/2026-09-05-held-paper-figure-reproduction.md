@@ -317,6 +317,21 @@ establish Held-level performance by itself.
 ## Task 8: Whole-paper reproduction drafts from prepared inputs
 
 **Active step.** Complete breadth of draft coverage before Task 7 optimization.
+
+**Figure 8 draft checkpoint (September 6):** the additive corpus command
+`pixi run held-reference-toolpaths --case CASE` now reuses prepared inputs.
+Upper and crossed-skis standard-model drafts emit respectively 4,183/2,958
+circles, with every connector rendered and zero predecessor-cap violations.
+Native contact projection fixes source/offset side-index mismatch; retained
+run anchors prevent spacing selection from losing an entire source run.
+CGAL corrected-chord arithmetic fixes the upper-pocket near-tangent witness.
+Figure 5/upper integration, placement, and native engagement checks pass.
+Monstera stops at a contact beyond its evidence bound; the stage documentation
+records the witness. Next: qualify invalid contact alternatives while retaining
+run coverage, then regenerate Monstera. Contour-aware Figure 5/8 semantics and
+the broader gallery remain open; these standard drafts close no full-panel
+reproduction gate.
+
 The prepared corpus is already delivered by
 [the reference-pocket plan](2026-08-31-held-pfeiffer-reference-pockets.md) and
 [its documentation](../../held_pfeiffer_reference_pockets.md). Do not repeat

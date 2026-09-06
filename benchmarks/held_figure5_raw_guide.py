@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from fractions import Fraction
 from typing import NewType
 
+from benchmarks.held_reference_cases import CANONICAL_CASE_NAMES
 from benchmarks.held_reference_cases import HeldReferenceCase
 from compas_cgal.adaptive.units import GuideRadius
 from compas_cgal.adaptive.units import Millimetre
@@ -152,8 +153,19 @@ class Figure5RawGuide:
     ) -> "Figure5RawGuide":
         if type(case) is not HeldReferenceCase or case.name != "figure5":
             raise InvalidFigure5RawGuideError("Raw guide extraction is restricted to canonical Figure 5.")
+        return cls.build_reference(case, runs)
+
+    @classmethod
+    def build_reference(
+        cls,
+        case: HeldReferenceCase,
+        runs: tuple[Figure5RawGuideRun, ...],
+    ) -> "Figure5RawGuide":
+        """Build a guide over any of the four prepared Held reference pockets."""
+        if type(case) is not HeldReferenceCase or case.name not in CANONICAL_CASE_NAMES:
+            raise InvalidFigure5RawGuideError("Raw guide requires a canonical Held reference case.")
         if not runs:
-            raise InvalidFigure5RawGuideError("Figure 5 raw guide is empty.")
+            raise InvalidFigure5RawGuideError("Held reference raw guide is empty.")
         points = case.projection.points
         boundary_length = sum(
             math.hypot(
@@ -399,6 +411,13 @@ def build_figure5_raw_guide(case: HeldReferenceCase) -> Figure5RawGuide:
     """Extract every emitted station before engagement-controlled thinning."""
     if type(case) is not HeldReferenceCase or case.name != "figure5":
         raise InvalidFigure5RawGuideError("Raw guide extraction is restricted to canonical Figure 5.")
+    return build_held_reference_raw_guide(case)
+
+
+def build_held_reference_raw_guide(case: HeldReferenceCase) -> Figure5RawGuide:
+    """Extract unthinned stations for a prepared Figure 5 or Figure 8 pocket."""
+    if type(case) is not HeldReferenceCase or case.name not in CANONICAL_CASE_NAMES:
+        raise InvalidFigure5RawGuideError("Raw guide requires a canonical Held reference case.")
     spec = case.pocket_spec()
     source_runs = _guide_chains(
         spec.polygon,
@@ -416,4 +435,4 @@ def build_figure5_raw_guide(case: HeldReferenceCase) -> Figure5RawGuide:
         )
         for run_index, source_run in enumerate(source_runs)
     )
-    return Figure5RawGuide.build(case, runs)
+    return Figure5RawGuide.build_reference(case, runs)

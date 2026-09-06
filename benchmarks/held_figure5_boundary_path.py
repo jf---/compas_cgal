@@ -175,8 +175,9 @@ def _circle(
     component: tuple[Point2[WorldXY], ...],
     hypothesis: ProjectionAdmissibleBoundaryHypothesis,
     evidence_bound: Millimetre,
+    resolved_site: ProjectionBoundarySite | None = None,
 ) -> Figure5CounterclockwiseCircle:
-    site = _resolved_site(component, hypothesis, evidence_bound)
+    site = _resolved_site(component, hypothesis, evidence_bound) if resolved_site is None else resolved_site
     contact = _canonical_offset_point(component, site)
     shift_x = float(contact.x) - float(hypothesis.contact_point.x)
     shift_y = float(contact.y) - float(hypothesis.contact_point.y)
@@ -255,6 +256,7 @@ def build_figure5_boundary_path(
     tool_radius: ToolRadius,
     boundary_evidence_bound: Millimetre,
     start_evidence_bound: Millimetre,
+    offset_sites: dict[ProjectionAdmissibleBoundaryHypothesis, ProjectionBoundarySite] | None = None,
 ) -> Figure5BoundaryPath:
     """Emit one bounded, continuous CCW traversal over selected hypotheses."""
     if len(inward_components) != 1:
@@ -268,7 +270,7 @@ def build_figure5_boundary_path(
         raise AmbiguousFigure5BoundaryPathError("Figure 5 published start radius does not match the radius-one tool evidence.")
     component = inward_components[0]
     _validate_boundary(component)
-    circles = tuple(_circle(component, candidate, boundary_evidence_bound) for candidate in side_candidates)
+    circles = tuple(_circle(component, candidate, boundary_evidence_bound, None if offset_sites is None else offset_sites[candidate]) for candidate in side_candidates)
     selected_runs = frozenset(circle.run_id for circle in circles)
     if selected_runs != reached_run_ids:
         raise MissingFigure5GuideRunError("Selected circles must cover exactly the reached guide runs.")

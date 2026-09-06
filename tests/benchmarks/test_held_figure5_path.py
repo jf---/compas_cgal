@@ -256,6 +256,23 @@ def test_placement_joins_compatible_continuous_side_fragments_across_runs() -> N
     assert result.reached_run_ids == frozenset((GuideRunId(0), GuideRunId(1)))
 
 
+def test_corpus_placement_retains_run_that_spacing_would_jump_over() -> None:
+    candidates = tuple(_hypothesis(run, x, ordinal=ordinal) for run, xs in ((0, (0.10, 0.11)), (1, (0.12, 0.13)), (2, (0.14, 0.15))) for ordinal, x in enumerate(xs))
+    result = build_hypothesis_figure5_path(
+        inward_components=(SQUARE,),
+        hypotheses=candidates,
+        reached_run_ids=frozenset((GuideRunId(0), GuideRunId(1), GuideRunId(2))),
+        published_start_center=candidates[0].contact_point,
+        published_start_radius=Millimetre(1),
+        boundary_evidence_bound=Millimetre(0.01),
+        start_evidence_bound=Millimetre(0.01),
+        tool_radius=TOOL_RADIUS,
+        cap=CAP,
+        preserve_source_runs=True,
+    )
+    assert {run for sources in result.circle_sources for run in sources} == {GuideRunId(0), GuideRunId(1), GuideRunId(2)}
+
+
 def test_placement_joins_unique_nearest_continuation_among_compatible_tails() -> None:
     candidates = tuple(_hypothesis(run, x, ordinal=ordinal) for run, xs in ((0, (0.1, 0.2)), (1, (0.05, 0.15)), (2, (0.3, 0.4))) for ordinal, x in enumerate(xs))
 

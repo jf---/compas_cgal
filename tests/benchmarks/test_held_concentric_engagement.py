@@ -62,3 +62,18 @@ def test_nearly_nested_figure5_successor_has_real_overlap() -> None:
     )
     angle = maximum_predecessor_engagement(predecessor, successor, ToolRadius.build(1))
     assert 0 <= float(angle) < math.radians(80)
+
+
+def test_nearly_nested_figure8_contact_has_real_corrected_angle() -> None:
+    predecessor = PaperCircleCandidate.build(
+        center=Point2[WorldXY].build(56.467007191633286, 31.186043224921367),
+        guide_radius=GuideRadius.build(3.5724223776958097),
+        contact_point=Point2[WorldXY].build(60.03600597104331, 31.029680322570627),
+    )
+    successor = PaperCircleCandidate.build(
+        center=Point2[WorldXY].build(56.49196743463321, 31.18494968124706),
+        guide_radius=GuideRadius.build(3.5474381913295723),
+        contact_point=Point2[WorldXY].build(60.03600597104331, 31.02968032257063),
+    )
+    angle = maximum_predecessor_engagement(predecessor, successor, ToolRadius.build(1))
+    assert 0 <= float(angle) < math.radians(80)
