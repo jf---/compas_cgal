@@ -1294,6 +1294,39 @@ not Python owner equality, compare those fresh reconstructions.
     equal-cap oriented-neck prefixes deliberately end with
     `ReplayTraversalError` while untouched MAT edges remain nonterminal.
 
+## Figure 5 exact connector checkpoint
+
+Python consumers can now retain native world-XY millimetre contacts through
+`ReachableBoundaryPrimitive2.start` and `.end`, and pass them to
+`ReachableBoundaryCycle2.ccw_transition`. The returned line/arc primitives
+preserve their exact contacts and source-piece lineage. `WorldXYBoundaryPointMm`
+is the existing native geometry value exposed without a public constructor;
+equality uses the traits predicate. `reporting_xy_mm` is a display view and is
+not accepted as transition input.
+
+This completes a connector interface, not the Figure 5 toolpath. The native
+cycle still comes from the 65-edge polygon projection. Its offset arcs do not
+establish an analytic segment/arc MAT. Full-circle placement, predecessor
+engagement, traversal, and continuous circle/connector integration remain open.
+
+![Figure 5 native connector and exact line/arc junctions](assets/images/held_figure5_exact_connector.png)
+
+Regenerate with `pixi run held-figure5-exact-connector`. The renderer checks
+native endpoint equality and source lineage before sampling curves for display.
+Consumer tests in `tests/benchmarks/test_held_exact_boundary_transition.py`
+exercise irrational contacts, CCW wrap, value equality across separately built
+cycles, and rejection of off-boundary, zero-progress, and raw-coordinate input.
+The explicit stub and this consumer are checked together with `mypy --strict`.
+
+An exact rational probe also found that all 26 stored Figure 5 arcs have
+unequal start/end squared radii about their stored centres; all 31 primitive
+joins share their stored endpoint. The largest radial difference is approximately
+`8.5405642109413503e-16 mm`. The reconstruction accepts roundoff-bounded endpoint
+consistency, but exact circular-arc input needs a declared construction policy.
+Preserving shared endpoints while constructing consistent exact supports would
+require renewed reconstruction/projection bounds. That conversion is pending;
+neither a tolerance nor the polygon MAT closes the analytic input criterion.
+
 ## Relation to Held and Pfeiffer (2025)
 
 [Held and Pfeiffer's 2025 MATHSM extension][held-pfeiffer-2025] is the direct

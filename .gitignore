@@ -92,6 +92,7 @@ coverage.xml
 .ruff_cache/
 .mypy_cache/
 .pixi/
+.superpowers/
 .testmondata*
 
 # ==============================================================================

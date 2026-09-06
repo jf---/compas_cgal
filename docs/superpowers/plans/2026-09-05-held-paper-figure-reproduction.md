@@ -7,14 +7,12 @@
 **Goal:** Reproduce the visible Figure 5 toolpath structure and the Figure 6
 comparison protocol and axes, with direct comparisons to publisher evidence.
 
-**Active criterion:** for Task 4, render repository Figure 6 measurements on the
-publisher's labeled axes and compare them directly with digitized graphical
-observations. Use bounded requested-cap path-length measurements at 80, 120, and
-160 degrees; label cap compliance unaudited and omit the audit-bound
-constant-spacing series rather than waiting on the multi-hour replay route. Do
-not claim unpublished numeric parity. Characterization beyond
-the figure, postprocessing, machine validation, and unrelated benchmark work do
-not advance this criterion.
+**Active criterion:** for Task 5, independently traverse the reconstructed
+Figure 5 medial axis, place the standard 80-degree machining circles, and emit
+one continuous planar circle-and-offset-transition stream. Publisher evidence
+is comparison-only and may not choose identities, ordering, or geometry.
+Characterization beyond Figures 5 and 6, postprocessing, machine validation,
+and unrelated benchmark work do not advance this criterion.
 
 **Implementation rule:** keep the current baseline generator intact. Add the paper-derived
 path beside it, prove the new path visually and at its geometry boundary, then
@@ -153,6 +151,20 @@ contradict completion of the actual toolpath-reproduction goal even though the
 earlier bounded comparison tasks are complete.
 
 ## Task 5: Generate the continuous Figure 5 standard path
+
+**Connector checkpoint (September 6):** native-owned boundary contacts and
+`ccw_transition` expose exact line/arc connectors with preserved source lineage.
+The consumer handles irrational coordinates without a reporting-double
+round-trip. `pixi run held-figure5-exact-connector` plots this bounded milestone.
+This interface does not yet integrate machining circles or close a checkbox.
+
+**Input-contract blocker:** all 26 reconstructed arcs have unequal exact
+endpoint radii around their stored centres (largest radial discrepancy about
+`8.54e-16 mm`); all primitive joins share endpoints. An exact-arc construction
+policy and renewed reconstruction bounds are needed before literal segment/arc
+MAT input. An amendment preserving endpoints and revalidating exact supports
+has been proposed; it is not yet approved. Polygon or sampled-point Voronoi
+geometry does not satisfy this criterion.
 
 - [ ] Complete publisher-free traversal and boundary-site ownership over the
   reconstructed Figure 5 segment/arc medial axis. Publisher evidence may be

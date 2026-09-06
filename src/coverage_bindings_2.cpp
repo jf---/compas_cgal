@@ -117,6 +117,27 @@ NB_MODULE(_coverage_2, m)
         "ReachableMaterialPredicateGeometryError",
         reachable_error.ptr());
 
+    nb::class_<ReachPoint>(
+        m,
+        "WorldXYBoundaryPointMm",
+        "Native exact boundary contact in world XY, measured in millimetres.")
+        .def_prop_ro(
+            "reporting_xy_mm",
+            &reporting_point,
+            "Approximate coordinates for reporting only; never geometric input.")
+        .def(
+            "__eq__",
+            [](const ReachPoint& left, const ReachPoint& right) {
+                return ReachTraits().equal_2_object()(left, right);
+            },
+            nb::is_operator())
+        .def(
+            "__ne__",
+            [](const ReachPoint& left, const ReachPoint& right) {
+                return !ReachTraits().equal_2_object()(left, right);
+            },
+            nb::is_operator());
+
     nb::class_<ReachableBoundaryCurve2>(
         m,
         "ReachableBoundaryPrimitive2")
@@ -126,6 +147,16 @@ NB_MODULE(_coverage_2, m)
                 return primitive.curve.is_linear()
                     ? std::string("line")
                     : std::string("arc");
+            })
+        .def_prop_ro(
+            "start",
+            [](const ReachableBoundaryCurve2& primitive) -> ReachPoint {
+                return primitive.curve.source();
+            })
+        .def_prop_ro(
+            "end",
+            [](const ReachableBoundaryCurve2& primitive) -> ReachPoint {
+                return primitive.curve.target();
             })
         .def_prop_ro(
             "start_mm",
@@ -167,7 +198,17 @@ NB_MODULE(_coverage_2, m)
             [](const ReachableBoundaryCycle2& cycle) {
                 return cycle.orientation == CGAL::COUNTERCLOCKWISE;
             })
-        .def_ro("primitives", &ReachableBoundaryCycle2::curves);
+        .def_ro("primitives", &ReachableBoundaryCycle2::curves)
+        .def(
+            "ccw_transition",
+            [](const ReachableBoundaryCycle2& cycle,
+               const ReachPoint& start,
+               const ReachPoint& end) {
+                return reachable_ccw_transition(cycle, start, end).curves;
+            },
+            "start"_a,
+            "end"_a,
+            "Traverse positive CCW boundary progress between exact native contacts.");
 
     m.def(
         "build_center_boundary_cycle",
