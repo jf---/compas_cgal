@@ -1,14 +1,22 @@
 #include "coverage_2.h"
 #include "cutter_centre_domain_2.h"
+#include "reachable_arrangement_2.h"
 #include "reachable_domain_2.h"
 #include "reachable_errors_2.h"
+#include "reachable_input_2.h"
 #include "reachable_material_predicate_2.h"
 
+#include <algorithm>
 #include <string>
+#include <tuple>
 #include <vector>
+
+#include <CGAL/number_utils.h>
 
 #include <nanobind/eigen/dense.h>
 #include <nanobind/nanobind.h>
+#include <nanobind/stl/string.h>
+#include <nanobind/stl/tuple.h>
 #include <nanobind/stl/vector.h>
 
 namespace nb = nanobind;
@@ -28,6 +36,57 @@ nb::list bytes_sequence(const std::vector<std::string>& records)
 nb::bytes bytes_value(const std::string& value)
 {
     return nb::bytes(value.data(), value.size());
+}
+
+std::tuple<double, double> reporting_point(const ReachPoint& point)
+{
+    return {
+        CGAL::to_double(point.x()),
+        CGAL::to_double(point.y()),
+    };
+}
+
+const ReachableBoundaryCycle2& outer_center_boundary(
+    const ReachableArrangement2& arrangement)
+{
+    const auto found = std::find_if(
+        arrangement.center_boundary_cycles.begin(),
+        arrangement.center_boundary_cycles.end(),
+        [](const ReachableBoundaryCycle2& cycle) {
+            return cycle.orientation == CGAL::COUNTERCLOCKWISE;
+        });
+    if (found == arrangement.center_boundary_cycles.end()) {
+        throw ReachableArrangementTopologyError(
+            "reachable arrangement exposes no counterclockwise center boundary");
+    }
+    return *found;
+}
+
+std::tuple<double, double> arc_center_reporting_point(
+    const ReachableBoundaryCurve2& primitive)
+{
+    if (!primitive.curve.is_circular()) {
+        throw ReachableArrangementTopologyError(
+            "linear center-boundary primitive has no arc center");
+    }
+    const ReachKernelPoint center =
+        primitive.curve.supporting_circle().center();
+    return {
+        CGAL::to_double(center.x()),
+        CGAL::to_double(center.y()),
+    };
+}
+
+double arc_reporting_radius(
+    const ReachableBoundaryCurve2& primitive)
+{
+    if (!primitive.curve.is_circular()) {
+        throw ReachableArrangementTopologyError(
+            "linear center-boundary primitive has no arc radius");
+    }
+    return CGAL::to_double(
+        CGAL::sqrt(
+            primitive.curve.supporting_circle().squared_radius()));
 }
 
 } // namespace
@@ -57,6 +116,76 @@ NB_MODULE(_coverage_2, m)
         m,
         "ReachableMaterialPredicateGeometryError",
         reachable_error.ptr());
+
+    nb::class_<ReachableBoundaryCurve2>(
+        m,
+        "ReachableBoundaryPrimitive2")
+        .def_prop_ro(
+            "kind",
+            [](const ReachableBoundaryCurve2& primitive) {
+                return primitive.curve.is_linear()
+                    ? std::string("line")
+                    : std::string("arc");
+            })
+        .def_prop_ro(
+            "start_mm",
+            [](const ReachableBoundaryCurve2& primitive) {
+                return reporting_point(primitive.curve.source());
+            })
+        .def_prop_ro(
+            "end_mm",
+            [](const ReachableBoundaryCurve2& primitive) {
+                return reporting_point(primitive.curve.target());
+            })
+        .def_prop_ro(
+            "source_piece_records",
+            [](const ReachableBoundaryCurve2& primitive) {
+                return bytes_sequence(primitive.source_piece_ids);
+            })
+        .def_prop_ro(
+            "arc_center_mm",
+            &arc_center_reporting_point)
+        .def_prop_ro(
+            "arc_radius_mm",
+            &arc_reporting_radius)
+        .def_prop_ro(
+            "arc_counterclockwise",
+            [](const ReachableBoundaryCurve2& primitive) {
+                if (!primitive.curve.is_circular()) {
+                    throw ReachableArrangementTopologyError(
+                        "linear center-boundary primitive has no arc orientation");
+                }
+                return primitive.curve.orientation()
+                    == CGAL::COUNTERCLOCKWISE;
+            });
+
+    nb::class_<ReachableBoundaryCycle2>(
+        m,
+        "ReachableBoundaryCycle2")
+        .def_prop_ro(
+            "counterclockwise",
+            [](const ReachableBoundaryCycle2& cycle) {
+                return cycle.orientation == CGAL::COUNTERCLOCKWISE;
+            })
+        .def_ro("primitives", &ReachableBoundaryCycle2::curves);
+
+    m.def(
+        "build_center_boundary_cycle",
+        [](Eigen::Ref<const compas::RowMatrixXd> design_boundary,
+           const std::vector<compas::RowMatrixXd>& holes,
+           double tool_radius) {
+            ReachableArrangement2 arrangement =
+                build_reachable_arrangement(
+                    canonical_reach_input(
+                        design_boundary,
+                        holes,
+                        tool_radius));
+            return outer_center_boundary(arrangement);
+        },
+        "design_boundary"_a,
+        "holes"_a,
+        "tool_radius"_a);
+
     nb::exception<InvalidCoverageGeometryError>(
         m,
         "InvalidCoverageGeometryError",

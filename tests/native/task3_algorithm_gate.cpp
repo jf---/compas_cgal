@@ -798,6 +798,144 @@ void acute_corner_gate()
     require_reachable_audit(acute, 9);
 }
 
+void exact_center_boundary_transition_gate()
+{
+    compas::RowMatrixXd boundary(6, 3);
+    boundary << 0, 0, 0, 8, 0, 0, 8, 3, 0,
+        3, 3, 0, 3, 8, 0, 0, 8, 0;
+    const ReachableArrangement2 reachable = build_reachable_arrangement(
+        canonical_reach_input(boundary, {}, 1.0));
+    require(
+        reachable.center_boundary_cycles.size() == 1,
+        "concave fixture did not expose one exact center-boundary cycle");
+    const ReachableBoundaryCycle2& cycle =
+        reachable.center_boundary_cycles.front();
+    require(
+        cycle.orientation == CGAL::COUNTERCLOCKWISE,
+        "center outer boundary is not counterclockwise");
+
+    for (std::size_t index = 0; index < cycle.curves.size(); ++index) {
+        const ReachableBoundaryCurve2& line = cycle.curves[index];
+        const ReachableBoundaryCurve2& arc =
+            cycle.curves[(index + 1) % cycle.curves.size()];
+        if (!line.curve.is_linear() || !arc.curve.is_circular()) {
+            continue;
+        }
+        const ReachableBoundaryTransition2 transition =
+            reachable_ccw_transition(
+                cycle,
+                line.curve.source(),
+                arc.curve.target());
+        require(
+            transition.curves.size() == 2,
+            "line-to-arc transition did not retain two exact primitives");
+        require(
+            transition.curves[0].curve.is_linear()
+                && transition.curves[1].curve.is_circular(),
+            "line-to-arc transition changed exact primitive kinds");
+        require(
+            transition.curves.front().curve.source()
+                    == line.curve.source()
+                && transition.curves.back().curve.target()
+                    == arc.curve.target(),
+            "line-to-arc transition changed requested endpoints");
+        require(
+            transition.curves[0].curve.target()
+                == transition.curves[1].curve.source(),
+            "line-to-arc transition lost exact endpoint continuity");
+        require(
+            transition.curves[0].source_piece_ids
+                    == line.source_piece_ids
+                && transition.curves[1].source_piece_ids
+                    == arc.source_piece_ids,
+            "line-to-arc transition lost exact source provenance");
+        require(
+            transition.curves[1].curve.orientation()
+                == arc.curve.orientation(),
+            "center-boundary transition changed the source arc orientation");
+        return;
+    }
+    throw std::runtime_error(
+        "concave fixture exposed no adjacent exact line and vertex arc");
+}
+
+void exact_center_boundary_same_curve_wrap_gate()
+{
+    const ReachableBoundaryCycle2 cycle{
+        CGAL::COUNTERCLOCKWISE,
+        {
+            {
+                ReachXCurve(
+                    ReachKernelPoint(ReachFT(0), ReachFT(0)),
+                    ReachKernelPoint(ReachFT(4), ReachFT(0))),
+                {"bottom"},
+            },
+            {
+                ReachXCurve(
+                    ReachKernelPoint(ReachFT(4), ReachFT(0)),
+                    ReachKernelPoint(ReachFT(4), ReachFT(4))),
+                {"right"},
+            },
+            {
+                ReachXCurve(
+                    ReachKernelPoint(ReachFT(4), ReachFT(4)),
+                    ReachKernelPoint(ReachFT(0), ReachFT(4))),
+                {"top"},
+            },
+            {
+                ReachXCurve(
+                    ReachKernelPoint(ReachFT(0), ReachFT(4)),
+                    ReachKernelPoint(ReachFT(0), ReachFT(0))),
+                {"left"},
+            },
+        },
+    };
+    const ReachPoint start(ReachFT(3), ReachFT(0));
+    const ReachPoint end(ReachFT(1), ReachFT(0));
+    bool zero_progress_rejected = false;
+    try {
+        static_cast<void>(
+            reachable_ccw_transition(cycle, start, start));
+    }
+    catch (const ReachableArrangementTopologyError&) {
+        zero_progress_rejected = true;
+    }
+    require(
+        zero_progress_rejected,
+        "zero-progress center-boundary transition did not fail named");
+    const ReachableBoundaryTransition2 forward =
+        reachable_ccw_transition(cycle, end, start);
+    require(
+        forward.curves.size() == 1
+            && forward.curves.front().curve.source() == end
+            && forward.curves.front().curve.target() == start,
+        "same-curve forward transition did not remain on its source curve");
+    const ReachableBoundaryTransition2 transition =
+        reachable_ccw_transition(cycle, start, end);
+
+    require(
+        transition.curves.size() == 5,
+        "same-curve reverse-order transition did not wrap around the cycle");
+    require(
+        transition.curves.front().curve.source() == start
+            && transition.curves.back().curve.target() == end,
+        "same-curve wrap changed requested endpoints");
+    require(
+        transition.curves.front().source_piece_ids
+                == std::vector<std::string>{"bottom"}
+            && transition.curves.back().source_piece_ids
+                == std::vector<std::string>{"bottom"},
+        "same-curve wrap lost repeated source lineage");
+    for (std::size_t index = 1;
+         index < transition.curves.size();
+         ++index) {
+        require(
+            transition.curves[index - 1].curve.target()
+                == transition.curves[index].curve.source(),
+            "same-curve wrap lost exact endpoint continuity");
+    }
+}
+
 void island_gate()
 {
     compas::RowMatrixXd boundary(4, 3);
@@ -1064,6 +1202,8 @@ int main()
     coverage_atomic_failure_gate();
     canonical_input_invariance_gate();
     acute_corner_gate();
+    exact_center_boundary_transition_gate();
+    exact_center_boundary_same_curve_wrap_gate();
     island_gate();
     overlap_label_gate();
     identical_boundary_parity_gate();

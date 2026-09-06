@@ -665,7 +665,12 @@ ReachXCurve directed_halfedge_curve(HalfedgeHandle2 halfedge)
     return curve;
 }
 
-ReachPolygonWithHoles extract_center_polygon(
+struct ExtractedCenterBoundary2 {
+    ReachPolygonWithHoles polygon;
+    std::vector<ReachableBoundaryCycle2> cycles;
+};
+
+ExtractedCenterBoundary2 extract_center_boundary(
     const DenseArrangementIndex2& dense,
     ReachableDomainBuildAudit2& audit)
 {
@@ -674,6 +679,7 @@ ReachPolygonWithHoles extract_center_polygon(
         false);
     std::vector<ReachPolygon> outer_cycles;
     std::vector<ReachPolygon> hole_cycles;
+    std::vector<ReachableBoundaryCycle2> boundary_cycles;
     for (std::size_t halfedge_slot_value = 0;
          halfedge_slot_value < dense.halfedges.size();
          ++halfedge_slot_value) {
@@ -688,6 +694,7 @@ ReachPolygonWithHoles extract_center_polygon(
             continue;
         }
         ReachPolygon cycle;
+        std::vector<ReachableBoundaryCurve2> boundary_curves;
         const std::size_t first = halfedge_slot_value;
         std::size_t current = first;
         for (std::size_t step = 0;
@@ -705,8 +712,13 @@ ReachPolygonWithHoles extract_center_polygon(
                 throw ReachableArrangementTopologyError(
                     "selected boundary edge has no propagated source provenance");
             }
-            cycle.push_back(
-                directed_halfedge_curve(current_halfedge));
+            ReachXCurve curve =
+                directed_halfedge_curve(current_halfedge);
+            cycle.push_back(curve);
+            boundary_curves.push_back({
+                std::move(curve),
+                current_halfedge->curve().data().source_piece_ids,
+            });
             current = next_selected_boundary(
                 dense,
                 current,
@@ -730,6 +742,10 @@ ReachPolygonWithHoles extract_center_polygon(
             throw ReachableArrangementTopologyError(
                 "selected boundary cycle has zero exact area");
         }
+        boundary_cycles.push_back({
+            orientation,
+            std::move(boundary_curves),
+        });
     }
     if (outer_cycles.size() != 1) {
         throw ReachableArrangementTopologyError(
@@ -746,10 +762,132 @@ ReachPolygonWithHoles extract_center_polygon(
         throw ReachableArrangementTopologyError(
             "selected center polygon with holes is invalid");
     }
-    return center;
+    return {
+        std::move(center),
+        std::move(boundary_cycles),
+    };
 }
 
 } // namespace
+
+ReachableBoundaryTransition2 reachable_ccw_transition(
+    const ReachableBoundaryCycle2& cycle,
+    const ReachPoint& start,
+    const ReachPoint& end)
+{
+    if (cycle.orientation != CGAL::COUNTERCLOCKWISE
+        || cycle.curves.empty()) {
+        throw ReachableArrangementTopologyError(
+            "CCW transition requires one nonempty counterclockwise boundary cycle");
+    }
+    const ReachTraits traits;
+    const auto equal = traits.equal_2_object();
+    if (equal(start, end)) {
+        throw ReachableArrangementTopologyError(
+            "CCW transition endpoints must make positive boundary progress");
+    }
+    const auto lies_on = [&](
+                             const ReachPoint& point,
+                             const ReachableBoundaryCurve2& item) {
+        return item.curve.is_in_x_range(point)
+            && traits.compare_y_at_x_2_object()(
+                   point,
+                   item.curve)
+                == CGAL::EQUAL;
+    };
+    const auto locate = [&](const ReachPoint& point, bool outgoing) {
+        std::optional<std::size_t> interior;
+        std::optional<std::size_t> endpoint;
+        for (std::size_t index = 0;
+             index < cycle.curves.size();
+             ++index) {
+            const ReachXCurve& curve = cycle.curves[index].curve;
+            if (!lies_on(point, cycle.curves[index])) {
+                continue;
+            }
+            if ((outgoing && equal(point, curve.source()))
+                || (!outgoing && equal(point, curve.target()))) {
+                endpoint = index;
+            }
+            else if (!equal(point, curve.source())
+                && !equal(point, curve.target())) {
+                if (interior.has_value()) {
+                    throw ReachableArrangementTopologyError(
+                        "transition point lies on multiple boundary-curve interiors");
+                }
+                interior = index;
+            }
+        }
+        if (endpoint.has_value()) {
+            return *endpoint;
+        }
+        if (interior.has_value()) {
+            return *interior;
+        }
+        throw ReachableArrangementTopologyError(
+            "transition point does not lie on its exact boundary cycle");
+    };
+    const std::size_t start_index = locate(start, true);
+    const std::size_t end_index = locate(end, false);
+    const auto follows_on_curve = [&](const ReachXCurve& curve) {
+        const CGAL::Comparison_result direction =
+            traits.is_vertical_2_object()(curve)
+            ? traits.compare_xy_2_object()(
+                  curve.source(),
+                  curve.target())
+            : traits.compare_x_2_object()(
+                  curve.source(),
+                  curve.target());
+        const CGAL::Comparison_result order =
+            traits.is_vertical_2_object()(curve)
+            ? traits.compare_xy_2_object()(start, end)
+            : traits.compare_x_2_object()(start, end);
+        return order == direction;
+    };
+    const bool wraps_same_curve =
+        start_index == end_index
+        && !follows_on_curve(cycle.curves[start_index].curve);
+    const auto trimmed = [&](const ReachableBoundaryCurve2& item,
+                             const ReachPoint& source,
+                             const ReachPoint& target) {
+        ReachXCurve curve = item.curve;
+        if (!equal(source, curve.source())
+            || !equal(target, curve.target())) {
+            curve = traits.trim_2_object()(
+                curve,
+                source,
+                target);
+        }
+        return ReachableBoundaryCurve2{
+            std::move(curve),
+            item.source_piece_ids,
+        };
+    };
+
+    std::vector<ReachableBoundaryCurve2> curves;
+    std::size_t index = start_index;
+    for (std::size_t step = 0;
+         step <= cycle.curves.size();
+         ++step) {
+        const ReachableBoundaryCurve2& item = cycle.curves[index];
+        const bool finishes =
+            index == end_index
+            && (!wraps_same_curve || step != 0);
+        const ReachPoint& source =
+            step == 0 ? start : item.curve.source();
+        const ReachPoint& target =
+            finishes ? end : item.curve.target();
+        if (!equal(source, target)) {
+            curves.push_back(trimmed(item, source, target));
+        }
+        if (finishes) {
+            return {std::move(curves)};
+        }
+        index = (index + 1) % cycle.curves.size();
+    }
+    throw ReachableArrangementTopologyError(
+        "CCW transition did not terminate on its exact boundary cycle");
+}
 
 ReachPolygonWithHoles reachable_design_polygon(
     const CanonicalReachInput2& input)
@@ -800,6 +938,7 @@ ReachableArrangement2 build_reachable_arrangement(
         {},
         ReachPolygonWithHoles{},
         ReachPolygonWithHoles{},
+        {},
         {},
     };
     result.audit.input_vertex_count = result.input.input_vertex_count_;
@@ -865,8 +1004,10 @@ ReachableArrangement2 build_reachable_arrangement(
         throw PocketNotMachinableError(
             "Phase 1 requires one connected center domain");
     }
-    result.center_polygon =
-        extract_center_polygon(dense, result.audit);
+    ExtractedCenterBoundary2 center =
+        extract_center_boundary(dense, result.audit);
+    result.center_polygon = std::move(center.polygon);
+    result.center_boundary_cycles = std::move(center.cycles);
     ++result.audit.center_extractions;
     return result;
 }
