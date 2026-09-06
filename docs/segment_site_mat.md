@@ -1331,6 +1331,17 @@ as a repair while the source circles themselves fail containment.
 
 ![Complete Figure 5 motion and remaining engagement failures](assets/images/held_figure5_toolpath_current.png)
 
+### Approved reproduction and performance sequence
+
+The active [reproduction plan](superpowers/plans/2026-09-05-held-paper-figure-reproduction.md)
+now schedules whole-paper drafts (Task 8), performance tracking over their
+runnable workloads (Task 7), then outstanding strict Figure 5/6 acceptance.
+Reuse the completed four-pocket reference corpus, Figure 7 reference panels,
+Figure 6 curves/renderers, and existing qualification consumer. Preparing these
+inputs again is not a new milestone. The gallery must distinguish computed
+panels from evidenced blockers; performance results must expose missing
+algorithm/case combinations rather than silently excluding them.
+
 ### Corner-aware engagement refinement
 
 `pixi run held-figure5-toolpath-progress --refine` adds an isolated polygon-path
