@@ -25,6 +25,7 @@ from benchmarks.held_reference_cases import load_held_reference_case
 from benchmarks.held_reference_figures import figure7_inward_offset
 from benchmarks.held_standard_placement import StandardPlacementFragmentationError
 from benchmarks.held_standard_placement import maximum_predecessor_engagement
+from benchmarks.tools.held_stock_plot import render_circle_stock_prefix
 from compas_cgal import _coverage_2
 from compas_cgal.adaptive.motion import EngagementCap
 from compas_cgal.adaptive.units import Millimetre
@@ -155,7 +156,10 @@ def _containment_report(circles: tuple[Figure5CounterclockwiseCircle, ...], boun
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--refine", action="store_true", help="Repair corner circles and subdivide over-cap gaps; report remaining containment failures.")
+    parser.add_argument("--stock-prefix", type=int, help="Also render native circle-only stock after this many emitted circles.")
     args = parser.parse_args()
+    if args.stock_prefix is not None and args.stock_prefix <= 0:
+        parser.error("Stock prefix must be positive.")
     case = load_held_reference_case("figure5")
     guide = build_figure5_raw_guide(case)
     components = figure7_inward_offset(case).components
@@ -174,6 +178,10 @@ def main() -> None:
         title = "Figure 5 · corner-aware engagement refinement"
         scope = f"Publisher-start polygon proposal · {rejected:,} exact containment rejections · max reported protrusion {float(excess):.2g} mm · not machining-qualified."
         print(scope)
+    if args.stock_prefix is not None:
+        if args.stock_prefix > len(circles):
+            parser.error("Stock prefix exceeds emitted circle count.")
+        render_circle_stock_prefix(case, circles[: args.stock_prefix], Path("docs/assets/images") / f"held_figure5_circle_stock_{args.stock_prefix}.png")
     render_path(
         case,
         circles,

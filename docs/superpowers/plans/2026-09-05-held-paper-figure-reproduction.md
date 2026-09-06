@@ -324,6 +324,16 @@ establish Held-level performance by itself.
 
 **Active step.** Complete breadth of draft coverage before Task 7 optimization.
 
+**Figure 5(c) stock consumer checkpoint (September 6):** native circle-stock
+replay retains earlier cuts and uncut centre islands, with radii formed in
+CGAL. Seven native/replay contracts pass, including a pointwise engagement
+decision that distinguishes full history from predecessor-only stock. The
+256-circle prefix PNG is generated and inspected; reproduce with
+`held-figure5-toolpath-progress --refine --stock-prefix 256`. This is an
+intermediate circle-only stock view. Entry/connector clearing and the
+contour-aware maximum-over-candidate-circle placement query remain open;
+Figure 5(c) is not marked reproduced.
+
 **Monstera motion checkpoint (September 6):** qualification reaches 6,747
 initial circles; boundary-order selection retains 2,696 sources. A demonstrated
 concave-corner contact jump blocks refinement at 111.590239 degrees despite

@@ -259,6 +259,8 @@ NB_MODULE(_stock_2, m)
         .def("subtract_disk", &Stock2::subtract_disk, "cx"_a, "cy"_a, "radius"_a)
         .def("subtract_annulus", &Stock2::subtract_annulus,
              "cx"_a, "cy"_a, "inner_radius"_a, "outer_radius"_a)
+        .def("subtract_circle_sweep", &Stock2::subtract_circle_sweep,
+             "cx"_a, "cy"_a, "guide_radius"_a, "tool_radius"_a)
         .def("subtract_disk_local", &Stock2::subtract_disk_local,
              "cx"_a, "cy"_a, "radius"_a)
         .def("subtract_annulus_local", &Stock2::subtract_annulus_local,

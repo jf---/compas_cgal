@@ -1342,6 +1342,42 @@ inputs again is not a new milestone. The gallery must distinguish computed
 panels from evidenced blockers; performance results must expose missing
 algorithm/case combinations rather than silently excluding them.
 
+### Figure 5 accumulated circle-stock replay
+
+The Figure 5(c) work now has an accumulated native stock consumer:
+`replay_circle_stock` subtracts each supplied machining circle's full swept
+annulus from the reconstructed polygon. The new native
+`Stock2.subtract_circle_sweep` accepts centre, guide radius and tool radius
+separately and reuses the existing exact annulus construction. CGAL forms
+`rho + r` and `max(0, rho - r)` after injection. Python does not round those
+derived radii or replace annuli with filled disks.
+
+Four native contracts cover retained central material, the disk case, invalid
+inputs without mutation, and excess removal caused by a rounded radius sum.
+Three replay contracts cover empty stock history, earlier-than-predecessor
+cuts, and the absence of invented connector or centre clearing. The earlier-cut
+witness also changes the native pointwise engagement-cap decision: a region
+clear in accumulated history remains engaged in predecessor-only stock.
+These seven focused contracts pass, as do strict typing and Ruff.
+
+![Figure 5 circle-only stock after 256 machining circles](assets/images/held_figure5_circle_stock_256.png)
+
+The inspected PNG replays the first 256 circles of the retained 2,013-circle
+Figure 5 draft. It displays native stock membership at 0.25 mm pitch; the stock
+itself remains a circle-segment region, not a raster model. Reproduce via:
+
+```bash
+pixi run held-figure5-toolpath-progress --refine --stock-prefix 256
+```
+
+This is circle-only history: entry clearing and connector sweeps are absent.
+It neither implements the paper's filled-disk contour approximation nor
+computes maximum engagement over a candidate circle. It therefore supplies
+an intermediate consumer for Figure 5(c), not a completed contour-aware panel
+or qualified machining result. The next placement step still needs to query
+the accumulated contour when choosing a successor; pointwise native engagement
+alone does not supply that maximum-over-motion contract.
+
 ### Figure 8 standard-model draft expansion
 
 #### Boundary-order spacing experiment
