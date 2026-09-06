@@ -1294,6 +1294,25 @@ not Python owner equality, compare those fresh reconstructions.
     equal-cap oriented-neck prefixes deliberately end with
     `ReplayTraversalError` while untouched MAT edges remain nonterminal.
 
+## Figure 5 toolpath repair
+
+The immediate milestone is a complete toolpath on the existing polygon input.
+Original-arc reconstruction is deferred. The current hypothesis generator
+places circles independently in lanes and then orders the selected circles
+again for emission; its stored predecessor checks therefore do not establish
+engagement limits on the emitted path. The replacement must place, check, and
+render one execution order without forced over-cap successors or lane resets.
+
+The standard predecessor model also incorrectly returned zero engagement for
+every concentric successor. It now distinguishes already cleared circles from
+radius growth: with tool radius 1 mm, machining radii 1 → 1.5 mm produce
+75.52 degrees by Equation 7, while 1 → 4 mm produces 180 degrees because the
+cutter disk no longer overlaps the preceding swept disk. Equal and shrinking
+circles retain zero engagement under this model. Five new concentric cases and
+the existing placement tests pass (14 tests); strict typing and Ruff pass.
+This repairs the approximate predecessor model, not the native certification
+pipeline, and does not establish complete toolpath acceptance.
+
 ## Figure 5 exact connector checkpoint
 
 Python consumers can now retain native world-XY millimetre contacts through
@@ -1324,8 +1343,10 @@ joins share their stored endpoint. The largest radial difference is approximatel
 `8.5405642109413503e-16 mm`. The reconstruction accepts roundoff-bounded endpoint
 consistency, but exact circular-arc input needs a declared construction policy.
 Preserving shared endpoints while constructing consistent exact supports would
-require renewed reconstruction/projection bounds. That conversion is pending;
-neither a tolerance nor the polygon MAT closes the analytic input criterion.
+require renewed reconstruction/projection bounds. That refinement is deferred
+until a continuous toolpath works on the existing input; it is not the next
+implementation workstream. Neither a tolerance nor the polygon MAT closes the
+full analytic input criterion.
 
 ## Relation to Held and Pfeiffer (2025)
 
