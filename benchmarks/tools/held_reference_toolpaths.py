@@ -6,6 +6,7 @@ import argparse
 import math
 from pathlib import Path
 
+from benchmarks.held_boundary_order_spacing import refine_boundary_ordered_path
 from benchmarks.held_figure5_boundary_path import _side_lengths
 from benchmarks.held_figure5_boundary_path import _transition
 from benchmarks.held_figure5_engagement_refinement import refine_figure5_engagement
@@ -23,7 +24,10 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--case", choices=CANONICAL_CASE_NAMES, required=True)
     parser.add_argument("--stage", choices=("initial", "refined"), default="refined")
+    parser.add_argument("--spacing", choices=("lane", "boundary"), default="lane", help="Boundary is an experimental reselection in emitted order, with source-run retention.")
     args = parser.parse_args()
+    if args.spacing == "boundary" and args.stage != "refined":
+        parser.error("Boundary spacing requires the refined stage so no unresolved gaps are emitted.")
     case = load_held_reference_case(args.case)
     guide = build_held_reference_raw_guide(case)
     print(f"{case.name}: {len(guide.runs)} guide runs, {guide.station_count} stations", flush=True)
@@ -32,18 +36,24 @@ def main() -> None:
     circles = result.path.circles
     print(f"{case.name}: {len(circles)} initial circles", flush=True)
     if args.stage == "refined":
-        refined = refine_figure5_engagement(circles, components[0], case.tool_radius, EngagementCap.build(math.radians(float(case.tea_cap))))
+        cap = EngagementCap.build(math.radians(float(case.tea_cap)))
+        if args.spacing == "boundary":
+            selected, refined = refine_boundary_ordered_path(result, components[0], case.tool_radius, cap)
+            print(f"{case.name}: {len(selected)} boundary-order sources, {len(refined.circles)} refined circles", flush=True)
+        else:
+            refined = refine_figure5_engagement(circles, components[0], case.tool_radius, cap)
+            render_distribution(case, result, refined, Path("docs/assets/images") / f"held_{case.name}_circle_distribution.png")
         circles = refined.circles
-        render_distribution(case, result, refined, Path("docs/assets/images") / f"held_{case.name}_circle_distribution.png")
     lengths = _side_lengths(components[0])
     transitions = tuple(_transition(components[0], lengths, a, b) for a, b in zip(circles, circles[1:]))
-    output = Path("docs/assets/images") / f"held_{case.name}_standard_{args.stage}.png"
+    suffix = f"{args.stage}_boundary" if args.spacing == "boundary" else args.stage
+    output = Path("docs/assets/images") / f"held_{case.name}_standard_{suffix}.png"
     render_path(
         case,
         circles,
         transitions,
         output,
-        title=f"{case.name.replace('_', ' ')} · standard-model {args.stage} draft",
+        title=f"{case.name.replace('_', ' ')} · standard-model {args.stage} draft · {args.spacing} spacing",
         scope="Publisher-start polygon guide · standard predecessor model · contour-aware reproduction and containment unqualified.",
     )
     print(output, flush=True)

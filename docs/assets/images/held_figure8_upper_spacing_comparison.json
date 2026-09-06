@@ -1,0 +1,35 @@
+{
+  "case": "figure8_upper",
+  "baseline": "lane spacing",
+  "candidate": "boundary-order spacing",
+  "scope": "Standard predecessor model; retained source-run provenance; no continuous coverage or contour-aware qualification",
+  "source_runs": 275,
+  "measurements": {
+    "Lane spacing": {
+      "circles": 4183,
+      "connectors": 4182,
+      "circle_length_mm": 43954.79234158543,
+      "connector_length_mm": 232.0880154154104,
+      "total_length_mm": 44186.88035700084,
+      "over_cap": 0,
+      "maximum_engagement_degrees": 79.99339561007837
+    },
+    "Boundary-order spacing": {
+      "circles": 1684,
+      "connectors": 1683,
+      "circle_length_mm": 18004.74525862647,
+      "connector_length_mm": 232.0880154154104,
+      "total_length_mm": 18236.83327404188,
+      "over_cap": 0,
+      "maximum_engagement_degrees": 79.99289553628019
+    }
+  },
+  "sampled_coverage": {
+    "grid_pitch_mm": 0.25,
+    "grid_points": 53436,
+    "baseline_swept_points": 29176,
+    "lost_points": 0,
+    "gained_points": 0,
+    "scope": "Binary64 annulus and connector-capsule grid samples; not continuous coverage certification"
+  }
+}

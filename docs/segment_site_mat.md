@@ -1344,6 +1344,51 @@ algorithm/case combinations rather than silently excluding them.
 
 ### Figure 8 standard-model draft expansion
 
+#### Boundary-order spacing experiment
+
+The additive `--spacing boundary` option selects from the lane draft in its
+final emitted order, carrying one predecessor across source families. It first
+repairs source circle normals/radii, retains the start and terminal circles,
+and retains the last available representative of each unseen source run.
+Linear lookahead stops a jump when it exceeds the predecessor cap or leaves
+the overlap model's domain. Bisection is inappropriate across these families
+because engagement need not be monotone. Bounded refinement then resolves
+every retained gap; an unresolved gap still raises an error. The original
+`--spacing lane` algorithm remains the default.
+
+![Upper pocket before and after boundary-order spacing](assets/images/held_figure8_upper_spacing_comparison.png)
+
+| Upper-pocket measurement | Lane draft | Boundary-order draft |
+| --- | ---: | ---: |
+| Circles | 4,183 | 1,684 |
+| Connectors | 4,182 | 1,683 |
+| Circle circumference / mm | 43,954.792 | 18,004.745 |
+| Connector length / mm | 232.088 | 232.088 |
+| Total emitted length / mm | 44,186.880 | 18,236.833 |
+| Predecessor pairs over 80 degrees | 0 | 0 |
+| Retained source runs | 275 | 275 |
+
+This is a 58.7% reduction in emitted path length relative to our lane draft,
+not a runtime speedup or a comparison against Held's implementation. A
+reporting-only binary64 grid at 0.25 mm pitch tests full-circle cutter annuli
+and connector capsules. Of 53,436 grid points, the baseline sweeps 29,176;
+the candidate loses zero and gains zero. This finite sample does not prove
+continuous coverage, containment, or contour-aware engagement. The comparison
+JSON beside the PNG records the measurements. Both plot inputs share the
+retained initial draft; no timing claim is made.
+
+Generate the experimental motion with
+`pixi run held-reference-toolpaths --case figure8_upper --spacing boundary`.
+The fresh CLI run reproduced 1,005 selected sources and 1,684 final circles;
+its complete motion plot was inspected. The option requires the refined stage.
+Focused contracts cover thinning dense
+stations, retaining disconnected source families, preserving endpoints, and
+resolving wide gaps before final motion; four tests pass. Ruff and strict
+typing pass. Monstera contact qualification and all contour-aware reproduction
+requirements remain open.
+
+#### Distribution baseline
+
 The upper-pocket distribution diagnostic separates the 3,114 repaired source
 circles from 1,069 inserted circles. Its initial placement uses 480 lanes for
 275 source runs. Final predecessor engagement has a median of 56.918 degrees;
