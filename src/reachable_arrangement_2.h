@@ -52,12 +52,27 @@ enum class ReachPrimitiveKind2 {
 using ReachPrimitiveKinds2 =
     std::map<std::string, ReachPrimitiveKind2>;
 
+struct ReachableBoundaryCurve2 {
+    ReachXCurve curve;
+    std::vector<std::string> source_piece_ids;
+};
+
+struct ReachableBoundaryCycle2 {
+    CGAL::Orientation orientation;
+    std::vector<ReachableBoundaryCurve2> curves;
+};
+
+struct ReachableBoundaryTransition2 {
+    std::vector<ReachableBoundaryCurve2> curves;
+};
+
 struct ReachableArrangement2 {
     ReachArrangement2 arrangement;
     CanonicalReachInput2 input;
     std::vector<std::string> source_records;
     ReachPolygonWithHoles design_polygon;
     ReachPolygonWithHoles center_polygon;
+    std::vector<ReachableBoundaryCycle2> center_boundary_cycles;
     ReachableDomainBuildAudit2 audit;
 };
 
@@ -70,3 +85,8 @@ ReachPolygonWithHoles reachable_design_polygon(
 void classify_faces_by_primitive_parity(
     ReachArrangement2& arrangement,
     const ReachPrimitiveKinds2& primitive_kinds);
+
+ReachableBoundaryTransition2 reachable_ccw_transition(
+    const ReachableBoundaryCycle2& cycle,
+    const ReachPoint& start,
+    const ReachPoint& end);
