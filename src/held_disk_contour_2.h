@@ -18,6 +18,10 @@ class NoExposedPredecessorArcError : public std::runtime_error {
 public:
     using std::runtime_error::runtime_error;
 };
+class BrokenHeldContourBoundaryError : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
 
 // Held-Pfeiffer Section 3.1's union of filled outer disks, in world XY mm.
 // This is a placement model, distinct from Stock2's physical annular sweeps.
@@ -31,6 +35,12 @@ public:
     // covered. The flag records whether b moved. Keep this point native for any
     // subsequent deciding geometry; the Python binding reports coordinates only.
     std::pair<GpsPoint, bool> contact_toward(const XY& candidate_center) const;
+
+    // Whole-orbit upper bound on total uncut leading-semicircle engagement.
+    // Return exact cosine of that bound and the exact squared-chord cap decision.
+    // This uses every contour boundary, not the ordered-MATHSM CW shortcut.
+    std::pair<GpsPoint::CoordNT, bool> engagement_bound(
+        const XY& candidate_center, double guide_radius, double cap_chord_ratio) const;
 
 private:
     HeldDiskContour2(const EPoint& center, const Epeck::FT& guide_radius,

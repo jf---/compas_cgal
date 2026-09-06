@@ -1,5 +1,30 @@
 # Exact Segment-Site Medial Axis
 
+**September 6 coverage correction:** every generated Held machining workload
+requires material-coverage qualification, independently of engagement and path
+length. The [shared motion coverage gate](held_motion_coverage.md) now connects
+the Figure 5/8 consumers to native exact sweeps and records the all-case
+acceptance matrix. Checker regression tests pass; full-corpus acceptance and
+shared generator repairs remain open. Monstera has two sampled residual
+candidates shared by its standard and contour-bound drafts.
+
+**Figure 5 coverage-preserving deletion:** the repaired dense source has 1,619
+circles; native local deletion retains 1,558, compared with the earlier 468-circle
+engagement-only draft. Analytic motion length increases from 13,086.7 to
+23,822.7 mm (+82.0%); maximum reported engagement bound is 79.992°. Native
+generation took 68.74 s. This preserves source swept material and actual connector
+waypoints; it does not prove source completeness, containment, or entry safety.
+
+![Figure 5 engagement-only and coverage-preserving paths](assets/images/held_figure5_coverage_preserving.png)
+
+[Measured comparison](assets/images/held_figure5_coverage_preserving.json).
+Conservative stock replay remains nonempty: the quarter-tool-radius inspection
+grid retains one residual point at `(47.25024912893663, 45.75)` mm. This is a
+diagnostic residual candidate, not yet a proved physical gap. Complete-coverage
+acceptance remains open. Actual path and residual comparisons must be shown at
+generation milestones before prolonged validation, including labeled partial
+and failed outcomes.
+
 The exact segment-site medial axis (MAT) is the geometric spine of the
 exact-certified adaptive-clearing pipeline. It is not a display skeleton and
 it is not a sampled approximation. Its native certificate must preserve the

@@ -5,6 +5,8 @@ from typing import NoReturn
 import numpy as np
 import numpy.typing as npt
 
+from compas_cgal._circle_geometry_2 import BoundaryNormalCircleProposal2
+
 Float64Array = npt.NDArray[np.float64]
 
 class ReachableDomainConstructionError(RuntimeError): ...
@@ -17,7 +19,7 @@ class InvalidCoverageGeometryError(RuntimeError): ...
 class CoverageTransitionError(RuntimeError): ...
 
 class WorldXYBoundaryPointMm:
-    """Native exact world-XY millimetre contact; obtained from primitives only."""
+    """Native exact world-XY millimetre contact; obtained from primitives or native circle proposals."""
 
     def __new__(cls, _native_only: NoReturn) -> WorldXYBoundaryPointMm: ...
     def __eq__(self, other: object) -> bool: ...
@@ -60,12 +62,31 @@ def build_center_boundary_cycle(
 ) -> ReachableBoundaryCycle2: ...
 
 class ExactRegion2:
+    @staticmethod
+    def from_polygon(boundary: Float64Array, holes: Sequence[Float64Array]) -> ExactRegion2:
+        """Build the exact design region directly, without cutter offsets."""
+        ...
     def clone(self) -> ExactRegion2: ...
     def contains(self, x: float, y: float) -> bool: ...
     def is_empty(self) -> bool: ...
     def component_count(self) -> int: ...
     def is_subset_of(self, other: ExactRegion2) -> bool: ...
     def exactly_equals(self, other: ExactRegion2) -> bool: ...
+
+def remaining_material(
+    target: ExactRegion2,
+    circles: Float64Array,
+    segments: Float64Array,
+    disks: Float64Array,
+    tool_radius: float,
+) -> ExactRegion2:
+    """Exact final residual, without accumulated sweeps or chronological history.
+
+    World-XY millimetres: circles Nx3=(cx,cy,guide radius), segments
+    Nx4=(x0,y0,x1,y1), disks Nx2=(cx,cy). Segment endpoints must differ.
+    Every shape/value is validated before geometry, including unused tails.
+    """
+    ...
 
 class ReachableDomainCertificate2:
     @property
@@ -159,6 +180,13 @@ class CoverageSweepRecord2:
     ) -> bool: ...
 
 class Coverage2:
+    @staticmethod
+    def from_uncut(target: ExactRegion2) -> Coverage2:
+        """Replay from an uncut design or reachable-material target."""
+        ...
+    def add_disk_sweep(self, center_x: float, center_y: float, tool_radius: float) -> None:
+        """Subtract an actual stationary cutter disk or plunge footprint."""
+        ...
     def __init__(
         self,
         reachable_material: ExactRegion2,
@@ -194,3 +222,7 @@ class Coverage2:
     def exact_residual_relation(self) -> bool: ...
     @property
     def strategy_version(self) -> bytes: ...
+
+def boundary_circle_contact(proposal: BoundaryNormalCircleProposal2) -> WorldXYBoundaryPointMm:
+    """Preserve the exact native proposal contact for boundary transitions."""
+    ...

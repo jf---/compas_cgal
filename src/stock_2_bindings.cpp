@@ -13,6 +13,7 @@
 
 #include <nanobind/eigen/dense.h>
 #include <nanobind/nanobind.h>
+#include <nanobind/stl/array.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/tuple.h>
 #include <nanobind/stl/vector.h>
@@ -67,6 +68,7 @@ NB_MODULE(_stock_2, m)
     // same way as every other malformed-input rejection in this module.
     nb::exception<InvalidAnnulusRadiiError>(m, "InvalidAnnulusRadiiError", PyExc_ValueError);
     nb::exception<NonFiniteAnnulusInputError>(m, "NonFiniteAnnulusInputError", PyExc_ValueError);
+    nb::exception<InvalidCircleRemovalInputError>(m, "InvalidCircleRemovalInputError", PyExc_ValueError);
     nb::exception<NonFiniteCapsuleInputError>(m, "NonFiniteCapsuleInputError", PyExc_ValueError);
 
     // Not an argument fault: the quad capsule's exact half-width certificate did
@@ -179,6 +181,9 @@ NB_MODULE(_stock_2, m)
         .def("clone", &Stock2::clone)
         .def("is_subset_of", &Stock2::is_subset_of, "other"_a)
         .def("exactly_equals", &Stock2::exactly_equals, "other"_a)
+        .def("can_remove_circle", &Stock2::can_remove_circle,
+             "previous"_a, "current"_a, "next"_a,
+             "connector_samples"_a, "tool_radius"_a)
         .def("subtract_capsule", &Stock2::subtract_capsule,
              "x0"_a, "y0"_a, "x1"_a, "y1"_a, "radius"_a)
         .def("subtract_capsule_quad", &Stock2::subtract_capsule_quad,

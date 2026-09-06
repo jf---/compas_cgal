@@ -412,8 +412,9 @@ add_nanobind_module(_polylines src/polylines.cpp)
 add_nanobind_module(_toolpath src/toolpath.cpp)
 add_nanobind_module(
     _stock_2
-    "src/stock_2_bindings.cpp;src/held_disk_contour_2.cpp;src/held_disk_contour_2_bindings.cpp;src/engagement_2.cpp;src/engagement_2_bindings.cpp;src/audit_identity_bindings_2.cpp;src/audit_replay_bindings_2.cpp;src/audit_classification_2.cpp")
+    "src/stock_2_bindings.cpp;src/held_disk_contour_2.cpp;src/held_contour_clearance_2.cpp;src/held_disk_contour_2_bindings.cpp;src/engagement_2.cpp;src/engagement_2_bindings.cpp;src/audit_identity_bindings_2.cpp;src/audit_replay_bindings_2.cpp;src/audit_classification_2.cpp")
 target_link_libraries(_stock_2 PRIVATE continuous_tea_exact_core)
+target_sources(_stock_2 PRIVATE src/stock_circle_redundancy_2.cpp)
 add_nanobind_module(
     _continuous_tea_2
     "src/continuous_tea_2.cpp;src/continuous_tea_2/bind_partition_records.cpp"
@@ -426,7 +427,10 @@ target_compile_definitions(
         CGAL_CORE_USE_BOOST_BACKEND=1
 )
 add_nanobind_module(_circle_geometry_2 src/circle_geometry_2_bindings.cpp)
+target_sources(_circle_geometry_2 PRIVATE src/boundary_normal_circle_2.cpp)
+target_compile_definitions(_circle_geometry_2 PRIVATE CGAL_USE_CORE=1 CGAL_CORE_USE_BOOST_BACKEND=1)
 add_nanobind_module(_coverage_2 src/coverage_bindings_2.cpp)
+target_sources(_coverage_2 PRIVATE src/remaining_material_2.cpp)
 target_link_libraries(_coverage_2 PRIVATE coverage_exact_core)
 target_compile_definitions(_coverage_2 PRIVATE CGAL_USE_CORE=1)
 add_nanobind_module(
