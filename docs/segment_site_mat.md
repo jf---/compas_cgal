@@ -1344,6 +1344,26 @@ algorithm/case combinations rather than silently excluding them.
 
 ### Figure 8 standard-model draft expansion
 
+The upper-pocket distribution diagnostic separates the 3,114 repaired source
+circles from 1,069 inserted circles. Its initial placement uses 480 lanes for
+275 source runs. Final predecessor engagement has a median of 56.918 degrees;
+1,795 of 4,182 pairs (42.9%) fall below 40 degrees despite an 80-degree cap.
+The map exposes repeated radial groups around rounded parts of the boundary.
+These are measured spacing discrepancies, not proof that every low-engagement
+circle is redundant. Source-family coverage and newly joined adjacencies must
+survive any spacing change.
+
+![Upper pocket circle distribution and final predecessor engagement](assets/images/held_figure8_upper_circle_distribution.png)
+
+Reproduce with `pixi run held-reference-toolpaths --case figure8_upper`.
+Each refined corpus run now emits a distribution PNG and a strict-JSON sibling
+with counts, angle quantiles, and circle circumference in millimetres. Circle
+circumference excludes connectors and is not full path length. The recorded
+upper diagnostic reruns refinement from the retained initial draft; it is not
+a fresh timing measurement or a Held performance comparison. The renderer was
+executed on that full draft, its PNG visually inspected, and Ruff and strict
+typing passed. No geometry-selection behavior changed in this diagnostic.
+
 The prepared Figure 8 inputs now reach the existing guide, circle placement,
 engagement refinement, and complete-motion renderer through additive
 `build_held_reference_raw_guide` and `build_held_reference_path` entry points.
