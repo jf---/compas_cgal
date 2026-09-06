@@ -318,6 +318,18 @@ establish Held-level performance by itself.
 
 **Active step.** Complete breadth of draft coverage before Task 7 optimization.
 
+**Figure 8 distribution evidence (September 6):** the upper draft has 3,114
+initial circles across 480 placement lanes and 275 source runs. Refinement adds
+1,069 circles. In final order, 1,795 of 4,182 predecessor pairs use less than
+half the 80-degree cap; the median is 56.918 degrees. The generated distribution
+map separates repaired source circles from insertions and exposes repeated
+radial groups around the rounded boundary. This diagnoses a spacing discrepancy,
+not permission to discard source families. The next spacing experiment must
+carry the predecessor across family boundaries while preserving coverage and
+checking every new adjacency. No efficiency improvement is claimed yet.
+The corpus command now emits the distribution PNG and reporting JSON alongside
+each refined path. Monstera's contact qualification blocker remains open.
+
 **Figure 8 draft checkpoint (September 6):** the additive corpus command
 `pixi run held-reference-toolpaths --case CASE` now reuses prepared inputs.
 Upper and crossed-skis standard-model drafts emit respectively 4,183/2,958

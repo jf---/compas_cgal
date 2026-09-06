@@ -14,6 +14,7 @@ from benchmarks.held_figure5_raw_guide import build_held_reference_raw_guide
 from benchmarks.held_reference_cases import CANONICAL_CASE_NAMES
 from benchmarks.held_reference_cases import load_held_reference_case
 from benchmarks.held_reference_figures import figure7_inward_offset
+from benchmarks.tools.held_circle_distribution import render_distribution
 from benchmarks.tools.held_toolpath_progress import render_path
 from compas_cgal.adaptive.motion import EngagementCap
 
@@ -31,7 +32,9 @@ def main() -> None:
     circles = result.path.circles
     print(f"{case.name}: {len(circles)} initial circles", flush=True)
     if args.stage == "refined":
-        circles = refine_figure5_engagement(circles, components[0], case.tool_radius, EngagementCap.build(math.radians(float(case.tea_cap)))).circles
+        refined = refine_figure5_engagement(circles, components[0], case.tool_radius, EngagementCap.build(math.radians(float(case.tea_cap))))
+        circles = refined.circles
+        render_distribution(case, result, refined, Path("docs/assets/images") / f"held_{case.name}_circle_distribution.png")
     lengths = _side_lengths(components[0])
     transitions = tuple(_transition(components[0], lengths, a, b) for a, b in zip(circles, circles[1:]))
     output = Path("docs/assets/images") / f"held_{case.name}_standard_{args.stage}.png"
