@@ -1656,7 +1656,7 @@ Regenerate the four 2400-pixel-long-side PNGs from the local publisher PDF
 with:
 
 ```bash
-pixi run held-reference-figures -- path/to/held-pfeiffer-2025.pdf
+pixi run held-reference-figures -- docs/assets/papers/held-pfeiffer-2025.pdf
 ```
 
 Measured on axis-parallel pockets only; `center_domain()` is ~3,500× slower
@@ -5053,7 +5053,7 @@ Before accepting a MAT change, verify:
 The locked headers are normative for the backend contract. Draw helpers and
 streamed geometry are not substitutes for those APIs.
 
-[held-pfeiffer-2025]: https://doi.org/10.14733/cadaps.2025.731-747
+[held-pfeiffer-2025]: assets/papers/held-pfeiffer-2025.pdf
 [cimatron-company-2025]: https://www.cimatron.com/en/news/cimatron-unveils-reframed-brand-identity-setting-the-stage-for-its-next-era-of-mold-and-die-innovation
 [cimatron-hard-materials]: https://www.cimatron.com/en/handling-complex-geometry-materials
 [cimatron-israel-2011]: https://www.sec.gov/Archives/edgar/data/1008595/000117891312001221/zk1211362.htm
