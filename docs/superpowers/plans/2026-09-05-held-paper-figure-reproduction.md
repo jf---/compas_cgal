@@ -318,6 +318,16 @@ establish Held-level performance by itself.
 
 **Active step.** Complete breadth of draft coverage before Task 7 optimization.
 
+**Boundary-order spacing checkpoint (September 6):** additive experimental
+`held-reference-toolpaths --case figure8_upper --spacing boundary` carries one
+predecessor through emitted order and retains all 275 source runs. The upper
+draft falls from 4,183 to 1,684 circles and from 44,186.880 to 18,236.833 mm
+including connectors, with zero predecessor-cap violations. A 0.25 mm grid
+finds no sampled swept-coverage change; continuous coverage remains unproved.
+Four focused contracts, Ruff and strict typing pass. The original lane route
+remains default. This improves draft spacing, not Held parity or contour-aware
+semantics. Monstera contact qualification remains the missing Figure 8 draft.
+
 **Figure 8 distribution evidence (September 6):** the upper draft has 3,114
 initial circles across 480 placement lanes and 275 source runs. Refinement adds
 1,069 circles. In final order, 1,795 of 4,182 predecessor pairs use less than
@@ -326,7 +336,8 @@ map separates repaired source circles from insertions and exposes repeated
 radial groups around the rounded boundary. This diagnoses a spacing discrepancy,
 not permission to discard source families. The next spacing experiment must
 carry the predecessor across family boundaries while preserving coverage and
-checking every new adjacency. No efficiency improvement is claimed yet.
+checking every new adjacency. The subsequent checkpoint above records the
+first measured improvement against this baseline.
 The corpus command now emits the distribution PNG and reporting JSON alongside
 each refined path. Monstera's contact qualification blocker remains open.
 
