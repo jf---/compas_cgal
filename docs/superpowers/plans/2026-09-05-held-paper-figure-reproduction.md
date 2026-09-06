@@ -1,31 +1,30 @@
 # Held Paper Figure Reproduction Plan
 
-> **status: in progress** - The bounded visual-comparison study is committed,
-> but the completion audit found that it does not yet reproduce continuous
-> Figure 5 toolpaths or the Figure 6 three-algorithm comparison. Task 5 is active.
+> **status: in progress** - Task 8 whole-paper reproduction drafts is active.
+> Reuse the completed reference corpus and current Figure 5 draft. Task 7
+> performance tracking follows; full Task 5/6 acceptance remains open.
 
-**Goal:** Reproduce the visible Figure 5 toolpath structure and the Figure 6
-comparison protocol and axes, with direct comparisons to publisher evidence.
+**Goal:** Produce repository-generated reproduction drafts for every figure and
+panel in Held–Pfeiffer 2025, then measure and improve their generating workloads.
+Retain the stricter Figure 5/6 reproduction criteria below.
 
-**Active criterion:** for Task 5, independently traverse the reconstructed
-Figure 5 medial axis, place the standard 80-degree machining circles, and emit
-one continuous planar circle-and-offset-transition stream. Publisher evidence
-is comparison-only and may not choose identities, ordering, or geometry.
-Characterization beyond Figures 5 and 6, postprocessing, machine validation,
-and unrelated benchmark work do not advance this criterion.
+**Active criterion:** Task 8 produces an inspectable whole-paper draft gallery
+from the existing prepared inputs and generator seams. Every panel has a
+reproducible generated result or an explicit, evidenced blocker. Reference
+images and blocker entries never count as generated reproductions.
 
-**User-directed execution order (September 6): toolpath first.** Land and plot
-one publisher-independent continuous path on the existing Figure 5 input before
-improving original-arc fidelity. Reuse the current guide and placement machinery;
-carry the last circle across guide boundaries, reject forced over-cap moves,
-and join every emitted motion. A connector-only plot does not satisfy this
-milestone. Keep the input approximation explicit; do not promote this first
-working path into full analytic segment/arc acceptance.
+**Approved execution order (September 6):** Task 8 draft gallery → Task 7
+performance baseline and one measured optimization → outstanding Task 5/6
+acceptance. Appended task numbers preserve historical references. This replaces
+the earlier instruction to run Task 7 immediately after the Figure 5 checkpoint.
+Postprocessing and machine validation remain outside this reproduction plan.
 
-**Approved next step (September 6): Task 7 performance baseline.** With the
-engagement checkpoint established, instrument and visualize the current Figure 5
-generator before optimizing it. Task 7 runs next despite its appended numbering;
-the outstanding Task 5 and Task 6 acceptance criteria remain unchanged.
+**Preserved toolpath-first direction:** reuse the current guide and placement
+machinery, carry the predecessor across guide boundaries, reject forced
+successors, and render every emitted motion. Do not make original-arc fidelity
+or full exact-MAT ownership prerequisites for clearly labeled drafts. Those
+limitations remain failures against the stricter reproduction gates. Exact
+arithmetic belongs in CGAL; Python orchestrates and reports.
 
 **Implementation rule:** keep the current baseline generator intact. Add the paper-derived
 path beside it, prove the new path visually and at its geometry boundary, then
@@ -243,8 +242,14 @@ engagement, length, scale, pocket, tool, start, and traversal semantics.
 
 ## Task 7: Track Figure 5 performance with heatmaps
 
-**Scope:** the current repaired Figure 5 path at 80 degrees. Extend the existing
-benchmark and plotting flow. First establish where time and work accumulate;
+**Dependency:** Task 8 draft gallery and its explicit workload inventory.
+
+**Scope:** use the repaired Figure 5 path at 80 degrees as the first baseline,
+then apply the same accounting to every runnable toolpath workload exposed by
+Task 8: the three algorithm variants and prepared Figure 8 cases. Preserve
+missing variants as blocked workloads, not omitted or passing samples. Keep
+construction-diagram/rendering cost separate from planner cost. Extend the
+existing benchmark and plotting flow. First establish where time and work accumulate;
 then optimize one demonstrated cause and compare before/after. Exact geometric
 arithmetic belongs in CGAL; Python orchestrates measurement and visualization.
 
@@ -300,7 +305,94 @@ this gate before choosing an optimization.
   and smallest correction, implement and validate it, and show before/after
   timings, counts, heatmaps, and correctness results under the same protocol.
 
-**Completion gate:** the reproducible tracking command exposes the measured
-cause and the effect of one targeted optimization, with unchanged correctness
+**Completion gate:** the reproducible tracking command covers the runnable
+Task 8 planner workloads, reports blocked workloads explicitly, and exposes the
+measured cause and effect of one targeted optimization. Compare common cases
+under identical protocols; do not aggregate unlike pockets, algorithms, or caps
+into a speedup. Retain unchanged correctness
 requirements and explicit remaining failures. This does not close Task 5/6 or
 establish Held-level performance by itself.
+
+
+## Task 8: Whole-paper reproduction drafts from prepared inputs
+
+**Active step.** Complete breadth of draft coverage before Task 7 optimization.
+The prepared corpus is already delivered by
+[the reference-pocket plan](2026-08-31-held-pfeiffer-reference-pockets.md) and
+[its documentation](../../held_pfeiffer_reference_pockets.md). Do not repeat
+source extraction or geometry reconstruction unless a concrete missing input
+or invalid artifact is demonstrated.
+
+### Existing preparation to reuse
+
+- [x] Four committed pocket inputs: `figure5.json`, `figure8_upper.json`,
+  `figure8_crossed_skis.json`, and `figure8_monstera.json` under
+  `benchmarks/data/held_pfeiffer_2025/`. Each retains publisher primitives,
+  normalization, reconstructed boundary, and polygon projection.
+- [x] Four reference-overlay PNGs and Figure 7's three shape-evidence panels,
+  handled by `benchmarks/held_reference_figures.py` and
+  `pixi run held-reference-figures`.
+- [x] Figure 6 digitized publisher curves, same-axes/literal comparison plots,
+  and `pixi run held-figure6-same-axes`.
+- [x] Existing four-case generator qualification entry point,
+  `pixi run held-reference-qualify`; its recorded non-empty paths are baseline
+  evidence, not accepted Held reproductions. Reuse the entry point and inputs.
+- [x] Figure 5(a) ordered publisher-turn evidence and the current repaired
+  circle/connector draft, reproducible with
+  `pixi run held-figure5-toolpath-progress --refine`.
+
+### Figure inventory and draft deliverables
+
+Inventory checked against the
+[publisher paper](https://doi.org/10.14733/cadaps.2025.731-747).
+The rows specify required output, not claims that a generator already exists.
+
+| Figure | Panels/content required | Starting point |
+| --- | --- | --- |
+| 1 | a–c: cutting width and engagement for linear/circular motion | Identify reusable construction code; preparation not yet established |
+| 2 | a–d: pocket machinability transformation and Voronoi/offset views | Reuse native geometry seams; preparation not yet established |
+| 3 | Machining-circle and transition construction | Existing circle/connector geometry |
+| 4 | a–d: engagement construction, maximum, and corrected overlap case | Standard predecessor model and native circle geometry |
+| 5 | a standard; b contour-aware; c intermediate machined contour/middle curve; d MATHSM | Prepared Figure 5 input and current a draft |
+| 6 | Path length versus engagement cap for all three algorithms | Prepared curves, scale calibration, and comparison renderer |
+| 7 | a–c: engagement maps for those three algorithms | Prepared reference panels and shared Figure 5 geometry |
+| 8 | Upper pocket, crossed skis, Monstera contour-aware paths | Three prepared inputs, overlays, and qualification consumer |
+
+- [ ] Reconcile each panel with its existing source asset, input case,
+  generating callable, output, and semantic limitations. Confirm inventory by
+  inspecting publisher panels. Mark only demonstrated preparation complete;
+  locate missing assets before proposing any new extraction.
+- [ ] Produce computed construction diagrams for Figures 1–4 and generated
+  drafts for every Figure 5–8 panel. Reuse the prepared inputs and additive
+  generator paths. Geometry annotations must derive from the displayed
+  construction; do not trace publisher toolpaths to manufacture results.
+- [ ] Keep standard, contour-aware, and constant-spacing MATHSM distinct.
+  Figures 5(c), 7, and 8 must use the relevant generated motion/stock state;
+  do not relabel the standard predecessor model as contour-aware or use its
+  pairwise maximum as a local depleted-stock engagement measurement.
+- [ ] Reuse shared motion results for Figure 5 paths, Figure 6 lengths, and
+  Figure 7 engagement maps under common pocket/tool/start/algorithm/cap
+  settings. Record sampled versus certified measurements explicitly. Record
+  uncovered cap samples and missing algorithm variants as failures.
+- [ ] Publish one browsable MkDocs gallery with reference, generated draft,
+  discrepancy, and missing capability for every panel. A blocked panel gets
+  the failed command or named missing consumer contract and a concrete repair
+  task; a publisher crop or placeholder is not a reproduced panel.
+- [ ] Provide reproducible Pixi generation commands and durable PNG outputs.
+  Inspect all generated panels; run focused geometry/consumer checks, strict
+  typing, Ruff, docs/plan gates, and diff hygiene for the changed scope.
+- [ ] Export the gallery's runnable planner cases and blocked cases as the
+  Task 7 workload inventory, with ordinary case/algorithm/cap identifiers.
+  Update `docs/segment_site_mat.md` with draft coverage and remaining gaps.
+
+**Draft coverage gate:** every inventory row/panel is accounted for by an
+inspected generated draft or an evidenced blocker with an explicit repair
+item. Report generated/required panel counts and blockers separately. This
+permits Task 7 to measure runnable workloads; it does not declare blocked
+panels reproduced or close their repair items.
+
+**Reproduction draft completion gate:** every required panel has a computed,
+inspectable draft under its stated algorithm semantics; no missing panel may
+be counted complete. Approximation and measured discrepancies remain visible.
+The exact independent-generation and quantitative gates in Tasks 5/6 remain
+open until their own evidence passes.
