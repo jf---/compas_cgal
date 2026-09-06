@@ -1342,6 +1342,58 @@ inputs again is not a new milestone. The gallery must distinguish computed
 panels from evidenced blockers; performance results must expose missing
 algorithm/case combinations rather than silently excluding them.
 
+### Native contour-aware critical-point correction
+
+`_stock_2.HeldDiskContour2` now implements Section 3.1's exposed-contact
+construction. It maintains the union of filled outer disks for accepted
+machining circles, adding guide and tool radii inside CGAL. A query constructs
+the standard critical point `b` on the latest outer circle toward the candidate
+centre. If that point is hidden, the query moves clockwise to the first exposed
+arc endpoint. Arc support, membership, order and endpoint selection are exact;
+the Python binding exposes approximate coordinates for inspection only.
+
+This is the paper's placement contour, distinct from the physical circle-sweep
+stock below. It does not assert that every outer disk's centre has actually
+been cleared. The current implementation uses CGAL polygon-set union and scans
+its boundary; it does not claim the paper's linear-time ordered-arc update.
+Concentric query directions and fully covered predecessors raise separate
+named errors. A caller must resolve these geometries before accepting a
+successor, rather than interpreting either as zero engagement.
+
+Twelve native test cases cover unchanged contacts, CW correction with different
+root extensions, hidden earlier intersections, tangency, full coverage,
+duplicate disks, invalid inputs without mutation, and exact radius addition.
+Together with the seven stock/replay contracts, **19 tests pass**. A reporting
+cancellation witness required conjugate evaluation of a one-root coordinate,
+normalized exactly before conversion to avoid squared-scale overflow/underflow;
+the geometric deciding path never rounds or uses tolerances. Ruff and strict
+typing pass for the changed Python consumers and binding stub.
+
+The first 256 retained Figure 5 circles yield **131 corrected / 124 unchanged**
+contacts. The first 256 boundary-spaced Figure 8 upper circles yield
+**173 corrected / 82 unchanged** contacts. Neither prefix has a fully covered
+predecessor or concentric direction. Both PNGs and their contact-coordinate
+JSON reports were generated from the retained standard drafts and inspected.
+
+![Figure 5 native contour contact corrections](assets/images/held_figure5_contour_contacts_256.png)
+
+![Figure 8 upper native contour contact corrections](assets/images/held_figure8_upper_contour_contacts_256.png)
+
+Production reproduction commands:
+
+```bash
+pixi run held-figure5-toolpath-progress --refine --contour-prefix 256
+pixi run held-reference-toolpaths --case figure8_upper --spacing boundary --contour-prefix 256
+```
+
+For this checkpoint, the production renderer consumed retained generated
+circles directly; the full guide-generation commands were not repeated.
+The circles and their spacing remain standard-model outputs. The next
+placement boundary is maximum engagement using the corrected native contact,
+including Figure 4(d)'s overlap case, followed by candidate selection against
+the evolving contour. This contact checkpoint completes no Figure 5(b/c) or
+Figure 8 reproduction gate and makes no path-length or speedup claim.
+
 ### Figure 5 accumulated circle-stock replay
 
 The Figure 5(c) work now has an accumulated native stock consumer:
