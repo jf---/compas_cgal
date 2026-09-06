@@ -8,6 +8,14 @@ Figure 5 and the upper, crossed-skis, and Monstera pockets in Figure 8. Figure 7
 is not a fifth pocket. Its three colour panels are reused as shape-only evidence
 inside the Figure 5 overlay.
 
+The [publisher paper is stored in the repository](assets/papers/held-pfeiffer-2025.pdf).
+This unmodified 17-page PDF was downloaded from the
+[publisher](https://www.cad-journal.net/files/vol_22/CAD_22%285%29_2025_731-747.pdf)
+on September 6, 2026. Use this local copy for reproduction and source inspection.
+Direct PDF page links: [Figure 5](assets/papers/held-pfeiffer-2025.pdf#page=12),
+[Figure 8](assets/papers/held-pfeiffer-2025.pdf#page=16), and
+[contour-aware construction, Section 3.1](assets/papers/held-pfeiffer-2025.pdf#page=10).
+
 ## What was reconstructed
 
 Publisher vector lines remain lines. Publisher cubics are reconstructed

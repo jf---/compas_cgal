@@ -8,6 +8,12 @@
 panel in Held–Pfeiffer 2025, then measure and improve their generating workloads.
 Retain the stricter Figure 5/6 reproduction criteria below.
 
+**Paper:** [committed publisher PDF](../../assets/papers/held-pfeiffer-2025.pdf).
+Use this repository copy for source inspection and figure reproduction:
+[Figure 5](../../assets/papers/held-pfeiffer-2025.pdf#page=12),
+[Figure 8](../../assets/papers/held-pfeiffer-2025.pdf#page=16),
+[Section 3.1](../../assets/papers/held-pfeiffer-2025.pdf#page=10).
+
 **Active criterion:** Task 8 produces an inspectable whole-paper draft gallery
 from the existing prepared inputs and generator seams. Every panel has a
 reproducible generated result or an explicit, evidenced blocker. Reference
@@ -405,7 +411,7 @@ or invalid artifact is demonstrated.
 ### Figure inventory and draft deliverables
 
 Inventory checked against the
-[publisher paper](https://doi.org/10.14733/cadaps.2025.731-747).
+[committed publisher paper](../../assets/papers/held-pfeiffer-2025.pdf).
 The rows specify required output, not claims that a generator already exists.
 
 | Figure | Panels/content required | Starting point |
