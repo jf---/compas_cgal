@@ -1384,8 +1384,8 @@ its complete motion plot was inspected. The option requires the refined stage.
 Focused contracts cover thinning dense
 stations, retaining disconnected source families, preserving endpoints, and
 resolving wide gaps before final motion; four tests pass. Ruff and strict
-typing pass. Monstera contact qualification and all contour-aware reproduction
-requirements remain open.
+typing pass. Contour-aware reproduction requirements remain open. The Monstera
+contact and corner-approach repairs are recorded below.
 
 #### Distribution baseline
 
@@ -1439,7 +1439,7 @@ pass; the final affected Figure 5/upper-pocket integration run passes 5 tests.
 | --- | ---: | ---: | ---: | --- |
 | Figure 8 upper | 4,183 | 4,182 | 0 | Generated and inspected |
 | Figure 8 crossed skis | 2,958 | 2,957 | 0 | Generated and inspected |
-| Figure 8 Monstera | — | — | — | Contact qualification failure; no completed draft |
+| Figure 8 Monstera | 4,367 | 4,366 | 0 | Qualified contacts and corner approaches; generated and inspected |
 
 Monstera emits 739 guide runs and 25,784 stations. Its run 0/station 0 includes
 an alternative at source vertex 375 whose proposed contact lies 0.462683 mm
@@ -1447,10 +1447,53 @@ from the polygon offset, exceeding the recorded 0.307371 mm evidence bound.
 Another local alternative projects successfully. Native circular-offset
 inspection does not justify accepting the rejected contact merely because it
 lies on a supporting circle: the retained arc covers a different interval.
-The next repair must qualify contact hypotheses while retaining source-run
-coverage and recording rejected alternatives; do not enlarge the evidence
-bound or suppress the failure. Local witnesses are retained under
-`build/held-reference-drafts/`.
+The opt-in `--qualify-contacts` route separates native distance rejections from
+usable contacts without enlarging the bound. The full Monstera scan finds
+120,257 usable hypotheses and 15 rejected alternatives, with all 739 input
+guide runs represented. Rejections remain attached to the generated path as
+`rejected_contact_hypotheses`; the CLI writes their run/station/source-side and
+contact coordinates to a `.contacts.json` sibling of a completed motion plot.
+An ambiguous projection still raises its native error. Loss of an entire run
+raises `MissingReferenceContactRunError`; the downstream reached-run check also
+remains active. The default route retains its original fail-fast behavior.
+
+Four new qualification contracts pass; the combined focused qualification,
+placement, and boundary-spacing suite passes 21 tests. Ruff and strict typing
+pass. The full contact scan reuses the retained prepared guide; it is not a
+runtime comparison or a completed motion result. Local witnesses and generated
+hypotheses remain under `build/held-reference-drafts/`.
+
+The qualified Monstera path reaches 6,747 initial circles and 1,332 placement
+lanes. Boundary-order spacing retains 2,696 sources. Its first refinement
+attempt then fails at interval 102 after 16 subdivisions, still at 111.590239
+degrees: the concave-corner midpoint jumps contact directly to the vertex
+while averaging phase vectors. That leaves an approximately 1.21 mm contact
+jump which further phase subdivision cannot remove.
+
+The opt-in `--corner-approaches` construction partitions each crossed concave
+corner into incoming-side approach, shared-contact rotation, and outgoing-side
+departure. One canonical vertex contact retains two incident side normals.
+With this partition enabled, midpoint rotation applies only when both contacts
+are already at that vertex. The prior refinement path remains available by
+default. A focused concave-L witness fails at 180 degrees before the change
+and passes with the new partition, including both incident phases and every
+final predecessor adjacency.
+
+The Monstera draft now emits 4,367 circles and 4,366 connected transitions, with
+maximum predecessor engagement 79.998367 degrees and total emitted length
+46,719.894 mm. All 739 source runs remain represented. The final motion and
+source index mappings were checked and its full PNG inspected. The final
+affected refinement/spacing suite passes nine tests; strict typing and Ruff
+pass. This generation reused retained guide/hypothesis stages, then executed
+the production qualifier, placement, spacing, refinement and renderer.
+
+Reproduce the complete route with:
+
+```bash
+pixi run held-reference-toolpaths --case figure8_monstera --spacing boundary --qualify-contacts --corner-approaches
+```
+
+![Monstera standard-model draft with corner approaches](assets/images/held_figure8_monstera_standard_refined_boundary_qualified_contacts_corner_approaches.png)
 
 These are standard-model drafts. The paper's Figure 8 paths are contour-aware;
 depleted-stock spacing, containment, coverage, and machining qualification

@@ -318,6 +318,27 @@ establish Held-level performance by itself.
 
 **Active step.** Complete breadth of draft coverage before Task 7 optimization.
 
+**Monstera motion checkpoint (September 6):** qualification reaches 6,747
+initial circles; boundary-order selection retains 2,696 sources. A demonstrated
+concave-corner contact jump blocks refinement at 111.590239 degrees despite
+16 subdivisions. The additive `--corner-approaches` path separates approach,
+shared-contact rotation and departure. Monstera then emits 4,367 circles and
+4,366 connected transitions, maximum predecessor engagement 79.998367 degrees,
+total path length 46,719.894 mm, and all 739 source runs retained. The full
+motion PNG and rejected-contact JSON are recorded in the stage documentation.
+The final affected suite passes nine tests, with strict typing and Ruff green.
+All three Figure 8 pockets now have standard-model drafts. Their contour-aware
+reproductions, containment and continuous coverage remain open.
+
+**Monstera contact qualification checkpoint (September 6):** the opt-in
+`--qualify-contacts` route retains 120,257 bounded contact hypotheses and records
+15 rejected alternatives. Every one of the 739 source runs retains at least
+one contact. The evidence bound is unchanged; ambiguity and missing-run
+coverage remain errors. The focused qualification/placement/spacing suite
+passes 21 tests, with Ruff and strict typing green. This resolves candidate
+eligibility; the subsequent motion checkpoint above resolves its refinement
+failure.
+
 **Boundary-order spacing checkpoint (September 6):** additive experimental
 `held-reference-toolpaths --case figure8_upper --spacing boundary` carries one
 predecessor through emitted order and retains all 275 source runs. The upper
@@ -326,7 +347,8 @@ including connectors, with zero predecessor-cap violations. A 0.25 mm grid
 finds no sampled swept-coverage change; continuous coverage remains unproved.
 Four focused contracts, Ruff and strict typing pass. The original lane route
 remains default. This improves draft spacing, not Held parity or contour-aware
-semantics. Monstera contact qualification remains the missing Figure 8 draft.
+semantics. Monstera was still missing at this checkpoint; its motion is now
+recorded above.
 
 **Figure 8 distribution evidence (September 6):** the upper draft has 3,114
 initial circles across 480 placement lanes and 275 source runs. Refinement adds
@@ -339,7 +361,8 @@ carry the predecessor across family boundaries while preserving coverage and
 checking every new adjacency. The subsequent checkpoint above records the
 first measured improvement against this baseline.
 The corpus command now emits the distribution PNG and reporting JSON alongside
-each refined path. Monstera's contact qualification blocker remains open.
+each lane-refined path. Monstera's later qualification and motion checkpoints
+are recorded above.
 
 **Figure 8 draft checkpoint (September 6):** the additive corpus command
 `pixi run held-reference-toolpaths --case CASE` now reuses prepared inputs.
@@ -349,9 +372,9 @@ Native contact projection fixes source/offset side-index mismatch; retained
 run anchors prevent spacing selection from losing an entire source run.
 CGAL corrected-chord arithmetic fixes the upper-pocket near-tangent witness.
 Figure 5/upper integration, placement, and native engagement checks pass.
-Monstera stops at a contact beyond its evidence bound; the stage documentation
-records the witness. Next: qualify invalid contact alternatives while retaining
-run coverage, then regenerate Monstera. Contour-aware Figure 5/8 semantics and
+Monstera initially stopped at a contact beyond its evidence bound; the stage
+documentation records the witness and the subsequent repair above.
+Contour-aware Figure 5/8 semantics and
 the broader gallery remain open; these standard drafts close no full-panel
 reproduction gate.
 

@@ -73,6 +73,8 @@ def refine_boundary_ordered_path(
     boundary: tuple[Point2[WorldXY], ...],
     tool_radius: ToolRadius,
     cap: EngagementCap,
+    *,
+    corner_approaches: bool = False,
 ) -> tuple[tuple[int, ...], Figure5EngagementRefinement]:
     """Repair source geometry, select in emitted order, then cap every gap.
 
@@ -84,5 +86,5 @@ def refine_boundary_ordered_path(
     represented = frozenset(run for index in selected for run in source.circle_sources[index])
     if represented != source.reached_run_ids:
         raise InvalidBoundarySpacingInputError("Boundary spacing source attribution differs from the reached-run ledger.")
-    refined = refine_figure5_engagement(tuple(circles[index] for index in selected), boundary, tool_radius, cap)
+    refined = refine_figure5_engagement(tuple(circles[index] for index in selected), boundary, tool_radius, cap, corner_approaches=corner_approaches)
     return selected, refined

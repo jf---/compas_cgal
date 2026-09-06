@@ -63,6 +63,25 @@ def test_unresolved_gap_fails_instead_of_forcing_successor() -> None:
         refine_figure5_engagement((_circle(2, 0), _circle(8, 1)), BOUNDARY, TOOL, CAP, max_depth=0)
 
 
+def test_concave_corner_approach_rotates_only_at_shared_contact() -> None:
+    boundary = tuple(Point2[WorldXY].build(x, y) for x, y in ((0, 0), (8, 0), (8, 8), (4, 8), (4, 4), (0, 4)))
+    incoming = ProjectionBoundarySite.build(ProjectionBoundarySegmentId(3), Fraction(1, 2), len(boundary))
+    outgoing = ProjectionBoundarySite.build(ProjectionBoundarySegmentId(4), Fraction(1, 2), len(boundary))
+    first = Figure5CounterclockwiseCircle(
+        GuideRunId(0), GuideRunStationOrdinal(0), incoming, incoming, Point2[WorldXY].build(5, 6), Point2[WorldXY].build(4, 6), GuideRadius.build(1)
+    )
+    last = Figure5CounterclockwiseCircle(
+        GuideRunId(1), GuideRunStationOrdinal(0), outgoing, outgoing, Point2[WorldXY].build(2, 3), Point2[WorldXY].build(2, 4), GuideRadius.build(1)
+    )
+    result = refine_figure5_engagement((first, last), boundary, TOOL, CAP, corner_approaches=True)
+    assert result.circles[0] == first and result.circles[-1] == last
+    corner_circles = tuple(circle for circle in result.circles if circle.contact_point == boundary[4])
+    assert any(circle.center == Point2[WorldXY].build(5, 4) for circle in corner_circles)
+    assert any(circle.center == Point2[WorldXY].build(4, 3) for circle in corner_circles)
+    for previous, current in zip(result.circles, result.circles[1:]):
+        assert float(maximum_predecessor_engagement(_paper_candidate(previous), _paper_candidate(current), TOOL)) <= float(CAP.theta)
+
+
 def test_source_circle_is_limited_by_incident_corner_without_losing_contact() -> None:
     source = replace(_circle(9, 0), center=Point2[WorldXY].build(9, 2), radius=GuideRadius.build(2))
     result = refine_figure5_engagement((source,), BOUNDARY, TOOL, CAP)

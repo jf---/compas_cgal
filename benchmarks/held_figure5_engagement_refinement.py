@@ -81,7 +81,22 @@ def _circle_on_side(
     proposed_radius: GuideRadius,
     boundary: tuple[Point2[WorldXY], ...],
 ) -> Figure5CounterclockwiseCircle:
-    side = int(site.segment_id)
+    return _circle_with_side_normal(source, site, contact, proposed_radius, boundary, int(site.segment_id))
+
+
+def _circle_with_side_normal(
+    source: Figure5CounterclockwiseCircle,
+    site: ProjectionBoundarySite,
+    contact: Point2[WorldXY],
+    proposed_radius: GuideRadius,
+    boundary: tuple[Point2[WorldXY], ...],
+    side: int,
+) -> Figure5CounterclockwiseCircle:
+    """Construct a circle using one incident side at a canonical contact.
+
+    A concave vertex has incoming and outgoing normals at the same site;
+    contact identity alone does not select the phase of its machining circle.
+    """
     # A bridge must follow the active side's inward normal. Interpolating
     # phase vectors from different sides tilts it through the boundary.
     start, end = boundary[side % len(boundary)], boundary[(side + 1) % len(boundary)]
@@ -102,6 +117,8 @@ def _midpoint(
     previous: Figure5CounterclockwiseCircle,
     successor: Figure5CounterclockwiseCircle,
     boundary: tuple[Point2[WorldXY], ...],
+    *,
+    corner_approaches: bool = False,
 ) -> Figure5CounterclockwiseCircle:
     previous_side, successor_side = int(previous.boundary_site.segment_id), int(successor.boundary_site.segment_id)
     corner = None
@@ -113,7 +130,8 @@ def _midpoint(
         corner = successor_side
     if corner is not None:
         before, vertex, after = boundary[(corner - 1) % len(boundary)], boundary[corner], boundary[(corner + 1) % len(boundary)]
-        if _turn(before, vertex, after) < 0:
+        shared_contact = previous.contact_point == vertex and successor.contact_point == vertex
+        if _turn(before, vertex, after) < 0 and (not corner_approaches or shared_contact):
             site = ProjectionBoundarySite.build(ProjectionBoundarySegmentId(corner), Fraction(0), len(boundary))
             dx = ((float(previous.center.x) - float(previous.contact_point.x)) + (float(successor.center.x) - float(successor.contact_point.x))) / 2
             dy = ((float(previous.center.y) - float(previous.contact_point.y)) + (float(successor.center.y) - float(successor.contact_point.y))) / 2
@@ -154,6 +172,27 @@ def _midpoint(
     return _circle_on_side(previous, site, contact, GuideRadius.build((float(previous.radius.value) + float(successor.radius.value)) / 2), boundary)
 
 
+def _concave_corner_bridges(
+    previous: Figure5CounterclockwiseCircle,
+    successor: Figure5CounterclockwiseCircle,
+    boundary: tuple[Point2[WorldXY], ...],
+) -> tuple[Figure5CounterclockwiseCircle, ...]:
+    """Partition crossed concave corners into incoming and outgoing phases."""
+    side = int(previous.boundary_site.segment_id)
+    target_side = int(successor.boundary_site.segment_id)
+    bridges = []
+    radius = GuideRadius.build((float(previous.radius.value) + float(successor.radius.value)) / 2)
+    while side != target_side:
+        corner = (side + 1) % len(boundary)
+        vertex = boundary[corner]
+        if _turn(boundary[side], vertex, boundary[(corner + 1) % len(boundary)]) < 0:
+            site = ProjectionBoundarySite.build(ProjectionBoundarySegmentId(corner), Fraction(0), len(boundary))
+            bridges.append(_circle_with_side_normal(previous, site, vertex, radius, boundary, side))
+            bridges.append(_circle_with_side_normal(previous, site, vertex, radius, boundary, corner))
+        side = corner
+    return tuple(bridges)
+
+
 def refine_figure5_engagement(
     circles: tuple[Figure5CounterclockwiseCircle, ...],
     boundary: tuple[Point2[WorldXY], ...],
@@ -162,6 +201,7 @@ def refine_figure5_engagement(
     *,
     max_depth: int = 16,
     max_circles: int = MAX_REFINED_CIRCLES,
+    corner_approaches: bool = False,
 ) -> Figure5EngagementRefinement:
     """Repair corner radii and resolve gaps, preserving source order and q.
 
@@ -177,7 +217,8 @@ def refine_figure5_engagement(
     emitted = [targets[0]]
     original_indices = [0]
     for source_interval, successor in enumerate(targets[1:]):
-        pending = [(successor, 0)]
+        bridges = _concave_corner_bridges(emitted[-1], successor, boundary) if corner_approaches else ()
+        pending = [(target, 0) for target in reversed((*bridges, successor))]
         while pending:
             target, depth = pending.pop()
             predecessor = emitted[-1]
@@ -189,7 +230,7 @@ def refine_figure5_engagement(
                 continue
             if depth >= max_depth:
                 raise Figure5EngagementResolutionError(f"Depth exhausted at source interval {source_interval}: {math.degrees(float(engagement)):.6f} degrees.")
-            midpoint = _midpoint(predecessor, target, boundary)
+            midpoint = _midpoint(predecessor, target, boundary, corner_approaches=corner_approaches)
             pending.append((target, depth + 1))
             pending.append((midpoint, depth + 1))
         original_indices.append(len(emitted) - 1)

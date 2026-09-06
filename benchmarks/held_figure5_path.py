@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from dataclasses import replace
 from fractions import Fraction
 
 from benchmarks.errors import BenchmarkError
@@ -18,6 +19,7 @@ from benchmarks.held_figure5_raw_guide import ProjectionAdmissibleBoundaryHypoth
 from benchmarks.held_figure5_raw_guide import ProjectionBoundarySegmentId
 from benchmarks.held_figure5_raw_guide import ProjectionBoundarySite
 from benchmarks.held_figure5_raw_guide import build_distance_admissible_hypotheses
+from benchmarks.held_reference_contacts import qualify_reference_contacts
 from benchmarks.held_standard_placement import PaperCircleCandidate
 from benchmarks.held_standard_placement import StandardPlacement
 from benchmarks.held_standard_placement import predecessor_overlap_margin
@@ -58,6 +60,7 @@ class HypothesisFigure5Path:
     candidate_count: int
     canonical_candidate_count: int
     placement_lane_count: int
+    rejected_contact_hypotheses: tuple[ProjectionAdmissibleBoundaryHypothesis, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -492,6 +495,7 @@ def build_held_reference_path(
     inward_components: tuple[tuple[Point2[WorldXY], ...], ...],
     *,
     project_contacts: bool = True,
+    qualify_contacts: bool = False,
 ) -> HypothesisFigure5Path:
     """Generate the standard polygon draft on a prepared Held reference guide.
 
@@ -499,29 +503,36 @@ def build_held_reference_path(
     """
     if type(guide) is not Figure5RawGuide:
         raise Figure5PathIntegrationError("Held path construction requires a reference raw guide.")
+    if qualify_contacts and not project_contacts:
+        raise Figure5PathIntegrationError("Contact qualification requires offset contact projection.")
     start = guide.case.start_marker
     start_radius = guide.case.start_marker_radius
     if start is None or start_radius is None:
         raise Figure5PathIntegrationError("Canonical Figure 5 requires its published start-circle evidence.")
     hypotheses = tuple(hypothesis for run in guide.runs for station in run.stations for hypothesis in build_distance_admissible_hypotheses(guide, station))
     offset_sites = None
+    rejected_contacts: tuple[ProjectionAdmissibleBoundaryHypothesis, ...] = ()
     if project_contacts:
         if len(inward_components) != 1:
             raise Figure5PathIntegrationError("Reference draft requires one connected inward boundary.")
         component = inward_components[0]
-        boundary = [(float(p.x), float(p.y)) for p in component]
-        offset_sites = {}
-        for hypothesis in hypotheses:
-            side, parameter = _circle_geometry_2.project_boundary_contact(
-                boundary,
-                (float(hypothesis.contact_point.x), float(hypothesis.contact_point.y)),
-                float(guide.site_budget.admissible_distance_gap),
-            )
-            # Existing site representation; all projection decisions belong to CGAL.
-            offset_sites[hypothesis] = ProjectionBoundarySite.build(ProjectionBoundarySegmentId(side), Fraction(parameter), len(component))
+        if qualify_contacts:
+            offset_sites, rejected_contacts = qualify_reference_contacts(hypotheses, component, guide.site_budget.admissible_distance_gap)
+            hypotheses = tuple(offset_sites)
+        else:
+            boundary = [(float(p.x), float(p.y)) for p in component]
+            offset_sites = {}
+            for hypothesis in hypotheses:
+                side, parameter = _circle_geometry_2.project_boundary_contact(
+                    boundary,
+                    (float(hypothesis.contact_point.x), float(hypothesis.contact_point.y)),
+                    float(guide.site_budget.admissible_distance_gap),
+                )
+                # Existing site representation; all projection decisions belong to CGAL.
+                offset_sites[hypothesis] = ProjectionBoundarySite.build(ProjectionBoundarySegmentId(side), Fraction(parameter), len(component))
     reached = frozenset(run.run_id for run in guide.runs)
     start_evidence_bound = Millimetre(float(guide.site_budget.reconstruction_bound) + float(guide.site_budget.projection_bound))
-    return build_hypothesis_figure5_path(
+    result = build_hypothesis_figure5_path(
         inward_components=inward_components,
         hypotheses=hypotheses,
         reached_run_ids=reached,
@@ -534,3 +545,4 @@ def build_held_reference_path(
         offset_sites=offset_sites,
         preserve_source_runs=project_contacts,
     )
+    return replace(result, rejected_contact_hypotheses=rejected_contacts)
