@@ -324,6 +324,18 @@ establish Held-level performance by itself.
 
 **Active step.** Complete breadth of draft coverage before Task 7 optimization.
 
+**Contour-aware contact checkpoint (September 6):** native
+`HeldDiskContour2` maintains the paper's filled outer-disk union and corrects
+the standard critical point clockwise to the exposed predecessor arc.
+Twelve native contour cases plus seven stock/replay contracts pass. Inspected
+256-circle prefixes show 131 corrected contacts for Figure 5 and 173 for
+Figure 8 upper, with JSON coordinate reports. The existing generation CLIs
+accept `--contour-prefix 256`; the checkpoint renderer reused retained drafts.
+This is a contact-query consumer, not a new placement result. Maximum
+engagement with the corrected contact (including Figure 4(d)), evolving-contour
+candidate selection, and full contour-aware Figure 5/8 drafts remain open.
+The polygon-set union/scan does not yet implement Held's linear-time arc update.
+
 **Figure 5(c) stock consumer checkpoint (September 6):** native circle-stock
 replay retains earlier cuts and uncut centre islands, with radii formed in
 CGAL. Seven native/replay contracts pass, including a pointwise engagement

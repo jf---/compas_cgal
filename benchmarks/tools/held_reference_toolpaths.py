@@ -17,6 +17,7 @@ from benchmarks.held_reference_cases import CANONICAL_CASE_NAMES
 from benchmarks.held_reference_cases import load_held_reference_case
 from benchmarks.held_reference_figures import figure7_inward_offset
 from benchmarks.tools.held_circle_distribution import render_distribution
+from benchmarks.tools.held_contour_contact_plot import render_contour_contacts
 from benchmarks.tools.held_toolpath_progress import render_path
 from compas_cgal.adaptive.motion import EngagementCap
 
@@ -24,11 +25,14 @@ from compas_cgal.adaptive.motion import EngagementCap
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--case", choices=CANONICAL_CASE_NAMES, required=True)
+    parser.add_argument("--contour-prefix", type=int, help="Inspect exposed-contour contact corrections on this many emitted circles.")
     parser.add_argument("--stage", choices=("initial", "refined"), default="refined")
     parser.add_argument("--qualify-contacts", action="store_true", help="Record out-of-bound contact alternatives; require a bounded representative for every source run.")
     parser.add_argument("--corner-approaches", action="store_true", help="Partition concave corner approach, rotation and departure before refinement.")
     parser.add_argument("--spacing", choices=("lane", "boundary"), default="lane", help="Boundary is an experimental reselection in emitted order, with source-run retention.")
     args = parser.parse_args()
+    if args.contour_prefix is not None and args.contour_prefix < 2:
+        parser.error("Contour prefix requires at least two circles.")
     if args.spacing == "boundary" and args.stage != "refined":
         parser.error("Boundary spacing requires the refined stage so no unresolved gaps are emitted.")
     if args.corner_approaches and args.stage != "refined":
@@ -58,6 +62,10 @@ def main() -> None:
     if args.corner_approaches:
         suffix += "_corner_approaches"
     output = Path("docs/assets/images") / f"held_{case.name}_standard_{suffix}.png"
+    if args.contour_prefix is not None:
+        if args.contour_prefix > len(circles):
+            parser.error("Contour prefix exceeds emitted circle count.")
+        render_contour_contacts(case, circles[: args.contour_prefix], Path("docs/assets/images") / f"held_{case.name}_contour_contacts_{args.contour_prefix}.png")
     if args.qualify_contacts:
         output.parent.mkdir(parents=True, exist_ok=True)
         contact_report = {

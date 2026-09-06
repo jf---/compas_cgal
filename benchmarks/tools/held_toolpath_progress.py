@@ -25,6 +25,7 @@ from benchmarks.held_reference_cases import load_held_reference_case
 from benchmarks.held_reference_figures import figure7_inward_offset
 from benchmarks.held_standard_placement import StandardPlacementFragmentationError
 from benchmarks.held_standard_placement import maximum_predecessor_engagement
+from benchmarks.tools.held_contour_contact_plot import render_contour_contacts
 from benchmarks.tools.held_stock_plot import render_circle_stock_prefix
 from compas_cgal import _coverage_2
 from compas_cgal.adaptive.motion import EngagementCap
@@ -157,9 +158,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--refine", action="store_true", help="Repair corner circles and subdivide over-cap gaps; report remaining containment failures.")
     parser.add_argument("--stock-prefix", type=int, help="Also render native circle-only stock after this many emitted circles.")
+    parser.add_argument("--contour-prefix", type=int, help="Inspect native exposed-contour contacts on this many existing circles.")
     args = parser.parse_args()
     if args.stock_prefix is not None and args.stock_prefix <= 0:
         parser.error("Stock prefix must be positive.")
+    if args.contour_prefix is not None and args.contour_prefix < 2:
+        parser.error("Contour prefix requires at least two circles.")
     case = load_held_reference_case("figure5")
     guide = build_figure5_raw_guide(case)
     components = figure7_inward_offset(case).components
@@ -182,6 +186,10 @@ def main() -> None:
         if args.stock_prefix > len(circles):
             parser.error("Stock prefix exceeds emitted circle count.")
         render_circle_stock_prefix(case, circles[: args.stock_prefix], Path("docs/assets/images") / f"held_figure5_circle_stock_{args.stock_prefix}.png")
+    if args.contour_prefix is not None:
+        if args.contour_prefix > len(circles):
+            parser.error("Contour prefix exceeds emitted circle count.")
+        render_contour_contacts(case, circles[: args.contour_prefix], Path("docs/assets/images") / f"held_figure5_contour_contacts_{args.contour_prefix}.png")
     render_path(
         case,
         circles,
