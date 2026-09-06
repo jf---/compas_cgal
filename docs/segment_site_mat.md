@@ -1342,6 +1342,59 @@ inputs again is not a new milestone. The gallery must distinguish computed
 panels from evidenced blockers; performance results must expose missing
 algorithm/case combinations rather than silently excluding them.
 
+### Figure 8 standard-model draft expansion
+
+The prepared Figure 8 inputs now reach the existing guide, circle placement,
+engagement refinement, and complete-motion renderer through additive
+`build_held_reference_raw_guide` and `build_held_reference_path` entry points.
+The original Figure 5 entry points retain their behavior. Generate a selected
+case with `pixi run held-reference-toolpaths --case figure8_crossed_skis`;
+`--stage initial` exposes the pre-refinement proposal explicitly.
+
+The first upper-pocket run exposed an invalid assumption: source-boundary side
+indices were used directly on an inward offset whose topology differs. The
+corpus path instead asks CGAL to project each proposed contact onto the offset.
+The native query compares distances exactly, coalesces shared-vertex contacts,
+rejects distinct equally near contacts, and enforces the reconstruction evidence
+bound. Original source sites remain attached to circles; offset sites are
+separate. Returned parameters are approximate construction views for the
+polygon draft, not native exact-contact identities. Seven focused native tests
+pass, including the contact-mapping and corrected-chord witnesses.
+
+The corpus placement retains a station from every source run before spacing
+refinement, preventing a jump across a joined lane from erasing a whole run.
+A real upper-pocket witness also exposed cancellation in the corrected chord
+cosine (`-1.0000000000000007`). CGAL now computes its squared ratio exactly:
+expanding the contact distance cancels the intermediate square roots before
+conversion for the reported angle. No clamp or evidence-bound relaxation was
+introduced. The 17 focused engagement tests and 13 focused placement tests
+pass; the final affected Figure 5/upper-pocket integration run passes 5 tests.
+
+| Prepared case | Refined circles | Connectors | Over-cap successors | Draft status |
+| --- | ---: | ---: | ---: | --- |
+| Figure 8 upper | 4,183 | 4,182 | 0 | Generated and inspected |
+| Figure 8 crossed skis | 2,958 | 2,957 | 0 | Generated and inspected |
+| Figure 8 Monstera | — | — | — | Contact qualification failure; no completed draft |
+
+Monstera emits 739 guide runs and 25,784 stations. Its run 0/station 0 includes
+an alternative at source vertex 375 whose proposed contact lies 0.462683 mm
+from the polygon offset, exceeding the recorded 0.307371 mm evidence bound.
+Another local alternative projects successfully. Native circular-offset
+inspection does not justify accepting the rejected contact merely because it
+lies on a supporting circle: the retained arc covers a different interval.
+The next repair must qualify contact hypotheses while retaining source-run
+coverage and recording rejected alternatives; do not enlarge the evidence
+bound or suppress the failure. Local witnesses are retained under
+`build/held-reference-drafts/`.
+
+These are standard-model drafts. The paper's Figure 8 paths are contour-aware;
+depleted-stock spacing, containment, coverage, and machining qualification
+remain open. This output must not be labeled a completed Figure 8 reproduction.
+
+![Upper-pocket standard-model draft](assets/images/held_figure8_upper_standard_refined.png)
+
+![Crossed-skis standard-model draft](assets/images/held_figure8_crossed_skis_standard_refined.png)
+
 ### Corner-aware engagement refinement
 
 `pixi run held-figure5-toolpath-progress --refine` adds an isolated polygon-path

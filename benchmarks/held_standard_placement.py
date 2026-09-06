@@ -207,10 +207,10 @@ def maximum_predecessor_engagement(
         cosine = (b_coordinate * b_coordinate - tool * tool - radius * radius) / (2.0 * tool * radius)
         return Radian(math.acos(_clamped_unit(cosine)))
 
-    # CGAL decides intersection existence and constructs its squared height
-    # exactly. Only reporting coordinates cross back into this approximate model.
+    # Keep the corrected chord geometry in CGAL: expanding its squared
+    # distance cancels the square roots before the final reporting conversion.
     try:
-        w_x, w_y_squared = _circle_geometry_2.swept_disk_intersection(
+        cosine_squared = _circle_geometry_2.corrected_engagement_cosine_squared(
             (float(predecessor.center.x), float(predecessor.center.y)),
             previous_radius,
             (float(candidate.center.x), float(candidate.center.y)),
@@ -219,13 +219,7 @@ def maximum_predecessor_engagement(
         )
     except _circle_geometry_2.NoCircleIntersectionError as error:
         raise StandardPlacementFragmentationError("Paper overlap correction has no real swept-disk intersection.") from error
-    q_scale = radius / current_outer_radius
-    q_corrected_x = q_scale * w_x
-    q_corrected_y_squared = q_scale * q_scale * w_y_squared
-    q_to_previous_squared = (q_corrected_x + distance) * (q_corrected_x + distance) + q_corrected_y_squared
-    q_to_previous = math.sqrt(q_to_previous_squared)
-    chord_offset_ratio = (q_to_previous_squared + tool * tool - previous_outer_radius * previous_outer_radius) / (2.0 * q_to_previous * tool)
-    return Radian(2.0 * math.acos(abs(_clamped_unit(chord_offset_ratio))))
+    return Radian(2.0 * math.acos(math.sqrt(cosine_squared)))
 
 
 def _validate_ordered_progress(
