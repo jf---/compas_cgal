@@ -10,12 +10,12 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from fractions import Fraction
 from typing import Self
 from typing import Sequence
 
 from compas.tolerance import TOL
 
+from compas_cgal import _circle_geometry_2
 from compas_cgal.adaptive.motion import EngagementCap
 from compas_cgal.adaptive.units import GuideRadius
 from compas_cgal.adaptive.units import Millimetre
@@ -105,14 +105,13 @@ def _center_spacing(first: PaperCircleCandidate, second: PaperCircleCandidate) -
 
 
 def _successor_disk_is_cleared(predecessor: PaperCircleCandidate, candidate: PaperCircleCandidate) -> bool:
-    # The common tool radius cancels. Compare squared distances on the exact
-    # rational values injected at this Python boundary, including tangency.
-    radius_difference = Fraction(_radius(predecessor)) - Fraction(_radius(candidate))
-    if radius_difference < 0:
-        return False
-    dx = Fraction(float(candidate.center.x)) - Fraction(float(predecessor.center.x))
-    dy = Fraction(float(candidate.center.y)) - Fraction(float(predecessor.center.y))
-    return dx * dx + dy * dy <= radius_difference * radius_difference
+    # The common tool radius cancels; CGAL owns the exact tangency decision.
+    return _circle_geometry_2.disk_contains_disk(
+        (float(predecessor.center.x), float(predecessor.center.y)),
+        _radius(predecessor),
+        (float(candidate.center.x), float(candidate.center.y)),
+        _radius(candidate),
+    )
 
 
 def _resolvability_floor(
@@ -208,20 +207,18 @@ def maximum_predecessor_engagement(
         cosine = (b_coordinate * b_coordinate - tool * tool - radius * radius) / (2.0 * tool * radius)
         return Radian(math.acos(_clamped_unit(cosine)))
 
-    # Near internal tangency, subtracting the two float squares can produce a
-    # negative height for intersecting circles. Construct the intersection
-    # height exactly from the injected center/radius values; no epsilon clamp.
-    exact_dx = Fraction(float(candidate.center.x)) - Fraction(float(predecessor.center.x))
-    exact_dy = Fraction(float(candidate.center.y)) - Fraction(float(predecessor.center.y))
-    spacing_squared = exact_dx * exact_dx + exact_dy * exact_dy
-    previous_squared = (Fraction(previous_radius) + Fraction(tool)) ** 2
-    current_squared = (Fraction(radius) + Fraction(tool)) ** 2
-    numerator = previous_squared - current_squared - spacing_squared
-    height_squared = current_squared - numerator * numerator / (4 * spacing_squared)
-    if height_squared < 0:
-        raise StandardPlacementFragmentationError("Paper overlap correction has no real swept-disk intersection.")
-    w_x = float(numerator) / (2.0 * distance)
-    w_y_squared = float(height_squared)
+    # CGAL decides intersection existence and constructs its squared height
+    # exactly. Only reporting coordinates cross back into this approximate model.
+    try:
+        w_x, w_y_squared = _circle_geometry_2.swept_disk_intersection(
+            (float(predecessor.center.x), float(predecessor.center.y)),
+            previous_radius,
+            (float(candidate.center.x), float(candidate.center.y)),
+            radius,
+            tool,
+        )
+    except _circle_geometry_2.NoCircleIntersectionError as error:
+        raise StandardPlacementFragmentationError("Paper overlap correction has no real swept-disk intersection.") from error
     q_scale = radius / current_outer_radius
     q_corrected_x = q_scale * w_x
     q_corrected_y_squared = q_scale * q_scale * w_y_squared

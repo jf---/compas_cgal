@@ -425,6 +425,7 @@ target_compile_definitions(
         CGAL_USE_CORE=1
         CGAL_CORE_USE_BOOST_BACKEND=1
 )
+add_nanobind_module(_circle_geometry_2 src/circle_geometry_2_bindings.cpp)
 add_nanobind_module(_coverage_2 src/coverage_bindings_2.cpp)
 target_link_libraries(_coverage_2 PRIVATE coverage_exact_core)
 target_compile_definitions(_coverage_2 PRIVATE CGAL_USE_CORE=1)

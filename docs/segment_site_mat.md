@@ -1349,7 +1349,7 @@ connectors, without adding an unchecked closing motion.
 | Successors above 80 degrees | 108 | 0 |
 | Maximum predecessor engagement | 180 degrees | 79.992 degrees |
 | Largest reported radius/clearance excess | 0.057 mm | 6.7e-15 mm |
-| Exact full-disk containment rejections | 801 | 1,013 |
+| Exact full-disk containment rejections | 801 | 1,010 |
 
 The initial vector-interpolation proposal eliminated engagement violations but
 introduced local corner protrusions of 0.013 mm. The retained construction
@@ -1358,6 +1358,24 @@ necessary: taking the next side's normal abruptly cannot converge by merely
 reducing station spacing. Near internal swept-disk tangency, the predecessor
 model also needs an exact rational intersection-height construction; direct
 subtraction of float squares falsely produced a negative height.
+
+The exact arithmetic now belongs to CGAL's Epeck kernel through the small
+`_circle_geometry_2` binding. It owns closed-disk containment (including
+tangency), swept-disk intersection existence and squared-height construction,
+and polygon orientation. Python receives approximate intersection coordinates
+for the existing approximate angle model. Phase-vector and arclength
+interpolation use floats; converting already-rounded lengths to rational
+numbers did not recover exact geometry. The existing source-site API still
+stores rational parameters, so the refinement retains a representation-only
+`Fraction(parameter)` conversion at that boundary.
+
+The native migration passes 22 affected tests, including complete Figure 5
+motion and five native boundary witnesses: exact tangency versus a positive
+gap, the near-tangent regression, known intersection coordinates, polygon
+turns, and invalid-input errors. Strict typing includes the new native stub.
+The regenerated plot retains 2,013 circles and zero over-cap successors. Float
+construction changes the exact containment rejection count from 1,013 to 1,010;
+this is still a failed containment gate, not a tolerance-based acceptance.
 
 The focused suite passes 21 tests, including complete Figure 5 final-order
 engagement, retained family/contact mapping, connector joints, convex limits,
@@ -1369,7 +1387,7 @@ strict containment count.
 **Maturity: incomplete.** Zero violations establish the existing approximate
 predecessor model's limit on these circles. They do not establish depleted-stock
 engagement, safe entry/connector cutting, analytic segment/arc ownership, or
-machining qualification. Exact native containment still rejects 1,013
+machining qualification. Exact native containment still rejects 1,010
 float-backed near-tangent circles; the small reported excess must not be used
 as a tolerance to turn those failures into passes. The publisher-derived start
 and source guide selection also remain. Full Task 5 acceptance stays open.

@@ -22,6 +22,7 @@ from benchmarks.held_figure5_path import _paper_candidate
 from benchmarks.held_figure5_raw_guide import ProjectionBoundarySegmentId
 from benchmarks.held_figure5_raw_guide import ProjectionBoundarySite
 from benchmarks.held_standard_placement import maximum_predecessor_engagement
+from compas_cgal import _circle_geometry_2
 from compas_cgal.adaptive.motion import EngagementCap
 from compas_cgal.adaptive.units import GuideRadius
 from compas_cgal.adaptive.units import Point2
@@ -43,15 +44,19 @@ class Figure5EngagementRefinement:
     original_indices: tuple[int, ...]
 
 
+def _turn(a: Point2[WorldXY], b: Point2[WorldXY], c: Point2[WorldXY]) -> int:
+    return _circle_geometry_2.orientation((float(a.x), float(a.y)), (float(b.x), float(b.y)), (float(c.x), float(c.y)))
+
+
 def _corner_radius_limit(boundary: tuple[Point2[WorldXY], ...], side: int, contact: Point2[WorldXY], proposed: GuideRadius) -> GuideRadius:
     radius = float(proposed.value)
     start, end = boundary[side], boundary[(side + 1) % len(boundary)]
-    ex, ey = Fraction(float(end.x)) - Fraction(float(start.x)), Fraction(float(end.y)) - Fraction(float(start.y))
+    ex, ey = float(end.x) - float(start.x), float(end.y) - float(start.y)
     length = math.hypot(float(ex), float(ey))
     for neighbor in ((side - 1) % len(boundary), (side + 1) % len(boundary)):
         a, b = boundary[neighbor], boundary[(neighbor + 1) % len(boundary)]
-        fx, fy = Fraction(float(b.x)) - Fraction(float(a.x)), Fraction(float(b.y)) - Fraction(float(a.y))
-        turn = fx * ey - fy * ex if neighbor == (side - 1) % len(boundary) else ex * fy - ey * fx
+        fx, fy = float(b.x) - float(a.x), float(b.y) - float(a.y)
+        turn = _turn(a, start, end) if neighbor == (side - 1) % len(boundary) else _turn(start, end, b)
         if turn <= 0:
             continue
         neighbor_length = math.hypot(float(fx), float(fy))
@@ -61,7 +66,7 @@ def _corner_radius_limit(boundary: tuple[Point2[WorldXY], ...], side: int, conta
         denominator = 1 - cosine
         if denominator <= 0:
             raise Figure5EngagementResolutionError("Convex corner normal could not be resolved.")
-        qx, qy = Fraction(float(contact.x)) - Fraction(float(a.x)), Fraction(float(contact.y)) - Fraction(float(a.y))
+        qx, qy = float(contact.x) - float(a.x), float(contact.y) - float(a.y)
         distance = float(fx * qy - fy * qx) / neighbor_length
         radius = min(radius, distance / denominator)
     if radius <= 0:
@@ -80,8 +85,8 @@ def _circle_on_side(
     # A bridge must follow the active side's inward normal. Interpolating
     # phase vectors from different sides tilts it through the boundary.
     start, end = boundary[side % len(boundary)], boundary[(side + 1) % len(boundary)]
-    edge_x = Fraction(float(end.x)) - Fraction(float(start.x))
-    edge_y = Fraction(float(end.y)) - Fraction(float(start.y))
+    edge_x = float(end.x) - float(start.x)
+    edge_y = float(end.y) - float(start.y)
     length = math.hypot(float(edge_x), float(edge_y))
     if length == 0:
         raise Figure5EngagementResolutionError("Interpolation encountered a zero-length boundary side.")
@@ -108,35 +113,27 @@ def _midpoint(
         corner = successor_side
     if corner is not None:
         before, vertex, after = boundary[(corner - 1) % len(boundary)], boundary[corner], boundary[(corner + 1) % len(boundary)]
-        ex, ey = Fraction(float(vertex.x)) - Fraction(float(before.x)), Fraction(float(vertex.y)) - Fraction(float(before.y))
-        fx, fy = Fraction(float(after.x)) - Fraction(float(vertex.x)), Fraction(float(after.y)) - Fraction(float(vertex.y))
-        if ex * fy - ey * fx < 0:
+        if _turn(before, vertex, after) < 0:
             site = ProjectionBoundarySite.build(ProjectionBoundarySegmentId(corner), Fraction(0), len(boundary))
-            dx = (
-                (Fraction(float(previous.center.x)) - Fraction(float(previous.contact_point.x)))
-                + (Fraction(float(successor.center.x)) - Fraction(float(successor.contact_point.x)))
-            ) / 2
-            dy = (
-                (Fraction(float(previous.center.y)) - Fraction(float(previous.contact_point.y)))
-                + (Fraction(float(successor.center.y)) - Fraction(float(successor.contact_point.y)))
-            ) / 2
-            center = Point2[WorldXY].build(float(Fraction(float(vertex.x)) + dx), float(Fraction(float(vertex.y)) + dy))
+            dx = ((float(previous.center.x) - float(previous.contact_point.x)) + (float(successor.center.x) - float(successor.contact_point.x))) / 2
+            dy = ((float(previous.center.y) - float(previous.contact_point.y)) + (float(successor.center.y) - float(successor.contact_point.y))) / 2
+            center = Point2[WorldXY].build(float(vertex.x) + dx, float(vertex.y) + dy)
             radius = GuideRadius.build(math.hypot(float(center.x) - float(vertex.x), float(center.y) - float(vertex.y)))
             return Figure5CounterclockwiseCircle(previous.run_id, previous.station_ordinal, previous.source_boundary_site, site, center, vertex, radius)
-    lengths = tuple(Fraction(length) for length in _side_lengths(boundary))
+    lengths = _side_lengths(boundary)
     ranges = []
     side = previous_side
-    begin = previous.boundary_site.parameter
+    begin = float(previous.boundary_site.parameter)
     while side != successor_side:
-        ranges.append((side, begin, Fraction(1)))
+        ranges.append((side, begin, 1.0))
         side = (side + 1) % len(boundary)
-        begin = Fraction(0)
-    ranges.append((side, begin, successor.boundary_site.parameter))
+        begin = 0.0
+    ranges.append((side, begin, float(successor.boundary_site.parameter)))
     # Subdivide physical boundary progress: equal side-index progress is not
     # equal distance when a short curved-outline chord meets a long straight.
-    total = sum(((end - start) * lengths[index] for index, start, end in ranges), Fraction(0))
+    total = math.fsum((end - start) * lengths[index] for index, start, end in ranges)
     remaining = total / 2
-    cumulative = Fraction(0)
+    cumulative = 0.0
     for index, start, end in ranges[:-1]:
         cumulative += (end - start) * lengths[index]
         if cumulative == remaining:
@@ -150,7 +147,9 @@ def _midpoint(
         remaining -= span
     else:
         raise Figure5EngagementResolutionError("Boundary midpoint exceeded its source interval.")
-    site = ProjectionBoundarySite.build(ProjectionBoundarySegmentId(side), parameter, len(boundary))
+    # Existing source-site API stores a rational parameter; this conversion is
+    # representation only. Approximate arclength arithmetic stays in floats.
+    site = ProjectionBoundarySite.build(ProjectionBoundarySegmentId(side), Fraction(parameter), len(boundary))
     contact = _canonical_offset_point(boundary, site)
     return _circle_on_side(previous, site, contact, GuideRadius.build((float(previous.radius.value) + float(successor.radius.value)) / 2), boundary)
 
