@@ -4,6 +4,13 @@
 > Reuse the completed reference corpus and current Figure 5 draft. Task 7
 > performance tracking follows; full Task 5/6 acceptance remains open.
 
+**Completion status (September 7, latest checkpoint):** Tasks 1–4 are completed
+diagnostic/draft milestones; they do not close the stricter Tasks 5–6 acceptance.
+Tasks 5–6 remain incomplete. Task 8 is active, with a real-workload runtime
+blocker in its curved-circle construction slice. Task 7 has not started.
+The latest Figure 5 query produced no circle after 5m37s; component test passes
+and source-import plots do not establish a runnable Held-level generator.
+
 **Goal:** Produce repository-generated reproduction drafts for every figure and
 panel in Held–Pfeiffer 2025, then measure and improve their generating workloads.
 Retain the stricter Figure 5/6 reproduction criteria below.
@@ -427,6 +434,44 @@ their joins first, rather than assuming every case needs another geometric
 regularization. Preserve the original target/residual and declare any target
 change explicitly. This advances the existing machinable-target requirement;
 no stationary event may be silently treated as cleared.
+
+**Curved-boundary implementation slice (September 7):** retain the prepared
+line/arc chain as native geometry. Import an arc by preserving its two authored
+endpoints and projecting its supplied centre onto their exact perpendicular
+bisector. Validate closed simple chains and reuse native primitive sampling and
+transitions. Plot all four imported cases and report centre changes; endpoint
+incidence alone is not a source-fit or tangent-continuity certificate. Keep
+the existing reconstruction budget and join defects explicit.
+
+The following medial extension must include finite-arc interior competitors
+and a convex source arc's focal event. Analytic disk, smooth capsule join, and
+crescent witnesses distinguish these from endpoint-only approximations. Do not
+average normals at non-tangent joins. Actual-cutter reachability, source-fit
+validation, target regularization if needed, and full-path acceptance remain
+required after this import slice.
+
+**Live curved-boundary checkpoint:** all four prepared cases import as exact
+closed native line/arc chains; seven native import tests and four actual-case
+consumer tests pass, and all four comparison plots are embedded in MkDocs.
+The curved medial implementation passes 76 focused compatibility/geometry
+tests. Its final isolated run passes 15 medial tests, including a fresh-process
+coverage-only import regression. The actual Figure 5 curved-circle diagnostic
+was stopped after 5m37s on its first midpoint query, with zero proposals and no
+curved-circle result plot. The process exited 143 after deliberate interruption;
+this is a runtime blocker, not a passing geometry result. The native stack sample
+places the stall in CORE sign/zero evaluation after sampling; the precise source
+expression is not yet established. Evidence is retained in
+`build/held-mat-baseline/native-curved-circle-interrupted.json` and
+`build/held-mat-baseline/native-curved-circle-live-sample.txt`.
+
+**Next action:** eliminate geometrically redundant same-support circle checks
+while retaining independent feature-clearance and interior checks, then rerun
+the same bounded query and publish its timing and any resulting plot. This
+removes a demonstrated Task 8 execution blocker; it does not start Task 7 or
+establish a measured Held performance ratio.
+
+No new complete Figure 5/8 path, curved-offset traversal, entry,
+or full-coverage acceptance is established by these component results.
 
 Then
 retain the compact contour-bound baseline and repair uncovered **reachable**
