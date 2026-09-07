@@ -237,10 +237,10 @@ BoundaryNormalCircleProposal2 BoundaryNormalCircle2::construct(
 
 BoundaryNormalCircleProposal2::BoundaryNormalCircleProposal2(
     Point p, Point m, Point q, Point center, FT guide_radius, FT clearance,
-    std::vector<std::size_t> vertices, std::vector<std::size_t> segments)
+    std::vector<std::size_t> vertices, std::vector<std::size_t> segments, std::vector<std::size_t> arcs)
     : p_(std::move(p)), m_(std::move(m)), q_(std::move(q)), center_(std::move(center)),
       guide_radius_(std::move(guide_radius)), clearance_(std::move(clearance)),
-      vertices_(std::move(vertices)), segments_(std::move(segments)) {}
+      vertices_(std::move(vertices)), segments_(std::move(segments)), arcs_(std::move(arcs)) {}
 
 XY BoundaryNormalCircleProposal2::p_mm() const { return report(p_); }
 XY BoundaryNormalCircleProposal2::m_mm() const { return report(m_); }

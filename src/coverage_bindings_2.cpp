@@ -1,5 +1,6 @@
 #include "boundary_normal_circle_2.h"
 #include "coverage_2.h"
+#include "native_boundary_curve_2.h"
 #include <type_traits>
 #include "cutter_centre_domain_2.h"
 #include "reachable_arrangement_2.h"
@@ -20,6 +21,7 @@
 #include <nanobind/eigen/dense.h>
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
+#include <nanobind/stl/array.h>
 #include <nanobind/stl/tuple.h>
 #include <nanobind/stl/vector.h>
 
@@ -97,6 +99,8 @@ double arc_reporting_radius(
 
 NB_MODULE(_coverage_2, m)
 {
+    // Circle-returning consumers require their native proposal type registered.
+    nb::module_::import_("compas_cgal._circle_geometry_2");
     nb::exception<ReachableDomainConstructionError> reachable_error(
         m,
         "ReachableDomainConstructionError");
@@ -287,6 +291,30 @@ NB_MODULE(_coverage_2, m)
         .def("component_count", &ExactRegion2::component_count)
         .def("is_subset_of", &ExactRegion2::is_subset_of, "other"_a)
         .def("exactly_equals", &ExactRegion2::exactly_equals, "other"_a);
+
+    nb::exception<InvalidNativeBoundaryCurveError>(m, "InvalidNativeBoundaryCurveError");
+    nb::exception<InvalidNativeBoundaryChainError>(m, "InvalidNativeBoundaryChainError");
+    nb::class_<NativeBoundaryCurve2>(m, "NativeBoundaryCurve2")
+        .def_static("line", &NativeBoundaryCurve2::line, "start"_a, "end"_a)
+        .def_static("arc", &NativeBoundaryCurve2::arc,
+                    "start"_a, "end"_a, "center"_a, "counterclockwise"_a)
+        .def_prop_ro("start", &NativeBoundaryCurve2::start)
+        .def_prop_ro("end", &NativeBoundaryCurve2::end)
+        .def_prop_ro("is_arc", &NativeBoundaryCurve2::is_arc)
+        .def_prop_ro("center_adjustment_mm", &NativeBoundaryCurve2::center_adjustment_mm)
+        .def_prop_ro("center_mm", [](const NativeBoundaryCurve2& curve) {
+            const auto xy = curve.center_mm(); return nb::make_tuple(xy[0], xy[1]);
+        })
+        .def_prop_ro("radius_mm", &NativeBoundaryCurve2::radius_mm);
+    nb::exception<InvalidNativeBoundaryMedialInputError>(m, "InvalidNativeBoundaryMedialInputError");
+    nb::exception<NoPositiveNativeBoundaryCircleError>(m, "NoPositiveNativeBoundaryCircleError");
+    nb::exception<NativeBoundaryMedialConstructionError>(m, "NativeBoundaryMedialConstructionError");
+    nb::class_<NativeBoundary2>(m, "NativeBoundary2")
+        .def(nb::init<std::vector<NativeBoundaryCurve2>>(), "curves"_a)
+        .def_prop_ro("curves", &NativeBoundary2::curves)
+        .def_prop_ro("cycle", &NativeBoundary2::cycle)
+        .def("design_region", &NativeBoundary2::design_region)
+        .def("circle_on_piece", &NativeBoundary2::circle_on_piece, "piece_index"_a, "parameter"_a, "tool_radius"_a);
 
     m.def("remaining_material", &remaining_material,
           "target"_a, "circles"_a, "segments"_a, "disks"_a, "tool_radius"_a);

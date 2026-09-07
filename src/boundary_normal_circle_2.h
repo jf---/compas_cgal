@@ -8,6 +8,8 @@
 #include <stdexcept>
 #include <vector>
 
+class NativeBoundary2;
+
 namespace boundary_normal {
 
 using Kernel = CGAL::Exact_predicates_exact_constructions_kernel_with_sqrt;
@@ -56,15 +58,18 @@ public:
     double clearance_mm() const;
     const std::vector<std::size_t>& competing_vertex_indices() const;
     const std::vector<std::size_t>& competing_segment_indices() const;
+    const std::vector<std::size_t>& competing_arc_indices() const { return arcs_; }
 
 private:
     BoundaryNormalCircleProposal2(
         Point p, Point m, Point q, Point center, FT guide_radius, FT clearance,
-        std::vector<std::size_t> vertices, std::vector<std::size_t> segments);
+        std::vector<std::size_t> vertices, std::vector<std::size_t> segments,
+        std::vector<std::size_t> arcs = {});
     Point p_, m_, q_, center_;
     FT guide_radius_, clearance_;
-    std::vector<std::size_t> vertices_, segments_;
+    std::vector<std::size_t> vertices_, segments_, arcs_;
     friend class BoundaryNormalCircle2;
+    friend class ::NativeBoundary2;
 };
 
 // One validated simple polygon. Segment indices retain the supplied order;

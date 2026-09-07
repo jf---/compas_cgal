@@ -198,6 +198,8 @@ function(add_nanobind_module module_name source_file)
 endfunction()
 
 add_library(coverage_exact_core STATIC
+    src/native_boundary_medial_2.cpp
+    src/native_boundary_curve_2.cpp
     src/boundary_circle_engagement_2.cpp
     src/boundary_normal_circle_2.cpp
     src/reachable_boundary_sampling_2.cpp
