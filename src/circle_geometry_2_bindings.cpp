@@ -1,3 +1,4 @@
+#include "boundary_circle_engagement_2.h"
 // Exact circle decisions for the approximate predecessor-placement consumer.
 #include "boundary_contact_projection_2.h"
 #include "boundary_normal_circle_2.h"
@@ -125,6 +126,7 @@ NB_MODULE(_circle_geometry_2, m)
     nb::exception<boundary_normal::NoPositiveBoundaryCircleError>(m, "NoPositiveBoundaryCircleError");
     nb::exception<boundary_normal::BoundaryNormalConstructionError>(m, "BoundaryNormalConstructionError");
     nb::class_<Proposal>(m, "BoundaryNormalCircleProposal2")
+        .def_prop_ro("is_stationary", &Proposal::is_stationary)
         .def_prop_ro("p_mm", [](const Proposal& p) { const auto xy = p.p_mm(); return nb::make_tuple(xy[0], xy[1]); })
         .def_prop_ro("m_mm", [](const Proposal& p) { const auto xy = p.m_mm(); return nb::make_tuple(xy[0], xy[1]); })
         .def_prop_ro("q_mm", [](const Proposal& p) { const auto xy = p.q_mm(); return nb::make_tuple(xy[0], xy[1]); })
@@ -133,6 +135,13 @@ NB_MODULE(_circle_geometry_2, m)
         .def_prop_ro("clearance_mm", &Proposal::clearance_mm)
         .def_prop_ro("competing_vertex_indices", &Proposal::competing_vertex_indices)
         .def_prop_ro("competing_segment_indices", &Proposal::competing_segment_indices);
+    nb::exception<boundary_normal::BoundaryCircleToolMismatchError>(m, "BoundaryCircleToolMismatchError");
+    nb::exception<boundary_normal::BoundaryCircleSpacingError>(m, "BoundaryCircleSpacingError");
+    nb::exception<boundary_normal::UncoveredStationaryCircleError>(m, "UncoveredStationaryCircleError");
+    nb::exception<boundary_normal::InvalidBoundaryEngagementCapError>(m, "InvalidBoundaryEngagementCapError");
+    nb::exception<boundary_normal::BoundaryCircleEngagementGeometryError>(m, "BoundaryCircleEngagementGeometryError");
+    m.def("boundary_circle_engagement", &boundary_normal::boundary_circle_engagement,
+          nb::arg("previous"), nb::arg("current"), nb::arg("cap_chord_ratio"));
     nb::class_<Boundary>(m, "BoundaryNormalCircle2")
         .def(nb::init<const std::vector<XY>&>())
         .def("query", &Boundary::query,

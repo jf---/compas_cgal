@@ -198,6 +198,9 @@ function(add_nanobind_module module_name source_file)
 endfunction()
 
 add_library(coverage_exact_core STATIC
+    src/boundary_circle_engagement_2.cpp
+    src/boundary_normal_circle_2.cpp
+    src/reachable_boundary_sampling_2.cpp
     src/cutter_centre_domain_2.cpp
     src/exact_region_2.cpp
     src/exact_sweep_2.cpp
@@ -427,7 +430,7 @@ target_compile_definitions(
         CGAL_CORE_USE_BOOST_BACKEND=1
 )
 add_nanobind_module(_circle_geometry_2 src/circle_geometry_2_bindings.cpp)
-target_sources(_circle_geometry_2 PRIVATE src/boundary_normal_circle_2.cpp)
+target_link_libraries(_circle_geometry_2 PRIVATE coverage_exact_core)
 target_compile_definitions(_circle_geometry_2 PRIVATE CGAL_USE_CORE=1 CGAL_CORE_USE_BOOST_BACKEND=1)
 add_nanobind_module(_coverage_2 src/coverage_bindings_2.cpp)
 target_sources(_coverage_2 PRIVATE src/remaining_material_2.cpp)

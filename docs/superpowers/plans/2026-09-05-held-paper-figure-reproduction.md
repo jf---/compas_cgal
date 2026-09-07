@@ -401,6 +401,33 @@ these proposals through the old contact translation or side-normal reconstructio
 Held-level geometry, coverage, engagement, and efficiency are the minimum
 baseline; this construction checkpoint alone does not meet that baseline.
 
+**Current integration slice:** sample native offset line/arc primitives, construct
+the q–m circle at each opaque exact contact, and join consecutive contacts through
+the existing oriented transition consumer. Explicitly represent zero-guide
+events. Render this connected construction on the actual pockets, then select
+spacing with native standard-predecessor engagement decisions on those same
+owned proposals. A construction plot does not qualify entry, engagement, or
+coverage. The 65-query timing remains a diagnostic baseline; per the September 7
+direction, establish the correct end-to-end path before optimization.
+
+**Integration checkpoint:** native offset sampling and inverse contact
+construction now feed an exact standard-predecessor engagement helper without
+reporting-coordinate reinjection. Fifty-five focused tests pass; two expensive
+arc-sampling loops remain unverified. The Figure 5 diagnostic reached three
+of 82 primitives in 347.9 seconds before stopping for a verified stationary-event
+correction. Partial plots are embedded in MkDocs. Adaptive spacing, the paper's
+machinable-target assumptions, entry, and full-motion coverage remain open.
+
+**Next correctness gate:** establish the curved target's native line/arc domain
+before applying a predecessor-only adaptive loop. The polygon projection creates
+zero-guide convex events outside Held §2.1's strict convex-radius assumption;
+the rectangular-corner counterexample in the coverage page shows that bisection
+does not cure this endpoint obstruction. Inspect the already-prepared arcs and
+their joins first, rather than assuming every case needs another geometric
+regularization. Preserve the original target/residual and declare any target
+change explicitly. This advances the existing machinable-target requirement;
+no stationary event may be silently treated as cleared.
+
 Then
 retain the compact contour-bound baseline and repair uncovered **reachable**
 material locally. Identify residuals for every machining case, distinguish

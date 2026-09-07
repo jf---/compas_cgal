@@ -3,6 +3,7 @@
 #include <type_traits>
 #include "cutter_centre_domain_2.h"
 #include "reachable_arrangement_2.h"
+#include "reachable_boundary_sampling_2.h"
 #include "reachable_domain_2.h"
 #include "reachable_errors_2.h"
 #include "reachable_input_2.h"
@@ -151,9 +152,23 @@ NB_MODULE(_coverage_2, m)
         "proposal"_a,
         "Retain the proposal's exact contact for native boundary transitions.");
 
+    nb::exception<boundary_normal::InvalidBoundaryCircleContactError>(m, "InvalidBoundaryCircleContactError");
+    nb::exception<BoundaryContactConstructionError>(m, "BoundaryContactConstructionError");
+    m.def(
+        "boundary_circle_at_contact",
+        [](const boundary_normal::BoundaryNormalCircle2& owner, const ReachPoint& contact, double tool_radius) {
+            try {
+                return owner.at_contact(reachable_kernel_point(contact), tool_radius);
+            } catch (const boundary_normal::BoundaryNormalConstructionError& error) {
+                throw BoundaryContactConstructionError(error.what());
+            }
+        },
+        "owner"_a, "contact"_a, "tool_radius"_a);
+
     nb::class_<ReachableBoundaryCurve2>(
         m,
         "ReachableBoundaryPrimitive2")
+        .def("sample", &sample_reachable_boundary, "parameter"_a)
         .def_prop_ro(
             "kind",
             [](const ReachableBoundaryCurve2& primitive) {

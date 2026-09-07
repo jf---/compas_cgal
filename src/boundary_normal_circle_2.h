@@ -30,6 +30,9 @@ public: using std::runtime_error::runtime_error;
 class NoPositiveBoundaryCircleError : public std::runtime_error {
 public: using std::runtime_error::runtime_error;
 };
+class InvalidBoundaryCircleContactError : public std::runtime_error {
+public: using std::runtime_error::runtime_error;
+};
 class BoundaryNormalConstructionError : public std::runtime_error {
 public: using std::runtime_error::runtime_error;
 };
@@ -41,6 +44,10 @@ class BoundaryNormalCircleProposal2 {
 public:
     // Native consumer seam: retain the exact cutter-centre boundary contact.
     const Point& exact_contact() const noexcept { return q_; }
+    const Point& exact_center() const noexcept { return center_; }
+    const FT& exact_guide_radius() const noexcept { return guide_radius_; }
+    FT exact_tool_radius() const { return clearance_ - FT(2) * guide_radius_; }
+    bool is_stationary() const { return CGAL::is_zero(guide_radius_); }
     XY p_mm() const;
     XY m_mm() const;
     XY q_mm() const;
@@ -71,9 +78,11 @@ public:
     BoundaryNormalCircleProposal2 query_vertex(
         std::int64_t vertex, const XY& inward_direction, double tool_radius) const;
 
+    BoundaryNormalCircleProposal2 at_contact(const Point& q, double tool_radius) const;
+
 private:
     BoundaryNormalCircleProposal2 construct(
-        const Point& p, const Kernel::Vector_2& normal, const FT& tool) const;
+        const Point& p, const Kernel::Vector_2& normal, const FT& tool, const FT& normal_length, bool allow_stationary = false) const;
     CGAL::Polygon_2<Kernel> polygon_;
 };
 
