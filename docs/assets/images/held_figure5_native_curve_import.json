@@ -1,0 +1,117 @@
+{
+  "case": "figure5",
+  "complete_import": true,
+  "failure": null,
+  "prepared_curves": 31,
+  "imported_curves": 31,
+  "native_cycle_primitives": 33,
+  "import_seconds": 0.002033834003668744,
+  "arc_center_adjustments": [
+    {
+      "input_index": 0,
+      "center_adjustment_mm": 1.783595542063159e-16
+    },
+    {
+      "input_index": 1,
+      "center_adjustment_mm": 1.286693383212378e-15
+    },
+    {
+      "input_index": 3,
+      "center_adjustment_mm": 6.707586393972702e-16
+    },
+    {
+      "input_index": 4,
+      "center_adjustment_mm": 6.990125433965887e-16
+    },
+    {
+      "input_index": 5,
+      "center_adjustment_mm": 2.5925158199570538e-15
+    },
+    {
+      "input_index": 6,
+      "center_adjustment_mm": 1.5432324188314041e-15
+    },
+    {
+      "input_index": 7,
+      "center_adjustment_mm": 1.0642783302550708e-15
+    },
+    {
+      "input_index": 8,
+      "center_adjustment_mm": 4.3360596464117626e-16
+    },
+    {
+      "input_index": 9,
+      "center_adjustment_mm": 2.5192489147856664e-15
+    },
+    {
+      "input_index": 10,
+      "center_adjustment_mm": 1.825137196787651e-15
+    },
+    {
+      "input_index": 11,
+      "center_adjustment_mm": 2.1698918553484133e-15
+    },
+    {
+      "input_index": 12,
+      "center_adjustment_mm": 1.5076263685970745e-15
+    },
+    {
+      "input_index": 13,
+      "center_adjustment_mm": 8.856914502887135e-16
+    },
+    {
+      "input_index": 14,
+      "center_adjustment_mm": 2.387187178733269e-16
+    },
+    {
+      "input_index": 15,
+      "center_adjustment_mm": 7.731020093638275e-16
+    },
+    {
+      "input_index": 16,
+      "center_adjustment_mm": 4.293288345993366e-15
+    },
+    {
+      "input_index": 17,
+      "center_adjustment_mm": 5.419466870386151e-16
+    },
+    {
+      "input_index": 18,
+      "center_adjustment_mm": 3.658771941658421e-16
+    },
+    {
+      "input_index": 19,
+      "center_adjustment_mm": 6.771451324045881e-16
+    },
+    {
+      "input_index": 20,
+      "center_adjustment_mm": 1.4716814687843683e-15
+    },
+    {
+      "input_index": 22,
+      "center_adjustment_mm": 2.8765503311926807e-16
+    },
+    {
+      "input_index": 23,
+      "center_adjustment_mm": 7.164910123403142e-16
+    },
+    {
+      "input_index": 25,
+      "center_adjustment_mm": 1.5998616620387075e-16
+    },
+    {
+      "input_index": 26,
+      "center_adjustment_mm": 1.2437565081463024e-17
+    },
+    {
+      "input_index": 28,
+      "center_adjustment_mm": 1.0228758498712684e-17
+    },
+    {
+      "input_index": 29,
+      "center_adjustment_mm": 1.6492823611045581e-15
+    }
+  ],
+  "maximum_center_adjustment_mm": 4.293288345993366e-15,
+  "scope": "Endpoint-preserving native import. Center displacement is reporting only, not a trimmed-source error bound. No G1, source-fit, machinability or toolpath acceptance claim."
+}

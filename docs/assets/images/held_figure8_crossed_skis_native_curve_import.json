@@ -1,0 +1,237 @@
+{
+  "case": "figure8_crossed_skis",
+  "complete_import": true,
+  "failure": null,
+  "prepared_curves": 58,
+  "imported_curves": 58,
+  "native_cycle_primitives": 64,
+  "import_seconds": 0.011330084002111107,
+  "arc_center_adjustments": [
+    {
+      "input_index": 0,
+      "center_adjustment_mm": 4.222662567354725e-16
+    },
+    {
+      "input_index": 1,
+      "center_adjustment_mm": 4.971497216705656e-16
+    },
+    {
+      "input_index": 2,
+      "center_adjustment_mm": 1.3678454069464335e-16
+    },
+    {
+      "input_index": 3,
+      "center_adjustment_mm": 4.715729843697014e-16
+    },
+    {
+      "input_index": 4,
+      "center_adjustment_mm": 1.8944885813753468e-14
+    },
+    {
+      "input_index": 5,
+      "center_adjustment_mm": 1.2101005068473186e-14
+    },
+    {
+      "input_index": 6,
+      "center_adjustment_mm": 2.913200715284692e-15
+    },
+    {
+      "input_index": 7,
+      "center_adjustment_mm": 5.318979389026705e-15
+    },
+    {
+      "input_index": 8,
+      "center_adjustment_mm": 6.738097525930588e-15
+    },
+    {
+      "input_index": 9,
+      "center_adjustment_mm": 2.9241481237699477e-15
+    },
+    {
+      "input_index": 10,
+      "center_adjustment_mm": 6.113580291979516e-17
+    },
+    {
+      "input_index": 11,
+      "center_adjustment_mm": 1.0822847997828826e-15
+    },
+    {
+      "input_index": 13,
+      "center_adjustment_mm": 1.1660762890398865e-15
+    },
+    {
+      "input_index": 14,
+      "center_adjustment_mm": 5.645871958678169e-15
+    },
+    {
+      "input_index": 15,
+      "center_adjustment_mm": 6.224024008784159e-15
+    },
+    {
+      "input_index": 16,
+      "center_adjustment_mm": 6.827939567174978e-15
+    },
+    {
+      "input_index": 17,
+      "center_adjustment_mm": 1.4207235571835415e-14
+    },
+    {
+      "input_index": 18,
+      "center_adjustment_mm": 3.090711988927061e-14
+    },
+    {
+      "input_index": 19,
+      "center_adjustment_mm": 4.858432945358129e-15
+    },
+    {
+      "input_index": 20,
+      "center_adjustment_mm": 1.610262273512479e-15
+    },
+    {
+      "input_index": 21,
+      "center_adjustment_mm": 5.152339021636e-16
+    },
+    {
+      "input_index": 22,
+      "center_adjustment_mm": 3.3770797743133168e-15
+    },
+    {
+      "input_index": 23,
+      "center_adjustment_mm": 4.771729263092335e-15
+    },
+    {
+      "input_index": 24,
+      "center_adjustment_mm": 1.0531485756561582e-14
+    },
+    {
+      "input_index": 25,
+      "center_adjustment_mm": 6.1488674811148645e-15
+    },
+    {
+      "input_index": 26,
+      "center_adjustment_mm": 9.173734923827283e-16
+    },
+    {
+      "input_index": 27,
+      "center_adjustment_mm": 1.1573380168907548e-15
+    },
+    {
+      "input_index": 28,
+      "center_adjustment_mm": 5.696782991703651e-16
+    },
+    {
+      "input_index": 30,
+      "center_adjustment_mm": 3.5284503287928936e-15
+    },
+    {
+      "input_index": 31,
+      "center_adjustment_mm": 1.6745623918219158e-15
+    },
+    {
+      "input_index": 32,
+      "center_adjustment_mm": 3.12559641227072e-16
+    },
+    {
+      "input_index": 33,
+      "center_adjustment_mm": 5.4900031326449795e-15
+    },
+    {
+      "input_index": 34,
+      "center_adjustment_mm": 9.849768948231122e-15
+    },
+    {
+      "input_index": 35,
+      "center_adjustment_mm": 2.0091855961879824e-14
+    },
+    {
+      "input_index": 36,
+      "center_adjustment_mm": 1.177851907735207e-14
+    },
+    {
+      "input_index": 37,
+      "center_adjustment_mm": 3.1810222969391077e-14
+    },
+    {
+      "input_index": 38,
+      "center_adjustment_mm": 4.498071420033487e-16
+    },
+    {
+      "input_index": 39,
+      "center_adjustment_mm": 1.2065027338835321e-15
+    },
+    {
+      "input_index": 40,
+      "center_adjustment_mm": 8.082338840473283e-16
+    },
+    {
+      "input_index": 41,
+      "center_adjustment_mm": 3.0775079585102386e-16
+    },
+    {
+      "input_index": 42,
+      "center_adjustment_mm": 7.784780372713537e-16
+    },
+    {
+      "input_index": 43,
+      "center_adjustment_mm": 5.916533268616476e-16
+    },
+    {
+      "input_index": 44,
+      "center_adjustment_mm": 1.0460090276331668e-16
+    },
+    {
+      "input_index": 45,
+      "center_adjustment_mm": 6.301282995133397e-17
+    },
+    {
+      "input_index": 46,
+      "center_adjustment_mm": 6.382680961624403e-15
+    },
+    {
+      "input_index": 47,
+      "center_adjustment_mm": 1.4042874756398325e-14
+    },
+    {
+      "input_index": 48,
+      "center_adjustment_mm": 6.898729973422196e-16
+    },
+    {
+      "input_index": 49,
+      "center_adjustment_mm": 4.1634762108465015e-16
+    },
+    {
+      "input_index": 50,
+      "center_adjustment_mm": 3.9502010576274033e-16
+    },
+    {
+      "input_index": 51,
+      "center_adjustment_mm": 1.3215610003098803e-15
+    },
+    {
+      "input_index": 52,
+      "center_adjustment_mm": 6.472094476794404e-15
+    },
+    {
+      "input_index": 53,
+      "center_adjustment_mm": 1.7268066009670582e-14
+    },
+    {
+      "input_index": 54,
+      "center_adjustment_mm": 2.641192953244557e-16
+    },
+    {
+      "input_index": 55,
+      "center_adjustment_mm": 2.4474326584177495e-16
+    },
+    {
+      "input_index": 56,
+      "center_adjustment_mm": 2.0556503184594318e-16
+    },
+    {
+      "input_index": 57,
+      "center_adjustment_mm": 1.0343910727545577e-16
+    }
+  ],
+  "maximum_center_adjustment_mm": 3.1810222969391077e-14,
+  "scope": "Endpoint-preserving native import. Center displacement is reporting only, not a trimmed-source error bound. No G1, source-fit, machinability or toolpath acceptance claim."
+}

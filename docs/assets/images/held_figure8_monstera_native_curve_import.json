@@ -1,0 +1,869 @@
+{
+  "case": "figure8_monstera",
+  "complete_import": true,
+  "failure": null,
+  "prepared_curves": 317,
+  "imported_curves": 317,
+  "native_cycle_primitives": 339,
+  "import_seconds": 0.04782116699789185,
+  "arc_center_adjustments": [
+    {
+      "input_index": 0,
+      "center_adjustment_mm": 1.3599388218205708e-15
+    },
+    {
+      "input_index": 1,
+      "center_adjustment_mm": 2.8288063231629664e-15
+    },
+    {
+      "input_index": 3,
+      "center_adjustment_mm": 2.106268469307886e-15
+    },
+    {
+      "input_index": 4,
+      "center_adjustment_mm": 3.500499832071208e-16
+    },
+    {
+      "input_index": 5,
+      "center_adjustment_mm": 8.671804557511998e-16
+    },
+    {
+      "input_index": 6,
+      "center_adjustment_mm": 7.100815924304145e-16
+    },
+    {
+      "input_index": 9,
+      "center_adjustment_mm": 1.6715623482277566e-15
+    },
+    {
+      "input_index": 10,
+      "center_adjustment_mm": 6.709363104890776e-16
+    },
+    {
+      "input_index": 12,
+      "center_adjustment_mm": 1.838559111542464e-15
+    },
+    {
+      "input_index": 13,
+      "center_adjustment_mm": 3.689012096863415e-16
+    },
+    {
+      "input_index": 15,
+      "center_adjustment_mm": 1.5110459486756632e-15
+    },
+    {
+      "input_index": 16,
+      "center_adjustment_mm": 2.19626281136511e-16
+    },
+    {
+      "input_index": 18,
+      "center_adjustment_mm": 3.1849165662622677e-16
+    },
+    {
+      "input_index": 19,
+      "center_adjustment_mm": 1.4616177558356466e-15
+    },
+    {
+      "input_index": 20,
+      "center_adjustment_mm": 5.307219777056661e-16
+    },
+    {
+      "input_index": 21,
+      "center_adjustment_mm": 2.2948176106231363e-15
+    },
+    {
+      "input_index": 24,
+      "center_adjustment_mm": 3.3981263326151846e-16
+    },
+    {
+      "input_index": 25,
+      "center_adjustment_mm": 2.224007232758034e-15
+    },
+    {
+      "input_index": 27,
+      "center_adjustment_mm": 5.803296774982228e-16
+    },
+    {
+      "input_index": 28,
+      "center_adjustment_mm": 2.4443451588356126e-15
+    },
+    {
+      "input_index": 30,
+      "center_adjustment_mm": 2.7297056029020492e-15
+    },
+    {
+      "input_index": 31,
+      "center_adjustment_mm": 1.3230503842204124e-15
+    },
+    {
+      "input_index": 33,
+      "center_adjustment_mm": 1.2078209231985604e-15
+    },
+    {
+      "input_index": 34,
+      "center_adjustment_mm": 3.576852769842239e-16
+    },
+    {
+      "input_index": 35,
+      "center_adjustment_mm": 1.7191472517851016e-15
+    },
+    {
+      "input_index": 36,
+      "center_adjustment_mm": 4.0436476069581156e-16
+    },
+    {
+      "input_index": 38,
+      "center_adjustment_mm": 8.65528036341957e-16
+    },
+    {
+      "input_index": 39,
+      "center_adjustment_mm": 3.655499779930314e-16
+    },
+    {
+      "input_index": 41,
+      "center_adjustment_mm": 3.0938211001992817e-15
+    },
+    {
+      "input_index": 42,
+      "center_adjustment_mm": 6.791953247109435e-16
+    },
+    {
+      "input_index": 44,
+      "center_adjustment_mm": 9.43616154083217e-16
+    },
+    {
+      "input_index": 45,
+      "center_adjustment_mm": 7.835240973448801e-17
+    },
+    {
+      "input_index": 47,
+      "center_adjustment_mm": 2.8125672625829044e-16
+    },
+    {
+      "input_index": 48,
+      "center_adjustment_mm": 1.5952296056323775e-15
+    },
+    {
+      "input_index": 49,
+      "center_adjustment_mm": 2.0265183736696263e-15
+    },
+    {
+      "input_index": 50,
+      "center_adjustment_mm": 7.914428454296975e-16
+    },
+    {
+      "input_index": 52,
+      "center_adjustment_mm": 1.2664655742972021e-15
+    },
+    {
+      "input_index": 53,
+      "center_adjustment_mm": 8.99651457482157e-16
+    },
+    {
+      "input_index": 55,
+      "center_adjustment_mm": 1.136218211760394e-15
+    },
+    {
+      "input_index": 56,
+      "center_adjustment_mm": 1.2084989133332397e-15
+    },
+    {
+      "input_index": 58,
+      "center_adjustment_mm": 1.2178247488732237e-15
+    },
+    {
+      "input_index": 59,
+      "center_adjustment_mm": 1.0044300246096675e-15
+    },
+    {
+      "input_index": 61,
+      "center_adjustment_mm": 9.145675733778688e-17
+    },
+    {
+      "input_index": 62,
+      "center_adjustment_mm": 3.965399330525529e-16
+    },
+    {
+      "input_index": 63,
+      "center_adjustment_mm": 3.8104075315385617e-16
+    },
+    {
+      "input_index": 64,
+      "center_adjustment_mm": 1.0837464982988815e-16
+    },
+    {
+      "input_index": 67,
+      "center_adjustment_mm": 8.985007663678088e-16
+    },
+    {
+      "input_index": 68,
+      "center_adjustment_mm": 4.5179091402942286e-17
+    },
+    {
+      "input_index": 70,
+      "center_adjustment_mm": 9.885293297860265e-17
+    },
+    {
+      "input_index": 71,
+      "center_adjustment_mm": 2.4193616873386085e-15
+    },
+    {
+      "input_index": 73,
+      "center_adjustment_mm": 8.749606730321113e-17
+    },
+    {
+      "input_index": 74,
+      "center_adjustment_mm": 3.172869646269631e-15
+    },
+    {
+      "input_index": 75,
+      "center_adjustment_mm": 2.826160611208913e-15
+    },
+    {
+      "input_index": 76,
+      "center_adjustment_mm": 3.003298641645286e-15
+    },
+    {
+      "input_index": 78,
+      "center_adjustment_mm": 6.29731852180829e-16
+    },
+    {
+      "input_index": 79,
+      "center_adjustment_mm": 3.756382497301183e-15
+    },
+    {
+      "input_index": 82,
+      "center_adjustment_mm": 1.2086978183450882e-15
+    },
+    {
+      "input_index": 83,
+      "center_adjustment_mm": 6.48591760600563e-16
+    },
+    {
+      "input_index": 85,
+      "center_adjustment_mm": 5.249512163603875e-16
+    },
+    {
+      "input_index": 86,
+      "center_adjustment_mm": 3.938927299358255e-16
+    },
+    {
+      "input_index": 88,
+      "center_adjustment_mm": 2.705781010280427e-15
+    },
+    {
+      "input_index": 89,
+      "center_adjustment_mm": 2.843523923574778e-15
+    },
+    {
+      "input_index": 91,
+      "center_adjustment_mm": 1.109371781186209e-15
+    },
+    {
+      "input_index": 92,
+      "center_adjustment_mm": 6.865819413847725e-17
+    },
+    {
+      "input_index": 94,
+      "center_adjustment_mm": 1.1844900076734678e-15
+    },
+    {
+      "input_index": 95,
+      "center_adjustment_mm": 1.2374037383632371e-16
+    },
+    {
+      "input_index": 97,
+      "center_adjustment_mm": 3.2274197117539706e-16
+    },
+    {
+      "input_index": 98,
+      "center_adjustment_mm": 8.868678284829176e-16
+    },
+    {
+      "input_index": 100,
+      "center_adjustment_mm": 1.1123737995996319e-15
+    },
+    {
+      "input_index": 101,
+      "center_adjustment_mm": 5.661641764319439e-16
+    },
+    {
+      "input_index": 102,
+      "center_adjustment_mm": 5.030797783773888e-16
+    },
+    {
+      "input_index": 103,
+      "center_adjustment_mm": 1.8047141092213382e-16
+    },
+    {
+      "input_index": 105,
+      "center_adjustment_mm": 3.3751385631568254e-15
+    },
+    {
+      "input_index": 106,
+      "center_adjustment_mm": 6.115937163710772e-16
+    },
+    {
+      "input_index": 108,
+      "center_adjustment_mm": 2.3838575264091037e-16
+    },
+    {
+      "input_index": 109,
+      "center_adjustment_mm": 3.5654655312124505e-16
+    },
+    {
+      "input_index": 112,
+      "center_adjustment_mm": 2.458708203220969e-16
+    },
+    {
+      "input_index": 113,
+      "center_adjustment_mm": 4.204905726518833e-17
+    },
+    {
+      "input_index": 114,
+      "center_adjustment_mm": 2.7952301534473475e-17
+    },
+    {
+      "input_index": 115,
+      "center_adjustment_mm": 1.6090916164739095e-15
+    },
+    {
+      "input_index": 117,
+      "center_adjustment_mm": 9.013241107702151e-17
+    },
+    {
+      "input_index": 118,
+      "center_adjustment_mm": 3.918705702767953e-16
+    },
+    {
+      "input_index": 120,
+      "center_adjustment_mm": 2.257416080753957e-15
+    },
+    {
+      "input_index": 121,
+      "center_adjustment_mm": 1.2539404716398757e-15
+    },
+    {
+      "input_index": 123,
+      "center_adjustment_mm": 2.01269664075622e-15
+    },
+    {
+      "input_index": 124,
+      "center_adjustment_mm": 2.5700389702737904e-15
+    },
+    {
+      "input_index": 126,
+      "center_adjustment_mm": 7.86393593930641e-16
+    },
+    {
+      "input_index": 127,
+      "center_adjustment_mm": 2.294821380819054e-15
+    },
+    {
+      "input_index": 130,
+      "center_adjustment_mm": 4.513767081936001e-15
+    },
+    {
+      "input_index": 131,
+      "center_adjustment_mm": 1.607462698002157e-15
+    },
+    {
+      "input_index": 132,
+      "center_adjustment_mm": 2.8332331640353343e-15
+    },
+    {
+      "input_index": 133,
+      "center_adjustment_mm": 1.0031248654070567e-15
+    },
+    {
+      "input_index": 135,
+      "center_adjustment_mm": 6.518192225024303e-16
+    },
+    {
+      "input_index": 136,
+      "center_adjustment_mm": 2.1817737304788674e-15
+    },
+    {
+      "input_index": 138,
+      "center_adjustment_mm": 2.551675192875172e-15
+    },
+    {
+      "input_index": 139,
+      "center_adjustment_mm": 4.906910613622984e-16
+    },
+    {
+      "input_index": 142,
+      "center_adjustment_mm": 1.826286480932755e-15
+    },
+    {
+      "input_index": 143,
+      "center_adjustment_mm": 5.602561219129654e-15
+    },
+    {
+      "input_index": 144,
+      "center_adjustment_mm": 4.9921306482366584e-15
+    },
+    {
+      "input_index": 145,
+      "center_adjustment_mm": 3.880882231926414e-15
+    },
+    {
+      "input_index": 147,
+      "center_adjustment_mm": 9.879711872748776e-16
+    },
+    {
+      "input_index": 148,
+      "center_adjustment_mm": 6.184746215030722e-17
+    },
+    {
+      "input_index": 150,
+      "center_adjustment_mm": 4.743182967307926e-15
+    },
+    {
+      "input_index": 151,
+      "center_adjustment_mm": 1.5254818248711253e-15
+    },
+    {
+      "input_index": 153,
+      "center_adjustment_mm": 3.923408488915884e-15
+    },
+    {
+      "input_index": 154,
+      "center_adjustment_mm": 9.12515913005877e-16
+    },
+    {
+      "input_index": 156,
+      "center_adjustment_mm": 3.957747690421825e-15
+    },
+    {
+      "input_index": 157,
+      "center_adjustment_mm": 3.328163132886001e-15
+    },
+    {
+      "input_index": 159,
+      "center_adjustment_mm": 3.1839607422119968e-15
+    },
+    {
+      "input_index": 160,
+      "center_adjustment_mm": 3.761846530473926e-15
+    },
+    {
+      "input_index": 161,
+      "center_adjustment_mm": 1.9632657869987026e-15
+    },
+    {
+      "input_index": 162,
+      "center_adjustment_mm": 5.5112099432544884e-17
+    },
+    {
+      "input_index": 164,
+      "center_adjustment_mm": 1.7780948426401644e-15
+    },
+    {
+      "input_index": 165,
+      "center_adjustment_mm": 3.99450595605004e-15
+    },
+    {
+      "input_index": 169,
+      "center_adjustment_mm": 1.8549943511218977e-15
+    },
+    {
+      "input_index": 170,
+      "center_adjustment_mm": 4.730382313862e-15
+    },
+    {
+      "input_index": 171,
+      "center_adjustment_mm": 2.2209327053535374e-15
+    },
+    {
+      "input_index": 172,
+      "center_adjustment_mm": 4.13346459237547e-15
+    },
+    {
+      "input_index": 174,
+      "center_adjustment_mm": 2.2231014429079353e-15
+    },
+    {
+      "input_index": 175,
+      "center_adjustment_mm": 2.703537328427892e-15
+    },
+    {
+      "input_index": 177,
+      "center_adjustment_mm": 1.206937542728228e-15
+    },
+    {
+      "input_index": 178,
+      "center_adjustment_mm": 2.0924469784896012e-15
+    },
+    {
+      "input_index": 180,
+      "center_adjustment_mm": 9.271499531900593e-17
+    },
+    {
+      "input_index": 181,
+      "center_adjustment_mm": 5.144463258278872e-16
+    },
+    {
+      "input_index": 183,
+      "center_adjustment_mm": 3.471409848008775e-15
+    },
+    {
+      "input_index": 184,
+      "center_adjustment_mm": 4.306385061392979e-15
+    },
+    {
+      "input_index": 186,
+      "center_adjustment_mm": 1.835191033406974e-15
+    },
+    {
+      "input_index": 187,
+      "center_adjustment_mm": 7.64280165169609e-16
+    },
+    {
+      "input_index": 189,
+      "center_adjustment_mm": 4.608334577171339e-18
+    },
+    {
+      "input_index": 190,
+      "center_adjustment_mm": 2.088508103964374e-15
+    },
+    {
+      "input_index": 191,
+      "center_adjustment_mm": 1.8611360322046935e-15
+    },
+    {
+      "input_index": 192,
+      "center_adjustment_mm": 2.3457095499204837e-15
+    },
+    {
+      "input_index": 194,
+      "center_adjustment_mm": 6.102556743908126e-15
+    },
+    {
+      "input_index": 195,
+      "center_adjustment_mm": 7.284066363610272e-15
+    },
+    {
+      "input_index": 197,
+      "center_adjustment_mm": 6.356703587367043e-15
+    },
+    {
+      "input_index": 198,
+      "center_adjustment_mm": 3.1736013527735445e-15
+    },
+    {
+      "input_index": 200,
+      "center_adjustment_mm": 6.353724474681578e-15
+    },
+    {
+      "input_index": 201,
+      "center_adjustment_mm": 1.1870912152249195e-15
+    },
+    {
+      "input_index": 202,
+      "center_adjustment_mm": 3.1091775401959773e-15
+    },
+    {
+      "input_index": 203,
+      "center_adjustment_mm": 2.017399034140986e-15
+    },
+    {
+      "input_index": 206,
+      "center_adjustment_mm": 2.3428607136082004e-16
+    },
+    {
+      "input_index": 207,
+      "center_adjustment_mm": 7.984739817967462e-15
+    },
+    {
+      "input_index": 209,
+      "center_adjustment_mm": 5.842813589535115e-15
+    },
+    {
+      "input_index": 210,
+      "center_adjustment_mm": 4.287022511248234e-16
+    },
+    {
+      "input_index": 212,
+      "center_adjustment_mm": 5.541991920787039e-17
+    },
+    {
+      "input_index": 213,
+      "center_adjustment_mm": 4.7415373888417185e-15
+    },
+    {
+      "input_index": 215,
+      "center_adjustment_mm": 4.086484010915552e-15
+    },
+    {
+      "input_index": 216,
+      "center_adjustment_mm": 5.881429081321589e-15
+    },
+    {
+      "input_index": 218,
+      "center_adjustment_mm": 3.570325025966168e-15
+    },
+    {
+      "input_index": 219,
+      "center_adjustment_mm": 3.6934302699264605e-15
+    },
+    {
+      "input_index": 220,
+      "center_adjustment_mm": 2.9141552444460014e-16
+    },
+    {
+      "input_index": 221,
+      "center_adjustment_mm": 5.498517283612453e-15
+    },
+    {
+      "input_index": 223,
+      "center_adjustment_mm": 1.5588288769141851e-15
+    },
+    {
+      "input_index": 224,
+      "center_adjustment_mm": 8.412401912885259e-15
+    },
+    {
+      "input_index": 226,
+      "center_adjustment_mm": 4.8648471955763345e-15
+    },
+    {
+      "input_index": 227,
+      "center_adjustment_mm": 5.904171951294798e-15
+    },
+    {
+      "input_index": 229,
+      "center_adjustment_mm": 4.579665996856247e-16
+    },
+    {
+      "input_index": 230,
+      "center_adjustment_mm": 5.27434804012592e-15
+    },
+    {
+      "input_index": 232,
+      "center_adjustment_mm": 3.784879413352761e-15
+    },
+    {
+      "input_index": 233,
+      "center_adjustment_mm": 6.168120823624588e-15
+    },
+    {
+      "input_index": 234,
+      "center_adjustment_mm": 3.3645331126603507e-15
+    },
+    {
+      "input_index": 235,
+      "center_adjustment_mm": 6.8099457397592634e-15
+    },
+    {
+      "input_index": 237,
+      "center_adjustment_mm": 1.9840889306351927e-16
+    },
+    {
+      "input_index": 238,
+      "center_adjustment_mm": 1.1597786572113956e-15
+    },
+    {
+      "input_index": 240,
+      "center_adjustment_mm": 8.987695359310983e-17
+    },
+    {
+      "input_index": 241,
+      "center_adjustment_mm": 4.737477133570834e-15
+    },
+    {
+      "input_index": 244,
+      "center_adjustment_mm": 5.092351053483915e-15
+    },
+    {
+      "input_index": 245,
+      "center_adjustment_mm": 5.962422078650344e-15
+    },
+    {
+      "input_index": 247,
+      "center_adjustment_mm": 2.5991700215055576e-15
+    },
+    {
+      "input_index": 248,
+      "center_adjustment_mm": 5.893713957889633e-16
+    },
+    {
+      "input_index": 250,
+      "center_adjustment_mm": 2.875736506252962e-15
+    },
+    {
+      "input_index": 251,
+      "center_adjustment_mm": 1.6231541510994895e-15
+    },
+    {
+      "input_index": 253,
+      "center_adjustment_mm": 4.972505465437834e-15
+    },
+    {
+      "input_index": 254,
+      "center_adjustment_mm": 1.591118055180425e-15
+    },
+    {
+      "input_index": 257,
+      "center_adjustment_mm": 3.858743527426373e-15
+    },
+    {
+      "input_index": 258,
+      "center_adjustment_mm": 4.169711221774869e-15
+    },
+    {
+      "input_index": 259,
+      "center_adjustment_mm": 1.1444599396258138e-15
+    },
+    {
+      "input_index": 260,
+      "center_adjustment_mm": 1.866636842678368e-15
+    },
+    {
+      "input_index": 262,
+      "center_adjustment_mm": 3.5564593562061055e-15
+    },
+    {
+      "input_index": 263,
+      "center_adjustment_mm": 6.168654318665529e-15
+    },
+    {
+      "input_index": 266,
+      "center_adjustment_mm": 5.3129676496103195e-17
+    },
+    {
+      "input_index": 267,
+      "center_adjustment_mm": 7.0010459886866085e-15
+    },
+    {
+      "input_index": 269,
+      "center_adjustment_mm": 5.782376809462907e-15
+    },
+    {
+      "input_index": 270,
+      "center_adjustment_mm": 1.381023649336301e-15
+    },
+    {
+      "input_index": 272,
+      "center_adjustment_mm": 1.401904692621745e-15
+    },
+    {
+      "input_index": 273,
+      "center_adjustment_mm": 3.4514630368912914e-15
+    },
+    {
+      "input_index": 275,
+      "center_adjustment_mm": 1.1214920790327534e-15
+    },
+    {
+      "input_index": 276,
+      "center_adjustment_mm": 8.99147257423661e-16
+    },
+    {
+      "input_index": 278,
+      "center_adjustment_mm": 3.4477612778001896e-15
+    },
+    {
+      "input_index": 279,
+      "center_adjustment_mm": 1.2481943174972562e-15
+    },
+    {
+      "input_index": 281,
+      "center_adjustment_mm": 2.2639047256200888e-15
+    },
+    {
+      "input_index": 282,
+      "center_adjustment_mm": 2.781412229190695e-15
+    },
+    {
+      "input_index": 284,
+      "center_adjustment_mm": 1.588489984794266e-15
+    },
+    {
+      "input_index": 285,
+      "center_adjustment_mm": 3.3519985280481935e-15
+    },
+    {
+      "input_index": 287,
+      "center_adjustment_mm": 2.2934401022832057e-15
+    },
+    {
+      "input_index": 288,
+      "center_adjustment_mm": 2.9675328941795576e-15
+    },
+    {
+      "input_index": 289,
+      "center_adjustment_mm": 9.695815822171808e-17
+    },
+    {
+      "input_index": 290,
+      "center_adjustment_mm": 2.135276774684032e-15
+    },
+    {
+      "input_index": 292,
+      "center_adjustment_mm": 7.843655851251665e-16
+    },
+    {
+      "input_index": 293,
+      "center_adjustment_mm": 5.120571389054686e-16
+    },
+    {
+      "input_index": 294,
+      "center_adjustment_mm": 5.92701940306514e-16
+    },
+    {
+      "input_index": 295,
+      "center_adjustment_mm": 1.944003954637287e-15
+    },
+    {
+      "input_index": 297,
+      "center_adjustment_mm": 6.088537862081164e-16
+    },
+    {
+      "input_index": 298,
+      "center_adjustment_mm": 7.067799355099912e-16
+    },
+    {
+      "input_index": 300,
+      "center_adjustment_mm": 6.666527829003397e-17
+    },
+    {
+      "input_index": 301,
+      "center_adjustment_mm": 5.962754365598334e-16
+    },
+    {
+      "input_index": 303,
+      "center_adjustment_mm": 6.103979862432744e-16
+    },
+    {
+      "input_index": 304,
+      "center_adjustment_mm": 2.09809718723936e-15
+    },
+    {
+      "input_index": 308,
+      "center_adjustment_mm": 7.491394184550111e-16
+    },
+    {
+      "input_index": 309,
+      "center_adjustment_mm": 1.0355352392262792e-15
+    },
+    {
+      "input_index": 311,
+      "center_adjustment_mm": 8.30198502932344e-16
+    },
+    {
+      "input_index": 312,
+      "center_adjustment_mm": 3.255730927463683e-15
+    },
+    {
+      "input_index": 314,
+      "center_adjustment_mm": 2.7479037790484926e-15
+    },
+    {
+      "input_index": 315,
+      "center_adjustment_mm": 2.1171809707987547e-16
+    }
+  ],
+  "maximum_center_adjustment_mm": 8.412401912885259e-15,
+  "scope": "Endpoint-preserving native import. Center displacement is reporting only, not a trimmed-source error bound. No G1, source-fit, machinability or toolpath acceptance claim."
+}
