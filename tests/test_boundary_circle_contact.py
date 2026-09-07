@@ -61,3 +61,80 @@ def test_bridge_does_not_accept_reporting_coordinates() -> None:
     proposal = circles.BoundaryNormalCircle2(RECTANGLE).query(0, 0.5, 1.0)
     with pytest.raises(TypeError):
         coverage.boundary_circle_contact(proposal.q_mm)  # type: ignore[arg-type]
+
+
+def test_primitive_sampling_and_inverse_proposals_preserve_exact_contacts() -> None:
+    owner = circles.BoundaryNormalCircle2(L_SHAPE)
+    cycle = _cycle(L_SHAPE, 0.25)
+    for primitive in cycle.primitives:
+        assert primitive.sample(0.0) == primitive.start
+        assert primitive.sample(1.0) == primitive.end
+        previous = primitive.start
+        for parameter in (0.25, 0.5, 0.75, 1.0):
+            contact = primitive.sample(parameter)
+            pieces = cycle.ccw_transition(previous, contact)
+            assert all(piece.kind == primitive.kind for piece in pieces)
+            proposal = coverage.boundary_circle_at_contact(owner, contact, 0.25)
+            assert coverage.boundary_circle_contact(proposal) == contact
+            previous = contact
+
+
+def test_convex_offset_vertex_is_explicit_stationary_proposal() -> None:
+    owner = circles.BoundaryNormalCircle2(RECTANGLE)
+    cycle = _cycle(RECTANGLE, 1.0)
+    for primitive in cycle.primitives:
+        proposal = coverage.boundary_circle_at_contact(owner, primitive.start, 1.0)
+        assert proposal.is_stationary
+        assert proposal.guide_radius_mm == 0.0
+        assert proposal.center_mm == proposal.m_mm == proposal.q_mm
+        assert coverage.boundary_circle_contact(proposal) == primitive.start
+    midpoint = cycle.primitives[0].sample(0.5)
+    assert not coverage.boundary_circle_at_contact(owner, midpoint, 1.0).is_stationary
+
+
+def test_inverse_rejects_foreign_contact_and_wrong_radius() -> None:
+    owner = circles.BoundaryNormalCircle2(RECTANGLE)
+    contact = _cycle([(x + 100.0, y) for x, y in RECTANGLE], 1.0).primitives[0].start
+    with pytest.raises(coverage.InvalidBoundaryCircleContactError):
+        coverage.boundary_circle_at_contact(owner, contact, 1.0)
+    contact = _cycle(RECTANGLE, 1.0).primitives[0].start
+    with pytest.raises(coverage.InvalidBoundaryCircleContactError):
+        coverage.boundary_circle_at_contact(owner, contact, 0.5)
+
+
+@pytest.mark.parametrize("parameter", [-0.1, 1.1, float("nan"), float("inf")])
+def test_sampling_rejects_invalid_parameter(parameter: float) -> None:
+    primitive = _cycle(L_SHAPE, 0.25).primitives[0]
+    with pytest.raises(coverage.ReachableArrangementTopologyError):
+        primitive.sample(parameter)
+
+
+def test_rotated_lines_and_arcs_lift_algebraic_coordinates_without_reports() -> None:
+    rotated = [(x - y, x + y) for x, y in L_SHAPE]
+    owner = circles.BoundaryNormalCircle2(rotated)
+    cycle = _cycle(rotated, 0.25)
+    for primitive in cycle.primitives:
+        contact = primitive.sample(0.375)
+        proposal = coverage.boundary_circle_at_contact(owner, contact, 0.25)
+        assert coverage.boundary_circle_contact(proposal) == contact
+        assert not proposal.is_stationary
+
+
+def test_rotated_convex_contacts_are_stationary_with_distinct_nearest_feet() -> None:
+    rotated = [(x - y, x + y) for x, y in RECTANGLE]
+    owner = circles.BoundaryNormalCircle2(rotated)
+    for primitive in _cycle(rotated, 1.0).primitives:
+        proposal = coverage.boundary_circle_at_contact(owner, primitive.start, 1.0)
+        assert proposal.is_stationary
+        assert coverage.boundary_circle_contact(proposal) == primitive.start
+        assert proposal.competing_segment_indices
+
+
+def test_reflex_join_duplicate_same_foot_is_not_stationary() -> None:
+    owner = circles.BoundaryNormalCircle2(L_SHAPE)
+    for direction in [(0.0, -1.0), (-1.0, 0.0)]:
+        original = owner.query_vertex(3, direction, 0.25)
+        contact = coverage.boundary_circle_contact(original)
+        inverse = coverage.boundary_circle_at_contact(owner, contact, 0.25)
+        assert not inverse.is_stationary
+        assert coverage.boundary_circle_contact(inverse) == contact

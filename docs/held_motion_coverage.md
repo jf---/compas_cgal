@@ -144,6 +144,12 @@ is included in the query selection but has no positive circle under the native
 construction; it is not silently discarded as a successful comparison.
 [Full probe report](assets/images/held_figure5_native_medial_incidence.json).
 
+This is about 29 ms per query, not an end-to-end toolpath timing. The current
+priority is correct boundary traversal, engagement, and full-motion coverage;
+performance optimization follows that working path. Keep construction timings
+alongside subsequent plots so the cost remains visible without turning a small
+probe into a claim about Held-level performance.
+
 The downstream bridge `_coverage_2.boundary_circle_contact(proposal)` returns
 the existing opaque `WorldXYBoundaryPointMm` directly from the native exact q.
 `ReachableBoundaryCycle2.ccw_transition` consumes that contact without a double
@@ -152,6 +158,111 @@ pass, including irrational reflex-circle contacts, clockwise arc splits,
 line/arc sector joins, and rejection of foreign geometry. This connects the
 circle construction to exact transition geometry; adaptive placement and
 complete workload coverage are still open.
+
+### Exact boundary progression and predecessor engagement
+
+`ReachableBoundaryPrimitive2.sample` samples native line/arc primitives;
+`boundary_circle_at_contact` passes their opaque exact contacts directly into
+circle construction. Convex offset vertices
+can have medial clearance equal to the cutter radius: their guide radius is
+zero. Such stationary events need explicit transition semantics, rather than
+division by a zero circle radius or an invented small positive circle.
+
+`_circle_geometry_2.boundary_circle_engagement` uses the retained native proposals
+and the paper's standard predecessor model (§2.3, Figures 4b/4d). It checks
+equal cutter radii, already-cleared containment, stationary events, and Eq. 4
+spacing. The angle cap enters as the existing squared-chord surrogate; exact
+cosine comparison decides acceptance and the reported angle is diagnostic.
+This is conditional on the predecessor disk actually having been cleared.
+It does not establish initial entry, connector engagement, or contour-aware
+depleted-stock behavior. Those remain separate full-path requirements.
+
+**Verification:** 55 focused owner, contact, and engagement tests pass in 1.08 s.
+They cover both engagement branches, exact cap equality and adjacent inputs,
+concentric growth, containment, Eq. 4 gaps, tool mismatch, and stationary events.
+Two expensive all-arc sampling loops were excluded from this focused run and
+remain unverified; this result is not a full-suite or full-figure pass.
+
+The inverse contact query now recognizes a stationary event directly when its
+full clearance scan finds two distinct nearest boundary feet at cutter radius.
+The disk is already medial, so the q–m diameter is zero. Incident edges touching
+the same reflex vertex count as one foot, not two. This retains every clearance
+check while avoiding a second construction of an already established event.
+Rotated convex contacts and same-foot reflex joins have explicit regressions.
+
+![Native rectangle traversal with stationary corner events](assets/images/held_native_boundary_rectangle.png)
+
+The small consumer fixture constructs four positive-radius circles and four
+stationary corner events, with eight exact transition pieces closing the cycle.
+Two renderer tests pass, covering these joins and publication of an explicitly
+failed partial result before propagating its native error. The deliberately
+sparse circles are not an engagement-controlled or coverage-qualified toolpath.
+[Fixture report](assets/images/held_native_boundary_rectangle.json).
+
+The same diagnostic consumer runs on all four prepared pockets with
+`pixi run held-native-boundary-draft --case figure5 --samples-per-primitive 1`.
+Its sampling is for inspection; adaptive engagement spacing remains required.
+
+![Figure 5 native construction progress](assets/images/held_figure5_native_boundary_draft.png)
+
+The bounded Figure 5 run completed three of 82 offset primitives: three
+machining circles, three stationary events, and five exact transition pieces.
+Construction through the third primitive took 86.8 seconds after the stationary
+correction, versus 347.9 seconds before it. Total time including transitions was
+116.7 seconds; the earlier timing excludes transitions and must not be compared
+with that total. These are integration measurements, not a Held performance
+comparison. The orange curve includes the complete offset boundary; only the
+reported prefix has generated transitions.
+[Bounded result](assets/images/held_figure5_native_boundary_draft.json).
+
+![Figure 5 completed native circles in detail](assets/images/held_figure5_native_boundary_detail.png)
+
+The construction checkpoint includes an overview and a close-up, with reporting
+coordinates retained for later plotting without another exact construction.
+[Construction checkpoint](assets/images/held_figure5_native_boundary_detail.json).
+
+### Why adaptive spacing alone cannot finish the polygon draft
+
+Held's §2.1 requires convex boundary arcs with radius strictly greater than the
+cutter radius. A polygon projection instead introduces convex vertices whose
+offset contacts have zero guide radius. This lies outside that simplifying
+assumption. In a rectangular corner, let the stationary contact be `(r,r)` and
+a preceding circle of radius `rho` have centre `(r+2*rho,r+rho)`. Their centre
+distance is `sqrt(5)*rho`, greater than `rho`: the predecessor outer disk cannot
+contain the stationary cutter disk for any positive `rho`. Merely bisecting the
+spacing cannot fix that endpoint condition.
+
+This does not rule out an independently validated stock-aware connector or entry.
+It rules out treating the stationary event as zero engagement in the current
+predecessor-only model. The next geometry work must inspect the prepared curved
+boundary and preserve native line/arc ownership. Figure 5's stored convex arc
+radii are all above its 1 mm cutter radius (minimum approximately 3.32 mm), so
+polygonization itself creates corner events absent from those arc interiors.
+This reporting observation does not establish exact arc joins or whole-pocket
+machinability. Any additional radius used to regularize a target must be a
+declared geometric parameter; it cannot silently become a numerical tolerance
+or remove original-design residuals from the coverage report.
+
+![Prepared curved boundaries and polygonization across all four pockets](assets/images/held_boundary_domain_audit.png)
+
+`pixi run held-boundary-domain-audit` inspects all four prepared inputs. Amber
+markers use a **display-only** 0.001-degree cutoff; every raw join angle is
+retained in the [audit report](assets/images/held_boundary_domain_audit.json).
+All cutters have radius 1 mm. These are approximate source diagnostics, not
+exact smoothness or machinability tests.
+
+| Pocket | Minimum convex arc radius (mm) | Convex arcs at or below cutter radius | Largest positive join turn |
+| --- | ---: | ---: | ---: |
+| Figure 5 | 3.320064 | 0 | 0.106092° |
+| Figure 8 upper | 0.247215 | 2 | 0.449811° |
+| Figure 8 crossed skis | 1.703932 | 0 | 1.649854° |
+| Figure 8 Monstera | 0.109604 | 2 | 3.867087° |
+
+Preserving the arcs removes many polygonization corners but does not establish
+exact tangent continuity. Native arc import must preserve shared endpoints,
+check the selected directed arc against the existing source reconstruction
+budget, and distinguish positional approximation from tangent continuity.
+No additional rounding radius has been selected from this audit.
 
 ## Exact gate
 

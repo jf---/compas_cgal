@@ -66,7 +66,7 @@ BoundaryNormalCircleProposal2 BoundaryNormalCircle2::query(
     const Point a = polygon_[source], b = polygon_[(source + 1) % polygon_.size()];
     const Point p = CGAL::barycenter(a, FT(1) - u, b, u);
     const auto normal = (b - a).perpendicular(polygon_.orientation());
-    return construct(p, normal, tool);
+    return construct(p, normal, tool, CGAL::sqrt(normal.squared_length()));
 }
 
 BoundaryNormalCircleProposal2 BoundaryNormalCircle2::query_vertex(
@@ -93,14 +93,66 @@ BoundaryNormalCircleProposal2 BoundaryNormalCircle2::query_vertex(
         || CGAL::sign(CGAL::scalar_product(direction, next - p)) == CGAL::POSITIVE) {
         throw InvalidBoundaryVertexDirectionError("Direction must lie in a reflex vertex's point-site normal cone.");
     }
-    return construct(p, direction, FT(tool_radius));
+    return construct(p, direction, FT(tool_radius), CGAL::sqrt(direction.squared_length()));
+}
+
+BoundaryNormalCircleProposal2 BoundaryNormalCircle2::at_contact(
+    const Point& q, double tool_radius) const
+{
+    if (!std::isfinite(tool_radius) || CGAL::sign(FT(tool_radius)) != CGAL::POSITIVE) {
+        throw InvalidBoundaryCircleContactError("Contact requires a positive finite cutter radius.");
+    }
+    const FT tool(tool_radius), squared = tool * tool;
+    if (polygon_.bounded_side(q) != CGAL::ON_BOUNDED_SIDE) {
+        throw InvalidBoundaryCircleContactError("Contact is not inside its boundary polygon.");
+    }
+    std::optional<Point> source;
+    std::vector<std::size_t> vertices, segments;
+    for (std::size_t index = 0; index < polygon_.size(); ++index) {
+        const Kernel::Segment_2 segment(polygon_[index], polygon_[(index + 1) % polygon_.size()]);
+        const auto relation = CGAL::compare(CGAL::squared_distance(q, segment), squared);
+        if (relation == CGAL::SMALLER) {
+            throw InvalidBoundaryCircleContactError("Contact cutter crosses the polygon boundary.");
+        }
+        if (relation != CGAL::EQUAL) continue;
+        const auto direction = segment.to_vector();
+        const FT projection = CGAL::scalar_product(q - segment.source(), direction);
+        const bool at_source = CGAL::sign(projection) != CGAL::POSITIVE;
+        const bool at_target = CGAL::compare(projection, direction.squared_length()) != CGAL::SMALLER;
+        const Point foot = at_source ? segment.source() : at_target ? segment.target()
+            : segment.source() + (projection / direction.squared_length()) * direction;
+        if (!source) source = foot;
+        else if (foot != *source) {
+            if (at_source) vertices.push_back(index);
+            else if (at_target) vertices.push_back((index + 1) % polygon_.size());
+            else segments.push_back(index);
+        }
+    }
+    if (!source) {
+        throw InvalidBoundaryCircleContactError("Contact does not lie on this radius's cutter-centre boundary.");
+    }
+    if (!vertices.empty() || !segments.empty()) {
+        // Full scan proved B(q,r) contained with two distinct boundary feet.
+        // Along p->q, expanding tangent disks nest inside B(q,r): no earlier
+        // competing contact is possible. Thus q itself is the first medial
+        // point and the q-m diameter vanishes. Same-foot incident-edge ties
+        // at reflex sector joins do not authorize this stationary event.
+        return BoundaryNormalCircleProposal2(*source, q, q, q, FT(0), tool,
+                                              std::move(vertices), std::move(segments));
+    }
+    auto result = construct(*source, q - *source, tool, tool, true);
+    if (result.exact_contact() != q) {
+        throw BoundaryNormalConstructionError("Inverse contact construction changed the exact contact.");
+    }
+    return result;
 }
 
 BoundaryNormalCircleProposal2 BoundaryNormalCircle2::construct(
-    const Point& p, const Kernel::Vector_2& normal, const FT& tool) const
+    const Point& p, const Kernel::Vector_2& normal, const FT& tool, const FT& normal_length, bool allow_stationary) const
 {
-    const FT normal_squared = normal.squared_length();
-    const FT normal_length = CGAL::sqrt(normal_squared);
+    // The inverse query has already proved |q-p| equals the cutter radius.
+    // Retain that exact length instead of rebuilding nested square roots.
+    const FT normal_squared = normal_length * normal_length;
     std::optional<FT> first;
     const auto consider = [&](const FT& t) {
         if (CGAL::sign(t) == CGAL::POSITIVE
@@ -164,7 +216,8 @@ BoundaryNormalCircleProposal2 BoundaryNormalCircle2::construct(
     if (vertices.empty() && segments.empty()) {
         throw BoundaryNormalConstructionError("Medial contact lacks a competing boundary feature.");
     }
-    if (CGAL::compare(clearance, tool) != CGAL::LARGER) {
+    if (CGAL::compare(clearance, tool) == CGAL::SMALLER
+        || (!allow_stationary && CGAL::compare(clearance, tool) == CGAL::EQUAL)) {
         throw NoPositiveBoundaryCircleError("Medial clearance does not exceed the cutter radius.");
     }
     const Point q = p + (tool / normal_length) * normal;

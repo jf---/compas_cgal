@@ -1,0 +1,149 @@
+{
+  "case": "figure5",
+  "algorithm": "native_boundary_traversal_diagnostic",
+  "complete_construction": false,
+  "sampled_primitives": 3,
+  "bounded_prefix": true,
+  "failure": null,
+  "samples_per_primitive": 1,
+  "offset_primitives": 82,
+  "sampled_events": 6,
+  "stationary_events": 3,
+  "transition_pieces": 5,
+  "native_construction_seconds": 116.65457737499673,
+  "scope": "Opaque native contacts and CCW transitions; all coordinates reporting only. No engagement-cap, complete-coverage, entry or emitted-motion qualification.",
+  "events": [
+    {
+      "primitive_index": 0,
+      "stationary": true,
+      "p_mm": [
+        0.012785692852643488,
+        15.263336599189495
+      ],
+      "m_mm": [
+        1.006419529694867,
+        15.150678717609017
+      ],
+      "q_mm": [
+        1.006419529694867,
+        15.150678717609017
+      ],
+      "center_mm": [
+        1.006419529694867,
+        15.150678717609017
+      ],
+      "guide_radius_mm": 0.0,
+      "clearance_mm": 1.0
+    },
+    {
+      "primitive_index": 0,
+      "stationary": false,
+      "p_mm": [
+        0.040240145585322476,
+        14.786483918449807
+      ],
+      "m_mm": [
+        3.3317687502225666,
+        15.145856968998103
+      ],
+      "q_mm": [
+        1.0343326414166139,
+        14.895020132369003
+      ],
+      "center_mm": [
+        2.18305069581959,
+        15.020438550683554
+      ],
+      "guide_radius_mm": 1.1555444379875153,
+      "clearance_mm": 3.3110888759750305
+    },
+    {
+      "primitive_index": 1,
+      "stationary": true,
+      "p_mm": [
+        0.06815325730706945,
+        14.530825333209794
+      ],
+      "m_mm": [
+        1.062245753138361,
+        14.63936154712899
+      ],
+      "q_mm": [
+        1.062245753138361,
+        14.63936154712899
+      ],
+      "center_mm": [
+        1.062245753138361,
+        14.63936154712899
+      ],
+      "guide_radius_mm": 0.0,
+      "clearance_mm": 1.0
+    },
+    {
+      "primitive_index": 1,
+      "stationary": false,
+      "p_mm": [
+        0.19977211872583625,
+        14.071656501102046
+      ],
+      "m_mm": [
+        3.331850818533016,
+        15.145865929314912
+      ],
+      "q_mm": [
+        1.1456852719766435,
+        14.39607645503077
+      ],
+      "center_mm": [
+        2.2387680452548295,
+        14.77097119217284
+      ],
+      "guide_radius_mm": 1.155584706187458,
+      "clearance_mm": 3.311169412374916
+    },
+    {
+      "primitive_index": 2,
+      "stationary": true,
+      "p_mm": [
+        0.2832116375641188,
+        13.828371409003825
+      ],
+      "m_mm": [
+        1.229124790814926,
+        14.152791362932547
+      ],
+      "q_mm": [
+        1.229124790814926,
+        14.152791362932547
+      ],
+      "center_mm": [
+        1.229124790814926,
+        14.152791362932547
+      ],
+      "guide_radius_mm": 0.0,
+      "clearance_mm": 1.0
+    },
+    {
+      "primitive_index": 2,
+      "stationary": false,
+      "p_mm": [
+        0.5125291625983514,
+        13.40937412164817
+      ],
+      "m_mm": [
+        3.332485812483135,
+        15.145975508032029
+      ],
+      "q_mm": [
+        1.3640198479182775,
+        13.933743850764374
+      ],
+      "center_mm": [
+        2.3482528302007064,
+        14.539859679398202
+      ],
+      "guide_radius_mm": 1.155894009471904,
+      "clearance_mm": 3.311788018943808
+    }
+  ]
+}
