@@ -339,6 +339,116 @@ gives an explicit stationary event; insufficient clearance fails. At a
 non-tangent join the query uses the selected piece's one-sided normal, never
 an averaged normal. This does not supply a complete join-traversal policy.
 
+### Deciding only what is generically nonzero
+
+The first curved-circle query on Figure 5 was stopped after 337 s with no
+result. The same query now returns in 8 ms, all 33 native Figure 5 pieces run
+in 0.70 s, and nothing about the kernel changed. The query had been asking
+`Exact_predicates_exact_constructions_kernel_with_sqrt`, whose number type is
+`CORE::Expr`, to decide values that are identically zero: a tangency equation
+re-checked by exact equality after being solved, incidence of a foot that was
+constructed on its circle, the winner's own contact re-derived as an equality,
+four diameter invariants that hold by construction, join vertices that lie on
+the source circle and therefore tie the focal event at exactly `t = 1`, and
+the winning vertex's own distance reached a second time through a
+nearest-endpoint fallback. CORE's floating-point filter decides a generic sign
+in about 40 ns. An exact zero can only be certified by refining to the
+root-separation bound, which grows exponentially with the number of
+independent square roots in the expression, and every Held arc contributes
+one: all 26 Figure 5 radii and all 214 Monstera radii are distinct.
+
+```mermaid
+flowchart LR
+    D[decision in circle_on_piece] --> S{coincidence decidable
+on rational data?}
+    S -- yes: shared support, parallel or
+collinear segment, tangent competitor,
+vertex on source circle --> R[decide rationally,
+record by construction]
+    S -- no --> F{CORE floating filter}
+    F -- generic sign, ~40 ns --> G[decided]
+    F -- value near or at zero --> X[refine toward the
+root-separation bound]
+    X -- genuine tie --> G
+    style X fill:#fde2e2,stroke:#c0392b
+    style R fill:#e2f4e8,stroke:#2e7d32
+```
+
+The scratch benchmark below runs the same first-contact decision, a source arc
+against `N` competitor circles, against the vendored CGAL with the extension's
+own defines. Only the number-type design changes.
+
+| first-contact query | N = 26 (Figure 5 scale) | N = 214 (Monstera scale) |
+| --- | ---: | ---: |
+| plain doubles | 0.38 µs | 1.1 µs |
+| CORE, generic decisions only | 23 µs | 131 µs |
+| one-root `Sqrt_extension` over Epeck lazy rationals | 308 µs | 2.3 ms |
+| CORE with the identity checks, as first written | > 337 s on Figure 5 | not attempted |
+
+In the same scene one identity decision cost between 1.5 ms (the source's own
+support) and 1.9 s (the tangency re-check), and per-site instrumentation of the
+real Figure 5 query placed 53.8 s of a 54.3 s query in the single
+endpoint-fallback comparison of the ownership loop; every other site in that
+query totalled under 3 ms.
+
+`NativeBoundary2::circle_on_piece` now follows three rules. Coincidences that
+would make a decision identically zero are detected first on rational or
+structural data: a competitor on the source support, a collinear or parallel
+segment (the parallel branch has a rational solution), a competitor tangent to
+the source tangent line at `p`, and a vertex on the source circle. Quantities
+that hold by construction are recorded, never re-decided: the winning contact
+keeps its index and kind, the focal event ties its support and its on-circle
+vertices, and the diameter invariants left the decision path for the medial
+tests, which witness them on reporting values. Ownership compares only against
+curve interiors, membership on an arc is an angular test on a direction, and
+the boundary sampler no longer re-decides that its own sample lies on its
+circle.
+
+!!! note "Witnesses"
+    Three generic-double queries carry a wall-clock budget of two seconds,
+    three orders of magnitude from both measured regimes. Before the change
+    they took 6.8 s, 4.9 s and 20.2 s; after it all three stay under 0.2 s.
+    A Hypothesis property runs 25 random generic rounded rectangles per
+    collection, and a sampling test checks arc samples against their circle on
+    reporting values. The 25 medial tests pass in about one second.
+
+| prepared case | queried pieces | wall time | max query | median query | stop |
+| --- | ---: | ---: | ---: | ---: | --- |
+| Figure 5 | 33 / 33 | 0.70 s | 11 ms | 7 ms | none |
+| Figure 8 upper | 76 / 78 | 11.2 s | 0.59 s | 26 ms | clearance below tool at (0.062, 40.049) mm |
+| Figure 8 crossed skis | 64 / 64 | 3.4 s | 0.22 s | 19 ms | none |
+| Figure 8 Monstera | 211 / 339 | 145.6 s | 14.7 s | 88 ms | clearance below tool at (70.395, 66.938) mm |
+
+![Figure 5 native curved circles](assets/images/held_figure5_native_curved_circles.png)
+[Figure 5 curved-circle report](assets/images/held_figure5_native_curved_circles.json).
+
+![Figure 8 upper native curved circles](assets/images/held_figure8_upper_native_curved_circles.png)
+[Upper curved-circle report](assets/images/held_figure8_upper_native_curved_circles.json).
+
+![Crossed skis native curved circles](assets/images/held_figure8_crossed_skis_native_curved_circles.png)
+[Crossed skis curved-circle report](assets/images/held_figure8_crossed_skis_native_curved_circles.json).
+
+![Monstera native curved circles](assets/images/held_figure8_monstera_native_curved_circles.png)
+[Monstera curved-circle report](assets/images/held_figure8_monstera_native_curved_circles.json).
+
+!!! warning "What remains"
+    The two stops are the machinable-target case the plan already requires:
+    a medial clearance smaller than the 1 mm cutter is a zero-guide event, and
+    the diagnostic driver stops at the first one rather than representing it.
+    The slow tail is not identities. Instrumented upper pieces spend 10 ms to
+    45 ms on each of a handful of near-zero decisions, a vertex almost on the
+    tangent line at `p`, a foot almost at a segment end, a disk almost reaching
+    a competitor centre, which are filter failures on the fitted near-tangent
+    arc chains and refine a few hundred bits through nested radicals; one
+    Monstera query reaches 14.7 s this way. Depth of the expression DAG is the
+    lever: split pieces lift a one-root endpoint into two more square roots,
+    and the sampler adds one. Exactly tangent inputs, integer fixtures today
+    and exactified arcs later, still tie the focal event exactly and reach the
+    root bound; deciding that case rationally on the supports is not yet done.
+    CORE exactness also ends at the coverage seam, where `remaining_material`
+    takes circles as float64 triples; what exact representation an emitted
+    circle should have is a design decision, not a fix.
+
 **Actual Figure 5 runtime blocker:** the first midpoint query returned no
 proposal after 337 seconds (5m37s). The process was deliberately stopped;
 exit 143 is interruption evidence, not a geometry rejection or a coverage
