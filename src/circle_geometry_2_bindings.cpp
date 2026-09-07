@@ -134,7 +134,8 @@ NB_MODULE(_circle_geometry_2, m)
         .def_prop_ro("guide_radius_mm", &Proposal::guide_radius_mm)
         .def_prop_ro("clearance_mm", &Proposal::clearance_mm)
         .def_prop_ro("competing_vertex_indices", &Proposal::competing_vertex_indices)
-        .def_prop_ro("competing_segment_indices", &Proposal::competing_segment_indices);
+        .def_prop_ro("competing_segment_indices", &Proposal::competing_segment_indices)
+        .def_prop_ro("competing_arc_indices", &Proposal::competing_arc_indices);
     nb::exception<boundary_normal::BoundaryCircleToolMismatchError>(m, "BoundaryCircleToolMismatchError");
     nb::exception<boundary_normal::BoundaryCircleSpacingError>(m, "BoundaryCircleSpacingError");
     nb::exception<boundary_normal::UncoveredStationaryCircleError>(m, "UncoveredStationaryCircleError");
