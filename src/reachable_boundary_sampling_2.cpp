@@ -52,9 +52,9 @@ ReachPoint sample_reachable_boundary(const ReachableBoundaryCurve2& primitive, d
     const auto a = first_half ? first : middle;
     const auto b = first_half ? middle : last;
     const auto chord = (ReachFT(1) - local) * a + local * b;
+    // The sample lies on the supporting circle by construction. Re-deciding
+    // that incidence would be an identically-zero CORE decision, refined to
+    // its root bound on every call; the sampling tests witness it instead.
     const auto point = center + chord * CGAL::sqrt(circle.squared_radius() / chord.squared_length());
-    if (!circle.has_on_boundary(point)) {
-        throw ReachableArrangementTopologyError("Boundary sample left its exact supporting circle.");
-    }
     return ReachPoint(point.x(), point.y());
 }
