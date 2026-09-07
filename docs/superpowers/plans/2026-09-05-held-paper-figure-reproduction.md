@@ -6,10 +6,12 @@
 
 **Completion status (September 7, latest checkpoint):** Tasks 1–4 are completed
 diagnostic/draft milestones; they do not close the stricter Tasks 5–6 acceptance.
-Tasks 5–6 remain incomplete. Task 8 is active, with a real-workload runtime
-blocker in its curved-circle construction slice. Task 7 has not started.
-The latest Figure 5 query produced no circle after 5m37s; component test passes
-and source-import plots do not establish a runnable Held-level generator.
+Tasks 5–6 remain incomplete. Task 8 is active; its curved-circle construction
+runtime blocker is resolved (the first Figure 5 query went from 337 s to 8 ms
+and all four prepared cases now run), and the slice stops at genuine
+clearance-below-tool events on Figure 8 upper and Monstera. Task 7 has not
+started. Component test passes and construction plots still do not establish
+a runnable Held-level generator.
 
 **Goal:** Produce repository-generated reproduction drafts for every figure and
 panel in Held–Pfeiffer 2025, then measure and improve their generating workloads.
@@ -459,16 +461,39 @@ coverage-only import regression. The actual Figure 5 curved-circle diagnostic
 was stopped after 5m37s on its first midpoint query, with zero proposals and no
 curved-circle result plot. The process exited 143 after deliberate interruption;
 this is a runtime blocker, not a passing geometry result. The native stack sample
-places the stall in CORE sign/zero evaluation after sampling; the precise source
-expression is not yet established. Evidence is retained in
+was unsymbolicated (stripped extension) and could not locate the stall; the
+mechanism was established afterwards by differential measurement, see the
+identity-decision checkpoint below. Evidence is retained in
 `build/held-mat-baseline/native-curved-circle-interrupted.json` and
 `build/held-mat-baseline/native-curved-circle-live-sample.txt`.
 
-**Next action:** eliminate geometrically redundant same-support circle checks
-while retaining independent feature-clearance and interior checks, then rerun
-the same bounded query and publish its timing and any resulting plot. This
-removes a demonstrated Task 8 execution blocker; it does not start Task 7 or
-establish a measured Held performance ratio.
+**Identity-decision checkpoint (September 7):** the stall was not redundant
+checks but identically-zero decisions handed to `CORE::Expr`, whose floating
+filter decides generic signs in nanoseconds and certifies an exact zero only by
+refining to the root-separation bound. On identical topology, integer
+coordinates decided in 0.000–0.004 s and generic doubles in 6.5–19.6 s per
+query; per-site instrumentation put 53.8 s of a 54.3 s Figure 5 query in one
+endpoint-fallback comparison. `circle_on_piece` now decides structural
+coincidences rationally, records what holds by construction, and compares only
+against curve interiors; the sampler no longer re-decides its own incidence.
+Witnesses: three generic-double tests under a 2 s budget (RED at 6.8, 4.9 and
+20.2 s), a Hypothesis property over random rounded rectangles, and sampling
+incidence on reporting values; 25 medial tests pass. The bounded Figure 5
+query returns in 8 ms per piece and all 33 pieces in 0.70 s; crossed skis
+completes 64/64 in 3.4 s; upper (76/78) and Monstera (211/339) stop at
+clearance-below-tool events, the machinable-target case that remains open.
+Residual: near-zero decisions on the fitted near-tangent arc chains cost
+10–45 ms each on upper and up to 14.7 s for one Monstera query; exactly
+tangent inputs still tie the focal event and reach the root bound. Evidence
+and rules: [deciding only what is generically
+nonzero](../../held_motion_coverage.md#deciding-only-what-is-generically-nonzero).
+
+**Next action:** represent the clearance-below-tool stop as the explicit
+zero-guide event the integration slice already requires, so the curved
+diagnostic completes upper and Monstera, then connect the oriented transition
+consumer on those proposals. Task 7 inherits the near-tie tail and the
+expression-depth lever as its first measured hypothesis. This does not
+establish a Held performance ratio.
 
 No new complete Figure 5/8 path, curved-offset traversal, entry,
 or full-coverage acceptance is established by these component results.
