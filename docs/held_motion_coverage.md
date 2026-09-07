@@ -264,6 +264,98 @@ check the selected directed arc against the existing source reconstruction
 budget, and distinguish positional approximation from tangent continuity.
 No additional rounding radius has been selected from this audit.
 
+### Native import of the prepared curved boundaries
+
+`NativeBoundaryCurve2.arc` keeps the two authored endpoints and projects the
+supplied centre onto their exact perpendicular bisector. This is the closest
+centre satisfying both endpoint radii. CGAL constructs the directed arc and
+checks exact incidence. `NativeBoundary2` validates the closed simple chain,
+retains its original curves, and exposes the native x-monotone cycle for
+sampling and transitions. Python's `import_held_boundary` supplies the prepared
+curves directly; it never uses the polygon projection.
+
+Seven native factory/chain tests pass, including directed semicircles, major
+arcs, inconsistent supplied centres, and rejection of crossings and retracing.
+Four actual-figure consumer tests pass: all authored endpoints remain exactly
+shared and all arcs remain arcs. These establish import topology and incidence,
+not tangent continuity or a renewed source-error bound.
+
+| Case | Imported curves | Retained arcs | Native cycle pieces | Initial native import |
+| --- | ---: | ---: | ---: | ---: |
+| Figure 5 | 31 | 26 | 33 | 2.0 ms |
+| Figure 8 upper | 70 | 66 | 78 | 16.2 ms |
+| Figure 8 crossed skis | 58 | 56 | 64 | 11.3 ms |
+| Figure 8 Monstera | 317 | 214 | 339 | 47.8 ms |
+
+These timings exclude loading/validating the reference case and rendering.
+The largest reported centre adjustment across the four cases is
+`3.18e-14 mm`. Its small size does not substitute for a directed source-fit
+bound or make the stored tangent discontinuities disappear.
+
+![Figure 5 native curved boundary import](assets/images/held_figure5_native_curve_import.png)
+[Figure 5 import report](assets/images/held_figure5_native_curve_import.json).
+
+![Figure 8 upper native curved boundary import](assets/images/held_figure8_upper_native_curve_import.png)
+[Upper import report](assets/images/held_figure8_upper_native_curve_import.json).
+
+![Crossed skis native curved boundary import](assets/images/held_figure8_crossed_skis_native_curve_import.png)
+[Crossed skis import report](assets/images/held_figure8_crossed_skis_native_curve_import.json).
+
+![Monstera native curved boundary import](assets/images/held_figure8_monstera_native_curve_import.png)
+[Monstera import report](assets/images/held_figure8_monstera_native_curve_import.json).
+
+### Medial-circle construction on native curved boundaries
+
+`NativeBoundary2.circle_on_piece(piece_index, parameter, tool_radius)` samples
+one native x-monotone source piece and follows its inward normal. Lines use
+their perpendicular direction; arcs use their radial direction and retained
+exact radius. The query tests original vertices, finite line interiors, and
+finite arc interiors. Squaring the two circle-tangency equations cancels the
+quadratic ray term, but each candidate must still satisfy its original signed
+equation and lie on the actual trimmed arc. Arc endpoints are independent
+point competitors.
+
+A convex source arc additionally contributes its focal point—the arc centre.
+Without this event, even a circular pocket would have no medial result. The
+selected point must be inside the cached native design, and a global nearest
+boundary check must confirm its clearance. The resulting q–m diameter circle
+uses the same retained native proposal consumed by the engagement helper.
+Arc competitor indices identify original input curves rather than pretending
+those features are line segments.
+
+The analytic witnesses below use a 1 mm cutter; all coordinates and guide
+radii are in millimetres.
+
+| Pocket and source point p | Medial point m | Cutter contact q | Circle centre c | Guide radius |
+| --- | --- | --- | --- | ---: |
+| Radius-4 disk, p=(4,0) | (0,0) | (3,0) | (1.5,0) | 1.5 |
+| Radius-4 capsule around [(0,0),(8,0)], p=(8,4) | (8,0) | (8,3) | (8,1.5) | 1.5 |
+| Radius-5 disk minus radius-3 disk centred at (-4,0), p=(5,0) | (2,0) | (4,0) | (3,0) | 1 |
+
+The capsule's selected line and arc sides agree at their smooth join. The
+crescent's competing foot is (-1,0), inside its concave arc; considering only
+endpoints would miss the correct medial contact. Radius equal to the cutter
+gives an explicit stationary event; insufficient clearance fails. At a
+non-tangent join the query uses the selected piece's one-sided normal, never
+an averaged normal. This does not supply a complete join-traversal policy.
+
+**Actual Figure 5 runtime blocker:** the first midpoint query returned no
+proposal after 337 seconds (5m37s). The process was deliberately stopped;
+exit 143 is interruption evidence, not a geometry rejection or a coverage
+result. A native stack sample located the stall in CORE sign/zero evaluation
+after sampling, without identifying the exact source expression. No curved
+circle result plot was produced. The successful source-import plots above and
+analytic tests do not establish a runnable whole-figure generator or Held
+performance parity.
+
+[Interrupted-query report](assets/images/held_figure5_native_curved_circle_interrupted.json).
+
+Reproduce the import plots with
+`pixi run held-native-curve-import --case all`. The curved-circle diagnostic is
+`pixi run held-native-curved-circle --case figure5 --max-pieces 3`; its first
+query currently has the runtime blocker above. Run it only as a supervised
+diagnostic until that blocker is corrected.
+
 ## Exact gate
 
 `benchmarks.held_exact_motion_coverage` replays complete circle paths through

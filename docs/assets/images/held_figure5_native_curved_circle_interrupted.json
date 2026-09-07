@@ -1,0 +1,12 @@
+{
+  "case": "figure5",
+  "requested_max_pieces": 3,
+  "completed_queries": 0,
+  "active_piece_index": 0,
+  "parameter": 0.5,
+  "elapsed_process_seconds_at_stop": 337,
+  "process_exit_code": 143,
+  "status": "Stopped by task controller after first native query failed to return within the observed runtime",
+  "sample_evidence": "native-curved-circle-live-sample.txt",
+  "scope": "Execution-cost failure; no returned circle, geometry rejection or coverage result"
+}
