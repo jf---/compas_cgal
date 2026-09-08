@@ -447,17 +447,7 @@ target_link_libraries(task9_mat_compile_gate PRIVATE coverage_exact_core)
 
 # Add new modules here
 add_nanobind_module(_types_std src/types_std.cpp)
-add_nanobind_module(_booleans src/booleans.cpp)
-add_nanobind_module(_meshing src/meshing.cpp)
-add_nanobind_module(_intersections src/intersections.cpp)
-add_nanobind_module(_measure src/measure.cpp)
-add_nanobind_module(_reconstruction src/reconstruction.cpp)
-add_nanobind_module(_skeletonization src/skeletonization.cpp)
-add_nanobind_module(_slicer src/slicer.cpp)
 add_nanobind_module(_straight_skeleton_2 src/straight_skeleton_2.cpp)
-add_nanobind_module(_triangulation src/triangulation.cpp)
-add_nanobind_module(_subdivision src/subdivision.cpp)
-add_nanobind_module(_polylines src/polylines.cpp)
 add_nanobind_module(_toolpath src/toolpath.cpp)
 add_nanobind_module(
     _stock_2
@@ -532,5 +522,3 @@ target_compile_definitions(
         CGAL_CORE_USE_BOOST_BACKEND=1
 )
 
-add_nanobind_module(_geodesics src/geodesics.cpp)
-add_nanobind_module(_isolines src/isolines.cpp)
