@@ -18,26 +18,23 @@ respect to edge direction.
 ## Running it
 
 ```bash
-pixi run measured-run
 pixi run python -m benchmarks.cli corpus --name all --out build/benchmarks
 pixi run python -m benchmarks.cli corpus --name external --external-dir /path/to/profiles
 ```
 
-`measured-run` requires a clean committed worktree and publishes one immutable corpus bundle under
-`benchmarks/results/<UTC-date>-<commit-prefix>/`. Claim-specific measurements use the separate
-`benchmarks/measurement_claim_results/` root, so the two payload grammars cannot be confused.
-It rechecks full HEAD and worktree cleanliness after the child, immediately before publication;
-operator edits or a concurrent commit invalidate the run rather than entering its evidence.
-Every bundle stamps a full source commit and committed `pixi.lock` as its build identity, the
-complete effective corpus configuration as its input identity, and SHA-256 digests of every exact
-payload byte as its result identity. The consumer reconstructs all three identities before using
-the report.
+Corpus reports are **reporting evidence**, not geometric or continuous-engagement
+certificates. Read them as measurements of this repository's generators on the
+corpora below, never as proof of a geometric property.
 
-These bundles are authenticated **reporting evidence**, not geometric or continuous-engagement
-certificates. Publication uses a hidden sibling stage followed by one rename. It assumes a
-single writer: pre-existing non-empty destinations are preserved and ordinary failures expose no partial
-result, but portable standard-library rename does not guarantee atomic no-replace against an
-operator creating an empty destination in the final race window.
+!!! warning "`benchmarks/results/` has no layout enforcement"
+
+    The authenticated `measured-run` publisher — which required a clean committed
+    worktree, published one immutable bundle per commit under
+    `benchmarks/results/<UTC-date>-<commit-prefix>/`, and stamped build, input and
+    result identities — was removed on 2026-09-08 along with the measurement-claim
+    subsystem it belonged to. Its single-writer rule is therefore no longer checked
+    by anything: `benchmarks/results/` now holds a mix of bundle directories and
+    plain baseline JSON files. Do not rely on its shape.
 
 ## The corpora
 
