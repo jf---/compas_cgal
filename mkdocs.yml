@@ -190,7 +190,6 @@ nav:
       - Machining Metric Validity: machining_metric_validity.md
       - The Oblique-Edge Cliff: oblique_edge_cost.md
       - Continuous Engagement Cost: continuous_engagement_cost.md
-      - CGAL Primitives Critique: critique_toolpath_cgal_primitives.md
   - API Reference:
       - compas_cgal.adaptive.motion_certificate: api/compas_cgal.adaptive.motion_certificate.md
       - compas_cgal.booleans: api/compas_cgal.booleans.md
