@@ -340,6 +340,147 @@ invariant, the canonical digest is a function of the mathematical **value**,
 not of the backend representation. Changing backends does not move replay
 identity. Hashing an approximation or an unreduced form would.
 
+## The exact vocabulary and the two doors
+
+One namespace, `compas_cgal::exact`, owns the project's exact-number vocabulary,
+and it admits exactly two boundary crossings: `from_binary64` in and
+`to_canonical` out. Between those doors every value is an `exact::Rational` or an
+`exact::OneRoot`, so every value carries lane L2's lazy interval filter by
+construction rather than by review. Wherever the vocabulary is adopted, R1 and R5
+stop being advisory and become structural.
+
+Rationale, staging and the counts behind the work:
+[Number-Type Coherence: Design](superpowers/specs/2026-09-08-number-type-coherence-design.md).
+
+```mermaid
+flowchart LR
+    D["binary64<br/>from Python"] --> IN["exact::from_binary64<br/>the only entry"]
+    IN --> R["exact::Rational = Epeck::FT<br/>exact::OneRoot = Sqrt_extension&lt;Rational, Rational&gt;<br/>lazy interval filter, no text anywhere"]
+    R --> P["predicates and geometry<br/>CGAL::sign, CGAL::compare"]
+    R --> OUT["exact::to_canonical<br/>the only exit"]
+    OUT --> B["CanonicalRational<br/>frozen attestation bytes"]
+```
+
+### `exact::Rational` is `Epeck::FT`, deliberately
+
+```cpp
+/// The project's exact rational carrier. Lazy and interval-filtered.
+using Rational = CGAL::Exact_predicates_exact_constructions_kernel::FT;
+
+/// One-root algebraic numbers, a0 + a1*sqrt(root).
+using OneRoot = CGAL::Sqrt_extension<Rational, Rational>;
+```
+
+A fresh strong type would have been the reflexive choice and it would have been
+the wrong one. `Epeck::FT` is *already* the coefficient type of
+`Gps_circle_segment_traits_2<Epeck>::Point_2::CoordNT` — lane L3 above — so
+`exact::OneRoot` **is** the traits' own `CoordNT`. Three consequences follow from
+that identity, and none of them survives being wrapped:
+
+| Because the alias is the kernel's own type | Consequence |
+|---|---|
+| `OneRoot` is `CoordNT`, not a sibling of it | arrangement interop is identity, never conversion |
+| `Rational` is `Lazy_exact_nt<cpp_rational>` | the interval filter arrives with the type; nothing has to remember to add one |
+| existing one-root code already spells these types | `sign_mixed_radical` and its callers compile unchanged |
+
+### The cross-root precondition lives in the call, not the type
+
+!!! warning "`OneRoot` is a bare alias on purpose"
+
+    A checking wrapper would enforce R5 at the type level and destroy the
+    `CoordNT` identity above, reintroducing exactly the impedance boundary the
+    alias removes. So the typedef stays bare and the precondition is enforced by
+    free functions in `exact/one_root.h`:
+
+    ```cpp
+    [[nodiscard]] OneRoot same_root_add(const OneRoot& a, const OneRoot& b);
+    [[nodiscard]] OneRoot same_root_multiply(const OneRoot& a, const OneRoot& b);
+    ```
+
+    Both check `is_extended()` **before** reading `root()`, because `a1()` and
+    `root()` are defined only on an extended value — reading them unconditionally
+    is undefined behaviour, not a wrong answer. A non-extended operand carries
+    `a0()` alone, is compatible with any root, and short-circuits. Distinct
+    non-zero roots raise `CrossRootExtensionError`.
+
+    Raw `Sqrt_extension` operators stay reachable and must not appear in our
+    code; checklist item 5 is what catches that. Cross-root *comparison* is
+    untouched — it remains exact and supported.
+
+### The two doors
+
+| Door | Signature | What it guarantees | Raises |
+|---|---|---|---|
+| in | `Rational from_binary64(double)` | exact and total on finite input: a binary64 **is** a dyadic rational, so there is no parsing, no tolerance and no snapping | `NonFiniteBinary64Error` |
+| out | `CanonicalRational to_canonical(const Rational&)` | reduced, positive denominator, `gcd == 1` — the invariant that makes the bytes value-determined | `UnreducedCanonicalRationalError` |
+
+`CanonicalRational` is a derived **view**, never a carrier. It exposes
+`numerator()`, `denominator()`, `text()` and `canonical_bytes()` as
+`std::string`, and it is constructible only through `to_canonical`. Nothing
+computes on it. That separation is the point: the attestation type and the
+compute type serve different consumers and change at different rates, so they are
+two types rather than one struct doing both jobs.
+
+The direction is therefore inverted from what the string carriers do today. Text
+is an output. A new `parse_rational`-shaped decoder is a defect, not a
+convenience.
+
+### Measured: the carrier does not move the bytes
+
+The whole refactor rests on one claim that had to be checked before any code was
+written — swapping the carrier must not move a single attestation byte. Measured
+first-party on 2026-09-08: `Epeck::FT(double)` followed by
+`Fraction_traits<FT>::Decompose` produces byte-identical numerator and
+denominator strings to the IEEE-754 bit-decomposition path already in
+`src/continuous_tea_2/segment_source.cpp:21`.
+
+| Corpus | Detail |
+|---|---|
+| edge doubles | smallest subnormal, smallest normal, ±0, 0.5, 1.0, 0.1, 3.0, 2^52, 2^53, 2^53 + 2, 1e308 |
+| random doubles | 3000, uniform in [-1e6, 1e6] |
+| signs | every value checked in both signs |
+| **total comparisons** | **6024** |
+| **mismatches** | **0** |
+
+The two paths reach the same bytes by different arithmetic: one decomposes the
+IEEE-754 sign, exponent and fraction fields by hand into a `CORE::BigRat`, the
+other hands the double to `Epeck::FT` and asks `Fraction_traits` to split it.
+Agreement between them was measured, not inferred — which is what turns
+*canonical attestation bytes are a function of the value, never of the carrier*
+into a property with evidence behind it. It is the same argument the backend pin
+rests on above, now checked across a second carrier rather than a second backend.
+
+### The error model
+
+One named exception per failure mode, each deriving `std::runtime_error`. The
+layer never throws `std::runtime_error` directly, so a caller catches the failure
+mode instead of matching on a message.
+
+| Error | Fires when | Where |
+|---|---|---|
+| `NonFiniteBinary64Error` | `from_binary64` is handed NaN or an infinity — the only inputs that denote no rational | `exact/errors.h` |
+| `UnreducedCanonicalRationalError` | a value reaches `to_canonical` whose decomposed denominator is not positive and reduced, which would make the encoding ambiguous | `exact/errors.h` |
+| `CrossRootExtensionError` | `same_root_add` or `same_root_multiply` is called on operands carrying distinct non-zero roots | `exact/errors.h` |
+| `AttestationByteDriftError` | a projection produces bytes differing from the frozen contract | designed, not yet landed — it belongs to the projection site, which arrives with the inversion |
+
+`AttestationByteDriftError` is deliberately not a release-build check on every
+projection: at that point the comparison costs more than the guarantee is worth.
+It is raised in debug builds and in the byte-stability contract test.
+
+!!! note "Status at stage 0: landed, not adopted"
+
+    **Nothing in the codebase uses these types yet.** `src/exact/` is proven in
+    isolation — native gates plus the binary64 contract test — and sits *beside*
+    the existing string and bare-`CORE::BigRat` carriers rather than replacing
+    them. The 504 unfiltered `BigRat` sites, the six lanes above and every
+    parse-back crossing are exactly as they were.
+
+    Stage 1 converges the duplicated `sign_mixed_radical` onto the single
+    definition this module will own. Conversion of existing lanes begins at
+    **stage 2**, smallest event source first, and the filtering payoff is
+    predicted to land in stage 4 where the deep construction chains are. Until
+    then, read this section as vocabulary, not as coverage.
+
 ## Review checklist
 
 Ask these of any diff that touches a number type.
