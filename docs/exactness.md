@@ -207,9 +207,21 @@ preconditions, not folklore:
   supported exact calls* rather than hand-rolling bignum arithmetic. The
   TEA kernel's mixed-radical sign — `sign(A + B√α + C√β + D√(αβ))` with
   rational coefficients, which both the chord-vs-threshold predicate and
-  the >π orientation test reduce to — decomposes as:
+  the >π orientation test reduce to — is
+  `compas_cgal::exact::sign_mixed_radical` (`src/exact/one_root.cpp`), and it
+  decomposes as:
 
 ```cpp
+// FIRST, fold degenerate radicands away with exact RATIONAL compares, so that
+// no extension is ever built over a zero root. These are not fast paths; the
+// predicate is unsound without them. See the danger note below.
+if (CGAL::is_zero(alpha) && CGAL::is_zero(beta)) return CGAL::sign(a);
+if (CGAL::is_zero(beta))  return CGAL::sign(CoordNT(a, b, alpha));
+if (CGAL::is_zero(alpha)) return CGAL::sign(CoordNT(a, c, beta));
+if (alpha == beta)  // √(αβ) = α, so the whole form collapses into one extension
+    return CGAL::sign(CoordNT(a + d * alpha, b + c, alpha));
+
+// THEN the general case, with both roots now known positive and distinct.
 // u = A + B√α and w = C + D√α are SAME-root values: legal arithmetic.
 // sign(u + √β·w) from three supported exact calls:
 const CGAL::Sign su = CGAL::sign(u);
@@ -224,6 +236,44 @@ switch (CGAL::compare(u * u, w * w * CoordNT(beta))) {   // same-root products
     case CGAL::EQUAL:   return CGAL::ZERO;
 }
 ```
+
+!!! danger "`CGAL::sign` is unsound on an extended value whose root is zero"
+
+    `Sqrt_extension::sign_()`
+    (`external/cgal/include/CGAL/Sqrt_extension/Sqrt_extension_type.h:295-313`)
+    decides by repeated squaring, and opens with:
+
+    ```cpp
+    s0 = CGAL_NTS sign(a0_);
+    s1 = CGAL_NTS sign(a1_);
+    if (s0 == s1) return s0;
+    if (s0 == CGAL::ZERO) return s1;   // the sign of a1·√root — only if root > 0
+    ```
+
+    Under `ACDE_TAG == Tag_true` — the arrangement's tag, hence `CoordNT`'s and
+    `exact::OneRoot`'s — an **extended value whose `root()` is zero is
+    representable**, and this repository constructs them. Such a value *is*
+    `a0`, so when `a0 == 0` the answer is `ZERO`; `sign_()` returns `sign(a1_)`,
+    which is not. One function up, `sign()` handles the non-extended case
+    correctly (`:316-317`, `if (! is_extended_) return sign(a0())`), so the
+    defect is reachable **only** through an extended zero-root value.
+
+    Measured: an oracle that built `CoordNT(a, b, alpha)` unconditionally
+    reported `NEGATIVE` for an expression whose value is exactly `0` on
+    **1,315 of 83,850** probes, every one of them over a degenerate root. First
+    witness `a=-1, b=-1, c=1, d=-1, α=0, β=1` (commit `e54caf77`).
+
+    The shipped predicate is correct **only because it folds first**. Those four
+    early returns read exactly like the fast paths a refactorer would collapse
+    into the general case, and they are load-bearing: deleting the single
+    `is_zero(alpha)` return reddens `sign_mixed_radical_gate` with **347
+    disagreements**, the first being that same witness — predicate `NEGATIVE`,
+    oracle `ZERO`. Do not collapse them.
+
+    This is the sibling of the rule `exact_one_root_gate` already pins. An
+    extended zero-root is not a rational operand for *arithmetic* — that raises
+    `CrossRootExtensionError`, and the exemption is `!is_extended()`, never
+    "the root is zero". It is not sign-safe either.
 
 ## Algebraic kernels: identify roots without minimal polynomials
 
@@ -437,7 +487,7 @@ The incident that produced this page, in three acts:
 
 ## Review checklist
 
-Run every exact-kernel change through these sixteen questions:
+Run every exact-kernel change through these seventeen questions:
 
 1. Is the kernel appropriate for every construction whose result is reused?
 2. Does any `to_double()` result affect control flow or topology?
@@ -463,6 +513,9 @@ Run every exact-kernel change through these sixteen questions:
     the producer can emit, including multiple outer CCBs?
 16. Does release-mode correctness and progress survive with every debug
     assertion removed, with bounded termination and classification both tested?
+17. Does every `Sqrt_extension` a predicate builds have a root that is provably
+    nonzero, or is a zero radicand folded away with rational compares *before*
+    the extension is constructed?
 
 ## References
 

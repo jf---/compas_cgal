@@ -11,8 +11,8 @@ by itself the mechanism*. Measured below, an unfiltered decision on a shallow
 expression costs only 1.4× a filtered one; the explosions come from two
 specific things the filter would otherwise have suppressed: **exact-zero
 identity decisions**, and **coefficient growth through construction chains**.
-The correct pattern is already in this repository — `sign_mixed_radical` in
-`src/engagement_2.cpp` — so the outstanding work is propagating a proven
+The correct pattern is already in this repository — `exact::sign_mixed_radical`
+in `src/exact/one_root.cpp` — so the outstanding work is propagating a proven
 in-repo idiom, not acquiring CGAL literacy.
 
 Read [Exact-Kernel Discipline](exactness.md) first: it governs *where* a
@@ -263,10 +263,13 @@ same-root calls rather than reaching for `CORE::Expr`. This repository already
 does exactly that:
 
 ```cpp
-// src/engagement_2.cpp — sign of A + B·√α + C·√β + D·√(αβ), rational A..D.
-// Group over the shared root α into u, w ∈ Q(√α), so the form is u + √β·w.
-// Its sign follows from sign(u), sign(w), and compare(u², β·w²) — three
-// supported exact calls, all same-root, and β enters as a rational.
+// src/exact/one_root.cpp — sign of A + B·√α + C·√β + D·√(αβ), rational A..D.
+// Degenerate radicands are folded away with rational compares FIRST; that is a
+// soundness requirement, not a fast path (docs/exactness.md, the danger note
+// under "One-root numbers"). Then group over the shared root α into
+// u, w ∈ Q(√α), so the form is u + √β·w. Its sign follows from sign(u),
+// sign(w), and compare(u², β·w²) — three supported exact calls, all same-root,
+// and β enters as a rational.
 switch (CGAL::compare(u * u, w * w * CoordNT(beta))) { ... }
 ```
 
@@ -275,12 +278,15 @@ Because `CoordNT`'s coefficient type is `Epeck::FT`, which is
 reason it costs 308 µs where the unfiltered form costs 1.5 ms and the
 `CORE::Expr` form can cost seconds.
 
-!!! warning "This predicate is currently duplicated"
+!!! note "Converged at stage 1"
 
-    `sign_mixed_radical` exists in both `src/engagement_2.cpp` and
-    `src/audit_exact_station_2.cpp`. Two authoritative copies of one exact
-    predicate violates the single-path rule in `CLAUDE.md`; they must converge
-    on one definition.
+    This predicate used to exist twice, in `src/engagement_2.cpp` and in
+    `src/audit_exact_station_2.cpp` — two authoritative copies of one exact
+    predicate, against the single-path rule in `CLAUDE.md`. Since `541b6ede`
+    there is one definition, `exact::sign_mixed_radical`, and both sites call
+    it. What the duplication was hiding, and the evidence that licensed the
+    merge, are below:
+    [Stage 1: one mixed-radical sign definition](#stage-1-one-mixed-radical-sign-definition-and-the-oracle-gap-it-closed).
 
 ### R6 — Compare squared quantities
 
@@ -656,19 +662,112 @@ check on every projection, where the comparison would cost more than the
 guarantee is worth. Until then the frozen byte literal in `exact_canonical_gate`
 is what actually catches attestation-byte drift.
 
-!!! note "Status at stage 0: landed, not adopted"
+!!! note "Status after stage 1: one predicate adopted, no lane converted"
 
-    **Nothing in the codebase uses these types yet.** `src/exact/` is proven in
-    isolation — native gates plus the binary64 contract test — and sits *beside*
-    the existing string and bare-`CORE::BigRat` carriers rather than replacing
-    them. The 504 unfiltered `BigRat` sites, the six lanes above and every
-    parse-back crossing are exactly as they were.
+    Stage 0 landed `src/exact/` beside the existing carriers with **nothing**
+    using it. Stage 1 changed that for exactly one thing:
+    `exact::sign_mixed_radical` is now on the deciding path in both
+    `src/engagement_2.cpp` and `src/audit_exact_station_2.cpp`, so
+    `exact::Rational` and `exact::OneRoot` are shipped types rather than
+    vocabulary.
 
-    Stage 1 converges the duplicated `sign_mixed_radical` onto the single
-    definition this module will own. Conversion of existing lanes begins at
-    **stage 2**, smallest event source first, and the filtering payoff is
-    predicted to land in stage 4 where the deep construction chains are. Until
-    then, read this section as vocabulary, not as coverage.
+    Everything else is unchanged. Neither door has a caller —
+    `exact::from_binary64` and `exact::to_canonical` are still reached only from
+    `exact_canonical_gate` — and neither do `same_root_add` and
+    `same_root_multiply` outside `exact_one_root_gate`. **No carrier has been
+    converted**: the 504 unfiltered `BigRat` sites, the six lanes above and
+    every parse-back crossing are exactly as they were.
+
+    Lane conversion begins at **stage 2**, smallest event source first, and the
+    filtering payoff is predicted to land in stage 4 where the deep construction
+    chains are. Until then, read the doors as vocabulary, not as coverage.
+
+## Stage 1: one mixed-radical sign definition, and the oracle gap it closed
+
+Since `541b6ede` the exact cap certificate (`src/engagement_2.cpp:77,:95`) and
+the certified audit station (`src/audit_exact_station_2.cpp:62,:84,:315`) decide
+through **one** definition of the mixed-radical sign,
+`exact::sign_mixed_radical` in `src/exact/one_root.cpp`, built on
+`exact::Rational` and `exact::OneRoot`. The merge was +114/−584 across six
+files; the 470 net lines were duplication.
+
+**The duplication was hiding a test-oracle gap, and that is the stronger reason
+it had to go.** Before the merge the Python binding `_sign_mixed_radical`
+reached copy B — `sign_mixed_radical_for_binding` →
+`audit_sign_mixed_radical_exact` → `src/audit_exact_station_2.cpp` — while the
+engagement geometry decided with copy A, a separate anonymous-namespace function
+in `src/engagement_2.cpp`. Every Python-level test of that predicate therefore
+exercised code the geometry never ran. The copies did turn out to be
+semantically equivalent — proven below, not assumed — but nothing enforced it. A
+divergence would have left `tests/test_stock.py` green while the shipped
+certificate was wrong. One definition closes that structurally: the tests and
+the geometry can no longer address different code.
+
+### The evidence that licensed the change
+
+Stage 1 touched a deciding predicate on a certificate path, so the merge was
+licensed by measurement rather than by inspection (`e54caf77`). Both copies were
+compiled into one binary — copy A has internal linkage, so the gate `#include`s
+its translation unit and calls the **shipped** function; nothing was transcribed
+— and compared against each other and against an independent oracle over:
+
+| Arm | Inputs | What it forces |
+|---|---:|---|
+| Exhaustive sign structure | 2,025 | `a,b,c,d ∈ {−1,0,1}` × `α,β ∈ {0..4}` — every sign pattern, `α = 0`, `β = 0`, `α = β`, perfect-square roots |
+| Widened magnitude grid | 60,025 | `a,b,c,d ∈ {−3,−1,−½,0,½,1,3}` — lets \|u\| and \|w·√β\| overtake each other, and lets `u` vanish over a perfect square |
+| Magnitude-tie neighbourhood | 1,800 | sits exactly on the `compare(u², β·w²) == EQUAL` tie and straddles it from both sides |
+| Randomised rationals, fixed seed | 20,000 | general `p/q` coefficients, roots occasionally forced to zero or to each other |
+| **Total** | **83,850** | **0 copy disagreements, 0 oracle disagreements** |
+
+Two properties make that number mean something.
+
+- The gate **requires all ten branch labels to be hit** before the agreement
+  result is allowed to count, so it cannot pass vacuously. The two branches copy
+  B merged were reached 1,747 (`u == 0`) and 20,118 (like signs) times; the
+  exact-tie branch 501 times.
+- Both copies' distinctive branches were **defect-injected**, in scratch copies
+  only. Forcing copy A's `α == β` branch to `ZERO` produced 12,352
+  disagreements; forcing copy B's *merged* branch to `opposite(w_sign)` produced
+  21,865. The second is the one that matters: it proves the gate bit on exactly
+  the branch whose equivalence was in doubt.
+
+!!! note "Maturity: `confirmed`, and empirical"
+
+    This is agreement over 83,850 inputs with enforced full branch coverage and
+    injected-defect evidence that the comparison bites. It is **not a symbolic
+    proof** that the two forms are equal for all rationals. Read it as strong
+    evidence, not as a theorem.
+
+### The standing gate, and what it is not independent of
+
+`tests/native/sign_mixed_radical_gate.cpp` (`3db64195`) is the surviving half of
+that proof, kept as a **correctness** gate. With one definition the
+copy-vs-copy arm became a function compared to itself, but the third arm never
+was: the expression `u + √β·w` with `u, w ∈ Q(√α)` *is* the nested one-root
+number `Sqrt_extension<CoordNT, FT>`, so asking CGAL for that value's sign runs
+CGAL's implementation, not this repository's. That arm now runs against the
+merged definition over the same 83,850-input corpus with the same ten-branch
+requirement.
+
+It is wired into `pixi run exact-gates`, and that detail is load-bearing:
+the native gates are `EXCLUDE_FROM_ALL`, and **nothing in this repository runs a
+`tests/native/*_gate` target automatically**. A proof nothing runs rots.
+
+!!! warning "The oracle is independent in the logic, not in the arithmetic"
+
+    The oracle shares CGAL's `Sqrt_extension` machinery with the predicate at
+    the leaf level. It is independent in the decomposition and the magnitude
+    comparison — the parts under test — and **not** independent in the
+    underlying bignum arithmetic. A defect in the backend rational itself would
+    move both sides together and this gate would not see it.
+
+    Nor is the oracle fold-free: it folds degenerate roots for the same reason
+    the predicate does, because an unfolded oracle measures CGAL's unsound
+    `sign_()` path instead of the predicate (`docs/exactness.md`, the danger
+    note under "One-root numbers"). That is what makes deleting a fold from the
+    predicate show up as a disagreement — 347 of them, first witness
+    `a=-1, b=-1, c=1, d=-1, α=0, β=1`, predicate `NEGATIVE`, oracle `ZERO` —
+    rather than as both sides being wrong together.
 
 ## Review checklist
 
