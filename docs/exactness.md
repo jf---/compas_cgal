@@ -466,6 +466,161 @@ classification and bounded termination on a fixed multi-outer-CCB fixture; a
 certificate that returns quickly but names the wrong face is more dangerous
 than an overt failure.
 
+## Copying a `Gps` aliases its traits object
+
+Copying a `General_polygon_set_2` — or an arrangement, or any type holding
+one — produces an object whose arrangement points at the **source's**
+geometry-traits object, not at its own. The copy allocates a traits it never
+uses; the pointer its arrangement actually reads is owned by the source and
+freed when the source dies. Three properties make this trap hard to see and
+harder to test for: the aliasing lives in vendored CGAL, `std::move` does not
+avoid it (it silently degrades to a copy), and whether the dangling pointer
+faults depends entirely on which point-location strategy reads it. The
+consequence for review is the actionable part: **the check must be structural
+— assert traits-pointer identity — because a fault-based test for this passes
+whenever the allocator happens to be kind.**
+
+!!! danger "A clean run is not evidence here"
+
+    For one confirmed instance of this defect, the following were all
+    collected on code that lldb *simultaneously* showed reading traits bytes
+    scribbled to `0x55555555…`: Guard Malloc (`libgmalloc.dylib`), five runs
+    under `MallocScribble`/`MallocPreScribble` with the nano zone disabled,
+    deliberate reclamation of the freed 32-byte block with three fill
+    patterns, and 130 tests. Every arm was clean and byte-identical, and
+    positive controls proved the instrumentation did detect a plain
+    read-after-free. Absence of a fault says nothing about whether the
+    pointer is valid.
+
+### 1. The copy borrows
+
+`Arrangement_on_surface_2::assign`, which the arrangement copy constructor
+delegates to
+(`external/cgal/include/CGAL/Arrangement_2/Arrangement_on_surface_2_impl.h:201`):
+
+```cpp
+m_geom_traits = (arr.m_own_traits) ? new Traits_adaptor_2 : arr.m_geom_traits;
+m_own_traits  = arr.m_own_traits;
+```
+
+Allocating a fresh traits only when the source **owns** one is defensible in
+isolation. What breaks it is that `Gps_on_surface_base_2` always builds its
+arrangement in borrow mode — the `Gps` owns the traits, the arrangement points
+at it (`Gps_on_surface_base_2.h:158-162`, `165-170`):
+
+```cpp
+Gps_on_surface_base_2(const Self& ps) :
+    m_traits(new Traits_2(*(ps.m_traits))),  // the copy gets its own traits ...
+    m_traits_owner(true),
+    m_arr(new Aos_2(*(ps.m_arr)))            // ... which its arrangement never uses
+{}
+```
+
+`m_own_traits` is therefore `false` all the way down a copy chain, so after
+`Gps b(a);` the object graph is `b.m_arr->m_geom_traits == a.m_traits`, and
+`~a` deletes it. The two CGAL components are individually reasonable and
+jointly wrong, and the combination is reachable from **any** `Gps` copy.
+
+### 2. `std::move` on a `Gps` is a copy
+
+`Gps_on_surface_base_2` declares `virtual ~Gps_on_surface_base_2()`
+(`Gps_on_surface_base_2.h:242`). A user-declared destructor suppresses the
+implicit move constructor, and `General_polygon_set_2` declares none of its
+own, so a `Gps` has **no move constructor at all** — every apparent move binds
+to the copy constructor and hits the aliasing above.
+
+This is not hypothetical. `ExactRegion2::build` (`src/exact_region_2.cpp:149`)
+takes its set by value and adopts it:
+
+```cpp
+ExactRegion2 ExactRegion2::build(ReachSet set, ExactRegionRole2 role, std::string recipe_record)
+{
+    return ExactRegion2(std::make_shared<const ReachSet>(std::move(set)), role, std::move(recipe_record));
+}
+```
+
+It reads as a clean ownership transfer. It is a copy that borrows the
+by-value parameter's traits, plus the destruction of that parameter on
+return — so the stored set's arrangement holds a freed traits pointer the
+instant `build()` returns, for every region, whatever the caller passed.
+
+### 3. Whether it crashes is a property of the locator
+
+The same dangling pointer is a hard fault on one path and silent
+undefined behavior on another, decided solely by which point-location
+strategy touches it:
+
+| Strategy | What it does with the traits pointer | Result |
+|---|---|---|
+| `Arr_trapezoid_ric_point_location` | Constructor runs `td.init_arrangement_and_traits(&arr)` → `new Td_traits(*m_trts_adaptor)` (`Trapezoidal_decomposition_2.h:1816`) — a genuine copy-construct out of the object, including `Arr_circle_segment_traits_2::inter_map` | SIGSEGV/SIGBUS, `KERN_INVALID_ADDRESS`; crashed `Stock2::contains` in 5 of 8 runs of the shipped test and 10 of 10 in a bare reproducer |
+| `Arr_walk_along_line_point_location` (the bounded-planar **default**, `Arr_bounded_planar_topology_traits_2.h:249`; used by `Gps_on_surface_base_2::oriented_side`, `:484`) | Only *stores* the pointer (`Arr_walk_along_line_point_location.h:71,90`) and reaches the traits through accessors that are all `return Functor();` | No fault, correct answers, byte-identical output — and still UB |
+
+The two `Arr_circle_segment_traits_2` accessors that do load the object's
+bytes — `intersect_2_object()` (captures `inter_map`) and
+`make_x_monotone_2_object()` (reads `m_use_cache`),
+`Arr_circle_segment_traits_2.h:684,740` — are simply never reached through the
+borrowed pointer on the walk path, because every boolean operation builds its
+result arrangement from the `Gps`'s own live `m_traits`. That is an accident
+of the current call graph, not an invariant. One locator choice separates
+silence from the crash: `80ddaa11 "fix: support multi-ccb point location"` is
+exactly the commit that gave `Stock2` a trapezoid-RIC locator and turned this
+aliasing into a SIGSEGV.
+
+### Detection is structural, not fault-based
+
+Do not write a test that allocates, drops the parent, churns the heap and
+hopes for a signal. That test is flaky by construction and reports green on
+broken code, as the evidence above shows. Assert the ownership invariant
+directly: **the arrangement an object reads must use the traits object that
+object owns.**
+
+```cpp
+// audit accessor, in the spirit of ExactRegion2::shares_storage_with_for_audit
+bool arrangement_uses_owned_traits() const
+{
+    return set_->arrangement().geometry_traits() == owned_traits_pointer();
+}
+```
+
+Measured on a plain region today, those two are `0x12ee0f450` (freed,
+`malloc_size == 0`) and `0x12ee15800` (live, never used) — the assertion is
+`false` before any fix and `true` after one, deterministically, with no
+dependence on allocator behaviour.
+
+### The safe shape
+
+One traits object whose lifetime outlives every arrangement in the family.
+Two forms, both sound:
+
+- **Share the traits.** Hold a `std::shared_ptr<const Traits>` member declared
+  *before* the arrangement member — declaration order is load-bearing, since
+  members are destroyed in reverse order and the arrangement must die first —
+  and root the set with the borrowing `Gps_on_surface_base_2(const Traits_2&)`
+  overload (`Gps_on_surface_base_2.h:158`), which sets `m_traits_owner = false`
+  and leaves the `shared_ptr` sole owner. Every copy carries the same share.
+- **Adopt the set instead of copying it.** Take `std::shared_ptr<const Set>`
+  rather than a by-value set: the stored set *is* the caller's root, owning its
+  own traits, and the borrowed pointer never comes into existence. Sites that
+  derive one object from another without an intervening boolean operation must
+  additionally carry the parent's share as a keep-alive.
+
+Rejected for this codebase: rebuilding a copy from its
+`polygons_with_holes` (re-runs a sweep and can perturb the arrangement that
+certificates hash); patching vendored CGAL at
+`Arrangement_on_surface_2_impl.h:201` (correct, but diverges the vendored tree
+— it belongs upstream, and an upstream report against
+`Gps_on_surface_base_2`'s copy constructor is worth filing regardless); a
+process-lifetime `static` traits (global mutable cache state shared across
+unrelated objects).
+
+### Status in this repository
+
+| Site | Reader | Maturity |
+|---|---|---|
+| `Stock2` (`src/stock_2.h`, `src/stock_2.cpp`) | `Arr_trapezoid_ric_point_location` in `contains` | **Fixed**, `57482731` — `std::shared_ptr<const GpsTraits> traits_` declared before `set_`. Confirmed: reproducer 6/6 crash → 0/8; shipped test 5/8 crashing → 8/8 pass; all digests byte-identical |
+| `ExactRegion2` (`src/exact_region_2.cpp:149`) | `Arr_walk_along_line_point_location` via `oriented_side` | **Confirmed latent, not fixed.** Every region built holds a freed traits pointer from the moment `build()` returns. Unobservable today — not harmless: it is UB whose quiet is contingent on the current locator and on `use_cache` staying off |
+| `ReachableMaterialPredicateStorage2` (`src/reachable_material_predicate_2.cpp:198`) | Two `Arr_trapezoid_ric_point_location` — the crashing strategy | **Standing hazard.** Its members copy by-value `ReachSet` parameters and the locators read the borrowed traits; it is safe *only* because member-initialiser order builds both locators while those parameters are still alive. One member reorder, or making a locator lazy, makes it live |
+
 ## Case study: the deflation constant that wasn't needed
 
 The incident that produced this page, in three acts:
@@ -487,7 +642,7 @@ The incident that produced this page, in three acts:
 
 ## Review checklist
 
-Run every exact-kernel change through these seventeen questions:
+Run every exact-kernel change through these eighteen questions:
 
 1. Is the kernel appropriate for every construction whose result is reused?
 2. Does any `to_double()` result affect control flow or topology?
@@ -516,6 +671,11 @@ Run every exact-kernel change through these seventeen questions:
 17. Does every `Sqrt_extension` a predicate builds have a root that is provably
     nonzero, or is a zero radicand folded away with rational compares *before*
     the extension is constructed?
+18. Does every copy of a `Gps`, an arrangement, or a type containing one — a
+    `std::move` of such a type included, since it is a copy — keep the traits
+    object its arrangement borrows alive for at least as long as the copy, and
+    is that asserted by traits-pointer identity rather than by observing that
+    tests pass?
 
 ## References
 
