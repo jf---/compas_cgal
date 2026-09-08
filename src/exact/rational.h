@@ -14,9 +14,15 @@ using Rational = CGAL::Exact_predicates_exact_constructions_kernel::FT;
 
 /// Convert a binary64 to its exact rational value.
 ///
-/// This is the ONLY double-to-exact entry point in the codebase. A binary64 is a
-/// dyadic rational, so the conversion is exact and total on finite input: there
-/// is no parsing, no tolerance and no snapping.
+/// The single intended double-to-exact door for this codebase. As of stage 0
+/// nothing is routed through it yet: the per-source `from_binary64` factories in
+/// continuous_tea_2 still inject doubles inline of their own accord
+/// (`SegmentEventSource2::from_binary64`, segment_source.cpp:127-131, and
+/// `FullCircleEventSource2::from_binary64`, :307-312). Routing them through here
+/// is stage 3.
+///
+/// A binary64 is a dyadic rational, so the conversion is exact and total on
+/// finite input: there is no parsing, no tolerance and no snapping.
 ///
 /// Args:
 ///     value: a finite binary64.
