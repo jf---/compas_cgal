@@ -168,9 +168,10 @@ unchanged, and the lazy filter arrives because it is the kernel's own field type
 [[nodiscard]] CanonicalRational to_canonical(const Rational& value);
 ```
 
-As landed (`afa6999b` narrowed this deliberately), `to_canonical` checks the sign
-of the decomposed denominator and nothing else. Reducedness is a property of the
-backend rational's auto-normalisation, pinned by probes in
+`to_canonical` checks the sign of the decomposed denominator and nothing else,
+and never checked more than that — `afa6999b` narrowed the *documentation* in
+`src/exact/errors.h` to match the code, it did not narrow the code. Reducedness
+is a property of the backend rational's auto-normalisation, pinned by probes in
 `exact_canonical_gate`, not an invariant this function establishes — a per-value
 bignum gcd would cost more than it can ever catch, so do not implement one.
 
@@ -219,10 +220,15 @@ bytes. That is the conclusion this design rests on, and it is measured rather
 than assumed: the carrier comparison recorded in
 [Number types](../../number_types.md) — `Epeck::FT` + `Fraction_traits::Decompose`
 against the IEEE-754 bit-decomposition path, 6024 comparisons over edge doubles
-and 3000 random doubles in both signs — found **0 mismatches**. The backend
-question was spiked separately (identical canonical bytes and SHA-256 under boost
-and GMP, 6024 values plus 200 depth-12 chains); that spike has no write-up in the
-tree yet, so treat it as a claim owed a record rather than as a citation.
+and 3000 random doubles in both signs — found **0 mismatches**.
+
+The same question was then measured across arithmetic *backends*, and the write-up
+is in the same page: canonical bytes are identical under boost and GMP
+([Canonical bytes do not move across backends](../../number_types.md#canonical-bytes-do-not-move-across-backends)),
+and the backend barely moves the clock on the filtered path at all — GMP's
+advantage is confined to deep unfiltered chains, with no advantage below the
+crossover ([Measured: the filter decides, not the bignum library](../../number_types.md#measured-the-filter-decides-not-the-bignum-library)).
+The tables live there; do not restate their numbers here, where they would drift.
 
 ### Data flow
 
