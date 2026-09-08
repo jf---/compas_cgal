@@ -574,6 +574,14 @@ broken code, as the evidence above shows. Assert the ownership invariant
 directly: **the arrangement an object reads must use the traits object that
 object owns.**
 
+This is not a hypothetical failure mode. `57482731` was declared verified and
+pushed on the strength of a fault-based test that faulted reliably *before* it
+and passed reliably *after* — and the fix was structurally unable to work for
+any stock that had been operated on, because the test only ever cloned
+unoperated ones. A fault-based test passes whenever the allocator is kind **or
+the specific path it exercises happens to be safe**, and the second half is the
+one that got through review.
+
 ```cpp
 // audit accessor, in the spirit of ExactRegion2::shares_storage_with_for_audit
 bool arrangement_uses_owned_traits() const
@@ -589,20 +597,44 @@ dependence on allocator behaviour.
 
 ### The safe shape
 
-One traits object whose lifetime outlives every arrangement in the family.
-Two forms, both sound:
+**Adopt the set instead of copying it, and resolve which set owns the traits.**
+Hold `std::shared_ptr<const Set>` rather than a by-value set — the stored set
+*is* the caller's root, owning its own traits, and the borrowed pointer never
+comes into existence — plus a `std::shared_ptr<const Set> traits_owner_`
+declared *before* it. Declaration order is load-bearing: members are destroyed
+in reverse order and the arrangement must die first. At every point where the
+stored set changes, ask the set which traits its arrangement actually reads and
+find the owner among the sets the caller offered; no match is a named exception,
+not an adoption. `ExactRegion2::build` (`src/exact_region_2.cpp:158`) and
+`Stock2::resolve_traits_owner` (`src/stock_2.cpp:188`) are the two instances.
 
-- **Share the traits.** Hold a `std::shared_ptr<const Traits>` member declared
-  *before* the arrangement member — declaration order is load-bearing, since
-  members are destroyed in reverse order and the arrangement must die first —
-  and root the set with the borrowing `Gps_on_surface_base_2(const Traits_2&)`
-  overload (`Gps_on_surface_base_2.h:158`), which sets `m_traits_owner = false`
-  and leaves the `shared_ptr` sole owner. Every copy carries the same share.
-- **Adopt the set instead of copying it.** Take `std::shared_ptr<const Set>`
-  rather than a by-value set: the stored set *is* the caller's root, owning its
-  own traits, and the borrowed pointer never comes into existence. Sites that
-  derive one object from another without an intervening boolean operation must
-  additionally carry the parent's share as a keep-alive.
+!!! danger "A shared traits OBJECT per family looks right and cannot work"
+
+    The obvious repair is to hold a `std::shared_ptr<const Traits>` member
+    declared before the set, root the set with the borrowing
+    `Gps_on_surface_base_2(const Traits_2&)` overload
+    (`Gps_on_surface_base_2.h:158`, which sets `m_traits_owner = false`), and
+    hand every copy the same share. **That is correct for a set nothing ever
+    operates on, and only for that.** CGAL allocates the copy its own
+    `Traits_2` on every copy (`:165`), and the first two-operand boolean
+    operation ADOPTS that one — `_difference(const Aos_2&)` opens with
+    `Aos_2* res_arr = new Aos_2(m_traits);` (`:1618-1620`). From that operation
+    onward the arrangement reads an object the shared member does not name, so
+    a clone taken afterwards borrows traits belonging to a `Gps` nobody has
+    told to stay alive. A traits object cannot track a pointer CGAL reassigns.
+
+    `57482731` shipped exactly this for `Stock2`. It crashed **12 of 12** runs
+    on the first clone of an operated stock, through the shipped
+    `compas_cgal.stock.Stock` API. See the status table below.
+
+Range-form boolean operations never re-root either, and they *read* the
+borrowed object rather than merely storing it: `Base_merge::operator()`
+(`Gps_merge.h:57-60`) does
+`const Geometry_traits_2* tr = arr_vec[i].first->geometry_traits(); Arrangement_2* res = new Arrangement_2(tr);`
+with `arr_vec[0].first == this->m_arr`, and the `Gps_agg_op` built over that
+object reaches `intersect_2_object()` / `make_x_monotone_2_object()`, which load
+`inter_map` and `m_use_cache`. A range op on a set whose traits are freed is a
+crash-grade read, not a quiet one.
 
 Rejected for this codebase: rebuilding a copy from its
 `polygons_with_holes` (re-runs a sweep and can perturb the arrangement that
@@ -617,8 +649,8 @@ unrelated objects).
 
 | Site | Reader | Maturity |
 |---|---|---|
-| `Stock2` (`src/stock_2.h`, `src/stock_2.cpp`) | `Arr_trapezoid_ric_point_location` in `contains` | **Fixed**, `57482731` — `std::shared_ptr<const GpsTraits> traits_` declared before `set_`. Confirmed: two independent reproducers crashed 10/10 and 6/6 before, and 0 of 20 and 0 of 8 after; the shipped intermittent test faulted 3/10 and 5/8 before, passing 15/15 and 8/8 after; all digests byte-identical |
-| `ExactRegion2` (`src/exact_region_2.cpp`) | `Arr_walk_along_line_point_location` via `oriented_side` | **Fixed**, `df6fb020` — `build` adopts a `shared_ptr<const ReachSet>` instead of copying, and resolves the traits owner at construction, raising `ExactRegionTraitsUnownedError` when no candidate owns them. The `Stock2` shape did not transfer: `build` adopts sets from 13 call sites across 5 translation units, so it cannot know which traits an incoming set is rooted on. Confirmed structurally, not by faulting: `arrangement_traits_are_owned_for_audit()` was false for **all 17** producers before and true after; digest snapshot byte-identical |
+| `Stock2` (`src/stock_2.h`, `src/stock_2.cpp`) | `Arr_trapezoid_ric_point_location` in `contains`; `CGAL::insert` through the arrangement in `subtract_region_local` | **Fixed**, under the resolver shape. `57482731` did **not** fix it — a `shared_ptr<const GpsTraits>` family member closed only clones of *unoperated* stocks, which is the one case its test exercised; clones of operated stocks still crashed 12/12, through the shipped `Stock.clone()`. `set_` is now `shared_ptr<Gps>` with `traits_owner_` resolved in the constructor, `clone()` and `replace_set()` (`StockTraitsUnownedError` when nothing owns them). Confirmed structurally: `arrangement_traits_are_owned_for_audit()` was false for four shapes — operated clone, clone after `replace_set`, `replace_set` onto an empty stock, and the sweep oracle's two sets — and true for all after (`tests/test_stock_traits_ownership.py`, `6 failed, 4 passed` → `10 passed`). The operated-clone reproducer went 12/12 SIGSEGV → **0/16**; digests byte-identical |
+| `ExactRegion2` (`src/exact_region_2.cpp`) | `Arr_walk_along_line_point_location` via `oriented_side` | **Fixed**, `df6fb020` — `build` adopts a `shared_ptr<const ReachSet>` instead of copying, and resolves the traits owner at construction, raising `ExactRegionTraitsUnownedError` when no candidate owns them. `build` adopts sets from 13 call sites across 5 translation units, so it cannot know which traits an incoming set is rooted on — which is why it resolved rather than shared from the start, and why `Stock2` now does the same. Confirmed structurally, not by faulting: `arrangement_traits_are_owned_for_audit()` was false for **all 17** producers before and true after; digest snapshot byte-identical |
 | `ReachableMaterialPredicateStorage2` (`src/reachable_material_predicate_2.cpp:198`) | Two `Arr_trapezoid_ric_point_location` — the crashing strategy | **Fixed**, `df6fb020`, under the same adoption shape. Before it, this was the sharpest instance in the tree: its members copied by-value `ReachSet` parameters and both locators read the borrowed traits, so it was correct *only* because member-initialiser order built the locators while those parameters were still alive. One member reorder, or one lazily-built locator, and it would have been the `Stock2` fault |
 
 ## Case study: the deflation constant that wasn't needed

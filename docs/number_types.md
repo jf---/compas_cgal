@@ -776,8 +776,9 @@ arrangement reads, and `ExactRegion2::build` **refuses to construct a region
 whose arrangement reads traits that nothing keeps alive** —
 `ExactRegionTraitsUnownedError` (`src/exact_region_2.h:35`).
 `ReachableMaterialPredicateStorage2` was repaired in the same commit under the
-same shape, and `Stock2` was repaired earlier, differently, in `57482731`.
-Maturity for all three: **`confirmed`**.
+same shape. `Stock2` now uses that shape too, after an earlier and different
+repair (`57482731`) turned out to be structurally unable to work. Maturity for
+all three: **`confirmed`**.
 
 The underlying trap is CGAL's, and it is written down once, under
 [Copying a `Gps` aliases its traits object](exactness.md#copying-a-gps-aliases-its-traits-object)
@@ -785,18 +786,42 @@ The underlying trap is CGAL's, and it is written down once, under
 leaves its arrangement pointing at the traits of the set it was copied from,
 which is freed when that set dies; `std::move` does not avoid it, because a
 `Gps` has no move constructor. What belongs on this page is what the repairs
-cost here, and the fact that **the same defect needed two different shapes,
-decided by how many producers construct the object.**
+cost here, and the fact that **one shape works and the obvious one does not** —
+the distinction is not how many producers construct the object, it is whether
+anything ever *operates* on it.
 
-### One defect, two shapes
+### One defect, one shape — and the shape that looked sufficient
 
-|  | `Stock2` (`57482731`) | `ExactRegion2` (`df6fb020`) |
+`57482731` gave `Stock2` a `std::shared_ptr<const GpsTraits> traits_` declared
+before `set_`, rooted its `Gps` with the borrowing constructor, and handed every
+clone the same share. This page previously recorded that as `confirmed` and
+argued it was the *right* shape for `Stock2` because there is only one
+construction point. Both claims were wrong, and the reasoning was wrong in an
+instructive way.
+
+**A traits object cannot track a pointer CGAL reassigns.** The copy constructor
+gives every copy its own `Traits_2` (`Gps_on_surface_base_2.h:165`), and the
+first two-operand boolean operation adopts it —
+`_difference(const Aos_2&)` opens `Aos_2* res_arr = new Aos_2(m_traits);`
+(`:1618-1620`). From that operation on, the arrangement reads an object `traits_`
+does not name; a clone taken afterwards borrows traits belonging to a `Gps`
+that only its parent keeps alive. The number of construction points is
+irrelevant: a *mutable* set leaves the family object on its first operation, so
+the owner has to be **resolved from the object graph** wherever the stored set
+changes, exactly as `ExactRegion2` does.
+
+`Stock2` now carries `std::shared_ptr<Gps> set_` with a
+`std::shared_ptr<const Gps> traits_owner_` declared before it, resolved by
+`Stock2::resolve_traits_owner` (`src/stock_2.cpp:188`) from the constructor,
+`clone()` and `replace_set()`, and throwing `StockTraitsUnownedError` when no
+offered set owns the traits.
+
+|  | `57482731` (withdrawn) | The resolver shape (`ExactRegion2` and `Stock2`) |
 |---|---|---|
-| Construction points | one | thirteen `build` call sites across five translation units |
-| Can the object own the traits? | **Yes.** One construction point can root every set on one share | **No.** `build` adopts sets from producers that each root their own traits, so it cannot know which traits an incoming set reads |
-| Shape | `std::shared_ptr<const GpsTraits> traits_` declared *before* `set_` (`src/stock_2.h:263-264`) so it is destroyed after the arrangement, propagated through `clone()`, the private constructor, `replace_set`, `swap` and the moves | The inverse: `build` takes `std::shared_ptr<const ReachSet>` instead of a by-value set — adopting, never copying — and **resolves the traits owner at construction** from a candidate list |
+| What is held | the traits **object**, one per clone family | the **set** that owns the traits, resolved per construction |
+| Survives an operation on the set | **No.** The operation re-roots the arrangement onto the `Gps`'s own traits and the member stops naming it | Yes — `clone()` and `replace_set()` re-resolve against both the current set and the previous owner |
 | What enforces the invariant | Convention: every construction site must root on `traits_` | The type: a set whose traits owner cannot be resolved is rejected with a named error |
-| Side effect | — | One full arrangement copy per region removed; `clone()` is now two refcount bumps (`src/exact_region_2.cpp:208`) |
+| Side effect | — | One full arrangement copy per region removed; `ExactRegion2::clone()` is two refcount bumps (`src/exact_region_2.cpp:208`) |
 
 `ExactRegion2::build` (`src/exact_region_2.cpp:158`) asks the set which traits
 its arrangement actually reads, then finds the owner among the candidates the
@@ -812,9 +837,10 @@ throw ExactRegionTraitsUnownedError(
     "exact region storage reads geometry traits that no offered set owns.");
 ```
 
-That is the substantive difference between the two fixes. `Stock2`'s repair
+That is the substantive difference between the two shapes. The withdrawn one
 answers *"did the author root every construction on `traits_`?"* with
-diligence. `ExactRegion2`'s answers it with a machine-checked invariant: a
+diligence — and the answer does not stay true, because CGAL moves the pointer
+out from under it. The resolver answers it with a machine-checked invariant: a
 producer that hands over a set rooted on traits it did not offer gets a named
 exception at the construction site, instead of a dangling pointer that surfaces
 later inside a point locator. Producers pass `{}` when the set was built from
@@ -863,6 +889,34 @@ offers both owners and lets `build` resolve it (`src/coverage_2.cpp:485`):
 ```cpp
 {state_.accumulated_sweeps.traits_owner(), sweep}
 ```
+
+`_difference(const Self&)` has the mirror-image shortcut — it returns
+immediately when the **left** operand is empty (`:1674`) — and that is the
+route through `Stock2` that needs no clone at all. `subtract_exact_segment` and
+its siblings copy `*set_` into a trial, difference the removal out of it, and
+`replace_set` the result. On an already-empty stock the difference never runs,
+so the trial is installed still reading the *outgoing* set's traits, and
+`replace_set` frees that set in the same statement. `Stock2::replace_set`
+therefore offers the outgoing set as a candidate owner, and holds the outgoing
+set and the outgoing owner in locals so the arrangement is destroyed before the
+traits it reads — the same order `~Gps_on_surface_base_2` uses (`:242-248`).
+
+The four `Stock2` shapes the resolver closes, all measured false before and true
+after:
+
+| Shape | Site | Evidence before |
+|---|---|---|
+| Clone of an operated non-root | `Stock2::clone` | 12/12 SIGSEGV, 0/12 with the parent alive; reproduced through `compas_cgal.stock.Stock` |
+| Clone after `replace_set` | `clone` after `subtract_exact_*` | ownership `false`; the root itself has left the family object |
+| `replace_set` onto an **empty** stock — no clone | `Stock2::replace_set` | ownership `false`; structurally certain, faulted about 1 run in 12 |
+| The sweep oracle's two sets | `return {std::move(removal), std::move(sweep)}` | ownership `false` for both members; latent, on the certificate paths |
+
+The last one is the `ExactRegion2::build` defect verbatim: a braced return
+copy-initializes each member from an xvalue, `Gps` has no move constructor, and
+no elision is permitted for that form. `ExactSweepOracle` now holds
+`std::shared_ptr<Gps>` and both sets are built in place through
+`build_exact_disk_union_region_2_into` and `exact_annulus_region_into` — the
+same `_into` split, for the same reason.
 
 !!! warning "A following boolean operation is not proof that a set was re-rooted"
 
@@ -914,6 +968,21 @@ the allocator happens to be kind, which for this defect was every single time.
 Assert the ownership invariant instead — it is deterministic, it fails on the
 broken code under any allocator, and it keeps failing until the code is right.
 
+There is a second, sharper way the fault-based test lies, and `Stock2` is the
+worked example. `57482731`'s test *did* fault before that fix and *did* pass
+after it — reliably, three tests, no flakiness — and the fix was still
+structurally unable to work. The test only ever cloned **unoperated** stocks,
+which is precisely the case a shared traits object handles. A fault-based test
+passes whenever the allocator is kind **or the specific path it exercises
+happens to be safe**; the second clause is not about luck, and no amount of
+re-running catches it. The same suite is now
+`tests/test_stock_traits_ownership.py`: ten structural assertions over the root,
+an unoperated clone, an operated stock, a clone of an operated clone, a clone
+after `replace_set`, `replace_set` onto an empty stock, both sweep oracles, and
+the public `compas_cgal.stock.Stock` surface — `6 failed, 4 passed` before,
+`10 passed` after. `tests/test_stock_clone_lifetime.py` keeps the fault arm as
+corroboration; it is no longer the gate.
+
 ### Evidence
 
 | Measurement | Before | After |
@@ -922,8 +991,10 @@ broken code under any allocator, and it keeps failing until the code is right.
 | Canonical digest snapshot | `6cdb83dd2b94688c918798656b07011f`, 61 payload lines | **byte-identical**, same hash and line count |
 | `pytest tests/adaptive tests/test_engagement_audit.py -q -n auto` | 4 failed, 783 passed | **4 failed, 783 passed** — the same four manifest-declared ids |
 | Region and digest-bearing suites | — | **64 passed** |
-| `pixi run exact-gates` | — | **four native gates OK** |
-| `Stock2` (`57482731`, [detail](exactness.md#status-in-this-repository)) | reproducer 6/6 crash; the shipped intermittent test 5/8 crashing | **0/8** and **8/8 passing**; all digests byte-identical |
+| `pixi run exact-gates` | — | **five native gates OK** |
+| `tests/test_stock_traits_ownership.py` ([detail](exactness.md#status-in-this-repository)) | 6 failed, 4 passed — all four `Stock2` shapes `false`, including through `compas_cgal.stock.Stock` | **10 passed** |
+| `Stock2` operated-clone reproducer | **12/12 SIGSEGV**; 0/12 with the parent kept alive | **0 of 16**, correct containment answers |
+| `tests/test_stock.py`, `tests/test_stock_clone_lifetime.py` | — | **76 passed**, **5 passed** |
 
 !!! note "The digest is what proves the change touched ownership only"
 

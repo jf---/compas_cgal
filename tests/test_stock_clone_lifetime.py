@@ -85,6 +85,47 @@ for _ in range(16):
 )
 
 
+CLONE_OF_AN_OPERATED_CLONE = (
+    _STOCK_SETUP
+    + """
+# The shape the shared-traits-object fix could not reach: the first boolean
+# operation moves the child's arrangement onto the child Gps's OWN traits, so the
+# grandchild borrows an object the FAMILY traits does not name and only the child
+# keeps alive. 12/12 SIGSEGV before the owner was resolved from the object graph.
+for _ in range(16):
+    root = _stock_2.Stock2(SQUARE, [ISLAND])
+    child = root.clone()
+    child.subtract_disk(3.0, 3.0, 1.0)
+    grandchild = child.clone()
+    del child, root
+    ballast = [bytearray(32) for _ in range(4096)]
+    assert probe(grandchild) == EXPECTED, probe(grandchild)
+    assert not grandchild.contains(3.0, 3.0)
+    del ballast, grandchild
+"""
+)
+
+REPLACE_SET_ONTO_AN_EMPTY_STOCK = (
+    _STOCK_SETUP
+    + """
+# No clone at all: `Gps::_difference` early-returns on an empty set, so the trial
+# `subtract_exact_segment` builds never rebuilds its arrangement and is installed
+# still reading the traits `replace_set` then frees. Structurally certain every
+# run; it faulted about one run in twelve.
+SMALL = np.array([[-2, -2, 0], [2, -2, 0], [2, 2, 0], [-2, 2, 0]], dtype=np.float64)
+for _ in range(16):
+    stock = _stock_2.Stock2(SMALL, [])
+    stock.subtract_exact_segment(-1.0, 0.0, 1.0, 0.0, 5.0, 10.0, 4096)
+    assert stock.is_empty()
+    stock.subtract_exact_segment(-1.0, 0.0, 1.0, 0.0, 5.0, 10.0, 4096)
+    ballast = [bytearray(32) for _ in range(4096)]
+    assert stock.is_empty()
+    assert not stock.contains(0.0, 0.0)
+    del ballast, stock
+"""
+)
+
+
 def _run_isolated(code: str) -> None:
     """Run `code` in a fresh interpreter; a fault becomes a named assertion failure."""
     finished = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=300)
@@ -103,3 +144,11 @@ def test_clone_family_two_deep_locates_points() -> None:
 
 def test_clone_locates_points_under_allocation_churn() -> None:
     _run_isolated(CLONE_UNDER_ALLOCATION_CHURN)
+
+
+def test_clone_of_an_operated_clone_locates_points() -> None:
+    _run_isolated(CLONE_OF_AN_OPERATED_CLONE)
+
+
+def test_replace_set_onto_an_empty_stock_locates_points() -> None:
+    _run_isolated(REPLACE_SET_ONTO_AN_EMPTY_STOCK)

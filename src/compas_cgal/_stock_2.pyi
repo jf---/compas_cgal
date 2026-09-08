@@ -40,6 +40,7 @@ class InvalidCircleRemovalInputError(ValueError): ...
 class NonFiniteCapsuleInputError(ValueError): ...
 class LocalDepletionEscapedError(RuntimeError): ...
 class CapsuleQuadCertificateError(RuntimeError): ...
+class StockTraitsUnownedError(RuntimeError): ...
 class AuditNonFiniteInputError(ValueError): ...
 class AuditInvalidPlaneError(ValueError): ...
 class AuditUnsupportedGeometryError(ValueError): ...
@@ -334,6 +335,10 @@ class Stock2:
     def clone(self) -> Stock2: ...
     def is_subset_of(self, other: Stock2) -> bool: ...
     def exactly_equals(self, other: Stock2) -> bool: ...
+    def arrangement_traits_are_owned_for_audit(self) -> bool:
+        """True when this stock keeps alive the object owning the traits its arrangement reads."""
+        ...
+
     def can_remove_circle(
         self,
         previous: tuple[float, float, float],
@@ -491,6 +496,32 @@ def exact_full_circle_undercover_holds(
     max_chord: float,
     center_count_limit: int,
 ) -> bool: ...
+def exact_segment_sweep_oracle_traits_are_owned_for_audit(
+    x0: float,
+    y0: float,
+    x1: float,
+    y1: float,
+    exact_length: float,
+    tool_radius: float,
+    max_chord: float,
+    center_count_limit: int,
+) -> bool:
+    """True when both sets of the segment sweep oracle read traits they own."""
+    ...
+
+def exact_full_circle_sweep_oracle_traits_are_owned_for_audit(
+    cx: float,
+    cy: float,
+    phase_x: float,
+    phase_y: float,
+    guide_radius: float,
+    tool_radius: float,
+    max_chord: float,
+    center_count_limit: int,
+) -> bool:
+    """True when both sets of the full-circle sweep oracle read traits they own."""
+    ...
+
 def exact_segment_induction_holds(
     initial: Stock2,
     x0: float,
