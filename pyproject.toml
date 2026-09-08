@@ -204,7 +204,12 @@ docs = { features = ["docs"], no-default-feature = true }
 
 [tool.pixi.tasks]
 held-native-curve-import = { cmd = "python -m benchmarks.held_native_curve_import_plot", description = "Plot native imports of prepared Held line/arc boundaries" }
-held-native-curved-circle = { cmd = "python -m benchmarks.held_native_curved_circle_plot", description = "Diagnose native curved medial circles; known Figure 5 runtime blocker" }
+held-native-curved-circle = { cmd = "python -m benchmarks.held_native_curved_circle_plot", depends-on = ["_editable-rebuild"], description = "Native curved medial circles on a prepared Held pocket; --case all --record-stops renders every case" }
+held-curved-circle-benchmark = { cmd = "python -m benchmarks.held_curved_circle_benchmark --output build/held-curved-circle/current.json", depends-on = ["_editable-rebuild"], description = "Time the native curved-circle query on all four Held pockets into build/" }
+held-curved-circle-baseline = { cmd = "python -m benchmarks.held_curved_circle_benchmark --output benchmarks/results/held_curved_circle_baseline.json", depends-on = ["_editable-rebuild"], description = "Deliberately re-record the committed curved-circle performance baseline" }
+_held-curved-circle-plots = { cmd = "python -m benchmarks.held_native_curved_circle_plot --case all --record-stops", depends-on = ["_editable-rebuild"] }
+_held-curved-circle-performance-plot = { cmd = "python -m benchmarks.held_curved_circle_performance_plot --current build/held-curved-circle/current.json --baseline benchmarks/results/held_curved_circle_baseline.json --output docs/assets/images/held_curved_circle_performance.png" }
+held-curved-circle-figures = { depends-on = ["_held-curved-circle-plots", "held-curved-circle-benchmark", "_held-curved-circle-performance-plot"], description = "Rebuild the four construction figures, the benchmark record and the performance figure" }
 _editable-rebuild = '''python -c "from compas_cgal import _containment_2, _coverage_2, _medial_axis_2, _stock_2, _toolpath"'''
 pytest = { cmd = '''editable_build_dir="$(python -c 'import sys; print(next(f.path for f in sys.meta_path if hasattr(f, "known_wheel_files") and "compas_cgal._stock_2" in f.known_wheel_files))')" && SKBUILD_EDITABLE_SKIP="$editable_build_dir" pytest''', depends-on = ["_editable-rebuild"] }
 baseline = { cmd = '''editable_build_dir="$(python -c 'import sys; print(next(f.path for f in sys.meta_path if hasattr(f, "known_wheel_files") and "compas_cgal._stock_2" in f.known_wheel_files))')" && SKBUILD_EDITABLE_SKIP="$editable_build_dir" pytest tests -n auto --dist=loadgroup -q''', depends-on = ["_editable-rebuild"] }
