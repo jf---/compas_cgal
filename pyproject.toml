@@ -273,9 +273,9 @@ task9-mat-compile-gate = { depends-on = ["_task9-mat-configure", "_task9-mat-bui
 # The run step chains the three gates with &&, so the first broken contract is
 # the one reported rather than the last one to print.
 _exact-gates-configure = "cmake -S . -B build/exact-gate -G Ninja -Dnanobind_DIR=$(python -m nanobind --cmake_dir)"
-_exact-gates-build = "cmake --build build/exact-gate --target exact_vocabulary_gate exact_canonical_gate exact_one_root_gate"
-_exact-gates-run = "build/exact-gate/exact_vocabulary_gate && build/exact-gate/exact_canonical_gate && build/exact-gate/exact_one_root_gate"
-exact-gates = { depends-on = ["_exact-gates-configure", "_exact-gates-build", "_exact-gates-run"], description = "Native gates for the exact number vocabulary: rational/one-root types, canonical bytes, cross-root discipline" }
+_exact-gates-build = "cmake --build build/exact-gate --target exact_vocabulary_gate exact_canonical_gate exact_one_root_gate sign_mixed_radical_gate"
+_exact-gates-run = "build/exact-gate/exact_vocabulary_gate && build/exact-gate/exact_canonical_gate && build/exact-gate/exact_one_root_gate && build/exact-gate/sign_mixed_radical_gate"
+exact-gates = { depends-on = ["_exact-gates-configure", "_exact-gates-build", "_exact-gates-run"], description = "Native gates for the exact number vocabulary: rational/one-root types, canonical bytes, cross-root discipline, mixed-radical sign correctness" }
 
 # ============================================================================
 # mypy — strict typing gate for the benchmark corpus
