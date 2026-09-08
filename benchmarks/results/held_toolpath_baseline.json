@@ -1,0 +1,117 @@
+{
+  "build": {
+    "commit": "fa1f53a3be0521a0bef671fcd647f355fe3e533c",
+    "dirty": true,
+    "package_version": "0.9.1",
+    "recorded_at": "2026-09-08T22:06:34+00:00"
+  },
+  "identity": {
+    "cpu_brand": "Apple M1 Max",
+    "machine": "arm64",
+    "python": "3.12.13",
+    "system": "Darwin"
+  },
+  "runs": {
+    "figure5_refined": {
+      "generation_seconds": 20.94795683299526,
+      "metrics": {
+        "circles": 2013,
+        "connectors": 2012,
+        "containment_rejections": 1010,
+        "max_engagement_deg": 79.99206786713134,
+        "path_length_mm": 26436.597167154923,
+        "unresolved_engagements": 0
+      },
+      "stage_seconds": {
+        "connectors": 0.00866775000031339,
+        "guide": 0.329758749998291,
+        "initial": 20.561948708000273,
+        "offset": 0.0017044579981302377,
+        "refine": 0.045877166998252505
+      },
+      "validation_seconds": null,
+      "workload": "figure5_refined"
+    },
+    "figure8_crossed_skis_boundary": {
+      "generation_seconds": 36.54675116400176,
+      "metrics": {
+        "circles": 1616,
+        "connectors": 1615,
+        "containment_rejections": 830,
+        "max_engagement_deg": 79.99556005814695,
+        "path_length_mm": 7835.64644102191,
+        "unresolved_engagements": 0
+      },
+      "stage_seconds": {
+        "connectors": 0.006286708001425723,
+        "guide": 0.429624041000352,
+        "initial": 36.02894608299903,
+        "offset": 0.003340166000270983,
+        "refine": 0.07855416600068565
+      },
+      "validation_seconds": null,
+      "workload": "figure8_crossed_skis_boundary"
+    },
+    "figure8_monstera_boundary_qualified_corners": {
+      "generation_seconds": 449.79163349900773,
+      "metrics": {
+        "circles": 4367,
+        "connectors": 4366,
+        "containment_rejections": 2168,
+        "max_engagement_deg": 79.99836670926365,
+        "path_length_mm": 46719.89410006804,
+        "unresolved_engagements": 0
+      },
+      "stage_seconds": {
+        "connectors": 0.016325166001479374,
+        "guide": 2.8713129999996454,
+        "initial": 446.47277408300215,
+        "offset": 0.1400346670016006,
+        "refine": 0.2911865830028546
+      },
+      "validation_seconds": null,
+      "workload": "figure8_monstera_boundary_qualified_corners"
+    },
+    "figure8_upper_boundary": {
+      "generation_seconds": 92.85698870800115,
+      "metrics": {
+        "circles": 1684,
+        "connectors": 1683,
+        "containment_rejections": 847,
+        "max_engagement_deg": 79.99289553628019,
+        "path_length_mm": 18236.833274041957,
+        "unresolved_engagements": 0
+      },
+      "stage_seconds": {
+        "connectors": 0.00694479199955822,
+        "guide": 0.7059760000011011,
+        "initial": 91.96721112500018,
+        "offset": 0.0049670000007608905,
+        "refine": 0.1718897909995576
+      },
+      "validation_seconds": null,
+      "workload": "figure8_upper_boundary"
+    },
+    "figure8_upper_lane": {
+      "generation_seconds": 90.90120875000503,
+      "metrics": {
+        "circles": 4183,
+        "connectors": 4182,
+        "containment_rejections": 2118,
+        "max_engagement_deg": 79.99339561007837,
+        "path_length_mm": 44186.880357000875,
+        "unresolved_engagements": 0
+      },
+      "stage_seconds": {
+        "connectors": 0.01996891599992523,
+        "guide": 0.7245798750009271,
+        "initial": 90.02862762500081,
+        "offset": 0.004791875002410961,
+        "refine": 0.1232404590009537
+      },
+      "validation_seconds": null,
+      "workload": "figure8_upper_lane"
+    }
+  },
+  "schema_version": 1
+}

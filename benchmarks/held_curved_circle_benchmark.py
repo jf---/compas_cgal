@@ -12,26 +12,25 @@ import dataclasses
 import json
 import math
 import pathlib
-import platform
 import statistics
-import subprocess
 import time
 from dataclasses import dataclass
-from datetime import datetime
-from datetime import timezone
 from typing import Any
 
 from benchmarks.errors import BenchmarkError
 from benchmarks.held_native_curve_import import import_held_boundary
 from benchmarks.held_reference_cases import CANONICAL_CASE_NAMES
 from benchmarks.held_reference_cases import load_held_reference_case
-from compas_cgal import __version__ as PACKAGE_VERSION
+from benchmarks.performance_record import REPOSITORY
+from benchmarks.performance_record import BuildIdentity
+from benchmarks.performance_record import MachineIdentity
+from benchmarks.performance_record import build_identity
+from benchmarks.performance_record import machine_identity
 from compas_cgal import _coverage_2 as native
 
 SCHEMA_VERSION = 1
 DEFAULT_REPEATS = 3
 SAMPLE_PARAMETER = 0.5
-REPOSITORY = pathlib.Path(__file__).resolve().parents[1]
 BASELINE_PATH = REPOSITORY / "benchmarks/results/held_curved_circle_baseline.json"
 
 # Regression policy. Run-to-run spread of a case median on one quiet machine
@@ -72,30 +71,6 @@ class BaselineSchemaError(CurvedCircleBenchmarkError):
 
 class EmptyCaseBenchmarkError(CurvedCircleBenchmarkError):
     """A case with no completed query has no timing statistics."""
-
-
-class BuildIdentityError(CurvedCircleBenchmarkError):
-    """The repository identity could not be read from git."""
-
-
-@dataclass(frozen=True)
-class MachineIdentity:
-    machine: str
-    system: str
-    cpu_brand: str
-    python: str
-
-    def matches(self, other: MachineIdentity) -> bool:
-        """Same hardware class: the same-machine factors apply."""
-        return (self.machine, self.system, self.cpu_brand) == (other.machine, other.system, other.cpu_brand)
-
-
-@dataclass(frozen=True)
-class BuildIdentity:
-    commit: str
-    dirty: bool
-    package_version: str
-    recorded_at: str
 
 
 @dataclass(frozen=True)
@@ -184,37 +159,6 @@ class RegressionFinding:
     current: float
     bound: float
     message: str
-
-
-def cpu_brand() -> str:
-    """Marketing name of the CPU, or 'unknown' where the platform does not publish one."""
-    system = platform.system()
-    if system == "Darwin":
-        return subprocess.run(["sysctl", "-n", "machdep.cpu.brand_string"], capture_output=True, text=True, check=True).stdout.strip()
-    if system == "Linux":
-        for line in pathlib.Path("/proc/cpuinfo").read_text(encoding="utf-8").splitlines():
-            if line.startswith("model name"):
-                return line.split(":", 1)[1].strip()
-        return "unknown"
-    return platform.processor() or "unknown"
-
-
-def machine_identity() -> MachineIdentity:
-    return MachineIdentity(machine=platform.machine(), system=platform.system(), cpu_brand=cpu_brand(), python=platform.python_version())
-
-
-def build_identity(repository: pathlib.Path = REPOSITORY) -> BuildIdentity:
-    try:
-        commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repository, capture_output=True, text=True, check=True).stdout.strip()
-        status = subprocess.run(["git", "status", "--porcelain"], cwd=repository, capture_output=True, text=True, check=True).stdout
-    except (subprocess.CalledProcessError, FileNotFoundError) as error:
-        raise BuildIdentityError(f"git identity unavailable in {repository}: {error}") from error
-    return BuildIdentity(
-        commit=commit,
-        dirty=bool(status.strip()),
-        package_version=PACKAGE_VERSION,
-        recorded_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
-    )
 
 
 def measure_case(case_name: str, repeats: int = DEFAULT_REPEATS) -> CaseBenchmark:
