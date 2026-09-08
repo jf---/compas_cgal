@@ -235,8 +235,15 @@ add_executable(task3_algorithm_gate EXCLUDE_FROM_ALL
 target_link_libraries(task3_algorithm_gate PRIVATE coverage_exact_core)
 target_compile_definitions(task3_algorithm_gate PRIVATE CGAL_USE_CORE=1)
 
+add_executable(exact_vocabulary_gate EXCLUDE_FROM_ALL
+    tests/native/exact_vocabulary_gate.cpp
+)
+target_link_libraries(exact_vocabulary_gate PRIVATE continuous_tea_exact_core)
+target_compile_definitions(exact_vocabulary_gate PRIVATE CGAL_USE_CORE=1)
+
 add_library(continuous_tea_exact_core STATIC
     src/canonical_encoding.cpp
+    src/exact/rational.cpp
     src/exact_algebraic_1.cpp
     src/exact_circle_chart_2.cpp
     src/exact_stock_region_2.cpp
