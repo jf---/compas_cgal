@@ -19,6 +19,15 @@
 
 namespace {
 
+// The traits object a set's ARRANGEMENT actually reads. Not necessarily the
+// set's own traits: CGAL's Gps copy constructor allocates a fresh Traits_2 for
+// the copy and then leaves the copy's arrangement pointing at the traits of the
+// set it was copied from.
+const GpsTraits* arrangement_traits_of(const Gps& set)
+{
+    return set.arrangement().geometry_traits();
+}
+
 // Convert an Nx3 double matrix (rationals by construction) to a linear
 // circle-segment general polygon, validating simplicity via Polygon_2.
 GpsPolygon data_to_gps_polygon(Eigen::Ref<const compas::RowMatrixXd> vertices)
@@ -61,6 +70,14 @@ GpsPolygon exact_linear_polygon(const std::vector<EPoint>& vertices)
     return polygon;
 }
 
+void exact_disk_union_into(
+    Gps& target,
+    const std::vector<EPoint>& centers,
+    const Epeck::FT& radius)
+{
+    build_exact_disk_union_region_2_into(target, centers, radius);
+}
+
 Gps exact_disk_union(
     const std::vector<EPoint>& centers,
     const Epeck::FT& radius)
@@ -77,18 +94,30 @@ Gps exact_disk_union(
 // `inner_radius == 0` yields the plain disk: a guide no wider than the tool
 // sweeps a filled disk, with no hole to punch. That branch is structural -- an
 // exact sign test on an exact quantity -- not an epsilon.
+//
+// Same `_into` / by-value split as the disk union above, and for the same
+// reason: a caller that must KEEP the annulus alive cannot receive it by value.
+void exact_annulus_region_into(
+    Gps& target,
+    const EPoint& center,
+    const Epeck::FT& inner_radius,
+    const Epeck::FT& outer_radius)
+{
+    target.insert(disk_polygon(center, outer_radius));
+    if (CGAL::sign(inner_radius) == CGAL::POSITIVE) {
+        Gps hole;
+        hole.insert(disk_polygon(center, inner_radius));
+        target.difference(hole);
+    }
+}
+
 Gps exact_annulus_region(
     const EPoint& center,
     const Epeck::FT& inner_radius,
     const Epeck::FT& outer_radius)
 {
     Gps region;
-    region.insert(disk_polygon(center, outer_radius));
-    if (CGAL::sign(inner_radius) == CGAL::POSITIVE) {
-        Gps hole;
-        hole.insert(disk_polygon(center, inner_radius));
-        region.difference(hole);
-    }
+    exact_annulus_region_into(region, center, inner_radius, outer_radius);
     return region;
 }
 
@@ -156,14 +185,34 @@ GpsPolygon disk_polygon(const EPoint& center, const Epeck::FT& radius)
     return polygon;
 }
 
+std::shared_ptr<const Gps> Stock2::resolve_traits_owner(
+    const std::shared_ptr<Gps>& set,
+    const std::vector<std::shared_ptr<const Gps>>& candidates)
+{
+    if (!set) {
+        throw StockTraitsUnownedError("stock requires owned native storage.");
+    }
+    const GpsTraits* borrowed = arrangement_traits_of(*set);
+    if (borrowed == &set->traits()) {
+        // A root: the set built its arrangement on its own traits, so owning the
+        // set is owning the traits.
+        return set;
+    }
+    for (const std::shared_ptr<const Gps>& candidate : candidates) {
+        if (candidate && borrowed == &candidate->traits()) {
+            return candidate;
+        }
+    }
+    throw StockTraitsUnownedError(
+        "stock storage reads geometry traits that no offered set owns.");
+}
+
 Stock2::Stock2(Eigen::Ref<const compas::RowMatrixXd> boundary,
                const std::vector<compas::RowMatrixXd>& holes)
-    // Root of a clone family: the traits object is owned HERE, and the Gps is
-    // built with the borrowing constructor so this instance and every clone
-    // taken from it read one traits object with a lifetime that outlives them
-    // all (see the traits_ member comment in stock_2.h).
-    : traits_(std::make_shared<const GpsTraits>()),
-      set_(std::make_unique<Gps>(*traits_))
+    // Root of a clone family: the Gps allocates its own traits and builds its
+    // arrangement on them, so the set IS the owner. Resolved below rather than
+    // assumed -- there is no candidate here to fall back on.
+    : set_(std::make_shared<Gps>())
 {
     set_->insert(data_to_gps_polygon(boundary));
     for (const auto& hole : holes) {
@@ -171,16 +220,20 @@ Stock2::Stock2(Eigen::Ref<const compas::RowMatrixXd> boundary,
         hole_set.insert(data_to_gps_polygon(hole));
         set_->difference(hole_set);
     }
+    traits_owner_ = resolve_traits_owner(set_, {});
 }
 
-Stock2::Stock2(std::shared_ptr<const GpsTraits> traits, std::unique_ptr<Gps> set)
-    : traits_(std::move(traits)),
+Stock2::Stock2(std::shared_ptr<const Gps> traits_owner, std::shared_ptr<Gps> set)
+    : traits_owner_(std::move(traits_owner)),
       set_(std::move(set))
 {
+    if (!set_ || !traits_owner_) {
+        throw StockTraitsUnownedError("stock requires owned native storage.");
+    }
 }
 
 Stock2::Stock2(Stock2&& other) noexcept
-    : traits_(std::move(other.traits_)),
+    : traits_owner_(std::move(other.traits_owner_)),
       set_(std::move(other.set_)),
       point_location_(std::move(other.point_location_))
 {
@@ -191,9 +244,9 @@ Stock2& Stock2::operator=(Stock2&& other) noexcept
     if (this != &other) {
         point_location_.reset();
         set_.reset();
-        // Only now may this instance drop its own share of the traits: the
-        // arrangement released above was still reading them.
-        traits_ = std::move(other.traits_);
+        // Only now may this instance drop its share of the traits owner: the
+        // arrangement released above was still reading it.
+        traits_owner_ = std::move(other.traits_owner_);
         set_ = std::move(other.set_);
         point_location_ = std::move(other.point_location_);
     }
@@ -227,33 +280,47 @@ Stock2 Stock2::clone() const
 {
     note_audit_trial_stock_clone_for_test();
     note_audit_replay_stock_clone_for_test();
-    // The copy's arrangement borrows this family's traits, so the clone must
-    // carry a share of them: it routinely outlives the instance it came from.
-    return Stock2(traits_, std::make_unique<Gps>(*set_));
+    // The copy's arrangement borrows whatever THIS arrangement reads: this
+    // stock's own set once an operation has rebuilt it there, and otherwise the
+    // ancestor that has owned those traits since this family's first copy. The
+    // clone routinely outlives both, so it must carry a share of the right one
+    // -- which one it is has to be resolved, not assumed.
+    auto copy = std::make_shared<Gps>(*set_);
+    std::shared_ptr<const Gps> owner =
+        resolve_traits_owner(copy, {set_, traits_owner_});
+    return Stock2(std::move(owner), std::move(copy));
 }
 
 void Stock2::swap(Stock2& other) noexcept
 {
     note_audit_trial_stock_swap_for_test();
     note_audit_replay_stock_swap_for_test();
-    // The traits travel with the arrangement that borrows them: the two
+    // The traits owner travels with the arrangement that reads it: the two
     // instances may belong to different clone families.
-    traits_.swap(other.traits_);
+    traits_owner_.swap(other.traits_owner_);
     set_.swap(other.set_);
     point_location_.swap(other.point_location_);
 }
 
-void Stock2::replace_set(std::unique_ptr<Gps> replacement)
+void Stock2::replace_set(std::shared_ptr<Gps> replacement)
 {
     // Detach before replacing the observed arrangement. The replacement starts
     // a new read-only epoch and acquires a locator lazily on its first query.
-    //
-    // traits_ is deliberately untouched: every replacement is a copy of *set_,
-    // so its arrangement borrows this family's traits and must keep finding
-    // them here. A Gps from a foreign family would need its own traits share
-    // and is not a legal argument.
     point_location_.reset();
-    set_.swap(replacement);
+    // Resolve BEFORE anything is released, and offer the OUTGOING set: a
+    // replacement seeded by copy from an EMPTY set still reads that set's
+    // traits, because Gps::_difference early-returns on an empty `this` and
+    // never rebuilds the arrangement. Dropping the outgoing set there is what
+    // leaves the stock reading traits replace_set has just freed.
+    std::shared_ptr<const Gps> owner =
+        resolve_traits_owner(replacement, {set_, traits_owner_});
+    // Locals are destroyed in reverse declaration order, so the outgoing
+    // ARRANGEMENT dies before the traits it was reading -- Gps's destructor
+    // deletes its arrangement first and its traits second for the same reason.
+    const std::shared_ptr<const Gps> previous_owner = traits_owner_;
+    const std::shared_ptr<Gps> previous_set = set_;
+    traits_owner_ = std::move(owner);
+    set_ = std::move(replacement);
 }
 
 bool Stock2::is_subset_of(const Stock2& other) const
@@ -265,6 +332,19 @@ bool Stock2::exactly_equals(const Stock2& other) const
 {
     return exact_set_is_subset(*set_, *other.set_)
         && exact_set_is_subset(*other.set_, *set_);
+}
+
+bool Stock2::arrangement_traits_are_owned_for_audit() const
+{
+    const GpsTraits* borrowed = arrangement_traits_of(*set_);
+    // The two objects whose lifetime this stock controls: the resolved traits
+    // owner, and its own set. Both are accepted because an in-place boolean
+    // operation through set() may move the arrangement onto set_'s OWN traits
+    // after traits_owner_ was resolved -- which is safe (set_ is a member) and
+    // leaves traits_owner_ merely over-retaining. Correctness never rests on
+    // traits_owner_ being the tighter of the two: clone() and replace_set()
+    // re-resolve against both.
+    return borrowed == &set_->traits() || borrowed == &traits_owner_->traits();
 }
 
 // Fraction of the tool radius allowed as chain under-coverage slack; the
@@ -651,7 +731,7 @@ DepletionTrace Stock2::subtract_exact_segment(
         tool_radius,
         max_chord,
         center_count_limit);
-    std::unique_ptr<Gps> trial = std::make_unique<Gps>(*set_);
+    auto trial = std::make_shared<Gps>(*set_);
     Gps removal = exact_disk_union(construction.centers, tool_radius);
     trial->difference(removal);
     validate_depletion_trace(construction.trace);
@@ -670,7 +750,7 @@ DepletionTrace Stock2::subtract_exact_full_circle(
         tool_radius,
         max_chord,
         center_count_limit);
-    std::unique_ptr<Gps> trial = std::make_unique<Gps>(*set_);
+    auto trial = std::make_shared<Gps>(*set_);
     Gps removal = exact_disk_union(construction.centers, tool_radius);
     trial->difference(removal);
     validate_depletion_trace(construction.trace);
@@ -689,7 +769,7 @@ ExactArcDepletionTrace2 Stock2::subtract_exact_arc(
         tool_radius,
         max_chord,
         center_count_limit);
-    std::unique_ptr<Gps> trial = std::make_unique<Gps>(*set_);
+    auto trial = std::make_shared<Gps>(*set_);
     Gps removal = exact_disk_union(construction.centers, tool_radius);
     trial->difference(removal);
     if (!exact_arc_structural_density_holds(
@@ -711,8 +791,14 @@ ExactArcDepletionTrace2 Stock2::subtract_exact_arc(
 namespace {
 
 struct ExactSweepOracle {
-    Gps removal;
-    Gps sweep;
+    // Held by shared_ptr, never by value. A Gps has no move constructor (its
+    // base declares a virtual destructor), so `return {std::move(a), std::move(b)}`
+    // on Gps members copy-initializes each member from an xvalue -- a COPY, with
+    // no elision permitted for a braced return -- and each copy's arrangement is
+    // left reading the traits of a local that dies on the way out. Nothing here
+    // is ever copied: both sets are built once, on the heap, in place.
+    std::shared_ptr<Gps> removal;
+    std::shared_ptr<Gps> sweep;
 };
 
 ExactSweepOracle exact_segment_sweep_oracle(
@@ -735,7 +821,8 @@ ExactSweepOracle exact_segment_sweep_oracle(
         tool_radius,
         max_chord,
         center_count_limit);
-    Gps removal = exact_disk_union(construction.centers, tool_radius);
+    auto removal = std::make_shared<Gps>();
+    exact_disk_union_into(*removal, construction.centers, tool_radius);
 
     const EVector direction = motion.end - motion.start;
     const EVector normal(
@@ -752,8 +839,8 @@ ExactSweepOracle exact_segment_sweep_oracle(
         disk_polygon(motion.start, tool_radius),
         disk_polygon(motion.end, tool_radius),
     };
-    Gps sweep;
-    sweep.join(sweep_parts.begin(), sweep_parts.end());
+    auto sweep = std::make_shared<Gps>();
+    sweep->join(sweep_parts.begin(), sweep_parts.end());
     return {std::move(removal), std::move(sweep)};
 }
 
@@ -777,7 +864,8 @@ ExactSweepOracle exact_full_circle_sweep_oracle(
         tool_radius,
         max_chord,
         center_count_limit);
-    Gps removal = exact_disk_union(construction.centers, tool_radius);
+    auto removal = std::make_shared<Gps>();
+    exact_disk_union_into(*removal, construction.centers, tool_radius);
 
     // The true swept region of a full turn IS the annulus, built by the same
     // shared exact_annulus_region that Stock2::subtract_annulus_exact removes --
@@ -785,11 +873,19 @@ ExactSweepOracle exact_full_circle_sweep_oracle(
     const Epeck::FT inner = (CGAL::compare(guide_radius, tool_radius) == CGAL::LARGER)
         ? Epeck::FT(guide_radius - tool_radius)
         : Epeck::FT(0);
-    Gps sweep = exact_annulus_region(
+    auto sweep = std::make_shared<Gps>();
+    exact_annulus_region_into(
+        *sweep,
         motion.center,
         inner,
         guide_radius + tool_radius);
     return {std::move(removal), std::move(sweep)};
+}
+
+bool oracle_traits_are_owned(const ExactSweepOracle& oracle)
+{
+    return arrangement_traits_of(*oracle.removal) == &oracle.removal->traits()
+        && arrangement_traits_of(*oracle.sweep) == &oracle.sweep->traits();
 }
 
 bool exact_induction_holds(
@@ -797,9 +893,9 @@ bool exact_induction_holds(
     const ExactSweepOracle& oracle)
 {
     Gps true_remaining(initial.set());
-    true_remaining.difference(oracle.sweep);
+    true_remaining.difference(*oracle.sweep);
     Gps modeled_remaining(initial.set());
-    modeled_remaining.difference(oracle.removal);
+    modeled_remaining.difference(*oracle.removal);
     return exact_set_is_subset(true_remaining, modeled_remaining);
 }
 
@@ -818,7 +914,7 @@ bool exact_segment_undercover_holds(
         tool_radius,
         max_chord,
         center_count_limit);
-    return exact_set_is_subset(oracle.removal, oracle.sweep);
+    return exact_set_is_subset(*oracle.removal, *oracle.sweep);
 }
 
 bool exact_full_circle_undercover_holds(
@@ -834,7 +930,7 @@ bool exact_full_circle_undercover_holds(
         tool_radius,
         max_chord,
         center_count_limit);
-    return exact_set_is_subset(oracle.removal, oracle.sweep);
+    return exact_set_is_subset(*oracle.removal, *oracle.sweep);
 }
 
 bool exact_segment_induction_holds(
@@ -869,6 +965,38 @@ bool exact_full_circle_induction_holds(
         max_chord,
         center_count_limit);
     return exact_induction_holds(initial, oracle);
+}
+
+bool exact_segment_sweep_oracle_traits_are_owned_for_audit(
+    const ExactSegmentMotion2& motion,
+    const Epeck::FT& exact_length,
+    const Epeck::FT& tool_radius,
+    const Epeck::FT& max_chord,
+    std::size_t center_count_limit)
+{
+    const ExactSweepOracle oracle = exact_segment_sweep_oracle(
+        motion,
+        exact_length,
+        tool_radius,
+        max_chord,
+        center_count_limit);
+    return oracle_traits_are_owned(oracle);
+}
+
+bool exact_full_circle_sweep_oracle_traits_are_owned_for_audit(
+    const ExactCircleMotion2& motion,
+    const Epeck::FT& guide_radius,
+    const Epeck::FT& tool_radius,
+    const Epeck::FT& max_chord,
+    std::size_t center_count_limit)
+{
+    const ExactSweepOracle oracle = exact_full_circle_sweep_oracle(
+        motion,
+        guide_radius,
+        tool_radius,
+        max_chord,
+        center_count_limit);
+    return oracle_traits_are_owned(oracle);
 }
 
 // --- Instrumentation --------------------------------------------------------

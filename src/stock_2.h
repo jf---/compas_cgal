@@ -63,6 +63,15 @@ public:
     using std::runtime_error::runtime_error;
 };
 
+// A Gps was offered as a stock's storage whose arrangement reads geometry traits
+// that no live Gps in the offered set owns. There is no repair at this point:
+// the caller has to build the set on traits something keeps alive. This is a
+// broken INTERNAL invariant of the construction, never an argument fault.
+class StockTraitsUnownedError : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
+
 // Full disk of the given radius centred at `center`, as a two-arc CCW general
 // polygon (split at its x-extreme vertical-tangency points). Shared by the
 // stock-subtraction paths and the engagement query (which intersects the stock
@@ -88,6 +97,25 @@ public:
     void swap(Stock2& other) noexcept;
     bool is_subset_of(const Stock2& other) const;
     bool exactly_equals(const Stock2& other) const;
+
+    // True when the geometry traits this stock's ARRANGEMENT reads belong to an
+    // object this stock keeps alive.
+    //
+    // CGAL's Gps copy constructor gives the copy a fresh Traits_2 of its own but
+    // builds the copy's arrangement as Aos_2(*(ps.m_arr)), and
+    // Arrangement_on_surface_2::assign propagates a BORROWED traits pointer
+    // verbatim (m_geom_traits = arr.m_own_traits ? new Traits_adaptor_2
+    // : arr.m_geom_traits). Every Gps builds its arrangement in borrow mode, so
+    // a copied set reads the traits of whatever set it was copied from -- and
+    // its own freshly allocated traits is never used. The first two-operand
+    // boolean operation then rebuilds the arrangement on the copy's OWN traits,
+    // which is why no single traits object can stand for a whole clone family:
+    // the owner has to be resolved from the object graph at every point where
+    // the arrangement changes.
+    //
+    // This accessor states the lifetime the object graph assumes; it decides
+    // nothing and no geometry depends on it.
+    bool arrangement_traits_are_owned_for_audit() const;
 
     // Sufficient deletion test on this remaining stock, which may conservatively
     // include material already cleared by an emitted path. Circle triples are
@@ -238,30 +266,43 @@ private:
     // Inputs validated by can_remove_circle before any local geometry changes.
     void intersect_circle_sweep(double cx, double cy,
                                 double guide_radius, double tool_radius);
-    Stock2(std::shared_ptr<const GpsTraits> traits, std::unique_ptr<Gps> set);
+    Stock2(std::shared_ptr<const Gps> traits_owner, std::shared_ptr<Gps> set);
 
     // Subtract the union of exact tool disks of the given radius centred at the
     // listed points — the one chain implementation shared by capsule and arc.
     void subtract_point_chain(const std::vector<std::pair<double, double>>& centers,
                               double radius);
-    void replace_set(std::unique_ptr<Gps> replacement);
+    void replace_set(std::shared_ptr<Gps> replacement);
 
-    // The geometry traits every arrangement in this clone family borrows.
+    // Which live Gps owns the geometry traits `set`'s arrangement reads: `set`
+    // itself when it is a root, otherwise the offered candidate whose traits
+    // object matches. Offer every set `set` may have been seeded by copy from.
+    // No match throws StockTraitsUnownedError rather than adopting a pointer
+    // into memory nothing keeps alive.
+    static std::shared_ptr<const Gps> resolve_traits_owner(
+        const std::shared_ptr<Gps>& set,
+        const std::vector<std::shared_ptr<const Gps>>& candidates);
+
+    // The Gps that owns the geometry traits this stock's ARRANGEMENT reads --
+    // this stock's own set when that set is a root.
     //
-    // CGAL's Gps copy constructor gives the copy a fresh Traits_2 of its own but
-    // builds the copy's arrangement as Aos_2(*(ps.m_arr)), and
-    // Arrangement_on_surface_2::assign propagates a BORROWED traits pointer
-    // verbatim (m_geom_traits = arr.m_own_traits ? new Traits_adaptor_2
-    // : arr.m_geom_traits). Every Gps builds its arrangement in borrow mode, so
-    // the arrangement of a clone -- and of a clone of a clone -- points at the
-    // traits object of the ROOT Gps, whose destructor would delete it. Owning
-    // that object here and handing the same shared_ptr to every clone encodes
-    // the lifetime the object graph already assumes.
+    // A shared traits OBJECT per clone family cannot express this, and that is
+    // the shape this replaces. CGAL's Gps copy constructor gives the copy a
+    // fresh Traits_2 of its own but builds the copy's arrangement as
+    // Aos_2(*(ps.m_arr)), and Arrangement_on_surface_2::assign propagates the
+    // BORROWED traits pointer verbatim -- so a fresh clone reads the traits of
+    // the set it was copied from. Then the first two-operand boolean operation
+    // rebuilds the arrangement on the copy's OWN traits
+    // (_difference(const Aos_2&) does `new Aos_2(m_traits)`), and from that
+    // point the family object is no longer the object being read. The owner
+    // therefore has to be RESOLVED from the object graph wherever set_ changes:
+    // the constructor, clone() and replace_set().
     //
     // Declared BEFORE set_ so it is destroyed AFTER the arrangement that reads
-    // it: members are destroyed in reverse declaration order.
-    std::shared_ptr<const GpsTraits> traits_;
-    std::unique_ptr<Gps> set_;
+    // it: members are destroyed in reverse declaration order. Aliases set_ when
+    // set_ is a root.
+    std::shared_ptr<const Gps> traits_owner_;
+    std::shared_ptr<Gps> set_;
     mutable std::unique_ptr<GpsPointLocation> point_location_;
 };
 
@@ -289,6 +330,27 @@ bool exact_segment_induction_holds(
 
 bool exact_full_circle_induction_holds(
     const Stock2& initial,
+    const ExactCircleMotion2& motion,
+    const Epeck::FT& guide_radius,
+    const Epeck::FT& tool_radius,
+    const Epeck::FT& max_chord,
+    std::size_t center_count_limit);
+
+// True when BOTH sets of the sweep oracle the four certificate entry points
+// above are built on read geometry traits they own. The oracle is built exactly
+// as those entry points build it and then observed; the answer decides nothing.
+//
+// The oracle carries the modeled removal and the true swept region side by
+// side, so a member whose arrangement reads freed traits is a certificate
+// computed against freed memory. See arrangement_traits_are_owned_for_audit.
+bool exact_segment_sweep_oracle_traits_are_owned_for_audit(
+    const ExactSegmentMotion2& motion,
+    const Epeck::FT& exact_length,
+    const Epeck::FT& tool_radius,
+    const Epeck::FT& max_chord,
+    std::size_t center_count_limit);
+
+bool exact_full_circle_sweep_oracle_traits_are_owned_for_audit(
     const ExactCircleMotion2& motion,
     const Epeck::FT& guide_radius,
     const Epeck::FT& tool_radius,

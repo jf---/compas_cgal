@@ -1,6 +1,7 @@
 #include "exact_disk_region_2.h"
 
-Gps build_exact_disk_union_region_2(
+void build_exact_disk_union_region_2_into(
+    Gps& target,
     const std::vector<EPoint>& centers,
     const Epeck::FT& radius)
 {
@@ -17,7 +18,14 @@ Gps build_exact_disk_union_region_2(
     for (const EPoint& center : centers) {
         disks.push_back(disk_polygon(center, radius));
     }
+    target.join(disks.begin(), disks.end());
+}
+
+Gps build_exact_disk_union_region_2(
+    const std::vector<EPoint>& centers,
+    const Epeck::FT& radius)
+{
     Gps region;
-    region.join(disks.begin(), disks.end());
+    build_exact_disk_union_region_2_into(region, centers, radius);
     return region;
 }

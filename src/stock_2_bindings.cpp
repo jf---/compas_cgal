@@ -77,6 +77,11 @@ NB_MODULE(_stock_2, m)
     // input" with no common ancestor a caller could tell apart.
     nb::exception<CapsuleQuadCertificateError>(m, "CapsuleQuadCertificateError", PyExc_RuntimeError);
 
+    // Not an argument fault either: a stock was offered native storage whose
+    // arrangement reads geometry traits no live set owns, which is a broken
+    // invariant of the construction and never something a caller passed in.
+    nb::exception<StockTraitsUnownedError>(m, "StockTraitsUnownedError", PyExc_RuntimeError);
+
     // Not an argument fault: a broken internal invariant of the local depletion
     // path, surfaced as a RuntimeError so it can never be confused with -- or
     // caught alongside -- a malformed-input rejection.
@@ -181,6 +186,9 @@ NB_MODULE(_stock_2, m)
         .def("clone", &Stock2::clone)
         .def("is_subset_of", &Stock2::is_subset_of, "other"_a)
         .def("exactly_equals", &Stock2::exactly_equals, "other"_a)
+        .def(
+            "arrangement_traits_are_owned_for_audit",
+            &Stock2::arrangement_traits_are_owned_for_audit)
         .def("can_remove_circle", &Stock2::can_remove_circle,
              "previous"_a, "current"_a, "next"_a,
              "connector_samples"_a, "tool_radius"_a)
@@ -396,6 +404,56 @@ NB_MODULE(_stock_2, m)
            double max_chord,
            std::size_t center_count_limit) {
             return exact_full_circle_undercover_holds(
+                {EPoint(cx, cy), EVector(phase_x, phase_y), false},
+                Epeck::FT(guide_radius),
+                Epeck::FT(tool_radius),
+                Epeck::FT(max_chord),
+                center_count_limit);
+        },
+        "cx"_a,
+        "cy"_a,
+        "phase_x"_a,
+        "phase_y"_a,
+        "guide_radius"_a,
+        "tool_radius"_a,
+        "max_chord"_a,
+        "center_count_limit"_a);
+    m.def(
+        "exact_segment_sweep_oracle_traits_are_owned_for_audit",
+        [](double x0,
+           double y0,
+           double x1,
+           double y1,
+           double exact_length,
+           double tool_radius,
+           double max_chord,
+           std::size_t center_count_limit) {
+            return exact_segment_sweep_oracle_traits_are_owned_for_audit(
+                {EPoint(x0, y0), EPoint(x1, y1)},
+                Epeck::FT(exact_length),
+                Epeck::FT(tool_radius),
+                Epeck::FT(max_chord),
+                center_count_limit);
+        },
+        "x0"_a,
+        "y0"_a,
+        "x1"_a,
+        "y1"_a,
+        "exact_length"_a,
+        "tool_radius"_a,
+        "max_chord"_a,
+        "center_count_limit"_a);
+    m.def(
+        "exact_full_circle_sweep_oracle_traits_are_owned_for_audit",
+        [](double cx,
+           double cy,
+           double phase_x,
+           double phase_y,
+           double guide_radius,
+           double tool_radius,
+           double max_chord,
+           std::size_t center_count_limit) {
+            return exact_full_circle_sweep_oracle_traits_are_owned_for_audit(
                 {EPoint(cx, cy), EVector(phase_x, phase_y), false},
                 Epeck::FT(guide_radius),
                 Epeck::FT(tool_radius),
