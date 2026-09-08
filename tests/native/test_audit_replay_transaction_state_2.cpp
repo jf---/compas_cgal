@@ -50,6 +50,12 @@ void mutating_failure_route_gate(const char* label, const Motion& motion, Invoke
         const auto retried = invoke(replay, motion, digest);
         require(retried.digest().bytes() == clean_result.digest().bytes(),
                 "retry after mutating-route failure diverged from clean replay");
+        if constexpr (requires { retried.reporting_observation(); })
+        {
+            require(retried.reporting_observation().digest().bytes() ==
+                        clean_result.reporting_observation().digest().bytes(),
+                    "retry after REPORTING failure changed observation identity");
+        }
         const AuditReplayInstrumentation2 retried_metrics =
             audit_replay_instrumentation_for_test(replay);
         require(retried_metrics.mutating_clone_count == expected_failed_clones + 1 &&
@@ -150,6 +156,7 @@ void mutating_failure_matrix_gate()
         {AuditReplayFailurePoint2::WITNESS_VALIDATION, 1},
         {AuditReplayFailurePoint2::LINEAGE, 1},
         {AuditReplayFailurePoint2::RESULT, 1},
+        {AuditReplayFailurePoint2::REPORTING, 1},
         {AuditReplayFailurePoint2::PROGRESS, 1},
     };
     mutating_failure_route_gate(

@@ -12,6 +12,7 @@ from compas_cgal.adaptive.units import Point3
 from compas_cgal.adaptive.units import Radian
 from compas_cgal.adaptive.units import WorldXYZ
 from compas_cgal.engagement_audit.identity import BuildIdentity
+from compas_cgal.engagement_audit.input import EngagementAuditInput
 from compas_cgal.engagement_audit.digests import AuthenticatedOperationDigest
 from compas_cgal.engagement_audit.operation_identity import ArcOperationSnapshot
 from compas_cgal.engagement_audit.records import AuthenticatedLateralOperation
@@ -22,7 +23,10 @@ from compas_cgal.engagement_audit.records import MeasuredOperationAudit
 from compas_cgal.engagement_audit.records import NonEngagingOperationAudit
 from compas_cgal.engagement_audit.records import NonEngagingReason
 from compas_cgal.engagement_audit.records import OperationAudit
+from compas_cgal.engagement_audit.records import PlungeOperationAudit
 from compas_cgal.engagement_audit.records import SupportedLateralMotion
+from compas_cgal.engagement_audit.replay import audit_toolpath_engagement
+from compas_cgal.engagement_audit.report import EngagementAuditReport
 
 
 def consume_build_and_operation(
@@ -31,11 +35,22 @@ def consume_build_and_operation(
 ) -> IdentityDigest:
     if isinstance(operation, MeasuredOperationAudit):
         assert_type(operation.verdict, NativeMotionVerdict)
+    elif isinstance(operation, PlungeOperationAudit):
+        assert_type(operation.depletion_witness_digest, bytes)
     elif isinstance(operation, NonEngagingOperationAudit):
         assert_type(operation.reason, NonEngagingReason)
     else:
         assert_never(operation)
     return build.digest
+
+
+def consume_truthful_report(audit_input: EngagementAuditInput) -> None:
+    report = audit_toolpath_engagement(audit_input)
+    assert_type(report, EngagementAuditReport)
+    assert_type(report.operations, tuple[OperationAudit, ...])
+    assert_type(report.max_tea, Radian)
+    assert_type(report.native_completion_digest, bytes)
+    assert_type(report.require_certified(), None)
 
 
 def consume_native_motion_request(motion: SupportedLateralMotion) -> None:

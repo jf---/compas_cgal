@@ -213,14 +213,18 @@ void finalization_failure_retry_and_terminal_gate()
 
     clear_audit_replay_failure_for_test(replay);
     const AuditReplayCompletion2 completion = finish_audit_replay(replay);
+    const AuditLineage2 expected_seed =
+        AuditReplayTestAuthority2::seed_lineage(input_digest(), request);
     require(completion.digest().bytes() == clean_completion.digest().bytes(),
             "retry after finalization failure diverged from clean completion");
-    require(completion.operation_count() == 6 &&
+    require(completion.input_digest().bytes() == input_digest().bytes() &&
+                completion.seed_lineage().bytes() == expected_seed.digest().bytes() &&
+                completion.operation_count() == 6 &&
                 completion.request_digest().bytes() == request.digest().bytes() &&
                 completion.terminal_lineage().bytes() ==
                     clean_completion.terminal_lineage().bytes() &&
                 completion.digest().bytes().size() == 32,
-            "completion lost count, request, terminal lineage, or digest");
+            "completion lost input, seed, count, request, terminal lineage, or digest");
 
     const AuditReplayInstrumentation2 committed = audit_replay_instrumentation_for_test(replay);
     require(committed.mutating_swap_count == 4 &&

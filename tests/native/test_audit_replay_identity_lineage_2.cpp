@@ -3,6 +3,7 @@
 #include "audit_depletion_witness_2.h"
 #include "audit_lineage_2.h"
 #include "audit_motion_result_2.h"
+#include "canonical_encoding.h"
 #include "stock_exact_depletion_2.h"
 
 #include <set>
@@ -569,7 +570,10 @@ void result_and_completion_component_gate()
     const AuditLateralResult2 result =
         audit_deplete_segment(replay, motion, operation);
     require(
-        result.authenticated_operation_digest().bytes() == operation.bytes()
+        result.request_digest().bytes() == request.digest().bytes()
+            && result.cursor() == 0
+            && result.motion_digest().bytes() == motion.digest().bytes()
+            && result.authenticated_operation_digest().bytes() == operation.bytes()
             && result.decision_digest().bytes() == decision.digest().bytes()
             && result.depletion_witness_digest().bytes()
                 == depletion.digest().bytes(),
@@ -661,7 +665,12 @@ void result_and_completion_component_gate()
     const AuditPlungeResult2 plunge_result = deplete_audit_plunge(
         plunge_replay, plunge_motion, plunge_operation);
     require(
-        plunge_result.authenticated_operation_digest().bytes()
+        plunge_result.request_digest().bytes()
+                == plunge_request.digest().bytes()
+            && plunge_result.cursor() == 0
+            && plunge_result.motion_digest().bytes()
+                == plunge_motion.digest().bytes()
+            && plunge_result.authenticated_operation_digest().bytes()
                 == plunge_operation.bytes()
             && plunge_result.depletion_witness_digest().bytes()
                 == plunge_depletion.digest().bytes(),
@@ -725,7 +734,12 @@ void result_and_completion_component_gate()
     const AuditNonEngagingResult2 retract_result = record_audit_retract(
         retract_replay, retract_motion, retract_operation);
     require(
-        retract_result.authenticated_operation_digest().bytes()
+        retract_result.request_digest().bytes()
+                == retract_request.digest().bytes()
+            && retract_result.cursor() == 0
+            && retract_result.motion_digest().bytes()
+                == retract_motion.digest().bytes()
+            && retract_result.authenticated_operation_digest().bytes()
             == retract_operation.bytes(),
         "non-engaging result does not retain authenticated operation digest");
     const AuditResultDigest2 expected_retract =
@@ -768,26 +782,58 @@ void result_and_completion_component_gate()
     }
 
     const AuditReplayCompletion2 completion = finish_audit_replay(replay);
+    const AuditInputDigest2 replay_input = input_digest();
+    const AuditLineage2 seed =
+        AuditReplayTestAuthority2::seed_lineage(replay_input, request);
+    const AuditInputDigest2 changed_input = input_digest("changed-completion");
+    const AuditLineage2 changed_seed =
+        AuditReplayTestAuthority2::seed_lineage(changed_input, request);
     const AuditResultDigest2 expected_completion =
         AuditReplayTestAuthority2::completion_digest(
-            request, 1, result.post_lineage());
+            replay_input, seed.digest(), request, 1, result.post_lineage());
     require(
-        completion.digest().bytes() == expected_completion.bytes(),
+        completion.input_digest().bytes() == replay_input.bytes()
+            && completion.seed_lineage().bytes() == seed.digest().bytes()
+            && completion.digest().bytes() == expected_completion.bytes(),
         "completion diverges from typed constituent authority");
+    const std::string completion_v2_bytes = canonical_encode_tagged_union(
+        "audit-replay-completion-v2",
+        canonical_encode_component_map({
+            {"audit-input-digest", replay_input.bytes()},
+            {"native-request-digest", request.digest().bytes()},
+            {"operation-count", canonical_audit_rational_bytes(Epeck::FT(1))},
+            {"seed-lineage-digest", seed.digest().bytes()},
+            {"terminal-lineage-digest", result.post_lineage().bytes()},
+        }));
+    require(
+        sha256_bytes(completion_v2_bytes) == completion.digest().bytes(),
+        "completion digest is not pinned to audit-replay-completion-v2");
     require(
         AuditReplayTestAuthority2::completion_digest(
-            changed_request, 1, result.post_lineage())
+            changed_input, seed.digest(), request, 1, result.post_lineage())
                 .bytes()
                 != completion.digest().bytes()
             && AuditReplayTestAuthority2::completion_digest(
-                   request, 2, result.post_lineage())
+                   replay_input, changed_seed.digest(), request, 1,
+                   result.post_lineage())
                    .bytes()
                 != completion.digest().bytes()
             && AuditReplayTestAuthority2::completion_digest(
-                   request, 1, foreign_lineage.digest())
+                   replay_input, seed.digest(), changed_request, 1,
+                   result.post_lineage())
+                .bytes()
+                != completion.digest().bytes()
+            && AuditReplayTestAuthority2::completion_digest(
+                   replay_input, seed.digest(), request, 2,
+                   result.post_lineage())
+                   .bytes()
+                != completion.digest().bytes()
+            && AuditReplayTestAuthority2::completion_digest(
+                   replay_input, seed.digest(), request, 1,
+                   foreign_lineage.digest())
                    .bytes()
                 != completion.digest().bytes(),
-        "completion digest omits request, count, or terminal lineage");
+        "completion v2 digest omits input, seed, request, count, or terminal lineage");
 }
 
 } // namespace

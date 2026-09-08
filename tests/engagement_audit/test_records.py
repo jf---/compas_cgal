@@ -1,21 +1,24 @@
 from __future__ import annotations
 
 import hashlib
+from copy import copy
+from dataclasses import fields
 from dataclasses import replace
 
+import numpy as np
 import pytest
 
 from compas_cgal import _stock_2
-from compas_cgal.adaptive.units import Radian
 from compas_cgal.engagement_audit.errors import InvalidMeasuredOperationAuditError
-from compas_cgal.engagement_audit.errors import InvalidMotionVerdictError
 from compas_cgal.engagement_audit.errors import InvalidNonEngagingOperationAuditError
+from compas_cgal.engagement_audit.errors import InvalidPlungeOperationAuditError
 from compas_cgal.engagement_audit.records import AuthenticatedLateralOperation
 from compas_cgal.engagement_audit.records import AuthenticatedNonEngagingOperation
 from compas_cgal.engagement_audit.records import AuthenticatedPlungeOperation
 from compas_cgal.engagement_audit.records import MeasuredOperationAudit
 from compas_cgal.engagement_audit.records import NonEngagingOperationAudit
 from compas_cgal.engagement_audit.records import OperationDigest
+from compas_cgal.engagement_audit.records import PlungeOperationAudit
 
 
 def _digest(seed: bytes) -> bytes:
@@ -30,30 +33,93 @@ def _line_classification(
     return _stock_2.classify_audit_line(start, end, 0.0, 5.0, role)
 
 
-def _measured(**changes: object) -> MeasuredOperationAudit:
-    arguments: dict[str, object] = {
-        "operation_index": 0,
-        "operation_digest": _digest(b"cut"),
-        "verdict": "certified",
-        "max_tea": Radian(0.5),
-        "station_count": 1,
-        "pre_motion_stock_lineage": _digest(b"stock"),
-        "motion_certificate_digest": _digest(b"certificate"),
-    }
-    arguments.update(changes)
-    return MeasuredOperationAudit.build(**arguments)  # type: ignore[arg-type]
+def _native_record_inputs(
+    *,
+    source_suffix: bytes = b"baseline",
+    stock_floor_y: float = -0.4,
+) -> tuple[
+    tuple[
+        AuthenticatedLateralOperation,
+        AuthenticatedPlungeOperation,
+        AuthenticatedNonEngagingOperation,
+    ],
+    tuple[
+        _stock_2.AuditLateralResult2,
+        _stock_2.AuditPlungeResult2,
+        _stock_2.AuditNonEngagingResult2,
+    ],
+]:
+    segment = _line_classification((-1.0, 0.0, 0.0), (1.0, 0.0, 0.0), "cut")
+    plunge = _line_classification((20.0, 0.0, 5.0), (20.0, 0.0, 0.0), "plunge")
+    retract = _line_classification((20.0, 0.0, 0.0), (20.0, 0.0, 5.0), "retract")
+    assert isinstance(segment, _stock_2.AuditSegmentMotion2)
+    assert isinstance(plunge, _stock_2.AuditVerticalPlunge2)
+    assert isinstance(retract, _stock_2.AuditVerticalRetract2)
 
-
-def test_non_engaging_record_has_no_certificate_verdict() -> None:
-    record = NonEngagingOperationAudit.build(
-        operation_index=0,
-        operation_digest=OperationDigest(_digest(b"retract")),
-        reason="vertical_retract",
+    carriers = (
+        AuthenticatedLateralOperation.build(
+            operation_index=0,
+            operation_digest=OperationDigest(_digest(b"segment:" + source_suffix)),
+            motion=segment,
+        ),
+        AuthenticatedPlungeOperation.build(
+            operation_index=1,
+            operation_digest=OperationDigest(_digest(b"plunge:" + source_suffix)),
+            motion=plunge,
+        ),
+        AuthenticatedNonEngagingOperation.build(
+            operation_index=2,
+            operation_digest=OperationDigest(_digest(b"retract:" + source_suffix)),
+            motion=retract,
+        ),
     )
-
-    assert not hasattr(record, "verdict")
-    assert not hasattr(record, "max_tea")
-    assert not hasattr(record, "station_count")
+    boundary = np.array(
+        (
+            (-5.0, -5.0),
+            (5.0, -5.0),
+            (5.0, stock_floor_y),
+            (-5.0, stock_floor_y),
+        ),
+        dtype=np.float64,
+    )
+    cap = np.pi / 2.0
+    policy = _stock_2.build_audit_policy(0.5, cap, 2.0, 0.02, 4096)
+    limits = _stock_2.build_audit_decision_limits(0.015625, 8, 256)
+    request = _stock_2.build_audit_native_request_identity(
+        boundary,
+        [],
+        policy,
+        limits,
+        tuple(carrier.motion for carrier in carriers),
+    )
+    replay = _stock_2.begin_audit_replay(
+        boundary,
+        [],
+        _digest(b"record-input"),
+        request,
+        policy,
+        limits,
+        tuple(bytes(carrier.digest) for carrier in carriers),
+    )
+    results = (
+        _stock_2.audit_deplete_segment(
+            replay,
+            segment,
+            bytes(carriers[0].digest),
+        ),
+        _stock_2.deplete_audit_plunge(
+            replay,
+            plunge,
+            bytes(carriers[1].digest),
+        ),
+        _stock_2.record_audit_retract(
+            replay,
+            retract,
+            bytes(carriers[2].digest),
+        ),
+    )
+    _stock_2.finish_audit_replay(replay)
+    return carriers, results
 
 
 def test_authenticated_carrier_digest_binds_domain_index_and_source() -> None:
@@ -203,39 +269,193 @@ def test_all_carrier_v2_variants_bind_native_motion_digest() -> None:
     assert retract.digest != changed_retract.digest
 
 
-def test_measured_record_rejects_foreign_verdict() -> None:
-    with pytest.raises(InvalidMotionVerdictError, match="foreign"):
-        _measured(verdict="foreign")
+def test_output_records_derive_only_from_exact_native_result_pairs() -> None:
+    carriers, results = _native_record_inputs()
+
+    measured = MeasuredOperationAudit.from_native(
+        carriers[0],
+        results[0],
+        expected_native_request_digest=results[0].request_digest,
+    )
+    plunge = PlungeOperationAudit.from_native(
+        carriers[1],
+        results[1],
+        expected_native_request_digest=results[1].request_digest,
+    )
+    non_engaging = NonEngagingOperationAudit.from_native(
+        carriers[2],
+        results[2],
+        expected_native_request_digest=results[2].request_digest,
+    )
+
+    assert measured.operation_index == 0
+    assert measured.authenticated_operation_digest == carriers[0].digest
+    assert measured.verdict == results[0].verdict
+    assert measured.evidence_count == results[0].evidence_count
+    assert measured.reporting_station_count == results[0].reporting_observation.station_count
+    assert measured.max_tea == results[0].reporting_observation.max_tea
+    assert measured.native_decision_digest == results[0].decision_digest
+    assert measured.depletion_witness_digest == results[0].depletion_witness_digest
+    assert measured.reporting_observation_digest == results[0].reporting_observation.digest
+    assert measured.native_result_digest == results[0].digest
+    assert plunge.depletion_witness_digest == results[1].depletion_witness_digest
+    assert plunge.native_result_digest == results[1].digest
+    assert non_engaging.reason == "vertical_retract"
+    assert non_engaging.pre_motion_stock_lineage == non_engaging.post_motion_stock_lineage
+    assert non_engaging.native_result_digest == results[2].digest
+    assert bytes(measured.digest) == hashlib.sha256(measured.canonical_bytes).digest()
+    assert bytes(plunge.digest) == hashlib.sha256(plunge.canonical_bytes).digest()
+    assert bytes(non_engaging.digest) == hashlib.sha256(non_engaging.canonical_bytes).digest()
 
 
-@pytest.mark.parametrize("station_count", [0, -1, True])
-def test_measured_record_requires_positive_exact_station_count(
-    station_count: object,
-) -> None:
-    with pytest.raises(InvalidMeasuredOperationAuditError, match="station count"):
-        _measured(station_count=station_count)
+def test_output_record_union_has_disjoint_chronology_fields() -> None:
+    carriers, results = _native_record_inputs()
+    measured = MeasuredOperationAudit.from_native(
+        carriers[0],
+        results[0],
+        expected_native_request_digest=results[0].request_digest,
+    )
+    plunge = PlungeOperationAudit.from_native(
+        carriers[1],
+        results[1],
+        expected_native_request_digest=results[1].request_digest,
+    )
+    non_engaging = NonEngagingOperationAudit.from_native(
+        carriers[2],
+        results[2],
+        expected_native_request_digest=results[2].request_digest,
+    )
+
+    for record in (measured, plunge, non_engaging):
+        assert not hasattr(record, "motion")
+        assert not hasattr(record, "operation_digest")
+    for forbidden in ("reason",):
+        assert not hasattr(measured, forbidden)
+        assert not hasattr(plunge, forbidden)
+    for forbidden in (
+        "verdict",
+        "max_tea",
+        "evidence_count",
+        "reporting_station_count",
+        "native_decision_digest",
+        "reporting_observation_digest",
+    ):
+        assert not hasattr(plunge, forbidden)
+        assert not hasattr(non_engaging, forbidden)
+    assert not hasattr(non_engaging, "depletion_witness_digest")
 
 
-def test_unresolved_measurement_remains_a_measured_record() -> None:
-    record = _measured(verdict="unresolved", max_tea=Radian(1.25))
+def test_output_record_factories_reject_wrong_kinds_and_foreign_pairs() -> None:
+    carriers, results = _native_record_inputs()
+    _foreign_carriers, foreign_results = _native_record_inputs(source_suffix=b"foreign")
+    _same_carriers, foreign_request_results = _native_record_inputs(
+        stock_floor_y=-0.3
+    )
 
-    assert record.verdict == "unresolved"
-    assert record.max_tea == Radian(1.25)
-    assert bytes(record.digest) == hashlib.sha256(record.canonical_bytes).digest()
-
-
-def test_measurement_digest_binds_pre_motion_stock_and_certificate() -> None:
-    original = _measured()
-    changed_stock = _measured(pre_motion_stock_lineage=_digest(b"other-stock"))
-    changed_certificate = _measured(motion_certificate_digest=_digest(b"other-certificate"))
-
-    assert len({original.digest, changed_stock.digest, changed_certificate.digest}) == 3
-
-
-def test_non_engaging_record_rejects_foreign_reason() -> None:
-    with pytest.raises(InvalidNonEngagingOperationAuditError, match="foreign"):
-        NonEngagingOperationAudit.build(
-            operation_index=0,
-            operation_digest=OperationDigest(_digest(b"transport")),
-            reason="foreign",  # type: ignore[arg-type]
+    with pytest.raises(InvalidMeasuredOperationAuditError):
+        MeasuredOperationAudit.from_native(
+            carriers[0],
+            results[1],  # type: ignore[arg-type]
+            expected_native_request_digest=results[0].request_digest,
         )
+    with pytest.raises(InvalidMeasuredOperationAuditError, match="operation|digest"):
+        MeasuredOperationAudit.from_native(
+            carriers[0],
+            foreign_results[0],
+            expected_native_request_digest=results[0].request_digest,
+        )
+    with pytest.raises(InvalidMeasuredOperationAuditError, match="request"):
+        MeasuredOperationAudit.from_native(
+            carriers[0],
+            foreign_request_results[0],
+            expected_native_request_digest=results[0].request_digest,
+        )
+    with pytest.raises(InvalidPlungeOperationAuditError):
+        PlungeOperationAudit.from_native(
+            carriers[1],
+            results[0],  # type: ignore[arg-type]
+            expected_native_request_digest=results[1].request_digest,
+        )
+    with pytest.raises(InvalidNonEngagingOperationAuditError):
+        NonEngagingOperationAudit.from_native(
+            carriers[2],
+            results[1],  # type: ignore[arg-type]
+            expected_native_request_digest=results[2].request_digest,
+        )
+
+
+@pytest.mark.parametrize(
+    ("record_type", "error"),
+    (
+        (MeasuredOperationAudit, InvalidMeasuredOperationAuditError),
+        (PlungeOperationAudit, InvalidPlungeOperationAuditError),
+        (NonEngagingOperationAudit, InvalidNonEngagingOperationAuditError),
+    ),
+)
+def test_output_records_are_factory_owned_and_reject_raw_construction(
+    record_type: type[object],
+    error: type[ValueError],
+) -> None:
+    with pytest.raises(error):
+        record_type()
+
+    forged = object.__new__(record_type)
+    with pytest.raises(error):
+        _ = forged.canonical_bytes  # type: ignore[attr-defined]
+
+
+def test_output_records_reject_replace_subclass_and_post_build_tamper() -> None:
+    carriers, results = _native_record_inputs()
+    measured = MeasuredOperationAudit.from_native(
+        carriers[0],
+        results[0],
+        expected_native_request_digest=results[0].request_digest,
+    )
+    plunge = PlungeOperationAudit.from_native(
+        carriers[1],
+        results[1],
+        expected_native_request_digest=results[1].request_digest,
+    )
+    non_engaging = NonEngagingOperationAudit.from_native(
+        carriers[2],
+        results[2],
+        expected_native_request_digest=results[2].request_digest,
+    )
+    records_and_errors = (
+        (measured, InvalidMeasuredOperationAuditError),
+        (plunge, InvalidPlungeOperationAuditError),
+        (non_engaging, InvalidNonEngagingOperationAuditError),
+    )
+
+    for record, error in records_and_errors:
+        with pytest.raises(error):
+            replace(record, operation_index=999)
+
+        for field in fields(record):
+            tampered = copy(record)
+            value = getattr(tampered, field.name)
+            if isinstance(value, bytes):
+                changed: object = _digest(b"tampered-field")
+            elif isinstance(value, str):
+                changed = f"{value}-tampered"
+            elif isinstance(value, int):
+                changed = value + 1
+            elif isinstance(value, float):
+                changed = value + 0.125
+            else:
+                changed = object()
+            object.__setattr__(tampered, field.name, changed)
+            with pytest.raises(error):
+                _ = tampered.canonical_bytes
+            with pytest.raises(error):
+                _ = tampered.digest
+
+    for record_type in (
+        MeasuredOperationAudit,
+        PlungeOperationAudit,
+        NonEngagingOperationAudit,
+    ):
+        with pytest.raises(TypeError):
+
+            class ForgedRecord(record_type):  # type: ignore[valid-type,misc]
+                pass

@@ -308,6 +308,7 @@ target_include_directories(
 target_link_libraries(continuous_tea_exact_core PUBLIC coverage_exact_core)
 
 add_executable(audit_native_gate EXCLUDE_FROM_ALL
+    src/engagement_2.cpp
     tests/native/test_audit_arc_motion_2.cpp
     tests/native/test_exact_arc_depletion_2.cpp
     tests/native/test_audit_identity_2.cpp
@@ -322,6 +323,7 @@ add_executable(audit_native_gate EXCLUDE_FROM_ALL
     tests/native/test_audit_replay_trial_depletion_2.cpp
     tests/native/test_audit_replay_identity_lineage_2.cpp
     tests/native/test_audit_replay_finalization_2.cpp
+    tests/native/test_audit_reporting_observation_2.cpp
 )
 target_link_libraries(audit_native_gate PRIVATE continuous_tea_exact_core)
 
