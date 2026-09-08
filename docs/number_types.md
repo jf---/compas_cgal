@@ -25,7 +25,7 @@ that choice costs.
 |---|------|-------------|--------|-------|
 | L1 | `Epick` | `double` | `Filtered_kernel` static/dynamic FP filter | `toolpath.cpp` |
 | L2 | `Epeck` | `Lazy_exact_nt<cpp_rational>` | **lazy interval** (`Interval_nt_advanced`) | stock, coverage, arrangements |
-| L3 | `Gps_circle_segment_traits_2<Epeck>` | `CoordNT = Sqrt_extension<Epeck::FT, Epeck::FT>` | **inherits L2's lazy filter** | 63 sites |
+| L3 | `Gps_circle_segment_traits_2<Epeck>` | `CoordNT = Sqrt_extension<FT, FT, Tag_true, Boolean_tag<Filter_>>` | **inherits L2's lazy filter** | 63 sites |
 | L4 | `Epeck_with_sqrt` | `CORE::Expr` | none at kernel level; only CORE's internal `filteredFp` | 3 headers |
 | L5 | `Algebraic_kernel_d_1/d_2` | `cpp_int` polynomials | bitstream-Descartes refinement, no NT-level filter | `exact_algebraic_1.cpp` |
 | L6 | **bespoke** | bare `CORE::BigRat` (504 sites), `CORE::BigInt` (28) | **none** | `segment_site_*` |
@@ -378,7 +378,12 @@ flowchart LR
 using Rational = CGAL::Exact_predicates_exact_constructions_kernel::FT;
 
 /// One-root algebraic numbers, a0 + a1*sqrt(root).
-using OneRoot = CGAL::Sqrt_extension<Rational, Rational>;
+/// The four template arguments are load-bearing: CGAL spells CoordNT as
+/// Sqrt_extension<NT, NT, Tag_true, Boolean_tag<Filter_>>, so a two-argument
+/// alias is a DIFFERENT type and arrangement coordinates will not compile
+/// against it. `exact_one_root_gate` static_asserts the identity.
+using OneRoot =
+    CGAL::Sqrt_extension<Rational, Rational, CGAL::Tag_true, CGAL::Tag_true>;
 ```
 
 A fresh strong type would have been the reflexive choice and it would have been
@@ -392,6 +397,19 @@ that identity, and none of them survives being wrapped:
 | `OneRoot` is `CoordNT`, not a sibling of it | arrangement interop is identity, never conversion |
 | `Rational` is `Lazy_exact_nt<cpp_rational>` | the interval filter arrives with the type; nothing has to remember to add one |
 | existing one-root code already spells these types | `sign_mixed_radical` and its callers compile unchanged |
+
+!!! danger "A type-identity claim belongs in a `static_assert`, not in prose"
+
+    The first draft of this alias had **two** template arguments. CGAL spells
+    `CoordNT` with **four** — `Sqrt_extension<NT, NT, Tag_true,
+    Boolean_tag<Filter_>>` (`Arr_geometry_traits/Circle_segment_2.h:46`) — so
+    the two-argument form is a *different type*, and an arrangement coordinate
+    would not have compiled as an argument. The whole "interop is identity"
+    rationale above was false as written, and prose could not catch it.
+
+    What catches it is `exact_one_root_gate`, which carries
+    `static_assert(std::is_same_v<exact::OneRoot, GpsTraits::Point_2::CoordNT>)`.
+    Any claim of type identity in this codebase should be bound the same way.
 
 ### The cross-root precondition lives in the call, not the type
 

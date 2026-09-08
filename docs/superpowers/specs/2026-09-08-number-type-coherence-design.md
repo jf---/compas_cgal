@@ -103,25 +103,42 @@ namespace compas_cgal::exact {
 using Rational = CGAL::Exact_predicates_exact_constructions_kernel::FT;
 
 /// One-root algebraic numbers, a0 + a1*sqrt(root).
-using OneRoot = CGAL::Sqrt_extension<Rational, Rational>;
+/// The four template arguments are load-bearing: CGAL spells CoordNT as
+/// Sqrt_extension<NT, NT, Tag_true, Boolean_tag<Filter_>>, so a two-argument
+/// alias is a DIFFERENT type and arrangement coordinates will not compile
+/// against it. `exact_one_root_gate` static_asserts the identity.
+using OneRoot =
+    CGAL::Sqrt_extension<Rational, Rational, CGAL::Tag_true, CGAL::Tag_true>;
 
 }  // namespace compas_cgal::exact
 ```
 
 `exact::Rational` is `Epeck::FT` deliberately, not a fresh type. `Epeck::FT` is
 already the coefficient type of `Gps_circle_segment_traits_2<Epeck>::Point_2::CoordNT`,
-so `exact::OneRoot` **is** the traits' own `CoordNT`. Interop with the arrangement
+so `exact::OneRoot` **is** the traits' own `CoordNT` — provided the alias is
+spelled with all four of CGAL's template arguments. Interop with the arrangement
 package is exact rather than approximate, existing one-root code compiles
 unchanged, and the lazy filter arrives because it is the kernel's own field type.
+
+!!! danger "Corrected 2026-09-08 during stage 0"
+
+    This section originally specified `Sqrt_extension<Rational, Rational>`. That
+    is a **different type** from `CoordNT`, which CGAL spells with four arguments
+    (`Circle_segment_2.h:46`), so the identity claim was false and arrangement
+    coordinates would not have compiled against it. The alias now carries all
+    four arguments and the identity is enforced by a `static_assert` in
+    `exact_one_root_gate` rather than asserted in prose.
 
 !!! warning "Why `OneRoot` is a bare typedef and not a checking wrapper"
 
     A wrapper would enforce the cross-root precondition but would break the
     `CoordNT` identity above, reintroducing an impedance boundary. Instead the
     typedef stays bare and the precondition lives in free functions in
-    `exact/one_root.h`, which check
-    `a.root() == 0 || b.root() == 0 || a.root() == b.root()` and raise
-    `CrossRootExtensionError`. Interop comes from the typedef, safety from the
+    `exact/one_root.h`, which check `is_extended()` on both operands BEFORE
+    reading `root()` on either, and raise `CrossRootExtensionError`. Note that
+    with `ACDE_TAG = Tag_true` a value can be extended while its root is zero,
+    so "rational operand" means `!is_extended()`, not "denotes a rational" —
+    this is CGAL's `check_roots` precondition verbatim. Interop comes from the typedef, safety from the
     call. Raw `Sqrt_extension` operators remain reachable but must not appear in
     our code; the review checklist covers this.
 
