@@ -253,6 +253,16 @@ add_executable(exact_one_root_gate EXCLUDE_FROM_ALL
 target_link_libraries(exact_one_root_gate PRIVATE continuous_tea_exact_core)
 target_compile_definitions(exact_one_root_gate PRIVATE CGAL_USE_CORE=1)
 
+# Correctness gate for exact::sign_mixed_radical, the deciding predicate of the
+# exact cap certificate. It compares the single merged definition (reached
+# through continuous_tea_exact_core) against CGAL's own nested-extension sign
+# over the 83,850-input corpus of e54caf77, and requires every branch to be hit.
+add_executable(sign_mixed_radical_gate EXCLUDE_FROM_ALL
+    tests/native/sign_mixed_radical_gate.cpp
+)
+target_link_libraries(sign_mixed_radical_gate PRIVATE continuous_tea_exact_core)
+target_compile_definitions(sign_mixed_radical_gate PRIVATE CGAL_USE_CORE=1)
+
 add_library(continuous_tea_exact_core STATIC
     src/canonical_encoding.cpp
     src/exact/rational.cpp
