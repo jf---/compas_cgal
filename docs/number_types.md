@@ -337,18 +337,20 @@ Epeck::FT      = Lazy_exact_nt<cpp_rational>
 
 **Keep the pin.** On the filtered path — `Lazy_exact_nt`'s interval settling the
 sign, which is what every deciding lane in this repository is built to do — a
-GMP-backed exact rational buys between **1.01× and 1.15×**, median 1.06×. That
+GMP-backed exact rational buys between **1.00× and 1.09×**, median 1.03×. That
 does not pay for adding a native `libgmp` + `libmpfr` dependency to a build that
 is currently header-only and self-contained, with wheel delocation and
 cross-platform CI downstream of it.
 
 GMP's real advantage — a saturating **~2.1×** — appears only on deep
-*unfiltered* rational chains, and at the shallow end it **loses**: below roughly
-150 bits of operand, `cpp_int`'s small-value inline representation beats `mpq`'s
-allocate-and-call overhead. So the backend question is conditional on the
-filtering question. It has an answer worth acting on only where the filter is
-not working, which is the unfiltered lane that stages 2–4 exist to remove. Revisit
-after stage 4, when the answer should be worth even less.
+*unfiltered* rational chains, and below roughly 150 bits of operand it shows
+**no advantage at all**: depth 1 is a near-tie at 0.89×, where `cpp_int`'s
+small-value inline representation offsets `mpq`'s allocate-and-call overhead.
+GMP has no edge below the crossover and a growing one above it. So the backend
+question is conditional on the filtering question. It has an answer worth acting
+on only where the filter is not working, which is the unfiltered lane that
+stages 2–4 exist to remove. Revisit after stage 4, when the answer should be
+worth even less.
 
 Measured first-party on 2026-09-08 by building `tests/benchmarks/depth_bench.cpp`
 twice from identical source — `-DCGAL_DISABLE_GMP -DCGAL_USE_BOOST_MP` against
@@ -356,16 +358,19 @@ twice from identical source — `-DCGAL_DISABLE_GMP -DCGAL_USE_BOOST_MP` against
 6.3.0 and MPFR 4.2.2 from Homebrew at `/opt/homebrew`, outside the pixi
 environment. The two binaries were confirmed distinct rather than assumed:
 `otool -L` shows the boost build linking **no** GMP libraries and the GMP build
-linking **two**. µs per sign decision; ratio **> 1 means GMP is faster**.
+linking **two**. These are steady-state figures, not single shots: the **first
+run of each binary is discarded as warm-up** and the reported value is the
+**minimum of the four consecutive runs** that follow. µs per sign decision;
+ratio **> 1 means GMP is faster**.
 
-| depth | 1 | 2 | 4 | 8 | 12 | 16 |
-|---|---|---|---|---|---|---|
-| filtered, `Lazy_exact_nt` — boost | 0.45 | 0.82 | 1.65 | 3.61 | 5.21 | 7.05 |
-| filtered — GMP | 0.39 | 0.80 | 1.63 | 3.29 | 4.91 | 6.64 |
-| **filtered ratio** | 1.15× | 1.03× | 1.01× | 1.10× | 1.06× | 1.06× |
-| unfiltered, bare `CORE::BigRat` — boost | 0.63 | 2.45 | 8.92 | 29.67 | 59.64 | 100.29 |
-| unfiltered — GMP | 1.99 | 1.89 | 4.74 | 14.11 | 27.46 | 46.36 |
-| **unfiltered ratio** | 0.32× | 1.30× | 1.88× | 2.10× | 2.17× | 2.16× |
+| depth | 1 | 2 | 4 | 8 | 16 |
+|---|---|---|---|---|---|
+| filtered, `Lazy_exact_nt` — boost | 0.36 | 0.76 | 1.54 | 3.30 | 6.52 |
+| filtered — GMP | 0.36 | 0.74 | 1.53 | 3.04 | 6.23 |
+| **filtered ratio** | 1.00× | 1.03× | 1.01× | 1.09× | 1.05× |
+| unfiltered, bare `CORE::BigRat` — boost | 0.57 | 2.31 | 8.21 | 27.62 | 92.60 |
+| unfiltered — GMP | 0.64 | 1.33 | 3.84 | 12.32 | 43.23 |
+| **unfiltered ratio** | 0.89× | 1.74× | 2.14× | 2.24× | 2.14× |
 
 The mechanism is the whole point: when the interval decides, the exact
 representative is **never built**, so the library underneath it never runs. The
@@ -373,19 +378,21 @@ residual few percent on the filtered row is not bignum speed at all — it is DA
 node size. `sizeof(Exact_rational)` is 64 bytes on boost against 32 on GMP, so
 every lazy node the filtered path allocates is 32 bytes larger.
 
-!!! note "Read the paired ratio, not the absolute µs"
+!!! note "Discard the warm-up run, or the shallow end lies to you"
 
-    This is a separate paired run of the same harness that produced the table in
-    *What the filter is actually worth* above, so its boost column differs from
-    that one by a few percent of run-to-run noise. Only the ratio measured
-    *within* one run is load-bearing.
+    A single-shot version of this table read **0.32×** at depth 1 — GMP
+    apparently three times slower — purely because the first run of each binary
+    is warm-up. Measured across five consecutive runs, GMP's depth-1 unfiltered
+    time goes 2.19, 0.72, 0.65, 0.64, 0.64 µs; the filtered lane does the same
+    thing (boost depth-1 filtered: 0.93, then 0.38, 0.39, 0.39, 0.39). Steady
+    state is a near-tie, and the apparent 3× was an artifact of run 1.
 
-    The depth-1 unfiltered ratio is the weakest cell in the table: 1.99 µs for
-    GMP at depth 1 is not monotone with 1.89 µs at depth 2, and a second sweep
-    in the same spike put depth 1 at 0.89× rather than 0.32×. Both runs agree on
-    the direction — boost wins below the crossover — but the **magnitude** of
-    that depth-1 loss is not a stable measurement, and 3× should not be quoted
-    from it.
+    This is also a separate paired run of the same harness that produced the
+    table in *What the filter is actually worth* above, so its boost column sits
+    a few percent below that one. Only the ratio measured *within* one paired
+    run is load-bearing.
+
+    Depth 12 is absent because the clean re-run sampled 1/2/4/8/16.
 
 Operand width was measured rather than assumed: the chain grows ~53 bits per
 level, putting depth 1 at 105 bits and depth 2 at 158, which brackets the
@@ -424,8 +431,9 @@ tightly:
 
 Allocator work is 23.7% of boost's time, so eliminating boost's allocator
 *entirely* caps the achievable win at `1/(1 − 0.237)` = **1.31×**. The measured
-deep win is 2.15×, so at least ~62% of it is genuinely GMP's `mpn` assembly and
-cannot be recovered by an allocator change.
+deep win is ~2.1×, which leaves a factor of ~1.6× the allocator cannot explain:
+the majority of the win is genuinely GMP's `mpn` assembly and is not recoverable
+by an allocator change.
 
 ### Canonical bytes do not move across backends
 
@@ -461,7 +469,7 @@ is unique. Stored replay digests would survive this specific swap.
       against GMP was out of scope, so "2.1× on a rational chain" maps to "X% on
       a pocket run" only by inference.
     - **The filter-failure rate of the real workload is unknown.** This is the
-      single most important missing number: the filtered row is ~1.05× and the
+      single most important missing number: the filtered row is ~1.03× and the
       unfiltered row is 2.1×, so any end-to-end benefit is almost entirely
       determined by what fraction of decisions escape the interval.
     - **`Sqrt_extension` and `Gps_circle_segment_traits_2` were not benchmarked
