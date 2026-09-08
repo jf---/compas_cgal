@@ -270,6 +270,12 @@ _task9-mat-configure = "cmake -S . -B build/task9-mat -G Ninja -Dnanobind_DIR=$(
 _task9-mat-build = "cmake --build build/task9-mat --target task9_mat_compile_gate"
 _task9-mat-run = "build/task9-mat/task9_mat_compile_gate"
 task9-mat-compile-gate = { depends-on = ["_task9-mat-configure", "_task9-mat-build", "_task9-mat-run"], description = "Compile exact segment-site MAT primitives" }
+# The run step chains the three gates with &&, so the first broken contract is
+# the one reported rather than the last one to print.
+_exact-gates-configure = "cmake -S . -B build/exact-gate -G Ninja -Dnanobind_DIR=$(python -m nanobind --cmake_dir)"
+_exact-gates-build = "cmake --build build/exact-gate --target exact_vocabulary_gate exact_canonical_gate exact_one_root_gate"
+_exact-gates-run = "build/exact-gate/exact_vocabulary_gate && build/exact-gate/exact_canonical_gate && build/exact-gate/exact_one_root_gate"
+exact-gates = { depends-on = ["_exact-gates-configure", "_exact-gates-build", "_exact-gates-run"], description = "Native gates for the exact number vocabulary: rational/one-root types, canonical bytes, cross-root discipline" }
 
 # ============================================================================
 # mypy — strict typing gate for the benchmark corpus
