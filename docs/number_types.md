@@ -497,10 +497,20 @@ Between those doors a value would be an `exact::Rational` or an `exact::OneRoot`
 carrying lane L2's lazy interval filter by construction rather than by review;
 wherever that happens, R1 and R5 stop being advisory and become structural.
 
-Rationale, staging and the counts behind the work live in the per-stage plans;
-the first lane conversion is
-[stage 2](superpowers/plans/2026-09-08-number-type-coherence-stage-2.md). The
-standalone design spec was retired in `2875cf8d`.
+Rationale, staging and the counts behind the work live in the
+[design spec](superpowers/specs/2026-09-08-number-type-coherence-design.md) and
+the per-stage plans; the first lane conversion is
+[stage 2](superpowers/plans/2026-09-08-number-type-coherence-stage-2.md).
+
+!!! note "The design spec records two invariants it originally got wrong"
+
+    Invariant 1 (one double→exact door) and invariant 2 (one
+    exact→attestation-bytes projection site) were both **false as written**, and
+    both were falsified by doing the work rather than by reviewing the document —
+    invariant 2 during stage-2 planning, invariant 1 during stage-3 planning. The
+    corrections are in the spec as `!!! danger` admonitions rather than silent
+    edits, because the failure mode generalises: an unused abstraction cannot be
+    reviewed, since the thing that proves its shape wrong is its second caller.
 
 ```mermaid
 flowchart LR
