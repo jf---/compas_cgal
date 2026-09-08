@@ -497,8 +497,10 @@ Between those doors a value would be an `exact::Rational` or an `exact::OneRoot`
 carrying lane L2's lazy interval filter by construction rather than by review;
 wherever that happens, R1 and R5 stop being advisory and become structural.
 
-Rationale, staging and the counts behind the work:
-[Number-Type Coherence: Design](superpowers/specs/2026-09-08-number-type-coherence-design.md).
+Rationale, staging and the counts behind the work live in the per-stage plans;
+the first lane conversion is
+[stage 2](superpowers/plans/2026-09-08-number-type-coherence-stage-2.md). The
+standalone design spec was retired in `2875cf8d`.
 
 ```mermaid
 flowchart LR
@@ -662,7 +664,7 @@ check on every projection, where the comparison would cost more than the
 guarantee is worth. Until then the frozen byte literal in `exact_canonical_gate`
 is what actually catches attestation-byte drift.
 
-!!! note "Status after stage 1: one predicate adopted, no lane converted"
+!!! note "Status after stage 2: one predicate adopted, one carrier converted"
 
     Stage 0 landed `src/exact/` beside the existing carriers with **nothing**
     using it. Stage 1 changed that for exactly one thing:
@@ -671,16 +673,18 @@ is what actually catches attestation-byte drift.
     `exact::Rational` and `exact::OneRoot` are shipped types rather than
     vocabulary.
 
-    Everything else is unchanged. Neither door has a caller —
-    `exact::from_binary64` and `exact::to_canonical` are still reached only from
-    `exact_canonical_gate` — and neither do `same_root_add` and
-    `same_root_multiply` outside `exact_one_root_gate`. **No carrier has been
-    converted**: the 504 unfiltered `BigRat` sites, the six lanes above and
-    every parse-back crossing are exactly as they were.
+    Stage 2 converted the first **carrier**. `StationEventSource2` now holds
+    `exact::Rational`, and `exact::to_canonical` has its first production
+    caller — one exit door adopted, on one lane, recorded in the stage 2 section
+    below. `exact::from_binary64` still has none, because the station's values
+    arrive already exact; `same_root_add` and `same_root_multiply` are still
+    reached only from `exact_one_root_gate`. Outside that lane the unfiltered
+    `BigRat` sites, the six lanes above and every parse-back crossing are
+    exactly as they were.
 
-    Lane conversion begins at **stage 2**, smallest event source first, and the
-    filtering payoff is predicted to land in stage 4 where the deep construction
-    chains are. Until then, read the doors as vocabulary, not as coverage.
+    The filtering payoff is still predicted for **stage 4**, where the deep
+    construction chains are; stage 2 moved a carrier without touching them. Read
+    the doors as one adopted exit and one unused entry, not as coverage.
 
 ## Stage 1: one mixed-radical sign definition, and the oracle gap it closed
 
@@ -1020,6 +1024,278 @@ corroboration; it is no longer the gate.
     lazily constructed locator, and it would have been live. It now holds
     `std::shared_ptr<const ReachSet>` for both, with `design` declared first so
     it outlives the `center` set seeded by copy from it.
+
+## Stage 2: the station lane carries rationals and projects the text
+
+Since `003e144c` `StationEventSource2` stores `compas_cgal::exact::Rational`
+(`src/continuous_tea_2/station_source.h:82`) and **projects** the decimal text
+that its four consumers used to parse straight back out. `ExactRational2`
+survives as the derived attestation view (`station_source.h:14`); it is no
+longer the compute carrier. Nothing observable moved. The two byte anchors
+frozen against the *text* carrier before the inversion (`044d81da`) pass
+unedited against the *exact* carrier, and a per-test diff against a
+pre-inversion baseline shows 145 ids with 0 on one side only and **0 outcome
+changes**. Maturity for both claims: **`confirmed`**.
+
+This is the first of the six lanes to be converted. `exact::to_canonical` now
+has exactly one production caller in the repository —
+`ExactRational2::project` (`src/continuous_tea_2/station_source.cpp:88`) — where
+before stage 2 it was reached only from `exact_canonical_gate`.
+
+### What inverted
+
+| | before | after |
+|---|---|---|
+| carrier | four `ExactRational2`, each two `std::string` | four `exact::Rational`, i.e. `Epeck::FT` with its lazy interval filter |
+| a consumer that needs a number | `parse_rational(source.center_x().text())` | `source.center_x()` |
+| text | an input, decoded again in every consumer | an output, projected once in the constructor |
+| attestation | a bare `std::string canonical_bytes_` beside the four string-carrying members | `StationAttestation2`, a named derived view projected once at construction (`station_source.cpp:56`) |
+| `build` signature | four `std::string`, so every caller rendered its `Epeck::FT` to text first | four `exact::Rational` |
+| `parse_rational` occurrences across the five lane files | 37 | 24 |
+| `parse_rational` definitions repo-wide | 15 | 15 |
+
+```mermaid
+flowchart LR
+    subgraph BEFORE["before: text is the carrier"]
+        B1["Epeck::FT<br/>at the call site"] --> B2["decimal text"]
+        B2 --> B3["ExactRational2<br/>members"]
+        B3 --> B4["parse_rational<br/>once per consumer"]
+        B4 --> B5["Epeck::FT<br/>again"]
+    end
+    subgraph AFTER["after: text is a projection"]
+        A1["Epeck::FT<br/>at the call site"] --> A2["exact::Rational<br/>members"]
+        A2 --> A3["consumers decide<br/>on the numbers"]
+        A2 --> A4["exact::to_canonical<br/>once, at construction"]
+        A4 --> A5["ExactRational2<br/>frozen bytes"]
+    end
+```
+
+The filter now arrives with the type rather than by review: every station value
+a consumer branches on is a `Lazy_exact_nt<cpp_rational>`, so R1 holds on this
+lane structurally instead of by inspection. The two roles are also type-distinct
+now, which is what R2's tip asks for — `exact::Rational` carries the arithmetic,
+`ExactRational2` is a terminated attestation leaf that nothing computes on. They
+sit in separate structs because they serve different consumers on different
+schedules: the source's fields feed predicates on every parameter cell, the
+attestation feeds the digest once.
+
+### The frozen literals were derived by hand, and the agreement is the result
+
+The 56-byte `exact-rational-v1` literal and the 281-byte
+`station-event-source-v1` framing were computed from the documented framing
+**before** either was compared with what the encoder emits, and they matched.
+Two independent confirmations: the gate's own `require_bytes` equality
+(`tests/native/exact_station_attestation_gate.cpp:79`, `:203`), and a hexdump of
+the current encoder whose field lengths — `0x11`, `0x17`, `0x38`, `0x34`, `0x33`
+— are the derivation's own operands read off the wire.
+`8 + (8+17) + (8+4) + (8+3) = 56`;
+`8 + (8+23) + (8+56) + (8+52) + (8+51) + (8+51) = 281`.
+
+!!! danger "Observe-first would have made the encoder correct by definition"
+
+    The cheap way to anchor a format is to print what the encoder produces and
+    paste it back as the expectation. That is not a check on the encoder. It
+    freezes whatever the encoder does — a malformed framing included — as
+    gospel, and it can never disagree with the code it is meant to constrain.
+
+    What verifies an encoder is agreement between an **independent derivation**
+    and the observed bytes. A mismatch is then informative in both directions,
+    and the report has to say which side was wrong: a bad derivation is a plan
+    bug, an undocumented framing is a serious finding. This pair agreed, which
+    is the evidence that the encoder implements the format this page describes.
+
+Both anchors are separately load-bearing, proven by injection into scratch
+copies compiled ahead of the archive so no tracked file was mutated. Swapping
+numerator and denominator inside the inner record fails the 56-byte anchor;
+swapping `tool_radius` and `cap_chord_ratio` in the **outer** record leaves every
+inner record byte-identical and fails only the 281-byte anchor. The second is
+the one no differential test can catch, because the legacy decoder and the new
+projection share the single `encode_string_sequence` and a framing edit moves
+both sides together. In each case an unmodified copy through the same link
+override passed first, so the failure is the perturbation and not the mechanism;
+source, object and binary SHA-256 were compared to prove the injected artefact
+really differed.
+
+After the inversion the anchor was re-run against the **new** producing path:
+numerator and denominator swapped inside `ExactRational2::project` only, legacy
+`build` untouched, gate `FAILED`. The anchor watches the projection, not just
+the decoder it replaced.
+
+### The witness measures arc-crossing, and the first attribution was wrong
+
+The stage's generic-double witness
+(`tests/adaptive/test_station_generic_double_witness.py`) exists because the
+station lane's existing coverage centres the tool at `(5.0, 5.0)` with radius
+`0.5` on a 10×10 integer square, where every square root is exact and the
+refinement path is never entered — checklist item 9, unanswered on this lane.
+
+The first measurement produced a 22× slowdown (0.33 → 7.35 ms) and attributed it
+to **degenerate sweep geometry**, tool radius ≈ half the segment length. *That
+attribution is false.* Holding arc-crossing fixed, the cost is flat across a
+radius/half-length ratio from 0.04 to 1.04; holding that ratio fixed at 0.991,
+the cost still flips 32× on segment length alone. The causal variable is whether
+the tool circle at the station **properly crosses** the curved stock boundary,
+`|R_disk − d| < r_tool < R_disk + d`, which is what puts the `Sqrt_extension`
+one-root algebra on the critical path. The original radius sweep happened to
+cross that band.
+
+Sweeping the tool radius alone on the shipped fixture reproduces the band at both
+edges, against tangencies predicted at 0.5785 and 2.1809:
+
+| tool radius | cost | position |
+|---|---|---|
+| 0.550 | 0.322 ms | below the internal tangency |
+| 0.600 | 10.270 ms | inside the band |
+| 2.150 | 9.941 ms | inside the band |
+| 2.200 | 0.333 ms | above the external tangency |
+
+A 32× flip across 0.05 of radius, on both edges. The axis decomposition on the
+same fixture (Apple M1 Max, macOS 15.3.2, CPython 3.12.13, 2026-09-08; warm-up
+discarded, minimum of five):
+
+| axis held / varied | cheap | expensive | ratio |
+|---|---|---|---|
+| tool circle crosses the void-disk arc | 0.298 ms | 10.413 ms | **34.9×** |
+| same, on an all-integer fixture | 0.226 ms | 6.452 ms | 28.5× |
+| generic vs integer, both arc-crossing | 6.452 ms | 10.413 ms | 1.61× |
+| generic vs integer, both clear of the arc | 0.226 ms | 0.298 ms | 1.32× |
+
+!!! danger "A guard on a non-causal parameter is a guard that will be walked past"
+
+    The consequence is why the correction matters more than the number. Had the
+    witness pinned `radius / half_length`, it would have constrained a variable
+    that does not drive the cost. A later edit could then slide the fixture
+    clear of the arc, drop its cost by 30×, stop exercising the one-root algebra
+    entirely — and leave every assertion in the file green.
+
+    The shipped guard is on the causal quantity:
+    `1.2 × internal_tangency < r_tool < 0.8 × external_tangency`
+    (`test_station_generic_double_witness.py:216`). The margin is 20% rather
+    than nominal because the transition is sharp; the fixture sits 1.58× above
+    the internal tangency and at 0.42× of the external one.
+
+A time ceiling has a second hole that no amount of tightening closes: **it can
+only fail upward**. Code that short-circuits the station and returns *fast and
+wrong* satisfies the ceiling, satisfies the disposition assertion, and satisfies
+both fixture guards. So the witness also asserts a **separation floor**
+(`test_station_generic_double_witness.py:269`): the arc-crossing station must
+cost at least 5× the same station clear
+of the arc. Measured 28.95×–34.76× over eight min-of-five trials, so the floor
+carries 5.8× headroom against the worst trial while still collapsing towards 1×
+the moment the exact algebra leaves the critical path.
+
+### The inversion made the plan's own regression check unmatchable
+
+Stage 2's regression check was specified as a grep for
+`source.center_x().text()`. After the inversion `source.center_x()` returns
+`Epeck::FT`, which has no `.text()` — code shaped like that no longer compiles,
+so the pattern can never match anything. The check would have run, reported
+success and guarded nothing, for as long as the file existed.
+
+The live regression path is the one that still compiles:
+`source.attestation().center_x.text()` reaches the same number through the
+derived view. `test_no_consumer_reaches_through_the_attestation_view`
+(`tests/build/test_station_lane_decoder_ratchet.py:227`) is what covers it, and
+an injection confirmed that the occurrence ratchet alone does not.
+
+!!! danger "The third instance of one defect shape: a check that cannot fail"
+
+    A check that runs, reports success, and is structurally incapable of
+    failing. The earlier two in this repository were `assert` under `-DNDEBUG` —
+    which is why `exact_station_attestation_gate` uses a `require` helper
+    (`:35`) and not `assert` — and native gate targets that are
+    `EXCLUDE_FROM_ALL` with nothing invoking them, fixed by wiring them into
+    `pixi run exact-gates`.
+
+    Ask of any new check what edit would make it fail. If the honest answer is
+    "an edit that would not compile", or "an edit to a target nothing runs", the
+    check is decoration and should be replaced, not tightened.
+
+### Scoping the ratchet by receiver type, not by file
+
+`tool_radius()` and `cap_chord_ratio()` are accessors of **both**
+`StationEventSource2` and `SegmentEventSource2`, and `segment_strata.cpp` binds
+the identifier `source` to each of them in different functions. A file-wide ban
+on `source.tool_radius().text()` therefore fires on `segment_branches_at` and
+`segment_branch_pair_dispositions`, which legitimately read stage 3's carrier. A
+ratchet that fires on correct code is a ratchet the next person deletes, which is
+worse than not having one.
+
+So the ban is scoped by receiver: `station_bound_regions`
+(`tests/build/test_station_lane_decoder_ratchet.py:132`) splits a translation
+unit at its column-0 closing braces and keeps the definitions that bind a
+`StationEventSource2` identifier; the ban applies to that identifier inside that
+definition only.
+
+Scoping introduces its own way to certify nothing — a scope that finds no region
+bans nothing — so the region counts are **asserted**, not merely computed: `0`,
+`1`, `1`, `2`, `0` across the five lane files
+(`test_station_lane_decoder_ratchet.py:99`). The two zeros are
+explained rather than tolerated: `station_source.cpp` is the carrier and reaches
+its members through `this`, and `segment_oracle.cpp` builds a station and hands
+it straight to `classify_station_cell` without ever binding it.
+
+The occurrence ratchet is two-directional for a reason of its own. A rise means a
+consumer started parsing again — the regression the inversion removed. A fall
+would mean a decoder *definition* was deleted, which is stage 6 and requires
+explicit user permission; the dormant ones are marked `[[maybe_unused]]` and
+named (`src/continuous_tea_2/station_classifier.cpp:22`). Repository-wide
+definitions were 15 before the inversion and are 15 after.
+
+### The equivalence baseline is a committed manifest, not the junit file
+
+Summary counts cannot state that no behaviour moved: two tests swapping outcomes
+leaves `tests`, `failures`, `errors` and `skipped` byte-identical, and a suite
+that collected nothing still exits 0. The comparison is therefore **by test
+identity** (`tools/lane_equivalence.py`).
+
+The frozen record is a distilled JSON manifest,
+`tests/build/stage2_station_lane_baseline.json`, rather than the raw
+`--junitxml` document — that document lives under the gitignored `build/` tree
+and cannot survive a clean checkout, so a baseline kept there is a baseline that
+quietly disappears. The manifest carries its provenance (commit `45c5cc8a`, the
+carrier state at capture, the exact command, the pytest summary line) beside 145
+id→outcome pairs, and its `summary` block is **cross-checked against its own
+outcome map on load** (`tools/lane_equivalence.py:226`), so editing a recorded
+verdict to silence a diff raises rather than passes.
+
+### Evidence
+
+| Measurement | Result |
+|---|---|
+| `exact-rational-v1` 56-byte and `station-event-source-v1` 281-byte anchors | **unmoved** by the inversion — gate diff is +17/−5 and no changed line matches `x00`, `frozen`, `constexpr`, `static_assert`, `281` or `56` |
+| Per-test equivalence against `45c5cc8a` | **145 ids; 0 only in baseline, 0 only in current, 0 outcome changes** — independently re-run on 2026-09-08, several commits past the inversion, and still identical |
+| `test_legacy_binary64_identity_survives_every_full_circle_outcome` | **passed** — the three stored `LEGACY_FULL_TRACE_SHA256` digests, computed over traces embedding `station-event-source-v1` records, did not move |
+| `pixi run exact-gates` | **five native gates OK**, exit 0 — re-run on 2026-09-08 with `exact_station_attestation_gate` among them, `exact_one_root_gate` still at 83,850 inputs, ten branches, 0 oracle disagreements |
+| `pytest tests/adaptive tests/test_engagement_audit.py -q -n auto` | **4 failed, 787 passed** at the close of stage 2 — the same four manifest-declared ids (`docs/red_manifest.json`), on 4 more tests than stage 1's 783 because the witness landed |
+| Decoder occurrences, five lane files | **37 → 24**; 13 call sites removed |
+| Decoder definitions, repository-wide | **15 → 15**; none removed |
+| Anchor defect injections | inner field order swapped → gate `FAILED`; outer field order swapped with inner records byte-identical → gate `FAILED`; `project` swapped after the inversion → gate `FAILED`; unmodified copy through the same override → `OK` |
+
+!!! warning "What stage 2 does not deliver"
+
+    - **The 10⁴–10⁷× figures recorded elsewhere on this page are not reproduced
+      on this lane.** The strongest fixture found is ~35×, and the genericity
+      axis alone is worth 1.6×. The witness is a stressing fixture with a time
+      bound and a separation floor; it is not a reproduction of the documented
+      worst case, and it should not be cited as one.
+    - **Design invariant 4 — an interval filter under every branch — is not
+      delivered.** The consumers now hold `Epeck::FT`, which carries the filter
+      with it, but they remain eager: nothing here defers a construction or
+      restructures the chains where the filter actually pays. That is stage 4.
+    - `exact-rational-v1` still names **two incompatible framings**: this
+      three-field one and the one-field `tagged_record` at
+      `src/continuous_tea_2/boundary_events.cpp:156`. There is no migration —
+      a version bump is its own project — so only the station side has an
+      absolute anchor and the other can still drift undetected except through a
+      composite digest.
+    - The station lane is **not bound to Python**. What is Python-visible is the
+      digest: `source.canonical_bytes()` (`src/continuous_tea_2/circle_strata.cpp:662`)
+      is embedded in every full-circle cell decision record, folded into
+      `full-circle-cell-authority-v1` (`:706`), and reaches
+      `EventTrace2.canonical_digest` (`src/continuous_tea_2.cpp:1162`) through
+      the trace's nested authority digest. Stage 3's lane is bound directly, so
+      its inversion has a Python-visible signature this one does not.
 
 ## Review checklist
 
