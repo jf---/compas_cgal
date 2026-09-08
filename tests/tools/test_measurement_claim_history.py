@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import pathlib
+import re
 import subprocess
 from typing import Any
 
@@ -25,6 +26,20 @@ MANIFEST_KEYS = {
     "patch_sha256",
     "claim_sources",
 }
+
+# `git diff` abbreviates the two blob object IDs on every `index` line to a width
+# git auto-scales with the size of the local object database: 7 hexdigits when this
+# patch was frozen, 8 once this repository grew past git's next threshold. Comparing
+# the frozen bytes against a default `git diff` therefore measures the clone, not
+# history, and goes red on a large enough checkout with no change to any commit.
+# `--full-index` pins the live side to complete object IDs, which never auto-scale
+# and are never ambiguous; each frozen abbreviation is then required to be a prefix
+# of the authenticated full ID it stands for. Every other byte of the patch, and the
+# frozen file's own sha256, still have to match exactly.
+INDEX_OBJECT_IDS = re.compile(rb"(?m)^index ([0-9a-f]+)\.\.([0-9a-f]+)")
+REDACTED_INDEX_PREFIX = b"index <blob>..<blob>"
+GIT_OBJECT_ID_HEXDIGITS = frozenset({40, 64})  # SHA-1 and SHA-256 repositories
+MINIMUM_ABBREVIATION_HEXDIGITS = 7  # git's floor for an auto-scaled `index` abbreviation
 
 
 class DuplicateManifestKeyError(RuntimeError):
@@ -70,6 +85,17 @@ def _authenticated_commit(object_id: str) -> bytes:
     return commit
 
 
+def _redact_index_object_ids(patch: bytes) -> tuple[bytes, list[bytes]]:
+    """Replace every `index` line's object IDs with a placeholder, returning them in order."""
+    object_ids: list[bytes] = []
+
+    def redact(match: "re.Match[bytes]") -> bytes:
+        object_ids.extend(match.groups())
+        return REDACTED_INDEX_PREFIX
+
+    return INDEX_OBJECT_IDS.sub(redact, patch), object_ids
+
+
 def test_historical_assertions_match_authenticated_correction_diff() -> None:
     manifest = _load_manifest()
     assert set(manifest) == MANIFEST_KEYS
@@ -92,12 +118,20 @@ def test_historical_assertions_match_authenticated_correction_diff() -> None:
     expected_patch = _git(
         "diff",
         "--binary",
+        "--full-index",
         PARENT_COMMIT,
         CORRECTION_COMMIT,
         "--",
         *SOURCE_PATHS,
     )
-    assert patch == expected_patch
+    frozen_body, frozen_object_ids = _redact_index_object_ids(patch)
+    authenticated_body, authenticated_object_ids = _redact_index_object_ids(expected_patch)
+    assert frozen_body == authenticated_body
+    assert len(authenticated_object_ids) == 2 * len(SOURCE_PATHS)
+    assert all(len(object_id) in GIT_OBJECT_ID_HEXDIGITS for object_id in authenticated_object_ids)
+    assert len(frozen_object_ids) == len(authenticated_object_ids)
+    assert all(len(object_id) >= MINIMUM_ABBREVIATION_HEXDIGITS for object_id in frozen_object_ids)
+    assert all(authenticated.startswith(frozen) for frozen, authenticated in zip(frozen_object_ids, authenticated_object_ids))
     assert hashlib.sha256(patch).hexdigest() == manifest["patch_sha256"]
 
     claim_sources = manifest["claim_sources"]
