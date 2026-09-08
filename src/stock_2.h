@@ -238,7 +238,7 @@ private:
     // Inputs validated by can_remove_circle before any local geometry changes.
     void intersect_circle_sweep(double cx, double cy,
                                 double guide_radius, double tool_radius);
-    explicit Stock2(std::unique_ptr<Gps> set);
+    Stock2(std::shared_ptr<const GpsTraits> traits, std::unique_ptr<Gps> set);
 
     // Subtract the union of exact tool disks of the given radius centred at the
     // listed points — the one chain implementation shared by capsule and arc.
@@ -246,6 +246,21 @@ private:
                               double radius);
     void replace_set(std::unique_ptr<Gps> replacement);
 
+    // The geometry traits every arrangement in this clone family borrows.
+    //
+    // CGAL's Gps copy constructor gives the copy a fresh Traits_2 of its own but
+    // builds the copy's arrangement as Aos_2(*(ps.m_arr)), and
+    // Arrangement_on_surface_2::assign propagates a BORROWED traits pointer
+    // verbatim (m_geom_traits = arr.m_own_traits ? new Traits_adaptor_2
+    // : arr.m_geom_traits). Every Gps builds its arrangement in borrow mode, so
+    // the arrangement of a clone -- and of a clone of a clone -- points at the
+    // traits object of the ROOT Gps, whose destructor would delete it. Owning
+    // that object here and handing the same shared_ptr to every clone encodes
+    // the lifetime the object graph already assumes.
+    //
+    // Declared BEFORE set_ so it is destroyed AFTER the arrangement that reads
+    // it: members are destroyed in reverse declaration order.
+    std::shared_ptr<const GpsTraits> traits_;
     std::unique_ptr<Gps> set_;
     mutable std::unique_ptr<GpsPointLocation> point_location_;
 };

@@ -158,7 +158,12 @@ GpsPolygon disk_polygon(const EPoint& center, const Epeck::FT& radius)
 
 Stock2::Stock2(Eigen::Ref<const compas::RowMatrixXd> boundary,
                const std::vector<compas::RowMatrixXd>& holes)
-    : set_(std::make_unique<Gps>())
+    // Root of a clone family: the traits object is owned HERE, and the Gps is
+    // built with the borrowing constructor so this instance and every clone
+    // taken from it read one traits object with a lifetime that outlives them
+    // all (see the traits_ member comment in stock_2.h).
+    : traits_(std::make_shared<const GpsTraits>()),
+      set_(std::make_unique<Gps>(*traits_))
 {
     set_->insert(data_to_gps_polygon(boundary));
     for (const auto& hole : holes) {
@@ -168,13 +173,15 @@ Stock2::Stock2(Eigen::Ref<const compas::RowMatrixXd> boundary,
     }
 }
 
-Stock2::Stock2(std::unique_ptr<Gps> set)
-    : set_(std::move(set))
+Stock2::Stock2(std::shared_ptr<const GpsTraits> traits, std::unique_ptr<Gps> set)
+    : traits_(std::move(traits)),
+      set_(std::move(set))
 {
 }
 
 Stock2::Stock2(Stock2&& other) noexcept
-    : set_(std::move(other.set_)),
+    : traits_(std::move(other.traits_)),
+      set_(std::move(other.set_)),
       point_location_(std::move(other.point_location_))
 {
 }
@@ -184,6 +191,9 @@ Stock2& Stock2::operator=(Stock2&& other) noexcept
     if (this != &other) {
         point_location_.reset();
         set_.reset();
+        // Only now may this instance drop its own share of the traits: the
+        // arrangement released above was still reading them.
+        traits_ = std::move(other.traits_);
         set_ = std::move(other.set_);
         point_location_ = std::move(other.point_location_);
     }
@@ -217,13 +227,18 @@ Stock2 Stock2::clone() const
 {
     note_audit_trial_stock_clone_for_test();
     note_audit_replay_stock_clone_for_test();
-    return Stock2(std::make_unique<Gps>(*set_));
+    // The copy's arrangement borrows this family's traits, so the clone must
+    // carry a share of them: it routinely outlives the instance it came from.
+    return Stock2(traits_, std::make_unique<Gps>(*set_));
 }
 
 void Stock2::swap(Stock2& other) noexcept
 {
     note_audit_trial_stock_swap_for_test();
     note_audit_replay_stock_swap_for_test();
+    // The traits travel with the arrangement that borrows them: the two
+    // instances may belong to different clone families.
+    traits_.swap(other.traits_);
     set_.swap(other.set_);
     point_location_.swap(other.point_location_);
 }
@@ -232,6 +247,11 @@ void Stock2::replace_set(std::unique_ptr<Gps> replacement)
 {
     // Detach before replacing the observed arrangement. The replacement starts
     // a new read-only epoch and acquires a locator lazily on its first query.
+    //
+    // traits_ is deliberately untouched: every replacement is a copy of *set_,
+    // so its arrangement borrows this family's traits and must keep finding
+    // them here. A Gps from a foreign family would need its own traits share
+    // and is not a legal argument.
     point_location_.reset();
     set_.swap(replacement);
 }
