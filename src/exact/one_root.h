@@ -3,6 +3,7 @@
 #include "exact/rational.h"
 
 #include <CGAL/Sqrt_extension.h>
+#include <CGAL/enum.h>
 #include <CGAL/tags.h>
 
 namespace compas_cgal::exact {
@@ -24,12 +25,12 @@ namespace compas_cgal::exact {
 using OneRoot =
     CGAL::Sqrt_extension<Rational, Rational, CGAL::Tag_true, CGAL::Tag_true>;
 
-// Stage-0 status: nothing in the pipeline calls the two functions below yet, so
-// today's only caller is exact_one_root_gate. The existing one-root site,
-// engagement_2.cpp::as_radpoint (engagement_2.cpp:84-97), decomposes the
-// arrangement's coordinates into rational parts and states the shared-root
-// precondition in a comment rather than combining them through here. Moving
-// sign_mixed_radical into this module is stage 1.
+// Stage-0 status: nothing in the pipeline calls same_root_add or
+// same_root_multiply yet, so their only caller today is exact_one_root_gate.
+// (sign_mixed_radical, below, is on the deciding path.) The existing one-root
+// site, engagement_2.cpp::as_radpoint, decomposes the arrangement's coordinates
+// into rational parts and states the shared-root precondition in a comment
+// rather than combining them through here.
 
 /// Add two one-root numbers that share a root.
 ///
@@ -56,5 +57,38 @@ using OneRoot =
 ///     CrossRootExtensionError: if both operands are extended and their roots
 ///         differ.
 [[nodiscard]] OneRoot same_root_multiply(const OneRoot& a, const OneRoot& b);
+
+/// Exact sign of the mixed two-radical form
+/// `a + b*sqrt(alpha) + c*sqrt(beta) + d*sqrt(alpha*beta)`, with RATIONAL
+/// a, b, c, d and RATIONAL alpha, beta >= 0.
+///
+/// The exact cap predicate reduces to this: orientation and squared-chord tests
+/// of two cutter-circle points p, q whose coordinates live in Q(sqrt alpha) and
+/// Q(sqrt beta) respectively expand to exactly this shape.
+///
+/// Idiom (docs/exactness.md "Numeric comparison is the exact-kernel idiom"):
+/// compare at the NUMBER-TYPE level. OneRoot is RealEmbeddable, so CGAL::sign
+/// and same-root CGAL::compare (and same-root +/-/*) are exact -- the derived
+/// quantities are built INSIDE one extension Q(sqrt alpha) and CGAL decides,
+/// rather than hand-rolling a bignum squaring routine. Cross-root OneRoot
+/// arithmetic (documented UB) is never formed: sqrt(beta) only ever appears as
+/// a squared factor `beta` (a rational), and the degenerate roots are folded
+/// away with exact Rational compares before any extension is built.
+///
+/// Args:
+///     a, b, c, d: the rational coefficients of the form.
+///     alpha, beta: the rational radicands, required to be nonnegative. This is
+///         a precondition, not a check: every caller in the deciding pipeline
+///         takes them from `Sqrt_extension::root()`, which is nonnegative by
+///         construction, and the binary64 ingress seam
+///         (`audit_sign_mixed_radical_exact`) rejects a negative radicand with
+///         `InvalidMixedRadicalRootError` before reaching here.
+///
+/// Returns:
+///     CGAL::NEGATIVE, CGAL::ZERO or CGAL::POSITIVE, decided exactly.
+[[nodiscard]] CGAL::Sign sign_mixed_radical(const Rational& a, const Rational& b,
+                                            const Rational& c, const Rational& d,
+                                            const Rational& alpha,
+                                            const Rational& beta);
 
 }  // namespace compas_cgal::exact

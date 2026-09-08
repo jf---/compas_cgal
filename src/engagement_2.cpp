@@ -2,6 +2,7 @@
 #include "audit_certification_2.h"
 #include "audit_policy_2.h"
 #include "stock_2.h"
+#include "exact/one_root.h"
 
 #include <algorithm>
 #include <cmath>
@@ -23,54 +24,6 @@ namespace {
 
 using FT = Epeck::FT;
 using CoordNT = GpsPoint::CoordNT;
-
-// ----------------------------------------------------------------------------
-// Exact sign of a mixed two-radical form   A + B*sqrt(alpha) + C*sqrt(beta)
-//                                            + D*sqrt(alpha*beta)
-// with RATIONAL A, B, C, D and RATIONAL alpha, beta >= 0. The exact cap
-// predicate reduces to this: orientation and squared-chord tests of two
-// cutter-circle points p, q whose coordinates live in Q(sqrt alpha) and
-// Q(sqrt beta) respectively expand to exactly this shape.
-//
-// Idiom (docs/exactness.md "Numeric comparison is the exact-kernel idiom"):
-// compare at the NUMBER-TYPE level. Sqrt_extension is RealEmbeddable, so CGAL::sign and
-// same-root CGAL::compare (and same-root +/-/*) are exact -- we build the
-// derived quantities INSIDE one extension Q(sqrt alpha) and let CGAL decide,
-// rather than hand-rolling a bignum squaring routine. Cross-root Sqrt_extension
-// arithmetic (documented UB) is never formed: sqrt(beta) only ever appears as a
-// squared factor `beta` (a rational), and the degenerate roots are folded away
-// with exact FT compares before any extension is built.
-CGAL::Sign sign_mixed_radical(const FT& A, const FT& B, const FT& C, const FT& D,
-                              const FT& alpha, const FT& beta)
-{
-    const bool alpha_ext = !CGAL::is_zero(alpha);
-    const bool beta_ext = !CGAL::is_zero(beta);
-
-    // Root degeneracies fold to a single same-root value -> one CGAL::sign.
-    if (!alpha_ext && !beta_ext) return CGAL::sign(A);              // fully rational
-    if (!beta_ext) return CGAL::sign(CoordNT(A, B, alpha));         // A + B*sqrt(alpha)
-    if (!alpha_ext) return CGAL::sign(CoordNT(A, C, beta));         // A + C*sqrt(beta)
-    if (alpha == beta)                                             // sqrt(alpha*beta) = alpha
-        return CGAL::sign(CoordNT(A + D * alpha, B + C, alpha));    // (A+D*alpha) + (B+C)*sqrt(alpha)
-
-    // General case: group over the shared root alpha into u, w in Q(sqrt alpha),
-    // so the form is u + sqrt(beta)*w. Its sign follows from sign(u), sign(w),
-    // and -- for opposite non-zero signs -- which magnitude dominates, decided
-    // exactly by compare(u^2, beta*w^2) (all same-root, so beta enters as the
-    // rational CoordNT(beta), never as sqrt(beta)).
-    const CoordNT u(A, B, alpha);
-    const CoordNT w(C, D, alpha);
-    const CGAL::Sign su = CGAL::sign(u);
-    const CGAL::Sign sw = CGAL::sign(w);
-    if (sw == CGAL::ZERO) return su;                 // sqrt(beta)*w = 0 -> u
-    if (su == CGAL::ZERO) return sw;                 // u = 0 -> sqrt(beta)*w, beta > 0
-    if (su == sw) return su;                         // like signs add
-    switch (CGAL::compare(u * u, w * w * CoordNT(beta))) {
-        case CGAL::LARGER:  return su;               // |u| dominates
-        case CGAL::SMALLER: return sw;               // sqrt(beta)*|w| dominates
-        default:            return CGAL::ZERO;        // equal magnitude, opposite sign
-    }
-}
 
 // A cutter-circle point in rational coordinates over its single root:
 // (x0 + x1*sqrt(root), y0 + y1*sqrt(root)). CGAL builds every circle/line and
@@ -120,7 +73,8 @@ bool run_exceeds_cap(const GpsPoint& p, const GpsPoint& q, const FT& cx,
     const FT B = bx * e - by * c;
     const FT C = ax * f - ay * d;
     const FT D = bx * f - by * d;
-    const CGAL::Sign orient = sign_mixed_radical(A, B, C, D, P.root, Q.root);
+    const CGAL::Sign orient =
+        compas_cgal::exact::sign_mixed_radical(A, B, C, D, P.root, Q.root);
 
     // CCW angle theta from p to q: orient > 0 <=> theta < pi, orient == 0 <=>
     // theta == pi, orient < 0 <=> theta > pi.
@@ -138,7 +92,9 @@ bool run_exceeds_cap(const GpsPoint& p, const GpsPoint& q, const FT& cx,
     const FT B2 = -2 * (ex * P.x1 + ey * P.y1);
     const FT C2 = 2 * (ex * Q.x1 + ey * Q.y1);
     const FT D2 = -2 * (P.x1 * Q.x1 + P.y1 * Q.y1);
-    return sign_mixed_radical(A2 - T, B2, C2, D2, P.root, Q.root) == CGAL::POSITIVE;
+    return compas_cgal::exact::sign_mixed_radical(A2 - T, B2, C2, D2, P.root,
+                                                  Q.root)
+           == CGAL::POSITIVE;
 }
 
 // One rim arc, CCW-normalized: the CCW sweep runs ccw_start -> ccw_end on the

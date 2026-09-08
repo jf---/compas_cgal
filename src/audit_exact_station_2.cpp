@@ -1,5 +1,6 @@
 #include "audit_certification_2.h"
 #include "engagement_2.h"
+#include "exact/one_root.h"
 
 #include <CGAL/Arr_trapezoid_ric_point_location.h>
 #include <CGAL/Arrangement_zone_2.h>
@@ -18,49 +19,6 @@ namespace {
 
 using FT = Epeck::FT;
 using CoordNT = GpsPoint::CoordNT;
-
-CGAL::Sign sign_mixed_radical_impl(
-    const FT& a,
-    const FT& b,
-    const FT& c,
-    const FT& d,
-    const FT& alpha,
-    const FT& beta)
-{
-    const bool alpha_extended = !CGAL::is_zero(alpha);
-    const bool beta_extended = !CGAL::is_zero(beta);
-    if (!alpha_extended && !beta_extended) {
-        return CGAL::sign(a);
-    }
-    if (!beta_extended) {
-        return CGAL::sign(CoordNT(a, b, alpha));
-    }
-    if (!alpha_extended) {
-        return CGAL::sign(CoordNT(a, c, beta));
-    }
-    if (alpha == beta) {
-        return CGAL::sign(CoordNT(a + d * alpha, b + c, alpha));
-    }
-    const CoordNT u(a, b, alpha);
-    const CoordNT w(c, d, alpha);
-    const CGAL::Sign u_sign = CGAL::sign(u);
-    const CGAL::Sign w_sign = CGAL::sign(w);
-    if (w_sign == CGAL::ZERO) {
-        return u_sign;
-    }
-    if (u_sign == CGAL::ZERO || u_sign == w_sign) {
-        return w_sign;
-    }
-    const CGAL::Comparison_result magnitude =
-        CGAL::compare(u * u, w * w * CoordNT(beta));
-    if (magnitude == CGAL::LARGER) {
-        return u_sign;
-    }
-    if (magnitude == CGAL::SMALLER) {
-        return w_sign;
-    }
-    return CGAL::ZERO;
-}
 
 struct RadPoint2 {
     FT x0;
@@ -101,7 +59,7 @@ bool run_exceeds_cap(
     const FT py = p.y0 - center.y();
     const FT qx = q.x0 - center.x();
     const FT qy = q.y0 - center.y();
-    const CGAL::Sign orientation = sign_mixed_radical_impl(
+    const CGAL::Sign orientation = compas_cgal::exact::sign_mixed_radical(
         px * qy - py * qx,
         p.x1 * qy - p.y1 * qx,
         px * q.y1 - py * q.x1,
@@ -123,7 +81,7 @@ bool run_exceeds_cap(
     const FT b = -FT(2) * (dx * p.x1 + dy * p.y1);
     const FT c = FT(2) * (dx * q.x1 + dy * q.y1);
     const FT d = -FT(2) * (p.x1 * q.x1 + p.y1 * q.y1);
-    return sign_mixed_radical_impl(
+    return compas_cgal::exact::sign_mixed_radical(
                a - squared_threshold,
                b,
                c,
@@ -354,7 +312,7 @@ CGAL::Sign audit_sign_mixed_radical_exact(
         throw InvalidMixedRadicalRootError(
             "mixed-radical roots must be nonnegative");
     }
-    return sign_mixed_radical_impl(a, b, c, d, alpha, beta);
+    return compas_cgal::exact::sign_mixed_radical(a, b, c, d, alpha, beta);
 }
 
 void validate_engagement_input_binary64(
