@@ -13,7 +13,7 @@ traits is never used. Destroying the source therefore leaves the copy with a dan
 `m_geom_traits`, and the first point-location query that reads through it is a use of
 freed memory. With `Gps_circle_segment_traits_2` over `Exact_predicates_exact_constructions_kernel`
 and `Arr_trapezoid_ric_point_location`, the reproducer below crashes with
-`EXC_BAD_ACCESS` in **10 of 10 runs**; with the bounded-planar default locator,
+`EXC_BAD_ACCESS` in **30 of 30 runs**; with the bounded-planar default locator,
 `Arr_walk_along_line_point_location`, the same freed pointer produces no fault and a
 correct-looking answer. The copy constructor is reachable from ordinary,
 correct-looking user code: `std::move` on a `General_polygon_set_2` silently performs a
@@ -208,7 +208,11 @@ Structural arm, exit code `0`, all four checks pass:
   ok    the orphan still points at the freed traits object
 ```
 
-`--uaf` arm, **10 of 10 runs** exit `139` (SIGSEGV). The walk-along-line query returns
+Structural arm: **20 of 20 runs** exit `0`.
+
+`--uaf` arm: **30 of 30 runs** exit `139` (SIGSEGV), and the crash is not an artefact of
+the optimisation level — a `-O0` build faulted in 5 of 5 and a second `-O1` build
+(without the unused Eigen include path) in 5 of 5. The walk-along-line query returns
 normally through the freed pointer; the process dies inside the trapezoid-RIC
 constructor, before its `locate` is ever called:
 
@@ -234,6 +238,37 @@ That `__tree` is `Arr_circle_segment_traits_2::inter_map`. A breakpoint on
 `Td_traits = CGAL::Td_traits<CGAL::Arr_traits_basic_adaptor_2<CGAL::Gps_circle_segment_traits_2<CGAL::Epeck>>, …>`,
 i.e. a type whose copy constructor copies the `Arr_circle_segment_traits_2` base
 subobject, `inter_map` included, out of the freed block.
+
+### Corroboration
+
+The defect was originally found downstream, through a different route and a different
+reproducer, before the plain-CGAL one above was written. Independent reproducers agree,
+which matters more here than any single rate: this is an intermittent fault whose
+observed rate depends on what else the process has allocated.
+
+| Reproducer | Written and measured by | N | Crashes |
+|---|---|---|---|
+| The plain-CGAL program above (`-O1`) | this page | 30 | 30 |
+| Same program, `-O0` build | this page | 5 | 5 |
+| A Python two-liner over the downstream binding — clone a set, drop the parent, call a containment query | a separate diagnosing agent, recorded in this repository's internal `segv-report.md` | 10 | 10 |
+| A second, independently written two-line variant of the same | a second agent | 6 | 6 |
+| The same Python two-liner with the parent object **kept alive** (control) | the diagnosing agent | 10 | 0 |
+
+!!! note "The downstream fix is not a CGAL fix"
+
+    Removing the aliasing downstream — by giving the object family one traits
+    object whose lifetime outlives every arrangement that borrows it — removed
+    the crash: 0 faults in 20 runs measured by the agent that applied it, and 0
+    in 8 measured independently afterwards. That is confirmatory of the causal
+    chain, not evidence about CGAL: **nothing in CGAL was changed**, and the
+    aliasing described below is still present in 6.0.1 exactly as shown. The
+    plain-CGAL reproducer above is unaffected by any downstream change and still
+    crashes.
+
+    Figures measured against this repository's own test suite (a shipped test
+    observed at 5 of 8 and at 3 of 10 faulting) are not reproducers and are
+    quoted here only to show the intermittency; they depend on test ordering and
+    on allocator state and should not be read as a rate for the defect.
 
 ## Mechanism
 
@@ -344,6 +379,23 @@ copy's own traits is duly deleted by its own destructor.
 
 The reproducer exercises all three.
 
+The third one is worth a second look, because the general case next to it is sound. When
+neither operand is empty, `_join` falls through to `_join(const Aos_2& arr)`
+(`:1542-1553`), which builds the result on the object's **own** traits at `:1544`:
+
+```cpp
+Aos_2* res_arr = new Aos_2(m_traits);   // the Gps's own live traits
+Gps_join_functor<Aos_2> func;
+overlay(*m_arr, arr, *res_arr, func);
+delete m_arr;
+m_arr = res_arr;
+```
+
+That is why boolean operations generally leave a healthy object behind, and why the
+empty-set shortcut at `:1611` stands out: it is the one branch of `_join` that does not
+rebuild on `m_traits`, and it reaches `assign` instead. The same holds for `_difference`
+(`:1618-1629`, `new Aos_2(m_traits)` at `:1620`).
+
 ## Why the symptom depends on the point-location strategy
 
 The same dangling pointer is a hard fault on one path and silent on another, decided
@@ -351,7 +403,7 @@ solely by what the locator does with it.
 
 | Strategy | What it does with `arr.geometry_traits()` | Observed |
 |---|---|---|
-| `Arr_trapezoid_ric_point_location` | Constructor (`Arr_trapezoid_ric_point_location.h:144-158`) stores it at `:152` and calls `td.init_arrangement_and_traits(&arr)` at `:154`, which runs `traits = new Td_traits(*m_trts_adaptor)` (`Arr_point_location/Trapezoidal_decomposition_2.h:1808-1817`, allocation at `:1816`) — a genuine copy-construct out of the object, including `Arr_circle_segment_traits_2::inter_map` (`Arr_circle_segment_traits_2.h:70-72`) | `EXC_BAD_ACCESS`, 10/10 |
+| `Arr_trapezoid_ric_point_location` | Constructor (`Arr_trapezoid_ric_point_location.h:144-158`) stores it at `:152` and calls `td.init_arrangement_and_traits(&arr)` at `:154`, which runs `traits = new Td_traits(*m_trts_adaptor)` (`Arr_point_location/Trapezoidal_decomposition_2.h:1808-1817`, allocation at `:1816`) — a genuine copy-construct out of the object, including `Arr_circle_segment_traits_2::inter_map` (`Arr_circle_segment_traits_2.h:70-72`) | `EXC_BAD_ACCESS`, 30 of 30 |
 | `Arr_walk_along_line_point_location` — the bounded-planar **default** (`Arr_bounded_planar_topology_traits_2.h:248-249`), used by `Gps_on_surface_base_2::oriented_side` (`:482-496`, `Point_location pl(*m_arr)` at `:484`) | Only *stores* the pointer (member at `Arr_walk_along_line_point_location.h:71`, assigned at `:90-91`) and reaches the traits through accessors that are all `return Functor();` | No fault, plausible answer |
 
 The split within `Arr_circle_segment_traits_2` is what makes the walk path quiet. Every
@@ -365,10 +417,10 @@ touches `this`:
 | `intersect_2_object` `:740` | `return Intersect_2(inter_map);` | **yes** — binds a reference into `inter_map` |
 | `approximate_2_object` `:558`, `merge_2_object` `:803`, `trim_2_object` `:897` | capture `*this` / `this` | only when the functor calls back through it |
 
-The reading accessors are simply not reached through the borrowed pointer, because every
-boolean operation builds its result arrangement from the `Gps`'s own live `m_traits`
-(e.g. `_difference` at `Gps_on_surface_base_2.h:1618-1629`, `new Aos_2(m_traits)` at
-`:1620`). That is a property of the current call graph, not an invariant.
+The reading accessors are simply not reached through the borrowed pointer, because the
+boolean operations rebuild on the `Gps`'s own live `m_traits`, as shown above for
+`_join` and `_difference`. That is a property of the current call graph, not an
+invariant.
 
 !!! danger "A clean run is not evidence of a valid pointer"
 
