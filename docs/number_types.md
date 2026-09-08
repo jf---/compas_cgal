@@ -321,18 +321,28 @@ Exact_rational = boost::multiprecision::cpp_rational
 Epeck::FT      = Lazy_exact_nt<cpp_rational>
 ```
 
-!!! warning "CGAL's own annotation on this backend"
+!!! warning "What this pin costs is an open question, not a settled one"
 
-    The comment immediately above that typedef in `Exact_type_selector.h` reads:
-    *"cpp_rational is even slower than `Quotient<MP_Float>`."* With GMP present
-    the selector would choose `BOOST_GMP_BACKEND` or `GMP_BACKEND` instead. A
-    symbolicated profile of this codebase shows the hot leaves are `cpp_int`
-    add/subtract/divide/compare **plus their allocator traffic** —
-    `cpp_int_base` limb allocation, and `__udivmodti4` inside bignum
-    division/GCD.
+    A comment above that typedef in `Exact_type_selector.h` reads *"cpp_rational
+    is even slower than `Quotient<MP_Float>`"* — but **that sentence is
+    historical and does not describe this build.** It sits above an
+    `#if BOOST_VERSION <= 107800` guard, and the next sentence of the same
+    comment says the newer `cpp_rational` (Boost multiprecision PR 366) *"is
+    much better than `Quotient<cpp_int>` because it is using smart gcd"*. The
+    vendored Boost here is **1.82.0**, so the `#else` branch applies and we get
+    the smart-GCD implementation. `Default_exact_nt_backend` only selects
+    `BOOST_BACKEND` at all when `BOOST_VERSION > 107900`, so the configuration
+    that comment disparages is not reachable.
 
-    The pin buys wheel portability. It is a real trade with a real price, and
-    it is currently undocumented outside this paragraph.
+    What remains true and measured: a symbolicated profile of this codebase
+    shows the hot leaves are `cpp_int` add/subtract/divide/compare **plus their
+    allocator traffic** — `cpp_int_base` limb allocation, and `__udivmodti4`
+    inside bignum division/GCD.
+
+    So the real question is GMP versus modern smart-GCD `cpp_rational` on this
+    workload, and it is **empirical and unmeasured**. The pin buys wheel
+    portability. Whether it costs anything, and how much, is not established
+    by the source comment and should not be asserted from it.
 
 Because `canonical_encode_rational` hashes the numerator and denominator as
 canonical integers under a validated *reduced, positive-denominator, gcd == 1*
