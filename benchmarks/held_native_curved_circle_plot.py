@@ -109,8 +109,16 @@ def _render(
     print(f"PLOT {output}: {len(events)}/{total} queries; failed={failure is not None}", flush=True)
 
 
-def render_native_curved_circles(case_name: str, *, max_pieces: int | None = None, output: Path | None = None) -> None:
-    """Query midpoint circles directly on native pieces, keeping failures visible."""
+def render_native_curved_circles(
+    case_name: str, *, max_pieces: int | None = None, output: Path | None = None, record_stops: bool = False
+) -> None:
+    """Query midpoint circles directly on native pieces, keeping failures visible.
+
+    A named geometry stop (a clearance below the tool, an inadmissible normal)
+    is rendered and written to the report either way; with ``record_stops`` it
+    is a recorded outcome and the call returns, otherwise it is re-raised.
+    Unexpected exceptions always propagate.
+    """
     if max_pieces is not None and max_pieces < 1:
         raise InvalidCurvedCircleDiagnosticLimitError("max_pieces must be positive when supplied.")
     case = load_held_reference_case(case_name)
@@ -146,6 +154,9 @@ def render_native_curved_circles(case_name: str, *, max_pieces: int | None = Non
         native.NativeBoundaryMedialConstructionError,
     ) as error:
         _render(case, owner, events, output, elapsed=time.perf_counter() - started, finished=False, failure=error, failure_site=site)
+        if record_stops:
+            print(f"STOP {case.name}: {type(error).__name__} after {len(events)} queries; recorded in {output.with_suffix('.json')}", flush=True)
+            return
         raise
     _render(case, owner, events, output, elapsed=time.perf_counter() - started, finished=True)
 
@@ -155,11 +166,12 @@ def main() -> None:
     parser.add_argument("--case", choices=("all", *CANONICAL_CASE_NAMES), default="figure5")
     parser.add_argument("--max-pieces", type=int)
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--record-stops", action="store_true", help="treat named geometry stops as recorded outcomes and continue to the next case")
     args = parser.parse_args()
     if args.case == "all" and args.output is not None:
         raise InvalidCurvedCircleDiagnosticLimitError("An explicit output path requires one case, so cases cannot overwrite one another.")
     for name in CANONICAL_CASE_NAMES if args.case == "all" else (args.case,):
-        render_native_curved_circles(name, max_pieces=args.max_pieces, output=args.output)
+        render_native_curved_circles(name, max_pieces=args.max_pieces, output=args.output, record_stops=args.record_stops)
 
 
 if __name__ == "__main__":
