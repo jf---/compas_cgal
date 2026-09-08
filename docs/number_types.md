@@ -321,37 +321,155 @@ Exact_rational = boost::multiprecision::cpp_rational
 Epeck::FT      = Lazy_exact_nt<cpp_rational>
 ```
 
-!!! warning "What this pin costs is an open question, not a settled one"
+!!! note "The `Exact_type_selector.h` comment about slow `cpp_rational` is historical"
 
-    A comment above that typedef in `Exact_type_selector.h` reads *"cpp_rational
-    is even slower than `Quotient<MP_Float>`"* — but **that sentence is
-    historical and does not describe this build.** It sits above an
-    `#if BOOST_VERSION <= 107800` guard, and the next sentence of the same
-    comment says the newer `cpp_rational` (Boost multiprecision PR 366) *"is
-    much better than `Quotient<cpp_int>` because it is using smart gcd"*. The
-    vendored Boost here is **1.82.0**, so the `#else` branch applies and we get
-    the smart-GCD implementation. `Default_exact_nt_backend` only selects
-    `BOOST_BACKEND` at all when `BOOST_VERSION > 107900`, so the configuration
-    that comment disparages is not reachable.
+    A comment above that typedef reads *"cpp_rational is even slower than
+    `Quotient<MP_Float>`"* — but **that sentence does not describe this build.**
+    It sits above an `#if BOOST_VERSION <= 107800` guard, and the next sentence
+    of the same comment says the newer `cpp_rational` (Boost multiprecision
+    PR 366) *"is much better than `Quotient<cpp_int>` because it is using smart
+    gcd"*. The vendored Boost here is **1.82.0**, so the `#else` branch applies
+    and we get the smart-GCD implementation. `Default_exact_nt_backend` only
+    selects `BOOST_BACKEND` at all when `BOOST_VERSION > 107900`, so the
+    configuration that comment disparages is not reachable.
 
-    What remains true and measured: a symbolicated profile of this codebase
-    shows the hot leaves are `cpp_int` add/subtract/divide/compare **plus their
-    allocator traffic** — `cpp_int_base` limb allocation, and `__udivmodti4`
-    inside bignum division/GCD.
+### Measured: the filter decides, not the bignum library
 
-    So the real question is GMP versus modern smart-GCD `cpp_rational` on this
-    workload, and it is **empirical and unmeasured**. The pin buys wheel
-    portability. Whether it costs anything, and how much, is not established
-    by the source comment and should not be asserted from it.
+**Keep the pin.** On the filtered path — `Lazy_exact_nt`'s interval settling the
+sign, which is what every deciding lane in this repository is built to do — a
+GMP-backed exact rational buys between **1.01× and 1.15×**, median 1.06×. That
+does not pay for adding a native `libgmp` + `libmpfr` dependency to a build that
+is currently header-only and self-contained, with wheel delocation and
+cross-platform CI downstream of it.
+
+GMP's real advantage — a saturating **~2.1×** — appears only on deep
+*unfiltered* rational chains, and at the shallow end it **loses**: below roughly
+150 bits of operand, `cpp_int`'s small-value inline representation beats `mpq`'s
+allocate-and-call overhead. So the backend question is conditional on the
+filtering question. It has an answer worth acting on only where the filter is
+not working, which is the unfiltered lane that stages 2–4 exist to remove. Revisit
+after stage 4, when the answer should be worth even less.
+
+Measured first-party on 2026-09-08 by building `tests/benchmarks/depth_bench.cpp`
+twice from identical source — `-DCGAL_DISABLE_GMP -DCGAL_USE_BOOST_MP` against
+`-DCGAL_USE_GMP -DCGAL_USE_BOOST_MP` — on Apple Silicon, clang -O3, with GMP
+6.3.0 and MPFR 4.2.2 from Homebrew at `/opt/homebrew`, outside the pixi
+environment. The two binaries were confirmed distinct rather than assumed:
+`otool -L` shows the boost build linking **no** GMP libraries and the GMP build
+linking **two**. µs per sign decision; ratio **> 1 means GMP is faster**.
+
+| depth | 1 | 2 | 4 | 8 | 12 | 16 |
+|---|---|---|---|---|---|---|
+| filtered, `Lazy_exact_nt` — boost | 0.45 | 0.82 | 1.65 | 3.61 | 5.21 | 7.05 |
+| filtered — GMP | 0.39 | 0.80 | 1.63 | 3.29 | 4.91 | 6.64 |
+| **filtered ratio** | 1.15× | 1.03× | 1.01× | 1.10× | 1.06× | 1.06× |
+| unfiltered, bare `CORE::BigRat` — boost | 0.63 | 2.45 | 8.92 | 29.67 | 59.64 | 100.29 |
+| unfiltered — GMP | 1.99 | 1.89 | 4.74 | 14.11 | 27.46 | 46.36 |
+| **unfiltered ratio** | 0.32× | 1.30× | 1.88× | 2.10× | 2.17× | 2.16× |
+
+The mechanism is the whole point: when the interval decides, the exact
+representative is **never built**, so the library underneath it never runs. The
+residual few percent on the filtered row is not bignum speed at all — it is DAG
+node size. `sizeof(Exact_rational)` is 64 bytes on boost against 32 on GMP, so
+every lazy node the filtered path allocates is 32 bytes larger.
+
+!!! note "Read the paired ratio, not the absolute µs"
+
+    This is a separate paired run of the same harness that produced the table in
+    *What the filter is actually worth* above, so its boost column differs from
+    that one by a few percent of run-to-run noise. Only the ratio measured
+    *within* one run is load-bearing.
+
+    The depth-1 unfiltered ratio is the weakest cell in the table: 1.99 µs for
+    GMP at depth 1 is not monotone with 1.89 µs at depth 2, and a second sweep
+    in the same spike put depth 1 at 0.89× rather than 0.32×. Both runs agree on
+    the direction — boost wins below the crossover — but the **magnitude** of
+    that depth-1 loss is not a stable measurement, and 3× should not be quoted
+    from it.
+
+Operand width was measured rather than assumed: the chain grows ~53 bits per
+level, putting depth 1 at 105 bits and depth 2 at 158, which brackets the
+crossover.
+
+### What a `-DCGAL_USE_GMP` flip actually selects
+
+Not `CGAL::Gmpq`. `Installation/internal/enable_third_party_libraries.h:56`
+defines `CGAL_USE_BOOST_MP` whenever `CGAL_DO_NOT_USE_BOOST_MP` is absent — it
+is absent here — so dropping `-DCGAL_USE_BOOST_MP` from the compile line does
+not remove it, and the selector's `CGAL_USE_GMP && CGAL_USE_BOOST_MP` branch
+takes `BOOST_GMP_BACKEND`. The real A/B is therefore boost's `number<>` wrapper
+over `cpp_int` versus the same wrapper over GMP's engine (`mpq_rational`), which
+is the *cleaner* comparison anyway: the interface layer is identical on both
+sides and only the bignum engine changes. Pure `GMP_BACKEND` would need
+`CGAL_DO_NOT_USE_BOOST_MP` or `CMAKE_OVERRIDDEN_DEFAULT_ENT_BACKEND=0`; neither
+was tested.
+
+### The integer arm, and where the deep win comes from
+
+The expensive real workload recorded in `docs/continuous_engagement_cost.md` is
+CGAL's bivariate algebraic kernel — **integer** polynomial arithmetic, not
+rational chains. Measured per operation across 64–2048 bits, GMP wins about 2×
+on multiply and 1.6× on GCD above 256 bits, but **loses on comparison at every
+size measured** (0.79×–0.90×). Comparison is the most common operation in
+predicate code, so even on the integer side a swap is not a uniform win.
+
+A `sample` profile of a depth-12 exact-path loop bounds the allocator story
+tightly:
+
+| | boost `cpp_rational` | GMP `mpq_rational` |
+|---|---:|---:|
+| arithmetic | 73.4% | 80.5% |
+| allocator | 23.7% | 18.8% |
+| allocations per decision | 268.7 | 85.7 |
+
+Allocator work is 23.7% of boost's time, so eliminating boost's allocator
+*entirely* caps the achievable win at `1/(1 − 0.237)` = **1.31×**. The measured
+deep win is 2.15×, so at least ~62% of it is genuinely GMP's `mpn` assembly and
+cannot be recovered by an allocator change.
+
+### Canonical bytes do not move across backends
 
 Because `canonical_encode_rational` hashes the numerator and denominator as
 canonical integers of a *reduced, positive-denominator* fraction, the canonical
 digest is a function of the mathematical **value**, not of the backend
-representation. Changing backends does not move replay identity. Hashing an
-approximation or an unreduced form would. That form is not validated at the
-encode site — `src/canonical_encoding.cpp:154` encodes `CORE::numerator` and
+representation. Hashing an approximation or an unreduced form would move replay
+identity. That form is not validated at the encode site —
+`src/canonical_encoding.cpp:154` encodes `CORE::numerator` and
 `CORE::denominator` exactly as handed to it — it comes from `CORE::BigRat`'s own
-normalisation, which is why a backend swap is the thing to check.
+normalisation. `CGAL::Fraction_traits` itself guarantees only `x == num/den`,
+never reducedness, so the reduced form is the backend's doing and a backend swap
+is exactly the thing that could move it.
+
+It was checked, and it is clean. Two checks, both under both backends:
+
+| Check | Result |
+|---|---|
+| `ft_equiv` harness, 6024 values, `Decompose` against IEEE-754 bit decomposition | 0 mismatches on boost, 0 on GMP |
+| direct cross-backend dump of numerator and denominator decimal strings — the same 6024 values **plus 200 depth-12 chained constructions** with ~180-digit coefficients | 6224 lines, byte-for-byte identical, same SHA-256 |
+
+The second is the stronger test: it compares the two backends' actual output
+against each other rather than each against a local reference, and it
+deliberately includes the deep-chain case where unreduced intermediates could
+plausibly diverge. Both `cpp_rational` and `mpq_rational` normalise to lowest
+terms with a positive denominator, and the reduced representation of a rational
+is unique. Stored replay digests would survive this specific swap.
+
+!!! warning "What this measurement does **not** establish"
+
+    - **The real pipeline was never run under GMP.** Everything above is a
+      microbenchmark plus a per-operation integer arm. Rebuilding the extension
+      against GMP was out of scope, so "2.1× on a rational chain" maps to "X% on
+      a pocket run" only by inference.
+    - **The filter-failure rate of the real workload is unknown.** This is the
+      single most important missing number: the filtered row is ~1.05× and the
+      unfiltered row is 2.1×, so any end-to-end benefit is almost entirely
+      determined by what fraction of decisions escape the interval.
+    - **`Sqrt_extension` and `Gps_circle_segment_traits_2` were not benchmarked
+      at all**, and byte identity was checked on doubles and rational chains
+      only — not on one-root coordinates, algebraic-kernel root representations,
+      or any polynomial canonicalisation path.
+    - **Single machine, single compiler, arm64 only.** GMP's advantage is
+      per-CPU assembly; x86-64 ratios will differ.
 
 ## The exact vocabulary and the two doors
 
@@ -487,7 +605,8 @@ other hands the double to `Epeck::FT` and asks `Fraction_traits` to split it.
 Agreement between them was measured, not inferred — which is what turns
 *canonical attestation bytes are a function of the value, never of the carrier*
 into a property with evidence behind it. It is the same argument the backend pin
-rests on above, now checked across a second carrier rather than a second backend.
+rests on above, run across a second carrier rather than a second backend — the
+backend arm of that argument is measured separately above.
 
 !!! warning "That was a one-off, and no landed gate repeats it"
 
