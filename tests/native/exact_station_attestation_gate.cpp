@@ -130,7 +130,11 @@ std::string frozen_value(
 /// same station through the exact API. The frozen expectations below never move.
 StationEventSource2 probe_station()
 {
-    return StationEventSource2::build("-355/113", "22/7", "1/2", "7/2");
+    return StationEventSource2::build(
+        exact::Rational(-355) / exact::Rational(113),
+        exact::Rational(22) / exact::Rational(7),
+        exact::Rational(1) / exact::Rational(2),
+        exact::Rational(7) / exact::Rational(2));
 }
 
 std::string frozen_station_bytes()
@@ -276,9 +280,12 @@ void lazy_and_eager_chains_canonicalise_identically()
 /// signature change unchanged.
 void invalid_stations_are_rejected()
 {
+    const exact::Rational zero(0);
+    const exact::Rational one(1);
+
     bool raised = false;
     try {
-        (void)StationEventSource2::build("0", "0", "0", "1");
+        (void)StationEventSource2::build(zero, zero, zero, one);
     } catch (const InvalidStationSourceError&) {
         raised = true;
     }
@@ -286,7 +293,7 @@ void invalid_stations_are_rejected()
 
     raised = false;
     try {
-        (void)StationEventSource2::build("0", "0", "1", "0");
+        (void)StationEventSource2::build(zero, zero, one, zero);
     } catch (const InvalidStationSourceError&) {
         raised = true;
     }
@@ -294,14 +301,19 @@ void invalid_stations_are_rejected()
 
     raised = false;
     try {
-        (void)StationEventSource2::build("0", "0", "1", "17/4");
+        (void)StationEventSource2::build(
+            zero, zero, one, exact::Rational(17) / exact::Rational(4));
     } catch (const InvalidStationSourceError&) {
         raised = true;
     }
     require(raised, "a cap chord ratio above 4 was accepted");
 
     // The closed upper end is admitted, and so is a negative coordinate.
-    (void)StationEventSource2::build("-1/3", "-7/2", "1", "4");
+    (void)StationEventSource2::build(
+        exact::Rational(-1) / exact::Rational(3),
+        exact::Rational(-7) / exact::Rational(2),
+        one,
+        exact::Rational(4));
 }
 
 }  // namespace

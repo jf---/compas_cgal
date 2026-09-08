@@ -5,6 +5,7 @@
 #include "../stock_2.h"
 #include "boundary_events.h"
 #include "event_certificate.h"
+#include "exact/rational.h"
 #include "segment_partition.h"
 #include "segment_source.h"
 #include "segment_strata.h"
@@ -18,6 +19,8 @@
 #include <utility>
 
 #include <CGAL/CORE/BigRat.h>
+
+namespace exact = compas_cgal::exact;
 
 namespace {
 
@@ -73,6 +76,10 @@ StationEventSource2 station_source(
     const Rational parameter{
         Integer(numerator),
         Integer(denominator)};
+    // The segment source still carries text; decoding it is stage 3's to
+    // remove. What stage 2 removes is the SECOND crossing: the interpolated
+    // station used to be re-rendered as decimal text purely so
+    // StationEventSource2 could parse it back.
     const Rational x0 =
         parse_rational(source.x0().text(), "start x");
     const Rational y0 =
@@ -89,23 +96,16 @@ StationEventSource2 station_source(
         parse_rational(
             source.cap_chord_ratio().text(),
             "cap chord ratio");
-    const auto text =
-        [](const Rational& value) {
-            const Integer numerator =
-                CORE::numerator(value);
-            const Integer denominator =
-                CORE::denominator(value);
-            return denominator == 1
-                ? numerator.convert_to<std::string>()
-                : numerator.convert_to<std::string>()
-                    + "/"
-                    + denominator.convert_to<std::string>();
-        };
+    // Named locals, not the expressions inline: CORE::BigRat is a boost
+    // multiprecision number, whose arithmetic yields lazy expression templates.
+    // Materialising here keeps the value alive independently of its operands.
+    const Rational station_x = x0 + parameter * (x1 - x0);
+    const Rational station_y = y0 + parameter * (y1 - y0);
     return StationEventSource2::build(
-        text(x0 + parameter * (x1 - x0)),
-        text(y0 + parameter * (y1 - y0)),
-        text(radius),
-        text(cap));
+        exact::Rational(station_x),
+        exact::Rational(station_y),
+        exact::Rational(radius),
+        exact::Rational(cap));
 }
 
 const AlgebraicRootRecord2& root_for(

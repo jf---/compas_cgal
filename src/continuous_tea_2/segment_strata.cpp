@@ -868,20 +868,17 @@ SegmentCellStratum2 construct_station_cell_stratum(
     return make_cell_stratum(
         branches_at_station(
             records,
-            exact_ft(
-                parse_rational(
-                    source.center_x().text())),
-            exact_ft(
-                parse_rational(
-                    source.center_y().text())),
-            exact_ft(
-                parse_rational(
-                    source.tool_radius().text()))),
+            source.center_x(),
+            source.center_y(),
+            source.tool_radius()),
         "station-rational-v1",
         "0",
         "1",
-        parse_rational(
-            source.cap_chord_ratio().text()));
+        // A DECLARED .exact() BOUNDARY (number_types.md R7). make_cell_stratum
+        // and branch_pair_dispositions_at still carry CORE::BigRat, so the cap
+        // is materialised here, once, rather than decoded from text four lines
+        // earlier. Converting those two is stage 3/4, not stage 2.
+        CGAL::exact(source.cap_chord_ratio()));
 }
 
 std::vector<std::string>

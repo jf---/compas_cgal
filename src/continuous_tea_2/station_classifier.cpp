@@ -14,7 +14,12 @@ namespace {
 using Integer = CORE::BigInt;
 using Rational = CORE::BigRat;
 
-Rational parse_rational(
+// DORMANT since stage 2: nothing in this translation unit decodes text any
+// more. Retained because decoder removal is stage 6, which requires explicit
+// user permission. `exact_ft`'s static_assert is the repository's statement that
+// CORE::BigRat and CGAL::Epeck_ft are the same type, so it earns its keep here
+// regardless.
+[[maybe_unused]] Rational parse_rational(
     const std::string& text,
     std::string_view role)
 {
@@ -42,7 +47,7 @@ Rational parse_rational(
     }
 }
 
-Epeck::FT exact_ft(const Rational& value)
+[[maybe_unused]] Epeck::FT exact_ft(const Rational& value)
 {
     static_assert(
         std::is_same_v<Rational, CGAL::Epeck_ft>);
@@ -82,18 +87,12 @@ StationCellClassification2 classify_station_cell(
             {},
         };
     }
-    const Epeck::FT center_x = exact_ft(
-        parse_rational(
-            source.center_x().text(),
-            "station center x"));
-    const Epeck::FT center_y = exact_ft(
-        parse_rational(
-            source.center_y().text(),
-            "station center y"));
-    const Epeck::FT radius = exact_ft(
-        parse_rational(
-            source.tool_radius().text(),
-            "station tool radius"));
+    // Canonical state, read straight from the source. Since stage 2 the station
+    // carries exact::Rational, which IS Epeck::FT, so the classifier decides on
+    // the same values the producer computed -- no decode, no re-normalisation.
+    const Epeck::FT& center_x = source.center_x();
+    const Epeck::FT& center_y = source.center_y();
+    const Epeck::FT& radius = source.tool_radius();
     const GpsPoint reference(
         center_x,
         center_y - radius);
