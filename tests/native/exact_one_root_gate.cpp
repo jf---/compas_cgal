@@ -107,6 +107,48 @@ void cross_root_arithmetic_is_rejected()
     require(raised, "cross-root multiplication was accepted");
 }
 
+void an_extended_zero_root_is_not_a_rational_operand()
+{
+    // ACDE_TAG == Tag_true -- the arrangement's tag, and therefore ours -- admits
+    // an EXTENDED value whose root is zero. Such a value denotes a rational, yet
+    // it is not a rational OPERAND: the exemption is `!is_extended()`, never
+    // "the root is zero". Roots 2 and 3 alone cannot tell those two rules apart,
+    // so the distinction is pinned here.
+    const exact::OneRoot extended_zero(
+        exact::Rational(0), exact::Rational(1), exact::Rational(0));
+    require(
+        extended_zero.is_extended(),
+        "an extended value with root 0 reports itself unextended");
+
+    const exact::OneRoot three(
+        exact::Rational(0), exact::Rational(1), exact::Rational(3));
+    bool raised = false;
+    try {
+        static_cast<void>(exact::same_root_add(extended_zero, three));
+    } catch (const exact::CrossRootExtensionError&) {
+        raised = true;
+    }
+    require(raised, "an extended root-0 operand was added across sqrt(3)");
+
+    raised = false;
+    try {
+        static_cast<void>(exact::same_root_multiply(three, extended_zero));
+    } catch (const exact::CrossRootExtensionError&) {
+        raised = true;
+    }
+    require(raised, "an extended root-0 operand was multiplied across sqrt(3)");
+
+    // The contrast that gives the check its meaning: the genuinely non-extended
+    // zero denotes the same number and IS permitted against the same operand.
+    const exact::OneRoot unextended_zero(exact::Rational(0));
+    require(
+        !unextended_zero.is_extended(),
+        "an unextended zero reports itself extended");
+    require(
+        exact::same_root_add(unextended_zero, three) == three,
+        "an unextended operand was not permitted against sqrt(3)");
+}
+
 }  // namespace
 
 int main()
@@ -115,6 +157,7 @@ int main()
         same_root_operations_are_exact();
         a_rational_operand_is_always_permitted();
         cross_root_arithmetic_is_rejected();
+        an_extended_zero_root_is_not_a_rational_operand();
     } catch (const std::exception& error) {
         std::printf("exact_one_root_gate FAILED: %s\n", error.what());
         return 1;
