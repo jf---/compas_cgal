@@ -266,6 +266,19 @@ target_link_libraries(
 target_compile_definitions(
     exact_station_attestation_gate PRIVATE CGAL_USE_CORE=1)
 
+# Absolute byte anchors for the segment lane. `segment-event-source-v1` appears
+# exactly once in the repository -- its own producer -- so before this gate
+# nothing pinned the outer framing at all, and the only anchor for
+# exact-binary64-rational-v1 lived on exact::CanonicalRational::canonical_bytes(),
+# which stage 3 removes.
+add_executable(exact_segment_attestation_gate EXCLUDE_FROM_ALL
+    tests/native/exact_segment_attestation_gate.cpp
+)
+target_link_libraries(
+    exact_segment_attestation_gate PRIVATE continuous_tea_exact_core)
+target_compile_definitions(
+    exact_segment_attestation_gate PRIVATE CGAL_USE_CORE=1)
+
 # Correctness gate for exact::sign_mixed_radical, the deciding predicate of the
 # exact cap certificate. It compares the single merged definition (reached
 # through continuous_tea_exact_core) against CGAL's own nested-extension sign
