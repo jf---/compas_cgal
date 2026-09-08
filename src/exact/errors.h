@@ -24,4 +24,13 @@ public:
     using std::runtime_error::runtime_error;
 };
 
+/// Raised when a projection produced attestation bytes differing from the
+/// frozen contract. Declared here so the module's error model is complete; it
+/// has no raiser yet, and gets one when the projections are routed through
+/// `to_canonical`.
+class AttestationByteDriftError : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
+
 }  // namespace compas_cgal::exact
