@@ -380,8 +380,7 @@ class DeclinedRegion:
     that runs out at both ends yields two of these rather than one span hiding a
     machined middle.
 
-    NOT THE SAME THING AS
-    `compas_cgal.engagement_ordered_toolpath.ForcedEntry`, AND THE DIFFERENCE IS
+    NOT THE SAME THING AS A FORCED ENTRY, AND THE DIFFERENCE IS
     POLARITY. A declined region is material NOT cut; a forced entry is material
     that IS cut, merely reached at the cost of a plunge. Unioning them and handing
     the result to a corner-clearing pass would re-machine finished stock. One
