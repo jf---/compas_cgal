@@ -74,7 +74,11 @@ markdown_extensions:
   - pymdownx.inlinehilite
   - pymdownx.snippets:
       check_paths: true
-  - pymdownx.superfences
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
   - toc:
       permalink: "¤"
 
@@ -164,6 +168,7 @@ nav:
       - Triangulation: examples/example_triangulation.md
   - Design Notes:
       - Exact-Kernel Discipline: exactness.md
+      - Number Types and Filtering: number_types.md
       - Truthful Engagement Audit: engagement_audit.md
       - Benchmark Corpus: benchmarks.md
       - Held–Pfeiffer Reference Pockets: held_pfeiffer_reference_pockets.md
