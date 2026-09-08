@@ -4,6 +4,7 @@
 
 #include <cmath>
 #include <exception>
+#include <memory>
 #include <string_view>
 #include <type_traits>
 #include <utility>
@@ -222,22 +223,30 @@ Coverage2::State Coverage2::build_initial_state(
                 reachable_material.recipe_record(),
                 accumulated_recipe,
             });
-        ReachSet accumulated;
-        accumulated.insert(reach_disk_polygon(
+        // Built on the heap, never copied into it: a ReachSet has no move
+        // constructor, so copying one into long-lived storage leaves the copy's
+        // arrangement reading the traits of a source that is about to die.
+        auto accumulated = std::make_shared<ReachSet>();
+        accumulated->insert(reach_disk_polygon(
             ReachKernelPoint(center_x, center_y),
             exact_precleared_radius));
-        ReachSet residual(reachable_material.set());
-        residual.difference(accumulated);
+        auto residual = std::make_shared<ReachSet>(reachable_material.set());
+        residual->difference(*accumulated);
         return State{
             reachable_material.clone(),
             ExactRegion2::build(
                 std::move(accumulated),
                 ExactRegionRole2::AccumulatedSweeps,
-                accumulated_recipe),
+                accumulated_recipe,
+                {}),
+            // residual is seeded by copy from the material, so its arrangement
+            // reads the material family's traits unless the difference above
+            // rebuilt it on its own.
             ExactRegion2::build(
                 std::move(residual),
                 ExactRegionRole2::CoverageResidual,
-                residual_recipe),
+                residual_recipe,
+                {reachable_material.traits_owner()}),
             {},
             true,
         };
@@ -256,13 +265,20 @@ Coverage2 Coverage2::from_uncut(const ExactRegion2& target)
         throw CoverageTransitionError(
             "uncut coverage requires a design or reachable-material region.");
     }
+    // Nothing operates on the residual here, so its arrangement keeps reading
+    // the target family's traits: the target owns them for it.
     return Coverage2(State{
         target.clone(),
         ExactRegion2::build(
-            ReachSet{}, ExactRegionRole2::AccumulatedSweeps, "uncut"),
+            std::make_shared<ReachSet>(),
+            ExactRegionRole2::AccumulatedSweeps,
+            "uncut",
+            {}),
         ExactRegion2::build(
-            ReachSet(target.set()), ExactRegionRole2::CoverageResidual,
-            target.recipe_record()),
+            std::make_shared<ReachSet>(target.set()),
+            ExactRegionRole2::CoverageResidual,
+            target.recipe_record(),
+            {target.traits_owner()}),
         {},
         true,
     });
@@ -283,8 +299,8 @@ void Coverage2::add_disk_sweep(double cx, double cy, double tool_radius)
         {point_record(cx, cy), reach_binary64_record(tool_radius)});
     CoverageTransitionAudit2 audit;
     try {
-        ReachSet sweep;
-        sweep.insert(reach_disk_polygon(ReachKernelPoint(cx, cy), radius));
+        auto sweep = std::make_shared<ReachSet>();
+        sweep->insert(reach_disk_polygon(ReachKernelPoint(cx, cy), radius));
         ++audit.sweep_constructions;
         apply_sweep(std::move(sweep), record, audit);
     }
@@ -334,7 +350,9 @@ CoverageSweepRecord2 Coverage2::add_segment_sweep(
     };
     CoverageTransitionAudit2 audit;
     try {
-        ReachSet sweep = reach_join_parts(
+        auto sweep = std::make_shared<ReachSet>();
+        reach_join_parts_into(
+            *sweep,
             reach_capsule_parts(start, end, radius),
             {});
         ++audit.sweep_constructions;
@@ -394,7 +412,9 @@ CoverageSweepRecord2 Coverage2::add_full_circle_sweep(
     };
     CoverageTransitionAudit2 audit;
     try {
-        ReachSet sweep = reach_full_circle_sweep(
+        auto sweep = std::make_shared<ReachSet>();
+        reach_full_circle_sweep_into(
+            *sweep,
             ReachKernelPoint(cx, cy),
             phase,
             radius);
@@ -419,7 +439,7 @@ CoverageSweepRecord2 Coverage2::add_full_circle_sweep(
 }
 
 void Coverage2::apply_sweep(
-    ReachSet sweep,
+    std::shared_ptr<ReachSet> sweep,
     std::string structural_record,
     CoverageTransitionAudit2 audit)
 {
@@ -428,12 +448,13 @@ void Coverage2::apply_sweep(
             "coverage transition requires an exact residual induction state.");
     }
 
-    ReachSet next_accumulated(state_.accumulated_sweeps.set());
-    next_accumulated.join(sweep);
+    auto next_accumulated =
+        std::make_shared<ReachSet>(state_.accumulated_sweeps.set());
+    next_accumulated->join(*sweep);
     ++audit.accumulated_unions;
 
-    ReachSet next_residual(state_.residual.set());
-    next_residual.difference(sweep);
+    auto next_residual = std::make_shared<ReachSet>(state_.residual.set());
+    next_residual->difference(*sweep);
     ++audit.residual_differences;
 
     std::vector<std::string> next_records =
@@ -451,16 +472,22 @@ void Coverage2::apply_sweep(
             state_.residual.recipe_record(),
             structural_record,
         });
+    // Each successor is seeded by copy from its predecessor, so it reads that
+    // family's traits -- except when the predecessor was empty, where CGAL
+    // assigns the sweep's arrangement and the successor reads the SWEEP's
+    // traits instead. Both owners are offered; build resolves which one it is.
     State next_state{
         state_.reachable_material.clone(),
         ExactRegion2::build(
             std::move(next_accumulated),
             ExactRegionRole2::AccumulatedSweeps,
-            accumulated_recipe),
+            accumulated_recipe,
+            {state_.accumulated_sweeps.traits_owner(), sweep}),
         ExactRegion2::build(
             std::move(next_residual),
             ExactRegionRole2::CoverageResidual,
-            residual_recipe),
+            residual_recipe,
+            {state_.residual.traits_owner(), sweep}),
         std::move(next_records),
         true,
     };

@@ -108,10 +108,10 @@ NativeBoundary2::NativeBoundary2(std::vector<NativeBoundaryCurve2> curves)
         throw InvalidNativeBoundaryChainError("Boundary chain must enclose nonzero area.");
     }
     if (cycle_.orientation == CGAL::CLOCKWISE) polygon.reverse_orientation();
-    design_ = ReachSet(polygon);
+    design_ = std::make_shared<ReachSet>(polygon);
 }
 
 ExactRegion2 NativeBoundary2::design_region() const
 {
-    return ExactRegion2::build(design_, ExactRegionRole2::Design, "native-line-arc-design");
+    return ExactRegion2::build(design_, ExactRegionRole2::Design, "native-line-arc-design", {});
 }

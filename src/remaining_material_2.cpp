@@ -4,6 +4,7 @@
 #include "exact_sweep_2.h"
 
 #include <cmath>
+#include <memory>
 #include <string>
 #include <utility>
 
@@ -47,29 +48,35 @@ ExactRegion2 remaining_material(
         }
     }
     try {
-        ReachSet remaining(target.set());
+        // Built on the heap and adopted, never copied into the region: a
+        // ReachSet has no move constructor, so a copy taken at adoption time
+        // would read the traits of a source that dies on the return.
+        auto remaining = std::make_shared<ReachSet>(target.set());
         for (Eigen::Index row = 0;
-             row < circles.rows() && !remaining.is_empty(); ++row) {
-            remaining.difference(reach_full_circle_sweep(
+             row < circles.rows() && !remaining->is_empty(); ++row) {
+            remaining->difference(reach_full_circle_sweep(
                 ReachKernelPoint(circles(row, 0), circles(row, 1)),
                 ReachKernelVector(circles(row, 2), 0), radius));
         }
         for (Eigen::Index row = 0;
-             row < segments.rows() && !remaining.is_empty(); ++row) {
-            remaining.difference(reach_join_parts(
+             row < segments.rows() && !remaining->is_empty(); ++row) {
+            remaining->difference(reach_join_parts(
                 reach_capsule_parts(
                     ReachKernelPoint(segments(row, 0), segments(row, 1)),
                     ReachKernelPoint(segments(row, 2), segments(row, 3)), radius),
                 {}));
         }
         for (Eigen::Index row = 0;
-             row < disks.rows() && !remaining.is_empty(); ++row) {
-            remaining.difference(reach_disk_polygon(
+             row < disks.rows() && !remaining->is_empty(); ++row) {
+            remaining->difference(reach_disk_polygon(
                 ReachKernelPoint(disks(row, 0), disks(row, 1)), radius));
         }
+        // With no motions nothing rebuilds the arrangement, so it still reads
+        // the target family's traits: the target owns them for it.
         return ExactRegion2::build(
             std::move(remaining), ExactRegionRole2::CoverageResidual,
-            "full-motion remaining material");
+            "full-motion remaining material",
+            {target.traits_owner()});
     }
     catch (const std::exception& error) {
         throw CoverageTransitionError(

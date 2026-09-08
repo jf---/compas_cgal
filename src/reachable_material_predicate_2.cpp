@@ -196,24 +196,31 @@ bool reach_curve_within_radius(
 }
 
 struct ReachableMaterialPredicateStorage2 {
+    // The sets arrive heap-owned. A ReachSet has no move constructor, so taking
+    // them by value would store COPIES whose arrangements read the traits of the
+    // parameters -- destroyed on the way out of this constructor. The two
+    // trapezoid-RIC locators below copy-construct a Td_traits out of exactly
+    // those traits, which is the read that made the same defect a SIGSEGV in
+    // Stock2::contains. `center` may borrow `design`'s traits (it is seeded by
+    // copy from it), so `design` is declared first and destroyed last.
     ReachableMaterialPredicateStorage2(
-        ReachSet design_value,
-        ReachSet center_value,
+        std::shared_ptr<const ReachSet> design_value,
+        std::shared_ptr<const ReachSet> center_value,
         std::vector<ReachCurveDistance2> boundary_curve_values,
         ReachFT radius_value,
         ReachableDomainBuildAudit2 audit_value)
         : design(std::move(design_value))
         , center(std::move(center_value))
-        , design_point_location(design.arrangement())
-        , center_point_location(center.arrangement())
+        , design_point_location(design->arrangement())
+        , center_point_location(center->arrangement())
         , boundary_curves(std::move(boundary_curve_values))
         , radius(std::move(radius_value))
         , audit(std::move(audit_value))
     {
     }
 
-    ReachSet design;
-    ReachSet center;
+    std::shared_ptr<const ReachSet> design;
+    std::shared_ptr<const ReachSet> center;
     mutable ReachPointLocation2 design_point_location;
     mutable ReachPointLocation2 center_point_location;
     mutable std::mutex design_point_location_mutex;
@@ -260,12 +267,12 @@ ReachableMaterialPredicate2 ReachableMaterialPredicate2::build(
             input.radius,
             forbidden_parts);
     }
-    ReachSet design(design_polygon);
-    ReachSet center = design;
-    center.difference(reach_join_parts(forbidden_parts, {}));
+    auto design = std::make_shared<ReachSet>(design_polygon);
+    auto center = std::make_shared<ReachSet>(*design);
+    center->difference(reach_join_parts(forbidden_parts, {}));
 
     std::vector<ReachPolygonWithHoles> center_components;
-    center.polygons_with_holes(
+    center->polygons_with_holes(
         std::back_inserter(center_components));
     if (center_components.empty()) {
         throw PocketNotMachinableError(

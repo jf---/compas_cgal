@@ -8,6 +8,7 @@
 #include <iterator>
 #include <string>
 #include <utility>
+#include <memory>
 #include <vector>
 
 #include <CGAL/number_utils.h>
@@ -52,7 +53,12 @@ void append_boundary_sweep_parts(
     }
 }
 
-ReachSet build_reachable_material_once(
+// Fills a set the caller already owns rather than returning one: a ReachSet has
+// no move constructor, so a returned set can only reach long-lived storage
+// through CGAL's Gps copy constructor, and the copy's arrangement would keep
+// reading the traits of the returned object after it dies.
+void build_reachable_material_into(
+    ReachSet& target,
     const ReachPolygonWithHoles& center,
     const ReachFT& radius,
     ReachableDomainBuildAudit2& audit)
@@ -68,10 +74,9 @@ ReachSet build_reachable_material_once(
         append_boundary_sweep_parts(*hole, radius, parts);
     }
     audit.material_sweep_operands += parts.size();
-    ReachSet material = reach_join_parts(parts, {center});
+    reach_join_parts_into(target, parts, {center});
     ++audit.material_batch_unions;
     ++audit.material_arrangements;
-    return material;
 }
 
 } // namespace
@@ -118,22 +123,24 @@ ReachableDomain2::State ReachableDomain2::build_state(
         build_reachable_arrangement(std::move(input));
     ++selected.audit.geometry_passes;
 
-    ReachSet design(selected.design_polygon);
-    ReachSet center(selected.center_polygon);
-    ReachSet material = build_reachable_material_once(
+    auto design = std::make_shared<ReachSet>(selected.design_polygon);
+    auto center = std::make_shared<ReachSet>(selected.center_polygon);
+    auto material = std::make_shared<ReachSet>();
+    build_reachable_material_into(
+        *material,
         selected.center_polygon,
         selected.input.radius,
         selected.audit);
 
     ++selected.audit.subset_decisions;
-    const bool subset = reach_exact_subset(material, design);
+    const bool subset = reach_exact_subset(*material, *design);
     if (!subset) {
         throw ReachableMaterialContainmentError(
             "exact reachable material is not contained in the design");
     }
 
-    ReachSet residual(design);
-    residual.difference(material);
+    auto residual = std::make_shared<ReachSet>(*design);
+    residual->difference(*material);
     ++selected.audit.residual_differences;
 
     ReachableDomainCertificate2 certificate =
@@ -154,23 +161,29 @@ ReachableDomain2::State ReachableDomain2::build_state(
         "exact-region-unreachable-residual-v2",
         {design_recipe, material_recipe});
 
+    // residual is seeded by copy from design, so its arrangement reads the
+    // design family's traits unless the difference above rebuilt it on its own.
     return State{
         ExactRegion2::build(
-            std::move(design),
+            design,
             ExactRegionRole2::Design,
-            design_recipe),
+            design_recipe,
+            {}),
         ExactRegion2::build(
             std::move(center),
             ExactRegionRole2::CenterDomain,
-            center_recipe),
+            center_recipe,
+            {}),
         ExactRegion2::build(
             std::move(material),
             ExactRegionRole2::ReachableMaterial,
-            material_recipe),
+            material_recipe,
+            {}),
         ExactRegion2::build(
             std::move(residual),
             ExactRegionRole2::UnreachableResidual,
-            residual_recipe),
+            residual_recipe,
+            {design}),
         std::move(certificate),
         selected.audit,
     };
