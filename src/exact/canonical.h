@@ -34,7 +34,12 @@ private:
 
 /// Project an exact rational into canonical attestation form.
 ///
-/// This is the ONLY exact-to-attestation-bytes exit point in the codebase.
+/// The single intended exact-to-attestation-bytes door for this codebase. As of
+/// stage 0 nothing is routed through it yet: every attested value still reaches
+/// the frozen encoding through `ExactBinary64Rational2::canonical_bytes()`
+/// (segment_source.cpp:87-95), fed by `SegmentEventSource2::lift_exact`
+/// (:170-180), which performs this same decomposition inline. Routing them
+/// through here is stage 3.
 ///
 /// Raises:
 ///     UnreducedCanonicalRationalError: if the decomposed denominator is not
