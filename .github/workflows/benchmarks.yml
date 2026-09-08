@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   corpus:
-    name: corpus tests + strict typing
+    name: exact gates + corpus tests + strict typing
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -30,6 +30,17 @@ jobs:
         with:
           environments: default
           cache: true
+
+      # The native gates are the only automated check on the exact number
+      # vocabulary's contracts: the frozen attestation byte literal, the
+      # cross-root precondition, and the mixed-radical sign predicate (whose
+      # degenerate-root folding is a soundness requirement, not an
+      # optimisation -- see docs/exactness.md). They are EXCLUDE_FROM_ALL, so
+      # nothing else in this repository ever builds or runs them; without this
+      # step they are only exercised by whoever types the command locally.
+      # Placed first so a broken exact contract fails before the corpus runs.
+      - name: Exact-number native gates
+        run: pixi run -e default exact-gates
 
       - name: Benchmark corpus tests
         run: pixi run pytest tests/benchmarks -q -n auto
