@@ -9,6 +9,11 @@ page is the discipline this repository holds itself to: geometric decisions
 stay inside the kernel, approximation lives only at named system boundaries,
 and every rule below is anchored to code that exists in this codebase.
 
+This page governs **where** a decision may be made. Its companion,
+[Number Types and Filtering](number_types.md), governs **what number type**
+makes it and what that choice costs — the filter architecture behind each
+kernel typedef, and the measured price of getting it wrong.
+
 !!! warning "Why this page exists"
 
     During SP1 of the adaptive-clearing programme, a generated design placed
