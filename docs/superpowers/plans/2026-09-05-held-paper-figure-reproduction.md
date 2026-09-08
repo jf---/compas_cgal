@@ -503,6 +503,23 @@ query answers in 1.33, 0.29 and 0.26 ms. Upper and Monstera still stop at
 their clearance-below-tool events. See [conditioning, not
 degeneracy](../../held_motion_coverage.md#conditioning-not-degeneracy).
 
+**Performance gate checkpoint (September 8):** the curved-circle lane now has
+its Task 7 first-gate instrument: `benchmarks/held_curved_circle_benchmark.py`
+times every native piece of all four pockets (median of three repeats,
+identity recorded), the committed baseline
+`benchmarks/results/held_curved_circle_baseline.json` holds the M1 Max record
+at `4e6cf761` (Figure 5 median 0.25 ms, upper 0.41 ms, crossed skis 0.35 ms,
+Monstera 0.82 ms, stops at upper 76 and Monstera 211), and
+`tests/benchmarks/test_held_curved_circle_performance.py` fails on a changed
+stop, on absolute ceilings (0.25 s per query, 20 ms median), and on 3×/5×
+same-hardware or 10× cross-machine slowdowns. `pixi run
+held-curved-circle-figures` rebuilds the four construction figures, the record
+and the performance figure; the construction driver's `--record-stops` keeps
+geometry stops as recorded outcomes. Documented in
+[Held curved-circle performance](../../held_curved_circle_performance.md).
+This instruments one query, not the traversal; Task 7's stage accounting and
+heatmaps remain open.
+
 **Next action:** represent the clearance-below-tool stop as the explicit
 zero-guide event the integration slice already requires, so the curved
 diagnostic completes upper and Monstera, then connect the oriented transition

@@ -5,12 +5,12 @@
   "all_native_pieces_queried": true,
   "native_pieces": 64,
   "completed_queries": 64,
-  "elapsed_seconds": 1.3769873329947586,
+  "elapsed_seconds": 0.9465568749947124,
   "failure": null,
   "events": [
     {
       "piece_index": 0,
-      "query_seconds": 0.0011295409931335598,
+      "query_seconds": 0.0003481250023469329,
       "stationary": false,
       "p_mm": [
         0.8166975795885141,
@@ -34,7 +34,7 @@
     },
     {
       "piece_index": 1,
-      "query_seconds": 0.00031429200316779315,
+      "query_seconds": 0.00030166700162226334,
       "stationary": false,
       "p_mm": [
         3.6923359643333873,
@@ -60,7 +60,7 @@
     },
     {
       "piece_index": 2,
-      "query_seconds": 0.00044858400360681117,
+      "query_seconds": 0.0004244579977239482,
       "stationary": false,
       "p_mm": [
         5.576538518833684,
@@ -86,7 +86,7 @@
     },
     {
       "piece_index": 3,
-      "query_seconds": 0.00025291699421359226,
+      "query_seconds": 0.00024308400315931067,
       "stationary": false,
       "p_mm": [
         5.758784373288438,
@@ -112,7 +112,7 @@
     },
     {
       "piece_index": 4,
-      "query_seconds": 0.00023233299725688994,
+      "query_seconds": 0.0002173750035581179,
       "stationary": false,
       "p_mm": [
         17.14186766312975,
@@ -138,7 +138,7 @@
     },
     {
       "piece_index": 5,
-      "query_seconds": 0.00023591599892824888,
+      "query_seconds": 0.00021266700059641153,
       "stationary": false,
       "p_mm": [
         39.861617909245524,
@@ -164,7 +164,7 @@
     },
     {
       "piece_index": 6,
-      "query_seconds": 0.000291458003630396,
+      "query_seconds": 0.00027562500326894224,
       "stationary": false,
       "p_mm": [
         64.08132726851179,
@@ -190,7 +190,7 @@
     },
     {
       "piece_index": 7,
-      "query_seconds": 0.00025495899899397045,
+      "query_seconds": 0.0002496250017429702,
       "stationary": false,
       "p_mm": [
         89.55493804951435,
@@ -216,7 +216,7 @@
     },
     {
       "piece_index": 8,
-      "query_seconds": 0.0005247910012258217,
+      "query_seconds": 0.0004911249998258427,
       "stationary": false,
       "p_mm": [
         103.29611164976497,
@@ -240,7 +240,7 @@
     },
     {
       "piece_index": 9,
-      "query_seconds": 0.0004385000065667555,
+      "query_seconds": 0.0004122079990338534,
       "stationary": false,
       "p_mm": [
         105.07891069439091,
@@ -264,7 +264,7 @@
     },
     {
       "piece_index": 10,
-      "query_seconds": 0.0005776250036433339,
+      "query_seconds": 0.0005334580055205151,
       "stationary": false,
       "p_mm": [
         105.52442596936936,
@@ -288,7 +288,7 @@
     },
     {
       "piece_index": 11,
-      "query_seconds": 0.0005213749973336235,
+      "query_seconds": 0.00048599999718135223,
       "stationary": false,
       "p_mm": [
         105.54028442121631,
@@ -314,7 +314,7 @@
     },
     {
       "piece_index": 12,
-      "query_seconds": 0.00034050000249408185,
+      "query_seconds": 0.00032970900065265596,
       "stationary": false,
       "p_mm": [
         105.68731218710548,
@@ -340,7 +340,7 @@
     },
     {
       "piece_index": 13,
-      "query_seconds": 0.0009667500053183176,
+      "query_seconds": 0.000934457995754201,
       "stationary": false,
       "p_mm": [
         105.85384223597335,
@@ -364,7 +364,7 @@
     },
     {
       "piece_index": 14,
-      "query_seconds": 0.0006686669948976487,
+      "query_seconds": 0.0006572499987669289,
       "stationary": false,
       "p_mm": [
         105.72815273631214,
@@ -390,7 +390,7 @@
     },
     {
       "piece_index": 15,
-      "query_seconds": 0.00046591700083808973,
+      "query_seconds": 0.00045566700282506645,
       "stationary": false,
       "p_mm": [
         104.54921711518554,
@@ -416,7 +416,7 @@
     },
     {
       "piece_index": 16,
-      "query_seconds": 0.00030779199732933193,
+      "query_seconds": 0.00041250000504078344,
       "stationary": false,
       "p_mm": [
         103.49813286128503,
@@ -442,7 +442,7 @@
     },
     {
       "piece_index": 17,
-      "query_seconds": 0.0005335000023478642,
+      "query_seconds": 0.0005342919976101257,
       "stationary": false,
       "p_mm": [
         103.41323614556487,
@@ -466,7 +466,7 @@
     },
     {
       "piece_index": 18,
-      "query_seconds": 0.000294707999273669,
+      "query_seconds": 0.0002814579929690808,
       "stationary": false,
       "p_mm": [
         94.92706595956732,
@@ -492,7 +492,7 @@
     },
     {
       "piece_index": 19,
-      "query_seconds": 0.0003062920004595071,
+      "query_seconds": 0.0002858750012819655,
       "stationary": false,
       "p_mm": [
         78.07498583737492,
@@ -518,7 +518,7 @@
     },
     {
       "piece_index": 20,
-      "query_seconds": 0.0003562909987522289,
+      "query_seconds": 0.0003345000004628673,
       "stationary": false,
       "p_mm": [
         69.46139917742205,
@@ -544,7 +544,7 @@
     },
     {
       "piece_index": 21,
-      "query_seconds": 0.0004116669952054508,
+      "query_seconds": 0.00038991699693724513,
       "stationary": false,
       "p_mm": [
         69.15539290488563,
@@ -570,7 +570,7 @@
     },
     {
       "piece_index": 22,
-      "query_seconds": 0.025518249996821396,
+      "query_seconds": 0.009557083001709543,
       "stationary": false,
       "p_mm": [
         69.08135693110181,
@@ -596,7 +596,7 @@
     },
     {
       "piece_index": 23,
-      "query_seconds": 0.011007583001628518,
+      "query_seconds": 0.00961187500070082,
       "stationary": false,
       "p_mm": [
         69.11280195579003,
@@ -622,7 +622,7 @@
     },
     {
       "piece_index": 24,
-      "query_seconds": 0.0002708340034587309,
+      "query_seconds": 0.0002452500048093498,
       "stationary": false,
       "p_mm": [
         69.40736961560448,
@@ -648,7 +648,7 @@
     },
     {
       "piece_index": 25,
-      "query_seconds": 0.00023329199757426977,
+      "query_seconds": 0.00022220800019567832,
       "stationary": false,
       "p_mm": [
         78.04938363000731,
@@ -674,7 +674,7 @@
     },
     {
       "piece_index": 26,
-      "query_seconds": 0.0002256660009152256,
+      "query_seconds": 0.0002112910005962476,
       "stationary": false,
       "p_mm": [
         94.87320133623871,
@@ -700,7 +700,7 @@
     },
     {
       "piece_index": 27,
-      "query_seconds": 0.0005431250028777868,
+      "query_seconds": 0.0005299580006976612,
       "stationary": false,
       "p_mm": [
         104.3304100788583,
@@ -726,7 +726,7 @@
     },
     {
       "piece_index": 28,
-      "query_seconds": 0.00045458300155587494,
+      "query_seconds": 0.0004345839988673106,
       "stationary": false,
       "p_mm": [
         105.60479315897142,
@@ -752,7 +752,7 @@
     },
     {
       "piece_index": 29,
-      "query_seconds": 0.0006299589949776419,
+      "query_seconds": 0.0006435420000343584,
       "stationary": false,
       "p_mm": [
         105.7568507483293,
@@ -778,7 +778,7 @@
     },
     {
       "piece_index": 30,
-      "query_seconds": 0.00036612499388866127,
+      "query_seconds": 0.0003707080031745136,
       "stationary": false,
       "p_mm": [
         105.73949696225033,
@@ -804,7 +804,7 @@
     },
     {
       "piece_index": 31,
-      "query_seconds": 0.0009325000064563937,
+      "query_seconds": 0.0009031669978867285,
       "stationary": false,
       "p_mm": [
         105.72652763002095,
@@ -830,7 +830,7 @@
     },
     {
       "piece_index": 32,
-      "query_seconds": 0.00028662499971687794,
+      "query_seconds": 0.00027762499667005613,
       "stationary": false,
       "p_mm": [
         105.56790851531046,
@@ -856,7 +856,7 @@
     },
     {
       "piece_index": 33,
-      "query_seconds": 0.00028612500318558887,
+      "query_seconds": 0.0002665840002009645,
       "stationary": false,
       "p_mm": [
         105.02874292555748,
@@ -882,7 +882,7 @@
     },
     {
       "piece_index": 34,
-      "query_seconds": 0.0004204580036457628,
+      "query_seconds": 0.00039629100501770154,
       "stationary": false,
       "p_mm": [
         103.30271654064346,
@@ -908,7 +908,7 @@
     },
     {
       "piece_index": 35,
-      "query_seconds": 0.0002927919995272532,
+      "query_seconds": 0.00028012500115437433,
       "stationary": false,
       "p_mm": [
         102.18476486624837,
@@ -934,7 +934,7 @@
     },
     {
       "piece_index": 36,
-      "query_seconds": 0.0003419579952606,
+      "query_seconds": 0.00033170900132972747,
       "stationary": false,
       "p_mm": [
         102.10081663371858,
@@ -958,7 +958,7 @@
     },
     {
       "piece_index": 37,
-      "query_seconds": 0.00029770800028927624,
+      "query_seconds": 0.00028316699899733067,
       "stationary": false,
       "p_mm": [
         89.43040705459079,
@@ -984,7 +984,7 @@
     },
     {
       "piece_index": 38,
-      "query_seconds": 0.00028491699777077883,
+      "query_seconds": 0.0002701250050449744,
       "stationary": false,
       "p_mm": [
         64.02200819411568,
@@ -1010,7 +1010,7 @@
     },
     {
       "piece_index": 39,
-      "query_seconds": 0.0003964160059695132,
+      "query_seconds": 0.00039074999949662015,
       "stationary": false,
       "p_mm": [
         39.801455749504115,
@@ -1036,7 +1036,7 @@
     },
     {
       "piece_index": 40,
-      "query_seconds": 0.00021987500076647848,
+      "query_seconds": 0.00022104100207798183,
       "stationary": false,
       "p_mm": [
         17.016519596964915,
@@ -1062,7 +1062,7 @@
     },
     {
       "piece_index": 41,
-      "query_seconds": 0.0005558749980991706,
+      "query_seconds": 0.0005365830002119765,
       "stationary": false,
       "p_mm": [
         3.8965667098222974,
@@ -1088,7 +1088,7 @@
     },
     {
       "piece_index": 42,
-      "query_seconds": 0.00031400000443682075,
+      "query_seconds": 0.0003007909981533885,
       "stationary": false,
       "p_mm": [
         0.8899330854902098,
@@ -1112,7 +1112,7 @@
     },
     {
       "piece_index": 43,
-      "query_seconds": 0.0004347080030129291,
+      "query_seconds": 0.0004122079990338534,
       "stationary": false,
       "p_mm": [
         0.11081199164704868,
@@ -1136,7 +1136,7 @@
     },
     {
       "piece_index": 44,
-      "query_seconds": 0.00043983300565741956,
+      "query_seconds": 0.00041466600669082254,
       "stationary": false,
       "p_mm": [
         0.07357215686139838,
@@ -1162,7 +1162,7 @@
     },
     {
       "piece_index": 45,
-      "query_seconds": 0.0003440000000409782,
+      "query_seconds": 0.0003301659962744452,
       "stationary": false,
       "p_mm": [
         0.015109531420309455,
@@ -1186,7 +1186,7 @@
     },
     {
       "piece_index": 46,
-      "query_seconds": 0.0007372079999186099,
+      "query_seconds": 0.0006994170034886338,
       "stationary": false,
       "p_mm": [
         0.22448037219796624,
@@ -1212,7 +1212,7 @@
     },
     {
       "piece_index": 47,
-      "query_seconds": 0.0003971249971073121,
+      "query_seconds": 0.0003713330006576143,
       "stationary": false,
       "p_mm": [
         2.1886994754033653,
@@ -1238,7 +1238,7 @@
     },
     {
       "piece_index": 48,
-      "query_seconds": 0.00034170800063293427,
+      "query_seconds": 0.00032087500585475937,
       "stationary": false,
       "p_mm": [
         3.9625998184433437,
@@ -1264,7 +1264,7 @@
     },
     {
       "piece_index": 49,
-      "query_seconds": 0.0002562500012572855,
+      "query_seconds": 0.0002468750026309863,
       "stationary": false,
       "p_mm": [
         4.148760387143126,
@@ -1290,7 +1290,7 @@
     },
     {
       "piece_index": 50,
-      "query_seconds": 0.0003887920029228553,
+      "query_seconds": 0.00037016699934611097,
       "stationary": false,
       "p_mm": [
         10.384883342178872,
@@ -1316,7 +1316,7 @@
     },
     {
       "piece_index": 51,
-      "query_seconds": 0.00039195799763547257,
+      "query_seconds": 0.00037324999721022323,
       "stationary": false,
       "p_mm": [
         22.655673313245607,
@@ -1342,7 +1342,7 @@
     },
     {
       "piece_index": 52,
-      "query_seconds": 0.00034133400185965,
+      "query_seconds": 0.0003222500017727725,
       "stationary": false,
       "p_mm": [
         29.002526789354167,
@@ -1368,7 +1368,7 @@
     },
     {
       "piece_index": 53,
-      "query_seconds": 0.0002641660030349158,
+      "query_seconds": 0.0002558750056778081,
       "stationary": false,
       "p_mm": [
         29.323599287062798,
@@ -1394,7 +1394,7 @@
     },
     {
       "piece_index": 54,
-      "query_seconds": 0.0003497079960652627,
+      "query_seconds": 0.0003436660044826567,
       "stationary": false,
       "p_mm": [
         29.393156890555197,
@@ -1420,7 +1420,7 @@
     },
     {
       "piece_index": 55,
-      "query_seconds": 0.00045200000022305176,
+      "query_seconds": 0.0004197919988655485,
       "stationary": false,
       "p_mm": [
         29.35732686532121,
@@ -1446,7 +1446,7 @@
     },
     {
       "piece_index": 56,
-      "query_seconds": 0.00027350000164005905,
+      "query_seconds": 0.0002952089998871088,
       "stationary": false,
       "p_mm": [
         29.04705926664358,
@@ -1472,7 +1472,7 @@
     },
     {
       "piece_index": 57,
-      "query_seconds": 0.00029558299866039306,
+      "query_seconds": 0.0002932919960585423,
       "stationary": false,
       "p_mm": [
         22.674416533934806,
@@ -1498,7 +1498,7 @@
     },
     {
       "piece_index": 58,
-      "query_seconds": 0.00039200000173877925,
+      "query_seconds": 0.00036841600376646966,
       "stationary": false,
       "p_mm": [
         10.420105146798887,
@@ -1524,7 +1524,7 @@
     },
     {
       "piece_index": 59,
-      "query_seconds": 0.00035791700065601617,
+      "query_seconds": 0.0003411249999771826,
       "stationary": false,
       "p_mm": [
         2.5647318193787116,
@@ -1550,7 +1550,7 @@
     },
     {
       "piece_index": 60,
-      "query_seconds": 0.039221915998496115,
+      "query_seconds": 0.013965958001790568,
       "stationary": false,
       "p_mm": [
         0.37861114556180353,
@@ -1576,7 +1576,7 @@
     },
     {
       "piece_index": 61,
-      "query_seconds": 0.014434750002692454,
+      "query_seconds": 0.013877459001378156,
       "stationary": false,
       "p_mm": [
         0.10863280149013224,
@@ -1602,7 +1602,7 @@
     },
     {
       "piece_index": 62,
-      "query_seconds": 0.0005950420018052682,
+      "query_seconds": 0.0005552500006160699,
       "stationary": false,
       "p_mm": [
         0.13191073887879404,
@@ -1626,7 +1626,7 @@
     },
     {
       "piece_index": 63,
-      "query_seconds": 0.00040512499981559813,
+      "query_seconds": 0.0003784159998758696,
       "stationary": false,
       "p_mm": [
         0.156048606080289,
