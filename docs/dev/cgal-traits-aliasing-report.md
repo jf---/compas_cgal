@@ -76,13 +76,16 @@ using Trap_RIC_pl   = CGAL::Arr_trapezoid_ric_point_location<Arrangement_2>;
 using Walk_pl       = CGAL::Arr_walk_along_line_point_location<Arrangement_2>;
 
 // An axis-aligned square as a linear circle-segment general polygon.
-static Polygon_2 square(int size)
+static Polygon_2 square_at(int x0, int y0, int size)
 {
-    const KPoint v[4] = {KPoint(0, 0), KPoint(size, 0), KPoint(size, size), KPoint(0, size)};
+    const KPoint v[4] = {KPoint(x0, y0), KPoint(x0 + size, y0),
+                         KPoint(x0 + size, y0 + size), KPoint(x0, y0 + size)};
     Polygon_2 p;
     for (int i = 0; i < 4; ++i) p.push_back(X_curve(v[i], v[(i + 1) % 4]));
     return p;
 }
+
+static Polygon_2 square(int size) { return square_at(0, 0, size); }
 
 static int failures = 0;
 
@@ -133,8 +136,25 @@ int main(int argc, char** argv)
               "the empty set adopted the other operand's traits");
     }
 
-    // ------------------------------------------------------------ 4. lifetime
-    std::cout << "4. destroying the source leaves the copy dangling\n";
+    // ------------------------------------------- 4. an operation rebinds again
+    std::cout << "4. a two-operand operation rebinds the arrangement to the copy's OWN traits\n";
+    {
+        Polygon_set_2 a(square(10));
+        Polygon_set_2 b(a);
+        const void* a_traits = a.arrangement().geometry_traits();
+
+        b.difference(Polygon_set_2(square_at(5, 5, 10)));  // -> new Aos_2(m_traits)
+        const void* b_after = b.arrangement().geometry_traits();
+
+        std::cout << "     before difference() : " << a_traits << "  (a's)\n"
+                  << "     after  difference() : " << b_after  << "  (b's own)\n";
+
+        check(b_after != a_traits,
+              "the operated copy no longer reads the traits its family shares");
+    }
+
+    // ------------------------------------------------------------ 5. lifetime
+    std::cout << "5. destroying the source leaves the copy dangling\n";
     std::unique_ptr<Polygon_set_2> orphan;
     const void* freed_traits = nullptr;
     {
@@ -152,8 +172,8 @@ int main(int argc, char** argv)
         return failures == 0 ? 0 : 1;
     }
 
-    // ----------------------------------------------------- 5. the dereference
-    std::cout << "5. reading through the freed pointer (undefined behaviour)\n";
+    // ----------------------------------------------------- 6. the dereference
+    std::cout << "6. reading through the freed pointer (undefined behaviour)\n";
     {
         // Arr_walk_along_line_point_location only STORES the pointer and reaches
         // the traits through stateless functor accessors: typically silent.
@@ -192,23 +212,25 @@ c++ -std=c++20 -O1 -g \
 A stock GMP-backed CGAL install should need only the header comment's
 `g++ … -lgmp -lmpfr`; that variant was not built here.
 
-Structural arm, exit code `0`, all four checks pass:
+Structural arm: **20 of 20 runs** exit `0`, with all five checks passing:
 
 ```text
 1. copy construction
-     a.arrangement().geometry_traits() = 0x123605ea0
-     b.arrangement().geometry_traits() = 0x123605ea0
+     a.arrangement().geometry_traits() = 0x12ee05ea0
+     b.arrangement().geometry_traits() = 0x12ee05ea0
   ok    the copy's arrangement reads the SOURCE's traits object
 2. std::move (no move constructor exists: this is a copy)
   ok    the "moved-to" set's arrangement reads the moved-from object's traits
 3. join() onto an empty set (Gps_on_surface_base_2::_join early return)
   ok    the empty set adopted the other operand's traits
-4. destroying the source leaves the copy dangling
-     orphan.arrangement().geometry_traits() = 0x123605ea0  (freed)
+4. a two-operand operation rebinds the arrangement to the copy's OWN traits
+     before difference() : 0x12ee05ea0  (a's)
+     after  difference() : 0x12ee075c0  (b's own)
+  ok    the operated copy no longer reads the traits its family shares
+5. destroying the source leaves the copy dangling
+     orphan.arrangement().geometry_traits() = 0x12ee05ea0  (freed)
   ok    the orphan still points at the freed traits object
 ```
-
-Structural arm: **20 of 20 runs** exit `0`.
 
 `--uaf` arm: **30 of 30 runs** exit `139` (SIGSEGV), and the crash is not an artefact of
 the optimisation level — a `-O0` build faulted in 5 of 5 and a second `-O1` build
@@ -254,21 +276,15 @@ observed rate depends on what else the process has allocated.
 | A second, independently written two-line variant of the same | a second agent | 6 | 6 |
 | The same Python two-liner with the parent object **kept alive** (control) | the diagnosing agent | 10 | 0 |
 
-!!! note "The downstream fix is not a CGAL fix"
+The kept-alive control is the load-bearing row: the only difference between it and the
+row above is whether the source object is still referenced, and it takes the fault rate
+to zero.
 
-    Removing the aliasing downstream — by giving the object family one traits
-    object whose lifetime outlives every arrangement that borrows it — removed
-    the crash: 0 faults in 20 runs measured by the agent that applied it, and 0
-    in 8 measured independently afterwards. That is confirmatory of the causal
-    chain, not evidence about CGAL: **nothing in CGAL was changed**, and the
-    aliasing described below is still present in 6.0.1 exactly as shown. The
-    plain-CGAL reproducer above is unaffected by any downstream change and still
-    crashes.
-
-    Figures measured against this repository's own test suite (a shipped test
-    observed at 5 of 8 and at 3 of 10 faulting) are not reproducers and are
-    quoted here only to show the intermittency; they depend on test ordering and
-    on allocator state and should not be read as a rate for the defect.
+Downstream fix history is deliberately left out. Consumers of this library have applied
+and revised workarounds while this page was written; none of it is a change to CGAL, and
+a maintainer cannot reproduce or check it. Everything above is either first-party and
+reproducible with the program in this page, or a reproducer whose source and author are
+named.
 
 ## Mechanism
 
@@ -369,7 +385,7 @@ pure cost — every `General_polygon_set_2` copy deep-copies a traits object (`i
 included) that is then never consulted — and the aliasing is *not* a leak, since the
 copy's own traits is duly deleted by its own destructor.
 
-### 3. Three ways in
+### 3. How user code reaches it
 
 | Path | Code | Why it does not look like a copy |
 |---|---|---|
@@ -377,7 +393,8 @@ copy's own traits is duly deleted by its own destructor.
 | `std::move` | `virtual ~Gps_on_surface_base_2()` at `:242` and `virtual ~General_polygon_set_on_surface_2()` (`General_polygon_set_on_surface_2.h:114`) suppress the implicit move constructors; no class in the chain declares one | The user believes ownership was transferred; the compiler silently binds to the copy constructor. |
 | `join()` onto an empty set | `join(const Self&)` at `:366-369` → `_join(const Self&)` at `:1595`, empty branch at `:1609-1613`, assignment at **`:1611`**: `*(this->m_arr) = *(other.m_arr); return;` | A boolean operation, not a copy — but `Arrangement_on_surface_2::operator=` (`Arrangement_on_surface_2_impl.h:145-150`) calls `assign`, so the empty set adopts the other operand's traits. |
 
-The reproducer exercises all three.
+The reproducer exercises all three of these; they are the routes we hit, not an
+exhaustive list of the calls that reach `assign`.
 
 The third one is worth a second look, because the general case next to it is sound. When
 neither operand is empty, `_join` falls through to `_join(const Aos_2& arr)`
@@ -394,7 +411,15 @@ m_arr = res_arr;
 That is why boolean operations generally leave a healthy object behind, and why the
 empty-set shortcut at `:1611` stands out: it is the one branch of `_join` that does not
 rebuild on `m_traits`, and it reaches `assign` instead. The same holds for `_difference`
-(`:1618-1629`, `new Aos_2(m_traits)` at `:1620`).
+(`:1618-1629`, `new Aos_2(m_traits)` at `:1620`) — whose own `is_plane()` branch,
+`*(this->m_arr) = *(other.m_arr);` at `:1677`, is a fourth route into `assign`.
+
+That rebuild has a consequence beyond self-healing, and check 4 of the reproducer
+measures it: after the operation, the copy's arrangement no longer reads the traits its
+source owns, but the **fresh `Traits_2` the copy allocated for itself** at `:166` —
+`0x12ee05ea0` before, `0x12ee075c0` after. So the traits object a given arrangement
+depends on is not stable over the object's lifetime; it changes on the first two-operand
+operation, to an object allocated per copy.
 
 ## Why the symptom depends on the point-location strategy
 
@@ -453,6 +478,22 @@ invariant.
   assert that the arrangement's traits pointer is the traits object the owner owns.
 
 ## Possible fixes
+
+!!! warning "The obvious consumer-side workaround does not close this"
+
+    The natural downstream response is to keep one traits object alive for a
+    whole family of related sets — root them on the borrowing constructor
+    `Gps_on_surface_base_2(const Traits_2&)` (`:158-162`) and hold that traits in
+    a shared owner, so that whatever an arrangement borrows outlives it.
+
+    That does not work, for the reason check 4 measures. Each copy allocates its
+    own `Traits_2` at `:166`, and the first two-operand operation rebinds the
+    arrangement onto **that** object (`:1544`, `:1620`) rather than the one the
+    consumer is keeping alive. From then on the family's shared traits is not
+    what the arrangement reads, and a copy of the operated set borrows a traits
+    whose lifetime is the operated set's. A consumer can only close this by
+    keeping every intermediate object alive forever, or by never copying a set —
+    which is why we think it is worth fixing here rather than in each consumer.
 
 Offered as options; the trade-offs are the maintainers'.
 
