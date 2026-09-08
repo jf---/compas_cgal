@@ -10,8 +10,14 @@ public:
     using std::runtime_error::runtime_error;
 };
 
-/// Raised when a canonical rational violates the reduced / positive-denominator
-/// / gcd == 1 invariant that makes attestation bytes value-determined.
+/// Raised when `to_canonical` decomposes a rational into a non-positive
+/// denominator, which would leave the attestation bytes ambiguous. That is the
+/// only condition raised today. Reducedness is relied on for the same reason
+/// but is not re-checked per value: it comes from the backend rational's
+/// auto-normalisation, not from CGAL's `Fraction_traits` concept, which
+/// guarantees only `value == num / den`. The probes in `exact_canonical_gate`
+/// pin that normalisation instead, because a per-value bignum gcd would cost
+/// more than it can ever catch.
 class UnreducedCanonicalRationalError : public std::runtime_error {
 public:
     using std::runtime_error::runtime_error;
