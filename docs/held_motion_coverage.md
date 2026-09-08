@@ -497,7 +497,8 @@ killed.
     test is the requested follow-up. CORE exactness also ends at the coverage
     seam, where `remaining_material` takes circles as float64 triples; what
     exact representation an emitted circle should have is a design decision,
-    not a fix.
+    not a fix. The recorded baseline and the pytest regression gate for this
+    query are on [Held curved-circle performance](held_curved_circle_performance.md).
 
 **Actual Figure 5 runtime blocker:** the first midpoint query returned no
 proposal after 337 seconds (5m37s). The process was deliberately stopped;

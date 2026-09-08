@@ -173,6 +173,7 @@ nav:
       - Benchmark Corpus: benchmarks.md
       - Held–Pfeiffer Reference Pockets: held_pfeiffer_reference_pockets.md
       - Held Motion Coverage: held_motion_coverage.md
+      - Held Curved-Circle Performance: held_curved_circle_performance.md
       - Measurement Claims: measurement_claims.md
       - Machining Quality: machining_quality.md
       - Drawing Tool Paths: toolpath_drawing.md
