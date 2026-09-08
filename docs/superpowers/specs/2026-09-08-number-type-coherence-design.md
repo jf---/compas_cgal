@@ -163,10 +163,16 @@ unchanged, and the lazy filter arrives because it is the kernel's own field type
 /// The ONLY exact -> canonical attestation bytes exit point.
 ///
 /// Raises:
-///     UnreducedCanonicalRationalError: if the reduced / positive-denominator /
-///         gcd == 1 invariant does not hold.
+///     UnreducedCanonicalRationalError: if the decomposed denominator is not
+///         positive. Reducedness is NOT re-checked per value.
 [[nodiscard]] CanonicalRational to_canonical(const Rational& value);
 ```
+
+As landed (`afa6999b` narrowed this deliberately), `to_canonical` checks the sign
+of the decomposed denominator and nothing else. Reducedness is a property of the
+backend rational's auto-normalisation, pinned by probes in
+`exact_canonical_gate`, not an invariant this function establishes — a per-value
+bignum gcd would cost more than it can ever catch, so do not implement one.
 
 ### The inversion
 
@@ -238,7 +244,7 @@ One named exception per failure mode, matching the repository's existing
 | Error | Raised when |
 |---|---|
 | `NonFiniteBinary64Error` | `from_binary64` receives NaN or infinity |
-| `UnreducedCanonicalRationalError` | canonical form violates reduced / positive-denominator / gcd == 1 |
+| `UnreducedCanonicalRationalError` | `to_canonical` decomposes a rational into a non-positive denominator (reducedness is not re-checked per value — see above) |
 | `CrossRootExtensionError` | one-root arithmetic attempted across distinct roots |
 | `AttestationByteDriftError` | a projection produced bytes differing from the frozen contract |
 

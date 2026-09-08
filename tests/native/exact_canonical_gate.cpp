@@ -81,7 +81,8 @@ void canonical_bytes_match_the_frozen_literal()
         exact::to_canonical(exact::from_binary64(0.1)).canonical_bytes();
     require(
         produced.size() == frozen.size(),
-        "canonical bytes changed length: the frozen attestation framing moved");
+        "canonical bytes changed length: the frozen attestation framing moved, "
+        "which invalidates every stored replay digest");
     require(
         produced == frozen,
         "canonical bytes differ from the frozen literal: every stored replay "

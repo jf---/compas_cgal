@@ -833,6 +833,32 @@ Expected: PASS, with the same pass/fail set as before the branch. Any newly fail
 Run: `pixi run -e default pytest tests -n auto -q`
 Expected: identical results to `main` at the branch point. Record the counts in the commit message.
 
+!!! warning "What was actually run in Steps 3-4, and what was not"
+
+    Both suites were run, twice, independently — once by the implementing agent
+    and once by the reviewing agent — with matching results:
+
+    | Run | Result |
+    |---|---|
+    | `pytest tests/test_replay_classification.py tests/test_false_certificate.py tests/adaptive -n auto` | 5 failed, 786 passed |
+    | `pytest tests -n auto -q` | 26 failed, 3183 passed, 1 error |
+
+    **No branch-point baseline was ever established**, so neither result was
+    compared against anything: the "same set as before the branch" half of both
+    steps did not happen. It was not attempted because a rebuild at the branch
+    point would have been confounded rather than informative — this is a shared
+    worktree, and concurrent sessions had in-flight uncommitted edits at the
+    time, including a live `SyntaxError` in another agent's file, so a checkout
+    of the branch point would have measured their work, not `main`'s.
+
+    The counts above were also never recorded in the Step-5 commit message
+    (`851358b2`), as Step 4 required.
+
+    Consequence: **completion criterion 2 is formally unmet.** The two runs are
+    evidence that stage 0 did not obviously break anything; they are not
+    evidence that the result set is unchanged from the branch point, and they
+    must not be read as such.
+
 - [ ] **Step 5: Commit**
 
 ```bash
@@ -847,7 +873,7 @@ git commit -- pyproject.toml -m "chore: exact-gates task, stage 0 exit gate"
 All of the following, or stage 0 is not done:
 
 1. `pixi run -e default exact-gates` exits 0 with three `OK` lines.
-2. `pixi run -e default pytest tests -n auto -q` matches the pre-branch result set exactly.
+2. `pixi run -e default pytest tests -n auto -q` matches the pre-branch result set exactly. **UNMET** — the suite was run twice with matching counts, but no pre-branch baseline exists to match it against; see the note under Step 4.
 3. `src/exact/` contains exactly four headers and three translation units; nothing outside `src/exact/` includes them yet.
 4. `grep -rn 'parse_rational' src/ | wc -l` is unchanged — stage 0 removes nothing.
 5. `docs/number_types.md` gains a short section documenting `exact::Rational`, `exact::OneRoot` and the two doors, per the repository's development-stage documentation rule.
