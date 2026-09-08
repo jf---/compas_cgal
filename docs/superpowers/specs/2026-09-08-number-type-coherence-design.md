@@ -201,12 +201,28 @@ byte-stability contract test exactly one target instead of six scattered ones.
 
 ### Why the frozen bytes cannot move
 
-`canonical_encoding.cpp:154-184` already validates *reduced, positive denominator,
-gcd == 1*. Under those constraints the canonical form is a function of the
-mathematical **value**, not of the carrier. A binary64 is exactly a dyadic
-rational, so `exact::from_binary64(d)` and today's `CORE::BigRat(d)` denote the
-same rational and therefore encode to the same bytes. This is a proof obligation
-discharged by a property test, not an article of faith.
+Every rational that reaches the encoder is in *reduced, positive-denominator*
+form, and under that constraint the canonical form is a function of the
+mathematical **value**, not of the carrier. That form is **not** established by
+the encoder: `canonical_encode_rational` (`canonical_encoding.cpp:154-158`)
+encodes `CORE::numerator` and `CORE::denominator` exactly as handed to it and
+validates nothing. It comes from `CORE::BigRat`'s own normalisation on
+construction, and it is re-checked on the way back in —
+`canonical_decode_rational` rejects a non-positive denominator or
+`gcd != 1` at `canonical_encoding.cpp:180`. So the encode path inherits the
+invariant and the decode path enforces it; neither the range `:154-184` nor the
+encoder alone should be cited as validating it.
+
+A binary64 is exactly a dyadic rational, so `exact::from_binary64(d)` and today's
+`CORE::BigRat(d)` denote the same rational and therefore encode to the same
+bytes. That is the conclusion this design rests on, and it is measured rather
+than assumed: the carrier comparison recorded in
+[Number types](../../number_types.md) — `Epeck::FT` + `Fraction_traits::Decompose`
+against the IEEE-754 bit-decomposition path, 6024 comparisons over edge doubles
+and 3000 random doubles in both signs — found **0 mismatches**. The backend
+question was spiked separately (identical canonical bytes and SHA-256 under boost
+and GMP, 6024 values plus 200 depth-12 chains); that spike has no write-up in the
+tree yet, so treat it as a claim owed a record rather than as a citation.
 
 ### Data flow
 
@@ -245,12 +261,14 @@ One named exception per failure mode, matching the repository's existing
 |---|---|
 | `NonFiniteBinary64Error` | `from_binary64` receives NaN or infinity |
 | `UnreducedCanonicalRationalError` | `to_canonical` decomposes a rational into a non-positive denominator (reducedness is not re-checked per value — see above) |
-| `CrossRootExtensionError` | one-root arithmetic attempted across distinct roots |
+| `CrossRootExtensionError` | one-root arithmetic attempted on two operands that are **both extended** and whose roots differ (`Tag_true` admits an extended value with `root() == 0`; only a non-extended operand is exempt) |
 | `AttestationByteDriftError` | a projection produced bytes differing from the frozen contract |
 
-`AttestationByteDriftError` is raised at the projection site in debug builds and in
-the contract test. It is not checked on every release-build projection, where the
-comparison would cost more than the guarantee is worth at that point.
+**Stage-2 intent, not current behaviour** (as of stage 0 the type is declared and
+nothing raises it): `AttestationByteDriftError` is to be raised at the projection
+site in debug builds and in the contract test, once that site exists. It is not
+to be checked on every release-build projection, where the comparison would cost
+more than the guarantee is worth at that point.
 
 ## Contract tests — the gate, not a follow-up
 
