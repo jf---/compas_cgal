@@ -36,8 +36,8 @@ def _assert_matches_oracle(value: float) -> None:
     exact = Fraction(value)
     rational = _source(value).x0
     assert int(rational.numerator) == exact.numerator
-    assert int(rational.denominator) == exact.denominator
     assert int(rational.denominator) > 0
+    assert int(rational.denominator) == exact.denominator
 
 
 @given(

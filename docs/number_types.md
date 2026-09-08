@@ -345,19 +345,25 @@ Epeck::FT      = Lazy_exact_nt<cpp_rational>
     by the source comment and should not be asserted from it.
 
 Because `canonical_encode_rational` hashes the numerator and denominator as
-canonical integers under a validated *reduced, positive-denominator, gcd == 1*
-invariant, the canonical digest is a function of the mathematical **value**,
-not of the backend representation. Changing backends does not move replay
-identity. Hashing an approximation or an unreduced form would.
+canonical integers of a *reduced, positive-denominator* fraction, the canonical
+digest is a function of the mathematical **value**, not of the backend
+representation. Changing backends does not move replay identity. Hashing an
+approximation or an unreduced form would. That form is not validated at the
+encode site — `src/canonical_encoding.cpp:154` encodes `CORE::numerator` and
+`CORE::denominator` exactly as handed to it — it comes from `CORE::BigRat`'s own
+normalisation, which is why a backend swap is the thing to check.
 
 ## The exact vocabulary and the two doors
 
 One namespace, `compas_cgal::exact`, owns the project's exact-number vocabulary,
-and it admits exactly two boundary crossings: `from_binary64` in and
-`to_canonical` out. Between those doors every value is an `exact::Rational` or an
-`exact::OneRoot`, so every value carries lane L2's lazy interval filter by
-construction rather than by review. Wherever the vocabulary is adopted, R1 and R5
-stop being advisory and become structural.
+and it *defines* exactly two boundary crossings: `from_binary64` in and
+`to_canonical` out. **As of stage 0 nothing is routed through either door** — the
+vocabulary landed beside the existing carriers, not in front of them (status note
+at the end of this section) — so what follows describes the shape the doors
+impose where the vocabulary is adopted, never coverage that exists today.
+Between those doors a value would be an `exact::Rational` or an `exact::OneRoot`,
+carrying lane L2's lazy interval filter by construction rather than by review;
+wherever that happens, R1 and R5 stop being advisory and become structural.
 
 Rationale, staging and the counts behind the work:
 [Number-Type Coherence: Design](superpowers/specs/2026-09-08-number-type-coherence-design.md).
@@ -365,7 +371,7 @@ Rationale, staging and the counts behind the work:
 ```mermaid
 flowchart LR
     D["binary64<br/>from Python"] --> IN["exact::from_binary64<br/>the only entry"]
-    IN --> R["exact::Rational = Epeck::FT<br/>exact::OneRoot = Sqrt_extension&lt;Rational, Rational&gt;<br/>lazy interval filter, no text anywhere"]
+    IN --> R["exact::Rational = Epeck::FT<br/>exact::OneRoot = Sqrt_extension&lt;Rational, Rational, Tag_true, Tag_true&gt;<br/>lazy interval filter, no text anywhere"]
     R --> P["predicates and geometry<br/>CGAL::sign, CGAL::compare"]
     R --> OUT["exact::to_canonical<br/>the only exit"]
     OUT --> B["CanonicalRational<br/>frozen attestation bytes"]
@@ -428,8 +434,12 @@ that identity, and none of them survives being wrapped:
     Both check `is_extended()` **before** reading `root()`, because `a1()` and
     `root()` are defined only on an extended value — reading them unconditionally
     is undefined behaviour, not a wrong answer. A non-extended operand carries
-    `a0()` alone, is compatible with any root, and short-circuits. Distinct
-    non-zero roots raise `CrossRootExtensionError`.
+    `a0()` alone, is compatible with any root, and short-circuits. Two operands
+    that are *both* extended and whose roots differ raise
+    `CrossRootExtensionError` — including an extended operand whose root is
+    **zero**, which `Tag_true` admits and which is *not* exempt: the exemption is
+    `!is_extended()`, never "the root is zero". `exact_one_root_gate` pins that
+    distinction, because roots 2 and 3 alone cannot tell the two rules apart.
 
     Raw `Sqrt_extension` operators stay reachable and must not appear in our
     code; checklist item 5 is what catches that. Cross-root *comparison* is
@@ -440,7 +450,7 @@ that identity, and none of them survives being wrapped:
 | Door | Signature | What it guarantees | Raises |
 |---|---|---|---|
 | in | `Rational from_binary64(double)` | exact and total on finite input: a binary64 **is** a dyadic rational, so there is no parsing, no tolerance and no snapping | `NonFiniteBinary64Error` |
-| out | `CanonicalRational to_canonical(const Rational&)` | reduced, positive denominator, `gcd == 1` — the invariant that makes the bytes value-determined | `UnreducedCanonicalRationalError` |
+| out | `CanonicalRational to_canonical(const Rational&)` | a **positive denominator**, which is the only condition it checks. Reducedness is what makes the bytes value-determined, but it arrives from the backend rational's auto-normalisation and is pinned by probes in `exact_canonical_gate` rather than re-checked per value | `UnreducedCanonicalRationalError` |
 
 `CanonicalRational` is a derived **view**, never a carrier. It exposes
 `numerator()`, `denominator()`, `text()` and `canonical_bytes()` as
@@ -457,7 +467,8 @@ convenience.
 
 The whole refactor rests on one claim that had to be checked before any code was
 written — swapping the carrier must not move a single attestation byte. Measured
-first-party on 2026-09-08: `Epeck::FT(double)` followed by
+first-party on 2026-09-08 with a throwaway harness, which is the only thing that
+ever ran this comparison: `Epeck::FT(double)` followed by
 `Fraction_traits<FT>::Decompose` produces byte-identical numerator and
 denominator strings to the IEEE-754 bit-decomposition path already in
 `src/continuous_tea_2/segment_source.cpp:21`.
@@ -478,6 +489,25 @@ Agreement between them was measured, not inferred — which is what turns
 into a property with evidence behind it. It is the same argument the backend pin
 rests on above, now checked across a second carrier rather than a second backend.
 
+!!! warning "That was a one-off, and no landed gate repeats it"
+
+    `exact_canonical_gate::to_canonical_matches_existing_projection` looks like
+    the standing form of the measurement above and is not.
+    `exact::to_canonical` and `SegmentEventSource2::lift_exact`
+    (`src/continuous_tea_2/segment_source.cpp:170-180`) are the **same
+    algorithm** — `Fraction_traits::Decompose`, then
+    `CORE::BigInt::convert_to<std::string>` — and `from_binary64` reaches the
+    source through `lift_exact`, so that check compares the promotion against
+    its own source. What it can catch is a promotion drifting from the code it
+    was lifted out of. What it cannot see is the framing moving, because both
+    sides share the one `encode_string_sequence`. The hand-decomposition path,
+    `lift_binary64`, is on neither side of it.
+
+    What anchors the format is the frozen byte literal in the same gate:
+    `canonical_bytes_match_the_frozen_literal` compares
+    `to_canonical(from_binary64(0.1))` against 91 absolute bytes. An absolute
+    constant is the only reference that does not move with the code it checks.
+
 ### The error model
 
 One named exception per failure mode, each deriving `std::runtime_error`. The
@@ -487,13 +517,17 @@ mode instead of matching on a message.
 | Error | Fires when | Where |
 |---|---|---|
 | `NonFiniteBinary64Error` | `from_binary64` is handed NaN or an infinity — the only inputs that denote no rational | `exact/errors.h` |
-| `UnreducedCanonicalRationalError` | a value reaches `to_canonical` whose decomposed denominator is not positive and reduced, which would make the encoding ambiguous | `exact/errors.h` |
-| `CrossRootExtensionError` | `same_root_add` or `same_root_multiply` is called on operands carrying distinct non-zero roots | `exact/errors.h` |
+| `UnreducedCanonicalRationalError` | a value reaches `to_canonical` whose decomposed denominator is **not positive**, which would make the encoding ambiguous. The name also covers unreducedness; that half is not re-checked per value, because a bignum gcd on every attested value costs more than it can ever catch (`exact_canonical_gate` pins the backend's normalisation instead) | `exact/errors.h` |
+| `CrossRootExtensionError` | `same_root_add` or `same_root_multiply` is called on two extended operands whose roots differ. An extended operand whose root is zero is *not* exempt; only a non-extended one is | `exact/errors.h` |
 | `AttestationByteDriftError` | a projection produces bytes differing from the frozen contract | designed, not yet landed — it belongs to the projection site, which arrives with the inversion |
 
-`AttestationByteDriftError` is deliberately not a release-build check on every
-projection: at that point the comparison costs more than the guarantee is worth.
-It is raised in debug builds and in the byte-stability contract test.
+`AttestationByteDriftError` is **declared and nothing raises it** — its
+declaration is its only occurrence in the tree. It is written now so the module's
+error model is complete when the projection site arrives, and that site is
+stage 2. The design intent it records is that it must not become a release-build
+check on every projection, where the comparison would cost more than the
+guarantee is worth. Until then the frozen byte literal in `exact_canonical_gate`
+is what actually catches attestation-byte drift.
 
 !!! note "Status at stage 0: landed, not adopted"
 
