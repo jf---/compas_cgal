@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 import pytest
 
-import benchmarks.figure6 as figure6_module
 from benchmarks.families.analytic import rectangle
 from benchmarks.figure6 import NO_BASELINE_CELL
 from benchmarks.figure6 import Figure6Point
