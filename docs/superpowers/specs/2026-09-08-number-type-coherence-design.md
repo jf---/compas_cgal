@@ -307,7 +307,7 @@ Each stage is independently valuable and independently revertible.
 | 0 | Create `src/exact/`; land the vocabulary and both doors. No behaviour change. | Byte-stability property test green; replay corpus identical |
 | 1 | Move `sign_mixed_radical` into `exact/one_root.*`; converge both call sites | Engagement and station suites unchanged |
 | 2 | Invert `StationEventSource2` (smallest surface); convert its consumers | Byte identity, lane equivalence, generic-double witness |
-| 3 | Invert `SegmentEventSource2` and `FullCircleEventSource2` (18-file surface) | Byte identity, lane equivalence, generic-double witness |
+| 3 | Invert `SegmentEventSource2`; close the two door violations that `FullCircleEventSource2` is reached through; remove the dead second door and `CanonicalRational::canonical_bytes()` (18-file surface) | Byte identity, lane equivalence, near-degenerate-sweep witness |
 | 4 | Convert `segment_site_*` bare `CORE::BigRat` carriers to `exact::Rational` | MAT certificates identical; depth-sensitive lanes measured before and after |
 | 5 | Coefficient-ring discipline in the `Algebraic_kernel_d_*` lanes | Coefficient bit-length measured before and after on a real pocket |
 | 6 | Removal, on explicit instruction only: delete the 13 private decoders and dead string paths | Decoder ratchet reaches zero |
@@ -323,12 +323,70 @@ Each stage is independently valuable and independently revertible.
 
 ## Invariants this design establishes
 
-1. Exactly one double→exact conversion site exists in the codebase.
-2. Exactly one exact→attestation-bytes projection site exists.
+1. Exactly one double→exact conversion site exists in the codebase
+   (`from_binary64`). **This was false when written** — see the correction below.
+2. Exactly one **value→canonical-decimal-strings** door exists (`to_canonical`).
+   Record *framing* is a per-lane compatibility contract, not a property of the
+   number type, and each framing site needs its own absolute byte anchor.
 3. No consumer parses a number from text. Text is an output, never an input.
 4. Every value that reaches a branch has an interval filter beneath it.
 5. Every exact predicate has exactly one definition.
 6. Canonical attestation bytes are a function of the value, never of the carrier.
+
+!!! danger "Invariant 1 was also false, and the staging table was wrong (2026-09-08)"
+
+    Stage-3 planning measured the tree and found two errors in this document.
+
+    **Invariant 1 is violated by dead code.** `exact_binary64` and `lift_binary64`
+    (`src/continuous_tea_2/segment_source.cpp:21-51`, `:161-168`) are a *second*
+    IEEE-754 double→exact door. They have **zero callers** anywhere in `src/` or
+    `tests/` — verified — so nothing ever surfaced the duplication. Stage 3 removes
+    them. This is the same failure mode as invariant 2 below: an unused abstraction
+    cannot be reviewed, because the thing that proves its shape wrong is its second
+    caller.
+
+    **The stage-3 row paired two sources that are not alike.**
+    `FullCircleEventSource2` is **already inverted** — it carries
+    `ExactCircleMotion2` plus two `Epeck::FT` (`circle_source.h:18-21`), and
+    `circle_oracle.cpp` contains **zero** `parse_rational`. It is not a string
+    carrier and needs no inversion. Its actual defect is different in kind: it is
+    reached through two *door violations* inside `segment_source.cpp` — an inline
+    `Epeck::FT(d)` injection bypassing `from_binary64`, and a private
+    `rational_text` lambda duplicating `to_canonical`. Closing those is a
+    different task shape from inverting a carrier, and the staging row above now
+    says so.
+
+!!! danger "Invariant 2 was stated wrongly and is corrected here (2026-09-08)"
+
+    It originally read *"exactly one exact→attestation-bytes projection site
+    exists."* That is false, and stage-2 planning proved it against the tree.
+
+    Three distinct framings exist today, and **two of them share one tag**:
+
+    | site | tag | shape |
+    |---|---|---|
+    | `segment_source.cpp` | `exact-binary64-rational-v1` | 3-field `encode_string_sequence` |
+    | `station_source.cpp:94` | `exact-rational-v1` | 3-field `encode_string_sequence` |
+    | `boundary_events.cpp:156` | `exact-rational-v1` | 1-field `tagged_record`, streamed `Epeck::FT`, no decomposition |
+
+    The last two are different byte formats under the same tag, so the tag does
+    not identify the encoding. Both are frozen; neither is changeable without a
+    version bump. Any "one framing site" invariant is unwritable against that.
+
+    `exact::CanonicalRational::canonical_bytes()` compounds it by hard-coding
+    `exact-binary64-rational-v1` — a base-vocabulary type carrying one
+    consumer's record tag. It is a **latent** defect: it has zero production
+    callers (only `exact_canonical_gate` and `exact/` itself), stage 0 landed it
+    unused, and stage 2 routes the station lane through `numerator()` /
+    `denominator()` only, so no caller ever becomes wrong-shaped by waiting.
+
+    The repair is **removal**, not a tag parameter — a tag-taking method still
+    puts record tags in the vocabulary and invites three frozen contracts onto
+    one framer. It is scheduled for **stage 3**, not because it is low value but
+    because `exact_canonical_gate` currently holds the only absolute anchor for
+    `exact-binary64-rational-v1`, and that anchor must relocate into
+    `ExactBinary64Rational2` — a `segment_source.*` edit, which is stage 3's
+    file set.
 
 ## Risks
 
