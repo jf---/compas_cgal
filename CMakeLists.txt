@@ -253,6 +253,19 @@ add_executable(exact_one_root_gate EXCLUDE_FROM_ALL
 target_link_libraries(exact_one_root_gate PRIVATE continuous_tea_exact_core)
 target_compile_definitions(exact_one_root_gate PRIVATE CGAL_USE_CORE=1)
 
+# Equivalence gate for the two copies of the mixed-radical sign predicate. It
+# reaches copy B through continuous_tea_exact_core and compiles copy A's
+# translation unit (src/engagement_2.cpp) into itself, because copy A has
+# internal linkage. src/engagement_2.cpp is a member of the _stock_2 module
+# target only, never of continuous_tea_exact_core, so nothing is linked twice.
+add_executable(sign_mixed_radical_equivalence_gate EXCLUDE_FROM_ALL
+    tests/native/sign_mixed_radical_equivalence_gate.cpp
+)
+target_link_libraries(
+    sign_mixed_radical_equivalence_gate PRIVATE continuous_tea_exact_core)
+target_compile_definitions(
+    sign_mixed_radical_equivalence_gate PRIVATE CGAL_USE_CORE=1)
+
 add_library(continuous_tea_exact_core STATIC
     src/canonical_encoding.cpp
     src/exact/rational.cpp
