@@ -154,9 +154,12 @@ def _assert_coupled(proposal: _circle_geometry_2.BoundaryNormalCircleProposal2, 
     assert math.dist(c, m) == pytest.approx(proposal.guide_radius_mm)
 
 
-def _generic_disk(cx: float, cy: float, r: float) -> native.NativeBoundary2:
+def _generic_disk(cx: float, cy: float, r: float, counterclockwise: bool = True) -> native.NativeBoundary2:
     arc = native.NativeBoundaryCurve2.arc
-    return native.NativeBoundary2([arc((cx + r, cy), (cx, cy + r), (cx, cy), True), arc((cx, cy + r), (cx + r, cy), (cx, cy), True)])
+    a, b = (cx + r, cy), (cx, cy + r)
+    if not counterclockwise:
+        a, b = b, a
+    return native.NativeBoundary2([arc(a, b, (cx, cy), counterclockwise), arc(b, a, (cx, cy), counterclockwise)])
 
 
 def _rounded_rectangle(
@@ -274,7 +277,10 @@ def test_generic_double_rounded_rectangles_stay_fast_and_coupled(
 def test_arc_samples_stay_on_their_supporting_circle(parameter: float) -> None:
     # The sampler constructs its point on the circle and no longer re-decides
     # that incidence exactly; witness it here on reporting values instead.
+    # The fitted generic circles split into x-monotone slivers thinner than
+    # double rounding, in both orientations; those take the exact bisector.
     for cx, cy, r in ((0.0, 0.0, 5.0), (0.37, -1.21, 4.123)):
-        owner = _generic_disk(cx, cy, r)
-        for primitive in owner.cycle.primitives:
-            assert math.dist(primitive.sample(parameter).reporting_xy_mm, (cx, cy)) == pytest.approx(r)
+        for counterclockwise in (True, False):
+            owner = _generic_disk(cx, cy, r, counterclockwise)
+            for primitive in owner.cycle.primitives:
+                assert math.dist(primitive.sample(parameter).reporting_xy_mm, (cx, cy)) == pytest.approx(r)
