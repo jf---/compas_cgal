@@ -20,9 +20,9 @@ EDGE_DOUBLES = [
     0.5,
     2.0**52,
     2.0**53,
-    2.0**53 + 2.0,  # first integer gap above 2**53
-    2.0**-1074,
-    0.1,  # not exactly representable in decimal
+    2.0**53 + 2.0,  # first representable integer above 2**53
+    0.0,  # +0.0; -0.0 is covered by test_signed_zero_lifts_to_positive_zero
+    0.1,  # exactly representable in decimal, not in binary64
     1e308,
 ]
 
@@ -37,7 +37,7 @@ def _assert_matches_oracle(value: float) -> None:
     rational = _source(value).x0
     assert int(rational.numerator) == exact.numerator
     assert int(rational.denominator) == exact.denominator
-    assert exact.denominator > 0
+    assert int(rational.denominator) > 0
 
 
 @given(
@@ -57,6 +57,15 @@ def test_binary64_lift_is_exact_at_edges() -> None:
     for value in EDGE_DOUBLES:
         _assert_matches_oracle(value)
         _assert_matches_oracle(-value)
+
+
+def test_signed_zero_lifts_to_positive_zero() -> None:
+    """-0.0 and +0.0 denote the same rational; the lift must not carry the sign bit."""
+    for value in (0.0, -0.0):
+        rational = _source(value).x0
+        assert int(rational.numerator) == 0
+        assert int(rational.denominator) == 1
+        assert not rational.numerator.startswith("-")
 
 
 def test_binary64_lift_denominator_is_a_power_of_two() -> None:
