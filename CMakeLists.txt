@@ -253,6 +253,19 @@ add_executable(exact_one_root_gate EXCLUDE_FROM_ALL
 target_link_libraries(exact_one_root_gate PRIVATE continuous_tea_exact_core)
 target_compile_definitions(exact_one_root_gate PRIVATE CGAL_USE_CORE=1)
 
+# Absolute byte anchor for the station lane's attestation framings. Nothing else
+# pins exact-rational-v1 or station-event-source-v1 to a constant; the composite
+# LEGACY_FULL_TRACE_SHA256 detects drift but cannot localise it, and both
+# framings share the one encode_string_sequence, so a differential alone moves
+# with the code it checks.
+add_executable(exact_station_attestation_gate EXCLUDE_FROM_ALL
+    tests/native/exact_station_attestation_gate.cpp
+)
+target_link_libraries(
+    exact_station_attestation_gate PRIVATE continuous_tea_exact_core)
+target_compile_definitions(
+    exact_station_attestation_gate PRIVATE CGAL_USE_CORE=1)
+
 # Correctness gate for exact::sign_mixed_radical, the deciding predicate of the
 # exact cap certificate. It compares the single merged definition (reached
 # through continuous_tea_exact_core) against CGAL's own nested-extension sign
