@@ -1,17 +1,24 @@
 #include "station_source.h"
 
 #include "event_certificate.h"
+#include "exact/canonical.h"
 
 #include <string_view>
 #include <utility>
 
 #include <CGAL/CORE/BigRat.h>
+#include <CGAL/number_utils.h>
+
+namespace exact = compas_cgal::exact;
 
 namespace {
 
 using Integer = CORE::BigInt;
 using Rational = CORE::BigRat;
 
+// LEGACY DECODER, reachable only through ExactRational2::build, which nothing in
+// the pipeline calls since stage 2. Retained so the attestation gate can keep
+// comparing the projection against it. Removing both is stage 6.
 Rational parse_rational(
     const std::string& text,
     std::string_view role)
@@ -46,7 +53,47 @@ Rational parse_rational(
     }
 }
 
+StationAttestation2 project_attestation(
+    const exact::Rational& center_x,
+    const exact::Rational& center_y,
+    const exact::Rational& tool_radius,
+    const exact::Rational& cap_chord_ratio)
+{
+    const ExactRational2 attested_center_x =
+        ExactRational2::project(center_x);
+    const ExactRational2 attested_center_y =
+        ExactRational2::project(center_y);
+    const ExactRational2 attested_tool_radius =
+        ExactRational2::project(tool_radius);
+    const ExactRational2 attested_cap_chord_ratio =
+        ExactRational2::project(cap_chord_ratio);
+    return {
+        attested_center_x,
+        attested_center_y,
+        attested_tool_radius,
+        attested_cap_chord_ratio,
+        encode_string_sequence(
+            {
+                "station-event-source-v1",
+                attested_center_x.canonical_bytes(),
+                attested_center_y.canonical_bytes(),
+                attested_tool_radius.canonical_bytes(),
+                attested_cap_chord_ratio.canonical_bytes(),
+            }),
+    };
+}
+
 } // namespace
+
+ExactRational2 ExactRational2::project(
+    const exact::Rational& value)
+{
+    const exact::CanonicalRational canonical =
+        exact::to_canonical(value);
+    return ExactRational2(
+        canonical.numerator(),
+        canonical.denominator());
+}
 
 ExactRational2 ExactRational2::build(
     const std::string& text)
@@ -98,86 +145,85 @@ std::string ExactRational2::canonical_bytes() const
 }
 
 StationEventSource2 StationEventSource2::build(
-    const std::string& center_x,
-    const std::string& center_y,
-    const std::string& tool_radius,
-    const std::string& cap_chord_ratio)
+    const exact::Rational& center_x,
+    const exact::Rational& center_y,
+    const exact::Rational& tool_radius,
+    const exact::Rational& cap_chord_ratio)
 {
-    const ExactRational2 exact_center_x =
-        ExactRational2::build(center_x);
-    const ExactRational2 exact_center_y =
-        ExactRational2::build(center_y);
-    const ExactRational2 exact_tool_radius =
-        ExactRational2::build(tool_radius);
-    const ExactRational2 exact_cap_chord_ratio =
-        ExactRational2::build(cap_chord_ratio);
-    const Rational radius = parse_rational(
-        exact_tool_radius.text(),
-        "station tool radius");
-    const Rational cap = parse_rational(
-        exact_cap_chord_ratio.text(),
-        "station cap chord ratio");
-    if (radius <= 0) {
+    // Exact, filtered decisions on the carrier itself. Epeck::FT is
+    // RealEmbeddable, so CGAL::sign and CGAL::compare decide from the lazy
+    // interval whenever it separates and materialise the exact rational only
+    // when it does not -- where the text carrier forced a decode and a full
+    // bignum comparison every time.
+    if (CGAL::sign(tool_radius) != CGAL::POSITIVE) {
         throw InvalidStationSourceError(
             "station tool radius must be positive");
     }
-    if (cap <= 0 || cap > 4) {
+    if (CGAL::sign(cap_chord_ratio) != CGAL::POSITIVE
+        || CGAL::compare(cap_chord_ratio, exact::Rational(4))
+            == CGAL::LARGER) {
         throw InvalidStationSourceError(
             "station cap chord ratio must lie in (0, 4]");
     }
     return StationEventSource2(
-        exact_center_x,
-        exact_center_y,
-        exact_tool_radius,
-        exact_cap_chord_ratio);
+        center_x,
+        center_y,
+        tool_radius,
+        cap_chord_ratio);
 }
 
 StationEventSource2::StationEventSource2(
-    ExactRational2 center_x,
-    ExactRational2 center_y,
-    ExactRational2 tool_radius,
-    ExactRational2 cap_chord_ratio)
+    exact::Rational center_x,
+    exact::Rational center_y,
+    exact::Rational tool_radius,
+    exact::Rational cap_chord_ratio)
     : center_x_(std::move(center_x)),
       center_y_(std::move(center_y)),
       tool_radius_(std::move(tool_radius)),
-      cap_chord_ratio_(std::move(cap_chord_ratio))
+      cap_chord_ratio_(std::move(cap_chord_ratio)),
+      // Declared last, so initialised last: the four carriers above are already
+      // live when the projection reads them.
+      attestation_(
+          project_attestation(
+              center_x_,
+              center_y_,
+              tool_radius_,
+              cap_chord_ratio_))
 {
-    canonical_bytes_ = encode_string_sequence(
-        {
-            "station-event-source-v1",
-            center_x_.canonical_bytes(),
-            center_y_.canonical_bytes(),
-            tool_radius_.canonical_bytes(),
-            cap_chord_ratio_.canonical_bytes(),
-        });
 }
 
-const ExactRational2&
+const exact::Rational&
 StationEventSource2::center_x() const noexcept
 {
     return center_x_;
 }
 
-const ExactRational2&
+const exact::Rational&
 StationEventSource2::center_y() const noexcept
 {
     return center_y_;
 }
 
-const ExactRational2&
+const exact::Rational&
 StationEventSource2::tool_radius() const noexcept
 {
     return tool_radius_;
 }
 
-const ExactRational2&
+const exact::Rational&
 StationEventSource2::cap_chord_ratio() const noexcept
 {
     return cap_chord_ratio_;
 }
 
+const StationAttestation2&
+StationEventSource2::attestation() const noexcept
+{
+    return attestation_;
+}
+
 const std::string&
 StationEventSource2::canonical_bytes() const noexcept
 {
-    return canonical_bytes_;
+    return attestation_.canonical_bytes;
 }

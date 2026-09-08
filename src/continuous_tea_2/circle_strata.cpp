@@ -142,39 +142,27 @@ StationEventSource2 station_source(
     const Epeck::FT& cap_chord_ratio,
     const ChartWitness& witness)
 {
-    const Rational exact_center_x =
-        parse_rational(
-            exact_rational_text(center_x),
-            "circle center x");
-    const Rational exact_center_y =
-        parse_rational(
-            exact_rational_text(center_y),
-            "circle center y");
-    const Rational exact_phase_x =
-        parse_rational(
-            exact_rational_text(phase_dx),
-            "circle phase x");
-    const Rational exact_phase_y =
-        parse_rational(
-            exact_rational_text(phase_dy),
-            "circle phase y");
+    // The chart direction is built in CORE::BigRat by unit_direction; injecting
+    // it into the lazy carrier is an exact rewrap, because Epeck::FT's exact
+    // type IS CORE::BigRat. The station coordinates are then computed once, in
+    // the filtered carrier, and handed to the source as the numbers they are --
+    // where this function used to render four Epeck::FT values as decimal text
+    // only to parse them straight back.
     const auto [unit_x, unit_y] =
         unit_direction(
             witness.chart,
             witness.local_parameter);
-    const Rational station_x =
-        exact_center_x
-        + exact_phase_x * unit_x
-        - exact_phase_y * unit_y;
-    const Rational station_y =
-        exact_center_y
-        + exact_phase_y * unit_x
-        + exact_phase_x * unit_y;
+    const Epeck::FT direction_x(unit_x);
+    const Epeck::FT direction_y(unit_y);
     return StationEventSource2::build(
-        rational_text(station_x),
-        rational_text(station_y),
-        exact_rational_text(tool_radius),
-        exact_rational_text(cap_chord_ratio));
+        center_x
+            + phase_dx * direction_x
+            - phase_dy * direction_y,
+        center_y
+            + phase_dy * direction_x
+            + phase_dx * direction_y,
+        tool_radius,
+        cap_chord_ratio);
 }
 
 const SegmentBoundaryBranch2* branch_for(
