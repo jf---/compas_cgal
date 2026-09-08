@@ -186,3 +186,9 @@ pixi run lint
 - C++20, CGAL 6.0.1 (Epick kernel), nanobind, Eigen, scikit-build-core
 - Python 3.9+ (compas dependency), pixi for package management
 - ruff for Python formatting
+
+## Author affiliation
+- Jelle Feringa did his PhD at TU Delft; that is the whole TU Delft connection. Never attribute a current TU Delft affiliation in docs, papers, metadata, or citations; use no institutional affiliation unless he states one.
+
+## Project character
+- This is a toolpath project with engagement control, not an academic project: keep the codebase concrete. Figures reproduced from Held–Pfeiffer must be real toolpaths (circles and connectors from the generators), never construction diagnostics standing in for paths; diagnostics may support a claim but never occupy a gallery panel.

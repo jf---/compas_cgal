@@ -516,7 +516,7 @@ same-hardware or 10× cross-machine slowdowns. `pixi run
 held-curved-circle-figures` rebuilds the four construction figures, the record
 and the performance figure; the construction driver's `--record-stops` keeps
 geometry stops as recorded outcomes. Documented in
-[Held curved-circle performance](../../held_curved_circle_performance.md).
+[Held curved-circle performance](../../held_performance.md).
 This instruments one query, not the traversal; Task 7's stage accounting and
 heatmaps remain open.
 
@@ -546,6 +546,23 @@ the slow ones in `benchmarks/acceptance` via `pixi run held-toolpath-gate`;
 any change in geometry fails, and time beyond 3x/5x same-hardware or 10x
 cross-machine fails. This is Task 7's first-gate instrument for the
 generators; the initial placement is the stage to account for next.
+
+**Exact replay set aside (September 8, user decision):** the exact
+full-motion coverage replay does not finish on real drafts (Figure 5 draft:
+400 circles 5.4 s, 800 circles 10 s, 1,200 circles unfinished after 4.5 min,
+2,013 circles unfinished after 18 min; one connector capsule 16 ms on its
+tangency identity; `remaining_material` differences every sweep against a
+growing residual). It has no practical value at this cost and was stalling
+the toolpath work, so it is off the critical path: opt-in `--check-coverage`
+/ `--exact-coverage` in the three figure tools, opt-in `exact_coverage=` in
+the Figure 6, MATHSM and comparison measurements, its tests in
+`benchmarks/acceptance` which pytest does not collect. This un-blocked the
+Figure 6, MATHSM, CLI and comparison suites (15 of the 28 reds). What to do
+with the replay is decided later; the coverage page states the situation.
+The toolpath generators are now gated by `tests/benchmarks/test_held_toolpath_performance.py`
+(fast tier) and `pixi run held-toolpath-gate` (slow tier) against
+`benchmarks/results/held_toolpath_baseline.json`; the gallery of generated
+toolpaths is [Held toolpath gallery](../../held_toolpath_gallery.md).
 
 **Next action:** represent the clearance-below-tool stop as the explicit
 zero-guide event the integration slice already requires, so the curved
