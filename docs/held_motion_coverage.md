@@ -412,12 +412,64 @@ circle.
     collection, and a sampling test checks arc samples against their circle on
     reporting values. The 25 medial tests pass in about one second.
 
-| prepared case | queried pieces | wall time | max query | median query | stop |
+### Conditioning, not degeneracy
+
+With the identities gone, Monstera queries still took 2.6 s to 3.1 s and
+Figure 8 upper 0.4 s, and this time the money was not in any single site.
+Per-site timers showed the segment-interior test failing CORE's filter on
+generic values, projections of 100 to 400 against segment lengths of 20 to
+150, at a flat 25 ms each, and paying that once per competitor line. CORE's
+filter (`CGAL/CORE/Filter.h`) carries a magnitude bound `maxAbs` and an
+index `ind`; a quotient inherits `maxAbs / |divisor|`, so a sub-expression
+whose value is tiny against the coordinates it is built from inflates every
+decision downstream, and each failed filter costs one root-bound evaluation
+whatever the sign is. Two hypotheses were falsified before the mechanism was
+measured, and both are recorded because they were plausible: carrying the
+ray parameter projectively, without any division, changed nothing; and the
+sample point's radical depth was not it either, since queries at an authored
+endpoint were just as slow.
+
+| experiment on the same pieces | Monstera 159 | Monstera 85 | Monstera 160 | upper 75 |
+| --- | ---: | ---: | ---: | ---: |
+| identities removed, as committed | 2.9 s | 2.5 s | 3.1 s | 0.36 s |
+| ray parameter kept projective | 3.0 s | 2.6 s | 3.1 s | 0.36 s |
+| CORE rational reduction switched on | 3.0 s | 2.6 s | 3.1 s | 0.008 s |
+| fitted circles as rational leaves | 0.49 s | 0.92 s | 0.43 s | 0.09 s |
+| leaves, query at an endpoint instead of the midpoint | 0.005 s | 0.010 s | 0.004 s | 0.005 s |
+| leaves and rational chord sampling | 0.003 s | 0.003 s | 0.003 s | 0.005 s |
+
+Two sources, two fixes. `NativeBoundaryCurve2::arc` kept the fitted centre
+as the expression `bisector(a, b).projection(c)`; it now performs the fit in
+exact rational arithmetic and injects centre, squared radius and adjustment as
+`CORE::BigRat` leaves, so the arrangement, the polygon set and the query all
+see three leaves instead of a thirty-node expression. `sample_reachable_boundary`
+normalised a bisecting vector by `sqrt(r² / |middle|²)`, dividing by a squared
+sum of coordinate differences near 84 mm whose value is near 6; it now chooses
+the target angle on reporting values and takes the second intersection of the
+circle with a rational chord from the piece's start, a point that lies exactly
+on the exact circle, involves no cancelling divisor, and has its membership in
+the piece verified exactly. Pieces thinner than 1e-9 rad, the x-monotone
+slivers that splitting leaves within double rounding of a vertical tangency,
+keep the exact bisector construction; a clockwise sliver on Monstera whose two
+endpoints print identically is the regression test for that regime.
+
+!!! note "Corpus witnesses"
+    The four slowest measured pieces, Monstera 159, 85 and 160 and upper 75,
+    carry a budget of 0.25 s in `tests/benchmarks`, RED at 2.7 s, 3.2 s,
+    3.1 s and 0.40 s before the change. The sampling witness covers both
+    orientations of the fitted generic disk, whose slivers exercise the
+    bisector regime.
+
+| prepared case | queried pieces | wall time incl. plots | max query | median query | stop |
 | --- | ---: | ---: | ---: | ---: | --- |
-| Figure 5 | 33 / 33 | 0.70 s | 11 ms | 7 ms | none |
-| Figure 8 upper | 76 / 78 | 11.2 s | 0.59 s | 26 ms | clearance below tool at (0.062, 40.049) mm |
-| Figure 8 crossed skis | 64 / 64 | 3.4 s | 0.22 s | 19 ms | none |
-| Figure 8 Monstera | 211 / 339 | 145.6 s | 14.7 s | 88 ms | clearance below tool at (70.395, 66.938) mm |
+| Figure 5 | 33 / 33 | 0.67 s | 9.2 ms | 0.39 ms | none |
+| Figure 8 upper | 76 / 78 | 1.8 s | 31.6 ms | 0.43 ms | clearance below tool at (0.062, 40.049) mm |
+| Figure 8 crossed skis | 64 / 64 | 1.4 s | 39.2 ms | 0.39 ms | none |
+| Figure 8 Monstera | 211 / 339 | 3.6 s | 51.4 ms | 0.89 ms | clearance below tool at (70.395, 66.938) mm |
+
+The plan's original blocker, the first three Figure 5 pieces, now answers in
+1.33 ms, 0.29 ms and 0.26 ms per query against the 337 s at which it was
+killed.
 
 ![Figure 5 native curved circles](assets/images/held_figure5_native_curved_circles.png)
 [Figure 5 curved-circle report](assets/images/held_figure5_native_curved_circles.json).
@@ -435,19 +487,17 @@ circle.
     The two stops are the machinable-target case the plan already requires:
     a medial clearance smaller than the 1 mm cutter is a zero-guide event, and
     the diagnostic driver stops at the first one rather than representing it.
-    The slow tail is not identities. Instrumented upper pieces spend 10 ms to
-    45 ms on each of a handful of near-zero decisions, a vertex almost on the
-    tangent line at `p`, a foot almost at a segment end, a disk almost reaching
-    a competitor centre, which are filter failures on the fitted near-tangent
-    arc chains and refine a few hundred bits through nested radicals; one
-    Monstera query reaches 14.7 s this way. Depth of the expression DAG is the
-    lever: split pieces lift a one-root endpoint into two more square roots,
-    and the sampler adds one. Exactly tangent inputs, integer fixtures today
-    and exactified arcs later, still tie the focal event exactly and reach the
-    root bound; deciding that case rationally on the supports is not yet done.
-    CORE exactness also ends at the coverage seam, where `remaining_material`
-    takes circles as float64 triples; what exact representation an emitted
-    circle should have is a design decision, not a fix.
+    Genuine exact ties, integer fixtures today and exactified arcs later,
+    still tie the focal event exactly and reach the root bound; deciding that
+    case rationally on the supports is not yet done. The same conditioning
+    pattern, a rational construction kept as an expression or a normalisation
+    by a cancelling quantity, may exist in the other `Epeck_with_sqrt` lanes,
+    the reachable arrangement, the transitions and the engagement helper; a
+    codebase audit with the first-touch timers and the endpoint-versus-midpoint
+    test is the requested follow-up. CORE exactness also ends at the coverage
+    seam, where `remaining_material` takes circles as float64 triples; what
+    exact representation an emitted circle should have is a design decision,
+    not a fix.
 
 **Actual Figure 5 runtime blocker:** the first midpoint query returned no
 proposal after 337 seconds (5m37s). The process was deliberately stopped;
