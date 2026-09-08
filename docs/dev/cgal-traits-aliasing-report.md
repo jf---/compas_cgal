@@ -2,8 +2,9 @@
 
 !!! note "Status of this page"
 
-    This is a **draft bug report to the CGAL project**, kept in the repository so
-    the evidence stays with the code that found it. It has not been submitted.
+    Submitted to the CGAL project as
+    [CGAL/cgal#9638](https://github.com/CGAL/cgal/issues/9638) on 2026-09-08.
+    Kept here so the evidence stays with the code that found it.
     The local mitigation and the review rule derived from it live in
     [Exact-Kernel Discipline](../exactness.md#copying-a-gps-aliases-its-traits-object).
 
