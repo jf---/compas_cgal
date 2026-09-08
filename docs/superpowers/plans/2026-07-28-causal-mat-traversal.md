@@ -1,0 +1,541 @@
+# Causal MAT Traversal and Covered Generation Implementation Plan
+
+> **status: landed** — verified 2026-08-28 by artifact audit. **evidence:** 29/29 promised
+> artifacts exist. The 10 unticked boxes are unmaintained planning residue, not open work.
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use
+> superpowers:executing-plans to implement this plan task-by-task. Steps use
+> checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Derive neck scope from exact global MAT side history, traverse every
+supported MAT edge, generate a terminal covered operation stream, and close it
+with fresh replay.
+
+**Architecture:** An additive native topology projection preserves exact neck
+loci and every separating-cut partition. `MatTraversalState` owns global
+directed graph cursors and causal sides; `GenerationState` continues to own
+the physical stock/coverage boundary. A distinct entry-circle bootstrap and
+the existing atomic link/circle engine are cross-bound by immutable traversal
+commits.
+
+**Tech Stack:** C++20, CGAL exact kernels, nanobind, Python 3.12, COMPAS framed
+geometry, frozen typed dataclasses, CCAN, SHA-256, pytest-xdist,
+pytest-testmon, Ruff, strict mypy, strict MkDocs.
+
+## Global constraints
+
+- Exact topology comes from the retained native evidence owner. No Python
+  evidence parser, coordinate adjacency, sampled side test, or epsilon.
+- Preserve the frozen 20-field numeric projection; add exact owner
+  properties and cross-validate them against the existing cut union.
+- `GenerationState` and `MatTraversalState` remain separate lifetimes.
+- One authoritative candidate-evaluation engine owns containment,
+  certification, depletion, coverage, and witness construction.
+- No `max_passes`, skip, xfail, fallback, partial certificate, or silent
+  branch drop.
+- Every test has a geometric/proof-boundary docstring.
+- Every pytest command uses `-n auto`; affected tests use `--testmon`.
+- Update developer MkDocs and the Held comparison at each completed coherent
+  stage.
+
+---
+
+### Task 1: Exact neck topology projection
+
+**Status (2026-07-29): complete and published at `d289f79`.**
+
+**Files**
+
+- Modify: `src/segment_site_mat_bundle.h`
+- Modify: `src/segment_site_mat_bundle.cpp`
+- Modify: `src/segment_site_neck_evidence.h`
+- Modify: `src/segment_site_neck_evidence.cpp`
+- Modify: `src/segment_site_neck_evidence_bytes.cpp`
+- Modify: `src/medial_axis_2.cpp`
+- Modify: `src/compas_cgal/_medial_axis_2.pyi`
+- Modify: `src/compas_cgal/adaptive/neck.py`
+- Create: `src/compas_cgal/adaptive/neck_topology.py`
+- Test: `tests/native/task9_neck_evidence_gate.cpp`
+- Test: `tests/native/task9_mat_numeric_table_gate.cpp`
+- Test: `tests/adaptive/test_neck.py`
+
+**Interfaces**
+
+- Additive `SegmentSiteMedialAxis.neck_location_tags`.
+- Additive `SegmentSiteMedialAxis.neck_location_edge_ids`.
+- Additive `SegmentSiteMedialAxis.neck_location_node_ids`.
+- Additive `SegmentSiteMedialAxis.neck_parameter_root_ids`.
+- Additive `SegmentSiteMedialAxis.neck_cut_edge_partitions`.
+- Typed four-variant Python neck locus.
+- `NeckSide` and complete `ClassifiedNeck.sides`.
+
+- [x] **Step 1: Write native RED retention tests**
+
+Require exact evidence construction to retain all location fields and nested
+partitions after `SegmentSiteMatBundle2::build()`. Native synthetic gates cover
+all four location variants and malformed endpoint projection. The L gate
+proves both plateau necks have three canonical partitions and that reversal
+produces the same records.
+
+- [x] **Step 2: Write Python RED projection tests**
+
+Require the generic native projection to cover all four synthetic location
+variants, then require the production L owner to cross the binding with:
+
+- two plateau loci;
+- three sides per neck;
+- side unions equal the established projected cut unions;
+- side IDs and complete `ClassifiedNeck` bytes survive input reversal; and
+- deleted, reordered, duplicated, unknown-edge, and cross-wired partitions
+  fail `InvalidNeckEvidenceError`.
+
+- [x] **Step 3: Implement retained native topology**
+
+Derive binding fields directly from each retained `MatNeckEvidenceV1`. Keep
+the exact evidence records or their complete derived topology inside
+`SegmentSiteMatBundle2`; never decode its canonical bytes.
+
+- [x] **Step 4: Implement typed Python topology**
+
+Construct the closed neck-locus union, canonical `NeckSide` values, and
+cross-validated `ClassifiedNeck` fields. Keep the existing cut union as an
+additive compatibility fact during validation; do not use it as traversal
+authority.
+
+- [x] **Step 5: GREEN and publish the coherent stage**
+
+```bash
+pixi run task9-mat-compile-gate
+pixi run pytest tests/adaptive/test_neck.py -n auto --testmon -q
+pixi run lint
+pixi run types-adaptive
+pixi run docs
+```
+
+Commit: `feat(mat): expose exact neck sides`
+
+---
+
+### Task 2: Directed global traversal ledger
+
+**Status (2026-07-29): complete and published at `6ac2050`.**
+
+**Files**
+
+- Create: `src/compas_cgal/adaptive/traversal.py`
+- Create: `src/compas_cgal/adaptive/traversal_graph.py`
+- Modify: `src/compas_cgal/adaptive/candidates.py`
+- Modify: `src/compas_cgal/adaptive/errors.py`
+- Test: `tests/adaptive/test_traversal.py`
+- Modify: `tests/adaptive/typecheck/consumer_contract.py`
+
+**Interfaces**
+
+- `DirectedEdgeCursor.build(...) -> DirectedEdgeCursor`
+- `CausalNeckTransit.build(...) -> CausalNeckTransit`
+- `MatTraversalState.seed(...) -> MatTraversalState`
+- `MatTraversalState.advance(candidate) -> MatTraversalState`
+- `MatTraversalState.activate_next(...) -> MatTraversalState`
+- `MatTraversalState.require_terminal() -> None`
+- `TraversalSampleIndex.build(...) -> TraversalSampleIndex`
+- `TraversalGraph.from_axis(...) -> TraversalGraph`
+
+- [x] **Step 1: Write RED state contracts**
+
+Test one cursor per edge, canonical state identity, exact owner binding,
+single-cursor advancement, stale cursor rejection, terminal-edge rejection,
+alias-free immutable transitions, and deterministic component/branch order.
+
+- [x] **Step 2: Write RED graph-route contracts**
+
+Use exact synthetic chain, branch, cycle, and multi-component topologies.
+Require transitions to use shared node IDs, retain both cycle incidences, and
+visit every edge. Mutate a node ID while preserving reporting coordinates and
+require loud failure.
+
+- [x] **Step 3: Write RED causal-side contracts**
+
+Require unique side initialization, a three-partition plateau transition,
+canonical forward/reverse orientation, passage-state lookup, and exact
+NoNeckScope outside a transit. Reject union-only inference, ambiguous sides,
+overlapping active necks, and a relabelled partition.
+
+- [x] **Step 4: Implement immutable traversal**
+
+Keep route discovery, per-edge cursors, visited incidences, and neck sides in
+one graph-lifetime value. Hash the MAT certificate digest plus complete
+canonical state. Do not include mutable stock or coverage.
+
+- [x] **Step 5: GREEN and document**
+
+```bash
+pixi run pytest tests/adaptive/test_traversal.py -n auto --testmon -q
+pixi run lint
+pixi run types-adaptive
+pixi run docs
+```
+
+Commit: `feat(adaptive): add causal traversal`
+
+---
+
+### Task 3: Bidirectional finite-lattice spans
+
+**Status (2026-07-29): complete and published at `0c2f631`.**
+
+**Files**
+
+- Modify: `src/compas_cgal/adaptive/candidates.py`
+- Modify: `src/compas_cgal/adaptive/replay.py`
+- Test: `tests/adaptive/test_candidates.py`
+- Test: `tests/adaptive/test_replay.py`
+- Test: `tests/adaptive/test_traversal.py`
+
+- [x] **Step 1: Write RED reverse-span tests**
+
+Mirror a real L line edge and P-S parabola span. Require reverse progress,
+geometry, native/derived cursor identity, deterministic enumeration, terminal
+limit, and forward/reverse identity separation. Reject a direction reversal
+inside one derived continuation.
+
+- [x] **Step 2: Implement inferred span direction**
+
+Allow ordered native cursor pairs in either ordinal direction. Retain the
+direction in `DerivedCandidateCursor`, compute the next legal limit ordinal,
+and leave positive progress and MATHSM geometry unchanged.
+
+- [x] **Step 3: Extend fresh unique reconstruction**
+
+Replay searches the directed window owned by traversal state. It must uniquely
+reconstruct old forward fixtures and new reverse fixtures with no
+orientation-based inference.
+
+- [x] **Step 4: GREEN and document**
+
+```bash
+pixi run pytest tests/adaptive/test_candidates.py \
+  tests/adaptive/test_replay.py \
+  tests/adaptive/test_traversal.py -n auto --testmon -q
+pixi run lint
+pixi run types-adaptive
+pixi run docs
+```
+
+Commit: `feat(adaptive): traverse mat both ways`
+
+---
+
+### Task 4: Entry-circle bootstrap
+
+**Status (2026-07-29): complete and published at `d35410d`.** Fifteen focused
+launch contracts and the complete 501-test adaptive suite pass.
+
+**Files**
+
+- Create: `src/compas_cgal/adaptive/bootstrap.py`
+- Modify: `src/compas_cgal/adaptive/errors.py`
+- Test: `tests/adaptive/test_acceptance.py`
+
+**Interfaces**
+
+- `InitialCandidateEvaluator.build(...) -> InitialCandidateEvaluator`
+- `evaluate(traversal, candidate) -> InitialCandidateTransaction`
+- `commit(traversal, transaction) -> tuple[GenerationState,
+  MatTraversalState]`
+
+- [x] **Step 1: Write RED launch tests**
+
+Require exact phase equality with entry center, full sweep inside the qualified
+entry, design containment, motion certification against post-entry stock,
+certify-before-deplete chronology, coverage addition, one cursor advance,
+unchanged seeded passage inventory, and deterministic evidence. A causal
+passage begins only at a later branch transition and advances only on that
+continuation commit.
+
+- [x] **Step 2: Write RED atomicity and mutation tests**
+
+Reject a zero-length synthetic link, circle outside the entry disk, foreign
+entry/domain/tool/cut depth, stale traversal parent, deplete-before-certify,
+cross-wired circle witness, and a launch that advances two cursors.
+
+- [x] **Step 3: Implement isolated launch and independent commit**
+
+Build pristine stock, apply entry depletion once, build empty coverage, then
+evaluate the candidate circle on forks. Commit repeats the complete launch and
+requires byte-identical transaction evidence.
+
+- [x] **Step 4: GREEN and document**
+
+```bash
+pixi run pytest tests/adaptive/test_acceptance.py -n auto --testmon -q
+pixi run lint
+pixi run types-adaptive
+pixi run docs
+```
+
+Commit: `feat(adaptive): certify entry launch`
+
+---
+
+### Task 5: Global continuation and finite search
+
+**Files**
+
+- Modify: `src/compas_cgal/adaptive/transaction.py`
+- Create: `src/compas_cgal/adaptive/generator.py`
+- Modify: `src/compas_cgal/adaptive/errors.py`
+- Test: `tests/adaptive/test_transaction.py`
+- Test: `tests/adaptive/test_traversal.py`
+- Test: `tests/adaptive/test_acceptance.py`
+- Create: `tests/adaptive/test_generator.py`
+- Modify: `tests/adaptive/test_motion_certificate.py`
+
+**Interfaces**
+
+- One internal candidate-trial engine accepting an authenticated active cursor.
+- `TraversalCommit.build(...) -> TraversalCommit`
+- `generate_exact_adaptive_continuation(...) -> GenerationContinuation`
+
+- [x] **Step 1: RED branch-switch transaction tests**
+
+Require the same Task 12 proof order when the active global edge differs from
+the last physical edge. Bind physical and traversal parents, advance exactly
+one cursor, and reject stale/cross-wired parents. Existing same-edge Task 12
+tests stay unchanged and GREEN.
+
+- [x] **Step 2: RED finite-search tests**
+
+Require invariant ordered search, first-feasible winner, no lower-ranked
+evaluation afterward, exact continuation after gouge/cap failures, immediate
+propagation of unresolved events, and named exhaustion errors. Count one
+candidate-family build per attempted span.
+
+- [x] **Step 3: Implement one deciding trial engine**
+
+Refactor only enough to let both Task 12 and the traversal consumer supply an
+authenticated cursor. Keep exactly one containment/certification/depletion/
+coverage/witness path.
+
+- [x] **Step 4: Implement route orchestration**
+
+Seed with the launch transaction, activate deterministic directed edges,
+derive scope/cap from causal side state, enumerate each forward window once,
+commit the first feasible candidate, and continue until every component is
+terminal. No recursion or iteration bound substitutes for the well-founded
+cursor measure.
+
+- [x] **Step 5: GREEN and document**
+
+```bash
+pixi run pytest tests/adaptive/test_transaction.py \
+  tests/adaptive/test_traversal.py \
+  tests/adaptive/test_acceptance.py -n auto --testmon -q
+pixi run lint
+pixi run types-adaptive
+pixi run docs
+```
+
+Implementation note (2026-07-29): Task 5 returns a launch-rooted
+`GenerationContinuation`, not `GenerationResult`. Task 6 owns the exact empty
+residual and fresh terminal replay required to construct the latter. The real
+scaled-L ordered family currently stops fail-closed at a native incomplete
+segment partition; this is translated to `UnresolvedMotionEventError` and is
+not counted as candidate infeasibility.
+
+Gate evidence (2026-07-29): affected selection passed `113` tests; the complete
+adaptive suite passed `518` tests in `223.88 s`; Ruff, strict mypy over `27`
+source files, strict MkDocs, and `git diff --check` passed.
+
+Commit: `feat(adaptive): generate traversal continuation`
+
+Published at `b16dd82`.
+
+---
+
+### Task 6: Tractable fixture, terminal coverage, and fresh replay
+
+**Files**
+
+- Create: `tests/adaptive/fixtures/tractable_pocket.json`
+- Modify: `src/compas_cgal/adaptive/generator.py`
+- Modify: `src/compas_cgal/adaptive/replay.py`
+- Modify: `src/compas_cgal/adaptive/replay_trace.py`
+- Test: `tests/adaptive/test_acceptance.py`
+- Test: `tests/adaptive/test_replay.py`
+
+Implementation note (2026-07-29): the radius-1 fixture now freezes a valid
+point-site launch and deterministic 16-cell continuation family. The first
+three cells are proved gouges. Trial 4 passes the one-root source and exposes a
+phase seam with incomparable exact active sets plus tangent endpoint
+incidences inactive on both adjacent cells. Exhaustive set-relation
+classification proves the mixed transition; the independently replayed
+two-axis commit binds the reproduced trace digest and terminalizes route 0.
+Full continuation then reaches route 1, a straight width-2 arm whose exact
+clearance equals the radius-1 tool throughout. It has no positive guide circle
+but still requires centerline removal. The separately typed, MAT-certified
+link-only candidate, exact swept-prefix transaction, and proof-directed global
+dispatch are now implemented before terminal sealing.
+The native prerequisite is now implemented: `SegmentSiteMatBundle2` proves a
+complete two-record zero-guide inventory by exact profile-coefficient identity,
+retains it outside the fixed numeric projection, and rejects incomplete or
+mutated inventories under MAT replay. Typed projection through route
+consumption and fresh advancing-segment replay are recorded in the dedicated
+zero-guide implementation plan; remaining route generation and terminal
+residual proof remain here.
+
+The approved prerequisite design is
+[`2026-07-29-one-root-full-circle-source-design.md`](../specs/2026-07-29-one-root-full-circle-source-design.md);
+its executable plan is
+[`2026-07-29-one-root-full-circle-source.md`](2026-07-29-one-root-full-circle-source.md).
+It uses the existing segment-oracle doctrine: norm roots refine the partition,
+but the original radical equation alone owns physical endpoint events.
+
+Prerequisite gate evidence (2026-07-29): the full circle-oracle file passed
+`17` tests; the affected motion/identity/replay/acceptance/generator slice
+passed `97`; the complete adaptive suite passed `521` in `230.33 s`; Ruff,
+strict mypy over `27` source files, strict MkDocs, and diff checks passed.
+
+- [x] **Step 1: Commit exact fixture inputs**
+
+Record polygon, holes, cut plane, tool, entry evidence identity, MAT sampling,
+candidate, neck, depletion, traversal, and cut-direction policies. No expected
+certificate bytes are hand-authored.
+
+Result: `tests/adaptive/task13f_fixture.py` builds every typed input and
+qualified entry from frozen values; all exact certificates and digests are
+generated by their owning factories.
+
+- [ ] **Step 2: RED complete acceptance**
+
+    - [x] Dispatch Task 13F route 1 through its owned zero-guide family and
+      independently commit the rank-1 advancing segment.
+    - [x] Freshly reconstruct that segment from the rebuilt native zero-guide
+      proof and reproduce its physical witness before the terminal gate.
+
+Route-dispatch evidence (2026-08-05): the active window contains `36` spatial
+candidates, one trial accepts rank `1`, and independent commit adds one
+operation. The bounded warm route-1 observation was `0.133066 s`; the uncached
+generator file passed `6` tests in `27.77 s`, and the complete adaptive suite
+passed `563` in `224.39 s`. These are structural/regression data, not a matched
+planner benchmark. Adversarial consumer-boundary mutations additionally reject
+direct evaluation/commit with a foreign same-edge native record and reject a
+child that hides operations before the transaction-owned suffix.
+
+Fresh-replay evidence (2026-08-05): the independent MAT rebuild requires one
+typed and one byte-identical native zero-guide record, uniquely reconstructs
+the committed route-1 candidate, and reproduces its `ReplayLateralWitness`.
+The complete lateral grammar is rejected before candidate search when an
+advance precedes entry or a later circle is unpaired. Advancing-proof
+mutations, changed edge or endpoint, missing or foreign proof, and ambiguous
+candidate lineage raise `ReplayZeroGuideCandidateError`; an advance relabelled
+as a dangling hold raises `ReplayPairingError` because the serialized proof
+role has been erased. The review-fixed affected `--testmon` selection passed
+`20` tests in `63.97 s`; uncached replay/generator files passed `28` in
+`39.52 s`; the complete adaptive suite passed `566` in `235.47 s`. Independent
+re-review found no remaining Critical or Important issue. The expected
+remaining failure is nonterminal traversal, not candidate reconstruction or
+physical certification.
+
+Full-continuation boundary (2026-08-05): the launch-rooted generator rebuilds
+families `(16, 36, 56)`, commits routes 0 and 1, then exhausts route 2 at cursor
+`def1bf1471e2df355ba488378ffad7b9e20116ac81909d9f9822a5a62b6abbb0` with
+`56` gouges, zero cap failures, and zero degenerate links. All 56 failures are
+the direct transition from physical phase `(5,1)`; 30 candidate circles are
+individually contained. Reversing accepted route-1 motion to
+`(1.7480694691784169,1)` is contained and restores 10 candidate links plus six
+complete containment-valid pairs. The traversal route is DFS edge-discovery
+authority, not physical continuity; an authenticated inter-route retrace is
+the next exact boundary.
+
+Performance premise (2026-08-05): generic event certification of that reverse
+remained active beyond `10 min` at approximately 99% CPU and the bounded probe
+was terminated. The existing swept-prefix theorem certified the same motion in
+`0.040943 s` with two exact motion strata. The retrace stage must reuse the
+motion-class theorem under a distinct causal operation role; it must not route
+through the generic event oracle or silently reuse zero-guide traversal
+semantics.
+
+Boundary publication gate (2026-08-05): the final focused affected `--testmon`
+gate passed `1` in `31.34 s`; the post-review uncached adaptive suite passed
+`567` in `237.09 s`; Ruff, strict mypy over `28` source files, strict MkDocs,
+formatting, and diff checks passed.
+
+Require approach/plunge, at least one segment and two circles, complete witness
+bijection, terminal traversal, exact empty reachable residual, separately
+bound unreachable residual, and fresh causal replay with zero cap violations.
+
+- [ ] **Step 3: RED mutations**
+
+Kill empty, entry-only, first-circle-only, dropped-final-branch, relabelled
+side, reversed transit, stale traversal parent, nonterminal cursor, nonempty
+residual, and certify-after-deplete histories.
+
+- [ ] **Step 4: Implement terminal seal**
+
+After traversal terminality, call `CoverageLedger.require_complete()`, rebuild
+the complete traversal and physical state through fresh replay, re-derive each
+causal neck scope, and build content-addressed `GenerationResult`.
+
+- [ ] **Step 5: GREEN**
+
+```bash
+pixi run pytest tests/adaptive/test_acceptance.py \
+  tests/adaptive/test_replay.py -n auto --testmon -q
+```
+
+Commit: `feat(adaptive): seal covered generation`
+
+---
+
+### Task 7: Verification, performance baseline, docs, and publication
+
+**Files**
+
+- Modify: `docs/segment_site_mat.md`
+- Modify: `docs/continuous_engagement.md`
+- Modify:
+  `docs/superpowers/plans/2026-07-24-exact-certified-adaptive-trochoidal-phase1.md`
+- Modify: `docs/superpowers/plans/2026-07-28-causal-mat-traversal.md`
+
+- [ ] **Step 1: Structural performance counters**
+
+Gate one MAT/inventory build, one candidate-family build per attempted span,
+no post-acceptance lower-ranked trials, one winner replay per commit, and one
+terminal fresh replay.
+
+- [ ] **Step 2: Bounded runtime measurement**
+
+Measure warm Release medians for generation and replay on the committed
+fixture. Report build/oracle/candidate counts and wall time. Do not call this
+Held parity; matched Fig. 5 measurement remains Task 16.
+
+- [ ] **Step 3: Full verification**
+
+```bash
+pixi run format-adaptive
+pixi run lint
+pixi run types-adaptive
+pixi run affected
+pixi run pytest tests/adaptive -n auto -q
+pixi run docs
+git diff --check
+```
+
+- [ ] **Step 4: ETH review and regression repair**
+
+Audit exact authority, ownership, error models, file responsibility, strict
+typing, proof chronology, mutation coverage, and documentation accuracy.
+Repair every finding before completion.
+
+- [ ] **Step 5: Update contemporaneous MkDocs**
+
+Document implemented behavior, topology, three-partition insight, causal scope,
+entry bootstrap, traversal/coverage/replay evidence, measured runtime,
+limitations, and the Held–Pfeiffer comparison. Mark only verified checklist
+items complete.
+
+- [ ] **Step 6: Commit, cancel superseded CI, push, and verify**
+
+Commit each remaining coherent stage as Jelle Feringa. Before every push, list
+the branch's runs with explicit repository, cancel every `in_progress` run,
+push without force, and require remote branch SHA to equal local `HEAD`.
