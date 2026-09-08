@@ -2127,6 +2127,37 @@ Every converted lane needs one test on generic double coordinates with a wall-cl
     **1.4×**, not the 10⁴–10⁷× that `docs/number_types.md` describes. That row's
     driver is a CORE **exact-zero identity decision** forcing root-bound
     refinement, not genericity itself. Of six probed configurations only a
+
+!!! danger "CORRECTED 2026-09-08 — degenerate sweep is NOT the causal variable"
+
+    The guidance below was written from a measurement of mine that was real but
+    **misattributed**, and stage 2's witness falsified it. Do not build a
+    degenerate-sweep ladder; build an **arc-crossing** fixture.
+
+    Holding arc-crossing fixed, cost is flat across `radius / half_length` from
+    0.04 to 1.04. Holding that ratio fixed at 0.991, cost still flips **32×** on
+    segment length alone. The real variable is whether the tool circle at the
+    station **properly crosses the curved stock boundary** — predicted
+    analytically as `|R_disk − d| < r_tool < R_disk + d` — which puts the
+    `Sqrt_extension` one-root algebra on the critical path. The 22× I originally
+    measured was this transition; my radius sweep happened to cross the band.
+
+    Confirmed to both band edges on the station lane: r=0.550 → 0.322 ms,
+    r=0.600 → **10.270 ms**, r=2.150 → **9.941 ms**, r=2.200 → 0.333 ms, against
+    predicted tangencies of 0.5785 and 2.1809.
+
+    **A guard band on `radius / half_length` would constrain a non-causal ratio**,
+    so a later edit could slide the fixture clear of the arc, drop the cost 30×,
+    and leave every assertion green. Use the shipped stage-2 shape instead:
+    `1.2 × internal_tangency < r_tool < 0.8 × external_tangency`, and add the
+    **separation floor** — arc-crossing must cost ≥5× the same station clear of
+    the arc, because a ceiling only fails upward and cannot catch code that
+    short-circuits and returns fast and wrong. See
+    `tests/adaptive/test_station_generic_double_witness.py`.
+
+    Whether the segment lane has the same sensitivity is **open**. If the ladder
+    comes back flat, that is a finding, not a licence to weaken the test.
+
     **near-degenerate sweep** — tool radius comparable to half the segment
     length — moved: **7.35 ms against a 0.33 ms baseline, 22×**. Station at
     either endpoint, a collinear-ish segment and a near-zero cap ratio were all
