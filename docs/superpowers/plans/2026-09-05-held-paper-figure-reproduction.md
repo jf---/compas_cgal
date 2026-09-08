@@ -482,18 +482,35 @@ incidence on reporting values; 25 medial tests pass. The bounded Figure 5
 query returns in 8 ms per piece and all 33 pieces in 0.70 s; crossed skis
 completes 64/64 in 3.4 s; upper (76/78) and Monstera (211/339) stop at
 clearance-below-tool events, the machinable-target case that remains open.
-Residual: near-zero decisions on the fitted near-tangent arc chains cost
-10–45 ms each on upper and up to 14.7 s for one Monstera query; exactly
-tangent inputs still tie the focal event and reach the root bound. Evidence
-and rules: [deciding only what is generically
+Evidence and rules: [deciding only what is generically
 nonzero](../../held_motion_coverage.md#deciding-only-what-is-generically-nonzero).
+
+**Conditioning checkpoint (September 8):** the remaining tail (Monstera 2.6–3.1 s
+and upper 0.36 s per query) was not near-degeneracy. Per-site timers showed
+generic decisions failing CORE's floating filter at a flat 25 ms each because
+their expressions carried badly conditioned sub-terms: the fitted circle kept
+as a bisector-projection expression, and the sampler normalising by a squared
+sum of large coordinates. Two hypotheses (division in the ray parameter,
+radical depth of the sample) were falsified by measurement first. Fixes:
+`NativeBoundaryCurve2::arc` fits in exact rational arithmetic and injects
+`CORE::BigRat` leaves; `sample_reachable_boundary` takes a rational chord
+sample with exact membership, keeping the exact bisector for slivers under
+1e-9 rad. Corpus witnesses (Monstera 159/85/160, upper 75) under a 0.25 s
+budget, RED at 2.7–3.2 s, now 3–5 ms. Final build: Figure 5 median 0.39 ms
+(max 9.2 ms), upper 0.43 ms (max 31.6 ms), crossed skis 0.39 ms (max
+39.2 ms), Monstera 0.89 ms (max 51.4 ms); the bounded three-piece Figure 5
+query answers in 1.33, 0.29 and 0.26 ms. Upper and Monstera still stop at
+their clearance-below-tool events. See [conditioning, not
+degeneracy](../../held_motion_coverage.md#conditioning-not-degeneracy).
 
 **Next action:** represent the clearance-below-tool stop as the explicit
 zero-guide event the integration slice already requires, so the curved
 diagnostic completes upper and Monstera, then connect the oriented transition
-consumer on those proposals. Task 7 inherits the near-tie tail and the
-expression-depth lever as its first measured hypothesis. This does not
-establish a Held performance ratio.
+consumer on those proposals. Follow-up requested September 8: audit every
+`Epeck_with_sqrt` lane (reachable arrangement, transitions, engagement helper)
+for the same filter-conditioning pattern with the first-touch timers and the
+endpoint-versus-midpoint test. Task 7 starts from these per-query numbers.
+This does not establish a Held performance ratio.
 
 No new complete Figure 5/8 path, curved-offset traversal, entry,
 or full-coverage acceptance is established by these component results.
