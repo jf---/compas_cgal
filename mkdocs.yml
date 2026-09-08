@@ -149,7 +149,6 @@ nav:
       - Isolines: examples/example_isolines.md
       - Meshing: examples/example_meshing.md
       - Meshing Dual: examples/example_meshing_dual.md
-      - Projection: examples/example_projection.md
       - Normal Estimation: examples/example_reconstruction_pointset_normal_estimation.md
       - Outlier Removal: examples/example_reconstruction_pointset_outlier_removal.md
       - Point Reduction: examples/example_reconstruction_pointset_reduction.md
@@ -173,7 +172,8 @@ nav:
       - Benchmark Corpus: benchmarks.md
       - Held–Pfeiffer Reference Pockets: held_pfeiffer_reference_pockets.md
       - Held Motion Coverage: held_motion_coverage.md
-      - Held Curved-Circle Performance: held_curved_circle_performance.md
+      - Held Toolpath Gallery: held_toolpath_gallery.md
+      - Held Performance: held_performance.md
       - Measurement Claims: measurement_claims.md
       - Machining Quality: machining_quality.md
       - Drawing Tool Paths: toolpath_drawing.md
@@ -200,7 +200,6 @@ nav:
       - compas_cgal.measure: api/compas_cgal.measure.md
       - compas_cgal.meshing: api/compas_cgal.meshing.md
       - compas_cgal.polylines: api/compas_cgal.polylines.md
-      - compas_cgal.projection: api/compas_cgal.projection.md
       - compas_cgal.reconstruction: api/compas_cgal.reconstruction.md
       - compas_cgal.skeletonization: api/compas_cgal.skeletonization.md
       - compas_cgal.slicer: api/compas_cgal.slicer.md
