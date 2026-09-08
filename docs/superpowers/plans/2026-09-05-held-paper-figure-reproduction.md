@@ -520,6 +520,33 @@ geometry stops as recorded outcomes. Documented in
 This instruments one query, not the traversal; Task 7's stage accounting and
 heatmaps remain open.
 
+**Exact replay set aside (September 8, user decision):** the exact
+full-motion coverage replay does not finish on real drafts (Figure 5: 400
+circles 5.4 s, 800 10 s, 1,200 unfinished after four minutes, all 2,013
+unfinished after eighteen). Causes identified, not fixed: per-sweep
+differences against a growing residual, capsule unions that certify their
+own tangencies exactly, CORE arithmetic throughout. Decision: the replay is
+opt-in in the figure tools and the Figure 6/MATHSM measurements, its tests
+live in `benchmarks/acceptance` outside pytest's collection, path lengths are
+reported coverage-unqualified, and the shared-gate checkpoint above no longer
+binds. The "complete coverage" acceptance of Task 8 is therefore suspended,
+not met; see the banner on [Held motion coverage](../../held_motion_coverage.md).
+
+**Toolpath figures and generator gate (September 8):** all Figure 5 to 8
+panels that exist are real toolpaths from the generators and are collected on
+[Held toolpath gallery](../../held_toolpath_gallery.md) beside the publisher
+panels, with Figure 7 and the Figure 5 (b)–(d) variants stated as blocked.
+`benchmarks/held_toolpath_benchmark.py` times the five generator workloads
+stage by stage and records circles, connectors, planar length, maximum
+predecessor engagement and containment rejections; measured generation on
+the M1 Max: Figure 5 refined 20.6 s, upper lane 88.2 s, upper boundary
+87.9 s, crossed skis 34.9 s, Monstera 436 s, all but a fraction of a second
+inside the initial placement. The fast workloads gate in `tests/benchmarks`,
+the slow ones in `benchmarks/acceptance` via `pixi run held-toolpath-gate`;
+any change in geometry fails, and time beyond 3x/5x same-hardware or 10x
+cross-machine fails. This is Task 7's first-gate instrument for the
+generators; the initial placement is the stage to account for next.
+
 **Next action:** represent the clearance-below-tool stop as the explicit
 zero-guide event the integration slice already requires, so the curved
 diagnostic completes upper and Monstera, then connect the oriented transition
