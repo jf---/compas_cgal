@@ -769,6 +769,187 @@ the native gates are `EXCLUDE_FROM_ALL`, and **nothing in this repository runs a
     `a=-1, b=-1, c=1, d=-1, α=0, β=1`, predicate `NEGATIVE`, oracle `ZERO` —
     rather than as both sides being wrong together.
 
+## Stage 1: one traits owner per exact-region family
+
+Since `df6fb020` an `ExactRegion2` holds the geometry-traits object its
+arrangement reads, and `ExactRegion2::build` **refuses to construct a region
+whose arrangement reads traits that nothing keeps alive** —
+`ExactRegionTraitsUnownedError` (`src/exact_region_2.h:35`).
+`ReachableMaterialPredicateStorage2` was repaired in the same commit under the
+same shape, and `Stock2` was repaired earlier, differently, in `57482731`.
+Maturity for all three: **`confirmed`**.
+
+The underlying trap is CGAL's, and it is written down once, under
+[Copying a `Gps` aliases its traits object](exactness.md#copying-a-gps-aliases-its-traits-object)
+— a copied `General_polygon_set_2` allocates a traits object it never uses and
+leaves its arrangement pointing at the traits of the set it was copied from,
+which is freed when that set dies; `std::move` does not avoid it, because a
+`Gps` has no move constructor. What belongs on this page is what the repairs
+cost here, and the fact that **the same defect needed two different shapes,
+decided by how many producers construct the object.**
+
+### One defect, two shapes
+
+|  | `Stock2` (`57482731`) | `ExactRegion2` (`df6fb020`) |
+|---|---|---|
+| Construction points | one | thirteen `build` call sites across five translation units |
+| Can the object own the traits? | **Yes.** One construction point can root every set on one share | **No.** `build` adopts sets from producers that each root their own traits, so it cannot know which traits an incoming set reads |
+| Shape | `std::shared_ptr<const GpsTraits> traits_` declared *before* `set_` (`src/stock_2.h:263-264`) so it is destroyed after the arrangement, propagated through `clone()`, the private constructor, `replace_set`, `swap` and the moves | The inverse: `build` takes `std::shared_ptr<const ReachSet>` instead of a by-value set — adopting, never copying — and **resolves the traits owner at construction** from a candidate list |
+| What enforces the invariant | Convention: every construction site must root on `traits_` | The type: a set whose traits owner cannot be resolved is rejected with a named error |
+| Side effect | — | One full arrangement copy per region removed; `clone()` is now two refcount bumps (`src/exact_region_2.cpp:208`) |
+
+`ExactRegion2::build` (`src/exact_region_2.cpp:158`) asks the set which traits
+its arrangement actually reads, then finds the owner among the candidates the
+producer offered:
+
+```cpp
+const ReachTraits* borrowed = arrangement_traits_of(*set);
+if (borrowed == &set->traits()) { /* a root: owning the set owns the traits */ }
+for (std::shared_ptr<const ReachSet>& candidate : traits_owner_candidates) {
+    if (candidate && borrowed == &candidate->traits()) { /* adopt that owner */ }
+}
+throw ExactRegionTraitsUnownedError(
+    "exact region storage reads geometry traits that no offered set owns.");
+```
+
+That is the substantive difference between the two fixes. `Stock2`'s repair
+answers *"did the author root every construction on `traits_`?"* with
+diligence. `ExactRegion2`'s answers it with a machine-checked invariant: a
+producer that hands over a set rooted on traits it did not offer gets a named
+exception at the construction site, instead of a dangling pointer that surfaces
+later inside a point locator. Producers pass `{}` when the set was built from
+scratch and each source region's `traits_owner()` when the set was seeded by
+copy — `src/reachable_domain_2.cpp:182-186` (residual seeded from design) and
+`src/remaining_material_2.cpp:76-79` (target region, zero motions) are the two
+plainest cases.
+
+Two supporting changes fall out of adopting rather than copying.
+`reach_join_parts_into` and `reach_full_circle_sweep_into`
+(`src/exact_sweep_2.h:24,31`) let a producer build a sweep *inside* an already
+heap-owned `ReachSet`, because assigning a by-value factory result into one
+would reintroduce the copy; the by-value factories survive as one-line wrappers
+over those definitions, so there is still a single construction path. And
+`NativeBoundary2::design_region()` (`src/native_boundary_curve_2.cpp:116`) now
+hands over the boundary's own `design_` share rather than copying it.
+
+### The third aliasing route: joining onto an empty set
+
+Two routes into the trap are obvious once it is known — copy-constructing a
+set, and `std::move`-ing one. The third is not, and it is the one that caught
+`Coverage2`. `Gps_on_surface_base_2::_join(const Self&)` short-circuits when
+the *left* operand is empty
+(`external/cgal/include/CGAL/Boolean_set_operations_2/Gps_on_surface_base_2.h:1609-1613`):
+
+```cpp
+if (this->is_empty())
+{
+  *(this->m_arr) = *(other.m_arr);
+  return;
+}
+```
+
+Arrangement assignment delegates to `assign`
+(`Arrangement_on_surface_2_impl.h:145-150`), which propagates a borrowed traits
+pointer verbatim at `:201`. So a set that owned its traits a moment ago reads
+the **right operand's** traits after the join — and nothing at the call site
+looks like a copy.
+
+`Coverage2::apply_sweep` (`src/coverage_2.cpp:441`) is exactly that shape: the
+first sweep after `Coverage2::from_uncut` joins onto an accumulated set that is
+still empty, so the successor's arrangement reads the *sweep's* traits rather
+than the accumulated family's. The fix does not try to predict which it is; it
+offers both owners and lets `build` resolve it (`src/coverage_2.cpp:485`):
+
+```cpp
+{state_.accumulated_sweeps.traits_owner(), sweep}
+```
+
+!!! warning "A following boolean operation is not proof that a set was re-rooted"
+
+    The comforting reading — *a `difference` or `join` rebuilds the
+    arrangement, so any borrowed pointer heals* — is true only of the **local**:
+    `_difference` and the general `_join` build their result arrangement from
+    the object's own live `m_traits`. The empty-operand shortcut above does
+    not, and even in the healing case the healed local is then copied into
+    long-lived storage, where the copy borrows the local that is about to die.
+    Do not reason about this from the call site. Assert it.
+
+### A use-after-free test that depends on faulting is a test of your allocator
+
+The `ExactRegion2` defect could not be made to fault. Guard Malloc, five runs
+under `MallocScribble`/`MallocPreScribble` with the nano zone disabled,
+deliberate reclamation of the freed 32-byte block with three fill patterns, and
+130 region tests were all clean and byte-identical — while `lldb`
+simultaneously showed `contains` reading traits bytes scribbled to
+`0x55555555…`, and positive controls confirmed the instrumentation does catch a
+plain read-after-free. Whether this defect faults is a property of the point
+locator, not of the code that is wrong; the detail is in
+[exactness.md](exactness.md#detection-is-structural-not-fault-based).
+
+So the check is structural. `ExactRegion2::arrangement_traits_are_owned_for_audit()`
+(`src/exact_region_2.cpp:249`) asserts the ownership invariant directly:
+
+```cpp
+return arrangement_traits_of(*set_) == &traits_owner_->traits()
+    && arrangement_traits_of(*traits_owner_) == &traits_owner_->traits();
+```
+
+The second conjunct is what makes it a proof rather than a gesture: the chain
+must **terminate** at a root this region holds, instead of pointing one link
+further at an ancestor nobody keeps alive.
+
+Bound to Python (`src/compas_cgal/_coverage_2.pyi:79`), it made a RED→GREEN
+pair possible for a defect that never faults.
+`tests/test_exact_region_traits_ownership.py` asserts it over seventeen regions
+covering every producer — `from_polygon`, `clone`, the four `ReachableDomain2`
+regions, precleared and swept coverage, `from_uncut` before and after a sweep,
+remaining material with and without motions, and the native-boundary design
+region — with the parent objects deliberately dropped first. The accessor was
+`false` for **all seventeen** before the fix and the file went
+`12 failed, 0 passed` → `12 passed` after it.
+
+**The general rule: a use-after-free test that depends on faulting is a test of
+your allocator, not of your code.** It reports green on broken code whenever
+the allocator happens to be kind, which for this defect was every single time.
+Assert the ownership invariant instead — it is deterministic, it fails on the
+broken code under any allocator, and it keeps failing until the code is right.
+
+### Evidence
+
+| Measurement | Before | After |
+|---|---|---|
+| `tests/test_exact_region_traits_ownership.py` | 12 failed, 0 passed — accessor `false` for all 17 producers | **12 passed** |
+| Canonical digest snapshot | `6cdb83dd2b94688c918798656b07011f`, 61 payload lines | **byte-identical**, same hash and line count |
+| `pytest tests/adaptive tests/test_engagement_audit.py -q -n auto` | 4 failed, 783 passed | **4 failed, 783 passed** — the same four manifest-declared ids |
+| Region and digest-bearing suites | — | **64 passed** |
+| `pixi run exact-gates` | — | **four native gates OK** |
+| `Stock2` (`57482731`, [detail](exactness.md#status-in-this-repository)) | reproducer 6/6 crash; the shipped intermittent test 5/8 crashing | **0/8** and **8/8 passing**; all digests byte-identical |
+
+!!! note "The digest is what proves the change touched ownership only"
+
+    `6cdb83dd…` hashes 61 asserted payload lines — region containment grids and
+    component counts, `ReachableDomain2` certificate record digests, coverage
+    sweep and residual-component records, the four `containment_2` structural
+    records, and stock digests. It was stable across eleven pre-fix runs
+    (plain, Guard Malloc, scribble) and is unchanged after the fix. That is a
+    stronger statement than "the tests still pass": a byte that moved would
+    have invalidated stored attestations. Hash a **filtered payload with an
+    asserted line count**, never raw stdout — the first attempt at this check
+    included the build tool's own preamble and reported a false move.
+
+!!! warning "`ReachableMaterialPredicateStorage2` was safe only by accident"
+
+    Before `df6fb020` it took its two `ReachSet`s **by value** and built two
+    `Arr_trapezoid_ric_point_location` over their arrangements
+    (`src/reachable_material_predicate_2.cpp:198`). That is the strategy whose
+    constructor copy-constructs a `Td_traits` out of the traits object — the
+    read that turned this same defect into a SIGSEGV in `Stock2::contains`. It
+    did not crash only because member-initialiser order builds both locators
+    while the by-value parameters are still alive. One member reorder, or one
+    lazily constructed locator, and it would have been live. It now holds
+    `std::shared_ptr<const ReachSet>` for both, with `design` declared first so
+    it outlives the `center` set seeded by copy from it.
+
 ## Review checklist
 
 Ask these of any diff that touches a number type.
