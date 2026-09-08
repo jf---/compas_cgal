@@ -279,9 +279,11 @@ NB_MODULE(_coverage_2, m)
                 const CanonicalReachInput2 input = canonical_reach_input(
                     boundary, holes, UNUSED_VALIDATION_RADIUS_MM);
                 return ExactRegion2::build(
-                    ReachSet(reachable_design_polygon(input)),
+                    std::make_shared<ReachSet>(
+                        reachable_design_polygon(input)),
                     ExactRegionRole2::Design,
-                    input.recipe_record);
+                    input.recipe_record,
+                    {});
             },
             "boundary"_a,
             "holes"_a)
@@ -290,7 +292,10 @@ NB_MODULE(_coverage_2, m)
         .def("is_empty", &ExactRegion2::is_empty)
         .def("component_count", &ExactRegion2::component_count)
         .def("is_subset_of", &ExactRegion2::is_subset_of, "other"_a)
-        .def("exactly_equals", &ExactRegion2::exactly_equals, "other"_a);
+        .def("exactly_equals", &ExactRegion2::exactly_equals, "other"_a)
+        .def(
+            "arrangement_traits_are_owned_for_audit",
+            &ExactRegion2::arrangement_traits_are_owned_for_audit);
 
     nb::exception<InvalidNativeBoundaryCurveError>(m, "InvalidNativeBoundaryCurveError");
     nb::exception<InvalidNativeBoundaryChainError>(m, "InvalidNativeBoundaryChainError");

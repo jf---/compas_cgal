@@ -187,7 +187,7 @@ boundary_normal::BoundaryNormalCircleProposal2 NativeBoundary2::circle_on_piece(
     if (!first) throw NativeBoundaryMedialConstructionError("Boundary normal has no positive medial contact.");
     const Point m = first->kind == ContactKind::Focal ? *focal : p + first->t * normal;
     const FT squared_clearance = first->t * first->t * normal_squared;
-    if (design_.oriented_side(ReachPoint(m.x(), m.y())) != CGAL::ON_POSITIVE_SIDE) {
+    if (design_->oriented_side(ReachPoint(m.x(), m.y())) != CGAL::ON_POSITIVE_SIDE) {
         throw NativeBoundaryMedialConstructionError("First medial candidate is not inside its exact design.");
     }
     std::vector<std::size_t> vertices, segments, arcs;

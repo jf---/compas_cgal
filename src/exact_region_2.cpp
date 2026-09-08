@@ -9,6 +9,15 @@
 
 namespace {
 
+// The traits object a set's arrangement actually reads. Not necessarily the
+// set's own traits: CGAL's Gps copy constructor allocates a fresh Traits_2 for
+// the copy and then leaves the copy's arrangement pointing at the traits of the
+// ROOT set it descends from.
+const ReachTraits* arrangement_traits_of(const ReachSet& set)
+{
+    return set.arrangement().geometry_traits();
+}
+
 void append_u64(std::string& target, std::uint64_t value)
 {
     for (int shift = 56; shift >= 0; shift -= 8) {
@@ -147,25 +156,50 @@ std::vector<std::string> reach_component_records(
 }
 
 ExactRegion2 ExactRegion2::build(
-    ReachSet set,
+    std::shared_ptr<const ReachSet> set,
     ExactRegionRole2 role,
-    std::string recipe_record)
+    std::string recipe_record,
+    std::vector<std::shared_ptr<const ReachSet>> traits_owner_candidates)
 {
-    return ExactRegion2(
-        std::make_shared<const ReachSet>(std::move(set)),
-        role,
-        std::move(recipe_record));
+    if (!set) {
+        throw ReachableDomainConstructionError(
+            "exact region requires owned native storage.");
+    }
+    const ReachTraits* borrowed = arrangement_traits_of(*set);
+    if (borrowed == &set->traits()) {
+        // A root: the set built its own arrangement on its own traits, and
+        // owning the set is owning the traits.
+        std::shared_ptr<const ReachSet> owner = set;
+        return ExactRegion2(
+            std::move(owner),
+            std::move(set),
+            role,
+            std::move(recipe_record));
+    }
+    for (std::shared_ptr<const ReachSet>& candidate : traits_owner_candidates) {
+        if (candidate && borrowed == &candidate->traits()) {
+            return ExactRegion2(
+                std::move(candidate),
+                std::move(set),
+                role,
+                std::move(recipe_record));
+        }
+    }
+    throw ExactRegionTraitsUnownedError(
+        "exact region storage reads geometry traits that no offered set owns.");
 }
 
 ExactRegion2::ExactRegion2(
+    std::shared_ptr<const ReachSet> traits_owner,
     std::shared_ptr<const ReachSet> set,
     ExactRegionRole2 role,
     std::string recipe_record)
-    : set_(std::move(set))
+    : traits_owner_(std::move(traits_owner))
+    , set_(std::move(set))
     , role_(role)
     , recipe_record_(std::move(recipe_record))
 {
-    if (!set_) {
+    if (!set_ || !traits_owner_) {
         throw ReachableDomainConstructionError(
             "exact region requires owned native storage.");
     }
@@ -212,9 +246,23 @@ bool ExactRegion2::shares_storage_with_for_audit(
     return set_.get() == other.set_.get();
 }
 
+bool ExactRegion2::arrangement_traits_are_owned_for_audit() const
+{
+    // Two claims: this region's arrangement reads the traits of a set this
+    // region holds, and that set is itself a root, so the chain terminates here
+    // instead of pointing at an ancestor nobody keeps alive.
+    return arrangement_traits_of(*set_) == &traits_owner_->traits()
+        && arrangement_traits_of(*traits_owner_) == &traits_owner_->traits();
+}
+
 const ReachSet& ExactRegion2::set() const
 {
     return *set_;
+}
+
+const std::shared_ptr<const ReachSet>& ExactRegion2::traits_owner() const
+{
+    return traits_owner_;
 }
 
 ExactRegionRole2 ExactRegion2::role() const

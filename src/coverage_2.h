@@ -4,6 +4,7 @@
 #include "exact_region_2.h"
 
 #include <cstddef>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -97,8 +98,11 @@ private:
         double precleared_x,
         double precleared_y,
         double precleared_radius);
+    // The sweep arrives heap-owned because the next accumulated set can end up
+    // borrowing its geometry traits: joining onto an EMPTY accumulated set makes
+    // CGAL assign the sweep's arrangement wholesale, traits pointer included.
     void apply_sweep(
-        ReachSet sweep,
+        std::shared_ptr<ReachSet> sweep,
         std::string structural_record,
         CoverageTransitionAudit2 audit);
 

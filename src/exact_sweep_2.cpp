@@ -209,20 +209,29 @@ std::vector<ReachPolygon> reach_arc_sweep_parts(
     };
 }
 
+void reach_join_parts_into(
+    ReachSet& target,
+    const std::vector<ReachPolygon>& polygons,
+    const std::vector<ReachPolygonWithHoles>& polygons_with_holes)
+{
+    target.join(
+        polygons.begin(),
+        polygons.end(),
+        polygons_with_holes.begin(),
+        polygons_with_holes.end());
+}
+
 ReachSet reach_join_parts(
     const std::vector<ReachPolygon>& polygons,
     const std::vector<ReachPolygonWithHoles>& polygons_with_holes)
 {
     ReachSet result;
-    result.join(
-        polygons.begin(),
-        polygons.end(),
-        polygons_with_holes.begin(),
-        polygons_with_holes.end());
+    reach_join_parts_into(result, polygons, polygons_with_holes);
     return result;
 }
 
-ReachSet reach_full_circle_sweep(
+void reach_full_circle_sweep_into(
+    ReachSet& target,
     const ReachKernelPoint& center,
     const ReachKernelVector& phase_vector,
     const ReachFT& tool_radius)
@@ -234,24 +243,27 @@ ReachSet reach_full_circle_sweep(
     }
     const ReachFT guide_radius =
         CGAL::sqrt(phase_vector.squared_length());
-    ReachSet result;
-    result.insert(reach_disk_polygon(
+    target.insert(reach_disk_polygon(
         center,
         guide_radius + tool_radius));
     const CGAL::Comparison_result radius_comparison =
         CGAL::compare(guide_radius, tool_radius);
-    if (radius_comparison == CGAL::LARGER) {
-        ReachSet inner;
-        inner.insert(reach_disk_polygon(
-            center,
-            guide_radius - tool_radius));
-        result.difference(inner);
+    if (radius_comparison != CGAL::LARGER) {
+        return;
     }
-    else if (radius_comparison == CGAL::EQUAL) {
-        return result;
-    }
-    else {
-        return result;
-    }
+    ReachSet inner;
+    inner.insert(reach_disk_polygon(
+        center,
+        guide_radius - tool_radius));
+    target.difference(inner);
+}
+
+ReachSet reach_full_circle_sweep(
+    const ReachKernelPoint& center,
+    const ReachKernelVector& phase_vector,
+    const ReachFT& tool_radius)
+{
+    ReachSet result;
+    reach_full_circle_sweep_into(result, center, phase_vector, tool_radius);
     return result;
 }

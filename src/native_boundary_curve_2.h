@@ -53,5 +53,8 @@ public:
 private:
     std::vector<NativeBoundaryCurve2> curves_;
     ReachableBoundaryCycle2 cycle_;
-    ReachSet design_;
+    // Heap-owned so design_region() can share this exact root instead of
+    // copying it: a copy's arrangement would keep reading these traits after
+    // the boundary that owns them is gone.
+    std::shared_ptr<ReachSet> design_;
 };
