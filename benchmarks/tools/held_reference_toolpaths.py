@@ -30,6 +30,7 @@ def main() -> None:
     parser.add_argument("--stage", choices=("initial", "refined"), default="refined")
     parser.add_argument("--qualify-contacts", action="store_true", help="Record out-of-bound contact alternatives; require a bounded representative for every source run.")
     parser.add_argument("--corner-approaches", action="store_true", help="Partition concave corner approach, rotation and departure before refinement.")
+    parser.add_argument("--check-coverage", action="store_true", help="Also run the exact full-motion coverage replay; unworkable at this size, see docs/held_motion_coverage.md.")
     parser.add_argument("--spacing", choices=("lane", "boundary"), default="lane", help="Boundary is an experimental reselection in emitted order, with source-run retention.")
     args = parser.parse_args()
     if args.contour_prefix is not None and args.contour_prefix < 2:
@@ -93,7 +94,10 @@ def main() -> None:
         title=f"{case.name.replace('_', ' ')} · standard-model {args.stage} draft · {args.spacing} spacing",
         scope="Publisher-start polygon guide · standard predecessor model · contour-aware reproduction and containment unqualified.",
     )
-    require_full_motion_coverage(case, circles, transitions, output.with_suffix(".exact-coverage.json"))
+    if args.check_coverage:
+        require_full_motion_coverage(case, circles, transitions, output.with_suffix(".exact-coverage.json"))
+    else:
+        print("exact full-motion coverage NOT checked (set aside 2026-09-08; pass --check-coverage to run the replay)", flush=True)
     print(output, flush=True)
 
 

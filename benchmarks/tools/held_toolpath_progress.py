@@ -160,6 +160,7 @@ def main() -> None:
     parser.add_argument("--refine", action="store_true", help="Repair corner circles and subdivide over-cap gaps; report remaining containment failures.")
     parser.add_argument("--stock-prefix", type=int, help="Also render native circle-only stock after this many emitted circles.")
     parser.add_argument("--contour-prefix", type=int, help="Inspect native exposed-contour contacts on this many existing circles.")
+    parser.add_argument("--check-coverage", action="store_true", help="Also run the exact full-motion coverage replay; unworkable at this size, see docs/held_motion_coverage.md.")
     args = parser.parse_args()
     if args.stock_prefix is not None and args.stock_prefix <= 0:
         parser.error("Stock prefix must be positive.")
@@ -199,7 +200,10 @@ def main() -> None:
         title=title,
         scope=scope,
     )
-    require_full_motion_coverage(case, circles, transitions, output.with_suffix(".exact-coverage.json"))
+    if args.check_coverage:
+        require_full_motion_coverage(case, circles, transitions, output.with_suffix(".exact-coverage.json"))
+    else:
+        print("exact full-motion coverage NOT checked (set aside 2026-09-08; pass --check-coverage to run the replay)", flush=True)
     print(output)
 
 

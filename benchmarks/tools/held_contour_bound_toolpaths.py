@@ -30,7 +30,8 @@ from compas_cgal.adaptive.motion import EngagementCap
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--case", choices=CANONICAL_CASE_NAMES, required=True)
-    parser.add_argument("--check-coverage", action="store_true", help="Also compare sampled coverage; exact full-motion coverage is always checked.")
+    parser.add_argument("--check-coverage", action="store_true", help="Also compare sampled coverage.")
+    parser.add_argument("--exact-coverage", action="store_true", help="Also run the exact full-motion coverage replay; unworkable at this size, see docs/held_motion_coverage.md.")
     parser.add_argument("--qualify-contacts", action="store_true", help="Retain bounded contact representatives and report rejected hypotheses.")
     parser.add_argument("--corner-approaches", action="store_true", help="Partition concave corner approach, rotation and departure.")
     parser.add_argument("--coverage-preserving", action="store_true", help="Reproduce the rejected dense-source preservation experiment; not the selected local-repair approach.")
@@ -75,6 +76,9 @@ def main() -> None:
         render_coverage_preserving_comparison(case, before, corrected, bounds, output)
         print(f"{case.name}: {len(dense.circles)} dense -> {len(corrected.circles)} retained; conservative residual empty={stock.is_empty()}; plot {output}", flush=True)
         # Publish the actual path before the more expensive absolute gate.
+        if not args.exact_coverage:
+            print("exact full-motion coverage NOT checked (set aside 2026-09-08; pass --exact-coverage to run the replay)", flush=True)
+            return
         residual = report_full_motion_coverage(case, corrected.circles, corrected.transitions, output.with_suffix(".exact-coverage.json"))
         if not residual.is_empty():
             raise IncompleteMotionCoverageError(f"{case.name}: coverage-preserving path still leaves full-design residual material; see exact-coverage report.")
@@ -84,6 +88,10 @@ def main() -> None:
     if args.check_coverage:
         lost, gained = compare_sampled_motion_coverage(case, baseline.circles, baseline_transitions, refined.circles, transitions, output.with_suffix(".coverage.json"))
         print(f"{case.name}: sampled coverage lost={lost}, gained={gained}; not continuous proof", flush=True)
+    if not args.exact_coverage:
+        print("exact full-motion coverage NOT checked (set aside 2026-09-08; pass --exact-coverage to run the replay)", flush=True)
+        print(output, flush=True)
+        return
     baseline_residual = report_full_motion_coverage(case, baseline.circles, baseline_transitions, output.with_suffix(".baseline.exact-coverage.json"))
     draft_residual = report_full_motion_coverage(case, refined.circles, transitions, output.with_suffix(".exact-coverage.json"))
     preserves_coverage = draft_residual.is_subset_of(baseline_residual)

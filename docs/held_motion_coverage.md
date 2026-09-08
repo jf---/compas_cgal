@@ -1,5 +1,30 @@
 # Held motion coverage
 
+!!! danger "Exact full-motion coverage replay: set aside on 2026-09-08 as unworkable"
+    The exact replay behind every "complete coverage" claim on this page,
+    `remaining_material` on `Exact_predicates_exact_constructions_kernel_with_sqrt`,
+    does not finish on a real toolpath. Measured on the Figure 5 draft of
+    2,013 circles and 2,202 connector segments: 400 circles in 5.4 s, 800 in
+    10.0 s, 1,200 not finished after four minutes, the whole draft not
+    finished after eighteen. Two causes are identified and neither is fixed:
+    the replay differences every sweep one at a time against a residual that
+    grows with each circle, and every connector capsule is built as the union
+    of two disks and a rectangle whose sides are tangent to them by
+    construction, a tangency the arrangement then certifies exactly over a
+    square root, 16 ms per capsule. On top sits the kernel: CORE::Expr
+    arithmetic for every arrangement predicate.
+
+    Decision: the replay is off the critical path. The figure generators and
+    the Figure 6 and MATHSM measurements no longer run it unless asked
+    (`--check-coverage`, `--exact-coverage`, `exact_coverage=True`), the
+    replay tests live in `benchmarks/acceptance`, which pytest does not
+    collect, and `pixi run held-coverage-corpus` runs them deliberately. Path
+    lengths reported without the replay are stated as coverage-unqualified.
+    What to do with the replay is decided later; a fix would start with one
+    divide-and-conquer union of all sweeps followed by a single difference,
+    capsules as one polygon with the tangency points as shared vertices, and
+    the number-type refactor for the kernel.
+
 Coverage is an acceptance condition for every generated machining workload.
 An engagement bound and retained guide-run families do not establish that the
 cutter reaches all material. A shorter path with unqualified coverage is a draft,
@@ -498,7 +523,7 @@ killed.
     seam, where `remaining_material` takes circles as float64 triples; what
     exact representation an emitted circle should have is a design decision,
     not a fix. The recorded baseline and the pytest regression gate for this
-    query are on [Held curved-circle performance](held_curved_circle_performance.md).
+    query are on [Held performance](held_performance.md).
 
 **Actual Figure 5 runtime blocker:** the first midpoint query returned no
 proposal after 337 seconds (5m37s). The process was deliberately stopped;
