@@ -25,11 +25,11 @@ from benchmarks.held_standard_placement import StandardPlacement
 from benchmarks.held_standard_placement import predecessor_overlap_margin
 from benchmarks.held_standard_placement import select_next_standard_candidate
 from compas_cgal import _circle_geometry_2
-from compas_cgal.adaptive.motion import EngagementCap
-from compas_cgal.adaptive.units import Millimetre
-from compas_cgal.adaptive.units import Point2
-from compas_cgal.adaptive.units import ToolRadius
-from compas_cgal.adaptive.units import WorldXY
+from compas_cgal.motion import EngagementCap
+from compas_cgal.units import Millimetre
+from compas_cgal.units import Point2
+from compas_cgal.units import ToolRadius
+from compas_cgal.units import WorldXY
 
 
 class Figure5PathIntegrationError(BenchmarkError):

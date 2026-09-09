@@ -14,14 +14,6 @@ CoverageTransitionError = _coverage_2.CoverageTransitionError
 ContainmentConstructionError = _containment_2.ContainmentConstructionError
 
 
-class InvalidUnitValueError(ValueError):
-    """A typed unit or framed coordinate violates its numeric invariant."""
-
-
-class InvalidEngagementCapError(ValueError):
-    """An engagement cap cannot be represented by the native exact boundary."""
-
-
 class InvalidMotionCertificateError(ValueError):
     """A motion-certifier request violates its typed local contract."""
 
@@ -44,14 +36,6 @@ class EngagementCapExceededError(RuntimeError):
 
 class UnresolvedMotionEventError(RuntimeError):
     """An exact motion oracle cannot reconstruct a complete event partition."""
-
-
-class DegenerateSegmentMotionError(ValueError):
-    """An exact segment motion has no progress."""
-
-
-class DegenerateCircleMotionError(ValueError):
-    """An exact circle motion has no nonzero phase vector."""
 
 
 class InvalidCandidatePolicyError(ValueError):

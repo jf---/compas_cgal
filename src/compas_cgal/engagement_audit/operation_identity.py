@@ -22,16 +22,16 @@ from compas_cgal.adaptive.canonical import encode_component_map
 from compas_cgal.adaptive.canonical import encode_integer
 from compas_cgal.adaptive.canonical import encode_sequence
 from compas_cgal.adaptive.canonical import encode_tagged_union
-from compas_cgal.adaptive.units import Direction3
-from compas_cgal.adaptive.units import ObservedRadius
-from compas_cgal.adaptive.units import Point3
-from compas_cgal.adaptive.units import Radian
-from compas_cgal.adaptive.units import WorldXYZ
 from compas_cgal.engagement_audit.errors import InvalidAuditOperationError
 from compas_cgal.engagement_audit.errors import NonFiniteAuditGeometryError
 from compas_cgal.engagement_audit.records import OperationDigest
 from compas_cgal.toolpath import OperationType
 from compas_cgal.toolpath import ToolpathOperation
+from compas_cgal.units import Direction3
+from compas_cgal.units import ObservedRadius
+from compas_cgal.units import Point3
+from compas_cgal.units import Radian
+from compas_cgal.units import WorldXYZ
 
 OPERATION_STREAM_VERSION: Final[bytes] = b"toolpath-operation-stream-v1"
 OperationStreamDigest = NewType("OperationStreamDigest", bytes)

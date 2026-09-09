@@ -6,9 +6,9 @@ from benchmarks.held_reference_cases import HeldReferenceCase
 from benchmarks.held_reference_cases import load_all_held_reference_cases
 from benchmarks.held_reference_cases import load_held_reference_case
 from benchmarks.spec import PocketSpec
-from compas_cgal.adaptive.units import Millimetre
-from compas_cgal.adaptive.units import Point2
-from compas_cgal.adaptive.units import WorldXY
+from compas_cgal.units import Millimetre
+from compas_cgal.units import Point2
+from compas_cgal.units import WorldXY
 
 case = assert_type(load_held_reference_case("figure5"), HeldReferenceCase)
 assert_type(load_all_held_reference_cases(), tuple[HeldReferenceCase, ...])

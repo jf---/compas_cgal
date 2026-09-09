@@ -32,8 +32,8 @@ from compas_cgal.adaptive.errors import StaleRouteRetraceTransactionError
 from compas_cgal.adaptive.errors import UnresolvedMotionEventError
 from compas_cgal.adaptive.generation_state import GenerationState
 from compas_cgal.adaptive.identity import IdentityDigest
-from compas_cgal.adaptive.motion import EngagementCap
-from compas_cgal.adaptive.motion import ExactSegmentMotion
+from compas_cgal.motion import EngagementCap
+from compas_cgal.motion import ExactSegmentMotion
 from compas_cgal.adaptive.motion_certificate import SWEPT_PREFIX_MOTION_STRATA
 from compas_cgal.adaptive.motion_certificate import SWEPT_PREFIX_STRATEGY_VERSION
 from compas_cgal.adaptive.motion_certificate import SWEPT_PREFIX_THEOREM_VERSION
@@ -50,8 +50,8 @@ from compas_cgal.adaptive.retrace_transaction import RouteRetraceTransaction
 from compas_cgal.adaptive.stock_area import DepletionWitness
 from compas_cgal.adaptive.stock_area import Stock2Area
 from compas_cgal.adaptive.transaction import CandidateEvaluator
-from compas_cgal.adaptive.units import ChordBound
-from compas_cgal.adaptive.units import ToolRadius
+from compas_cgal.units import ChordBound
+from compas_cgal.units import ToolRadius
 from tests.adaptive.task13f_fixture import Task13FFixture
 from tests.adaptive.task13f_fixture import task13f_retrace_decision
 from tests.adaptive.task13f_fixture import task13f_route_one_terminal

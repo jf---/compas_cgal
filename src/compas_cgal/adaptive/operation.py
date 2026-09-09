@@ -21,7 +21,6 @@ from compas_cgal.adaptive.canonical import encode_passage_state
 from compas_cgal.adaptive.canonical import encode_tagged_union
 from compas_cgal.adaptive.errors import ArtifactIdentityError
 from compas_cgal.adaptive.errors import CanonicalEncodingError
-from compas_cgal.adaptive.errors import DegenerateSegmentMotionError
 from compas_cgal.adaptive.errors import InvalidAdvanceSegmentOperationError
 from compas_cgal.adaptive.errors import InvalidEffectiveCapDecisionError
 from compas_cgal.adaptive.errors import InvalidOperationIdentityError
@@ -30,18 +29,19 @@ from compas_cgal.adaptive.errors import InvalidRouteRetraceDecisionError
 from compas_cgal.adaptive.errors import InvalidTraversalDecisionError
 from compas_cgal.adaptive.identity import OPERATION_SCHEMA_VERSION
 from compas_cgal.adaptive.identity import IdentityDigest
-from compas_cgal.adaptive.motion import EngagementCap
-from compas_cgal.adaptive.motion import ExactCircleMotion
-from compas_cgal.adaptive.motion import ExactSegmentMotion
 from compas_cgal.adaptive.policy import BranchId
 from compas_cgal.adaptive.policy import ComponentId
 from compas_cgal.adaptive.policy import MaterialSide
 from compas_cgal.adaptive.policy import PassageState
-from compas_cgal.adaptive.units import ClearanceZ
-from compas_cgal.adaptive.units import CutZ
-from compas_cgal.adaptive.units import Point2
-from compas_cgal.adaptive.units import Vector2
-from compas_cgal.adaptive.units import WorldXY
+from compas_cgal.errors import DegenerateSegmentMotionError
+from compas_cgal.motion import EngagementCap
+from compas_cgal.motion import ExactCircleMotion
+from compas_cgal.motion import ExactSegmentMotion
+from compas_cgal.units import ClearanceZ
+from compas_cgal.units import CutZ
+from compas_cgal.units import Point2
+from compas_cgal.units import Vector2
+from compas_cgal.units import WorldXY
 
 EdgeId = NewType("EdgeId", bytes)
 CursorIdentity = NewType("CursorIdentity", bytes)

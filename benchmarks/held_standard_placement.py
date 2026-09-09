@@ -16,13 +16,13 @@ from typing import Sequence
 from compas.tolerance import TOL
 
 from compas_cgal import _circle_geometry_2
-from compas_cgal.adaptive.motion import EngagementCap
-from compas_cgal.adaptive.units import GuideRadius
-from compas_cgal.adaptive.units import Millimetre
-from compas_cgal.adaptive.units import Point2
-from compas_cgal.adaptive.units import Radian
-from compas_cgal.adaptive.units import ToolRadius
-from compas_cgal.adaptive.units import WorldXY
+from compas_cgal.motion import EngagementCap
+from compas_cgal.units import GuideRadius
+from compas_cgal.units import Millimetre
+from compas_cgal.units import Point2
+from compas_cgal.units import Radian
+from compas_cgal.units import ToolRadius
+from compas_cgal.units import WorldXY
 
 # Held and Pfeiffer, Section 2.4: stop once theta_max - 0.001 <= theta <= theta_max.
 PAPER_BISECTION_ANGLE_TOLERANCE = Radian(0.001)

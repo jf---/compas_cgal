@@ -9,14 +9,14 @@ from typing import NewType
 
 from benchmarks.held_reference_cases import CANONICAL_CASE_NAMES
 from benchmarks.held_reference_cases import HeldReferenceCase
-from compas_cgal.adaptive.units import GuideRadius
-from compas_cgal.adaptive.units import Millimetre
-from compas_cgal.adaptive.units import Point2
-from compas_cgal.adaptive.units import WorldXY
 from compas_cgal.engagement_toolpath import GUIDE_STEP_TOOL_DIAMETERS
 from compas_cgal.engagement_toolpath import _guide_chains
 from compas_cgal.engagement_toolpath import _GuideStation
 from compas_cgal.toolpath import RADIAL_CLEARANCE_FRACTION
+from compas_cgal.units import GuideRadius
+from compas_cgal.units import Millimetre
+from compas_cgal.units import Point2
+from compas_cgal.units import WorldXY
 
 ProjectionBoundarySegmentId = NewType("ProjectionBoundarySegmentId", int)
 ProjectionBoundaryVertexId = NewType("ProjectionBoundaryVertexId", int)

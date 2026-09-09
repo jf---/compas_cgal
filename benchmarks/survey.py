@@ -48,9 +48,6 @@ from benchmarks.spec import PocketSpec
 from benchmarks.units import OperationIndex
 from compas_cgal import _coverage_2
 from compas_cgal import _stock_2
-from compas_cgal.adaptive.units import Millimetre
-from compas_cgal.adaptive.units import Point2
-from compas_cgal.adaptive.units import WorldXY
 from compas_cgal.engagement import _cap_chord_ratio
 from compas_cgal.engagement import _infer_cut_height
 from compas_cgal.engagement import _subtract_operation
@@ -62,6 +59,9 @@ from compas_cgal.stock import _polygon_to_ccw_vertices
 from compas_cgal.toolpath import OperationType
 from compas_cgal.toolpath import ToolpathOperation
 from compas_cgal.toolpath import ToolpathResult
+from compas_cgal.units import Millimetre
+from compas_cgal.units import Point2
+from compas_cgal.units import WorldXY
 
 # Cutter positions probed per cut motion. Chosen against the instrument the
 # generator regulates itself with -- a 32-position ring, `LOOP_PROBE_COUNT` in

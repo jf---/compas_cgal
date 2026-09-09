@@ -32,7 +32,6 @@ from compas_cgal.adaptive.medial_axis import MatSite
 from compas_cgal.adaptive.medial_axis import MatSiteId
 from compas_cgal.adaptive.medial_axis import MatZeroGuideRun
 from compas_cgal.adaptive.medial_axis import MedialAxis
-from compas_cgal.adaptive.motion import ExactCircleMotion
 from compas_cgal.adaptive.operation import AdvanceTraversalDecision
 from compas_cgal.adaptive.operation import CursorIdentity
 from compas_cgal.adaptive.operation import EdgeId
@@ -45,12 +44,13 @@ from compas_cgal.adaptive.operation import OrientedNeckScope
 from compas_cgal.adaptive.policy import CandidateOrderKey
 from compas_cgal.adaptive.policy import CandidatePolicy
 from compas_cgal.adaptive.policy import CircleOrientation
-from compas_cgal.adaptive.units import ExactMillimetre
-from compas_cgal.adaptive.units import Point2
-from compas_cgal.adaptive.units import SquaredMillimetre
-from compas_cgal.adaptive.units import ToolRadius
-from compas_cgal.adaptive.units import Vector2
-from compas_cgal.adaptive.units import WorldXY
+from compas_cgal.motion import ExactCircleMotion
+from compas_cgal.units import ExactMillimetre
+from compas_cgal.units import Point2
+from compas_cgal.units import SquaredMillimetre
+from compas_cgal.units import ToolRadius
+from compas_cgal.units import Vector2
+from compas_cgal.units import WorldXY
 
 MiddleCurveCandidateId = NewType("MiddleCurveCandidateId", bytes)
 ZeroGuideLinkCandidateId = NewType("ZeroGuideLinkCandidateId", bytes)

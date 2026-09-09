@@ -9,9 +9,9 @@ from typing import TypeAlias
 from compas.geometry import Line
 from compas.tolerance import TOL
 
-from compas_cgal.adaptive.units import Millimetre
 from compas_cgal.toolpath import OperationType
 from compas_cgal.toolpath import ToolpathOperation
+from compas_cgal.units import Millimetre
 
 ReplayCategory: TypeAlias = Literal["motion", "rapid", "plunge", "retract"]
 

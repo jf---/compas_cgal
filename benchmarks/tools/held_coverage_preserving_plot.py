@@ -14,7 +14,7 @@ from benchmarks.held_figure5_boundary_path import Figure5BoundaryPath
 from benchmarks.held_reference_cases import HeldReferenceCase
 from benchmarks.tools.held_contour_bound_plot import _length
 from benchmarks.tools.held_toolpath_progress import _draw_motion
-from compas_cgal.adaptive.units import Radian
+from compas_cgal.units import Radian
 
 
 class InvalidCoveragePreservingPlotError(ValueError):

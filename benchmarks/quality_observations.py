@@ -56,7 +56,6 @@ from benchmarks.units import degrees_value
 from benchmarks.units import motion_count
 from benchmarks.units import operation_index
 from benchmarks.units import tool_radius_multiple
-from compas_cgal.adaptive.units import Millimetre
 from compas_cgal.replay_classification import CutPlaneRampError
 from compas_cgal.replay_classification import OffPlaneReplayCurveError
 from compas_cgal.replay_classification import ReplayCategory
@@ -65,6 +64,7 @@ from compas_cgal.replay_classification import classify_planar_replay
 from compas_cgal.replay_classification import line_cut_height_anchor
 from compas_cgal.replay_classification import minimum_cut_height
 from compas_cgal.toolpath import OperationType
+from compas_cgal.units import Millimetre
 
 CriterionName: TypeAlias = Literal[
     "uncut fraction",

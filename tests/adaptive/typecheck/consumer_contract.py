@@ -32,7 +32,7 @@ from compas_cgal.adaptive.medial_axis import MedialAxis
 from compas_cgal.adaptive.medial_axis import MatEdgeId
 from compas_cgal.adaptive.medial_axis import MatZeroGuideInventory
 from compas_cgal.adaptive.medial_axis import MatZeroGuideRun
-from compas_cgal.adaptive.motion import EngagementCap
+from compas_cgal.motion import EngagementCap
 from compas_cgal.adaptive.motion_certificate import MotionCertifier
 from compas_cgal.adaptive.motion_certificate import MotionWitness
 from compas_cgal.adaptive.motion_refutation import CapRefutation
@@ -56,8 +56,8 @@ from compas_cgal.adaptive.operation import NoNeckScope
 from compas_cgal.adaptive.operation import PlungeOperation
 from compas_cgal.adaptive.operation import RetraceSegmentOperation
 from compas_cgal.adaptive.operation import TraversalDecision
-from compas_cgal.adaptive.motion import ExactCircleMotion
-from compas_cgal.adaptive.motion import ExactSegmentMotion
+from compas_cgal.motion import ExactCircleMotion
+from compas_cgal.motion import ExactSegmentMotion
 from compas_cgal.adaptive.policy import CandidatePolicy
 from compas_cgal.adaptive.policy import CircleOrientation
 from compas_cgal.adaptive.policy import CutDirectionPolicy
@@ -77,17 +77,17 @@ from compas_cgal.adaptive.traversal import DirectedEdgeCursor
 from compas_cgal.adaptive.traversal import MatTraversalState
 from compas_cgal.adaptive.traversal_graph import DirectedRouteStep
 from compas_cgal.adaptive.traversal_graph import TraversalGraph
-from compas_cgal.adaptive.units import ChordBound
-from compas_cgal.adaptive.units import ClearanceZ
-from compas_cgal.adaptive.units import CutPlane
-from compas_cgal.adaptive.units import CutZ
-from compas_cgal.adaptive.units import EntryRadius
-from compas_cgal.adaptive.units import GuideRadius
-from compas_cgal.adaptive.units import Point2
-from compas_cgal.adaptive.units import Spacing
-from compas_cgal.adaptive.units import ToolRadius
-from compas_cgal.adaptive.units import Vector2
-from compas_cgal.adaptive.units import WorldXY
+from compas_cgal.units import ChordBound
+from compas_cgal.units import ClearanceZ
+from compas_cgal.units import CutPlane
+from compas_cgal.units import CutZ
+from compas_cgal.units import EntryRadius
+from compas_cgal.units import GuideRadius
+from compas_cgal.units import Point2
+from compas_cgal.units import Spacing
+from compas_cgal.units import ToolRadius
+from compas_cgal.units import Vector2
+from compas_cgal.units import WorldXY
 from compas_cgal.stock import Stock
 
 

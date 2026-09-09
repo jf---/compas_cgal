@@ -20,10 +20,10 @@ from fontTools.svgLib.path import parse_path  # type: ignore[import-untyped]
 
 from benchmarks.errors import BenchmarkError
 from benchmarks.held_reference_cases import HeldReferenceCase
-from compas_cgal.adaptive.units import Millimetre
-from compas_cgal.adaptive.units import Point2
-from compas_cgal.adaptive.units import Radian
-from compas_cgal.adaptive.units import WorldXY
+from compas_cgal.units import Millimetre
+from compas_cgal.units import Point2
+from compas_cgal.units import Radian
+from compas_cgal.units import WorldXY
 
 PublisherTurnOrdinal = NewType("PublisherTurnOrdinal", int)
 PublisherOperatorOrdinal = NewType("PublisherOperatorOrdinal", int)

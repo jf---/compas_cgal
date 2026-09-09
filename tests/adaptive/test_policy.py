@@ -12,7 +12,7 @@ from compas_cgal.adaptive.errors import InvalidDepletionPolicyError
 from compas_cgal.adaptive.errors import InvalidMatSamplingPolicyError
 from compas_cgal.adaptive.errors import InvalidNeckPolicyError
 from compas_cgal.adaptive.errors import InvalidTraversalPolicyError
-from compas_cgal.adaptive.motion import EngagementCap
+from compas_cgal.motion import EngagementCap
 from compas_cgal.adaptive.policy import BranchId
 from compas_cgal.adaptive.policy import CandidateOrderKey
 from compas_cgal.adaptive.policy import CandidatePolicy
@@ -26,11 +26,11 @@ from compas_cgal.adaptive.policy import MatSamplingPolicy
 from compas_cgal.adaptive.policy import NeckPolicy
 from compas_cgal.adaptive.policy import PassageState
 from compas_cgal.adaptive.policy import TraversalPolicy
-from compas_cgal.adaptive.units import ChordBound
-from compas_cgal.adaptive.units import ExactMillimetre
-from compas_cgal.adaptive.units import GuideRadius
-from compas_cgal.adaptive.units import Spacing
-from compas_cgal.adaptive.units import SquaredMillimetre
+from compas_cgal.units import ChordBound
+from compas_cgal.units import ExactMillimetre
+from compas_cgal.units import GuideRadius
+from compas_cgal.units import Spacing
+from compas_cgal.units import SquaredMillimetre
 
 
 def _candidate_policy() -> CandidatePolicy:

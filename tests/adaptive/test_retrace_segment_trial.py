@@ -17,7 +17,7 @@ from compas_cgal.adaptive.operation import AdvanceSegmentOperation
 from compas_cgal.adaptive.operation import RetraceSegmentOperation
 from compas_cgal.adaptive.retrace_segment_trial import evaluate_retrace_segment_trial
 from compas_cgal.adaptive.stock_area import Stock2Area
-from compas_cgal.adaptive.units import ToolRadius
+from compas_cgal.units import ToolRadius
 from tests.adaptive.task13f_fixture import Task13FFixture
 from tests.adaptive.task13f_fixture import task13f_retrace_decision
 from tests.adaptive.task13f_fixture import task13f_route_one_terminal

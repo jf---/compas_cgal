@@ -20,7 +20,7 @@ from benchmarks.held_reference_figures import figure7_inward_offset
 from benchmarks.tools.held_circle_distribution import render_distribution
 from benchmarks.tools.held_contour_contact_plot import render_contour_contacts
 from benchmarks.tools.held_toolpath_progress import render_path
-from compas_cgal.adaptive.motion import EngagementCap
+from compas_cgal.motion import EngagementCap
 
 
 def main() -> None:

@@ -18,10 +18,7 @@ from compas_cgal.adaptive.canonical import encode_binary64
 from compas_cgal.adaptive.canonical import encode_component_map
 from compas_cgal.adaptive.canonical import encode_sequence
 from compas_cgal.adaptive.canonical import encode_tagged_union
-from compas_cgal.adaptive.motion import EngagementCap
 from compas_cgal.adaptive.policy import DepletionPolicy
-from compas_cgal.adaptive.units import CutPlane
-from compas_cgal.adaptive.units import ToolRadius
 from compas_cgal.engagement_audit.classification import classify_operation_snapshot
 from compas_cgal.engagement_audit.decision_limits import AuditDecisionLimits
 from compas_cgal.engagement_audit.digests import AuditInputDigest
@@ -40,7 +37,10 @@ from compas_cgal.engagement_audit.operation_identity import canonical_operation_
 from compas_cgal.engagement_audit.operation_identity import operation_stream_digest
 from compas_cgal.engagement_audit.operation_identity import snapshot_toolpath_operation
 from compas_cgal.engagement_audit.records import AuthenticatedOperation
+from compas_cgal.motion import EngagementCap
 from compas_cgal.toolpath import ToolpathOperation
+from compas_cgal.units import CutPlane
+from compas_cgal.units import ToolRadius
 
 AUDIT_INPUT_VERSION: Final[bytes] = b"engagement-audit-input-v3"
 

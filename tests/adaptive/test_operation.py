@@ -11,9 +11,9 @@ from compas_cgal.adaptive.errors import InvalidEffectiveCapDecisionError
 from compas_cgal.adaptive.errors import InvalidOperationIdentityError
 from compas_cgal.adaptive.errors import InvalidTraversalDecisionError
 from compas_cgal.adaptive.identity import IdentityDigest
-from compas_cgal.adaptive.motion import EngagementCap
-from compas_cgal.adaptive.motion import ExactCircleMotion
-from compas_cgal.adaptive.motion import ExactSegmentMotion
+from compas_cgal.motion import EngagementCap
+from compas_cgal.motion import ExactCircleMotion
+from compas_cgal.motion import ExactSegmentMotion
 from compas_cgal.adaptive.operation import AdvanceSegmentOperation
 from compas_cgal.adaptive.operation import ApproachOperation
 from compas_cgal.adaptive.operation import CanonicalOperation
@@ -36,11 +36,11 @@ from compas_cgal.adaptive.policy import BranchId
 from compas_cgal.adaptive.policy import ComponentId
 from compas_cgal.adaptive.policy import MaterialSide
 from compas_cgal.adaptive.policy import PassageState
-from compas_cgal.adaptive.units import ClearanceZ
-from compas_cgal.adaptive.units import CutZ
-from compas_cgal.adaptive.units import Point2
-from compas_cgal.adaptive.units import Vector2
-from compas_cgal.adaptive.units import WorldXY
+from compas_cgal.units import ClearanceZ
+from compas_cgal.units import CutZ
+from compas_cgal.units import Point2
+from compas_cgal.units import Vector2
+from compas_cgal.units import WorldXY
 
 
 @dataclass(frozen=True)

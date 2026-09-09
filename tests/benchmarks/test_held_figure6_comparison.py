@@ -20,7 +20,7 @@ from benchmarks.held_figure6_publisher import load_figure6_publisher_evidence
 from benchmarks.tools.held_figure6_same_axes import build_figure
 from benchmarks.tools.held_figure6_same_axes import build_literal_overlay
 from benchmarks.units import Degrees
-from compas_cgal.adaptive.units import Millimetre
+from compas_cgal.units import Millimetre
 
 
 def _axes() -> PublisherFigure6Axes:

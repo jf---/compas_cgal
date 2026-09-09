@@ -17,7 +17,7 @@ from compas_cgal.adaptive.canonical import encode_component_map
 from compas_cgal.adaptive.canonical import encode_sequence
 from compas_cgal.adaptive.canonical import encode_tagged_union
 from compas_cgal.adaptive.errors import InvalidReachableDomainCertificateError
-from compas_cgal.adaptive.units import ToolRadius
+from compas_cgal.units import ToolRadius
 
 _U64_BYTES: Final[int] = 8
 _BINARY64: Final[struct.Struct] = struct.Struct(">d")

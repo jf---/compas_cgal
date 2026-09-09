@@ -7,16 +7,16 @@ import numpy as np
 import pytest
 
 from compas_cgal import _stock_2
-from compas_cgal.adaptive.errors import DegenerateCircleMotionError
-from compas_cgal.adaptive.errors import DegenerateSegmentMotionError
-from compas_cgal.adaptive.errors import InvalidEngagementCapError
-from compas_cgal.adaptive.motion import EngagementCap
-from compas_cgal.adaptive.motion import ExactCircleMotion
-from compas_cgal.adaptive.motion import ExactSegmentMotion
-from compas_cgal.adaptive.units import Point2
-from compas_cgal.adaptive.units import SquaredMillimetre
-from compas_cgal.adaptive.units import Vector2
-from compas_cgal.adaptive.units import WorldXY
+from compas_cgal.errors import DegenerateCircleMotionError
+from compas_cgal.errors import DegenerateSegmentMotionError
+from compas_cgal.errors import InvalidEngagementCapError
+from compas_cgal.motion import EngagementCap
+from compas_cgal.motion import ExactCircleMotion
+from compas_cgal.motion import ExactSegmentMotion
+from compas_cgal.units import Point2
+from compas_cgal.units import SquaredMillimetre
+from compas_cgal.units import Vector2
+from compas_cgal.units import WorldXY
 
 
 def test_exact_segment_rejects_zero_progress() -> None:

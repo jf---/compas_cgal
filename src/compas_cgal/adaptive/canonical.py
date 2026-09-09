@@ -9,9 +9,6 @@ from typing import Self
 from typing import TypeVar
 
 from compas_cgal.adaptive.errors import CanonicalEncodingError
-from compas_cgal.adaptive.motion import EngagementCap
-from compas_cgal.adaptive.motion import ExactCircleMotion
-from compas_cgal.adaptive.motion import ExactSegmentMotion
 from compas_cgal.adaptive.policy import CandidatePolicy
 from compas_cgal.adaptive.policy import CircleOrientation
 from compas_cgal.adaptive.policy import CutDirectionPolicy
@@ -23,16 +20,19 @@ from compas_cgal.adaptive.policy import NeckEffectiveCap
 from compas_cgal.adaptive.policy import NeckPolicy
 from compas_cgal.adaptive.policy import PassageState
 from compas_cgal.adaptive.policy import TraversalPolicy
-from compas_cgal.adaptive.units import ChordBound
-from compas_cgal.adaptive.units import ClearanceZ
-from compas_cgal.adaptive.units import CutPlane
-from compas_cgal.adaptive.units import CutZ
-from compas_cgal.adaptive.units import GuideRadius
-from compas_cgal.adaptive.units import Point2
-from compas_cgal.adaptive.units import Spacing
-from compas_cgal.adaptive.units import ToolRadius
-from compas_cgal.adaptive.units import Vector2
-from compas_cgal.adaptive.units import WorldXY
+from compas_cgal.motion import EngagementCap
+from compas_cgal.motion import ExactCircleMotion
+from compas_cgal.motion import ExactSegmentMotion
+from compas_cgal.units import ChordBound
+from compas_cgal.units import ClearanceZ
+from compas_cgal.units import CutPlane
+from compas_cgal.units import CutZ
+from compas_cgal.units import GuideRadius
+from compas_cgal.units import Point2
+from compas_cgal.units import Spacing
+from compas_cgal.units import ToolRadius
+from compas_cgal.units import Vector2
+from compas_cgal.units import WorldXY
 
 CANONICAL_ENCODING_VERSION: Final[bytes] = b"CCAN\x00\x01"
 _U64: Final[struct.Struct] = struct.Struct(">Q")

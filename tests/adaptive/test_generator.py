@@ -25,13 +25,13 @@ from compas_cgal.adaptive.generator import advance_active_candidate_family
 from compas_cgal.adaptive.generator import generate_exact_adaptive_continuation
 from compas_cgal.adaptive.generator import materialize_active_candidate_family
 from compas_cgal.adaptive.medial_axis import MatZeroGuideRun
-from compas_cgal.adaptive.motion import ExactSegmentMotion
+from compas_cgal.motion import ExactSegmentMotion
 from compas_cgal.adaptive.transaction import CandidateEvaluator
 from compas_cgal.adaptive.transaction import CandidateTransaction
 from compas_cgal.adaptive.transaction import ZeroGuideLinkTransaction
 from compas_cgal.adaptive.traversal import MatTraversalState
-from compas_cgal.adaptive.units import Point2
-from compas_cgal.adaptive.units import WorldXY
+from compas_cgal.units import Point2
+from compas_cgal.units import WorldXY
 from tests.adaptive.test_acceptance import _BranchFixture
 from tests.adaptive.test_acceptance import _build_branch_fixture
 from tests.adaptive.task13f_fixture import Task13FFixture

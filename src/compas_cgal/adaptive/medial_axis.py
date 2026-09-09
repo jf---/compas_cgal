@@ -27,12 +27,12 @@ from compas_cgal.adaptive.identity import IdentityDigest
 from compas_cgal.adaptive.operation import CursorIdentity
 from compas_cgal.adaptive.policy import BranchId
 from compas_cgal.adaptive.policy import ComponentId
-from compas_cgal.adaptive.units import ChordBound
-from compas_cgal.adaptive.units import Clearance
-from compas_cgal.adaptive.units import Point2
-from compas_cgal.adaptive.units import Spacing
-from compas_cgal.adaptive.units import ToolRadius
-from compas_cgal.adaptive.units import WorldXY
+from compas_cgal.units import ChordBound
+from compas_cgal.units import Clearance
+from compas_cgal.units import Point2
+from compas_cgal.units import Spacing
+from compas_cgal.units import ToolRadius
+from compas_cgal.units import WorldXY
 
 MatNodeId = NewType("MatNodeId", bytes)
 MatEdgeId = NewType("MatEdgeId", bytes)

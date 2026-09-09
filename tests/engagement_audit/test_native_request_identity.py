@@ -11,8 +11,8 @@ from compas_cgal.adaptive.canonical import CanonicalRingV1
 from compas_cgal.adaptive.canonical import encode_component_map
 from compas_cgal.adaptive.canonical import encode_sequence
 from compas_cgal.adaptive.canonical import encode_tagged_union
-from compas_cgal.adaptive.units import Point2
-from compas_cgal.adaptive.units import WorldXY
+from compas_cgal.units import Point2
+from compas_cgal.units import WorldXY
 
 
 def _boundary(*, extent: float = 10.0) -> np.ndarray:

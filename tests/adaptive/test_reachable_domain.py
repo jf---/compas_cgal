@@ -14,9 +14,9 @@ from compas_cgal.adaptive.errors import ReachableArrangementTopologyError
 from compas_cgal.adaptive.errors import ReachableMaterialContainmentError
 from compas_cgal.adaptive.reachable_domain import ReachableDomain
 from compas_cgal.adaptive.reachable_domain import ReachableDomainCertificate
-from compas_cgal.adaptive.units import Point2
-from compas_cgal.adaptive.units import ToolRadius
-from compas_cgal.adaptive.units import WorldXY
+from compas_cgal.units import Point2
+from compas_cgal.units import ToolRadius
+from compas_cgal.units import WorldXY
 
 
 def _array(points: tuple[tuple[float, float], ...]) -> np.ndarray:

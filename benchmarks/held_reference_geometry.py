@@ -32,11 +32,11 @@ from benchmarks.held_reference_certification import maximum_arc_segment_distance
 from benchmarks.held_reference_certification import outward_sqrt_fraction
 from benchmarks.held_reference_certification import outward_sum
 from benchmarks.held_reference_certification import reflection_perturbation_bound
-from compas_cgal.adaptive.units import Millimetre
-from compas_cgal.adaptive.units import Point2
-from compas_cgal.adaptive.units import Radian
-from compas_cgal.adaptive.units import ToolRadius
-from compas_cgal.adaptive.units import WorldXY
+from compas_cgal.units import Millimetre
+from compas_cgal.units import Point2
+from compas_cgal.units import Radian
+from compas_cgal.units import ToolRadius
+from compas_cgal.units import WorldXY
 
 PdfPointUnit = NewType("PdfPointUnit", float)
 MillimetresPerPdfPoint = NewType("MillimetresPerPdfPoint", float)

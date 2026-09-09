@@ -19,7 +19,6 @@ from compas_cgal.adaptive.errors import CandidateStateMismatchError
 from compas_cgal.adaptive.errors import InvalidGenerationStateError
 from compas_cgal.adaptive.errors import InvalidRetraceSegmentOperationError
 from compas_cgal.adaptive.identity import IdentityDigest
-from compas_cgal.adaptive.motion import ExactCircleMotion
 from compas_cgal.adaptive.motion_certificate import MotionCertifier
 from compas_cgal.adaptive.neck import NeckPassage
 from compas_cgal.adaptive.operation import AdvanceSegmentOperation
@@ -38,9 +37,10 @@ from compas_cgal.adaptive.policy import BranchId
 from compas_cgal.adaptive.policy import ComponentId
 from compas_cgal.adaptive.policy import PassageState
 from compas_cgal.adaptive.stock_area import Stock2Area
-from compas_cgal.adaptive.units import Point2
-from compas_cgal.adaptive.units import ToolRadius
-from compas_cgal.adaptive.units import WorldXY
+from compas_cgal.motion import ExactCircleMotion
+from compas_cgal.units import Point2
+from compas_cgal.units import ToolRadius
+from compas_cgal.units import WorldXY
 
 _DIGEST_SIZE = hashlib.sha256().digest_size
 

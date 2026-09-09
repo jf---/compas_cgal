@@ -29,7 +29,6 @@ from compas.geometry import Line
 from compas.geometry import Polygon
 
 from compas_cgal import _stock_2  # type: ignore
-from compas_cgal.adaptive.units import Millimetre
 from compas_cgal.replay_classification import AUDIT_ENGAGED as AUDIT_ENGAGED
 from compas_cgal.replay_classification import CutPlaneRampError
 from compas_cgal.replay_classification import OffPlaneReplayCurveError
@@ -41,6 +40,7 @@ from compas_cgal.stock import Stock
 from compas_cgal.toolpath import OperationType
 from compas_cgal.toolpath import ToolpathOperation
 from compas_cgal.toolpath import ToolpathResult
+from compas_cgal.units import Millimetre
 
 # Arc-length station step for circular motions, as a fraction of the FULL-circle
 # circumference: 0.05 -> 20 stations per full turn, matched to a partial arc's

@@ -32,7 +32,6 @@ from compas.geometry import Line
 
 from benchmarks.errors import UnreplayableOperationError
 from benchmarks.spec import PocketSpec
-from compas_cgal.adaptive.units import Millimetre
 from compas_cgal.engagement import _infer_cut_height
 from compas_cgal.engagement import _subtract_operation
 from compas_cgal.replay_classification import CutPlaneRampError
@@ -44,6 +43,7 @@ from compas_cgal.stock import Stock
 from compas_cgal.toolpath import OperationType
 from compas_cgal.toolpath import ToolpathOperation
 from compas_cgal.toolpath import ToolpathResult
+from compas_cgal.units import Millimetre
 
 
 class ReplayKind(enum.Enum):

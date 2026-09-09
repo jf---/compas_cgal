@@ -17,15 +17,15 @@ from compas_cgal.adaptive.errors import EngagementCapExceededError
 from compas_cgal.adaptive.errors import InvalidMotionCertificateError
 from compas_cgal.adaptive.errors import UnresolvedMotionEventError
 from compas_cgal.adaptive.identity import IdentityDigest
-from compas_cgal.adaptive.motion import EngagementCap
-from compas_cgal.adaptive.motion import ExactCircleMotion
-from compas_cgal.adaptive.motion import ExactSegmentMotion
 from compas_cgal.adaptive.motion_oracle_cache import audit_motion_tea_event_exact
 from compas_cgal.adaptive.motion_refutation import CapRefutation
 from compas_cgal.adaptive.motion_refutation import refute_segment_cap
 from compas_cgal.adaptive.stock_area import Stock2Area
-from compas_cgal.adaptive.units import ToolRadius
+from compas_cgal.motion import EngagementCap
+from compas_cgal.motion import ExactCircleMotion
+from compas_cgal.motion import ExactSegmentMotion
 from compas_cgal.toolpath import OperationType
+from compas_cgal.units import ToolRadius
 
 _DIGEST_SIZE = hashlib.sha256().digest_size
 _BINARY64_SIZE = struct.calcsize(">d")

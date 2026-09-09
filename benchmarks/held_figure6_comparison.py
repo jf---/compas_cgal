@@ -12,7 +12,7 @@ from benchmarks.figure6 import reference_pocket
 from benchmarks.pathmetrics import path_length
 from benchmarks.toolpath_coverage import require_toolpath_coverage
 from benchmarks.units import Degrees
-from compas_cgal.adaptive.units import Millimetre
+from compas_cgal.units import Millimetre
 
 REPOSITORY_FIGURE6_CAPS: tuple[Degrees, ...] = (Degrees(80.0), Degrees(120.0), Degrees(160.0))
 COMPLIANCE_UNAUDITED: Literal["compliance unaudited"] = "compliance unaudited"

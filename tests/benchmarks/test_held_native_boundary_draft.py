@@ -9,9 +9,9 @@ import pytest
 from benchmarks import held_native_boundary_draft as draft
 from compas_cgal import _circle_geometry_2
 from compas_cgal import _coverage_2
-from compas_cgal.adaptive.units import Point2
-from compas_cgal.adaptive.units import ToolRadius
-from compas_cgal.adaptive.units import WorldXY
+from compas_cgal.units import Point2
+from compas_cgal.units import ToolRadius
+from compas_cgal.units import WorldXY
 
 
 def _rectangle(monkeypatch: pytest.MonkeyPatch) -> None:

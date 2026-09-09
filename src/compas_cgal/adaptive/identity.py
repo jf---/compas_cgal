@@ -33,7 +33,6 @@ from compas_cgal.adaptive.errors import InvalidInputIdentityError
 
 if TYPE_CHECKING:
     from compas_cgal.adaptive.entry import PreclearedEntry
-    from compas_cgal.adaptive.motion import EngagementCap
     from compas_cgal.adaptive.policy import CandidatePolicy
     from compas_cgal.adaptive.policy import CutDirectionPolicy
     from compas_cgal.adaptive.policy import DepletionPolicy
@@ -41,8 +40,9 @@ if TYPE_CHECKING:
     from compas_cgal.adaptive.policy import NeckPolicy
     from compas_cgal.adaptive.policy import TraversalPolicy
     from compas_cgal.adaptive.reachable_domain import ReachableDomain
-    from compas_cgal.adaptive.units import CutPlane
-    from compas_cgal.adaptive.units import ToolRadius
+    from compas_cgal.motion import EngagementCap
+    from compas_cgal.units import CutPlane
+    from compas_cgal.units import ToolRadius
 
 INPUT_SCHEMA_VERSION: Final[bytes] = b"adaptive-input-schema-v2"
 OPERATION_SCHEMA_VERSION: Final[bytes] = b"adaptive-operation-schema-v2"
@@ -260,7 +260,6 @@ class InputIdentity:
 
     def __post_init__(self) -> None:
         from compas_cgal.adaptive.entry import PreclearedEntry
-        from compas_cgal.adaptive.motion import EngagementCap
         from compas_cgal.adaptive.policy import CandidatePolicy
         from compas_cgal.adaptive.policy import CutDirectionPolicy
         from compas_cgal.adaptive.policy import DepletionPolicy
@@ -268,8 +267,9 @@ class InputIdentity:
         from compas_cgal.adaptive.policy import NeckPolicy
         from compas_cgal.adaptive.policy import TraversalPolicy
         from compas_cgal.adaptive.reachable_domain import ReachableDomain
-        from compas_cgal.adaptive.units import CutPlane
-        from compas_cgal.adaptive.units import ToolRadius
+        from compas_cgal.motion import EngagementCap
+        from compas_cgal.units import CutPlane
+        from compas_cgal.units import ToolRadius
 
         if type(self.design_boundary) is not CanonicalRingV1 or not self.design_boundary.is_outer:
             raise InvalidInputIdentityError("input identity requires one canonical outer design boundary.")

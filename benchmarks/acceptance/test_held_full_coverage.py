@@ -29,9 +29,9 @@ from benchmarks.held_reference_cases import CANONICAL_CASE_NAMES
 from benchmarks.held_reference_cases import HeldReferenceCase
 from benchmarks.held_reference_cases import load_held_reference_case
 from benchmarks.held_reference_figures import figure7_inward_offset
-from compas_cgal.adaptive.motion import EngagementCap
-from compas_cgal.adaptive.units import Point2
-from compas_cgal.adaptive.units import WorldXY
+from compas_cgal.motion import EngagementCap
+from compas_cgal.units import Point2
+from compas_cgal.units import WorldXY
 
 PreparedPaths = tuple[
     HeldReferenceCase,

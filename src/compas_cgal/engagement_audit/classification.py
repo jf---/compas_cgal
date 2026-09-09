@@ -5,10 +5,6 @@ from __future__ import annotations
 from typing import assert_never
 
 from compas_cgal import _stock_2
-from compas_cgal.adaptive.units import CutPlane
-from compas_cgal.adaptive.units import Direction3
-from compas_cgal.adaptive.units import Point3
-from compas_cgal.adaptive.units import WorldXYZ
 from compas_cgal.engagement_audit.errors import ContradictoryOperationOrientationError
 from compas_cgal.engagement_audit.errors import ContradictoryOperationRoleError
 from compas_cgal.engagement_audit.errors import InvalidAuditPlaneError
@@ -28,6 +24,10 @@ from compas_cgal.engagement_audit.records import AuthenticatedNonEngagingOperati
 from compas_cgal.engagement_audit.records import AuthenticatedOperation
 from compas_cgal.engagement_audit.records import AuthenticatedPlungeOperation
 from compas_cgal.toolpath import ToolpathOperation
+from compas_cgal.units import CutPlane
+from compas_cgal.units import Direction3
+from compas_cgal.units import Point3
+from compas_cgal.units import WorldXYZ
 
 
 def _point3_native(point: Point3[WorldXYZ]) -> tuple[float, float, float]:

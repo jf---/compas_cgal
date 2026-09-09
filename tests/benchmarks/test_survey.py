@@ -17,8 +17,8 @@ from benchmarks.spec import PocketSpec
 from benchmarks.survey import QUALITY_SAMPLES_PER_MOTION
 from benchmarks.survey import MotionQuality
 from benchmarks.survey import survey_path
-from compas_cgal.adaptive.units import Point2
-from compas_cgal.adaptive.units import WorldXY
+from compas_cgal.units import Point2
+from compas_cgal.units import WorldXY
 from compas_cgal.toolpath import OperationType
 from compas_cgal.toolpath import ToolpathOperation
 from compas_cgal.toolpath import ToolpathResult

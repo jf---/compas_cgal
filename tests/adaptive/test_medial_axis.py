@@ -74,11 +74,11 @@ def _owned_mat(
 def _typed_axis(*, tool_radius: float = 0.5):
     from compas_cgal.adaptive.canonical import CanonicalRingV1
     from compas_cgal.adaptive.medial_axis import MedialAxis
-    from compas_cgal.adaptive.units import ChordBound
-    from compas_cgal.adaptive.units import Point2
-    from compas_cgal.adaptive.units import Spacing
-    from compas_cgal.adaptive.units import ToolRadius
-    from compas_cgal.adaptive.units import WorldXY
+    from compas_cgal.units import ChordBound
+    from compas_cgal.units import Point2
+    from compas_cgal.units import Spacing
+    from compas_cgal.units import ToolRadius
+    from compas_cgal.units import WorldXY
 
     boundary = CanonicalRingV1.build_outer(
         tuple(Point2[WorldXY].build(x, y) for x, y, _ in L_SHAPE),
@@ -316,11 +316,11 @@ def test_native_owner_rejects_foreign_mat_certificate() -> None:
 def test_typed_medial_axis_projects_native_topology_without_coordinate_matching() -> None:
     from compas_cgal.adaptive.canonical import CanonicalRingV1
     from compas_cgal.adaptive.medial_axis import MedialAxis
-    from compas_cgal.adaptive.units import ChordBound
-    from compas_cgal.adaptive.units import Point2
-    from compas_cgal.adaptive.units import Spacing
-    from compas_cgal.adaptive.units import ToolRadius
-    from compas_cgal.adaptive.units import WorldXY
+    from compas_cgal.units import ChordBound
+    from compas_cgal.units import Point2
+    from compas_cgal.units import Spacing
+    from compas_cgal.units import ToolRadius
+    from compas_cgal.units import WorldXY
 
     boundary = CanonicalRingV1.build_outer(
         tuple(Point2[WorldXY].build(x, y) for x, y, _ in L_SHAPE),
@@ -420,11 +420,11 @@ def test_typed_topology_rejects_mutable_lookup_views() -> None:
     from compas_cgal.adaptive.errors import InvalidMedialAxisProjectionError
     from compas_cgal.adaptive.medial_axis import MatTopology
     from compas_cgal.adaptive.medial_axis import MedialAxis
-    from compas_cgal.adaptive.units import ChordBound
-    from compas_cgal.adaptive.units import Point2
-    from compas_cgal.adaptive.units import Spacing
-    from compas_cgal.adaptive.units import ToolRadius
-    from compas_cgal.adaptive.units import WorldXY
+    from compas_cgal.units import ChordBound
+    from compas_cgal.units import Point2
+    from compas_cgal.units import Spacing
+    from compas_cgal.units import ToolRadius
+    from compas_cgal.units import WorldXY
 
     boundary = CanonicalRingV1.build_outer(
         tuple(Point2[WorldXY].build(x, y) for x, y, _ in L_SHAPE),

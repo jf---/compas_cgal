@@ -37,12 +37,12 @@ from benchmarks.held_reference_geometry import SourceToWorld
 from benchmarks.held_reference_geometry import project_boundary
 from benchmarks.held_reference_geometry import reconstruct_source_path
 from benchmarks.spec import PocketSpec
-from compas_cgal.adaptive.errors import InvalidUnitValueError
-from compas_cgal.adaptive.units import Millimetre
-from compas_cgal.adaptive.units import Point2
-from compas_cgal.adaptive.units import Radian
-from compas_cgal.adaptive.units import ToolRadius
-from compas_cgal.adaptive.units import WorldXY
+from compas_cgal.errors import InvalidUnitValueError
+from compas_cgal.units import Millimetre
+from compas_cgal.units import Point2
+from compas_cgal.units import Radian
+from compas_cgal.units import ToolRadius
+from compas_cgal.units import WorldXY
 
 Degree = NewType("Degree", float)
 JsonValue: TypeAlias = None | bool | int | float | str | list["JsonValue"] | dict[str, "JsonValue"]

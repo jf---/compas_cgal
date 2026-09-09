@@ -6,25 +6,25 @@ from typing import assert_type
 import pytest
 
 import compas_cgal.adaptive as adaptive
-from compas_cgal.adaptive.errors import InvalidUnitValueError
-from compas_cgal.adaptive.units import ChordBound
-from compas_cgal.adaptive.units import Clearance
-from compas_cgal.adaptive.units import ClearanceZ
-from compas_cgal.adaptive.units import CutPlane
-from compas_cgal.adaptive.units import CutZ
-from compas_cgal.adaptive.units import Direction3
-from compas_cgal.adaptive.units import EntryRadius
-from compas_cgal.adaptive.units import GuideRadius
-from compas_cgal.adaptive.units import Millimetre
-from compas_cgal.adaptive.units import ObservedRadius
-from compas_cgal.adaptive.units import Point2
-from compas_cgal.adaptive.units import Point3
-from compas_cgal.adaptive.units import Spacing
-from compas_cgal.adaptive.units import SquaredMillimetre
-from compas_cgal.adaptive.units import ToolRadius
-from compas_cgal.adaptive.units import Vector2
-from compas_cgal.adaptive.units import WorldXY
-from compas_cgal.adaptive.units import WorldXYZ
+from compas_cgal.errors import InvalidUnitValueError
+from compas_cgal.units import ChordBound
+from compas_cgal.units import Clearance
+from compas_cgal.units import ClearanceZ
+from compas_cgal.units import CutPlane
+from compas_cgal.units import CutZ
+from compas_cgal.units import Direction3
+from compas_cgal.units import EntryRadius
+from compas_cgal.units import GuideRadius
+from compas_cgal.units import Millimetre
+from compas_cgal.units import ObservedRadius
+from compas_cgal.units import Point2
+from compas_cgal.units import Point3
+from compas_cgal.units import Spacing
+from compas_cgal.units import SquaredMillimetre
+from compas_cgal.units import ToolRadius
+from compas_cgal.units import Vector2
+from compas_cgal.units import WorldXY
+from compas_cgal.units import WorldXYZ
 
 
 def test_point_factory_accepts_scalar_and_sequence_forms() -> None:

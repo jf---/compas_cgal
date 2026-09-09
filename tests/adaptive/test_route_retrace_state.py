@@ -13,8 +13,8 @@ from compas_cgal.adaptive.errors import InvalidGenerationStateError
 from compas_cgal.adaptive.errors import InvalidRetraceSegmentOperationError
 from compas_cgal.adaptive.generation_state import GenerationState
 from compas_cgal.adaptive.identity import IdentityDigest
-from compas_cgal.adaptive.motion import EngagementCap
-from compas_cgal.adaptive.motion import ExactSegmentMotion
+from compas_cgal.motion import EngagementCap
+from compas_cgal.motion import ExactSegmentMotion
 from compas_cgal.adaptive.neck import NeckPassage
 from compas_cgal.adaptive.operation import AdvanceSegmentOperation
 from compas_cgal.adaptive.operation import CanonicalOperation
@@ -28,9 +28,9 @@ from compas_cgal.adaptive.operation import RouteRetraceDecision
 from compas_cgal.adaptive.policy import PassageState
 from compas_cgal.adaptive.retrace_segment_trial import evaluate_retrace_segment_trial
 from compas_cgal.adaptive.stock_area import Stock2Area
-from compas_cgal.adaptive.units import CutZ
-from compas_cgal.adaptive.units import Point2
-from compas_cgal.adaptive.units import WorldXY
+from compas_cgal.units import CutZ
+from compas_cgal.units import Point2
+from compas_cgal.units import WorldXY
 from tests.adaptive.task13f_fixture import Task13FFixture
 from tests.adaptive.task13f_fixture import task13f_retrace_decision
 from tests.adaptive.task13f_fixture import task13f_route_one_terminal

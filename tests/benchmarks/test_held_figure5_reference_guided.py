@@ -16,7 +16,7 @@ from benchmarks.held_figure5_reference_guided import _classify_publisher_marker
 from benchmarks.held_figure5_reference_guided import build_reference_guided_figure5_correspondence
 from benchmarks.held_reference_cases import load_held_reference_case
 from benchmarks.held_reference_figures import figure7_inward_offset
-from compas_cgal.adaptive.units import Millimetre
+from compas_cgal.units import Millimetre
 
 
 def _geometry_key(candidate: ReferenceGuidedFigure5Circle) -> tuple[float, ...]:

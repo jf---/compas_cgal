@@ -9,10 +9,10 @@ from benchmarks.held_figure5_raw_guide import ProjectionBoundarySegmentId
 from benchmarks.held_figure5_raw_guide import ProjectionBoundarySite
 from benchmarks.held_stock_replay import replay_circle_stock
 from compas_cgal import _stock_2
-from compas_cgal.adaptive.units import GuideRadius
-from compas_cgal.adaptive.units import Point2
-from compas_cgal.adaptive.units import ToolRadius
-from compas_cgal.adaptive.units import WorldXY
+from compas_cgal.units import GuideRadius
+from compas_cgal.units import Point2
+from compas_cgal.units import ToolRadius
+from compas_cgal.units import WorldXY
 
 
 BOUNDARY = tuple(Point2[WorldXY].build(x, y) for x, y in ((-5, -5), (8, -5), (8, 5), (-5, 5)))

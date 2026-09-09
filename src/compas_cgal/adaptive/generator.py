@@ -21,7 +21,6 @@ from compas_cgal.adaptive.canonical import encode_bytes
 from compas_cgal.adaptive.canonical import encode_component_map
 from compas_cgal.adaptive.canonical import encode_sequence
 from compas_cgal.adaptive.canonical import encode_tagged_union
-from compas_cgal.adaptive.errors import DegenerateSegmentMotionError
 from compas_cgal.adaptive.errors import EngagementCapExceededError
 from compas_cgal.adaptive.errors import EngagementCapInfeasibleError
 from compas_cgal.adaptive.errors import GougeContainmentError
@@ -56,6 +55,7 @@ from compas_cgal.adaptive.transaction import CandidateEvaluator
 from compas_cgal.adaptive.transaction import CandidateTransaction
 from compas_cgal.adaptive.transaction import ZeroGuideLinkTransaction
 from compas_cgal.adaptive.traversal import MatTraversalState
+from compas_cgal.errors import DegenerateSegmentMotionError
 
 _DIGEST_SIZE = hashlib.sha256().digest_size
 
@@ -497,12 +497,7 @@ def _derive_route_retrace_decision(
         UnsupportedRouteRetraceError: If the exact boundary has no admitted
             no-neck full-cap advancing-segment source.
     """
-    if (
-        type(physical) is not GenerationState
-        or type(terminal) is not MatTraversalState
-        or type(activated) is not MatTraversalState
-        or type(source_commit) is not TraversalCommit
-    ):
+    if type(physical) is not GenerationState or type(terminal) is not MatTraversalState or type(activated) is not MatTraversalState or type(source_commit) is not TraversalCommit:
         raise InvalidRouteRetraceDecisionError(
             "route retrace derivation requires exact causal preimages.",
         )
@@ -510,10 +505,7 @@ def _derive_route_retrace_decision(
         raise InvalidRouteRetraceDecisionError(
             "incident route activation requires no physical retrace.",
         )
-    if (
-        source_commit.physical_child_digest != physical.digest
-        or source_commit.traversal_after != terminal
-    ):
+    if source_commit.physical_child_digest != physical.digest or source_commit.traversal_after != terminal:
         raise InvalidRouteRetraceDecisionError(
             "route retrace source is not the final physical/global commit.",
         )
@@ -524,8 +516,7 @@ def _derive_route_retrace_decision(
             "nonincident route requires a final zero-guide source.",
         )
     if (
-        source_commit.physical_parent_digest
-        != source_transaction.parent_state_digest
+        source_commit.physical_parent_digest != source_transaction.parent_state_digest
         or source_transaction.result_state_digest != physical.digest
         or source_transaction.traversal_after != physical.traversal
     ):
@@ -548,8 +539,7 @@ def _derive_route_retrace_decision(
         or source_witness.operation != source_operation
         or source_witness.operation_index != source_index
         or source_operation.motion.end != physical.phase_point
-        or source_operation.traversal_decision
-        != source_transaction.candidate.traversal_decision
+        or source_operation.traversal_decision != source_transaction.candidate.traversal_decision
         or source_operation.motion.end != source_transaction.candidate.target
     ):
         raise InvalidRouteRetraceDecisionError(
@@ -614,10 +604,7 @@ class RouteRetraceCommit:
             self.source_commit_digest,
             "route retrace commit source commit",
         )
-        if (
-            type(self.traversal_before) is not MatTraversalState
-            or type(self.traversal_after) is not MatTraversalState
-        ):
+        if type(self.traversal_before) is not MatTraversalState or type(self.traversal_after) is not MatTraversalState:
             raise InvalidRouteRetraceCommitError(
                 "route retrace commit requires exact global parent and child states.",
             )
@@ -626,12 +613,7 @@ class RouteRetraceCommit:
                 "route retrace commit requires one exact physical transaction.",
             )
         RouteRetraceTransaction.validate(self.transaction)
-        if (
-            self.transaction.parent_state_digest
-            != self.physical_parent_digest
-            or self.transaction.result_state_digest
-            != self.physical_child_digest
-        ):
+        if self.transaction.parent_state_digest != self.physical_parent_digest or self.transaction.result_state_digest != self.physical_child_digest:
             raise InvalidRouteRetraceCommitError(
                 "route retrace transaction contradicts physical commit lineage.",
             )
@@ -649,14 +631,10 @@ class RouteRetraceCommit:
             )
         decision = self.transaction.decision
         if (
-            decision.terminal_traversal_digest
-            != self.traversal_before.digest
-            or decision.activated_traversal_digest
-            != self.traversal_after.digest
-            or decision.completed_route_index
-            != self.traversal_before.active_route_index
-            or decision.activated_route_index
-            != self.traversal_after.active_route_index
+            decision.terminal_traversal_digest != self.traversal_before.digest
+            or decision.activated_traversal_digest != self.traversal_after.digest
+            or decision.completed_route_index != self.traversal_before.active_route_index
+            or decision.activated_route_index != self.traversal_after.active_route_index
             or bytes(decision.completed_exit_node_id)
             != bytes(
                 self.traversal_before.active_cursor.route_step.exit_node_id,
@@ -724,11 +702,8 @@ class RouteRetraceCommit:
         if (
             transaction.parent_state_digest != physical_before.digest
             or transaction.result_state_digest != physical_after.digest
-            or physical_after.operations
-            != physical_before.operations
-            + (transaction.segment_witness.operation,)
-            or physical_after.phase_point
-            != transaction.segment_witness.operation.motion.end
+            or physical_after.operations != physical_before.operations + (transaction.segment_witness.operation,)
+            or physical_after.phase_point != transaction.segment_witness.operation.motion.end
             or physical_after.traversal != physical_before.traversal
             or physical_after.passages != physical_before.passages
         ):
@@ -797,10 +772,7 @@ class GenerationContinuation:
             raise InvalidTraversalCommitError(
                 "generation continuation requires exact physical and global states.",
             )
-        if type(self.commits) is not tuple or any(
-            type(commit) not in (TraversalCommit, RouteRetraceCommit)
-            for commit in self.commits
-        ):
+        if type(self.commits) is not tuple or any(type(commit) not in (TraversalCommit, RouteRetraceCommit) for commit in self.commits):
             raise InvalidTraversalCommitError(
                 "generation continuation requires one immutable commit tuple.",
             )
@@ -810,10 +782,7 @@ class GenerationContinuation:
         )
         preceding_traversal_commit_digest: IdentityDigest | None = None
         for commit in self.commits:
-            retrace_pending = (
-                expected_traversal.active_route_index is not None
-                and expected_traversal.active_cursor.terminal
-            )
+            retrace_pending = expected_traversal.active_route_index is not None and expected_traversal.active_cursor.terminal
             if type(commit) is TraversalCommit:
                 if retrace_pending:
                     raise InvalidRouteRetraceCommitError(
@@ -849,10 +818,7 @@ class GenerationContinuation:
                 raise InvalidRouteRetraceCommitError(
                     "generation continuation breaks retrace global lineage.",
                 )
-            if (
-                commit.source_commit_digest
-                != preceding_traversal_commit_digest
-            ):
+            if commit.source_commit_digest != preceding_traversal_commit_digest:
                 raise InvalidRouteRetraceCommitError(
                     "route retrace does not name the immediately preceding commit.",
                 )
@@ -860,10 +826,7 @@ class GenerationContinuation:
             expected_traversal = _activate_completed_incident_routes(
                 commit.traversal_after,
             )
-        if (
-            expected_traversal.active_route_index is not None
-            and expected_traversal.active_cursor.terminal
-        ):
+        if expected_traversal.active_route_index is not None and expected_traversal.active_cursor.terminal:
             raise InvalidRouteRetraceCommitError(
                 "generation continuation ends before its required route retrace.",
             )
@@ -1426,10 +1389,7 @@ def generate_exact_adaptive_continuation(
         )
         commits.append(commit)
         traversal = _activate_completed_incident_routes(traversal)
-        if (
-            traversal.active_route_index is not None
-            and traversal.active_cursor.terminal
-        ):
+        if traversal.active_route_index is not None and traversal.active_cursor.terminal:
             activated = traversal.activate_next()
             decision = _derive_route_retrace_decision(
                 physical=physical,

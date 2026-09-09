@@ -9,11 +9,11 @@ from benchmarks.held_figure5_raw_guide import GuideRunStationOrdinal
 from benchmarks.held_figure5_raw_guide import ProjectionBoundarySegmentId
 from benchmarks.held_figure5_raw_guide import ProjectionBoundarySite
 from compas_cgal import _stock_2
-from compas_cgal.adaptive.motion import EngagementCap
-from compas_cgal.adaptive.units import GuideRadius
-from compas_cgal.adaptive.units import Point2
-from compas_cgal.adaptive.units import ToolRadius
-from compas_cgal.adaptive.units import WorldXY
+from compas_cgal.motion import EngagementCap
+from compas_cgal.units import GuideRadius
+from compas_cgal.units import Point2
+from compas_cgal.units import ToolRadius
+from compas_cgal.units import WorldXY
 
 BOUNDARY = tuple(Point2[WorldXY].build(x, y) for x, y in ((0, 0), (10, 0), (10, 10), (0, 10)))
 TOOL = ToolRadius.build(1)

@@ -15,9 +15,9 @@ from benchmarks.held_figure5_boundary_path import Figure5CounterclockwiseCircle
 from benchmarks.held_motion_coverage import InvalidCoverageMotionError
 from benchmarks.held_reference_cases import HeldReferenceCase
 from compas_cgal import _coverage_2
-from compas_cgal.adaptive.units import Point2
-from compas_cgal.adaptive.units import ToolRadius
-from compas_cgal.adaptive.units import WorldXY
+from compas_cgal.units import Point2
+from compas_cgal.units import ToolRadius
+from compas_cgal.units import WorldXY
 
 SAMPLES_PER_TOOL_RADIUS = 4  # Plot inspection only; native residual emptiness owns acceptance.
 

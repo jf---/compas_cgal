@@ -23,9 +23,9 @@ from compas_cgal.adaptive.canonical import encode_sequence
 from compas_cgal.adaptive.canonical import encode_tagged_union
 from compas_cgal.adaptive.canonical import require_canonical_record
 from compas_cgal.adaptive.errors import CanonicalEncodingError
-from compas_cgal.adaptive.motion import EngagementCap
-from compas_cgal.adaptive.motion import ExactCircleMotion
-from compas_cgal.adaptive.motion import ExactSegmentMotion
+from compas_cgal.motion import EngagementCap
+from compas_cgal.motion import ExactCircleMotion
+from compas_cgal.motion import ExactSegmentMotion
 from compas_cgal.adaptive.policy import ACTIVE_PASSAGE_STATES
 from compas_cgal.adaptive.policy import CandidatePolicy
 from compas_cgal.adaptive.policy import CutDirectionPolicy
@@ -33,16 +33,16 @@ from compas_cgal.adaptive.policy import CutIntent
 from compas_cgal.adaptive.policy import DepletionPolicy
 from compas_cgal.adaptive.policy import NeckPolicy
 from compas_cgal.adaptive.policy import TraversalPolicy
-from compas_cgal.adaptive.units import ChordBound
-from compas_cgal.adaptive.units import ClearanceZ
-from compas_cgal.adaptive.units import CutPlane
-from compas_cgal.adaptive.units import CutZ
-from compas_cgal.adaptive.units import GuideRadius
-from compas_cgal.adaptive.units import Millimetre
-from compas_cgal.adaptive.units import Point2
-from compas_cgal.adaptive.units import Spacing
-from compas_cgal.adaptive.units import Vector2
-from compas_cgal.adaptive.units import WorldXY
+from compas_cgal.units import ChordBound
+from compas_cgal.units import ClearanceZ
+from compas_cgal.units import CutPlane
+from compas_cgal.units import CutZ
+from compas_cgal.units import GuideRadius
+from compas_cgal.units import Millimetre
+from compas_cgal.units import Point2
+from compas_cgal.units import Spacing
+from compas_cgal.units import Vector2
+from compas_cgal.units import WorldXY
 
 
 @dataclass(frozen=True)

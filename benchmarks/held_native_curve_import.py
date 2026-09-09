@@ -7,8 +7,8 @@ This import alone establishes neither source-fit bounds nor tangent continuity.
 from benchmarks.held_reference_cases import HeldReferenceCase
 from benchmarks.held_reference_geometry import ReferenceLine
 from compas_cgal import _coverage_2 as native
-from compas_cgal.adaptive.units import Point2
-from compas_cgal.adaptive.units import WorldXY
+from compas_cgal.units import Point2
+from compas_cgal.units import WorldXY
 
 
 def _xy(point: Point2[WorldXY]) -> tuple[float, float]:

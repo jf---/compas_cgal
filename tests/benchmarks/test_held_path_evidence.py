@@ -39,11 +39,11 @@ from benchmarks.survey import RapidMotion
 from benchmarks.units import OperationIndex
 from benchmarks.units import MotionCount
 from benchmarks.units import Seconds
-from compas_cgal.adaptive.units import Direction3
-from compas_cgal.adaptive.units import Point2
-from compas_cgal.adaptive.units import Point3
-from compas_cgal.adaptive.units import WorldXY
-from compas_cgal.adaptive.units import WorldXYZ
+from compas_cgal.units import Direction3
+from compas_cgal.units import Point2
+from compas_cgal.units import Point3
+from compas_cgal.units import WorldXY
+from compas_cgal.units import WorldXYZ
 from compas_cgal.engagement import EngagementReport
 from compas_cgal.engagement import OperationEngagement
 from compas_cgal.stock import Stock

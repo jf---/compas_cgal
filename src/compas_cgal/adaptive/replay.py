@@ -44,8 +44,6 @@ from compas_cgal.adaptive.medial_axis import MatEdgeId
 from compas_cgal.adaptive.medial_axis import MatSample
 from compas_cgal.adaptive.medial_axis import MatZeroGuideRun
 from compas_cgal.adaptive.medial_axis import MedialAxis
-from compas_cgal.adaptive.motion import EngagementCap
-from compas_cgal.adaptive.motion import ExactSegmentMotion
 from compas_cgal.adaptive.motion_certificate import MotionCertifier
 from compas_cgal.adaptive.neck import NeckInventory
 from compas_cgal.adaptive.neck import NeckPassage
@@ -71,12 +69,14 @@ from compas_cgal.adaptive.reachable_domain import ReachableDomain
 from compas_cgal.adaptive.replay_trace import FreshReplayTrace
 from compas_cgal.adaptive.replay_trace import ReplayLateralWitness
 from compas_cgal.adaptive.stock_area import Stock2Area
-from compas_cgal.adaptive.units import CutPlane
-from compas_cgal.adaptive.units import Point2
-from compas_cgal.adaptive.units import ToolRadius
-from compas_cgal.adaptive.units import WorldXY
+from compas_cgal.motion import EngagementCap
+from compas_cgal.motion import ExactSegmentMotion
 from compas_cgal.stock import Stock
 from compas_cgal.toolpath import OperationType
+from compas_cgal.units import CutPlane
+from compas_cgal.units import Point2
+from compas_cgal.units import ToolRadius
+from compas_cgal.units import WorldXY
 
 
 def _canonical_ring(

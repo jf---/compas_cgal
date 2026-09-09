@@ -18,8 +18,8 @@ from benchmarks.held_reference_figures import _reference_primitive_points
 from benchmarks.held_reference_geometry import ReferenceArc
 from benchmarks.held_reference_geometry import ReferenceLine
 from benchmarks.held_reference_geometry import ReferencePrimitive
-from compas_cgal.adaptive.units import Point2
-from compas_cgal.adaptive.units import WorldXY
+from compas_cgal.units import Point2
+from compas_cgal.units import WorldXY
 
 OUTPUT = Path("docs/assets/images/held_boundary_domain_audit.png")
 # Display-only cutoff separates visible tangent defects from binary64 residuals.

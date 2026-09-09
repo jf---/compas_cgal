@@ -17,7 +17,7 @@ from compas_cgal.adaptive.identity import InputIdentity
 from compas_cgal.adaptive.medial_axis import MedialAxis
 from compas_cgal.adaptive.medial_axis import MatZeroGuideInventory
 from compas_cgal.adaptive.medial_axis import MatZeroGuideRun
-from compas_cgal.adaptive.motion import ExactSegmentMotion
+from compas_cgal.motion import ExactSegmentMotion
 from compas_cgal.adaptive.operation import AdvanceSegmentOperation
 from compas_cgal.adaptive.operation import AdvanceTraversalDecision
 from compas_cgal.adaptive.operation import CanonicalOperation
@@ -28,8 +28,8 @@ from compas_cgal.adaptive.operation import LinkSegmentOperation
 from compas_cgal.adaptive.replay import replay_certificate
 from compas_cgal.adaptive.replay_trace import FreshReplayTrace
 from compas_cgal.adaptive.transaction import ZeroGuideLinkTransaction
-from compas_cgal.adaptive.units import Point2
-from compas_cgal.adaptive.units import WorldXY
+from compas_cgal.units import Point2
+from compas_cgal.units import WorldXY
 from tests.adaptive.task13f_fixture import TASK13F_OUTER
 from tests.adaptive.task13f_fixture import Task13FFixture
 

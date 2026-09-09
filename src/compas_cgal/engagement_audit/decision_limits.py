@@ -7,11 +7,11 @@ from dataclasses import dataclass
 from typing import Self
 
 from compas_cgal import _stock_2
-from compas_cgal.adaptive.units import Millimetre
 from compas_cgal.engagement_audit.errors import InvalidAuditDecisionDepthError
 from compas_cgal.engagement_audit.errors import InvalidAuditDecisionLimitsError
 from compas_cgal.engagement_audit.errors import InvalidAuditDecisionNodeLimitError
 from compas_cgal.engagement_audit.errors import InvalidAuditSpatialFloorError
+from compas_cgal.units import Millimetre
 
 
 @dataclass(frozen=True)

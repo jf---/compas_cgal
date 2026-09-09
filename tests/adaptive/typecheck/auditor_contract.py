@@ -6,11 +6,11 @@ from typing import assert_type
 from compas_cgal import _stock_2
 from compas_cgal.adaptive.identity import IdentityDigest
 from compas_cgal.adaptive.motion_oracle_cache import NativeMotionVerdict
-from compas_cgal.adaptive.units import Direction3
-from compas_cgal.adaptive.units import ObservedRadius
-from compas_cgal.adaptive.units import Point3
-from compas_cgal.adaptive.units import Radian
-from compas_cgal.adaptive.units import WorldXYZ
+from compas_cgal.units import Direction3
+from compas_cgal.units import ObservedRadius
+from compas_cgal.units import Point3
+from compas_cgal.units import Radian
+from compas_cgal.units import WorldXYZ
 from compas_cgal.engagement_audit.identity import BuildIdentity
 from compas_cgal.engagement_audit.digests import AuthenticatedOperationDigest
 from compas_cgal.engagement_audit.operation_identity import ArcOperationSnapshot

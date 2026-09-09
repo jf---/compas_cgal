@@ -27,10 +27,10 @@ from benchmarks.held_figure5_raw_guide import ProjectionAdmissibleBoundaryHypoth
 from benchmarks.held_figure5_raw_guide import build_distance_admissible_hypotheses
 from benchmarks.held_standard_placement import PaperCircleCandidate
 from benchmarks.held_standard_placement import maximum_predecessor_engagement
-from compas_cgal.adaptive.units import Millimetre
-from compas_cgal.adaptive.units import Point2
-from compas_cgal.adaptive.units import Radian
-from compas_cgal.adaptive.units import WorldXY
+from compas_cgal.units import Millimetre
+from compas_cgal.units import Point2
+from compas_cgal.units import Radian
+from compas_cgal.units import WorldXY
 
 FIGURE5_REFERENCE_GUIDED_PROVENANCE: Literal["publisher-ordered unchanged repository hypotheses"] = "publisher-ordered unchanged repository hypotheses"
 FIGURE5_REFERENCE_GUIDED_CLAIM_BOUNDARY: Literal[

@@ -20,8 +20,8 @@ from benchmarks.held_reference_geometry import MillimetresPerPdfPoint
 from benchmarks.held_reference_geometry import PdfPoint2
 from benchmarks.held_reference_geometry import SourceLine
 from benchmarks.held_reference_geometry import SourceToWorld
-from compas_cgal.adaptive.units import Point2
-from compas_cgal.adaptive.units import WorldXY
+from compas_cgal.units import Point2
+from compas_cgal.units import WorldXY
 
 start = PdfPoint2.build(0.0, 0.0)
 end = PdfPoint2.build(1.0, 0.0)

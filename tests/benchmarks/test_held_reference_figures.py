@@ -38,8 +38,8 @@ from benchmarks.held_reference_geometry import PdfPoint2
 from benchmarks.held_reference_geometry import PdfPointUnit
 from benchmarks.held_reference_geometry import SourceLine
 from benchmarks.held_reference_geometry import SourceToWorld
-from compas_cgal.adaptive.units import Point2
-from compas_cgal.adaptive.units import WorldXY
+from compas_cgal.units import Point2
+from compas_cgal.units import WorldXY
 from tools.held_reference_extractor import ExtractedCase
 from tools.held_reference_extractor import PublishedToolCircle
 

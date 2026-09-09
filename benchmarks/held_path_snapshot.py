@@ -24,14 +24,14 @@ from benchmarks.errors import InvalidHeldOperationSnapshotError
 from benchmarks.errors import MutatedHeldToolpathError
 from benchmarks.units import OperationIndex
 from benchmarks.units import operation_index
-from compas_cgal.adaptive.units import Direction3
-from compas_cgal.adaptive.units import Millimetre
-from compas_cgal.adaptive.units import Point3
-from compas_cgal.adaptive.units import Radian
-from compas_cgal.adaptive.units import WorldXYZ
 from compas_cgal.toolpath import OperationType
 from compas_cgal.toolpath import ToolpathOperation
 from compas_cgal.toolpath import ToolpathResult
+from compas_cgal.units import Direction3
+from compas_cgal.units import Millimetre
+from compas_cgal.units import Point3
+from compas_cgal.units import Radian
+from compas_cgal.units import WorldXYZ
 
 TangentSnapshot: TypeAlias = Optional[Direction3[WorldXYZ]]
 SnapshotT = TypeVar("SnapshotT")

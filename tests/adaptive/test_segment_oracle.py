@@ -6,10 +6,10 @@ import pytest
 
 from compas_cgal import _continuous_tea_2
 from compas_cgal import _stock_2
-from compas_cgal.adaptive.errors import DegenerateSegmentMotionError
-from compas_cgal.adaptive.motion import ExactSegmentMotion
-from compas_cgal.adaptive.units import Point2
-from compas_cgal.adaptive.units import WorldXY
+from compas_cgal.errors import DegenerateSegmentMotionError
+from compas_cgal.motion import ExactSegmentMotion
+from compas_cgal.units import Point2
+from compas_cgal.units import WorldXY
 
 
 HALF_PLANE_WINDOW = np.array(

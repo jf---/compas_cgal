@@ -21,11 +21,11 @@ from benchmarks.held_path_snapshot import HeldLineSnapshot
 from benchmarks.held_path_snapshot import assert_toolpath_matches_snapshot
 from benchmarks.held_path_snapshot import snapshot_toolpath
 from benchmarks.units import OperationIndex
-from compas_cgal.adaptive.units import Direction3
-from compas_cgal.adaptive.units import Millimetre
-from compas_cgal.adaptive.units import Point3
-from compas_cgal.adaptive.units import Radian
-from compas_cgal.adaptive.units import WorldXYZ
+from compas_cgal.units import Direction3
+from compas_cgal.units import Millimetre
+from compas_cgal.units import Point3
+from compas_cgal.units import Radian
+from compas_cgal.units import WorldXYZ
 from compas_cgal.toolpath import OperationType
 from compas_cgal.toolpath import ToolpathOperation
 from compas_cgal.toolpath import ToolpathResult

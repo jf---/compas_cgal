@@ -21,7 +21,7 @@ from benchmarks.held_figure5_path import build_figure5_approximate_path
 from benchmarks.held_figure5_raw_guide import build_figure5_raw_guide
 from benchmarks.held_reference_cases import load_held_reference_case
 from benchmarks.held_reference_figures import figure7_inward_offset
-from compas_cgal.adaptive.motion import EngagementCap
+from compas_cgal.motion import EngagementCap
 
 # One divide-and-conquer union of all sweeps and a single difference should
 # replay 400 circles in well under a second on the recording machine; 2 s

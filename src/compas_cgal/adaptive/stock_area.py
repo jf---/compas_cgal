@@ -14,11 +14,11 @@ from compas_cgal.adaptive.errors import InvalidDepletionTraceError
 from compas_cgal.adaptive.errors import InvalidDepletionWitnessError
 from compas_cgal.adaptive.errors import InvalidStockAreaError
 from compas_cgal.adaptive.identity import IdentityDigest
-from compas_cgal.adaptive.motion import ExactCircleMotion
-from compas_cgal.adaptive.motion import ExactSegmentMotion
 from compas_cgal.adaptive.policy import DepletionPolicy
-from compas_cgal.adaptive.units import ToolRadius
+from compas_cgal.motion import ExactCircleMotion
+from compas_cgal.motion import ExactSegmentMotion
 from compas_cgal.stock import Stock
+from compas_cgal.units import ToolRadius
 
 
 def _is_power_of_two(value: int) -> bool:

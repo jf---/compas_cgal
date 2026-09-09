@@ -24,7 +24,7 @@ from benchmarks.held_reference_cases import load_held_reference_case
 from benchmarks.held_reference_figures import figure7_inward_offset
 from benchmarks.tools.held_contour_bound_plot import render_contour_bound_comparison
 from benchmarks.tools.held_coverage_preserving_plot import render_coverage_preserving_comparison
-from compas_cgal.adaptive.motion import EngagementCap
+from compas_cgal.motion import EngagementCap
 
 
 def main() -> None:

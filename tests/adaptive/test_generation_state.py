@@ -7,8 +7,8 @@ import pytest
 from compas_cgal.adaptive.errors import InvalidGenerationStateError
 from compas_cgal.adaptive.generation_state import GenerationState
 from compas_cgal.adaptive.generation_state import TraversalCursorState
-from compas_cgal.adaptive.motion import ExactCircleMotion
-from compas_cgal.adaptive.motion import ExactSegmentMotion
+from compas_cgal.motion import ExactCircleMotion
+from compas_cgal.motion import ExactSegmentMotion
 from compas_cgal.adaptive.operation import AdvanceSegmentOperation
 from compas_cgal.adaptive.operation import AdvanceTraversalDecision
 from compas_cgal.adaptive.operation import CanonicalOperation
@@ -20,9 +20,9 @@ from compas_cgal.adaptive.operation import NeckCapDecision
 from compas_cgal.adaptive.operation import NoNeckScope
 from compas_cgal.adaptive.operation import OrientedNeckScope
 from compas_cgal.adaptive.policy import MaterialSide
-from compas_cgal.adaptive.units import Point2
-from compas_cgal.adaptive.units import Vector2
-from compas_cgal.adaptive.units import WorldXY
+from compas_cgal.units import Point2
+from compas_cgal.units import Vector2
+from compas_cgal.units import WorldXY
 from tests.adaptive.task13f_fixture import Task13FFixture
 from tests.adaptive.test_transaction import _StateFixture
 from tests.adaptive.test_transaction import _state_fixture

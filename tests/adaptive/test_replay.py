@@ -29,9 +29,9 @@ from compas_cgal.adaptive.errors import InvalidReplayTraceError
 from compas_cgal.adaptive.identity import IdentityDigest
 from compas_cgal.adaptive.identity import InputIdentity
 from compas_cgal.adaptive.medial_axis import MedialAxis
-from compas_cgal.adaptive.motion import EngagementCap
-from compas_cgal.adaptive.motion import ExactCircleMotion
-from compas_cgal.adaptive.motion import ExactSegmentMotion
+from compas_cgal.motion import EngagementCap
+from compas_cgal.motion import ExactCircleMotion
+from compas_cgal.motion import ExactSegmentMotion
 from compas_cgal.adaptive.motion_certificate import MotionCertifier
 from compas_cgal.adaptive.neck import NeckInventory
 from compas_cgal.adaptive.operation import AdvanceTraversalDecision
@@ -59,17 +59,17 @@ from compas_cgal.adaptive.reachable_domain import ReachableDomain
 from compas_cgal.adaptive.replay import replay_certificate
 from compas_cgal.adaptive.replay_trace import FreshReplayTrace
 from compas_cgal.adaptive.stock_area import Stock2Area
-from compas_cgal.adaptive.units import ChordBound
-from compas_cgal.adaptive.units import ClearanceZ
-from compas_cgal.adaptive.units import CutPlane
-from compas_cgal.adaptive.units import CutZ
-from compas_cgal.adaptive.units import EntryRadius
-from compas_cgal.adaptive.units import GuideRadius
-from compas_cgal.adaptive.units import Point2
-from compas_cgal.adaptive.units import Spacing
-from compas_cgal.adaptive.units import SquaredMillimetre
-from compas_cgal.adaptive.units import ToolRadius
-from compas_cgal.adaptive.units import WorldXY
+from compas_cgal.units import ChordBound
+from compas_cgal.units import ClearanceZ
+from compas_cgal.units import CutPlane
+from compas_cgal.units import CutZ
+from compas_cgal.units import EntryRadius
+from compas_cgal.units import GuideRadius
+from compas_cgal.units import Point2
+from compas_cgal.units import Spacing
+from compas_cgal.units import SquaredMillimetre
+from compas_cgal.units import ToolRadius
+from compas_cgal.units import WorldXY
 from compas_cgal.toolpath import OperationType
 
 OUTER = (

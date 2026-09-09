@@ -18,10 +18,10 @@ from benchmarks.held_figure5_path import _paper_candidate
 from benchmarks.held_figure5_raw_guide import GuideRunId
 from benchmarks.held_standard_placement import StandardPlacementFragmentationError
 from benchmarks.held_standard_placement import maximum_predecessor_engagement
-from compas_cgal.adaptive.motion import EngagementCap
-from compas_cgal.adaptive.units import Point2
-from compas_cgal.adaptive.units import ToolRadius
-from compas_cgal.adaptive.units import WorldXY
+from compas_cgal.motion import EngagementCap
+from compas_cgal.units import Point2
+from compas_cgal.units import ToolRadius
+from compas_cgal.units import WorldXY
 
 
 class InvalidBoundarySpacingInputError(BenchmarkError):

@@ -16,11 +16,11 @@ from benchmarks.held_reference_geometry import project_boundary
 from benchmarks.held_reference_geometry import reconstruct_cubic
 from benchmarks.held_reference_geometry import reconstruct_cubic_certified
 from benchmarks.held_reference_geometry import reconstruct_source_path
-from compas_cgal.adaptive.units import Millimetre
-from compas_cgal.adaptive.units import Point2
-from compas_cgal.adaptive.units import Radian
-from compas_cgal.adaptive.units import ToolRadius
-from compas_cgal.adaptive.units import WorldXY
+from compas_cgal.units import Millimetre
+from compas_cgal.units import Point2
+from compas_cgal.units import Radian
+from compas_cgal.units import ToolRadius
+from compas_cgal.units import WorldXY
 
 pdf_start = assert_type(PdfPoint2.build(1.0, 0.0), PdfPoint2)
 pdf_end = assert_type(PdfPoint2.build([0.0, 1.0]), PdfPoint2)

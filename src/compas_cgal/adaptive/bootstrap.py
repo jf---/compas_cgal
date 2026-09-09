@@ -40,10 +40,10 @@ from compas_cgal.adaptive.replay_trace import ReplayLateralWitness
 from compas_cgal.adaptive.stock_area import DepletionWitness
 from compas_cgal.adaptive.stock_area import Stock2Area
 from compas_cgal.adaptive.traversal import MatTraversalState
-from compas_cgal.adaptive.units import Point2
-from compas_cgal.adaptive.units import WorldXY
 from compas_cgal.stock import Stock
 from compas_cgal.toolpath import OperationType
+from compas_cgal.units import Point2
+from compas_cgal.units import WorldXY
 
 _DIGEST_SIZE = hashlib.sha256().digest_size
 

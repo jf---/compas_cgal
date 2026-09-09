@@ -6,7 +6,7 @@ from dataclasses import replace
 import pytest
 
 from compas_cgal import _stock_2
-from compas_cgal.adaptive.units import Radian
+from compas_cgal.units import Radian
 from compas_cgal.engagement_audit.errors import InvalidMeasuredOperationAuditError
 from compas_cgal.engagement_audit.errors import InvalidMotionVerdictError
 from compas_cgal.engagement_audit.errors import InvalidNonEngagingOperationAuditError

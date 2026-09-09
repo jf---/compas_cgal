@@ -12,15 +12,15 @@ from compas_cgal import _stock_2
 from compas_cgal.adaptive import motion_oracle_cache
 from compas_cgal.adaptive.errors import EngagementCapExceededError
 from compas_cgal.adaptive.errors import UnresolvedMotionEventError
-from compas_cgal.adaptive.motion import EngagementCap
-from compas_cgal.adaptive.motion import ExactCircleMotion
-from compas_cgal.adaptive.motion import ExactSegmentMotion
+from compas_cgal.motion import EngagementCap
+from compas_cgal.motion import ExactCircleMotion
+from compas_cgal.motion import ExactSegmentMotion
 from compas_cgal.adaptive.motion_certificate import MotionCertifier
 from compas_cgal.adaptive.stock_area import Stock2Area
-from compas_cgal.adaptive.units import Point2
-from compas_cgal.adaptive.units import ToolRadius
-from compas_cgal.adaptive.units import Vector2
-from compas_cgal.adaptive.units import WorldXY
+from compas_cgal.units import Point2
+from compas_cgal.units import ToolRadius
+from compas_cgal.units import Vector2
+from compas_cgal.units import WorldXY
 from compas_cgal.toolpath import OperationType
 
 SQUARE = np.array(

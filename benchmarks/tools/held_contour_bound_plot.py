@@ -14,7 +14,7 @@ from benchmarks.held_figure5_boundary_path import Figure5BoundaryTransition
 from benchmarks.held_figure5_boundary_path import Figure5CounterclockwiseCircle
 from benchmarks.held_reference_cases import HeldReferenceCase
 from benchmarks.tools.held_toolpath_progress import _draw_motion
-from compas_cgal.adaptive.units import Radian
+from compas_cgal.units import Radian
 
 
 class InvalidContourBoundPlotError(ValueError):

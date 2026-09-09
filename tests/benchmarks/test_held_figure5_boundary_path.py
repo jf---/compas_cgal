@@ -15,11 +15,11 @@ from benchmarks.held_figure5_raw_guide import build_distance_admissible_hypothes
 from benchmarks.held_figure5_raw_guide import build_figure5_raw_guide
 from benchmarks.held_reference_cases import load_held_reference_case
 from benchmarks.held_reference_figures import figure7_inward_offset
-from compas_cgal.adaptive.units import GuideRadius
-from compas_cgal.adaptive.units import Millimetre
-from compas_cgal.adaptive.units import Point2
-from compas_cgal.adaptive.units import ToolRadius
-from compas_cgal.adaptive.units import WorldXY
+from compas_cgal.units import GuideRadius
+from compas_cgal.units import Millimetre
+from compas_cgal.units import Point2
+from compas_cgal.units import ToolRadius
+from compas_cgal.units import WorldXY
 
 
 def _point(x: float, y: float) -> Point2[WorldXY]:

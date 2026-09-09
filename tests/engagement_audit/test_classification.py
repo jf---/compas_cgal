@@ -9,9 +9,9 @@ from compas.geometry import Frame
 from compas.geometry import Line
 
 from compas_cgal import _stock_2
-from compas_cgal.adaptive.units import ClearanceZ
-from compas_cgal.adaptive.units import CutPlane
-from compas_cgal.adaptive.units import CutZ
+from compas_cgal.units import ClearanceZ
+from compas_cgal.units import CutPlane
+from compas_cgal.units import CutZ
 from compas_cgal.engagement_audit.classification import classify_operation
 from compas_cgal.engagement_audit.errors import ContradictoryOperationRoleError
 from compas_cgal.engagement_audit.errors import ContradictoryOperationOrientationError

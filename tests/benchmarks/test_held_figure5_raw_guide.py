@@ -16,9 +16,9 @@ from benchmarks.held_figure5_raw_guide import build_figure5_raw_guide
 from benchmarks.held_figure5_raw_guide import build_projection_admissible_hypothesis
 from benchmarks.held_figure5_raw_guide import distance_admissible_boundary_sites
 from benchmarks.held_reference_cases import load_held_reference_case
-from compas_cgal.adaptive.units import GuideRadius
-from compas_cgal.adaptive.units import Point2
-from compas_cgal.adaptive.units import WorldXY
+from compas_cgal.units import GuideRadius
+from compas_cgal.units import Point2
+from compas_cgal.units import WorldXY
 
 
 def _distance(first: Point2[WorldXY], second: Point2[WorldXY]) -> float:

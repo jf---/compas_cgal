@@ -29,10 +29,10 @@ from benchmarks.held_standard_placement import maximum_predecessor_engagement
 from benchmarks.tools.held_contour_contact_plot import render_contour_contacts
 from benchmarks.tools.held_stock_plot import render_circle_stock_prefix
 from compas_cgal import _coverage_2
-from compas_cgal.adaptive.motion import EngagementCap
-from compas_cgal.adaptive.units import Millimetre
-from compas_cgal.adaptive.units import Point2
-from compas_cgal.adaptive.units import WorldXY
+from compas_cgal.motion import EngagementCap
+from compas_cgal.units import Millimetre
+from compas_cgal.units import Point2
+from compas_cgal.units import WorldXY
 
 TURN_DISPLAY_SAMPLES = 96  # Display resolution only; no geometric decisions.
 PATH_COLOR = "#087e8b"

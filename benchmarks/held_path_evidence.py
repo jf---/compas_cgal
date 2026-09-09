@@ -38,11 +38,11 @@ from benchmarks.units import closed_unit_fraction
 from benchmarks.units import operation_index
 from benchmarks.units import seconds_value
 from benchmarks.units import square_millimetres_value
-from compas_cgal.adaptive.units import Millimetre
-from compas_cgal.adaptive.units import Point2
-from compas_cgal.adaptive.units import WorldXY
 from compas_cgal.engagement import EngagementReport
 from compas_cgal.engagement import OperationEngagement
+from compas_cgal.units import Millimetre
+from compas_cgal.units import Point2
+from compas_cgal.units import WorldXY
 
 RecordT = TypeVar("RecordT")
 ZERO_COUNT = 0

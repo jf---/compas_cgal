@@ -11,7 +11,7 @@ from benchmarks.held_figure5_raw_guide import build_held_reference_raw_guide
 from benchmarks.held_reference_cases import load_held_reference_case
 from benchmarks.held_reference_figures import figure7_inward_offset
 from benchmarks.held_standard_placement import maximum_predecessor_engagement
-from compas_cgal.adaptive.motion import EngagementCap
+from compas_cgal.motion import EngagementCap
 
 
 def test_figure8_upper_emits_connected_capped_standard_draft() -> None:

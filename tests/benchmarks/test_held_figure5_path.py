@@ -15,12 +15,12 @@ from benchmarks.held_figure5_raw_guide import ProjectionAdmissibleBoundaryHypoth
 from benchmarks.held_figure5_raw_guide import ProjectionBoundarySegmentId
 from benchmarks.held_figure5_raw_guide import ProjectionBoundarySite
 from benchmarks.held_figure5_raw_guide import ProjectionBoundaryVertexId
-from compas_cgal.adaptive.motion import EngagementCap
-from compas_cgal.adaptive.units import GuideRadius
-from compas_cgal.adaptive.units import Millimetre
-from compas_cgal.adaptive.units import Point2
-from compas_cgal.adaptive.units import ToolRadius
-from compas_cgal.adaptive.units import WorldXY
+from compas_cgal.motion import EngagementCap
+from compas_cgal.units import GuideRadius
+from compas_cgal.units import Millimetre
+from compas_cgal.units import Point2
+from compas_cgal.units import ToolRadius
+from compas_cgal.units import WorldXY
 
 
 def _point(x: float, y: float) -> Point2[WorldXY]:

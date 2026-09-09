@@ -18,7 +18,6 @@ from compas_cgal.adaptive.canonical import encode_integer
 from compas_cgal.adaptive.canonical import encode_tagged_union
 from compas_cgal.adaptive.identity import IdentityDigest
 from compas_cgal.adaptive.motion_oracle_cache import NativeMotionVerdict
-from compas_cgal.adaptive.units import Radian
 from compas_cgal.engagement_audit.digests import AuthenticatedOperationDigest
 from compas_cgal.engagement_audit.digests import NativeMotionDigest
 from compas_cgal.engagement_audit.errors import InvalidAuthenticatedLateralOperationError
@@ -27,6 +26,7 @@ from compas_cgal.engagement_audit.errors import InvalidAuthenticatedPlungeOperat
 from compas_cgal.engagement_audit.errors import InvalidMeasuredOperationAuditError
 from compas_cgal.engagement_audit.errors import InvalidMotionVerdictError
 from compas_cgal.engagement_audit.errors import InvalidNonEngagingOperationAuditError
+from compas_cgal.units import Radian
 
 MEASURED_OPERATION_AUDIT_VERSION: Final[bytes] = b"measured-operation-audit-v1"
 NON_ENGAGING_OPERATION_AUDIT_VERSION: Final[bytes] = b"non-engaging-operation-audit-v1"

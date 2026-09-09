@@ -46,9 +46,9 @@ from benchmarks.performance_record import build_identity
 from benchmarks.performance_record import machine_identity
 from benchmarks.performance_record import time_factor
 from benchmarks.tools.held_toolpath_progress import _containment_report
-from compas_cgal.adaptive.motion import EngagementCap
-from compas_cgal.adaptive.units import Point2
-from compas_cgal.adaptive.units import WorldXY
+from compas_cgal.motion import EngagementCap
+from compas_cgal.units import Point2
+from compas_cgal.units import WorldXY
 
 SCHEMA_VERSION = 1
 BASELINE_PATH = REPOSITORY / "benchmarks/results/held_toolpath_baseline.json"
@@ -143,7 +143,9 @@ class _Stages:
         self.seconds[stage] = time.perf_counter() - self._started
 
 
-def _metrics(case: HeldReferenceCase, circles: tuple[Figure5CounterclockwiseCircle, ...], transitions: tuple[Figure5BoundaryTransition, ...], boundary: tuple[Point2[WorldXY], ...]) -> ToolpathMetrics:
+def _metrics(
+    case: HeldReferenceCase, circles: tuple[Figure5CounterclockwiseCircle, ...], transitions: tuple[Figure5BoundaryTransition, ...], boundary: tuple[Point2[WorldXY], ...]
+) -> ToolpathMetrics:
     length = sum(2 * math.pi * float(circle.radius.value) for circle in circles)
     for transition in transitions:
         samples = transition.samples
@@ -187,21 +189,37 @@ def figure5_refined(validate: bool = False) -> WorkloadRun:
     """Figure 5 standard-model draft: publisher-start polygon proposal, corner-aware engagement refinement."""
     case = load_held_reference_case("figure5")
     stages = _Stages()
-    stages.start(); guide = build_figure5_raw_guide(case); stages.stop("guide")
-    stages.start(); components = figure7_inward_offset(case).components; stages.stop("offset")
-    stages.start(); result = build_figure5_approximate_path(guide, components); stages.stop("initial")
+    stages.start()
+    guide = build_figure5_raw_guide(case)
+    stages.stop("guide")
+    stages.start()
+    components = figure7_inward_offset(case).components
+    stages.stop("offset")
+    stages.start()
+    result = build_figure5_approximate_path(guide, components)
+    stages.stop("initial")
     cap = EngagementCap.build(math.radians(float(case.tea_cap)))
-    stages.start(); refined = refine_figure5_engagement(result.path.circles, components[0], case.tool_radius, cap); stages.stop("refine")
-    stages.start(); transitions = _connectors(components[0], refined.circles); stages.stop("connectors")
+    stages.start()
+    refined = refine_figure5_engagement(result.path.circles, components[0], case.tool_radius, cap)
+    stages.stop("refine")
+    stages.start()
+    transitions = _connectors(components[0], refined.circles)
+    stages.stop("connectors")
     return _finish("figure5_refined", case, refined.circles, transitions, components[0], stages, validate)
 
 
 def _figure8(name: str, case_name: str, *, spacing: str, qualify_contacts: bool, corner_approaches: bool, validate: bool) -> WorkloadRun:
     case = load_held_reference_case(case_name)
     stages = _Stages()
-    stages.start(); guide = build_held_reference_raw_guide(case); stages.stop("guide")
-    stages.start(); components = figure7_inward_offset(case).components; stages.stop("offset")
-    stages.start(); result = build_held_reference_path(guide, components, qualify_contacts=qualify_contacts); stages.stop("initial")
+    stages.start()
+    guide = build_held_reference_raw_guide(case)
+    stages.stop("guide")
+    stages.start()
+    components = figure7_inward_offset(case).components
+    stages.stop("offset")
+    stages.start()
+    result = build_held_reference_path(guide, components, qualify_contacts=qualify_contacts)
+    stages.stop("initial")
     cap = EngagementCap.build(math.radians(float(case.tea_cap)))
     stages.start()
     if spacing == "boundary":
@@ -209,7 +227,9 @@ def _figure8(name: str, case_name: str, *, spacing: str, qualify_contacts: bool,
     else:
         refined = refine_figure5_engagement(result.path.circles, components[0], case.tool_radius, cap, corner_approaches=corner_approaches)
     stages.stop("refine")
-    stages.start(); transitions = _connectors(components[0], refined.circles); stages.stop("connectors")
+    stages.start()
+    transitions = _connectors(components[0], refined.circles)
+    stages.stop("connectors")
     return _finish(name, case, refined.circles, transitions, components[0], stages, validate)
 
 
@@ -282,18 +302,66 @@ def compare(current: ToolpathBenchmark, baseline: ToolpathBenchmark, ceilings: M
             if current_value != recorded_value:
                 findings.append(Finding(name, kind, current_value, recorded_value, f"{name}: {kind} {current_value} differs from baseline {recorded_value}."))
         if abs(now.path_length_mm - was.path_length_mm) > REPORTED_LENGTH_TOLERANCE_MM:
-            findings.append(Finding(name, "path_length", now.path_length_mm, was.path_length_mm, f"{name}: path length {now.path_length_mm:.6f} mm differs from baseline {was.path_length_mm:.6f} mm."))
+            findings.append(
+                Finding(
+                    name,
+                    "path_length",
+                    now.path_length_mm,
+                    was.path_length_mm,
+                    f"{name}: path length {now.path_length_mm:.6f} mm differs from baseline {was.path_length_mm:.6f} mm.",
+                )
+            )
         if abs(now.max_engagement_deg - was.max_engagement_deg) > REPORTED_ANGLE_TOLERANCE_DEG:
-            findings.append(Finding(name, "max_engagement", now.max_engagement_deg, was.max_engagement_deg, f"{name}: max engagement {now.max_engagement_deg:.6f} deg differs from baseline {was.max_engagement_deg:.6f} deg."))
+            findings.append(
+                Finding(
+                    name,
+                    "max_engagement",
+                    now.max_engagement_deg,
+                    was.max_engagement_deg,
+                    f"{name}: max engagement {now.max_engagement_deg:.6f} deg differs from baseline {was.max_engagement_deg:.6f} deg.",
+                )
+            )
         if now.containment_rejections != was.containment_rejections:
-            findings.append(Finding(name, "containment_rejections", now.containment_rejections, was.containment_rejections, f"{name}: containment rejections {now.containment_rejections} differ from baseline {was.containment_rejections}."))
+            findings.append(
+                Finding(
+                    name,
+                    "containment_rejections",
+                    now.containment_rejections,
+                    was.containment_rejections,
+                    f"{name}: containment rejections {now.containment_rejections} differ from baseline {was.containment_rejections}.",
+                )
+            )
         if now.unresolved_engagements != was.unresolved_engagements:
-            findings.append(Finding(name, "unresolved_engagements", now.unresolved_engagements, was.unresolved_engagements, f"{name}: unresolved engagements {now.unresolved_engagements} differ from baseline {was.unresolved_engagements}."))
+            findings.append(
+                Finding(
+                    name,
+                    "unresolved_engagements",
+                    now.unresolved_engagements,
+                    was.unresolved_engagements,
+                    f"{name}: unresolved engagements {now.unresolved_engagements} differ from baseline {was.unresolved_engagements}.",
+                )
+            )
         bound = recorded.generation_seconds * factor
         if present.generation_seconds > bound:
-            findings.append(Finding(name, "generation_time", present.generation_seconds, bound, f"{name}: generation {present.generation_seconds:.2f} s > {factor}x baseline {recorded.generation_seconds:.2f} s ({regime})."))
+            findings.append(
+                Finding(
+                    name,
+                    "generation_time",
+                    present.generation_seconds,
+                    bound,
+                    f"{name}: generation {present.generation_seconds:.2f} s > {factor}x baseline {recorded.generation_seconds:.2f} s ({regime}).",
+                )
+            )
         if present.generation_seconds > ceilings[name]:
-            findings.append(Finding(name, "absolute_ceiling", present.generation_seconds, ceilings[name], f"{name}: generation {present.generation_seconds:.2f} s exceeds the {ceilings[name]} s ceiling."))
+            findings.append(
+                Finding(
+                    name,
+                    "absolute_ceiling",
+                    present.generation_seconds,
+                    ceilings[name],
+                    f"{name}: generation {present.generation_seconds:.2f} s exceeds the {ceilings[name]} s ceiling.",
+                )
+            )
     return findings
 
 
@@ -312,7 +380,9 @@ def summary_lines(benchmark: ToolpathBenchmark) -> list[str]:
         m = run.metrics
         stages = " ".join(f"{stage} {seconds:.2f}" for stage, seconds in run.stage_seconds.items())
         validation = "" if run.validation_seconds is None else f"  validation {run.validation_seconds:.1f} s"
-        lines.append(f"{name:<44} {run.generation_seconds:8.2f} s [{stages}]  circles {m.circles:>5}  connectors {m.connectors:>5}  length {m.path_length_mm:12.3f} mm  max eng {m.max_engagement_deg:8.4f} deg  rejections {m.containment_rejections}{validation}")
+        lines.append(
+            f"{name:<44} {run.generation_seconds:8.2f} s [{stages}]  circles {m.circles:>5}  connectors {m.connectors:>5}  length {m.path_length_mm:12.3f} mm  max eng {m.max_engagement_deg:8.4f} deg  rejections {m.containment_rejections}{validation}"
+        )
     return lines
 
 

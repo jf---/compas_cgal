@@ -14,14 +14,14 @@ from compas_cgal.adaptive.errors import IncompletePocketCoverageError
 from compas_cgal.adaptive.errors import InvalidCoverageCertificateError
 from compas_cgal.adaptive.errors import InvalidCoverageGeometryError
 from compas_cgal.adaptive.errors import InvalidCoverageSweepError
-from compas_cgal.adaptive.motion import ExactCircleMotion
-from compas_cgal.adaptive.motion import ExactSegmentMotion
+from compas_cgal.motion import ExactCircleMotion
+from compas_cgal.motion import ExactSegmentMotion
 from compas_cgal.adaptive.reachable_domain import ReachableDomain
-from compas_cgal.adaptive.units import EntryRadius
-from compas_cgal.adaptive.units import Point2
-from compas_cgal.adaptive.units import ToolRadius
-from compas_cgal.adaptive.units import Vector2
-from compas_cgal.adaptive.units import WorldXY
+from compas_cgal.units import EntryRadius
+from compas_cgal.units import Point2
+from compas_cgal.units import ToolRadius
+from compas_cgal.units import Vector2
+from compas_cgal.units import WorldXY
 from compas_cgal.stock import Stock
 
 

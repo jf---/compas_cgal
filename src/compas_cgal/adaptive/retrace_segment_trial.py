@@ -5,14 +5,14 @@ from typing import TypeAlias
 from compas_cgal.adaptive.containment import GougeContainment
 from compas_cgal.adaptive.coverage import CoverageLedger
 from compas_cgal.adaptive.errors import InvalidRetraceSegmentOperationError
-from compas_cgal.adaptive.motion import EngagementCap
 from compas_cgal.adaptive.motion_certificate import MotionCertifier
 from compas_cgal.adaptive.operation import AdvanceSegmentOperation
 from compas_cgal.adaptive.operation import RetraceSegmentOperation
 from compas_cgal.adaptive.policy import DepletionPolicy
 from compas_cgal.adaptive.replay_trace import ReplayLateralWitness
 from compas_cgal.adaptive.stock_area import Stock2Area
-from compas_cgal.adaptive.units import ToolRadius
+from compas_cgal.motion import EngagementCap
+from compas_cgal.units import ToolRadius
 
 SweptPrefixSegmentOperation: TypeAlias = AdvanceSegmentOperation | RetraceSegmentOperation
 

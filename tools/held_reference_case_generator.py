@@ -25,10 +25,10 @@ from benchmarks.held_reference_geometry import SourcePrimitive
 from benchmarks.held_reference_geometry import SourceToWorld
 from benchmarks.held_reference_geometry import project_boundary
 from benchmarks.held_reference_geometry import reconstruct_source_path
-from compas_cgal.adaptive.units import Millimetre
-from compas_cgal.adaptive.units import Point2
-from compas_cgal.adaptive.units import ToolRadius
-from compas_cgal.adaptive.units import WorldXY
+from compas_cgal.units import Millimetre
+from compas_cgal.units import Point2
+from compas_cgal.units import ToolRadius
+from compas_cgal.units import WorldXY
 from tools.held_reference_extractor import FIGURE_CROPS
 from tools.held_reference_extractor import ExtractedCase
 from tools.held_reference_extractor import FigureCrop

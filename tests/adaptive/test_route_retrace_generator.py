@@ -18,7 +18,7 @@ from compas_cgal.adaptive.generator import GenerationContinuation
 from compas_cgal.adaptive.generator import materialize_active_candidate_family
 from compas_cgal.adaptive.generator import TraversalCommit
 from compas_cgal.adaptive.identity import IdentityDigest
-from compas_cgal.adaptive.motion import ExactSegmentMotion
+from compas_cgal.motion import ExactSegmentMotion
 from compas_cgal.adaptive.motion_certificate import MotionCertifier
 from compas_cgal.adaptive.motion_certificate import SWEPT_PREFIX_MOTION_STRATA
 from compas_cgal.adaptive.motion_certificate import SweptPrefixMotionWitness

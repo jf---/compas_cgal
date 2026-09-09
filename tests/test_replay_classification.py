@@ -3,7 +3,7 @@
 import pytest
 from compas.tolerance import TOL
 
-from compas_cgal.adaptive.units import Millimetre
+from compas_cgal.units import Millimetre
 from compas_cgal.replay_classification import CutPlaneRampError
 from compas_cgal.replay_classification import OffPlaneReplayCurveError
 from compas_cgal.replay_classification import classify_line_replay

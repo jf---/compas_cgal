@@ -10,16 +10,16 @@ from compas_cgal import _medial_axis_2
 from compas_cgal.adaptive.canonical import ExactRationalV1
 from compas_cgal.adaptive.canonical import CanonicalRingV1
 from compas_cgal.adaptive.medial_axis import MedialAxis
-from compas_cgal.adaptive.motion import EngagementCap
+from compas_cgal.motion import EngagementCap
 from compas_cgal.adaptive.policy import ACTIVE_PASSAGE_STATES
 from compas_cgal.adaptive.policy import NeckPolicy
 from compas_cgal.adaptive.policy import PassageState
-from compas_cgal.adaptive.units import ChordBound
-from compas_cgal.adaptive.units import Point2
-from compas_cgal.adaptive.units import Spacing
-from compas_cgal.adaptive.units import SquaredMillimetre
-from compas_cgal.adaptive.units import ToolRadius
-from compas_cgal.adaptive.units import WorldXY
+from compas_cgal.units import ChordBound
+from compas_cgal.units import Point2
+from compas_cgal.units import Spacing
+from compas_cgal.units import SquaredMillimetre
+from compas_cgal.units import ToolRadius
+from compas_cgal.units import WorldXY
 
 L_SHAPE = np.asarray(
     (

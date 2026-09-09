@@ -59,9 +59,9 @@ from compas_cgal.adaptive.canonical import encode_tagged_union
 from compas_cgal.adaptive.errors import InvalidCapRefutationError
 from compas_cgal.adaptive.errors import InvalidStationLadderError
 from compas_cgal.adaptive.identity import IdentityDigest
-from compas_cgal.adaptive.motion import EngagementCap
-from compas_cgal.adaptive.motion import ExactSegmentMotion
-from compas_cgal.adaptive.units import ToolRadius
+from compas_cgal.motion import EngagementCap
+from compas_cgal.motion import ExactSegmentMotion
+from compas_cgal.units import ToolRadius
 
 CAP_REFUTATION_SCHEMA_VERSION: Final[bytes] = b"cap-refutation-schema-v1"
 

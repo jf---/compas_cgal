@@ -12,10 +12,10 @@ from benchmarks.held_figure5_raw_guide import ProjectionBoundarySite
 from benchmarks.held_reference_contacts import MissingReferenceContactRunError
 from benchmarks.held_reference_contacts import qualify_reference_contacts
 from compas_cgal import _circle_geometry_2
-from compas_cgal.adaptive.units import GuideRadius
-from compas_cgal.adaptive.units import Millimetre
-from compas_cgal.adaptive.units import Point2
-from compas_cgal.adaptive.units import WorldXY
+from compas_cgal.units import GuideRadius
+from compas_cgal.units import Millimetre
+from compas_cgal.units import Point2
+from compas_cgal.units import WorldXY
 
 
 BOUNDARY = tuple(Point2[WorldXY].build(x, y) for x, y in ((0, 0), (4, 0), (4, 4), (0, 4)))

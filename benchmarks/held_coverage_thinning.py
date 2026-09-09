@@ -15,12 +15,12 @@ from benchmarks.held_figure5_boundary_path import Figure5CounterclockwiseCircle
 from benchmarks.held_figure5_raw_guide import GuideRunId
 from benchmarks.held_motion_coverage import InvalidCoverageMotionError
 from compas_cgal import _stock_2
-from compas_cgal.adaptive.motion import EngagementCap
-from compas_cgal.adaptive.units import Millimetre
-from compas_cgal.adaptive.units import Point2
-from compas_cgal.adaptive.units import Radian
-from compas_cgal.adaptive.units import ToolRadius
-from compas_cgal.adaptive.units import WorldXY
+from compas_cgal.motion import EngagementCap
+from compas_cgal.units import Millimetre
+from compas_cgal.units import Point2
+from compas_cgal.units import Radian
+from compas_cgal.units import ToolRadius
+from compas_cgal.units import WorldXY
 
 
 class UnqualifiedDenseSourceError(BenchmarkError):

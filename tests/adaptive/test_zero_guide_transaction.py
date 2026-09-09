@@ -22,8 +22,8 @@ from compas_cgal.adaptive.errors import StaleZeroGuideTransactionError
 from compas_cgal.adaptive.generation_state import GenerationState
 from compas_cgal.adaptive.generation_state import TraversalCursorState
 from compas_cgal.adaptive.generator import advance_active_candidate_family
-from compas_cgal.adaptive.motion import EngagementCap
-from compas_cgal.adaptive.motion import ExactSegmentMotion
+from compas_cgal.motion import EngagementCap
+from compas_cgal.motion import ExactSegmentMotion
 from compas_cgal.adaptive.motion_certificate import MotionCertifier
 from compas_cgal.adaptive.motion_certificate import MotionWitness
 from compas_cgal.adaptive.motion_certificate import SweptPrefixMotionWitness
@@ -42,9 +42,9 @@ from compas_cgal.adaptive.stock_area import DepletionWitness
 from compas_cgal.adaptive.stock_area import Stock2Area
 from compas_cgal.adaptive.transaction import CandidateEvaluator
 from compas_cgal.adaptive.transaction import ZeroGuideLinkTransaction
-from compas_cgal.adaptive.units import Point2
-from compas_cgal.adaptive.units import ToolRadius
-from compas_cgal.adaptive.units import WorldXY
+from compas_cgal.units import Point2
+from compas_cgal.units import ToolRadius
+from compas_cgal.units import WorldXY
 from tests.adaptive.task13f_fixture import Task13FFixture
 
 
