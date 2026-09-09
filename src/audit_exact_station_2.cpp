@@ -1,4 +1,5 @@
 #include "audit_certification_2.h"
+#include "exact_cap_certificate_2.h"
 #include "engagement_2.h"
 #include "exact/one_root.h"
 
@@ -19,77 +20,6 @@ namespace {
 
 using FT = Epeck::FT;
 using CoordNT = GpsPoint::CoordNT;
-
-struct RadPoint2 {
-    FT x0;
-    FT x1;
-    FT y0;
-    FT y1;
-    FT root;
-};
-
-RadPoint2 radial_point(const GpsPoint& point)
-{
-    const CoordNT& x = point.x();
-    const CoordNT& y = point.y();
-    const ExactOneRootPoint2 decomposition =
-        decompose_exact_one_root_point(point);
-    return {
-        x.a0(),
-        x.is_extended() ? x.a1() : FT(0),
-        y.a0(),
-        y.is_extended() ? y.a1() : FT(0),
-        decomposition.root(),
-    };
-}
-
-bool run_exceeds_cap(
-    const GpsPoint& start,
-    const GpsPoint& end,
-    const EPoint& center,
-    const FT& cap_chord_ratio,
-    const FT& squared_threshold)
-{
-    if (start == end) {
-        return true;
-    }
-    const RadPoint2 p = radial_point(start);
-    const RadPoint2 q = radial_point(end);
-    const FT px = p.x0 - center.x();
-    const FT py = p.y0 - center.y();
-    const FT qx = q.x0 - center.x();
-    const FT qy = q.y0 - center.y();
-    const CGAL::Sign orientation = compas_cgal::exact::sign_mixed_radical(
-        px * qy - py * qx,
-        p.x1 * qy - p.y1 * qx,
-        px * q.y1 - py * q.x1,
-        p.x1 * q.y1 - p.y1 * q.x1,
-        p.root,
-        q.root);
-    if (orientation == CGAL::NEGATIVE) {
-        return true;
-    }
-    if (orientation == CGAL::ZERO) {
-        return CGAL::compare(cap_chord_ratio, FT(4)) == CGAL::SMALLER;
-    }
-
-    const FT dx = q.x0 - p.x0;
-    const FT dy = q.y0 - p.y0;
-    const FT a = dx * dx + dy * dy
-        + (p.x1 * p.x1 + p.y1 * p.y1) * p.root
-        + (q.x1 * q.x1 + q.y1 * q.y1) * q.root;
-    const FT b = -FT(2) * (dx * p.x1 + dy * p.y1);
-    const FT c = FT(2) * (dx * q.x1 + dy * q.y1);
-    const FT d = -FT(2) * (p.x1 * q.x1 + p.y1 * q.y1);
-    return compas_cgal::exact::sign_mixed_radical(
-               a - squared_threshold,
-               b,
-               c,
-               d,
-               p.root,
-               q.root)
-        == CGAL::POSITIVE;
-}
 
 struct ExactRimArc2 {
     GpsPoint start;
@@ -262,7 +192,7 @@ std::vector<ExactRimArc2> pessimistic_exact_runs(
     std::vector<bool> gap_closed(count);
     std::size_t open_count = 0;
     for (std::size_t index = 0; index < count; ++index) {
-        gap_closed[index] = !run_exceeds_cap(
+        gap_closed[index] = !compas_cgal::cap::run_exceeds_cap(
             runs[index].end,
             runs[(index + 1) % count].start,
             center,
@@ -479,7 +409,7 @@ AuditExactStationClassification2 classify_audit_unguarded_station_exact(
         gap_close_ratio * tool_radius * tool_radius;
     for (const ExactRimArc2& run : pessimistic_exact_runs(
              runs, center, gap_close_ratio, squared_gap_threshold)) {
-        if (run_exceeds_cap(
+        if (compas_cgal::cap::run_exceeds_cap(
                 run.start,
                 run.end,
                 center,

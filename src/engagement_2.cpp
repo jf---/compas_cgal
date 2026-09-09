@@ -3,6 +3,7 @@
 #include "audit_policy_2.h"
 #include "stock_2.h"
 #include "exact/one_root.h"
+#include "exact_cap_certificate_2.h"
 
 #include <algorithm>
 #include <cmath>
@@ -24,78 +25,6 @@ namespace {
 
 using FT = Epeck::FT;
 using CoordNT = GpsPoint::CoordNT;
-
-// A cutter-circle point in rational coordinates over its single root:
-// (x0 + x1*sqrt(root), y0 + y1*sqrt(root)). CGAL builds every circle/line and
-// circle/circle intersection point with a single shared discriminant, so both
-// coordinates of one point share one root; a rational coordinate has root 0 and
-// a1 == 0. Distinct points may carry distinct roots (alpha for p, beta for q).
-struct RadPoint {
-    FT x0, x1, y0, y1, root;
-};
-
-RadPoint as_radpoint(const GpsPoint& p)
-{
-    const CoordNT& X = p.x();
-    const CoordNT& Y = p.y();
-    FT root(0), x1(0), y1(0);
-    if (X.is_extended()) { root = X.root(); x1 = X.a1(); }
-    if (Y.is_extended()) {
-        // Both coordinates extended -> CGAL guarantees the shared root.
-        CGAL_assertion(!X.is_extended() || Y.root() == root);
-        root = Y.root();
-        y1 = Y.a1();
-    }
-    return { X.a0(), x1, Y.a0(), y1, root };
-}
-
-// Exact cap certificate for one maximal engaged run with CCW endpoints p, q on
-// the cutter circle centred at (cx, cy). T = cap_chord_ratio * tool_radius^2 is
-// the exact squared-chord threshold. Returns true iff the run's angular extent
-// exceeds the cap.
-bool run_exceeds_cap(const GpsPoint& p, const GpsPoint& q, const FT& cx,
-                     const FT& cy, const FT& cap_chord_ratio, const FT& T)
-{
-    if (p == q) return true;   // closed loop: full 2*pi run exceeds any cap <= pi
-
-    const RadPoint P = as_radpoint(p);
-    const RadPoint Q = as_radpoint(q);
-
-    // orientation(center, p, q) = sign of the determinant of (p - center) and
-    // (q - center). Writing p - center = (ax + bx*sqrt(alpha), ay + by*sqrt(alpha))
-    // and q - center = (c + d*sqrt(beta), e + f*sqrt(beta)), the determinant is
-    // A + B*sqrt(alpha) + C*sqrt(beta) + D*sqrt(alpha*beta).
-    const FT ax = P.x0 - cx, bx = P.x1;
-    const FT ay = P.y0 - cy, by = P.y1;
-    const FT c = Q.x0 - cx, d = Q.x1;
-    const FT e = Q.y0 - cy, f = Q.y1;
-    const FT A = ax * e - ay * c;
-    const FT B = bx * e - by * c;
-    const FT C = ax * f - ay * d;
-    const FT D = bx * f - by * d;
-    const CGAL::Sign orient =
-        compas_cgal::exact::sign_mixed_radical(A, B, C, D, P.root, Q.root);
-
-    // CCW angle theta from p to q: orient > 0 <=> theta < pi, orient == 0 <=>
-    // theta == pi, orient < 0 <=> theta > pi.
-    if (orient == CGAL::NEGATIVE) return true;                 // theta > pi >= cap
-    if (orient == CGAL::ZERO) return cap_chord_ratio < FT(4);  // theta == pi
-
-    // theta < pi: chord grows monotonically, so exceeded <=> |pq|^2 > T. With
-    // p - q coordinates carrying both sqrt(alpha) and sqrt(beta), |pq|^2 expands
-    // to A2 + B2*sqrt(alpha) + C2*sqrt(beta) + D2*sqrt(alpha*beta).
-    const FT ex = Q.x0 - P.x0;
-    const FT ey = Q.y0 - P.y0;
-    const FT A2 = ex * ex + ey * ey
-                  + (P.x1 * P.x1 + P.y1 * P.y1) * P.root
-                  + (Q.x1 * Q.x1 + Q.y1 * Q.y1) * Q.root;
-    const FT B2 = -2 * (ex * P.x1 + ey * P.y1);
-    const FT C2 = 2 * (ex * Q.x1 + ey * Q.y1);
-    const FT D2 = -2 * (P.x1 * Q.x1 + P.y1 * Q.y1);
-    return compas_cgal::exact::sign_mixed_radical(A2 - T, B2, C2, D2, P.root,
-                                                  Q.root)
-           == CGAL::POSITIVE;
-}
 
 // One rim arc, CCW-normalized: the CCW sweep runs ccw_start -> ccw_end on the
 // cutter circle. `span` is the arc's angular extent in radians, a REPORTING
@@ -163,9 +92,10 @@ double rim_sub_arc_span(const GpsPoint& s, const GpsPoint& t, double cx, double 
 // run[(i+1)%n].ccw_start (for n == 1 the single gap is the run's complement).
 //
 // EXACTNESS. A gap is itself an arc with exact one-root endpoints; it is absorbed
-// iff its span does not exceed gamma, decided by run_exceeds_cap VERBATIM (the
-// identical exact orientation + squared-chord machinery the run cap uses) -- no
-// angle is ever summed. Absorbing gap[i] merges run[i] and run[(i+1)%n]; a chain
+// iff its span does not exceed gamma, decided by the same
+// compas_cgal::cap::run_exceeds_cap the run cap uses -- literally the one
+// definition, not a second copy of the same machinery -- so no angle is ever
+// summed. Absorbing gap[i] merges run[i] and run[(i+1)%n]; a chain
 // of runs joined by absorbed gaps is a SINGLE CCW arc from the chain's first
 // ccw_start to its last ccw_end (this is what keeps the whole construction exact:
 // the pessimistic run is one arc, so the same endpoint predicates apply directly
@@ -196,7 +126,7 @@ pessimistic_runs(const std::vector<Arc>& runs, const FT& cx, const FT& cy,
     for (std::size_t i = 0; i < n; ++i) {
         const GpsPoint& g_start = runs[i].ccw_end;
         const GpsPoint& g_end = runs[(i + 1) % n].ccw_start;
-        gap_closed[i] = !run_exceeds_cap(g_start, g_end, cx, cy, gap_close_ratio, T_gamma);
+        gap_closed[i] = !compas_cgal::cap::run_exceeds_cap(g_start, g_end, cx, cy, gap_close_ratio, T_gamma);
         if (!gap_closed[i]) ++open_count;
     }
 
@@ -321,7 +251,7 @@ EngagementSample finish_engagement(std::vector<Arc>& arcs, double cx, double cy,
     const FT cxf(cx), cyf(cy);
     for (const auto& [start, end] :
          pessimistic_runs(runs, cxf, cyf, gap_ratio_ft, T_gamma)) {
-        if (run_exceeds_cap(start, end, cxf, cyf, ratio_ft, T)) {
+        if (compas_cgal::cap::run_exceeds_cap(start, end, cxf, cyf, ratio_ft, T)) {
             out.cap_exceeded = true;
             break;
         }
