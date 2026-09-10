@@ -144,6 +144,7 @@ nav:
       - Booleans With Face Source: examples/example_booleans_with_face_source.md
       - CSG Drilled Rounded Cube: examples/example_boolean_difference_mesh_meshes.md
       - Geodesics: examples/example_geodesics.md
+      - Geodesics Exact: examples/example_geodesics_exact.md
       - Intersections: examples/example_intersections.md
       - Isolines: examples/example_isolines.md
       - Measure: examples/example_measure.md
