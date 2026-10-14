@@ -1,5 +1,8 @@
 # Number-Type Coherence — Stage 1 Implementation Plan
 
+> **status: landed** — `541b6ede` (one mixed-radical sign in `exact/one_root`). Superseded as active work by `2026-10-13-product-pipeline.md`.
+
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax.
 
 **Goal:** Converge the two divergent copies of `sign_mixed_radical` into one definition in `src/exact/one_root.*`, proving equivalence before the move rather than assuming it.

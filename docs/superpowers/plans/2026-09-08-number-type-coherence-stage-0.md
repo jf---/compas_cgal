@@ -1,5 +1,8 @@
 # Number-Type Coherence — Stage 0 Implementation Plan
 
+> **status: landed** — `1a108985` (exact attestation door). Superseded as active work by `2026-10-13-product-pipeline.md`.
+
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Land the `src/exact/` number-type vocabulary and its two doors, with a byte-stability contract proven against the existing implementation, changing no behaviour anywhere.

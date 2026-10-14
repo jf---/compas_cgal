@@ -1,5 +1,8 @@
 # Number-Type Coherence — Stage 3 Implementation Plan
 
+> **status: parked** — 2026-09-08 ruling: number-type stages 3–6 cut no metal. Only the attestation anchor test `fa1f53a3` landed. The active plan is `2026-10-13-product-pipeline.md`.
+
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Invert the canonical direction for `SegmentEventSource2` — the large string carrier — so the source stores `compas_cgal::exact::Rational` and *projects* the `exact-binary64-rational-v1` text; route `FullCircleEventSource2`'s two remaining private door copies through `exact::from_binary64` and `exact::to_canonical`; remove `exact::CanonicalRational::canonical_bytes()` after relocating the absolute anchor it holds; and give the outer `segment-event-source-v1` framing the absolute byte anchor it has never had.

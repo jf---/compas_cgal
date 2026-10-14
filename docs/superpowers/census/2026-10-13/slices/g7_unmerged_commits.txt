@@ -1,0 +1,84 @@
+# Commits on other branches that are NOT on codex/held-task5-continuation
+
+## jf/toolpath-redesign
+73d53729 2026-08-23 feat(engagement): adaptive arc certification on the swept-annulus guard
+f369b3df 2026-08-23 docs: due-diligence reviews, integration decision, fig6 plots
+c90a4fef 2026-08-23 docs: machining-quality track (tasks 29-35), pixi build rules
+48b9e08f 2026-08-22 fix(engagement): correct the slack derivation, guard the <=pi precondition
+148a49ad 2026-08-22 fix(engagement): enforce the shared-root precondition in release builds
+5c1d492a 2026-08-22 docs: ETH audit findings + 21-task remediation plan
+387bb7ef 2026-08-22 docs: harvest 2pi misreport is repaired at 3db92d6, not open
+f227dab2 2026-08-22 docs: the TEA certificate -- the false certificate and the swept-annulus guard
+3db92d64 2026-08-22 fix(engagement): sub-ulp rim sliver was reported as a full turn
+e446d035 2026-08-21 test(engagement): move the stations==1 witness from an assertion to the docstring
+03866fcc 2026-08-21 fix(engagement): rotation-invariant interior bound -- exact direction spans replace the axis-aligned box
+2e2422b5 2026-08-21 fix(engagement): exact swept-annulus guard replaces the false growth lemma
+c3bdef84 2026-08-21 test(engagement): separate witness liveness from certifier verdict in every red
+3c270cb5 2026-08-21 test(engagement): spiral rib -- the false certificate is generic, not a radius coincidence
+eee1c35b 2026-08-21 test(engagement): false TEA certificate FOUND -- rib of the tool's own radius
+ebb627d3 2026-08-21 test(engagement): falsification harness for the TEA growth bound (RED)
+728b6c82 2026-08-21 refactor(engagement): single compiled source of truth for the TEA growth guard
+92cedda2 2026-08-21 fix(toolpath): contracts for radial_clearance, radius bounds, clearance plane
+5c489fbd 2026-08-21 fix(stock): bound the disk-chain count; finiteness alone does not
+832765b0 2026-08-21 fix(stock): seal the exact-kernel seam on every Stock2 entry point
+2f983d8b 2026-08-21 fix(engagement): validate tool radius and coordinate finiteness at the exact seam
+34bddcc0 2026-08-21 fix(toolpath): dedup tessellator junctions at OUTPUT_DEDUP_TOL
+b2fa087e 2026-08-21 fix(toolpath): tessellator must carry a discontinuous op stream
+446daca5 2026-08-21 fix(toolpath): lift the unlinked traverse to clearance_z
+b0094cb6 2026-08-21 fix(toolpath): certify the implied traverse when link_paths is off
+2568453b 2026-08-21 fix(pixi): _editable-rebuild actually rebuilds
+d90e18b8 2026-08-20 fix(toolpath): mat_scale bounded to (0,1] — gouge-free holds by construction only there
+2af221cd 2026-08-20 docs(build): correct strtobool claim in strict-config override comment
+e333c46f 2026-08-20 build: scope lint gate to owned code, green it
+8b1d431e 2026-08-20 fix(build): scope strict-config to pixi, dedup probe, widen lint gate
+83b36ab1 2026-08-20 build: pixi manifest for jf/toolpath-redesign
+ebf0dcbd 2026-08-19 feat(bench): expose arrangement size and exact-rational digit growth
+4c058e33 2026-08-19 test(bench): exact congruence invariants via Pythagorean rotations
+6f404354 2026-08-19 feat(bench): analytic pocket families with closed-form clearance
+23a1de0a 2026-08-19 feat(bench): PocketSpec foundation with validated invariants
+33cbcb6d 2026-07-24 docs(engagement): mkdocs page for zone-query speedup + measured A/B
+
+## codex/held-reference-corpus
+a29ff8c6 2026-09-07 feat(toolpath): sweep standard Figure 6 paths
+274fd1a4 2026-09-07 feat(toolpath): add shared MATHSM traversal
+8ca2c9f6 2026-09-07 feat(toolpath): add contour-aware Figure 5 path
+7be75e0d 2026-09-07 feat(toolpath): replay engagement within motions
+4bf94eed 2026-09-06 docs(plan): close Figure 5 toolpath
+26c04d3f 2026-09-06 test(toolpath): enforce overlay freshness
+567da10d 2026-09-06 fix(toolpath): close Figure 5 review findings
+0a3cd8a8 2026-09-06 feat(toolpath): measure Figure 6 motion stream
+a662a9c3 2026-09-06 fix(toolpath): decode publisher turns geometrically
+4685653b 2026-09-06 fix(toolpath): resolve Figure 5 review gaps
+22ffc356 2026-09-06 docs(plan): record Figure 5 review gaps
+5b5ed867 2026-09-06 fix(toolpath): make Figure 5 path continuous
+0c792fc7 2026-09-06 docs(plan): reopen Figure 5 after review
+757b948c 2026-09-06 feat(toolpath): reproduce analytic Figure 5 path
+334c028b 2026-09-06 feat(toolpath): evaluate continuous MAT edges
+f90d1ce4 2026-09-06 fix(toolpath): remove false medial branches
+9db59ac5 2026-09-06 feat(benchmarks): measure Figure 6 planar paths
+266bfec6 2026-09-06 feat(toolpath): render independent Figure 5 path
+1dc71b8e 2026-09-06 docs(plan): focus continuous Figure 5 path
+07c87ce0 2026-09-06 feat(toolpath): add Figure 5 Voronoi guide
+
+## codex/stock-clone-ownership
+d0f32e8d 2026-09-21 fix(stock): retain cloned arrangement traits
+a29ff8c6 2026-09-07 feat(toolpath): sweep standard Figure 6 paths
+274fd1a4 2026-09-07 feat(toolpath): add shared MATHSM traversal
+8ca2c9f6 2026-09-07 feat(toolpath): add contour-aware Figure 5 path
+7be75e0d 2026-09-07 feat(toolpath): replay engagement within motions
+4bf94eed 2026-09-06 docs(plan): close Figure 5 toolpath
+26c04d3f 2026-09-06 test(toolpath): enforce overlay freshness
+567da10d 2026-09-06 fix(toolpath): close Figure 5 review findings
+0a3cd8a8 2026-09-06 feat(toolpath): measure Figure 6 motion stream
+a662a9c3 2026-09-06 fix(toolpath): decode publisher turns geometrically
+4685653b 2026-09-06 fix(toolpath): resolve Figure 5 review gaps
+22ffc356 2026-09-06 docs(plan): record Figure 5 review gaps
+5b5ed867 2026-09-06 fix(toolpath): make Figure 5 path continuous
+0c792fc7 2026-09-06 docs(plan): reopen Figure 5 after review
+757b948c 2026-09-06 feat(toolpath): reproduce analytic Figure 5 path
+334c028b 2026-09-06 feat(toolpath): evaluate continuous MAT edges
+f90d1ce4 2026-09-06 fix(toolpath): remove false medial branches
+9db59ac5 2026-09-06 feat(benchmarks): measure Figure 6 planar paths
+266bfec6 2026-09-06 feat(toolpath): render independent Figure 5 path
+1dc71b8e 2026-09-06 docs(plan): focus continuous Figure 5 path
+07c87ce0 2026-09-06 feat(toolpath): add Figure 5 Voronoi guide

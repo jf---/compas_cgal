@@ -1,5 +1,8 @@
 # Number-Type Coherence — Stage 2 Implementation Plan
 
+> **status: landed** — `003e144c` (station source carries exact rationals). Superseded as active work by `2026-10-13-product-pipeline.md`.
+
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Invert the canonical direction for `StationEventSource2` — the smallest of the string-carrier sources — so the source stores `compas_cgal::exact::Rational` and *projects* the `exact-rational-v1` text, with the `station-event-source-v1` bytes proven unmoved by an absolute literal that does not exist today.

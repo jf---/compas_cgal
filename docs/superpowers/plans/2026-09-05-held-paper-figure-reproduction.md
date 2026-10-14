@@ -1,8 +1,8 @@
 # Held Paper Figure Reproduction Plan
 
-> **status: in progress** - Task 8 whole-paper reproduction drafts is active.
-> Reuse the completed reference corpus and current Figure 5 draft. Task 7
-> performance tracking follows; full Task 5/6 acceptance remains open.
+> **status: parked** — behind `2026-10-13-product-pipeline.md` (2026-10-13). Held's
+> pockets join the gate in its Task 2.1; the analytic Held lap is the port source.
+> Prior status: Task 8 drafts active, Task 5/6 acceptance open.
 
 **Completion status (September 7, latest checkpoint):** Tasks 1–4 are completed
 diagnostic/draft milestones; they do not close the stricter Tasks 5–6 acceptance.
