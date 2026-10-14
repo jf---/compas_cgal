@@ -10,12 +10,40 @@ or tolerance downstream of the vertex arrays handed to `Stock2`.
 
 from __future__ import annotations
 
+import enum
+
 import numpy as np
 from compas.geometry import Polygon
 from compas.tolerance import TOL
 
 from compas_cgal import _stock_2  # type: ignore
 from compas_cgal.toolpath import InvalidPolygonError
+
+
+class SweepRemoval(enum.Enum):
+    """What one motion removes, bracketed exactly between two certified regions.
+
+    The replay subtracts an UNDER region (a subset of the true swept area); a
+    certified OVER region contains the true swept area. Both tests are exact
+    regularized interior intersections with the stock.
+
+    Attributes:
+        REMOVES: The replay's own region meets the stock's interior, so the
+            replay changes the stock.
+        WITHIN_BAND: The replay's region misses the stock but the over-region
+            meets it: any material the tool still cuts lies inside the certified
+            band, so neither other answer can be claimed.
+        NOTHING: Even the over-region misses the stock: the tool removes nothing.
+    """
+
+    REMOVES = "removes"
+    WITHIN_BAND = "within_band"
+    NOTHING = "nothing"
+
+
+def _sweep_removal(verdict: "_stock_2.SweepRemovalVerdict") -> SweepRemoval:
+    """Map the native verdict onto `SweepRemoval` by name (one vocabulary)."""
+    return SweepRemoval[verdict.name]
 
 
 def _polygon_to_ccw_vertices(polygon: Polygon) -> np.ndarray:
@@ -181,6 +209,167 @@ class Stock:
                 invariant, never a malformed input.
         """
         self._raw.subtract_capsule_quad(float(x0), float(y0), float(x1), float(y1), float(radius))
+
+    def subtract_line_sweep(self, x0: float, y0: float, x1: float, y1: float, radius: float) -> None:
+        """Remove the replay's model of the sweep along a segment: exact, or certified under.
+
+        The model is decided EXACTLY on the injected endpoints: when
+        ``dx**2 + dy**2`` is the square of a rational the capsule's side lines
+        are rational and the region removed IS the swept capsule. Otherwise it
+        is ``disk(A, r) | rect | disk(B, r)``: the end disks are exact (the
+        tool's endpoint positions are), and the rectangle has half-width ``h``
+        with ``(1 - 1e-4) r <= h <= r`` checked exactly, fixed by the
+        direction class. A plunge or the next motion's start at an endpoint
+        therefore meets nothing the model left; only a thin side band may
+        survive.
+
+        Args:
+            x0: X coordinate of the segment start (tool center).
+            y0: Y coordinate of the segment start (tool center).
+            x1: X coordinate of the segment end (tool center).
+            y1: Y coordinate of the segment end (tool center).
+            radius: Tool radius.
+
+        Raises:
+            NonFiniteCapsuleInputError: A coordinate or the radius is not finite.
+            InvalidLineSweepRadiusError: The radius is not positive.
+            LineSweepBandCertificateError: The rectangle's exact half-width left
+                its certified band -- a broken internal invariant.
+        """
+        self._raw.subtract_line_sweep(float(x0), float(y0), float(x1), float(y1), float(radius))
+
+    def subtract_line_sweep_local(self, x0: float, y0: float, x1: float, y1: float, radius: float) -> None:
+        """Remove the same region as `subtract_line_sweep`, by local arrangement surgery.
+
+        Args:
+            x0: X coordinate of the segment start (tool center).
+            y0: Y coordinate of the segment start (tool center).
+            x1: X coordinate of the segment end (tool center).
+            y1: Y coordinate of the segment end (tool center).
+            radius: Tool radius.
+
+        Raises:
+            NonFiniteCapsuleInputError: A coordinate or the radius is not finite.
+            InvalidLineSweepRadiusError: The radius is not positive.
+            LineSweepBandCertificateError: The rectangle's exact half-width left
+                its certified band.
+            LocalDepletionEscapedError: The flood escaped the region -- a broken
+                internal invariant.
+        """
+        self._raw.subtract_line_sweep_local(float(x0), float(y0), float(x1), float(y1), float(radius))
+
+    def subtract_circle_sweep(self, cx: float, cy: float, guide_radius: float, tool_radius: float) -> None:
+        """Remove the exact annulus a tool sweeps over one full turn of a guide circle.
+
+        The AUTHORED guide radius is injected exactly; the annulus is
+        ``[max(rho - r, 0), rho + r]`` formed in the exact kernel, a full disk
+        when ``rho <= r``.
+
+        Args:
+            cx: X coordinate of the guide centre.
+            cy: Y coordinate of the guide centre.
+            guide_radius: Authored guide radius ``rho``.
+            tool_radius: Tool radius ``r``.
+
+        Raises:
+            NonFiniteAnnulusInputError: A coordinate or radius is not finite.
+            InvalidAnnulusRadiiError: ``rho < 0`` or ``r <= 0``.
+        """
+        self._raw.subtract_circle_sweep(float(cx), float(cy), float(guide_radius), float(tool_radius))
+
+    def subtract_circle_sweep_local(self, cx: float, cy: float, guide_radius: float, tool_radius: float) -> None:
+        """Remove the same annulus as `subtract_circle_sweep`, by local arrangement surgery.
+
+        Args:
+            cx: X coordinate of the guide centre.
+            cy: Y coordinate of the guide centre.
+            guide_radius: Authored guide radius ``rho``.
+            tool_radius: Tool radius ``r``.
+
+        Raises:
+            NonFiniteAnnulusInputError: A coordinate or radius is not finite.
+            InvalidAnnulusRadiiError: ``rho < 0`` or ``r <= 0``.
+        """
+        self._raw.subtract_circle_sweep_local(float(cx), float(cy), float(guide_radius), float(tool_radius))
+
+    def line_sweep_removal(self, x0: float, y0: float, x1: float, y1: float, radius: float) -> SweepRemoval:
+        """What the line sweep would remove from this stock, without removing it.
+
+        Args:
+            x0: X coordinate of the segment start (tool center).
+            y0: Y coordinate of the segment start (tool center).
+            x1: X coordinate of the segment end (tool center).
+            y1: Y coordinate of the segment end (tool center).
+            radius: Tool radius.
+
+        Returns:
+            The exact three-valued verdict; never WITHIN_BAND for an exact
+            (Pythagorean or zero-length) motion.
+
+        Raises:
+            NonFiniteCapsuleInputError: A coordinate or the radius is not finite.
+            InvalidLineSweepRadiusError: The radius is not positive.
+        """
+        return _sweep_removal(self._raw.line_sweep_removal(float(x0), float(y0), float(x1), float(y1), float(radius)))
+
+    def circle_sweep_removal(self, cx: float, cy: float, guide_radius: float, tool_radius: float) -> SweepRemoval:
+        """What one full machining circle would remove from this stock, without removing it.
+
+        Args:
+            cx: X coordinate of the guide centre.
+            cy: Y coordinate of the guide centre.
+            guide_radius: Authored guide radius ``rho``.
+            tool_radius: Tool radius ``r``.
+
+        Returns:
+            REMOVES or NOTHING: the annulus is the swept region exactly.
+
+        Raises:
+            NonFiniteAnnulusInputError: A coordinate or radius is not finite.
+            InvalidAnnulusRadiiError: ``rho < 0`` or ``r <= 0``.
+        """
+        return _sweep_removal(self._raw.circle_sweep_removal(float(cx), float(cy), float(guide_radius), float(tool_radius)))
+
+    def can_remove_circle(
+        self,
+        previous: tuple[float, float, float],
+        current: tuple[float, float, float],
+        following: tuple[float, float, float],
+        connector_samples: np.ndarray,
+        tool_radius: float,
+    ) -> bool:
+        """Whether deleting the *current* loop provably loses no material.
+
+        Sufficient, not necessary: True means the material the current loop's
+        annulus meets is covered by the two neighbouring loops and the
+        preserved connector polyline (swept with `subtract_line_sweep`, which
+        never over-covers); False retains the loop without claiming a gap.
+
+        Args:
+            previous: ``(cx, cy, rho)`` of the preceding loop, world XY mm.
+            current: ``(cx, cy, rho)`` of the loop proposed for deletion.
+            following: ``(cx, cy, rho)`` of the succeeding loop.
+            connector_samples: ``(N, 2)`` world-XY polyline, ``N >= 2``, of the
+                route kept in place of the deleted loop.
+            tool_radius: Tool radius.
+
+        Returns:
+            True when the deletion is proved to preserve material.
+
+        Raises:
+            InvalidCircleRemovalInputError: Malformed samples, non-finite input,
+                a negative guide radius, or a non-positive tool radius.
+        """
+        samples = np.asarray(connector_samples, dtype=np.float64, order="C")
+        return bool(
+            self._raw.can_remove_circle(
+                (float(previous[0]), float(previous[1]), float(previous[2])),
+                (float(current[0]), float(current[1]), float(current[2])),
+                (float(following[0]), float(following[1]), float(following[2])),
+                samples,
+                float(tool_radius),
+            )
+        )
 
     def subtract_disk(self, cx: float, cy: float, radius: float) -> None:
         """Remove the disk swept by a tool of *radius* plunging at ``(cx, cy)``.

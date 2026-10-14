@@ -396,6 +396,54 @@ byte serialization and build attestation.
     original unit/content sign by factor signs according to multiplicity
     parity. Never reuse a zero-set-only canonical form as a signed predicate.
 
+### Case: is a segment's length rational? Ask the number type
+
+A capsule swept along `A → B` has rational side lines exactly when
+`|B − A|` is rational, i.e. when `dx² + dy²` is the square of a rational.
+That is a decision, so it is made on the exact value:
+`Fraction_traits<FT>::Decompose` gives the reduced `p/q`, and
+`Algebraic_structure_traits<Integer>::Is_square` on `p` and on `q` decides
+it (a reduced fraction is a square iff both terms are), returning the roots
+for `Compose` to rebuild `L` exactly (`src/stock_line_sweep_2.cpp`,
+`rational_square_root`). Axis-aligned and 3-4-5-type directions pass, and
+their capsule is built as an **equality**; nothing about `hypot` or
+`to_double` enters the decision.
+
+When the test fails the construction falls back to a *certified bound*, and
+its double construction parameters must be deterministic in the exact
+inputs: round `CGAL::exact(x)`, not the lazy `FT`, because a lazy number's
+`to_double` reads its interval, whose width depends on how the value was
+computed. Two equal rationals built along different DAGs can round to
+different doubles — and two collinear cuts then get rectangles of
+different widths, so their certified bands no longer nest.
+
+### Deciding on a model that is only a bound: bracket it
+
+An exact predicate on an *inexact model* is not an exact verdict about the
+thing modelled. For a non-Pythagorean direction the replay removes the exact
+end disks and a rectangle that under-covers the true capsule's sides by up to
+`1e-4 r`. Asking "does that region meet the stock?" decides the *model*
+exactly and the *tool* not at all. The honest answer is three-valued
+(`SweepRemovalVerdict`, `src/stock_2.h`):
+
+| Test (regularized interior intersection with the replay's stock) | Verdict |
+|---|---|
+| UNDER region (end disks ∪ rectangle with `h ∈ [(1−f)r, r]`, ⊆ true capsule) meets it | `REMOVES`: the **replay** changes its stock |
+| OVER region (end disks ∪ rectangle with `h ∈ [r, (1+f)r]`, ⊇ true capsule) misses it | `NOTHING`: the tool removes nothing |
+| neither | `WITHIN_BAND` |
+
+`REMOVES` is a statement about the replay. Its stock may still hold band
+slivers that the real tool removed, so `REMOVES` does not certify that the real
+tool cuts fresh material. `NOTHING` is sound for the tool, because the replay's
+stock contains the true stock.
+
+Both bands are checked exactly on squared half-widths. Where the model is the
+swept region itself — annuli, Pythagorean capsules, disks — UNDER and OVER
+coincide and the verdict is two-valued. A consumer that needs a boolean picks
+its safe direction explicitly (the gate counts `WITHIN_BAND` as removing, so
+a motion is called redundant only when `NOTHING` is proved) and reports the
+undecided count beside it rather than folding it in.
+
 ## Avoid square roots; prefer squared quantities
 
 Epeck's field type is rational: a generic square root leaves the field.

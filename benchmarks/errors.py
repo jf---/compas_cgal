@@ -141,6 +141,10 @@ class InvalidMotionSampleCountError(BenchmarkError):
     """A cut motion was to be probed at fewer than one cutter position."""
 
 
+class InconsistentRemovalVerdictError(BenchmarkError):
+    """A motion record's removes_material contradicts its exact removal verdict."""
+
+
 class EmptyReachableRegionError(BenchmarkError):
     """No coverage sample landed inside the tool-reachable region, so no coverage fraction is defined."""
 

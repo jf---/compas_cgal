@@ -100,6 +100,21 @@ void register_engagement(nanobind::module_& m)
           "stock"_a, "guide_cx"_a, "guide_cy"_a, "start_x"_a, "start_y"_a,
           "end_x"_a, "end_y"_a, "clockwise"_a, "parameters"_a,
           "tool_radius"_a, "cap_chord_ratio"_a, "gap_close_ratio"_a = 0.0);
+    m.def("engagement_circle_prefixes",
+          [sample_tuples](
+              const Stock2& stock, double guide_cx, double guide_cy,
+              double guide_radius, double entry_x, double entry_y,
+              bool clockwise, const std::vector<double>& parameters,
+              double tool_radius, double cap_chord_ratio,
+              double gap_close_ratio) {
+              return sample_tuples(engagement_circle_prefixes(
+                  stock, guide_cx, guide_cy, guide_radius, entry_x, entry_y,
+                  clockwise, parameters, tool_radius, cap_chord_ratio,
+                  gap_close_ratio));
+          },
+          "stock"_a, "guide_cx"_a, "guide_cy"_a, "guide_radius"_a,
+          "entry_x"_a, "entry_y"_a, "clockwise"_a, "parameters"_a,
+          "tool_radius"_a, "cap_chord_ratio"_a, "gap_close_ratio"_a = 0.0);
 
     // Nanobind boundary for the motion certificate: x0..y1, tool_radius and the
     // angular cap enter exact-land inside certify_segment_tea (validation + exact

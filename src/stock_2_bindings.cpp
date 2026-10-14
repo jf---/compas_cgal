@@ -3,6 +3,7 @@
 #include "audit_replay_bindings_2.h"
 #include "engagement_2_bindings.h"
 #include "stock_2.h"
+#include "stock_line_sweep_2.h"
 #include "stock_local_2.h"
 
 #include <cmath>
@@ -70,6 +71,28 @@ NB_MODULE(_stock_2, m)
     nb::exception<NonFiniteAnnulusInputError>(m, "NonFiniteAnnulusInputError", PyExc_ValueError);
     nb::exception<InvalidCircleRemovalInputError>(m, "InvalidCircleRemovalInputError", PyExc_ValueError);
     nb::exception<NonFiniteCapsuleInputError>(m, "NonFiniteCapsuleInputError", PyExc_ValueError);
+    nb::exception<InvalidLineSweepRadiusError>(m, "InvalidLineSweepRadiusError", PyExc_ValueError);
+    // A line sweep region that is not one simply connected polygon is a broken
+    // internal invariant of the disk-rect-disk construction, never an argument fault.
+    nb::exception<LineSweepRegionTopologyError>(m, "LineSweepRegionTopologyError", PyExc_RuntimeError);
+    nb::exception<LineSweepBandCertificateError>(m, "LineSweepBandCertificateError", PyExc_RuntimeError);
+    nb::exception<DegenerateLineSweepRectangleError>(m, "DegenerateLineSweepRectangleError", PyExc_RuntimeError);
+
+    nb::enum_<SweepRemovalVerdict>(m, "SweepRemovalVerdict")
+        .value("REMOVES", SweepRemovalVerdict::REMOVES)
+        .value("WITHIN_BAND", SweepRemovalVerdict::WITHIN_BAND)
+        .value("NOTHING", SweepRemovalVerdict::NOTHING);
+    nb::enum_<LineSweepModel2>(m, "LineSweepModel")
+        .value("DISK", LineSweepModel2::DISK)
+        .value("EXACT_CAPSULE", LineSweepModel2::EXACT_CAPSULE)
+        .value("CANONICAL_QUAD", LineSweepModel2::CANONICAL_QUAD);
+    // Which model the replay's line sweep uses for this motion: decided exactly
+    // on the injected endpoints, the same build every line sweep entry runs.
+    m.def("line_sweep_model",
+          [](double x0, double y0, double x1, double y1, double radius) {
+              return LineSweepRegion2::build(x0, y0, x1, y1, radius).model();
+          },
+          "x0"_a, "y0"_a, "x1"_a, "y1"_a, "radius"_a);
 
     // Not an argument fault: the quad capsule's exact half-width certificate did
     // not hold. Registered explicitly under RuntimeError -- nanobind's default
@@ -198,6 +221,18 @@ NB_MODULE(_stock_2, m)
              "x0"_a, "y0"_a, "x1"_a, "y1"_a, "radius"_a)
         .def("subtract_arc_sweep", &Stock2::subtract_arc_sweep,
              "cx"_a, "cy"_a, "sx"_a, "sy"_a, "ex"_a, "ey"_a, "cw"_a, "tool_radius"_a)
+        .def("subtract_line_sweep", &Stock2::subtract_line_sweep,
+             "x0"_a, "y0"_a, "x1"_a, "y1"_a, "radius"_a)
+        .def("subtract_line_sweep_local", &Stock2::subtract_line_sweep_local,
+             "x0"_a, "y0"_a, "x1"_a, "y1"_a, "radius"_a)
+        .def("subtract_line_sweep_over", &Stock2::subtract_line_sweep_over,
+             "x0"_a, "y0"_a, "x1"_a, "y1"_a, "radius"_a)
+        .def("line_sweep_removal", &Stock2::line_sweep_removal,
+             "x0"_a, "y0"_a, "x1"_a, "y1"_a, "radius"_a)
+        .def("circle_sweep_removal", &Stock2::circle_sweep_removal,
+             "cx"_a, "cy"_a, "guide_radius"_a, "tool_radius"_a)
+        .def("subtract_circle_sweep_local", &Stock2::subtract_circle_sweep_local,
+             "cx"_a, "cy"_a, "guide_radius"_a, "tool_radius"_a)
         .def(
             "subtract_exact_segment",
             [](Stock2& stock,

@@ -405,8 +405,12 @@ void Stock2::subtract_annulus_exact(
     set().difference(region);
 }
 
-void Stock2::subtract_circle_sweep(double cx, double cy,
-                                 double guide_radius, double tool_radius)
+namespace {
+
+// The one argument contract of every full machining-circle sweep entry point:
+// finite doubles (checked before injection), then exact signs on the injected
+// radii.
+void validate_circle_sweep_input(double cx, double cy, double guide_radius, double tool_radius)
 {
     if (!std::isfinite(cx) || !std::isfinite(cy)
         || !std::isfinite(guide_radius) || !std::isfinite(tool_radius)) {
@@ -416,8 +420,37 @@ void Stock2::subtract_circle_sweep(double cx, double cy,
         || CGAL::sign(Epeck::FT(tool_radius)) != CGAL::POSITIVE) {
         throw InvalidAnnulusRadiiError("Circle sweep requires a nonnegative guide radius and positive tool radius.");
     }
+}
+
+} // namespace
+
+void Stock2::subtract_circle_sweep(double cx, double cy,
+                                 double guide_radius, double tool_radius)
+{
+    validate_circle_sweep_input(cx, cy, guide_radius, tool_radius);
     const auto [inner, outer] = full_turn_annulus_bounds(guide_radius, tool_radius);
     subtract_annulus_exact(EPoint(cx, cy), inner, outer);
+}
+
+void Stock2::subtract_circle_sweep_local(double cx, double cy,
+                                         double guide_radius, double tool_radius)
+{
+    validate_circle_sweep_input(cx, cy, guide_radius, tool_radius);
+    const auto [inner, outer] = full_turn_annulus_bounds(guide_radius, tool_radius);
+    subtract_annulus_exact_local(EPoint(cx, cy), inner, outer);
+}
+
+// The annulus is the swept region EXACTLY, so its verdict is two-valued: the
+// under- and over-region coincide.
+SweepRemovalVerdict Stock2::circle_sweep_removal(double cx, double cy,
+                                                 double guide_radius, double tool_radius) const
+{
+    validate_circle_sweep_input(cx, cy, guide_radius, tool_radius);
+    const auto [inner, outer] = full_turn_annulus_bounds(guide_radius, tool_radius);
+    Gps region;
+    exact_annulus_region_into(region, EPoint(cx, cy), inner, outer);
+    return set_->do_intersect(region) ? SweepRemovalVerdict::REMOVES
+                                      : SweepRemovalVerdict::NOTHING;
 }
 
 void Stock2::intersect_circle_sweep(double cx, double cy,

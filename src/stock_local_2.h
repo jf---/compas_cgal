@@ -3,7 +3,6 @@
 #include "stock_2.h"
 
 #include <stdexcept>
-#include <utility>
 #include <vector>
 
 // The flood that marks the removed faces escaped the removal region: it reached
@@ -24,17 +23,16 @@ public:
 // that re-marks containment never crosses out of the region, and (b) START that
 // flood, once per connected component of the region's interior.
 struct LocalRemovalRegion {
-    // Supporting circles of the region boundary, as (centre, squared radius).
-    // An arrangement edge lies on the boundary iff it is circular and its
-    // supporting circle is one of these -- an exact rational equality of centre
-    // and squared radius, never a distance tolerance. Splitting a curve at an
-    // intersection preserves these three stored coefficients (CGAL 6.0.1
-    // Circle_segment_2.h: m_first/m_second/m_third), so a sub-arc of the
-    // boundary is still recognised as boundary.
-    std::vector<std::pair<EPoint, Epeck::FT>> boundary_circles;
-
-    // The x-monotone arcs of the boundary, in the exact form used to insert them
-    // into the stock's own arrangement.
+    // The x-monotone curves of the region boundary, each traversed with the
+    // material the removal KEEPS on its left, in the exact form inserted into
+    // the stock's own arrangement. They are also the boundary DESCRIPTION: an
+    // arrangement edge lies on the boundary iff it is a SUB-CURVE of one of
+    // them -- same supporting curve (exact rational coefficients, which survive
+    // every split: CGAL 6.0.1 Circle_segment_2.h m_first/m_second/m_third), the
+    // same half of a supporting circle, and both endpoints on the closed curve.
+    // Inserting a curve makes its endpoints arrangement vertices, so an edge on
+    // its support either lies inside it or misses its relative interior: the
+    // test is exact and complete, for whole circles and for capsule pieces alike.
     std::vector<GpsXCurve> boundary_curves;
 
     // At least one exact point STRICTLY inside every connected component of the

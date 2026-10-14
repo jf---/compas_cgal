@@ -301,6 +301,7 @@ add_library(continuous_tea_exact_core STATIC
     src/audit_arc_motion_2.cpp
     src/stock_2.cpp
     src/stock_local_2.cpp
+    src/stock_line_sweep_2.cpp
     src/audit_motion_identity_2.cpp
     src/audit_classification_core_2.cpp
     src/audit_policy_2.cpp

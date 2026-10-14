@@ -59,14 +59,20 @@
 //
 // EXACTNESS. Every decision above is an exact predicate on exact quantities:
 // point location and curve insertion are CGAL's own exact machinery, the
-// boundary test is exact rational equality of a circle's centre and squared
-// radius, and the redundancy test is a comparison of two booleans. No epsilon,
+// boundary test is exact sub-curve membership (rational supporting-curve
+// equality plus exact endpoint incidence), and the redundancy test is a
+// comparison of two booleans. No epsilon,
 // no tolerance, no ulp-nudge anywhere in the path.
 // ----------------------------------------------------------------------------
 
 namespace {
 
 using Arr = Gps::Arrangement_2;
+// Trapezoid RIC: its documented preconditions cover the multi-outer-CCB faces
+// a depleting Gps produces, where a walk locator's progress guard is a debug
+// assertion only (docs/exactness.md). ONE map serves insertion and the flood,
+// and it is destroyed before the repair: a trapezoidal map is an arrangement
+// observer, so a live one is re-built around every edge the repair removes.
 using PL = CGAL::Arr_trapezoid_ric_point_location<Arr>;
 
 // Restores I1 across the face splits incremental insertion causes. Both pieces
@@ -86,18 +92,53 @@ public:
     }
 };
 
-// Does `curve` lie on the region boundary? Exact: a circular arc stores its
-// supporting circle's centre and SQUARED radius as rationals, and both survive
-// every split, so this is rational equality -- not a distance test.
-bool lies_on_region_boundary(const GpsXCurve& curve,
-                             const std::vector<std::pair<EPoint, Epeck::FT>>& circles)
+// Does the circular arc lie on the UPPER half of its supporting circle? Its
+// stored orientation and direction decide it, exactly as CGAL's own
+// _X_monotone_circle_segment_2::_is_upper does (Circle_segment_2.h).
+bool is_upper_arc(const GpsXCurve& arc)
 {
-    if (!curve.is_circular()) {
+    const bool directed_right = arc.is_directed_right();
+    return (arc.orientation() == CGAL::COUNTERCLOCKWISE && !directed_right)
+        || (arc.orientation() == CGAL::CLOCKWISE && directed_right);
+}
+
+// Is `edge` a sub-curve of `boundary`? Exact: same supporting curve (rational
+// coefficient comparison, scale-free for lines), the same half for arcs -- on one
+// half of a circle an x-monotone arc is fixed by its endpoints -- and both
+// endpoints on the closed boundary curve (x-range + point_position == EQUAL,
+// which also bounds the y-range of a vertical segment). Segments are convex, so
+// two endpoints on one segment put the whole edge on it.
+//
+// PRECONDITION: curve indices are all zero. has_same_supporting_curve accepts
+// equal NONZERO indices before comparing any geometry (Circle_segment_2.h), and
+// the traits assign indices only with their curve cache on; Gps_circle_segment_
+// traits_2 is constructed with it off throughout this repository.
+bool is_sub_curve(const GpsXCurve& edge, const GpsXCurve& boundary)
+{
+    if (edge.is_linear() != boundary.is_linear()) {
         return false;
     }
-    const ECircle support = curve.supporting_circle();
-    for (const auto& [center, squared_radius] : circles) {
-        if (support.center() == center && support.squared_radius() == squared_radius) {
+    if (!edge.has_same_supporting_curve(boundary)) {
+        return false;
+    }
+    if (edge.is_circular() && is_upper_arc(edge) != is_upper_arc(boundary)) {
+        return false;
+    }
+    for (const GpsPoint* endpoint : {&edge.left(), &edge.right()}) {
+        if (!boundary.is_in_x_range(*endpoint)
+            || boundary.point_position(*endpoint) != CGAL::EQUAL) {
+            return false;
+        }
+    }
+    return true;
+}
+
+// Does `curve` lie on the region boundary? Exact sub-curve membership in one of
+// the inserted boundary curves -- never a distance test.
+bool lies_on_region_boundary(const GpsXCurve& curve, const std::vector<GpsXCurve>& boundary)
+{
+    for (const GpsXCurve& piece : boundary) {
+        if (is_sub_curve(curve, piece)) {
             return true;
         }
     }
@@ -151,7 +192,7 @@ void flood_region_faces(Arr& arrangement,
         Arr::Ccb_halfedge_circulator curr = start;
         do {
             incident.push_back(curr);
-            if (lies_on_region_boundary(curr->curve(), region.boundary_circles)) {
+            if (lies_on_region_boundary(curr->curve(), region.boundary_curves)) {
                 continue;   // dR separates inside from outside: never cross it
             }
             const Arr::Face_handle neighbour = curr->twin()->face();
@@ -250,7 +291,6 @@ void append_boundary_circle(const EPoint& center,
     const GpsPoint& second = (traversal == CGAL::CLOCKWISE) ? leftmost : rightmost;
     region.boundary_curves.emplace_back(circle, first, second, traversal);
     region.boundary_curves.emplace_back(circle, second, first, traversal);
-    region.boundary_circles.emplace_back(center, squared_radius);
 }
 
 } // namespace
@@ -291,26 +331,27 @@ void subtract_region_local(Gps& set, const LocalRemovalRegion& region)
 {
     Arr& arrangement = set.arrangement();
 
-    {
-        // Scoped so the propagator is detached before the marking phase: it must
-        // observe insertion (I1) and nothing else.
-        ContainmentPropagator propagator(arrangement);
-        PL point_location(arrangement);
-        for (const GpsXCurve& curve : region.boundary_curves) {
-            CGAL::insert(arrangement, curve, point_location);
-        }
-    }
-
-    const PL point_location(arrangement);
     std::vector<Arr::Face_handle> inside;
     std::vector<Arr::Halfedge_handle> incident;
-    try {
-        flood_region_faces(arrangement, region, point_location, inside, incident);
-    } catch (...) {
-        for (const Arr::Face_handle face : inside) {
-            face->set_visited(false);
+    {
+        // Scoped so the locator is detached before the repair phase (see PL).
+        PL point_location(arrangement);
+        {
+            // Scoped so the propagator is detached before the marking phase: it
+            // must observe insertion (I1) and nothing else.
+            ContainmentPropagator propagator(arrangement);
+            for (const GpsXCurve& curve : region.boundary_curves) {
+                CGAL::insert(arrangement, curve, point_location);
+            }
         }
-        throw;
+        try {
+            flood_region_faces(arrangement, region, point_location, inside, incident);
+        } catch (...) {
+            for (const Arr::Face_handle face : inside) {
+                face->set_visited(false);
+            }
+            throw;
+        }
     }
 
     // Clear the flood marks BEFORE any removal: edge removal merges faces, so

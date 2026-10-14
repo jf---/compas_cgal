@@ -37,6 +37,7 @@ from compas_cgal.replay_classification import classify_operation_replay
 from compas_cgal.replay_classification import infer_operation_cut_height
 from compas_cgal.replay_classification import minimum_cut_height
 from compas_cgal.stock import Stock
+from compas_cgal.stock import SweepRemoval
 from compas_cgal.toolpath import OperationType
 from compas_cgal.toolpath import ToolpathOperation
 from compas_cgal.toolpath import ToolpathResult
@@ -169,10 +170,17 @@ def _subtract_operation(stock: Stock, op: ToolpathOperation, tool_radius: float)
     """Remove one operation's swept material from *stock* (geometry -> sweep dispatch).
 
     The single mapping from a :class:`ToolpathOperation`'s geometry to an exact
-    stock boolean, reused by the audit and exposed for tools/tests: ``Line`` ->
-    capsule of the XY segment; ``Circle`` -> full arc sweep (start == end);
-    ``Arc`` -> arc sweep between its endpoints with the operation's turn
-    direction. Plunges are handled by the replay (disk), not here.
+    stock boolean, reused by the audit and exposed for tools/tests, each removed
+    by LOCAL arrangement surgery (docs/local_depletion.md):
+
+    - ``Line`` -> `Stock.subtract_line_sweep_local`: the exact capsule when the
+      direction is Pythagorean, else exact end disks + a certified under-rectangle.
+    - ``Circle`` -> `Stock.subtract_circle_sweep_local` with the AUTHORED
+      ``g.radius``: the exact annulus, independent of where the loop starts.
+    - ``Arc`` -> arc sweep between its endpoints with the operation's turn
+      direction (a certified under-covering disk chain).
+
+    Plunges are handled by the replay (disk), not here.
 
     Args:
         stock: The depleting stock to subtract from.
@@ -185,26 +193,10 @@ def _subtract_operation(stock: Stock, op: ToolpathOperation, tool_radius: float)
     """
     g = op.geometry
     if isinstance(g, Line):
-        stock.subtract_capsule(
-            float(g.start[0]),
-            float(g.start[1]),
-            float(g.end[0]),
-            float(g.end[1]),
-            tool_radius,
-        )
+        stock.subtract_line_sweep_local(float(g.start[0]), float(g.start[1]), float(g.end[0]), float(g.end[1]), tool_radius)
     elif isinstance(g, Circle):
         c = g.frame.point
-        s = g.point_at(0.0)
-        stock.subtract_arc_sweep(
-            float(c[0]),
-            float(c[1]),
-            float(s[0]),
-            float(s[1]),
-            float(s[0]),
-            float(s[1]),
-            op.clockwise,
-            tool_radius,
-        )
+        stock.subtract_circle_sweep_local(float(c[0]), float(c[1]), float(g.radius), tool_radius)
     elif isinstance(g, Arc):
         c = g.frame.point
         s = g.point_at(0.0)
@@ -221,6 +213,53 @@ def _subtract_operation(stock: Stock, op: ToolpathOperation, tool_radius: float)
         )
     else:
         raise UnexpectedToolpathGeometryError(f"Cannot subtract operation with geometry type {type(g).__name__!r}.")
+
+
+def _operation_removal(stock: Stock, op: ToolpathOperation, tool_radius: float) -> SweepRemoval:
+    """What `_subtract_operation` would remove from *stock*, decided without removing it.
+
+    The exact three-valued bracket (`SweepRemoval`) between the region the replay
+    subtracts and a certified region containing the true swept area:
+
+    - ``Line`` -> `Stock.line_sweep_removal`: two-valued for an exact capsule,
+      three-valued for a canonical quad.
+    - ``Circle`` -> `Stock.circle_sweep_removal` on the authored radius: the
+      annulus is exact, so REMOVES or NOTHING.
+    - ``Arc`` -> the chain the replay removes decides REMOVES (one clone and an
+      exact equality, as before); otherwise the full-turn annulus of the
+      authored radius, which contains the arc's true sweep, decides NOTHING;
+      else WITHIN_BAND.
+
+    *stock* is never mutated.
+
+    Args:
+        stock: The stock the operation is about to cut.
+        op: The operation.
+        tool_radius: Tool radius (sweep half-width).
+
+    Returns:
+        The verdict.
+
+    Raises:
+        UnexpectedToolpathGeometryError: If the geometry is not a supported
+            ``Line``/``Arc``/``Circle`` primitive.
+    """
+    g = op.geometry
+    if isinstance(g, Line):
+        return stock.line_sweep_removal(float(g.start[0]), float(g.start[1]), float(g.end[0]), float(g.end[1]), tool_radius)
+    if isinstance(g, Circle):
+        c = g.frame.point
+        return stock.circle_sweep_removal(float(c[0]), float(c[1]), float(g.radius), tool_radius)
+    if isinstance(g, Arc):
+        probe = stock.clone()
+        _subtract_operation(probe, op, tool_radius)
+        if not probe.exactly_equals(stock):
+            return SweepRemoval.REMOVES
+        c = g.frame.point
+        if stock.circle_sweep_removal(float(c[0]), float(c[1]), float(g.radius), tool_radius) is SweepRemoval.NOTHING:
+            return SweepRemoval.NOTHING
+        return SweepRemoval.WITHIN_BAND
+    raise UnexpectedToolpathGeometryError(f"Cannot decide the removal of geometry type {type(g).__name__!r}.")
 
 
 def _certify_arc_engagement(stock: Stock, geometry: Arc | Circle, tool_radius: float, tea_cap: float) -> tuple[float, bool, int]:

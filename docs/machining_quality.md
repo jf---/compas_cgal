@@ -78,7 +78,7 @@ a named error when it is absent — `MissingMaterialModelError`,
 | | `zero_length_motions` | operations of no length | ▣ |
 | | `degenerate_loops` | `ρ ≤ r`: a disk sweep, not a trochoid | ▣ |
 | | `marginal_loops` | `r < ρ ≤ 1.5 r`: a hole too small to use | ▣ |
-| | `redundant_operations` | motions leaving the stock exactly unchanged | ▣ |
+| | `redundant_operations` | motions whose exact removal verdict is `NOTHING` — even a certified region containing the true sweep misses the stock; `WITHIN_BAND` counts as removing and is reported as `PathSurvey.within_band_motions` ([bracket](exactness.md#deciding-on-a-model-that-is-only-a-bound-bracket-it)) | ▣ |
 | | `recut_fraction` | swept area meeting no fresh material | ▣ |
 | **quality** | `max_engagement_deg`, `engagement_p95_deg`, `engagement_variance_deg2` | load level and steadiness | ▣ |
 | | `cap_exceedances` | motions the exact cap predicate fired on | ▣ |

@@ -46,6 +46,7 @@ from compas.tolerance import TOL
 
 from benchmarks.depletion import CutMotion
 from benchmarks.depletion import replay_cuts
+from benchmarks.errors import InconsistentRemovalVerdictError
 from benchmarks.errors import InvalidMotionSampleCountError
 from benchmarks.errors import UnmeasurableOperationLengthError
 from benchmarks.errors import UnreplayableOperationError
@@ -58,11 +59,12 @@ from compas_cgal import _coverage_2
 from compas_cgal import _stock_2
 from compas_cgal.engagement import _cap_chord_ratio
 from compas_cgal.engagement import _infer_cut_height
-from compas_cgal.engagement import _subtract_operation
+from compas_cgal.engagement import _operation_removal
 from compas_cgal.replay_classification import CutPlaneRampError
 from compas_cgal.replay_classification import OffPlaneReplayCurveError
 from compas_cgal.replay_classification import classify_operation_replay
 from compas_cgal.stock import Stock
+from compas_cgal.stock import SweepRemoval
 from compas_cgal.stock import _polygon_to_ccw_vertices
 from compas_cgal.toolpath import OperationType
 from compas_cgal.toolpath import ToolpathOperation
@@ -162,8 +164,15 @@ class MotionQuality:
             SAMPLED: a lower bound on true exceedance.
         slot_exceeded: Whether a STRAIGHT motion passed
             `SLOT_ENGAGEMENT_FRACTION` of the cap at any sample. SAMPLED.
-        removes_material: Whether subtracting this motion's swept area changes
-            the stock. EXACT regularized-set equality.
+        removes_material: Whether the motion may remove material: False only
+            when its exact removal verdict is NOTHING, i.e. even a certified
+            region CONTAINING the true swept area misses the stock's interior.
+            A WITHIN_BAND motion counts as removing, because the band it may
+            cut cannot be ruled out. EXACT.
+        removal: The exact three-valued removal verdict (`SweepRemoval`) the
+            replay decided for this motion, or None for a record assembled
+            without one (synthetic fixtures). When present it determines
+            *removes_material*.
     """
 
     index: int
@@ -181,6 +190,17 @@ class MotionQuality:
     cap_exceeded: bool
     slot_exceeded: bool
     removes_material: bool
+    removal: Optional[SweepRemoval] = None
+
+    def __post_init__(self) -> None:
+        """Refuse a record whose two removal fields disagree.
+
+        Raises:
+            InconsistentRemovalVerdictError: *removes_material* is not
+                ``removal is not SweepRemoval.NOTHING``.
+        """
+        if self.removal is not None and self.removes_material != (self.removal is not SweepRemoval.NOTHING):
+            raise InconsistentRemovalVerdictError(f"motion {self.index}: removes_material={self.removes_material!r} contradicts the verdict {self.removal.name}.")
 
     @property
     def peak_engagement_deg(self) -> float:
@@ -259,6 +279,17 @@ class PathSurvey:
     def swept_area(self) -> float:
         """Total area the tool sweeps, cut motions and plunges together."""
         return sum(motion.swept_area for motion in self.motions) + self.plunge_swept_area
+
+    @property
+    def within_band_motions(self) -> int:
+        """Motions whose exact removal verdict is WITHIN_BAND.
+
+        Their stock change is undecidable on the replay's certified model: the
+        model removes nothing, the true sweep may cut material inside the
+        rectangle's side band. Counted as removing in the redundancy reduction; reported
+        here so the undecided share is visible rather than folded in.
+        """
+        return sum(1 for motion in self.motions if motion.removal is SweepRemoval.WITHIN_BAND)
 
 
 def survey_path(spec: PocketSpec, result: ToolpathResult, *, samples_per_motion: int = QUALITY_SAMPLES_PER_MOTION) -> PathSurvey:
@@ -368,8 +399,7 @@ def _measure_motion(
             )
         )
 
-    probe = motion.stock.clone()
-    _subtract_operation(probe, motion.operation, tool_radius)
+    removal = _operation_removal(motion.stock, motion.operation, tool_radius)
     start, end = _endpoints(geometry)
     start_tangent, end_tangent = _tangents(motion.operation)
     return MotionQuality(
@@ -387,7 +417,8 @@ def _measure_motion(
         samples=tuple(samples),
         cap_exceeded=any(sample.cap_exceeded for sample in samples),
         slot_exceeded=slot_exceeded,
-        removes_material=not probe.exactly_equals(motion.stock),
+        removes_material=removal is not SweepRemoval.NOTHING,
+        removal=removal,
     )
 
 
@@ -454,6 +485,26 @@ def _sample_parameters(geometry: object, count: int) -> List[float]:
     return [i / count for i in range(stations)]
 
 
+def _stationary_point(geometry: object) -> Optional[Tuple[float, float]]:
+    """The point of a zero-length cut-plane line, or None for any other motion.
+
+    Zero length is decided by EXACT equality of the injected XY endpoints: a
+    double enters exact-land as itself, so equal doubles are equal exact points
+    and unequal ones are not; there is no tolerance (Ruling 0.2-zerolen).
+
+    Args:
+        geometry: The motion's primitive.
+
+    Returns:
+        ``(x, y)`` when *geometry* is a `Line` whose XY endpoints coincide.
+    """
+    if not isinstance(geometry, Line):
+        return None
+    start = (float(geometry.start[0]), float(geometry.start[1]))
+    end = (float(geometry.end[0]), float(geometry.end[1]))
+    return start if start == end else None
+
+
 def _motion_travel_positions(motion: CutMotion, count: int) -> Sequence[Tuple[float, float, float]]:
     """Probe positions along one motion, in travel order, as ``(arc distance, x, y)``.
 
@@ -471,7 +522,8 @@ def _motion_travel_positions(motion: CutMotion, count: int) -> Sequence[Tuple[fl
 
     The positions are REPORTING doubles (and the centre-domain membership
     queries); the engagement at each is decided by `_motion_prefix_samples` on
-    the same parameters.
+    the same parameters. A zero-length line is ONE position: the tool sits
+    there and sweeps nothing (Ruling 0.2-zerolen).
 
     Args:
         motion: The cut motion to sample.
@@ -485,6 +537,9 @@ def _motion_travel_positions(motion: CutMotion, count: int) -> Sequence[Tuple[fl
             circle.
     """
     geometry = motion.operation.geometry
+    stationary = _stationary_point(geometry)
+    if stationary is not None:
+        return [(0.0, stationary[0], stationary[1])]
     parameters = _sample_parameters(geometry, count)
     if isinstance(geometry, Circle):
         span = float(geometry.circumference)
@@ -546,8 +601,11 @@ def _motion_prefix_samples(motion: CutMotion, count: int, tool_radius: float, ca
 
     One native call per motion. The motion's start, end, centre and turn
     direction are exactly those `compas_cgal.engagement._subtract_operation`
-    sweeps, so the prefix measured here is a prefix of the very sweep the replay
-    removes next. The stock the motion starts from is read, never mutated.
+    sweeps. The prefix is the TRUE swept region: for a loop, the replay removes
+    it exactly; for a non-Pythagorean line, the replay's model keeps a side band
+    up to 1e-4 r wide that the true prefix covers, and later motions may read
+    that band as engagement (a documented model limit, not physics). The stock
+    the motion starts from is read, never mutated.
 
     Args:
         motion: The motion and the stock it is about to cut.
@@ -564,15 +622,28 @@ def _motion_prefix_samples(motion: CutMotion, count: int, tool_radius: float, ca
     """
     geometry = motion.operation.geometry
     raw = motion.stock.raw
+    stationary = _stationary_point(geometry)
+    if stationary is not None:
+        # One station with an empty prefix: the stock the motion starts from,
+        # read at the point the tool sits on. The native prefix query refuses a
+        # zero-length segment, and should: there is no prefix to subtract.
+        return [_stock_2.engagement_at(raw, stationary[0], stationary[1], tool_radius, cap_ratio, NO_GAP_CLOSURE)]
     parameters = _sample_parameters(geometry, count)
     if isinstance(geometry, Line):
         x0, y0 = float(geometry.start[0]), float(geometry.start[1])
         x1, y1 = float(geometry.end[0]), float(geometry.end[1])
         return _stock_2.engagement_line_prefixes(raw, x0, y0, x1, y1, parameters, tool_radius, cap_ratio, NO_GAP_CLOSURE)
-    if isinstance(geometry, (Arc, Circle)):
+    if isinstance(geometry, Circle):
+        # Station 0 is the entry point_at(0) itself -- where the tool is, and
+        # where the previous motion ended; stations p > 0 lie on the AUTHORED
+        # radius, the circle the replay's annulus is built on.
         cx, cy = _xy(geometry.frame.point)
         sx, sy = _xy(geometry.point_at(0.0))
-        ex, ey = (sx, sy) if isinstance(geometry, Circle) else _xy(geometry.point_at(1.0))
+        return _stock_2.engagement_circle_prefixes(raw, cx, cy, float(geometry.radius), sx, sy, motion.operation.clockwise, parameters, tool_radius, cap_ratio, NO_GAP_CLOSURE)
+    if isinstance(geometry, Arc):
+        cx, cy = _xy(geometry.frame.point)
+        sx, sy = _xy(geometry.point_at(0.0))
+        ex, ey = _xy(geometry.point_at(1.0))
         return _stock_2.engagement_arc_prefixes(raw, cx, cy, sx, sy, ex, ey, motion.operation.clockwise, parameters, tool_radius, cap_ratio, NO_GAP_CLOSURE)
     raise UnsampleableMotionError(f"Operation {motion.index} ({motion.operation.operation.value}) has geometry {type(geometry).__name__!r}, which carries no cutter-centre path.")
 

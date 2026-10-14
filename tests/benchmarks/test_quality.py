@@ -1258,16 +1258,16 @@ QUALITY_GATE_CASES = tuple(
 _EXPECTED_QUALITY_GATE_MEASUREMENTS = {
     (120.0, "engagement_controlled", "rect_12x8"): (0.008041, 4, 10, 1, 0, 157.15, 24),
     (120.0, "radius_regulated", "rect_12x8"): (0.008041, 4, 10, 1, 0, 157.15, 24),
-    (120.0, "engagement_controlled", "rect_20x12"): (0.002843, 4, 10, 9, 4, 164.20, 32),
-    (120.0, "radius_regulated", "rect_20x12"): (0.002843, 4, 10, 9, 4, 164.20, 32),
-    (120.0, "engagement_controlled", "L_shape"): (0.006930, 5, 10, 1, 0, 152.77, 22),
-    (120.0, "radius_regulated", "L_shape"): (0.006930, 5, 10, 1, 0, 152.77, 22),
+    (120.0, "engagement_controlled", "rect_20x12"): (0.002843, 4, 12, 9, 4, 164.20, 32),
+    (120.0, "radius_regulated", "rect_20x12"): (0.002843, 4, 12, 9, 4, 164.20, 32),
+    (120.0, "engagement_controlled", "L_shape"): (0.006930, 5, 11, 1, 0, 152.77, 22),
+    (120.0, "radius_regulated", "L_shape"): (0.006930, 5, 11, 1, 0, 152.77, 22),
     (40.0, "engagement_controlled", "rect_12x8"): (0.003186, 80, 26, 21, 40, 177.13, 184),
     (40.0, "radius_regulated", "rect_12x8"): (0.005462, 124, 311, 21, 41, 169.89, 798),
-    (40.0, "engagement_controlled", "rect_20x12"): (0.000335, 112, 62, 105, 108, 178.02, 400),
-    (40.0, "radius_regulated", "rect_20x12"): (0.000669, 308, 490, 65, 116, 178.02, 1384),
-    (40.0, "engagement_controlled", "L_shape"): (0.006059, 40, 15, 6, 15, 176.08, 92),
-    (40.0, "radius_regulated", "L_shape"): (0.002916, 236, 499, 105, 62, 167.52, 956),
+    (40.0, "engagement_controlled", "rect_20x12"): (0.000335, 112, 64, 105, 108, 178.02, 400),
+    (40.0, "radius_regulated", "rect_20x12"): (0.000669, 308, 492, 65, 116, 178.02, 1384),
+    (40.0, "engagement_controlled", "L_shape"): (0.006059, 40, 16, 6, 15, 176.08, 92),
+    (40.0, "radius_regulated", "L_shape"): (0.002916, 236, 500, 105, 62, 167.52, 956),
 }
 
 

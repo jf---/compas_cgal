@@ -103,7 +103,7 @@ def thin_covered_contour_path(
         represented.update(circle_sources[index])
         stock.subtract_circle_sweep(*current, radius)
         for start, end in zip(pending.samples, pending.samples[1:]):
-            stock.subtract_capsule_quad(float(start.x), float(start.y), float(end.x), float(end.y), radius)
+            stock.subtract_line_sweep(float(start.x), float(start.y), float(end.x), float(end.y), radius)
         contour.append((current[0], current[1]), current[2])
         if index < len(transitions):
             pending = transitions[index]

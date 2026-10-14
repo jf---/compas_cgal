@@ -547,6 +547,76 @@ void validate_prefix_parameters(const std::vector<double>& parameters)
     }
 }
 
+// An exact rational unit vector along the direction (x, y) != 0, by the
+// half-angle parametrization ((1 - t^2), 2t) / (1 + t^2), whose squared length is
+// 1 identically. t = y / (|p| + x) is a CONSTRUCTION parameter computed in
+// doubles (placement intent, never a decision): any rational t gives an exact
+// unit vector, and the double only steers its direction. Reflecting x < 0 into
+// x >= 0 keeps |t| <= 1, away from the parametrization's pole.
+EVector rational_unit_along(double x, double y)
+{
+    const bool reflected = x < 0.0;
+    const double px = reflected ? -x : x;
+    const double py = reflected ? -y : y;
+    const FT t(py / (std::hypot(px, py) + px));
+    const FT t_squared = t * t;
+    const FT denominator = FT(1) + t_squared;
+    const EVector unit((FT(1) - t_squared) / denominator, FT(2) * t / denominator);
+    return reflected ? -unit : unit;
+}
+
+// Stations along one circular motion from `start` about `guide`, classified
+// against the stock minus the motion's own swept prefix. Parameter 0 (empty
+// prefix) is classified at `zero_station`: where the tool physically is. `total_sweep` is the
+// travel INTENT in radians that places the interior stations; every station is
+// `start` rotated exactly by the quarter-chart atlas, so all lie on start's
+// guide circle.
+std::vector<EngagementSample> arc_prefix_samples(
+    const Stock2& stock, const EPoint& guide, const EPoint& zero_station,
+    const EPoint& start,
+    const EPoint& end, bool full_turn, double total_sweep, bool clockwise,
+    const std::vector<double>& parameters, double tool_radius,
+    double cap_chord_ratio, double gap_close_ratio)
+{
+    const EVector phase = start - guide;
+    std::vector<EngagementSample> result;
+    result.reserve(parameters.size());
+    for (const double parameter : parameters) {
+        EPoint station = zero_station;
+        ArcPrefixExtent2 extent = ArcPrefixExtent2::ZERO;
+        if (parameter == 1.0) {
+            station = end;
+            extent = full_turn
+                ? ArcPrefixExtent2::FULL_TURN
+                : classify_arc_prefix_extent_exact(guide, start, end, clockwise);
+        } else if (parameter != 0.0) {
+            const double turned = total_sweep * parameter;
+            station = exact_circle_chart_point(
+                guide,
+                phase,
+                audit_arc_chart_parameter_for_angle(clockwise ? -turned : turned));
+            extent = classify_arc_prefix_extent_exact(
+                guide, start, station, clockwise);
+        }
+        const AuditExactStationClassification2 exact =
+            classify_arc_swept_prefix_station_exact(
+                stock,
+                guide,
+                start,
+                station,
+                clockwise,
+                extent,
+                FT(tool_radius),
+                FT(cap_chord_ratio),
+                FT(gap_close_ratio));
+        result.push_back(engagement_sample_from_exact(
+            exact,
+            CGAL::to_double(station.x()),
+            CGAL::to_double(station.y())));
+    }
+    return result;
+}
+
 } // namespace
 
 double cap_chord_ratio(double cap_radians)
@@ -658,43 +728,47 @@ std::vector<EngagementSample> engagement_arc_prefixes(
         total_sweep = clockwise ? start_angle - end_angle : end_angle - start_angle;
         if (total_sweep <= 0.0) total_sweep += FULL_TURN;
     }
-    const EVector phase = start - guide;
-    std::vector<EngagementSample> result;
-    result.reserve(parameters.size());
-    for (const double parameter : parameters) {
-        EPoint station = start;
-        ArcPrefixExtent2 extent = ArcPrefixExtent2::ZERO;
-        if (parameter == 1.0) {
-            station = end;
-            extent = full_turn
-                ? ArcPrefixExtent2::FULL_TURN
-                : classify_arc_prefix_extent_exact(guide, start, end, clockwise);
-        } else if (parameter != 0.0) {
-            const double turned = total_sweep * parameter;
-            station = exact_circle_chart_point(
-                guide,
-                phase,
-                audit_arc_chart_parameter_for_angle(clockwise ? -turned : turned));
-            extent = classify_arc_prefix_extent_exact(
-                guide, start, station, clockwise);
-        }
-        const AuditExactStationClassification2 exact =
-            classify_arc_swept_prefix_station_exact(
-                stock,
-                guide,
-                start,
-                station,
-                clockwise,
-                extent,
-                FT(tool_radius),
-                FT(cap_chord_ratio),
-                FT(gap_close_ratio));
-        result.push_back(engagement_sample_from_exact(
-            exact,
-            CGAL::to_double(station.x()),
-            CGAL::to_double(station.y())));
+    return arc_prefix_samples(
+        stock, guide, start, start, end, full_turn, total_sweep, clockwise, parameters,
+        tool_radius, cap_chord_ratio, gap_close_ratio);
+}
+
+std::vector<EngagementSample> engagement_circle_prefixes(
+    const Stock2& stock, double guide_cx, double guide_cy, double guide_radius,
+    double entry_x, double entry_y, bool clockwise,
+    const std::vector<double>& parameters, double tool_radius,
+    double cap_chord_ratio, double gap_close_ratio)
+{
+    validate_engagement_input_binary64(
+        guide_cx, guide_cy, tool_radius, cap_chord_ratio, gap_close_ratio);
+    validate_prefix_parameters(parameters);
+    if (!std::isfinite(guide_radius) || !std::isfinite(entry_x)
+        || !std::isfinite(entry_y)) {
+        throw InvalidSweptPrefixInputError(
+            "circle swept-prefix guide radius and entry must be finite");
     }
-    return result;
+    const FT radius(guide_radius);
+    if (CGAL::sign(radius) != CGAL::POSITIVE) {
+        throw InvalidSweptPrefixInputError(
+            "circle swept-prefix guide radius must be positive");
+    }
+    const EPoint guide{FT(guide_cx), FT(guide_cy)};
+    const EPoint entry{FT(entry_x), FT(entry_y)};
+    if (entry == guide) {
+        throw InvalidSweptPrefixInputError(
+            "circle swept-prefix entry must differ from the guide centre");
+    }
+    // Station 0 is the authored ENTRY itself: the empty prefix sees the tool
+    // where it physically is, which is where the previous motion ended (Ruling
+    // 0.2-station0). Stations p > 0 lie on the AUTHORED radius: the first is
+    // rho times an exact rational unit vector along the entry direction (that
+    // direction is placement intent), the rest rotate exactly from it, all on
+    // the circle the replay's annulus is built on.
+    const EPoint start =
+        guide + radius * rational_unit_along(entry_x - guide_cx, entry_y - guide_cy);
+    return arc_prefix_samples(
+        stock, guide, entry, start, start, true, FULL_TURN, clockwise, parameters,
+        tool_radius, cap_chord_ratio, gap_close_ratio);
 }
 
 CertifiedTea certify_segment_tea(const Stock2& stock, double x0, double y0,

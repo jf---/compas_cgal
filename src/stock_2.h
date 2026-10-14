@@ -72,6 +72,21 @@ public:
     using std::runtime_error::runtime_error;
 };
 
+// What one motion removes from a stock, bracketed exactly between the region the
+// replay subtracts (UNDER, a subset of the true swept region) and a certified
+// region containing the true swept region (OVER):
+//   REMOVES      UNDER meets the stock's interior: the replay changes the stock.
+//   WITHIN_BAND  UNDER misses it, OVER meets it: material survives only inside
+//                the certified band, so neither answer can be claimed.
+//   NOTHING      OVER misses it: the tool removes nothing at all.
+// Exact sweeps (annuli, Pythagorean capsules, disks) have UNDER == OVER, so their
+// verdict is two-valued. Every test is a regularized interior intersection.
+enum class SweepRemovalVerdict {
+    REMOVES,
+    WITHIN_BAND,
+    NOTHING,
+};
+
 // Full disk of the given radius centred at `center`, as a two-arc CCW general
 // polygon (split at its x-extreme vertical-tangency points). Shared by the
 // stock-subtraction paths and the engagement query (which intersects the stock
@@ -193,6 +208,29 @@ public:
     //     removed -- the same slack budget the disk chain documents.
     // Added ALONGSIDE subtract_capsule, which stays the reference.
     void subtract_capsule_quad(double x0, double y0, double x1, double y1, double radius);
+
+    // The replay's line sweep (stock_line_sweep_2.h): the EXACT capsule when the
+    // direction is Pythagorean, else exact end disks + certified under-rectangle.
+    // Never over-cuts; removes everything within (1 - 1e-4) r of the segment.
+    // Added ALONGSIDE subtract_capsule and subtract_capsule_quad, which keep
+    // their callers and their semantics.
+    void subtract_line_sweep(double x0, double y0, double x1, double y1, double radius);
+    void subtract_line_sweep_local(double x0, double y0, double x1, double y1, double radius);
+    // Remove the certified OVER bound of the same sweep (a superset of the true
+    // capsule; over-cuts by at most 1e-4 r on the sides). For audits and bracket
+    // tests only -- never a depletion model.
+    void subtract_line_sweep_over(double x0, double y0, double x1, double y1, double radius);
+
+    // Full machining-circle sweep removed locally: the same exact annulus as
+    // subtract_circle_sweep, from the AUTHORED guide radius.
+    void subtract_circle_sweep_local(double cx, double cy, double guide_radius, double tool_radius);
+
+    // Non-mutating removal verdicts (SweepRemovalVerdict): one exact
+    // regularized-intersection test per bound, no clone, no subtraction.
+    SweepRemovalVerdict line_sweep_removal(double x0, double y0, double x1, double y1,
+                                           double radius) const;
+    SweepRemovalVerdict circle_sweep_removal(double cx, double cy, double guide_radius,
+                                             double tool_radius) const;
 
     // Remove the tool sweep along the circular guide arc from (sx,sy) to
     // (ex,ey) about (cx,cy) — cw selects the sweep direction, start == end

@@ -185,6 +185,20 @@ std::vector<EngagementSample> engagement_arc_prefixes(
     const std::vector<double>& parameters, double tool_radius,
     double cap_chord_ratio, double gap_close_ratio = 0.0);
 
+// A FULL machining circle of AUTHORED guide radius: the stations lie exactly on
+// the circle of radius `guide_radius` about the guide centre -- the circle the
+// replay's exact annulus (Stock2::subtract_circle_sweep) is built on -- rather
+// than on the circle through a double entry point, which a compas Frame puts
+// ulps off that radius. Station 0 (empty prefix) is the authored entry
+// (entry_x, entry_y) exactly; stations p > 0 start from guide + rho * u, u an
+// exact rational unit vector along the entry direction. Same classification,
+// extent and reporting as the arc form.
+std::vector<EngagementSample> engagement_circle_prefixes(
+    const Stock2& stock, double guide_cx, double guide_cy, double guide_radius,
+    double entry_x, double entry_y, bool clockwise,
+    const std::vector<double>& parameters, double tool_radius,
+    double cap_chord_ratio, double gap_close_ratio = 0.0);
+
 // Result of certifying the engagement cap along one linear cutter motion.
 // max_tea is the largest run TEA seen at any station visited -- a REPORTING
 // double, best-effort over the sampled stations, never a decision input.

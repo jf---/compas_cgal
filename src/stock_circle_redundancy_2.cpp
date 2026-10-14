@@ -43,11 +43,12 @@ bool Stock2::can_remove_circle(
         if (start == end) {
             continue;  // A zero-progress fan contributes no additional motion.
         }
-        lost.subtract_capsule_quad(
+        lost.subtract_line_sweep(
             connector_samples(row - 1, 0), connector_samples(row - 1, 1),
             connector_samples(row, 0), connector_samples(row, 1), tool_radius);
     }
-    // Quad sweeps under-cover the actual connectors. Empty therefore proves
-    // preservation; nonempty merely retains the circle, without claiming a gap.
+    // Line sweeps (exact capsules or under-stadia) never cover more than the
+    // actual connectors. Empty therefore proves preservation; nonempty merely
+    // retains the circle, without claiming a gap.
     return lost.is_empty();
 }
