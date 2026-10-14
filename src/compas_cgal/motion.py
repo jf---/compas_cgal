@@ -5,14 +5,14 @@ from fractions import Fraction
 from typing import Self
 
 from compas_cgal import _stock_2
-from compas_cgal.adaptive.errors import DegenerateCircleMotionError
-from compas_cgal.adaptive.errors import DegenerateSegmentMotionError
-from compas_cgal.adaptive.errors import InvalidEngagementCapError
-from compas_cgal.adaptive.units import Point2
-from compas_cgal.adaptive.units import Radian
-from compas_cgal.adaptive.units import SquaredMillimetre
-from compas_cgal.adaptive.units import Vector2
-from compas_cgal.adaptive.units import WorldXY
+from compas_cgal.errors import DegenerateCircleMotionError
+from compas_cgal.errors import DegenerateSegmentMotionError
+from compas_cgal.errors import InvalidEngagementCapError
+from compas_cgal.units import Point2
+from compas_cgal.units import Radian
+from compas_cgal.units import SquaredMillimetre
+from compas_cgal.units import Vector2
+from compas_cgal.units import WorldXY
 
 
 @dataclass(frozen=True)

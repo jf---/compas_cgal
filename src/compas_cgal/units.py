@@ -9,7 +9,7 @@ from typing import Self
 from typing import TypeVar
 from typing import overload
 
-from compas_cgal.adaptive.errors import InvalidUnitValueError
+from compas_cgal.errors import InvalidUnitValueError
 
 Millimetre = NewType("Millimetre", float)
 DirectionComponent = NewType("DirectionComponent", float)

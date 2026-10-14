@@ -143,7 +143,7 @@ def _holes_to_vertex_arrays(holes: list[Polygon] | None) -> list[np.ndarray]:
 def _warn_if_truncated(skipped: int, max_passes: int) -> None:
     if skipped > 0:
         warnings.warn(
-            f"max_passes={max_passes} reached: {skipped} skeleton edge chain(s) left unmachined; " "raise max_passes for full coverage.",
+            f"max_passes={max_passes} reached: {skipped} skeleton edge chain(s) left unmachined; raise max_passes for full coverage.",
             UserWarning,
             stacklevel=3,
         )

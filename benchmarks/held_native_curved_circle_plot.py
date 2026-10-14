@@ -109,9 +109,7 @@ def _render(
     print(f"PLOT {output}: {len(events)}/{total} queries; failed={failure is not None}", flush=True)
 
 
-def render_native_curved_circles(
-    case_name: str, *, max_pieces: int | None = None, output: Path | None = None, record_stops: bool = False
-) -> None:
+def render_native_curved_circles(case_name: str, *, max_pieces: int | None = None, output: Path | None = None, record_stops: bool = False) -> None:
     """Query midpoint circles directly on native pieces, keeping failures visible.
 
     A named geometry stop (a clearance below the tool, an inadmissible normal)

@@ -137,9 +137,7 @@ assert not owner.circle_on_piece(0,0.5,1.).is_stationary
     subprocess.run([sys.executable, "-c", code], check=True, capture_output=True, text=True, timeout=30)
 
 
-def _timed_query(
-    owner: native.NativeBoundary2, piece: int, parameter: float, tool: float
-) -> tuple[_circle_geometry_2.BoundaryNormalCircleProposal2, float]:
+def _timed_query(owner: native.NativeBoundary2, piece: int, parameter: float, tool: float) -> tuple[_circle_geometry_2.BoundaryNormalCircleProposal2, float]:
     started = time.perf_counter()
     proposal = owner.circle_on_piece(piece, parameter, tool)
     return proposal, time.perf_counter() - started
@@ -162,9 +160,7 @@ def _generic_disk(cx: float, cy: float, r: float, counterclockwise: bool = True)
     return native.NativeBoundary2([arc(a, b, (cx, cy), counterclockwise), arc(b, a, (cx, cy), counterclockwise)])
 
 
-def _rounded_rectangle(
-    x0: float, y0: float, width: float, height: float, rx: float, ry: float | None = None
-) -> native.NativeBoundary2:
+def _rounded_rectangle(x0: float, y0: float, width: float, height: float, rx: float, ry: float | None = None) -> native.NativeBoundary2:
     """CCW rounded rectangle; unequal rx/ry gives corner arcs that are not tangent to the edges."""
     ry = rx if ry is None else ry
     arc, line = native.NativeBoundaryCurve2.arc, native.NativeBoundaryCurve2.line
@@ -253,9 +249,7 @@ _physical = st.floats(-50.0, 50.0).filter(lambda v: abs(v) >= 1e-3)
     squash=st.floats(1.1, 1.5),
     tool_fraction=st.floats(0.05, 0.9),
 )
-def test_generic_double_rounded_rectangles_stay_fast_and_coupled(
-    x0: float, y0: float, height: float, aspect: float, fillet: float, squash: float, tool_fraction: float
-) -> None:
+def test_generic_double_rounded_rectangles_stay_fast_and_coupled(x0: float, y0: float, height: float, aspect: float, fillet: float, squash: float, tool_fraction: float) -> None:
     width, rx = height * aspect, height * fillet
     ry = rx * squash
     tool = rx * tool_fraction * 0.25  # below every clearance queried here

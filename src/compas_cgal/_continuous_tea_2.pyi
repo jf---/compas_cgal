@@ -14,81 +14,31 @@ BoundaryEventKind: TypeAlias = Literal[
 
 BOUNDARY_EVENT_KINDS: tuple[BoundaryEventKind, ...]
 
-
 class BoundaryExtractionError(RuntimeError): ...
-
-
 class DegenerateBoundarySupportError(BoundaryExtractionError): ...
-
-
 class MissingBoundaryEndpointError(BoundaryExtractionError): ...
-
-
 class MissingBoundaryIntersectionError(BoundaryExtractionError): ...
-
-
 class BoundaryFeatureIndexError(BoundaryExtractionError): ...
-
-
 class EventSubstrateError(RuntimeError): ...
-
-
 class AlgebraicBackendError(EventSubstrateError): ...
-
-
 class InvalidAlgebraicPolynomialError(EventSubstrateError): ...
-
-
 class UnsupportedAlgebraicDegreeError(EventSubstrateError): ...
-
-
 class AlgebraicRootIsolationError(EventSubstrateError): ...
-
-
 class ChartCoverageError(EventSubstrateError): ...
-
-
 class ProjectionDegreeBoundError(EventSubstrateError): ...
-
-
 class TrimFilterError(EventSubstrateError): ...
-
-
 class TrimEndpointOffSupportError(TrimFilterError): ...
-
-
 class DegenerateTrimError(TrimFilterError): ...
-
-
 class UnsupportedLineMotionError(TrimFilterError): ...
-
-
 class EventPartitionVerificationError(EventSubstrateError): ...
-
-
 class EventTraceVerificationError(EventSubstrateError): ...
-
-
 class NonFiniteSegmentInputError(EventSubstrateError): ...
-
-
 class ZeroLengthSegmentMotionError(EventSubstrateError): ...
-
-
 class NonPositiveToolRadiusError(EventSubstrateError): ...
-
-
 class InvalidCapChordRatioError(EventSubstrateError): ...
-
-
 class UnsupportedAlgebraicVertexProjectionError(EventSubstrateError): ...
-
-
 class IncompleteSegmentPartitionError(EventSubstrateError): ...
-
-
 class IncompleteSegmentOracleError(EventSubstrateError): ...
-
 
 class ContinuousTeaVerdict:
     CERTIFIED: ContinuousTeaVerdict
@@ -97,13 +47,11 @@ class ContinuousTeaVerdict:
     @property
     def name(self) -> str: ...
 
-
 class ExactBinary64Rational2:
     numerator: str
     denominator: str
     text: str
     canonical_bytes: bytes
-
 
 class SegmentEventSource2:
     @staticmethod
@@ -124,7 +72,6 @@ class SegmentEventSource2:
     motion_data: tuple[str, str, str, str]
     canonical_bytes: bytes
     canonical_digest: bytes
-
 
 class BoundaryFeatureRecord2:
     @property
@@ -156,7 +103,6 @@ class BoundaryFeatureRecord2:
     @property
     def overlap_multiplicity(self) -> int: ...
 
-
 class BoundaryEvent2:
     kind: BoundaryEventKind
     @property
@@ -171,7 +117,6 @@ class BoundaryEvent2:
     def exact_overlap_record(self) -> bytes: ...
     multiplicity: int
 
-
 class AlgebraicBackendEvidence2:
     cgal_version: str
     integer_backend: str
@@ -179,7 +124,6 @@ class AlgebraicBackendEvidence2:
     algebraic_kernel_2: str
     arrangement_traits: str
     compile_definitions: tuple[str, ...]
-
 
 class ParameterChart2:
     chart_id: str
@@ -191,7 +135,6 @@ class ParameterChart2:
     end_seam_id: bytes
     owns_start_seam: bool
     owns_end_seam: bool
-
 
 class PartitionEvent2:
     def __init__(
@@ -226,7 +169,6 @@ class PartitionEvent2:
     first_branch_id: bytes
     second_branch_id: bytes
 
-
 class ProjectionInput2:
     def __init__(
         self,
@@ -234,7 +176,6 @@ class ProjectionInput2:
         coefficients: Sequence[str],
         events: Sequence[PartitionEvent2],
     ) -> None: ...
-
 
 class AlgebraicRootRecord2:
     def __init__(
@@ -253,14 +194,12 @@ class AlgebraicRootRecord2:
     interval_low: str
     interval_high: str
 
-
 class ParameterCell2:
     lower_root_id: bytes
     upper_root_id: bytes
     witness_numerator: str
     witness_denominator: str
     disposition: str
-
 
 class PhysicalIncidence2:
     incidence_id: bytes
@@ -272,7 +211,6 @@ class PhysicalIncidence2:
     endpoint_role: Literal["source", "target"]
     sheet_ordinal: int
 
-
 class ActiveBoundaryBranch2:
     branch_id: bytes
     feature_id: bytes
@@ -282,7 +220,6 @@ class ActiveBoundaryBranch2:
     sheet_ordinal: int
     root_id: bytes
     physical_incidence: PhysicalIncidence2
-
 
 class LocalEventWitness2:
     kind: str
@@ -298,7 +235,6 @@ class LocalEventWitness2:
     source_factor_id: bytes
     multiplicity: int
 
-
 class EventFibre2:
     root_id: bytes
     local_root_ids: Sequence[bytes]
@@ -310,12 +246,10 @@ class EventFibre2:
     ccw_direction: Literal["merge", "split", "mixed", "unchanged", ""]
     cw_direction: Literal["merge", "split", "mixed", "unchanged", ""]
 
-
 class RationalTrimInterval2:
     rim_parameter: str
     motion_domain_low: str
     motion_domain_high: str
-
 
 class TrimmedLineBranch2:
     rim_parameter: str
@@ -336,7 +270,6 @@ class TrimmedLineBranch2:
     trim_id: bytes
     branch_id: bytes
 
-
 class ProjectedRegularizationVertex2:
     root: AlgebraicRootRecord2
     vertex_id: bytes
@@ -344,18 +277,15 @@ class ProjectedRegularizationVertex2:
     second_trim_disposition: str
     conjugate_disposition: str
 
-
 class CcwOrientation2:
     disposition: str
     determinant_sign: str
     dot_sign: str
 
-
 class OneRootPredicate2:
     rational_coefficients: Sequence[str]
     radical_coefficients: Sequence[str]
     radicand: str
-
 
 class ProjectionRecord2:
     projection_id: str
@@ -367,7 +297,6 @@ class ProjectionRecord2:
     normalized_coefficient_bytes: bytes
     signed_predicate_coefficients: Sequence[str]
     one_root_predicate: OneRootPredicate2 | None
-
 
 class OverlapInterval2:
     kind: str
@@ -381,11 +310,9 @@ class OverlapInterval2:
     trim_id: bytes
     branch_id: bytes
 
-
 class ChartSeam2:
     seam_id: bytes
     owner_chart_id: str
-
 
 class EventPartitionCertificate2:
     def __init__(
@@ -415,11 +342,9 @@ class EventPartitionCertificate2:
     canonical_bytes: bytes
     canonical_digest: bytes
 
-
 class VerifiedEventPartition2:
     verdict: ContinuousTeaVerdict
     partition: EventPartitionCertificate2
-
 
 class SegmentBoundaryBranch2:
     branch_id: bytes
@@ -436,14 +361,12 @@ class SegmentBoundaryBranch2:
     rim_factor_coefficients: Sequence[str]
     rim_root_ordinal: int
 
-
 class BranchPairDisposition2:
     pair_sheet_id: bytes
     first_branch_id: bytes
     second_branch_id: bytes
     orientation_disposition: Literal["ccw-forward", "ccw-wrap"]
     cap_disposition: Literal["below-cap", "equal-cap", "above-cap"]
-
 
 class SegmentEventStratum2:
     kind: Literal["cell", "fibre"]
@@ -464,7 +387,6 @@ class SegmentEventStratum2:
     original_equations_rechecked: bool
     orientation_rechecked: bool
     trim_predicates_rechecked: bool
-
 
 class EventTraceEvent2:
     def __init__(
@@ -489,7 +411,6 @@ class EventTraceEvent2:
     canonical_bytes: bytes
     canonical_id: bytes
 
-
 class EventTrace2:
     exact_verdict: Literal["certified", "cap_exceeded", "unresolved"]
     partition: EventPartitionCertificate2
@@ -506,11 +427,9 @@ class EventTrace2:
     canonical_bytes: bytes
     canonical_digest: bytes
 
-
 def event_oracle_component_version() -> bytes: ...
 def swept_prefix_strategy_version() -> bytes: ...
 def swept_prefix_theorem_version() -> bytes: ...
-
 
 class SweptPrefixSegmentTeaAudit2:
     exact_verdict: Literal["certified", "unresolved"]
@@ -523,11 +442,9 @@ class SweptPrefixSegmentTeaAudit2:
     motion_stratum_count: int
     is_self_consistent: bool
 
-
 class SegmentCellStratum2:
     branches: Sequence[SegmentBoundaryBranch2]
     stratum: SegmentEventStratum2
-
 
 class SegmentEventPartition2:
     source: SegmentEventSource2
@@ -539,11 +456,9 @@ class SegmentEventPartition2:
     canonical_bytes: bytes
     canonical_digest: bytes
 
-
 class VerifiedSegmentEventPartition2:
     verdict: ContinuousTeaVerdict
     partition: SegmentEventPartition2
-
 
 def extract_boundary_records(stock: Stock2) -> Sequence[BoundaryFeatureRecord2]: ...
 def classify_boundary_pair(

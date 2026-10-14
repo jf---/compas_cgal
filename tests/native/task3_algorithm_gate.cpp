@@ -13,6 +13,7 @@
 #include <stdexcept>
 #include <string>
 #include <utility>
+#include <memory>
 #include <vector>
 
 #include <CGAL/Arrangement_2.h>
@@ -32,12 +33,13 @@ compas::RowMatrixXd rectangle_matrix();
 
 void exact_region_storage_gate()
 {
-    ReachSet disk;
-    disk.insert(reach_disk_polygon(ReachKernelPoint(0, 0), ReachFT(2)));
+    auto disk = std::make_shared<ReachSet>();
+    disk->insert(reach_disk_polygon(ReachKernelPoint(0, 0), ReachFT(2)));
     const ExactRegion2 original = ExactRegion2::build(
         std::move(disk),
         ExactRegionRole2::ReachableMaterial,
-        "native-gate-region");
+        "native-gate-region",
+        {});
     const ExactRegion2 clone = original.clone();
     require(
         original.shares_storage_with_for_audit(clone),

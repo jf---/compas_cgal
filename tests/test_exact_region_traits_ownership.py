@@ -210,9 +210,7 @@ def test_containment_evaluation_survives_orphaned_regions(domain: _coverage_2.Re
     center = domain.center_domain()
     del domain
     authority = bytes(range(32))
-    record = _containment_2.evaluate_exact_segment_containment(
-        design, center, authority, 1.0, 1.0, 8.0, 1.0, 0.4
-    )
+    record = _containment_2.evaluate_exact_segment_containment(design, center, authority, 1.0, 1.0, 8.0, 1.0, 0.4)
     assert owns_traits(design)
     assert owns_traits(center)
     assert record.contained is True

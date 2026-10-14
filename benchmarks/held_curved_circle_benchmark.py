@@ -135,10 +135,7 @@ class CurvedCircleBenchmark:
                 stop_piece_index=case["stop_piece_index"],
                 stop_type=case["stop_type"],
                 import_seconds=case["import_seconds"],
-                pieces=tuple(
-                    PieceTiming(piece_index=p["piece_index"], kind=p["kind"], seconds=p["seconds"], samples=tuple(p["samples"]))
-                    for p in case["pieces"]
-                ),
+                pieces=tuple(PieceTiming(piece_index=p["piece_index"], kind=p["kind"], seconds=p["seconds"], samples=tuple(p["samples"])) for p in case["pieces"]),
             )
             for name, case in raw["cases"].items()
         }
@@ -220,27 +217,65 @@ def compare(current: CurvedCircleBenchmark, baseline: CurvedCircleBenchmark) -> 
             findings.append(RegressionFinding(name, "missing_case", 0.0, 0.0, f"{name}: not measured in the current run."))
             continue
         if present.completed_queries != recorded.completed_queries:
-            findings.append(RegressionFinding(name, "completed", present.completed_queries, recorded.completed_queries,
-                                              f"{name}: completed {present.completed_queries} queries, baseline {recorded.completed_queries}; behaviour changed, re-record deliberately if intended."))
+            findings.append(
+                RegressionFinding(
+                    name,
+                    "completed",
+                    present.completed_queries,
+                    recorded.completed_queries,
+                    f"{name}: completed {present.completed_queries} queries, baseline {recorded.completed_queries}; behaviour changed, re-record deliberately if intended.",
+                )
+            )
         if (present.stop_piece_index, present.stop_type) != (recorded.stop_piece_index, recorded.stop_type):
-            findings.append(RegressionFinding(name, "stop", present.stop_piece_index or -1, recorded.stop_piece_index or -1,
-                                              f"{name}: stop {present.stop_type} at {present.stop_piece_index}, baseline {recorded.stop_type} at {recorded.stop_piece_index}."))
+            findings.append(
+                RegressionFinding(
+                    name,
+                    "stop",
+                    present.stop_piece_index or -1,
+                    recorded.stop_piece_index or -1,
+                    f"{name}: stop {present.stop_type} at {present.stop_piece_index}, baseline {recorded.stop_type} at {recorded.stop_piece_index}.",
+                )
+            )
         if not present.pieces or not recorded.pieces:
             continue
         if present.max_seconds > ABSOLUTE_PIECE_CEILING_S:
-            findings.append(RegressionFinding(name, "absolute_piece_ceiling", present.max_seconds, ABSOLUTE_PIECE_CEILING_S,
-                                              f"{name}: slowest query {present.max_seconds:.4f} s exceeds the {ABSOLUTE_PIECE_CEILING_S} s ceiling."))
+            findings.append(
+                RegressionFinding(
+                    name,
+                    "absolute_piece_ceiling",
+                    present.max_seconds,
+                    ABSOLUTE_PIECE_CEILING_S,
+                    f"{name}: slowest query {present.max_seconds:.4f} s exceeds the {ABSOLUTE_PIECE_CEILING_S} s ceiling.",
+                )
+            )
         if present.median_seconds > ABSOLUTE_MEDIAN_CEILING_S:
-            findings.append(RegressionFinding(name, "absolute_median_ceiling", present.median_seconds, ABSOLUTE_MEDIAN_CEILING_S,
-                                              f"{name}: median query {present.median_seconds:.4f} s exceeds the {ABSOLUTE_MEDIAN_CEILING_S} s ceiling."))
+            findings.append(
+                RegressionFinding(
+                    name,
+                    "absolute_median_ceiling",
+                    present.median_seconds,
+                    ABSOLUTE_MEDIAN_CEILING_S,
+                    f"{name}: median query {present.median_seconds:.4f} s exceeds the {ABSOLUTE_MEDIAN_CEILING_S} s ceiling.",
+                )
+            )
         median_bound = recorded.median_seconds * median_factor
         if present.median_seconds > median_bound:
-            findings.append(RegressionFinding(name, "median", present.median_seconds, median_bound,
-                                              f"{name}: median {present.median_seconds:.5f} s > {median_factor}x baseline {recorded.median_seconds:.5f} s ({regime})."))
+            findings.append(
+                RegressionFinding(
+                    name,
+                    "median",
+                    present.median_seconds,
+                    median_bound,
+                    f"{name}: median {present.median_seconds:.5f} s > {median_factor}x baseline {recorded.median_seconds:.5f} s ({regime}).",
+                )
+            )
         max_bound = recorded.max_seconds * max_factor
         if present.max_seconds > max_bound:
-            findings.append(RegressionFinding(name, "max", present.max_seconds, max_bound,
-                                              f"{name}: slowest {present.max_seconds:.5f} s > {max_factor}x baseline {recorded.max_seconds:.5f} s ({regime})."))
+            findings.append(
+                RegressionFinding(
+                    name, "max", present.max_seconds, max_bound, f"{name}: slowest {present.max_seconds:.5f} s > {max_factor}x baseline {recorded.max_seconds:.5f} s ({regime})."
+                )
+            )
     return findings
 
 
@@ -258,7 +293,9 @@ def summary_lines(benchmark: CurvedCircleBenchmark) -> list[str]:
     for name, case in benchmark.cases.items():
         stop = "none" if case.stop_type is None else f"{case.stop_type} at piece {case.stop_piece_index}"
         if case.pieces:
-            lines.append(f"{name:<22} {case.completed_queries:>3}/{case.native_pieces:<3} median {case.median_seconds * 1000:7.3f} ms  p95 {case.p95_seconds * 1000:7.3f} ms  max {case.max_seconds * 1000:7.3f} ms  stop {stop}")
+            lines.append(
+                f"{name:<22} {case.completed_queries:>3}/{case.native_pieces:<3} median {case.median_seconds * 1000:7.3f} ms  p95 {case.p95_seconds * 1000:7.3f} ms  max {case.max_seconds * 1000:7.3f} ms  stop {stop}"
+            )
         else:
             lines.append(f"{name:<22} {case.completed_queries:>3}/{case.native_pieces:<3} no completed query  stop {stop}")
     return lines
