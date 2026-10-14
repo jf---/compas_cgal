@@ -2,10 +2,13 @@
 
 #include "engagement_2.h"
 #include "stock_2.h"
+#include "swept_prefix_engagement_2.h"
 
 #include <tuple>
+#include <vector>
 
 #include <nanobind/stl/tuple.h>
+#include <nanobind/stl/vector.h>
 
 namespace nb = nanobind;
 using namespace nb::literals;
@@ -22,6 +25,12 @@ void register_engagement(nanobind::module_& m)
         m, "InvalidEngagementCapRatioError", PyExc_ValueError);
     nb::exception<InvalidEngagementGapRatioError>(
         m, "InvalidEngagementGapRatioError", PyExc_ValueError);
+    nb::exception<InvalidSweptPrefixInputError>(
+        m, "InvalidSweptPrefixInputError", PyExc_ValueError);
+    nb::exception<SweptPrefixRimCellError>(
+        m, "SweptPrefixRimCellError", PyExc_RuntimeError);
+    nb::exception<ArcPrefixExtentAmbiguousError>(
+        m, "ArcPrefixExtentAmbiguousError", PyExc_RuntimeError);
     nb::exception<NonFiniteSegmentCertificationInputError>(
         m, "NonFiniteSegmentCertificationInputError", PyExc_ValueError);
     nb::exception<NonPositiveSegmentCertificationToolRadiusError>(
@@ -52,6 +61,45 @@ void register_engagement(nanobind::module_& m)
           },
           "stock"_a, "cx"_a, "cy"_a, "tool_radius"_a, "cap_chord_ratio"_a,
           "gap_close_ratio"_a = 0.0);
+
+    // Nanobind boundary for the in-process (swept-prefix) queries. Same seam as
+    // engagement_at: every double is injected exactly; the stock is read, never
+    // depleted. Each sample is (total_tea, max_run_tea, cap_exceeded).
+    auto sample_tuples = [](const std::vector<EngagementSample>& samples) {
+        std::vector<std::tuple<double, double, bool>> result;
+        result.reserve(samples.size());
+        for (const EngagementSample& sample : samples) {
+            result.emplace_back(
+                sample.total_tea, sample.max_run_tea, sample.cap_exceeded);
+        }
+        return result;
+    };
+    m.def("engagement_line_prefixes",
+          [sample_tuples](
+              const Stock2& stock, double x0, double y0, double x1, double y1,
+              const std::vector<double>& parameters, double tool_radius,
+              double cap_chord_ratio, double gap_close_ratio) {
+              return sample_tuples(engagement_line_prefixes(
+                  stock, x0, y0, x1, y1, parameters, tool_radius,
+                  cap_chord_ratio, gap_close_ratio));
+          },
+          "stock"_a, "x0"_a, "y0"_a, "x1"_a, "y1"_a, "parameters"_a,
+          "tool_radius"_a, "cap_chord_ratio"_a, "gap_close_ratio"_a = 0.0);
+    m.def("engagement_arc_prefixes",
+          [sample_tuples](
+              const Stock2& stock, double guide_cx, double guide_cy,
+              double start_x, double start_y, double end_x, double end_y,
+              bool clockwise, const std::vector<double>& parameters,
+              double tool_radius, double cap_chord_ratio,
+              double gap_close_ratio) {
+              return sample_tuples(engagement_arc_prefixes(
+                  stock, guide_cx, guide_cy, start_x, start_y, end_x, end_y,
+                  clockwise, parameters, tool_radius, cap_chord_ratio,
+                  gap_close_ratio));
+          },
+          "stock"_a, "guide_cx"_a, "guide_cy"_a, "start_x"_a, "start_y"_a,
+          "end_x"_a, "end_y"_a, "clockwise"_a, "parameters"_a,
+          "tool_radius"_a, "cap_chord_ratio"_a, "gap_close_ratio"_a = 0.0);
 
     // Nanobind boundary for the motion certificate: x0..y1, tool_radius and the
     // angular cap enter exact-land inside certify_segment_tea (validation + exact

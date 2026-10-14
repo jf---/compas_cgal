@@ -57,6 +57,18 @@ public:
     using AuditArcMotionError::AuditArcMotionError;
 };
 
+// The binary64 angle seam onto the exact quarter-chart atlas: an authored angle
+// (radians, any real value) crosses into exact-land ONCE here. The whole-turn
+// count and the chart index are decided exactly on the injected rational; the
+// in-chart parameter tan(local/2) is a binary64 evaluation, injected exactly and
+// checked to lie strictly inside the chart. The returned parameter rotates any
+// rational phase vector exactly (exact_circle_chart_point), so every point built
+// from it lies exactly on the phase's circle. AuditArcMotion2::build uses the
+// same seam for its authored endpoints.
+//
+// Raises AuditArcAngleNormalizationError when the angle cannot be represented.
+ExactCircleChartParameter2 audit_arc_chart_parameter_for_angle(double radians);
+
 class ExactArcChartInterval2 {
 public:
     static ExactArcChartInterval2 build(

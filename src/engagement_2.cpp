@@ -4,6 +4,9 @@
 #include "stock_2.h"
 #include "exact/one_root.h"
 #include "exact_cap_certificate_2.h"
+#include "audit_arc_motion_2.h"
+#include "exact_circle_chart_2.h"
+#include "swept_prefix_engagement_2.h"
 
 #include <algorithm>
 #include <cmath>
@@ -499,6 +502,51 @@ void certify_recursive(const Stock2& stock, double x0, double y0, double x1,
     certify_recursive(stock, mx, my, x1, y1, r, cap, full_cap_chord_ratio, acc, depth + 1);
 }
 
+// Reporting view of an exact station classification: the verdict is copied,
+// the spans are measured about the station's double centre (REPORTING only).
+EngagementSample engagement_sample_from_exact(
+    const AuditExactStationClassification2& exact,
+    double center_x,
+    double center_y)
+{
+    EngagementSample out{
+        0.0,
+        0.0,
+        exact.disposition()
+            == AuditExactStationDisposition2::CAP_EXCEEDED,
+    };
+    for (const auto& run : exact.true_run_arcs()) {
+        double run_span = 0.0;
+        for (const auto& [start, end] : run) {
+            run_span += rim_sub_arc_span(start, end, center_x, center_y);
+        }
+        out.total_tea += run_span;
+        out.max_run_tea = std::max(out.max_run_tea, run_span);
+    }
+    if (out.total_tea > FULL_TURN + FULL_TURN_REPORTING_SLACK) {
+        throw RimSpanNormalizationError(
+            "Engaged rim runs exceed the cutter's full turn");
+    }
+    return out;
+}
+
+// Boundary validation of the prefix parameters: comparisons of the input
+// doubles themselves (each IS a rational), not a tolerance.
+void validate_prefix_parameters(const std::vector<double>& parameters)
+{
+    double previous = 0.0;
+    for (const double parameter : parameters) {
+        if (!std::isfinite(parameter)
+            || parameter < 0.0
+            || parameter > 1.0
+            || parameter < previous) {
+            throw InvalidSweptPrefixInputError(
+                "swept-prefix parameters must be finite, non-decreasing, and lie in [0, 1]");
+        }
+        previous = parameter;
+    }
+}
+
 } // namespace
 
 double cap_chord_ratio(double cap_radians)
@@ -536,25 +584,117 @@ EngagementSample engagement_at(const Stock2& stock, double cx, double cy,
             FT(tool_radius),
             FT(cap_chord_ratio),
             FT(gap_close_ratio));
-    EngagementSample out{
-        0.0,
-        0.0,
-        exact.disposition()
-            == AuditExactStationDisposition2::CAP_EXCEEDED,
-    };
-    for (const auto& run : exact.true_run_arcs()) {
-        double run_span = 0.0;
-        for (const auto& [start, end] : run) {
-            run_span += rim_sub_arc_span(start, end, cx, cy);
+    return engagement_sample_from_exact(exact, cx, cy);
+}
+
+std::vector<EngagementSample> engagement_line_prefixes(
+    const Stock2& stock, double x0, double y0, double x1, double y1,
+    const std::vector<double>& parameters, double tool_radius,
+    double cap_chord_ratio, double gap_close_ratio)
+{
+    validate_engagement_input_binary64(
+        x0, y0, tool_radius, cap_chord_ratio, gap_close_ratio);
+    validate_engagement_input_binary64(
+        x1, y1, tool_radius, cap_chord_ratio, gap_close_ratio);
+    validate_prefix_parameters(parameters);
+    const EPoint start{FT(x0), FT(y0)};
+    const EPoint end{FT(x1), FT(y1)};
+    if (start == end) {
+        throw InvalidSweptPrefixInputError(
+            "line swept-prefix motion requires distinct endpoints");
+    }
+    std::vector<EngagementSample> result;
+    result.reserve(parameters.size());
+    for (const double parameter : parameters) {
+        const FT exact_parameter(parameter);
+        const AuditExactStationClassification2 exact =
+            classify_line_swept_prefix_station_exact(
+                stock,
+                start,
+                end,
+                exact_parameter,
+                FT(tool_radius),
+                FT(cap_chord_ratio),
+                FT(gap_close_ratio));
+        const EPoint station = start + exact_parameter * (end - start);
+        result.push_back(engagement_sample_from_exact(
+            exact,
+            CGAL::to_double(station.x()),
+            CGAL::to_double(station.y())));
+    }
+    return result;
+}
+
+std::vector<EngagementSample> engagement_arc_prefixes(
+    const Stock2& stock, double guide_cx, double guide_cy,
+    double start_x, double start_y, double end_x, double end_y, bool clockwise,
+    const std::vector<double>& parameters, double tool_radius,
+    double cap_chord_ratio, double gap_close_ratio)
+{
+    validate_engagement_input_binary64(
+        start_x, start_y, tool_radius, cap_chord_ratio, gap_close_ratio);
+    validate_engagement_input_binary64(
+        end_x, end_y, tool_radius, cap_chord_ratio, gap_close_ratio);
+    if (!std::isfinite(guide_cx) || !std::isfinite(guide_cy)) {
+        throw InvalidSweptPrefixInputError(
+            "arc swept-prefix guide center must be finite");
+    }
+    validate_prefix_parameters(parameters);
+    const EPoint guide{FT(guide_cx), FT(guide_cy)};
+    const EPoint start{FT(start_x), FT(start_y)};
+    const EPoint end{FT(end_x), FT(end_y)};
+    if (guide == start || guide == end) {
+        throw InvalidSweptPrefixInputError(
+            "arc swept-prefix guide radius must be positive");
+    }
+    const bool full_turn = start == end;
+    // INTENT, not geometry: the travel sweep in radians that places the interior
+    // stations. It crosses into exact-land only through the chart seam below;
+    // no decision reads it.
+    double total_sweep = FULL_TURN;
+    if (!full_turn) {
+        const double start_angle = std::atan2(start_y - guide_cy, start_x - guide_cx);
+        const double end_angle = std::atan2(end_y - guide_cy, end_x - guide_cx);
+        total_sweep = clockwise ? start_angle - end_angle : end_angle - start_angle;
+        if (total_sweep <= 0.0) total_sweep += FULL_TURN;
+    }
+    const EVector phase = start - guide;
+    std::vector<EngagementSample> result;
+    result.reserve(parameters.size());
+    for (const double parameter : parameters) {
+        EPoint station = start;
+        ArcPrefixExtent2 extent = ArcPrefixExtent2::ZERO;
+        if (parameter == 1.0) {
+            station = end;
+            extent = full_turn
+                ? ArcPrefixExtent2::FULL_TURN
+                : classify_arc_prefix_extent_exact(guide, start, end, clockwise);
+        } else if (parameter != 0.0) {
+            const double turned = total_sweep * parameter;
+            station = exact_circle_chart_point(
+                guide,
+                phase,
+                audit_arc_chart_parameter_for_angle(clockwise ? -turned : turned));
+            extent = classify_arc_prefix_extent_exact(
+                guide, start, station, clockwise);
         }
-        out.total_tea += run_span;
-        out.max_run_tea = std::max(out.max_run_tea, run_span);
+        const AuditExactStationClassification2 exact =
+            classify_arc_swept_prefix_station_exact(
+                stock,
+                guide,
+                start,
+                station,
+                clockwise,
+                extent,
+                FT(tool_radius),
+                FT(cap_chord_ratio),
+                FT(gap_close_ratio));
+        result.push_back(engagement_sample_from_exact(
+            exact,
+            CGAL::to_double(station.x()),
+            CGAL::to_double(station.y())));
     }
-    if (out.total_tea > FULL_TURN + FULL_TURN_REPORTING_SLACK) {
-        throw RimSpanNormalizationError(
-            "Engaged rim runs exceed the cutter's full turn");
-    }
-    return out;
+    return result;
 }
 
 CertifiedTea certify_segment_tea(const Stock2& stock, double x0, double y0,

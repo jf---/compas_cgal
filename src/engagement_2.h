@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdexcept>
+#include <vector>
 
 class Stock2;
 
@@ -113,6 +114,14 @@ struct EngagementSample {
     bool cap_exceeded;
 };
 
+// Raised for a swept-prefix query whose inputs do not describe a motion: prefix
+// parameters that are non-finite, outside [0, 1] or not non-decreasing, a line
+// with coincident endpoints, a non-finite guide centre or a zero guide radius.
+class InvalidSweptPrefixInputError : public std::invalid_argument {
+public:
+    using std::invalid_argument::invalid_argument;
+};
+
 // Exact TEA query, read LOCALLY. Zone the cutter circle of radius tool_radius at
 // (cx, cy) in the stock's OWN Gps arrangement (faces carry contained() =
 // material) and harvest the engaged rim sub-arcs (the rim-in-material pieces),
@@ -149,6 +158,32 @@ struct EngagementSample {
 EngagementSample engagement_at(const Stock2& stock, double cx, double cy,
                                double tool_radius, double cap_chord_ratio,
                                double gap_close_ratio = 0.0);
+
+// IN-PROCESS engagement along ONE motion (src/swept_prefix_engagement_2.h): the
+// station at each prefix parameter p (non-decreasing, in [0, 1]) is classified
+// against `stock` minus the motion's own swept prefix [0, p]. `stock` is the
+// material the motion starts from; it is NOT mutated (depletion is the replay's
+// job). p == 0 is exactly engagement_at at the start.
+//
+// Every input double enters exact-land once, here, by exact injection. Line
+// stations are the exact rational start + p * (end - start). Arc stations for
+// 0 < p < 1 are the start phase rotated EXACTLY through the binary64 angle
+// p * sweep (sweep = 2*pi for start == end, else the atan2 sweep of the
+// authored endpoints in the travel direction) by the quarter-chart atlas
+// (audit_arc_chart_parameter_for_angle), so every station lies exactly on the
+// start's guide circle; p == 1 is the authored end. The prefix extent (at most
+// or beyond a half turn) is an exact orientation on those stations, never the
+// double angle. The reported spans use CGAL::to_double of the exact station.
+std::vector<EngagementSample> engagement_line_prefixes(
+    const Stock2& stock, double x0, double y0, double x1, double y1,
+    const std::vector<double>& parameters, double tool_radius,
+    double cap_chord_ratio, double gap_close_ratio = 0.0);
+
+std::vector<EngagementSample> engagement_arc_prefixes(
+    const Stock2& stock, double guide_cx, double guide_cy,
+    double start_x, double start_y, double end_x, double end_y, bool clockwise,
+    const std::vector<double>& parameters, double tool_radius,
+    double cap_chord_ratio, double gap_close_ratio = 0.0);
 
 // Result of certifying the engagement cap along one linear cutter motion.
 // max_tea is the largest run TEA seen at any station visited -- a REPORTING

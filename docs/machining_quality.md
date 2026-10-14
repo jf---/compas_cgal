@@ -22,6 +22,41 @@ the current generator emits machining "circles" a fiftieth of the tool radius,
 ten operations per path that remove nothing, and motions at 360° of engagement
 under a 120° cap.
 
+## How engagement is measured: in process
+
+Engagement at a station inside a motion is read against the stock the motion
+started from **minus that motion's own swept prefix** up to the station, not
+against the static stock. The static reading was physically wrong in the most
+basic case: a straight slot into solid stock read 360° (the whole rim sits in
+the material the motion is about to cut), while the cutter physically engages
+the leading half, 180°. The gate (`benchmarks/survey.py`) now asks
+`_stock_2.engagement_line_prefixes` / `engagement_arc_prefixes` once per motion
+and threshold:
+
+- **Lines.** The prefix capsule covers exactly the closed rear half of the
+  station's rim, so a straight slot reads 180° at every station after the first
+  (`verify_direction.py`: `[0.0, 180.0, 180.0] ... [180.0, 180.0, 180.0]`, was
+  `[0.0, 192.8, 205.7] ... [360.0, 360.0, 360.0]`). The cap and slotting
+  verdicts stay exact: at a 180° cap the slot is within, at 179° it exceeds.
+- **Arcs and circles.** The prefix is the start disk plus the annular sector
+  swept so far. A full circle is an arc prefix from 0 to 2π; its seam is
+  sampled once, at prefix 0, which is the static reading.
+- **Travel order.** Stations follow the operation's turn direction. The gate
+  streams cut clockwise, and the earlier sampler walked them counter-clockwise;
+  the prefix model depends on the order, and so do the engagement gradient and
+  the maximum engagement step.
+- **Non-mutating.** The query reads the motion's starting stock and never
+  depletes it; the replay still owns depletion.
+
+The generators' own probe rings (`_station_is_admissible` in
+`engagement_toolpath.py` and its importers) **still decide against the static
+stock** until Task 1.1. The gate therefore measures physics that the generators
+do not yet regulate. On radius_regulated, rect_20x12 at the 40° cap, the
+in-process gate counts 65 cap-exceeding motions where the static reading
+counted 125, at the same survey cost (124 s against 130 s, 1,717 motions). The
+figures and numbers on this page that predate Task 0.1 were measured with the
+static model, and Task 0.1 does not regenerate them.
+
 ## The four groups
 
 `benchmarks/quality.py` splits the question four ways, because a validity defect
@@ -69,18 +104,40 @@ a named error when it is absent — `MissingMaterialModelError`,
 | | `cut_air_alternations`, `alternations_per_length` | thermal cycling | ▣ |
 | | `cutting_speed_m_per_min`, `taylor_life_minutes`, `life_fraction_consumed` | Taylor life `V·Tⁿ = C` | ◈ both |
 
-!!! warning "Two angles, differing by a factor of two"
+!!! warning "Two rim arcs and one textbook angle"
 
-    The exact kernel reports the **engaged arc of the cutter rim**, which reaches
-    a full turn when the tool is surrounded — which is why a plunge measures
-    360° here. The textbook milling angle is measured entry-to-exit and tops out
-    at 180° for a slot. They are related by `θ_textbook = θ_rim / 2`, derived
-    from `a_e = r(1 − cos(θ_rim/2))` and **measured against the kernel**: on a
-    half-plane at tool radius 1, radial depths of 0, 0.5, 1.0, 1.5 and 2.0 give
-    rim arcs of 0, 120, 180, 240 and 360°, which that relation reproduces
-    exactly. `test_the_kernel_anchors_the_rim_arc_to_radial_depth_relation` pins
-    the table so the conversion cannot be "corrected" back on algebra alone —
-    using the textbook form directly reports a **plunge as zero immersion**.
+    The kernel reports the **engaged arc of the cutter rim**. What that arc means
+    depends on which stock it is read against, and the cut and material metrics
+    convert it differently for each reading:
+
+    - **Static** (`_stock_2.engagement_at`, the generators' probe rings): read
+      against the stock the motion is about to cut. A slot reads a full turn
+      (360°). On a half-plane at tool radius 1, radial depths of 0, 0.5, 1.0, 1.5
+      and 2.0 read 0, 120, 180, 240 and 360°, so `a_e = r(1 − cos(θ_rim/2))` and
+      `θ_textbook = θ_rim / 2` (`textbook_engagement_deg`, pinned by
+      `test_the_kernel_anchors_the_rim_arc_to_radial_depth_relation`).
+    - **In process** (`benchmarks/survey.py`, the gate, since Task 0.1): read
+      against the stock minus the motion's own swept prefix, which covers the
+      rim's rear half. A slot reads a half turn (180°). The same depths read 0,
+      60, 90, 120 and 180°, so `a_e = r(1 − cos θ_rim)` and
+      `θ_textbook = θ_rim` (`in_process_textbook_engagement_deg`, pinned by
+      `test_the_in_process_rim_arc_of_a_side_cut_is_the_textbook_angle`).
+
+    Every immersion, chip-thickness and rubbing number on this page is computed
+    from the survey, so it uses the in-process conversion
+    (`in_process_radial_immersion`, `chip_thickness_ratio_from_in_process_rim`).
+    Feeding an in-process reading through the static conversion would report a
+    90° side cut (`a_e = r`) at immersion 0.146 instead of 0.5.
+
+    **The cap number means two things until Task 1.1.** The generators still
+    decide on the static reading: a station is admissible when its static rim
+    arc is within `tea_cap`. The gate tests the in-process reading against the
+    same `tea_cap` number. For a straight-wall side cut the static arc is twice
+    the in-process one, so a generator held at a 120° cap cuts at about 60° in
+    process, and the gate's cap is about twice as lenient as the generators'
+    regulation for side cuts. `design_immersion` is the generators' commissioned
+    load: the static conversion of the cap, `a_e = r(1 − cos(cap/2))`, which is
+    the same `a_e/D` the in-process measurements report.
 
 ## Measured
 
@@ -211,7 +268,7 @@ cap.
 <figure markdown>
   ![Chip thinning](assets/images/quality_chip_thinning.svg)
   <figcaption>Why the cap is a proxy. The chip is <code>h(φ) = f_z sin φ</code>,
-  so <code>h_ex/f_z = sin(min(θ_rim/2, 90°))</code> — it rises as a sine and then
+  so, in the gate's in-process rim arc, <code>h_ex/f_z = sin(min(θ_rim, 90°))</code> — it rises as a sine and then
   <em>plateaus</em>, never falling. Two consequences. Below the plateau the same
   feed produces a thinner and thinner chip, so holding a tighter cap without
   compensating <code>f_z</code> silently reduces the load until the edge stops

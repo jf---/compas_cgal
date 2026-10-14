@@ -217,6 +217,18 @@ bool ExactArcChartInterval2::increasing() const noexcept { return increasing_; }
 bool ExactArcChartInterval2::owns_start_seam() const noexcept { return owns_start_seam_; }
 bool ExactArcChartInterval2::owns_end_seam() const noexcept { return owns_end_seam_; }
 
+ExactCircleChartParameter2 audit_arc_chart_parameter_for_angle(double radians)
+{
+    if (!std::isfinite(radians)) {
+        throw AuditArcAngleNormalizationError(
+            "arc angle-to-chart seam requires a finite angle");
+    }
+    const NormalizedChartCoordinate2 coordinate =
+        normalized_chart_coordinate(radians);
+    return ExactCircleChartParameter2::build(
+        coordinate.chart, coordinate.parameter);
+}
+
 AuditArcMotion2 AuditArcMotion2::build(
     const EPoint& center,
     const EVector& zero_phase,

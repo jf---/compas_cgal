@@ -23,6 +23,20 @@ sentence is not decoration. It is where the near-miss below came from.
 
 ## Case 1 — the near-miss: right physics, wrong variable
 
+!!! note "2026-10-14 (Task 0.1): the survey now reads in process"
+
+    The case below concerns the STATIC reading (`_stock_2.engagement_at`), and it
+    still holds for that reading. Since Task 0.1 the gate's survey reads each
+    station against the stock minus the motion's own swept prefix instead. That
+    covers the rim's rear half, so a straight-wall cut reads the entry-to-exit
+    angle itself: `a_e = r (1 - cos theta_rim)` and `theta_tb = theta_rim`, a
+    slot at 180 degrees. The metrics now convert the survey through
+    `in_process_textbook_engagement_deg`, `in_process_radial_immersion` and
+    `chip_thickness_ratio_from_in_process_rim`, which
+    `tests/benchmarks/test_quality_in_process.py` pins against
+    `_stock_2.engagement_line_prefixes`. The static conversions remain for static
+    readings and keep their pinned table.
+
 `CutQuality.mean_radial_depth` computes the radial width of cut as
 `a_e = r (1 - cos(theta / 2))`. Against the standard mechanistic relation
 `a_e = r (1 - cos theta)` that halved angle looks indefensible, and anchoring it

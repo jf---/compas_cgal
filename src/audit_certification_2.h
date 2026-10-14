@@ -136,6 +136,10 @@ CGAL::Sign audit_sign_mixed_radical_exact(
 
 class AuditExactStationClassification2 {
 public:
+    static AuditExactStationClassification2 build(
+        AuditExactStationDisposition2 disposition,
+        std::vector<GpsPoint> boundary_intersections,
+        std::vector<std::vector<std::pair<GpsPoint, GpsPoint>>> true_run_arcs);
     AuditExactStationDisposition2 disposition() const noexcept;
     const std::vector<GpsPoint>& boundary_intersections() const noexcept;
     const std::vector<std::vector<std::pair<GpsPoint, GpsPoint>>>&
@@ -153,6 +157,13 @@ private:
         const Epeck::FT&,
         const Epeck::FT&,
         const Epeck::FT&);
+    friend AuditExactStationClassification2
+    classify_audit_filtered_station_exact(
+        const EPoint&,
+        const Epeck::FT&,
+        const Epeck::FT&,
+        const Epeck::FT&,
+        const std::vector<std::pair<GpsPoint, GpsPoint>>&);
     AuditExactStationDisposition2 disposition_;
     std::vector<GpsPoint> boundary_intersections_;
     std::vector<std::vector<std::pair<GpsPoint, GpsPoint>>> true_run_arcs_;
@@ -164,6 +175,19 @@ AuditExactStationClassification2 classify_audit_unguarded_station_exact(
     const Epeck::FT& tool_radius,
     const Epeck::FT& cap_chord_ratio,
     const Epeck::FT& gap_close_ratio = Epeck::FT(0));
+
+// Classify a station whose engaged rim arcs were already harvested and filtered
+// by the caller (the swept-prefix query clips the static arcs to the part the
+// motion's own prefix has not removed). Arcs are CCW (start, end) rim pairs on
+// the cutter circle at center; abutting arcs must share endpoints exactly. The
+// cap decision is the same exact run assembly and chord predicate as
+// classify_audit_unguarded_station_exact. boundary_intersections() is empty.
+AuditExactStationClassification2 classify_audit_filtered_station_exact(
+    const EPoint& center,
+    const Epeck::FT& tool_radius,
+    const Epeck::FT& cap_chord_ratio,
+    const Epeck::FT& gap_close_ratio,
+    const std::vector<std::pair<GpsPoint, GpsPoint>>& engaged_arcs);
 
 AuditExactStationDisposition2 replay_audit_unguarded_station_exact(
     const Stock2& stock,

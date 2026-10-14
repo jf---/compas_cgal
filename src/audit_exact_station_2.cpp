@@ -227,6 +227,64 @@ std::vector<ExactRimArc2> pessimistic_exact_runs(
     return pessimistic;
 }
 
+void validate_station_parameters(
+    const FT& tool_radius,
+    const FT& cap_chord_ratio,
+    const FT& gap_close_ratio)
+{
+    if (CGAL::sign(tool_radius) != CGAL::POSITIVE) {
+        throw AuditExactStationToolRadiusError(
+            "exact station tool radius must be positive");
+    }
+    if (CGAL::sign(cap_chord_ratio) != CGAL::POSITIVE
+        || CGAL::compare(cap_chord_ratio, FT(4)) == CGAL::LARGER) {
+        throw AuditExactStationCapRatioError(
+            "exact station cap chord ratio must lie in (0, 4]");
+    }
+    if (CGAL::sign(gap_close_ratio) == CGAL::NEGATIVE
+        || CGAL::compare(gap_close_ratio, FT(4)) == CGAL::LARGER) {
+        throw AuditExactStationGapRatioError(
+            "exact station gap chord ratio must lie in [0, 4]");
+    }
+}
+
+AuditExactStationClassification2 classification_from_arcs(
+    std::vector<ExactRimArc2> arcs,
+    const EPoint& center,
+    const FT& tool_radius,
+    const FT& cap_chord_ratio,
+    const FT& gap_close_ratio,
+    std::vector<GpsPoint> intersections)
+{
+    const std::vector<ExactRimArc2> runs = maximal_exact_runs(
+        std::move(arcs), center);
+    std::vector<std::vector<std::pair<GpsPoint, GpsPoint>>> true_run_arcs;
+    true_run_arcs.reserve(runs.size());
+    for (const ExactRimArc2& run : runs) {
+        true_run_arcs.push_back(run.reporting_arcs);
+    }
+    const FT squared_threshold = cap_chord_ratio * tool_radius * tool_radius;
+    const FT squared_gap_threshold = gap_close_ratio * tool_radius * tool_radius;
+    for (const ExactRimArc2& run : pessimistic_exact_runs(
+             runs, center, gap_close_ratio, squared_gap_threshold)) {
+        if (compas_cgal::cap::run_exceeds_cap(
+                run.start,
+                run.end,
+                center,
+                cap_chord_ratio,
+                squared_threshold)) {
+            return AuditExactStationClassification2::build(
+                AuditExactStationDisposition2::CAP_EXCEEDED,
+                std::move(intersections),
+                std::move(true_run_arcs));
+        }
+    }
+    return AuditExactStationClassification2::build(
+        AuditExactStationDisposition2::WITHIN_CAP,
+        std::move(intersections),
+        std::move(true_run_arcs));
+}
+
 } // namespace
 
 CGAL::Sign audit_sign_mixed_radical_exact(
@@ -355,6 +413,17 @@ AuditExactStationClassification2::AuditExactStationClassification2(
 {
 }
 
+AuditExactStationClassification2 AuditExactStationClassification2::build(
+    AuditExactStationDisposition2 disposition,
+    std::vector<GpsPoint> boundary_intersections,
+    std::vector<std::vector<std::pair<GpsPoint, GpsPoint>>> true_run_arcs)
+{
+    return AuditExactStationClassification2(
+        disposition,
+        std::move(boundary_intersections),
+        std::move(true_run_arcs));
+}
+
 const std::vector<std::vector<std::pair<GpsPoint, GpsPoint>>>&
 AuditExactStationClassification2::true_run_arcs() const noexcept
 {
@@ -380,51 +449,39 @@ AuditExactStationClassification2 classify_audit_unguarded_station_exact(
     const Epeck::FT& cap_chord_ratio,
     const Epeck::FT& gap_close_ratio)
 {
-    if (CGAL::sign(tool_radius) != CGAL::POSITIVE) {
-        throw AuditExactStationToolRadiusError(
-            "exact station tool radius must be positive");
-    }
-    if (CGAL::sign(cap_chord_ratio) != CGAL::POSITIVE
-        || CGAL::compare(cap_chord_ratio, Epeck::FT(4)) == CGAL::LARGER) {
-        throw AuditExactStationCapRatioError(
-            "exact station cap chord ratio must lie in (0, 4]");
-    }
-    if (CGAL::sign(gap_close_ratio) == CGAL::NEGATIVE
-        || CGAL::compare(gap_close_ratio, Epeck::FT(4)) == CGAL::LARGER) {
-        throw AuditExactStationGapRatioError(
-            "exact station gap chord ratio must lie in [0, 4]");
-    }
+    validate_station_parameters(tool_radius, cap_chord_ratio, gap_close_ratio);
     std::vector<GpsPoint> intersections;
-    const std::vector<ExactRimArc2> runs = maximal_exact_runs(
-        exact_engaged_arcs(stock, center, tool_radius, intersections),
-        center);
-    std::vector<std::vector<std::pair<GpsPoint, GpsPoint>>> true_run_arcs;
-    true_run_arcs.reserve(runs.size());
-    for (const ExactRimArc2& run : runs) {
-        true_run_arcs.push_back(run.reporting_arcs);
+    std::vector<ExactRimArc2> arcs =
+        exact_engaged_arcs(stock, center, tool_radius, intersections);
+    return classification_from_arcs(
+        std::move(arcs),
+        center,
+        tool_radius,
+        cap_chord_ratio,
+        gap_close_ratio,
+        std::move(intersections));
+}
+
+AuditExactStationClassification2 classify_audit_filtered_station_exact(
+    const EPoint& center,
+    const Epeck::FT& tool_radius,
+    const Epeck::FT& cap_chord_ratio,
+    const Epeck::FT& gap_close_ratio,
+    const std::vector<std::pair<GpsPoint, GpsPoint>>& engaged_arcs)
+{
+    validate_station_parameters(tool_radius, cap_chord_ratio, gap_close_ratio);
+    std::vector<ExactRimArc2> arcs;
+    arcs.reserve(engaged_arcs.size());
+    for (const auto& [start, end] : engaged_arcs) {
+        arcs.push_back({start, end, {{start, end}}});
     }
-    const Epeck::FT squared_threshold =
-        cap_chord_ratio * tool_radius * tool_radius;
-    const Epeck::FT squared_gap_threshold =
-        gap_close_ratio * tool_radius * tool_radius;
-    for (const ExactRimArc2& run : pessimistic_exact_runs(
-             runs, center, gap_close_ratio, squared_gap_threshold)) {
-        if (compas_cgal::cap::run_exceeds_cap(
-                run.start,
-                run.end,
-                center,
-                cap_chord_ratio,
-                squared_threshold)) {
-            return AuditExactStationClassification2(
-                AuditExactStationDisposition2::CAP_EXCEEDED,
-                std::move(intersections),
-                std::move(true_run_arcs));
-        }
-    }
-    return AuditExactStationClassification2(
-        AuditExactStationDisposition2::WITHIN_CAP,
-        std::move(intersections),
-        std::move(true_run_arcs));
+    return classification_from_arcs(
+        std::move(arcs),
+        center,
+        tool_radius,
+        cap_chord_ratio,
+        gap_close_ratio,
+        {});
 }
 
 AuditExactStationDisposition2 replay_audit_unguarded_station_exact(

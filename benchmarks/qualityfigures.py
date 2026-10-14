@@ -57,8 +57,8 @@ from benchmarks.plotting import ColourBy
 from benchmarks.plotting import ToolpathDrawing
 from benchmarks.plotting import draw_toolpath
 from benchmarks.plotting import save_drawing
-from benchmarks.quality import FULL_TURN_DEG
-from benchmarks.quality import chip_thickness_ratio_from_rim
+from benchmarks.quality import HALF_TURN_DEG
+from benchmarks.quality import chip_thickness_ratio_from_in_process_rim
 from benchmarks.quality import measure_quality
 from benchmarks.spec import PocketSpec
 from benchmarks.survey import MotionQuality
@@ -115,14 +115,15 @@ CORNER_INSET_LOOP_RADII = 3.0
 # the plateau corner at 90 degrees without a visible facet.
 CHIP_CURVE_SAMPLES = 361
 
-# Where the chip reaches full thickness, in the kernel's ENGAGED RIM ARC: the
-# textbook plateau is at a quarter turn of the entry-to-exit angle, and the rim
-# arc is twice that (`benchmarks.quality.textbook_engagement_deg`).
-CHIP_PLATEAU_RIM_DEG = 180.0
+# Where the chip reaches full thickness, in the survey's IN-PROCESS engaged rim
+# arc: for a straight-wall cut that arc is the textbook entry-to-exit angle
+# (`benchmarks.quality.in_process_textbook_engagement_deg`), whose plateau is a
+# quarter turn.
+CHIP_PLATEAU_RIM_DEG = 90.0
 
 # The two formulas the figures carry on their own faces, so a reader never has to
 # take an axis label on trust.
-CHIP_FORMULA = "$h_{ex} = f_z\\,\\sin(\\min(θ_{rim}/2,\\,90°))$"
+CHIP_FORMULA = "$h_{ex} = f_z\\,\\sin(\\min(θ_{rim},\\,90°))$"
 FEED_FORMULA = "$v \\leq \\sqrt{a_{max}/κ}$"
 
 # The engagement range this project cannot yet deliver, in degrees. Held's
@@ -817,8 +818,8 @@ def draw_chip_thinning(measured: MeasuredPath, *, theme: Theme = Theme.LIGHT, ma
     floor = model.min_chip_thickness_mm / model.feed_per_tooth_mm
     low, high = operating_band(measured.survey)
 
-    angles = [FULL_TURN_DEG * index / (CHIP_CURVE_SAMPLES - 1) for index in range(CHIP_CURVE_SAMPLES)]
-    ratios = [chip_thickness_ratio_from_rim(angle) for angle in angles]
+    angles = [HALF_TURN_DEG * index / (CHIP_CURVE_SAMPLES - 1) for index in range(CHIP_CURVE_SAMPLES)]
+    ratios = [chip_thickness_ratio_from_in_process_rim(angle) for angle in angles]
 
     figure, axes = _chart_figure(palette, height_in=CHART_HEIGHT_IN + 0.25)
     axis = axes[0]
@@ -829,10 +830,10 @@ def draw_chip_thinning(measured: MeasuredPath, *, theme: Theme = Theme.LIGHT, ma
     axis.plot(angles, ratios, color=palette.ramp[3], linewidth=CURVE_WIDTH_PT, zorder=4)
     axis.axvline(CHIP_PLATEAU_RIM_DEG, color=palette.muted, linewidth=HAIRLINE_PT, linestyle=(0, (2, 3)), zorder=2)
 
-    axis.set_xlim(0.0, FULL_TURN_DEG)
+    axis.set_xlim(0.0, HALF_TURN_DEG)
     axis.set_ylim(0.0, 1.08)
-    axis.set_xticks([0, 60, 120, 180, 240, 300, 360])
-    axis.set_xlabel("engaged rim arc θ (°) — the angle this kernel reports; a full turn is a surrounded cutter", fontsize=LABEL_PT, color=palette.secondary)
+    axis.set_xticks([0, 30, 60, 90, 120, 150, 180])
+    axis.set_xlabel("in-process engaged rim arc θ (°) — against the stock minus the motion's own swept prefix; a slot is 180°", fontsize=LABEL_PT, color=palette.secondary)
     axis.set_ylabel("$h_{ex}/f_z$  (chip thickness ÷ feed per tooth)", fontsize=LABEL_PT, color=palette.secondary)
 
     # A reparameterisation of the SAME x axis -- radial immersion a_e/D --
@@ -843,8 +844,8 @@ def draw_chip_thinning(measured: MeasuredPath, *, theme: Theme = Theme.LIGHT, ma
     for side in top.spines:
         top.spines[side].set_visible(False)
 
-    _annotate(axis, palette, "plateau: past 180° of rim the chip\nis already at full thickness", xy=(280.0, 1.0), xytext=(196.0, 0.66))
-    _annotate(axis, palette, f"rubbing floor $h_{{min}}/f_z$ = {floor:.3g}\nbelow this the edge ploughs", xy=(330.0, floor), xytext=(210.0, 0.18))
+    _annotate(axis, palette, "plateau: past 90° of rim the chip\nis already at full thickness", xy=(140.0, 1.0), xytext=(98.0, 0.66))
+    _annotate(axis, palette, f"rubbing floor $h_{{min}}/f_z$ = {floor:.3g}\nbelow this the edge ploughs", xy=(165.0, floor), xytext=(105.0, 0.18))
     axis.text(0.5 * (UNREACHABLE_CAP_LOW_DEG + UNREACHABLE_CAP_HIGH_DEG), 1.03, "caps we\ncannot deliver", fontsize=ANNOTATION_PT, color=palette.secondary, ha="center", va="top")
     if high > low:
         axis.text(
@@ -862,7 +863,7 @@ def draw_chip_thinning(measured: MeasuredPath, *, theme: Theme = Theme.LIGHT, ma
 
 
 def _immersion_from_angle(degrees: Any) -> Any:
-    """Radial immersion ``a_e/D = (1 - cos(θ_rim/2))/2`` from an engaged rim arc.
+    """Radial immersion ``a_e/D = (1 - cos θ_rim)/2`` from an in-process engaged rim arc.
 
     Vectorised, because matplotlib hands a secondary axis' transform whole
     arrays of tick positions and `math.cos` accepts only scalars.
@@ -873,7 +874,7 @@ def _immersion_from_angle(degrees: Any) -> Any:
     Returns:
         The immersion ratio, same shape as the input.
     """
-    return 0.5 * (1.0 - np.cos(np.radians(np.clip(np.asarray(degrees, dtype=float), 0.0, FULL_TURN_DEG) / 2.0)))
+    return 0.5 * (1.0 - np.cos(np.radians(np.clip(np.asarray(degrees, dtype=float), 0.0, HALF_TURN_DEG))))
 
 
 def _angle_from_immersion(ratio: Any) -> Any:
@@ -885,7 +886,7 @@ def _angle_from_immersion(ratio: Any) -> Any:
     Returns:
         The engagement angle in degrees, same shape as the input.
     """
-    return 2.0 * np.degrees(np.arccos(np.clip(1.0 - 2.0 * np.asarray(ratio, dtype=float), -1.0, 1.0)))
+    return np.degrees(np.arccos(np.clip(1.0 - 2.0 * np.asarray(ratio, dtype=float), -1.0, 1.0)))
 
 
 def write_chip_thinning(out_dir: Path, *, formats: Sequence[str] = ("svg",), theme: Theme = Theme.LIGHT) -> Tuple[Path, ...]:

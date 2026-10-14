@@ -13,6 +13,14 @@ observation: engagement sampled along each motion, the exact effect of each
 motion on the stock, and the geometric quantities (curvature, tangents, swept
 area) that the speed and longevity groups read.
 
+ENGAGEMENT IS MEASURED IN PROCESS. A station inside a motion meets the stock the
+motion started from MINUS the motion's own swept prefix up to that station
+(`_stock_2.engagement_line_prefixes` / `engagement_arc_prefixes`): a straight
+slot into solid stock reads a half turn, not the full rim the static stock would
+report. Stations are taken in travel order, so a clockwise loop is walked
+clockwise. The generators' own probe rings still decide against the static
+stock; that is theirs to change, not the gate's.
+
 WHAT IS EXACT AND WHAT IS SAMPLED, per field, is stated on `MotionQuality`. The
 short version: effects on the stock are exact set operations; everything read
 along a motion is sampled at `samples_per_motion` positions, each position's
@@ -68,7 +76,10 @@ from compas_cgal.units import WorldXY
 # `compas_cgal.engagement_toolpath` -- and not against a cost budget: 45 samples
 # sit 8 degrees apart against the generator's 11.25, and gcd(45, 32) = 1, so the
 # seam is the only position the two rings share. A gate sampling at 32, 16, or 8
-# would be asking the generator to confirm its own verdict.
+# would be asking the generator to confirm its own verdict. The two instruments
+# also measure different things: the gate reads each station against the stock
+# minus the motion's own swept prefix, the generator's ring reads the static
+# stock it is about to cut.
 QUALITY_SAMPLES_PER_MOTION = 45
 
 # The engagement query is asked WITHOUT gap-closure pessimism, matching
@@ -339,17 +350,14 @@ def _measure_motion(
         UnmeasurableOperationLengthError: The motion's length is undefined.
     """
     geometry = motion.operation.geometry
-    raw = motion.stock.raw
     straight = isinstance(geometry, Line)
+    positions = _motion_travel_positions(motion, samples_per_motion)
+    verdicts = _motion_prefix_samples(motion, samples_per_motion, tool_radius, cap_ratio)
+    # A second exact verdict, asked only of straight motions, because the slot
+    # threshold decides `slot_exceeded` and nothing else.
+    slot_exceeded = straight and any(over for _total, _run, over in _motion_prefix_samples(motion, samples_per_motion, tool_radius, slot_ratio))
     samples: List[EngagementSample] = []
-    slot_exceeded = False
-    for distance, x, y in _motion_samples(motion, samples_per_motion):
-        _total_tea, max_run_tea, exceeded = _stock_2.engagement_at(raw, x, y, tool_radius, cap_ratio, NO_GAP_CLOSURE)
-        if straight and not slot_exceeded:
-            # A second exact verdict, asked only of straight motions, because
-            # the slot threshold decides `slot_exceeded` and nothing else.
-            _t, _m, over_slot = _stock_2.engagement_at(raw, x, y, tool_radius, slot_ratio, NO_GAP_CLOSURE)
-            slot_exceeded = over_slot
+    for (distance, x, y), (_total_tea, max_run_tea, exceeded) in zip(positions, verdicts, strict=True):
         samples.append(
             EngagementSample(
                 distance=distance,
@@ -378,7 +386,7 @@ def _measure_motion(
         end_tangent=end_tangent,
         samples=tuple(samples),
         cap_exceeded=any(sample.cap_exceeded for sample in samples),
-        slot_exceeded=straight and slot_exceeded,
+        slot_exceeded=slot_exceeded,
         removes_material=not probe.exactly_equals(motion.stock),
     )
 
@@ -432,14 +440,38 @@ def _require_world_xy_curve(index: int, geometry: object) -> None:
         )
 
 
-def _motion_samples(motion: CutMotion, count: int) -> Sequence[Tuple[float, float, float]]:
-    """Probe positions along one motion, as ``(arc distance, x, y)``.
+def _sample_parameters(geometry: object, count: int) -> List[float]:
+    """Prefix parameters of the probes: a closed circle wraps, so its seam is sampled once.
+
+    Args:
+        geometry: The motion primitive.
+        count: Positions to place.
+
+    Returns:
+        Non-decreasing parameters in [0, 1].
+    """
+    stations = count if isinstance(geometry, Circle) else count + 1
+    return [i / count for i in range(stations)]
+
+
+def _motion_travel_positions(motion: CutMotion, count: int) -> Sequence[Tuple[float, float, float]]:
+    """Probe positions along one motion, in travel order, as ``(arc distance, x, y)``.
 
     A closed circle wraps, so its seam is sampled once; an open arc and a segment
     keep both endpoints, where a motion's engagement is typically extreme. This
     is `benchmarks.exceedance`'s station convention, carrying the arc distance as
     well so the engagement gradient and the time-at-engagement histogram can be
-    built from the same probes.
+    built from the same probes. Circles and arcs are walked in the operation's
+    turn direction (``ToolpathOperation.clockwise``, the direction the replay
+    sweeps), not in their frame's parametrisation. For an arc that matters
+    beyond order: the replay sweeps from ``point_at(0)`` to ``point_at(1)`` in
+    the flag's direction, which for a clockwise-flagged arc (the snapshot
+    convention keeps ``start_angle <= end_angle``) is the other way round the
+    circle from ``point_at``, so arc positions come from `_arc_travel`.
+
+    The positions are REPORTING doubles (and the centre-domain membership
+    queries); the engagement at each is decided by `_motion_prefix_samples` on
+    the same parameters.
 
     Args:
         motion: The cut motion to sample.
@@ -453,17 +485,95 @@ def _motion_samples(motion: CutMotion, count: int) -> Sequence[Tuple[float, floa
             circle.
     """
     geometry = motion.operation.geometry
+    parameters = _sample_parameters(geometry, count)
     if isinstance(geometry, Circle):
         span = float(geometry.circumference)
-        return [(span * i / count, *_xy(geometry.point_at(i / count))) for i in range(count)]
+        # The frame's parametrisation runs counter-clockwise in world XY iff its
+        # normal is +Z; `_require_world_xy_curve` has already pinned it to +-Z.
+        frame_runs_ccw = float(geometry.frame.zaxis[2]) > 0.0
+        travel_reversed = frame_runs_ccw == motion.operation.clockwise
+        return [(span * t, *_xy(geometry.point_at((1.0 - t) % 1.0 if travel_reversed else t))) for t in parameters]
     if isinstance(geometry, Arc):
-        span = float(geometry.length)
-        return [(span * i / count, *_xy(geometry.point_at(i / count))) for i in range(count + 1)]
+        cx, cy, sx, sy, turn = _arc_travel(geometry, motion.operation.clockwise)
+        radius = math.hypot(sx - cx, sy - cy)
+        positions = []
+        for t in parameters:
+            angle = turn * t
+            cosine, sine = math.cos(angle), math.sin(angle)
+            x = cx + cosine * (sx - cx) - sine * (sy - cy)
+            y = cy + sine * (sx - cx) + cosine * (sy - cy)
+            positions.append((radius * abs(turn) * t, x, y))
+        return positions
     if isinstance(geometry, Line):
         x0, y0 = float(geometry.start[0]), float(geometry.start[1])
         x1, y1 = float(geometry.end[0]), float(geometry.end[1])
         span = float(geometry.length)
-        return [(span * i / count, x0 + (x1 - x0) * i / count, y0 + (y1 - y0) * i / count) for i in range(count + 1)]
+        return [(span * t, x0 + (x1 - x0) * t, y0 + (y1 - y0) * t) for t in parameters]
+    raise UnsampleableMotionError(f"Operation {motion.index} ({motion.operation.operation.value}) has geometry {type(geometry).__name__!r}, which carries no cutter-centre path.")
+
+
+def _arc_travel(geometry: Arc, clockwise: bool) -> Tuple[float, float, float, float, float]:
+    """The travel of an arc as the replay sweeps it: centre, start, signed turn.
+
+    The replay (`compas_cgal.engagement._subtract_operation`) and the native
+    prefix query sweep from ``point_at(0)`` to ``point_at(1)`` in the direction
+    *clockwise* names. The turn mirrors the native query's intent sweep
+    (``engagement_arc_prefixes``): the atan2 difference of the endpoints in the
+    travel direction, lifted into ``(0, 2 pi]``. REPORTING and placement intent
+    only; the engagement at each station is decided natively.
+
+    Args:
+        geometry: The arc.
+        clockwise: The operation's turn direction.
+
+    Returns:
+        ``(cx, cy, sx, sy, turn)``: the centre, the start, and the signed travel
+        angle in radians (negative for clockwise travel).
+    """
+    cx, cy = _xy(geometry.frame.point)
+    sx, sy = _xy(geometry.point_at(0.0))
+    ex, ey = _xy(geometry.point_at(1.0))
+    start_angle = math.atan2(sy - cy, sx - cx)
+    end_angle = math.atan2(ey - cy, ex - cx)
+    sweep = start_angle - end_angle if clockwise else end_angle - start_angle
+    if sweep <= 0.0:
+        sweep += math.tau
+    return cx, cy, sx, sy, -sweep if clockwise else sweep
+
+
+def _motion_prefix_samples(motion: CutMotion, count: int, tool_radius: float, cap_ratio: float) -> Sequence[Tuple[float, float, bool]]:
+    """In-process engagement at each probe: stock minus the motion's own swept prefix.
+
+    One native call per motion. The motion's start, end, centre and turn
+    direction are exactly those `compas_cgal.engagement._subtract_operation`
+    sweeps, so the prefix measured here is a prefix of the very sweep the replay
+    removes next. The stock the motion starts from is read, never mutated.
+
+    Args:
+        motion: The motion and the stock it is about to cut.
+        count: Positions to place, as in `_motion_travel_positions`.
+        tool_radius: Tool radius.
+        cap_ratio: Exact squared-chord surrogate of the threshold to decide.
+
+    Returns:
+        ``(total_tea, max_run_tea, cap_exceeded)`` per probe, in travel order.
+
+    Raises:
+        UnsampleableMotionError: The geometry is neither a line, an arc, nor a
+            circle.
+    """
+    geometry = motion.operation.geometry
+    raw = motion.stock.raw
+    parameters = _sample_parameters(geometry, count)
+    if isinstance(geometry, Line):
+        x0, y0 = float(geometry.start[0]), float(geometry.start[1])
+        x1, y1 = float(geometry.end[0]), float(geometry.end[1])
+        return _stock_2.engagement_line_prefixes(raw, x0, y0, x1, y1, parameters, tool_radius, cap_ratio, NO_GAP_CLOSURE)
+    if isinstance(geometry, (Arc, Circle)):
+        cx, cy = _xy(geometry.frame.point)
+        sx, sy = _xy(geometry.point_at(0.0))
+        ex, ey = (sx, sy) if isinstance(geometry, Circle) else _xy(geometry.point_at(1.0))
+        return _stock_2.engagement_arc_prefixes(raw, cx, cy, sx, sy, ex, ey, motion.operation.clockwise, parameters, tool_radius, cap_ratio, NO_GAP_CLOSURE)
     raise UnsampleableMotionError(f"Operation {motion.index} ({motion.operation.operation.value}) has geometry {type(geometry).__name__!r}, which carries no cutter-centre path.")
 
 

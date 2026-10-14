@@ -453,7 +453,7 @@ def test_attributed_gate_observations_match_old_reducers_on_a_synthetic_path() -
     engagement_maximum = assessment.attribution.max_engagement_step
     loop_maximum = assessment.attribution.max_loop_radius_step
     assert engagement_maximum is not None
-    assert engagement_maximum.pair == OperationPair.build(previous=OperationIndex(2), current=OperationIndex(3), operation_count=4)
+    assert engagement_maximum.pair == OperationPair.build(previous=OperationIndex(1), current=OperationIndex(2), operation_count=4)
     assert loop_maximum is not None
     assert loop_maximum.pair == OperationPair.build(previous=OperationIndex(1), current=OperationIndex(3), operation_count=4)
 
@@ -1256,18 +1256,18 @@ QUALITY_GATE_CASES = tuple(
 
 
 _EXPECTED_QUALITY_GATE_MEASUREMENTS = {
-    (120.0, "engagement_controlled", "rect_12x8"): (0.008041, 4, 10, 5, 0, 329.49, 24),
-    (120.0, "radius_regulated", "rect_12x8"): (0.008041, 4, 10, 5, 0, 329.49, 24),
-    (120.0, "engagement_controlled", "rect_20x12"): (0.002843, 4, 10, 9, 4, 337.54, 32),
-    (120.0, "radius_regulated", "rect_20x12"): (0.002843, 4, 10, 9, 4, 337.54, 32),
-    (120.0, "engagement_controlled", "L_shape"): (0.006930, 5, 10, 6, 0, 325.42, 22),
-    (120.0, "radius_regulated", "L_shape"): (0.006930, 5, 10, 6, 0, 325.42, 22),
-    (40.0, "engagement_controlled", "rect_12x8"): (0.003186, 80, 26, 145, 40, 356.18, 184),
-    (40.0, "radius_regulated", "rect_12x8"): (0.005462, 124, 311, 54, 41, 349.89, 798),
-    (40.0, "engagement_controlled", "rect_20x12"): (0.000335, 112, 62, 185, 108, 357.19, 400),
-    (40.0, "radius_regulated", "rect_20x12"): (0.000669, 308, 490, 125, 116, 357.19, 1384),
-    (40.0, "engagement_controlled", "L_shape"): (0.006059, 40, 15, 221, 15, 355.04, 92),
-    (40.0, "radius_regulated", "L_shape"): (0.002916, 236, 499, 229, 62, 347.52, 956),
+    (120.0, "engagement_controlled", "rect_12x8"): (0.008041, 4, 10, 1, 0, 157.15, 24),
+    (120.0, "radius_regulated", "rect_12x8"): (0.008041, 4, 10, 1, 0, 157.15, 24),
+    (120.0, "engagement_controlled", "rect_20x12"): (0.002843, 4, 10, 9, 4, 164.20, 32),
+    (120.0, "radius_regulated", "rect_20x12"): (0.002843, 4, 10, 9, 4, 164.20, 32),
+    (120.0, "engagement_controlled", "L_shape"): (0.006930, 5, 10, 1, 0, 152.77, 22),
+    (120.0, "radius_regulated", "L_shape"): (0.006930, 5, 10, 1, 0, 152.77, 22),
+    (40.0, "engagement_controlled", "rect_12x8"): (0.003186, 80, 26, 21, 40, 177.13, 184),
+    (40.0, "radius_regulated", "rect_12x8"): (0.005462, 124, 311, 21, 41, 169.89, 798),
+    (40.0, "engagement_controlled", "rect_20x12"): (0.000335, 112, 62, 105, 108, 178.02, 400),
+    (40.0, "radius_regulated", "rect_20x12"): (0.000669, 308, 490, 65, 116, 178.02, 1384),
+    (40.0, "engagement_controlled", "L_shape"): (0.006059, 40, 15, 6, 15, 176.08, 92),
+    (40.0, "radius_regulated", "L_shape"): (0.002916, 236, 499, 105, 62, 167.52, 956),
 }
 
 

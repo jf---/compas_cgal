@@ -38,6 +38,9 @@ class InvalidAnnulusRadiiError(ValueError): ...
 class NonFiniteAnnulusInputError(ValueError): ...
 class InvalidCircleRemovalInputError(ValueError): ...
 class NonFiniteCapsuleInputError(ValueError): ...
+class InvalidSweptPrefixInputError(ValueError): ...
+class SweptPrefixRimCellError(RuntimeError): ...
+class ArcPrefixExtentAmbiguousError(RuntimeError): ...
 class LocalDepletionEscapedError(RuntimeError): ...
 class CapsuleQuadCertificateError(RuntimeError): ...
 class StockTraitsUnownedError(RuntimeError): ...
@@ -556,6 +559,33 @@ def engagement_at(
     cap_chord_ratio: float,
     gap_close_ratio: float = ...,
 ) -> tuple[float, float, bool]: ...
+def engagement_line_prefixes(
+    stock: Stock2,
+    x0: float,
+    y0: float,
+    x1: float,
+    y1: float,
+    parameters: Sequence[float],
+    tool_radius: float,
+    cap_chord_ratio: float,
+    gap_close_ratio: float = ...,
+) -> list[tuple[float, float, bool]]:
+    """Engagement at each prefix parameter against stock minus the line's own swept prefix; never mutates stock."""
+def engagement_arc_prefixes(
+    stock: Stock2,
+    guide_cx: float,
+    guide_cy: float,
+    start_x: float,
+    start_y: float,
+    end_x: float,
+    end_y: float,
+    clockwise: bool,
+    parameters: Sequence[float],
+    tool_radius: float,
+    cap_chord_ratio: float,
+    gap_close_ratio: float = ...,
+) -> list[tuple[float, float, bool]]:
+    """Engagement at each prefix parameter against stock minus the arc's own swept prefix; start == end is a full turn."""
 def certify_segment_tea(
     stock: Stock2,
     x0: float,

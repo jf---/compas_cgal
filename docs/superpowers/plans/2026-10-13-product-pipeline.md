@@ -110,8 +110,8 @@ The live worktree carries an uncommitted 11-file diff from 2026-09-08/09: import
 - **Acceptance:**
   - a straight slot into solid stock reads 180° ± one sample spacing;
   - the 12 gate vectors are re-pinned;
-  - every engagement criterion (cap exceedances, max step, slotting) moves on at least one pocket, and the uncut, gouge, tangent and continuity criteria stay unchanged.
-- **Moves:** cap exceedances, max engagement step, slotting.
+  - cap exceedances and max engagement step move on at least one pocket; slotting, uncut, gouge, tangent and continuity stay unchanged. (Amended 2026-10-14, user: slotting counts straight motions over 0.5 x cap, which the 360 -> 180 slot correction cannot cross; it moves under Task 0.3 rule (c). Evidence: `docs/superpowers/state/task-0.1-gate-analysis.md`.)
+- **Moves:** cap exceedances, max engagement step.
 
 ### Task 0.2: Exact, idempotent sweeps in replay and generator
 
@@ -145,7 +145,7 @@ The live worktree carries an uncommitted 11-file diff from 2026-09-08/09: import
   - the plunge-per-pass tests (`test_engagement_radial_toolpath.py:408-431,574-588`).
 - **Ratchet:** the pinned vectors move to `benchmarks/results/gate_vectors.json`. `tools/gate_ratchet.py` fails a commit that improves no vector or worsens any. CI runs it, after fixing `benchmarks.yml`'s broken `--corpus smoke` step (`cli.py:284-292`) and stopping cibuildwheel from running the red gate.
 - **Results, not prose:** gate vectors live in one results layout (`benchmarks/results/gate_vectors.json`). Every number in a stage's docs page is read from it, never typed. A stage exits only when the ratchet passes and every acceptance row of that stage is green, checked by one exit-gate test per stage.
-- **Acceptance:** the old generators' vectors are re-pinned under the new rules; the ratchet passes on this commit and fails on a synthetic regression.
+- **Acceptance:** the old generators' vectors are re-pinned under the new rules; slotting moves on at least one pocket under rule (c) (moved here from Task 0.1, 2026-10-14); the ratchet passes on this commit and fails on a synthetic regression.
 - **Moves:** redundant and slotting on the old generators, as truthful re-pins.
 
 ## Stage 1: narrow regime, the pipeline's first form, on rect_12x8, rect_20x12 and L_shape

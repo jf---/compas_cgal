@@ -105,10 +105,19 @@ CHIP_PLATEAU_DEG = 90.0
 # it rather than carrying a bare 360.0.
 FULL_TURN_DEG = 360.0
 
-# Engagement bands for the time-at-engagement histogram, in degrees. Six equal
-# 30-degree bands span the cap's legal range of (0, 180], and a seventh catches
-# the entry cuts, which reach a full turn for any generator entering solid stock
-# and would otherwise silently fall off the top of the histogram.
+# A half turn of IN-PROCESS engaged rim: a full slot. The survey's stations read
+# the stock minus the motion's own swept prefix, which covers at least the rear
+# half of the rim, so every station after a motion's first reads at most this.
+# A motion's first station is the static reading and can read up to a full turn
+# (a loop entering solid stock); `in_process_textbook_engagement_deg` clamps it
+# here, because no cut is more immersed than a slot.
+HALF_TURN_DEG = 180.0
+
+# Engagement bands for the time-at-engagement histogram, in degrees of the
+# survey's IN-PROCESS rim arc. Six equal 30-degree bands span the cap's legal
+# range of (0, 180], which is every in-process station after a motion's first,
+# and a seventh catches those first stations, which are the static reading and
+# reach a full turn for a loop entering solid stock.
 ENGAGEMENT_BANDS_DEG: Tuple[float, ...] = (0.0, 30.0, 60.0, 90.0, 120.0, 150.0, 180.0, 360.0)
 
 # Percentile reported beside the maximum. The maximum is one position; the 95th
@@ -562,7 +571,7 @@ def _cut(spec: PocketSpec, survey: PathSurvey, wall_scallop_height: float, asses
     weighted = _weighted_engagement(survey.motions)
     radii = _loop_radii(survey.motions)
     engaged = [(value, weight) for value, weight in weighted if value > 0.0]
-    immersions = [(radial_immersion(value), weight) for value, weight in weighted]
+    immersions = [(in_process_radial_immersion(value), weight) for value, weight in weighted]
     depths = [(spec.tool_diameter * value, weight) for value, weight in immersions]
     design = design_immersion(spec.tea_cap_deg)
     band = IMMERSION_STEADY_BAND_FRACTION * design
@@ -571,8 +580,8 @@ def _cut(spec: PocketSpec, survey: PathSurvey, wall_scallop_height: float, asses
         cap_exceedances=int(assessment.cap_exceedances.measured),
         engagement_p95_deg=_weighted_percentile(weighted, ENGAGEMENT_PERCENTILE),
         engagement_variance_deg2=_weighted_variance(weighted),
-        max_chip_thickness_ratio=max((chip_thickness_ratio_from_rim(value) for value, _ in weighted), default=0.0),
-        low_chip_thickness_ratio=_weighted_percentile([(chip_thickness_ratio_from_rim(value), weight) for value, weight in engaged], LOW_CHIP_PERCENTILE),
+        max_chip_thickness_ratio=max((chip_thickness_ratio_from_in_process_rim(value) for value, _ in weighted), default=0.0),
+        low_chip_thickness_ratio=_weighted_percentile([(chip_thickness_ratio_from_in_process_rim(value), weight) for value, weight in engaged], LOW_CHIP_PERCENTILE),
         max_engagement_gradient_deg_per_length=_max_engagement_gradient(survey.motions),
         max_engagement_step_deg=float(assessment.max_engagement_step.measured),
         slotting_motions=int(assessment.slotting_motions.measured),
@@ -719,11 +728,11 @@ def material_outcome(survey: PathSurvey, material: Optional[MaterialModel]) -> M
     engaged = [(value, weight) for value, weight in weighted if value > 0.0]
     engaged_length = sum(weight for _, weight in engaged)
     floor = material.min_chip_thickness_mm
-    rubbing = sum(weight for value, weight in engaged if material.feed_per_tooth_mm * chip_thickness_ratio_from_rim(value) < floor)
+    rubbing = sum(weight for value, weight in engaged if material.feed_per_tooth_mm * chip_thickness_ratio_from_in_process_rim(value) < floor)
     return MaterialOutcome(
-        max_chip_thickness_mm=material.feed_per_tooth_mm * max((chip_thickness_ratio_from_rim(value) for value, _ in weighted), default=0.0),
+        max_chip_thickness_mm=material.feed_per_tooth_mm * max((chip_thickness_ratio_from_in_process_rim(value) for value, _ in weighted), default=0.0),
         low_chip_thickness_mm=material.feed_per_tooth_mm
-        * _weighted_percentile([(chip_thickness_ratio_from_rim(value), weight) for value, weight in engaged], LOW_CHIP_PERCENTILE),
+        * _weighted_percentile([(chip_thickness_ratio_from_in_process_rim(value), weight) for value, weight in engaged], LOW_CHIP_PERCENTILE),
         rubbing_length=rubbing,
         rubbing_fraction=0.0 if engaged_length <= 0.0 else rubbing / engaged_length,
     )
@@ -896,10 +905,72 @@ def chip_thickness_ratio_from_rim(rim_arc_deg: float) -> float:
     return chip_thickness_ratio(textbook_engagement_deg(rim_arc_deg))
 
 
+def in_process_textbook_engagement_deg(rim_arc_deg: float) -> float:
+    """The textbook engagement angle for an IN-PROCESS rim arc the survey reported.
+
+    The survey (`benchmarks.survey`) reads each station against the stock minus
+    the motion's own swept prefix. That prefix covers the station's whole rear
+    half, so for a cut into a straight wall the engaged rim arc runs from the
+    entry point to the exit point: ``a_e = r (1 - cos theta_rim)``, which is the
+    textbook ``a_e / D = (1 - cos theta_tb) / 2`` with ``theta_tb = theta_rim``.
+    A slot reads 180 degrees, half immersion 90. Confirmed against
+    `_stock_2.engagement_line_prefixes` on a half-plane at tool radius 1
+    (2026-10-14): radial depths of 0, 0.5, 1.0, 1.5 and 2.0 read 0, 60, 90, 120
+    and 180 degrees; `tests/benchmarks/test_quality_in_process.py` pins it.
+
+    Contrast `textbook_engagement_deg`, which converts the STATIC reading (the
+    whole rim in material, a slot at a full turn) and halves it.
+
+    A motion's first station is the static reading and can exceed a half turn;
+    it is clamped to a slot. The same one-sided straight-wall assumption as the
+    static conversion applies to the curved material a trochoid meets.
+
+    Args:
+        rim_arc_deg: The in-process engaged rim arc in degrees.
+
+    Returns:
+        The textbook engagement angle in degrees, in ``[0, 180]``.
+    """
+    return max(0.0, min(rim_arc_deg, HALF_TURN_DEG))
+
+
+def in_process_radial_immersion(rim_arc_deg: float) -> float:
+    """Radial immersion ``a_e / D`` for an IN-PROCESS rim arc of *rim_arc_deg*.
+
+    ``(1 - cos theta_tb) / 2`` at `in_process_textbook_engagement_deg`: a slot
+    (180 degrees) is full immersion, a 90 degree side cut is half.
+
+    Args:
+        rim_arc_deg: The in-process engaged rim arc in degrees.
+
+    Returns:
+        The immersion ratio, in ``[0, 1]``.
+    """
+    return 0.5 * (1.0 - math.cos(math.radians(in_process_textbook_engagement_deg(rim_arc_deg))))
+
+
+def chip_thickness_ratio_from_in_process_rim(rim_arc_deg: float) -> float:
+    """``h_ex / f_z`` for an IN-PROCESS rim arc, converting the angle first.
+
+    Args:
+        rim_arc_deg: The in-process engaged rim arc in degrees.
+
+    Returns:
+        The ratio in ``[0, 1]``.
+    """
+    return chip_thickness_ratio(in_process_textbook_engagement_deg(rim_arc_deg))
+
+
 def design_immersion(tea_cap_deg: float) -> float:
     """Radial immersion a cut running exactly at the engagement cap would carry.
 
-    The commissioned load, and a property of the cap alone.
+    The commissioned load, and a property of the cap alone. The cap here is the
+    GENERATORS' cap, which they still regulate against the STATIC rim arc (Task
+    0.1 moved only the gate to the in-process reading). A straight-wall cut held
+    at a static rim arc of the cap has ``a_e = r (1 - cos(cap / 2))``, which is
+    the static `radial_immersion` of the cap. It stays comparable with the
+    measured immersions, which `in_process_radial_immersion` converts from the
+    survey's in-process reading, because both are the same ``a_e / D``.
 
     Args:
         tea_cap_deg: The engagement cap in degrees.

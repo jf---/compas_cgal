@@ -275,6 +275,39 @@ switch (CGAL::compare(u * u, w * w * CoordNT(beta))) {   // same-root products
     `CrossRootExtensionError`, and the exemption is `!is_extended()`, never
     "the root is zero". It is not sign-safe either.
 
+### Case: an arc prefix's extent is an orientation, not an angle
+
+The in-process engagement query (`src/swept_prefix_engagement_2.cpp`) covers a
+station's rim with the sector an arc has swept so far. The sector test is an
+intersection of two half-planes up to a half turn and their union beyond it.
+The source of that query decided the switch with a double, `swept_angle <= pi`,
+while it built the station from `cos`/`sin` in doubles. The two could disagree:
+a rounded station near the seam could land past the start ray, so the exact
+sector signs described a tiny sweep while the double said almost 2π.
+
+The port decides both from points:
+
+- **Stations lie exactly on the guide circle.** An interior station is the start
+  phase rotated by the quarter-chart atlas,
+  `exact_circle_chart_point(guide, start - guide, audit_arc_chart_parameter_for_angle(±p·Θ))`.
+  The angle `p·Θ` is intent and crosses into exact-land once, through the same
+  seam `AuditArcMotion2::build` uses. The rotation is rational and preserves
+  length, so the station is on the start's circle whatever the angle rounded to.
+- **The extent is `ArcPrefixExtent2`.** `ZERO` (p = 0) and `FULL_TURN` (p = 1 of
+  a closed circle, exact `start == end`) are structural. Otherwise
+  `CGAL::orientation(guide, start, station)`, negated for clockwise travel,
+  gives `AT_MOST_HALF_TURN` or `BEYOND_HALF_TURN`. On the start line,
+  `CGAL::angle` decides: obtuse is exactly a half turn, where intersection and
+  union coincide, so no convention is needed. A station on the start ray strictly
+  inside the motion raises `ArcPrefixExtentAmbiguousError`.
+
+Each rim cell between exact event points (the radial points, the start-disk
+intersections) is decided at a rational witness strictly inside it. The witness
+is found by halving an x-interval under exact comparisons. That loop constructs
+a point; it is not a search over engagement, which is non-monotone and never
+bisected. The reported spans use `CGAL::to_double` of the exact station and
+never feed back into a decision.
+
 ## Algebraic kernels: identify roots without minimal polynomials
 
 CGAL's `Algebraic_kernel_d_1` model represents a real root with a square-free

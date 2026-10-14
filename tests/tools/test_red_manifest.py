@@ -40,7 +40,8 @@ ADAPTIVE_RED_IDS = (
     ("tests.adaptive.test_route_retrace_generator::test_route_retrace_derivation_rejects_unsupported_source_scope[terminal]"),
     ("tests.adaptive.test_route_retrace_generator::test_continuation_rejects_missing_retrace_commit"),
 )
-TRANSLATION_RED_ID = "tests.benchmarks.test_quality_invariants::test_moving_the_pocket_across_the_table_changes_no_metric"
+# One red from a multi-count entry; the adaptive test covers the count-1 entries.
+SUBSTITUTED_RED_ID = "tests.benchmarks.test_quality::test_the_generated_path_is_worth_running[cap-120-default-engagement_controlled-rect_12x8]"
 
 
 def _repository_red_ids() -> list[str]:
@@ -50,7 +51,7 @@ def _repository_red_ids() -> list[str]:
         for generator in ("engagement_controlled", "radius_regulated")
         for pocket in ("rect_12x8", "rect_20x12", "L_shape")
     ]
-    return [*quality_ids, TRANSLATION_RED_ID, *ADAPTIVE_RED_IDS]
+    return [*quality_ids, *ADAPTIVE_RED_IDS]
 
 
 def _junit(
@@ -207,17 +208,18 @@ def test_repository_manifest_rejects_a_substituted_adaptive_failure(
     ]
 
 
-def test_repository_manifest_rejects_a_substituted_translation_failure(
+def test_repository_manifest_rejects_a_substituted_quality_failure(
     tmp_path: pathlib.Path,
 ) -> None:
     expected_ids = _repository_red_ids()
-    substituted_ids = [f"{identity}-substitute" if identity == TRANSLATION_RED_ID else identity for identity in expected_ids]
+    substituted_ids = [f"{identity}-substitute" if identity == SUBSTITUTED_RED_ID else identity for identity in expected_ids]
     junit = _junit(
         tmp_path,
         [(identity.split("::", 1)[0], identity.split("::", 1)[1], "failure") for identity in substituted_ids],
     )
 
-    assert [violation.kind for violation in check(junit, PROJECT_ROOT / "docs" / "red_manifest.json")] == ["expected-red-went-green", "unexpected-red"]
+    # The substituted red sits in a 6-count regex entry, so the shortfall reads as a count mismatch.
+    assert [violation.kind for violation in check(junit, PROJECT_ROOT / "docs" / "red_manifest.json")] == ["count-mismatch", "unexpected-red"]
 
 
 def test_adaptive_manifest_accepts_only_the_four_exact_failures(
