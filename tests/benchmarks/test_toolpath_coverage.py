@@ -59,8 +59,8 @@ def test_figure6_consumers_reject_incomplete_cutting_paths(monkeypatch: pytest.M
     monkeypatch.setattr(mathsm, "constant_spacing_path", lambda *args: incomplete)
     with pytest.raises(IncompleteMotionCoverageError, match="residual"):
         if consumer == "repository":
-            held_figure6_comparison.measure_repository_figure6()
+            held_figure6_comparison.measure_repository_figure6(exact_coverage=True)
         elif consumer == "controlled":
-            figure6.figure6_points(_spec(), [80.0], [])
+            figure6.figure6_points(_spec(), [80.0], [], exact_coverage=True)
         else:
-            mathsm.measure_constant_spacing(_spec(), 0.1)
+            mathsm.measure_constant_spacing(_spec(), 0.1, exact_coverage=True)
