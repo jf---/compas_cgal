@@ -122,6 +122,7 @@ def _survey(snapshot: tuple[HeldOperationSnapshot, ...], second_samples: tuple[E
         retracts=1,
         plunge_indices=(OperationIndex(0),),
         retract_indices=(OperationIndex(3),),
+        material_plunge_indices=(OperationIndex(0),),
         final_stock=cast(Stock, object()),
         total_length=3.0,
         cut_length=2.0,
@@ -131,7 +132,7 @@ def _survey(snapshot: tuple[HeldOperationSnapshot, ...], second_samples: tuple[E
 
 
 def _quality(snapshot: tuple[HeldOperationSnapshot, ...], survey: PathSurvey) -> QualityEvidence:
-    coverage = CoverageEstimate(10, 10, 1.0, 10, 0, 0, 0.0)
+    coverage = CoverageEstimate(10, 10, 1.0, 10, 0, 0, 0.0, 1)
     assessment = assess_path_quality(survey.spec, snapshot, survey, coverage)
     path_quality = PathQuality(
         elementary=_elementary(survey.spec, survey, coverage.remaining_area, assessment),
@@ -279,8 +280,9 @@ def test_path_quality_must_equal_all_assessment_values() -> None:
         ("elementary", "unsafe_rapids"),
         ("elementary", "continuity_breaks"),
         ("elementary", "zero_length_motions"),
-        ("elementary", "degenerate_loops"),
         ("elementary", "redundant_operations"),
+        ("elementary", "material_plunges"),
+        ("elementary", "misplaced_plunges"),
         ("cut", "cap_exceedances"),
         ("cut", "slotting_motions"),
         ("cut", "max_engagement_step_deg"),
@@ -373,6 +375,34 @@ def test_coverage_wall_scallop_must_match_path_quality() -> None:
         {"path_quality": quality.path_quality, "assessment": quality.assessment, "coverage": forged_coverage},
     )
     with pytest.raises(ContradictoryPathQualityEvidenceError):
+        _build(values)
+
+
+def test_the_material_plunge_threshold_is_bound_to_the_coverage_component_count() -> None:
+    """The assessment takes the threshold from its own criterion; this boundary is its only binding (R2-6)."""
+    values = _inputs()
+    quality = cast(QualityEvidence, values["quality"])
+    assert quality.assessment.material_plunges.required == quality.coverage.centre_domain_components  # fixture precondition
+    forged_coverage = replace(quality.coverage, centre_domain_components=quality.coverage.centre_domain_components + 1)
+    values["quality"] = _build_record(
+        QualityEvidence,
+        {"path_quality": quality.path_quality, "assessment": quality.assessment, "coverage": forged_coverage},
+    )
+    with pytest.raises(ContradictoryPathQualityEvidenceError, match="component count"):
+        _build(values)
+
+
+@pytest.mark.parametrize("value", [1.0, True, "1"], ids=["float", "bool", "str"])
+def test_a_non_integer_coverage_component_count_is_invalid_evidence(value: object) -> None:
+    """A type failure is invalid evidence, not a contradiction between two valid records."""
+    values = _inputs()
+    quality = cast(QualityEvidence, values["quality"])
+    malformed = replace(quality.coverage, centre_domain_components=cast(Any, value))
+    values["quality"] = _build_record(
+        QualityEvidence,
+        {"path_quality": quality.path_quality, "assessment": quality.assessment, "coverage": malformed},
+    )
+    with pytest.raises(InvalidHeldPathEvidenceError, match="component count"):
         _build(values)
 
 

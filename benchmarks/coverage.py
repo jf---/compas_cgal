@@ -81,6 +81,11 @@ class CoverageEstimate:
             `WALL_BAND_TOOL_DIAMETERS` of the boundary, measured perpendicular
             from the boundary. A residue DEPTH near the wall, not the classical
             two-pass cusp formula.
+        centre_domain_components: Connected components of the exact
+            cutter-centre domain, read from the same reachable-material
+            predicate the grid queries
+            (`ReachableMaterialPredicate2.center_component_count`). Each admits
+            one plunge into material (gate rule b). EXACT.
     """
 
     nx: int
@@ -90,6 +95,7 @@ class CoverageEstimate:
     uncut_reachable_samples: int
     remaining_samples: int
     wall_scallop_height: float
+    centre_domain_components: int
 
     @property
     def uncut_fraction(self) -> float:
@@ -161,6 +167,7 @@ def measure_coverage(spec: PocketSpec, stock: Stock, *, grid: int = COVERAGE_GRI
         uncut_reachable_samples=uncut,
         remaining_samples=remaining,
         wall_scallop_height=scallop,
+        centre_domain_components=int(region.center_component_count()),
     )
 
 

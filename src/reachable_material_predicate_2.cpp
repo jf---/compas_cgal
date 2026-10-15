@@ -1,5 +1,6 @@
 #include "reachable_material_predicate_2.h"
 
+#include "exact_region_2.h"
 #include "exact_sweep_2.h"
 #include "reachable_arrangement_2.h"
 #include "reachable_errors_2.h"
@@ -311,6 +312,11 @@ ReachableMaterialPredicate2::ReachableMaterialPredicate2(
     std::shared_ptr<const ReachableMaterialPredicateStorage2> storage)
     : storage_(std::move(storage))
 {
+}
+
+std::size_t ReachableMaterialPredicate2::center_component_count() const
+{
+    return reach_component_count(*storage_->center);
 }
 
 bool ReachableMaterialPredicate2::contains(double x, double y) const

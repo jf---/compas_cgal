@@ -146,14 +146,15 @@ def test_regulated_path_beats_unregulated_on_measured_engagement():
 
 
 def test_only_chain_entry_loops_are_measured_above_the_cap():
-    """The 4-probe accept rule holds up against the audit's 20-station sweep.
+    """The 4-probe accept rule holds up off the chain entries against the audit's 20-station sweep.
 
     The generator evaluates four positions per machining circle; the audit
-    re-measures twenty. This pins the gap between them: on this pocket the only
-    motions the audit finds above the cap are the chain-entry loops, which the
-    generator already refuses and reports through `UnavoidableEngagementWarning`
-    (the tool meeting virgin stock cuts a full slot, whatever the advance). It is a
-    measurement on one pocket, not a proof that four probes suffice in general.
+    re-measures twenty. On this pocket every motion the audit finds above the
+    cap is a chain-entry loop, which the generator already refuses and reports
+    through `UnavoidableEngagementWarning` (the tool meeting virgin stock cuts a
+    full slot, whatever the advance). Whether every entry loop exceeds the cap is
+    no longer asserted (retired, Task 0.3 R1e). It is a measurement on one
+    pocket, not a proof that four probes suffice in general.
     """
     cap_rad = math.radians(CAP_DEG)
     result = engagement_controlled_toolpath(POCKET, TOOL_DIAMETER, CAP_DEG)
@@ -165,7 +166,7 @@ def test_only_chain_entry_loops_are_measured_above_the_cap():
             entry_indices.add(index + 1)  # the machining circle the plunge lands in
 
     above_cap = {e.op_index: math.degrees(e.max_tea) for e in report.operations if e.max_tea > cap_rad}
-    assert set(above_cap) == entry_indices, f"above cap {above_cap}, chain-entry loops at {sorted(entry_indices)}"
+    assert set(above_cap) <= entry_indices, f"above cap {above_cap}, chain-entry loops at {sorted(entry_indices)}"
 
 
 # The pocket and station the probe-placement tests are read on: a 20x12 rectangle

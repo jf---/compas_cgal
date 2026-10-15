@@ -10,8 +10,8 @@ operation stream byte-for-byte when the cap is loose enough that the ladder neve
 rung.
 
 It does **not** deliver the headline the knob was expected to buy. The worst loop engagement away
-from the chain entries stays pinned at 125.8 deg for caps of 40, 60 and 80 deg — the same saturation
-the advance-only generator shows. The section
+from the chain entries stays pinned at one value, above the cap, for caps of 40, 60 and 80 deg — the
+same saturation the advance-only generator shows (gated measurements: [`benchmarks/results/gate_vectors.md`](machining_quality.md#measured)). The section
 [below](#the-negative-result-the-worst-loop-does-not-track-the-cap) says exactly why, with the
 decomposition that proves it, because that finding is worth more than the improvement.
 

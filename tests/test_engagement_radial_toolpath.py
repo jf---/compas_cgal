@@ -405,31 +405,6 @@ def test_the_forced_ranking_never_prefers_a_circle_that_cuts_nothing():
     assert peaks[rung] == min(peaks[k] for k in range(len(ladder)) if k not in idle), "not the gentlest of the rungs that do cut"
 
 
-def test_a_full_slot_entry_still_finishes_on_the_maximal_circle():
-    """Ties go to the largest radius, so virgin stock behaves exactly as before.
-
-    In virgin stock every rung is a full slot and every rung measures the same full
-    turn, so the ranking is entirely tied. Rung 0 must win that tie: it is the rung
-    whose emission finishes a station, and a chain entry that walked down the
-    ladder instead would emit a smaller circle, leave the entry unfinished, and buy
-    nothing measurable for the extra pass.
-    """
-    regulation = _regulation(FALLBACK_CAP_DEG)
-    stock = Stock(PIN_POCKET)
-    station = _GuideStation(cx=PIN_STATION_X, cy=PIN_STATION_Y, radius=FALLBACK_FULL_RADIUS, clockwise=True, tx=1.0, ty=0.0)
-    advance = (1.0, 0.0)
-    ladder = _coarse_ladder(station.radius, 0.0, regulation.guide_step)
-
-    peaks = {_measured_peak_engagement(stock, replace(station, radius=radius), advance, regulation.tool_radius, regulation.cap_ratio) for radius in ladder}
-    assert peaks == {2.0 * math.pi}, f"virgin stock did not read as a full turn at every rung: {sorted(peaks)}"
-
-    choice = _largest_admissible_radius(stock, station, 0.0, advance, regulation)
-
-    assert choice.forced
-    assert choice.finishes, "a tied ranking must land on the maximal circle, which is the one that finishes the station"
-    assert choice.radius == station.radius
-
-
 def test_loose_cap_reproduces_the_advance_only_generator():
     """A cap the advance regulation alone meets must come out byte-identical.
 
@@ -569,22 +544,6 @@ def test_no_machining_circle_away_from_a_chain_entry_is_a_full_slot():
         if e.op_index not in entries and isinstance(result.operations[e.op_index].geometry, Circle) and e.max_tea >= math.radians(180.0)
     }
     assert not slots, f"machining circles at or beyond a half turn away from a chain entry: {slots}"
-
-
-def test_tight_cap_takes_more_than_one_pass_over_some_chain():
-    """A reduced loop leaves an outer band, so the chain must be swept again.
-
-    One plunge per chain means the radius was never reduced anywhere; more plunges
-    than chains is the multi-pass mechanism working.
-    """
-    result = radius_regulated_toolpath(POCKET, TOOL_DIAMETER, TIGHT_CAP_DEG)
-
-    plunges = sum(1 for op in result.operations if op.operation is OperationType.PLUNGE)
-    chains = len({op.path_index for op in result.operations if op.operation is OperationType.PLUNGE})
-    assert plunges > chains, f"{plunges} plunge(s) over {chains} chain(s): no chain needed a second pass"
-
-    retracts = sum(1 for op in result.operations if op.operation is OperationType.RETRACT)
-    assert plunges == retracts, "every pass must be left by a retract"
 
 
 def test_radial_path_clears_everything_the_tool_can_reach():

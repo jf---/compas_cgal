@@ -15,10 +15,12 @@ nothing, plunges bore a disk, and cut-plane motions remove their swept area. The
 public replay projection deliberately folds retracts into rapid travel; evidence
 consumers retain the four-way source category.
 
-`replay_cuts` is the primitive: it walks the toolpath and hands each cut-plane
+`replay_events` is the primitive: it walks the toolpath and hands each cut-plane
 motion to the caller BEFORE that motion removes its own material, which is the
-only moment at which the material a motion actually meets still exists.
-`replay_depletion` is the degenerate consumer that wants only the end state.
+only moment at which the material a motion actually meets still exists, and
+reports each plunge with the exact verdict of whether its disk bored material.
+`replay_cuts` is its projection onto the cut motions, and `replay_depletion` is
+the degenerate consumer that wants only the end state.
 """
 
 from __future__ import annotations
@@ -27,6 +29,7 @@ import enum
 import math
 from dataclasses import dataclass
 from typing import Iterator
+from typing import Union
 
 from compas.geometry import Line
 
@@ -40,6 +43,7 @@ from compas_cgal.replay_classification import ReplayCategory
 from compas_cgal.replay_classification import classify_line_replay
 from compas_cgal.replay_classification import classify_planar_replay
 from compas_cgal.stock import Stock
+from compas_cgal.stock import SweepRemoval
 from compas_cgal.toolpath import OperationType
 from compas_cgal.toolpath import ToolpathOperation
 from compas_cgal.toolpath import ToolpathResult
@@ -80,11 +84,78 @@ class CutMotion:
     stock: Stock
 
 
+# A plunge bores the tool disk at its foot. As a sweep that disk is the full-turn
+# sweep of a guide circle of radius ZERO: `Stock.circle_sweep_removal` with
+# rho = 0 builds the disk of radius r about the foot exactly and decides its
+# regularized interior intersection with the stock without mutating it. Not a
+# tolerance: the guide radius of a point.
+PLUNGE_GUIDE_RADIUS = 0.0
+
+
+@dataclass(frozen=True)
+class PlungeEvent:
+    """One plunge, judged against the stock it bores into.
+
+    Attributes:
+        index: Position of the operation in its toolpath.
+        x: X of the plunge's foot, as authored (binary64, injected exactly).
+        y: Y of the plunge's foot, as authored.
+        into_material: Whether the plunge disk meets the stock's interior, an
+            EXACT verdict taken before the disk is subtracted. Touching the
+            cleared boundary is not boring material.
+    """
+
+    index: int
+    x: float
+    y: float
+    into_material: bool
+
+
+ReplayEvent = Union[CutMotion, PlungeEvent]
+
+
+def replay_events(spec: PocketSpec, result: ToolpathResult, stock: Stock) -> Iterator[ReplayEvent]:
+    """Deplete *stock* by replaying *result*, yielding every cut motion and plunge.
+
+    A cut motion is yielded BEFORE it removes its swept area; a plunge is
+    yielded after its exact into-material verdict and before its disk is
+    removed, but carries no stock, so the caller cannot observe the order.
+    Rapid moves are skipped. On exhaustion *stock* holds the end state.
+
+    Args:
+        spec: The instance whose tool the toolpath was generated for.
+        result: The generated toolpath to replay.
+        stock: A fresh stock for *spec*, depleted in place as the replay proceeds.
+
+    Yields:
+        One `CutMotion` per cut-plane motion and one `PlungeEvent` per plunge,
+        in toolpath order.
+
+    Raises:
+        UnreplayableOperationError: An operation lies outside the cut-plane model.
+    """
+    cut_z = _infer_cut_height(result.operations)
+    for index, operation in enumerate(result.operations):
+        kind = _replay_kind(index, operation, cut_z)
+        if kind is ReplayKind.RAPID:
+            continue
+        if kind is ReplayKind.PLUNGE:
+            geometry = operation.geometry
+            assert isinstance(geometry, Line)  # guaranteed by _replay_kind's PLUNGE branch
+            x, y = float(geometry.end[0]), float(geometry.end[1])
+            verdict = stock.circle_sweep_removal(x, y, PLUNGE_GUIDE_RADIUS, spec.tool_radius)
+            yield PlungeEvent(index=index, x=x, y=y, into_material=verdict is SweepRemoval.REMOVES)
+            stock.subtract_disk(x, y, spec.tool_radius)
+            continue
+        yield CutMotion(index=index, operation=operation, stock=stock)
+        _subtract_operation(stock, operation, spec.tool_radius)
+
+
 def replay_cuts(spec: PocketSpec, result: ToolpathResult, stock: Stock) -> Iterator[CutMotion]:
     """Deplete *stock* by replaying *result*, yielding each cut motion before it cuts.
 
-    Rapid moves are skipped and plunges bore their disk without being yielded;
-    only the motions the engagement audit measures reach the caller. On exhaustion
+    The projection of `replay_events` onto its cut motions: rapid moves are
+    skipped and plunges bore their disk without being yielded. On exhaustion
     *stock* holds the state the audit ended with.
 
     Args:
@@ -98,18 +169,7 @@ def replay_cuts(spec: PocketSpec, result: ToolpathResult, stock: Stock) -> Itera
     Raises:
         UnreplayableOperationError: An operation lies outside the cut-plane model.
     """
-    cut_z = _infer_cut_height(result.operations)
-    for index, operation in enumerate(result.operations):
-        kind = _replay_kind(index, operation, cut_z)
-        if kind is ReplayKind.RAPID:
-            continue
-        if kind is ReplayKind.PLUNGE:
-            geometry = operation.geometry
-            assert isinstance(geometry, Line)  # guaranteed by _replay_kind's PLUNGE branch
-            stock.subtract_disk(float(geometry.end[0]), float(geometry.end[1]), spec.tool_radius)
-            continue
-        yield CutMotion(index=index, operation=operation, stock=stock)
-        _subtract_operation(stock, operation, spec.tool_radius)
+    return (event for event in replay_events(spec, result, stock) if isinstance(event, CutMotion))
 
 
 def replay_depletion(spec: PocketSpec, result: ToolpathResult) -> Stock:

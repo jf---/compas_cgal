@@ -7,7 +7,7 @@ would be four times the cost and four chances to drift apart. So the replay
 happens HERE, once, and produces a `PathSurvey` of per-motion evidence that
 `benchmarks.quality` reduces without touching a stock again.
 
-The replay itself is `benchmarks.depletion.replay_cuts` -- the primitive that
+The replay itself is `benchmarks.depletion.replay_events` -- the primitive that
 owns the cut-plane model -- not a second copy of it. What this module adds is the
 observation: engagement sampled along each motion, the exact effect of each
 motion on the stock, and the geometric quantities (curvature, tangents, swept
@@ -45,7 +45,8 @@ from compas.geometry import angle_vectors
 from compas.tolerance import TOL
 
 from benchmarks.depletion import CutMotion
-from benchmarks.depletion import replay_cuts
+from benchmarks.depletion import PlungeEvent
+from benchmarks.depletion import replay_events
 from benchmarks.errors import InconsistentRemovalVerdictError
 from benchmarks.errors import InvalidMotionSampleCountError
 from benchmarks.errors import UnmeasurableOperationLengthError
@@ -89,17 +90,6 @@ QUALITY_SAMPLES_PER_MOTION = 45
 # actually engaged at a position, not about what a certifier must assume could
 # happen before the next station.
 NO_GAP_CLOSURE = 0.0
-
-# A straight cut between machining circles is a TRANSFER through material the
-# loops already cleared: its nominal engagement is zero, and whatever it does
-# engage is material the stepover control never budgeted for. For a straight cut
-# into a straight wall the engagement angle theta and the radial depth of cut a_e
-# are related exactly by a_e = r * (1 - cos(theta / 2)) -- 0.5 r at a 120 degree
-# cap, 0.134 r at half of it. Half the cap therefore still allows a link about a
-# quarter of the regulated radial bite, a generous allowance for clipping the
-# corner of a cleared corridor. ENGINEERING JUDGEMENT, not a standard: no
-# literature fixes where a link stops linking and starts cutting.
-SLOT_ENGAGEMENT_FRACTION = 0.5
 
 
 class MotionKind(str, enum.Enum):
@@ -162,8 +152,9 @@ class MotionQuality:
         samples: The probed positions, in travel order.
         cap_exceeded: Whether the exact cap predicate fired at any sample.
             SAMPLED: a lower bound on true exceedance.
-        slot_exceeded: Whether a STRAIGHT motion passed
-            `SLOT_ENGAGEMENT_FRACTION` of the cap at any sample. SAMPLED.
+        slot_exceeded: Whether a STRAIGHT motion exceeded the cap at any
+            sample: the straight-motion subset of *cap_exceeded*, judged by the
+            same cap as a loop (gate rule c). SAMPLED.
         removes_material: Whether the motion may remove material: False only
             when its exact removal verdict is NOTHING, i.e. even a certified
             region CONTAINING the true swept area misses the stock's interior.
@@ -173,6 +164,17 @@ class MotionQuality:
             replay decided for this motion, or None for a record assembled
             without one (synthetic fixtures). When present it determines
             *removes_material*.
+        exit_sample: The station where the motion hands over to the next one,
+            read for the junction step (gate rule f) and for nothing else. For a
+            line or an arc it is the last of *samples*. For a closed loop it is
+            an extra station at the seam with the FULL turn as prefix (Ruling
+            0.3-f-loop): the seam is sampled once, at the start, so the last of
+            *samples* sits a station spacing before the loop ends. It does not
+            enter *cap_exceeded* or any per-motion statistic. None only on a
+            record assembled without a survey (synthetic fixtures). The
+            junction reads it only for a loop, and refuses a loop without it
+            (`MissingLoopSeamStationError`); a line or arc junction reads the
+            last of *samples* by definition.
     """
 
     index: int
@@ -191,6 +193,7 @@ class MotionQuality:
     slot_exceeded: bool
     removes_material: bool
     removal: Optional[SweepRemoval] = None
+    exit_sample: Optional[EngagementSample] = None
 
     def __post_init__(self) -> None:
         """Refuse a record whose two removal fields disagree.
@@ -253,6 +256,9 @@ class PathSurvey:
         plunges: Downward bores in the path.
         retracts: Upward clearance moves in the path.
         plunge_indices: Source operation indices of the downward bores.
+        material_plunge_indices: The plunges whose disk met the stock's
+            interior when it was bored, a subset of *plunge_indices*. EXACT
+            (`benchmarks.depletion.PlungeEvent`).
         retract_indices: Source operation indices of the upward clearance moves.
         final_stock: The stock after the whole path has been replayed.
         total_length: Analytic length of every operation.
@@ -269,6 +275,7 @@ class PathSurvey:
     retracts: int
     plunge_indices: tuple[OperationIndex, ...]
     retract_indices: tuple[OperationIndex, ...]
+    material_plunge_indices: tuple[OperationIndex, ...]
     final_stock: Stock
     total_length: float
     cut_length: float
@@ -317,23 +324,27 @@ def survey_path(spec: PocketSpec, result: ToolpathResult, *, samples_per_motion:
 
     _validate_cut_plane_curves(result.operations)
 
-    # Both thresholds cross into exact-land the way the kernel's own cap does:
-    # the transcendental intent (an angle) is converted once, here, to the exact
-    # rational surrogate 4*sin^2(theta/2), and the predicate then decides against
-    # that surrogate exactly. The slot threshold is a cap like any other, so it
-    # gets a cap's treatment rather than a comparison of reported degrees.
+    # The cap crosses into exact-land the way the kernel's own cap does: the
+    # transcendental intent (an angle) is converted once, here, to the exact
+    # rational surrogate 4*sin^2(theta/2), and the predicate then decides
+    # against that surrogate exactly. Slotting is judged by the same cap.
     cap_ratio = _cap_chord_ratio(spec.tea_cap_rad)
-    slot_ratio = _cap_chord_ratio(SLOT_ENGAGEMENT_FRACTION * spec.tea_cap_rad)
+    holes = [_polygon_to_ccw_vertices(hole) for hole in spec.holes]
     centre_domain = _coverage_2.CutterCentreDomain2.build(
         _polygon_to_ccw_vertices(spec.polygon),
-        [_polygon_to_ccw_vertices(hole) for hole in spec.holes],
+        holes,
         spec.tool_radius,
     )
 
     stock = Stock(spec.polygon, list(spec.holes))
     motions: List[MotionQuality] = []
-    for motion in replay_cuts(spec, result, stock):
-        motions.append(_measure_motion(motion, spec.tool_radius, cap_ratio, slot_ratio, centre_domain, samples_per_motion))
+    material_plunges: list[OperationIndex] = []
+    for event in replay_events(spec, result, stock):
+        if isinstance(event, PlungeEvent):
+            if event.into_material:
+                material_plunges.append(OperationIndex(event.index))
+            continue
+        motions.append(_measure_motion(event, spec.tool_radius, cap_ratio, centre_domain, samples_per_motion))
 
     rapids, plunge_indices, retract_indices, plunge_area = _classify_non_cutting(result, spec.tool_radius)
     cut_length = sum(motion.length for motion in motions)
@@ -347,6 +358,7 @@ def survey_path(spec: PocketSpec, result: ToolpathResult, *, samples_per_motion:
         retracts=len(retract_indices),
         plunge_indices=plunge_indices,
         retract_indices=retract_indices,
+        material_plunge_indices=tuple(material_plunges),
         final_stock=stock,
         total_length=sum(_primitive_length(index, operation) for index, operation in enumerate(result.operations)),
         cut_length=cut_length,
@@ -359,7 +371,6 @@ def _measure_motion(
     motion: CutMotion,
     tool_radius: float,
     cap_ratio: float,
-    slot_ratio: float,
     centre_domain: "_coverage_2.CutterCentreDomain2",
     samples_per_motion: int,
 ) -> MotionQuality:
@@ -369,7 +380,6 @@ def _measure_motion(
         motion: The motion and the stock it is about to cut.
         tool_radius: Tool radius.
         cap_ratio: Exact squared-chord surrogate of the engagement cap.
-        slot_ratio: Exact squared-chord surrogate of the slotting threshold.
         centre_domain: Where a cutter of this radius may legally be centred.
         samples_per_motion: Cutter positions to probe.
 
@@ -384,9 +394,6 @@ def _measure_motion(
     straight = isinstance(geometry, Line)
     positions = _motion_travel_positions(motion, samples_per_motion)
     verdicts = _motion_prefix_samples(motion, samples_per_motion, tool_radius, cap_ratio)
-    # A second exact verdict, asked only of straight motions, because the slot
-    # threshold decides `slot_exceeded` and nothing else.
-    slot_exceeded = straight and any(over for _total, _run, over in _motion_prefix_samples(motion, samples_per_motion, tool_radius, slot_ratio))
     samples: List[EngagementSample] = []
     for (distance, x, y), (_total_tea, max_run_tea, exceeded) in zip(positions, verdicts, strict=True):
         samples.append(
@@ -400,6 +407,8 @@ def _measure_motion(
         )
 
     removal = _operation_removal(motion.stock, motion.operation, tool_radius)
+    cap_exceeded = any(sample.cap_exceeded for sample in samples)
+    exit_sample = _loop_seam_exit(motion, tool_radius, cap_ratio, centre_domain) if isinstance(geometry, Circle) else samples[-1]
     start, end = _endpoints(geometry)
     start_tangent, end_tangent = _tangents(motion.operation)
     return MotionQuality(
@@ -415,10 +424,47 @@ def _measure_motion(
         start_tangent=start_tangent,
         end_tangent=end_tangent,
         samples=tuple(samples),
-        cap_exceeded=any(sample.cap_exceeded for sample in samples),
-        slot_exceeded=slot_exceeded,
+        cap_exceeded=cap_exceeded,
+        slot_exceeded=straight and cap_exceeded,
         removes_material=removal is not SweepRemoval.NOTHING,
         removal=removal,
+        exit_sample=exit_sample,
+    )
+
+
+# The prefix parameter of a closed loop's own end: the full turn.
+FULL_TURN_PREFIX = 1.0
+
+
+def _loop_seam_exit(motion: CutMotion, tool_radius: float, cap_ratio: float, centre_domain: "_coverage_2.CutterCentreDomain2") -> EngagementSample:
+    """The junction station of a closed loop: its seam, after the whole turn.
+
+    One native prefix query at the full-turn parameter, against the stock the
+    loop started from (Ruling 0.3-f-loop). The position is the authored entry
+    ``point_at(0)``, where the loop both begins and ends.
+
+    Args:
+        motion: The loop and the stock it is about to cut.
+        tool_radius: Tool radius.
+        cap_ratio: Exact squared-chord surrogate of the cap.
+        centre_domain: Where a cutter of this radius may legally be centred.
+
+    Returns:
+        The seam station with the full-turn prefix.
+    """
+    geometry = motion.operation.geometry
+    assert isinstance(geometry, Circle)  # guaranteed by the caller
+    cx, cy = _xy(geometry.frame.point)
+    sx, sy = _xy(geometry.point_at(0.0))
+    ((_total, max_run, exceeded),) = _stock_2.engagement_circle_prefixes(
+        motion.stock.raw, cx, cy, float(geometry.radius), sx, sy, motion.operation.clockwise, [FULL_TURN_PREFIX], tool_radius, cap_ratio, NO_GAP_CLOSURE
+    )
+    return EngagementSample(
+        distance=float(geometry.circumference),
+        position=Point2[WorldXY].build(sx, sy),
+        engagement_deg=math.degrees(max_run),
+        cap_exceeded=exceeded,
+        inside_centre_domain=centre_domain.contains(sx, sy),
     )
 
 
@@ -801,8 +847,9 @@ def _classify_non_cutting(
 ) -> tuple[List[RapidMotion], tuple[OperationIndex, ...], tuple[OperationIndex, ...], float]:
     """Record the motions the depletion replay does not yield.
 
-    `replay_cuts` skips rapids and swallows plunges, which is right for a
-    depletion but loses the speed and longevity groups' inputs. This walk
+    `replay_events` skips rapids and reports a plunge only by its foot and its
+    into-material verdict, which is right for a depletion but loses the speed
+    and longevity groups' inputs. This walk
     reclassifies with the SAME `_replay_kind`, so the two can never disagree
     about what counts as cutting.
 

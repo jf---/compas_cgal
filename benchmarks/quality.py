@@ -185,11 +185,22 @@ class ElementaryQuality:
             next begins.
         zero_length_motions: Operations of no length at all.
         degenerate_loops: Loops with ``rho <= r`` -- a disk sweep, not a
-            trochoid. EXACT, and physics rather than judgement.
+            trochoid. EXACT, and physics rather than judgement. REPORTED, not
+            gated (gate rule d): in cleared stock a small circle is legitimate
+            cleanup, and the cap decides whether it loads the tool.
         marginal_loops: Loops with ``r < rho <= MARGINAL_LOOP_RATIO * r`` -- a
             hole too small to be useful. ENGINEERING JUDGEMENT.
-        redundant_operations: Cut motions that leave the stock exactly
-            unchanged. EXACT.
+        redundant_operations: CUT motions whose exact removal verdict is
+            NOTHING (gate rule a). A LINK or lead at the cut plane that removes
+            nothing is a stay-down transit, reported as
+            `SpeedQuality.air_at_depth_length`, not counted here. EXACT.
+        material_plunges: Plunges whose disk met the stock's interior when it
+            was bored. Gated at no more than *centre_domain_components* (rule
+            b). EXACT.
+        misplaced_plunges: Plunges whose foot is not bit-equal to the next
+            motion's start, or that no cut motion follows (rule e). EXACT.
+        centre_domain_components: Connected components of the legal
+            cutter-centre domain; each admits one plunge into material.
         recut_fraction: Share of the swept area that met no fresh material --
             re-cut chips and already-cleared space together. Held discusses chip
             re-cutting explicitly and this is its geometric shadow, but READ THE
@@ -211,6 +222,9 @@ class ElementaryQuality:
     marginal_loops: int
     redundant_operations: int
     recut_fraction: float
+    material_plunges: int
+    misplaced_plunges: int
+    centre_domain_components: int
 
 
 @dataclass(frozen=True)
@@ -245,11 +259,14 @@ class CutQuality:
         max_engagement_gradient_deg_per_length: Steepest change of engagement
             per unit travel WITHIN a motion. Load shock, which damages an edge
             more than a high steady load does.
-        max_engagement_step_deg: Largest change between two motions the tool
-            runs back to back without leaving the cut. The same shock across a
-            junction, where the gradient is undefined because the travel is zero.
-        slotting_motions: Straight cut motions engaging past
-            `benchmarks.survey.SLOT_ENGAGEMENT_FRACTION` of the cap.
+        max_engagement_step_deg: Largest change of engagement AT THE JUNCTION
+            between two motions the tool runs back to back without leaving the
+            cut: the next motion's first station with a non-empty prefix
+            against the previous motion's last station (gate rule f). The same
+            shock as the gradient, across a junction, where the travel is zero.
+        slotting_motions: Straight cut motions over the cap: the straight
+            subset of *cap_exceedances*, judged by the same cap as a loop (gate
+            rule c).
         immersion_steady_fraction: Share of cut length whose radial immersion
             lies within `IMMERSION_STEADY_BAND_FRACTION` of the DESIGN immersion
             either side of the length-weighted median. One means a single-lobe
@@ -317,6 +334,9 @@ class SpeedQuality:
         direction_reversals: Junctions where the tool turns back on itself.
         retract_count: Upward clearance moves.
         reentry_count: Downward plunges, each of which is a re-entry.
+        air_at_depth_length: Length of the cut-plane LINK and lead motions that
+            remove nothing: staying down through cleared material, which is a
+            legal transit (gate rule a) and costs feed time, not a rapid.
     """
 
     cutting_length: float
@@ -328,6 +348,7 @@ class SpeedQuality:
     direction_reversals: int
     retract_count: int
     reentry_count: int
+    air_at_depth_length: float
 
 
 @dataclass(frozen=True)
@@ -548,10 +569,15 @@ def _elementary(
         unsafe_rapids=int(assessment.unsafe_rapids.measured),
         continuity_breaks=int(assessment.continuity_breaks.measured),
         zero_length_motions=int(assessment.zero_length_motions.measured),
-        degenerate_loops=int(assessment.degenerate_loops.measured),
+        degenerate_loops=len(assessment.attribution.degenerate_loop_operations),
         marginal_loops=sum(1 for radius in loops if DEGENERATE_LOOP_RATIO * spec.tool_radius < radius <= MARGINAL_LOOP_RATIO * spec.tool_radius),
         redundant_operations=int(assessment.redundant_operations.measured),
         recut_fraction=0.0 if swept <= 0.0 else max(0.0, 1.0 - removed / swept),
+        material_plunges=int(assessment.material_plunges.measured),
+        misplaced_plunges=int(assessment.misplaced_plunges.measured),
+        # The material-plunge threshold IS the component count (rule b), measured
+        # once by the coverage predicate; read back from the decision it set.
+        centre_domain_components=int(assessment.material_plunges.required),
     )
 
 
@@ -601,10 +627,12 @@ def _speed(survey: PathSurvey, assessment: PathQualityAssessment) -> SpeedQualit
 
     Args:
         survey: The replay's findings.
+        assessment: The canonical decisions, for the attributed operations.
 
     Returns:
         The machine-cost group.
     """
+    air_at_depth = set(assessment.attribution.air_at_depth_operations)
     return SpeedQuality(
         cutting_length=survey.cut_length,
         air_length=survey.air_length,
@@ -615,6 +643,7 @@ def _speed(survey: PathSurvey, assessment: PathQualityAssessment) -> SpeedQualit
         direction_reversals=len(assessment.attribution.reversal_pairs),
         retract_count=survey.retracts,
         reentry_count=survey.plunges,
+        air_at_depth_length=sum(motion.length for motion in survey.motions if motion.index in air_at_depth),
     )
 
 

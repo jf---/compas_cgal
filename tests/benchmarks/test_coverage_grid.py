@@ -66,6 +66,9 @@ def test_measure_coverage_builds_one_material_predicate_and_queries_each_cell(
             calls["contains"] += 1
             return True
 
+        def center_component_count(self) -> int:
+            return 1
+
     class Stock:
         def contains(self, x: float, y: float) -> bool:
             return True
@@ -83,3 +86,4 @@ def test_measure_coverage_builds_one_material_predicate_and_queries_each_cell(
     assert estimate.reachable_samples == 1600
     assert estimate.uncut_reachable_samples == 1600
     assert estimate.remaining_samples == 1600
+    assert estimate.centre_domain_components == 1  # read from the same, single predicate

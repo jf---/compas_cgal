@@ -52,6 +52,7 @@ import numpy as np
 
 from benchmarks.coverage import CoverageEstimate
 from benchmarks.held_path_snapshot import HeldOperationSnapshot
+from tests.benchmarks.test_quality import _independent_junction_step
 from benchmarks.held_path_snapshot import snapshot_toolpath
 from benchmarks.quality import _cut
 from benchmarks.quality import _elementary
@@ -367,6 +368,9 @@ class _Groups:
             uncut_reachable_samples=0,
             remaining_samples=0,
             wall_scallop_height=0.0,
+            # Every pocket drawn here is one rectangle or its transform: one
+            # connected centre domain, the material-plunge threshold.
+            centre_domain_components=1,
         )
         snapshot = snapshot_toolpath(result)
         self.assessment = assess_path_quality(spec, snapshot, survey, coverage)
@@ -389,9 +393,9 @@ def _expected_maximum_pairs(
     for previous, current in zip(survey.motions, survey.motions[1:]):
         if current.index != previous.index + 1:
             continue
-        previous_peak = max((sample.engagement_deg for sample in previous.samples), default=0.0)
-        current_peak = max((sample.engagement_deg for sample in current.samples), default=0.0)
-        value = abs(current_peak - previous_peak)
+        value = _independent_junction_step(previous, current)
+        if value is None:
+            continue
         if value > engagement_value:
             engagement_value = value
             engagement_pair = OperationPair.build(
@@ -468,7 +472,7 @@ def _expected_count_sources(
             for motion in survey.motions
             if motion.kind is MotionKind.LOOP and motion.loop_radius is not None and motion.loop_radius <= DEGENERATE_LOOP_RATIO * spec.tool_radius
         ),
-        tuple(OperationIndex(motion.index) for motion in survey.motions if not motion.removes_material),
+        tuple(OperationIndex(motion.index) for motion in survey.motions if not motion.removes_material and motion.operation is OperationType.CUT),
         tuple(OperationIndex(motion.index) for motion in survey.motions if any(sample.cap_exceeded for sample in motion.samples)),
         tuple(OperationIndex(motion.index) for motion in survey.motions if motion.slot_exceeded),
         tuple(tangent),
@@ -489,8 +493,10 @@ def _assert_invariant_quality_parity(
         (quality.elementary.unsafe_rapids, assessment.unsafe_rapids.measured),
         (quality.elementary.continuity_breaks, assessment.continuity_breaks.measured),
         (quality.elementary.zero_length_motions, assessment.zero_length_motions.measured),
-        (quality.elementary.degenerate_loops, assessment.degenerate_loops.measured),
+        (quality.elementary.degenerate_loops, len(assessment.attribution.degenerate_loop_operations)),
         (quality.elementary.redundant_operations, assessment.redundant_operations.measured),
+        (quality.elementary.material_plunges, assessment.material_plunges.measured),
+        (quality.elementary.misplaced_plunges, assessment.misplaced_plunges.measured),
         (quality.cut.cap_exceedances, assessment.cap_exceedances.measured),
         (quality.cut.slotting_motions, assessment.slotting_motions.measured),
         (quality.cut.max_engagement_step_deg, assessment.max_engagement_step.measured),

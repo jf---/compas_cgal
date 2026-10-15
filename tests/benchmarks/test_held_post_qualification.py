@@ -75,25 +75,27 @@ def _characterization(
     all_open: bool = False,
 ) -> HeldFigure5Characterization:
     case = load_held_reference_case("figure5")
-    if criterion == "degenerate loops":
-        circle_indices = {0}
-    elif criterion == "max loop radius step (tool radii)" or all_open:
+    if criterion == "max loop radius step (tool radii)" or all_open:
         circle_indices = {0, 1}
     else:
         circle_indices = set()
+    # Gate rule (b) needs two plunges into material on one centre-domain
+    # component; rule (e) needs a plunge no cut motion follows. Both are
+    # appended after the retract, so the two cut motions keep indices 0 and 1.
+    plunges = (3, 4) if all_open else {"material plunges": (3, 4), "misplaced plunges": (3,)}.get(criterion or "", ())
     snapshot = _snapshot(
-        3,
-        operation_roles={2: OperationType.RETRACT},
+        3 + len(plunges),
+        operation_roles={2: OperationType.RETRACT, **{index: OperationType.PLUNGE for index in plunges}},
         circle_indices=circle_indices,
         horizontal_role_indices={2},
     )
     first = _motion(0, samples=(_sample(),))
     second = _motion(1, start=(1.0, 0.0), end=(2.0, 0.0), samples=(_sample(),))
     rapid = RapidMotion(2, OperationType.RETRACT, MotionKind.LINE, 1.0, False)
-    coverage = CoverageEstimate(10, 10, 1.0, 10, 0, 0, 0.0)
+    coverage = CoverageEstimate(10, 10, 1.0, 10, 0, 0, 0.0, 1)
 
     if criterion == "uncut fraction" or all_open:
-        coverage = CoverageEstimate(10, 10, 1.0, 10, 1, 1, 0.0)
+        coverage = CoverageEstimate(10, 10, 1.0, 10, 1, 1, 0.0, 1)
     if criterion == "gouging motions" or all_open:
         first = replace(first, samples=(_sample(inside=False),))
     if criterion == "unsafe rapids" or all_open:
@@ -102,7 +104,8 @@ def _characterization(
         second = replace(second, start=(4.0, 0.0))
     if criterion == "zero-length motions" or all_open:
         first = replace(first, length=0.0)
-    if criterion == "degenerate loops" or all_open:
+    if all_open:
+        # Reported, not gated (rule d): a degenerate loop opens no condition.
         first = replace(first, kind=MotionKind.LOOP, loop_radius=0.5, curvature=2.0)
     if criterion == "redundant operations" or all_open:
         first = replace(first, removes_material=False)
@@ -112,7 +115,8 @@ def _characterization(
         first = replace(first, slot_exceeded=True)
     if criterion == "max engagement step (deg)" or all_open:
         first = replace(first, samples=(_sample(engagement=0.0, cap=all_open, inside=not all_open),), cap_exceeded=all_open)
-        second = replace(second, samples=(_sample(engagement=81.0),))
+        # Rule (f): the junction reads the second motion's station 1.
+        second = replace(second, samples=(_sample(engagement=0.0), _sample(engagement=81.0)))
     if criterion == "max loop radius step (tool radii)" or all_open:
         first_radius = 0.5 if all_open else 1.1
         second_radius = 4.0 if all_open else 4.2
@@ -120,12 +124,17 @@ def _characterization(
         second = replace(second, kind=MotionKind.LOOP, loop_radius=second_radius, curvature=1.0 / second_radius)
     if criterion == "tangent breaks" or all_open:
         second = replace(second, start_tangent=(-1.0, 0.0))
+    # A synthetic loop declares its seam station (Ruling 0.3-f-loop) to be its
+    # last station: the junction must not guess it (R2-6).
+    first, second = (replace(motion, exit_sample=motion.samples[-1]) if motion.kind is MotionKind.LOOP and motion.samples else motion for motion in (first, second))
 
     survey = _survey(
         (first, second),
         (rapid,),
         spec=case.pocket_spec(),
         retract_indices=(OperationIndex(2),),
+        plunge_indices=tuple(OperationIndex(index) for index in plunges),
+        material_plunge_indices=tuple(OperationIndex(index) for index in plunges),
         source_snapshot=snapshot,
     )
     demonstrated = any(sample.cap_exceeded for motion in survey.motions for sample in motion.samples)
@@ -136,7 +145,7 @@ def _characterization(
             operation.operation,
             0.0,
             index not in ({0} if demonstrated else set()) | ({unresolved_index} if unresolved_index is not None else set()),
-            0 if index == 2 else 3,
+            0 if index >= 2 else 3,  # the retract and any plunge are unmeasured moves
         )
         for index, operation in enumerate(snapshot)
     ]
@@ -194,8 +203,9 @@ def test_every_open_condition_has_stable_order_and_complete_error_context() -> N
         "unsafe rapids: measured=1, required=0, outcome=outside_declared_tolerance",
         "continuity breaks: measured=1, required=0, outcome=outside_declared_tolerance",
         "zero-length motions: measured=1, required=0, outcome=criterion_violated",
-        "degenerate loops: measured=1, required=0, outcome=criterion_violated",
         "redundant operations: measured=1, required=0, outcome=criterion_violated",
+        "material plunges: measured=2, required=1, outcome=criterion_violated",
+        "misplaced plunges: measured=2, required=0, outcome=criterion_violated",
         "cap exceedances: measured=1, required=0, outcome=failure_observed",
         "slotting motions: measured=1, required=0, outcome=failure_observed",
         "max engagement step (deg): measured=81.0, required=80.0, outcome=failure_observed",

@@ -44,8 +44,9 @@ EXPECTED_EVIDENCE_BY_CRITERION = {
     "unsafe rapids": "tolerance_diagnostic",
     "continuity breaks": "tolerance_diagnostic",
     "zero-length motions": "derived_geometry",
-    "degenerate loops": "derived_geometry",
     "redundant operations": "exact_depletion_replay",
+    "material plunges": "exact_depletion_replay",
+    "misplaced plunges": "derived_geometry",
     "cap exceedances": "sampled_exact_predicate",
     "slotting motions": "sampled_exact_predicate",
     "max engagement step (deg)": "sampled_diagnostic",
@@ -210,17 +211,18 @@ def test_held_figure5_path_live_oracle() -> None:
         assessment.unsafe_rapids,
         assessment.continuity_breaks,
         assessment.zero_length_motions,
-        assessment.degenerate_loops,
         assessment.redundant_operations,
+        assessment.material_plunges,
+        assessment.misplaced_plunges,
         assessment.cap_exceedances,
         assessment.slotting_motions,
         assessment.max_engagement_step,
         assessment.max_loop_radius_step,
         assessment.tangent_breaks,
     )
-    assert len(criteria) == 12
+    assert len(criteria) == 13
     assert tuple(criterion.name for criterion in criteria) == CRITERION_NAMES
-    assert len({criterion.name for criterion in criteria}) == 12
+    assert len({criterion.name for criterion in criteria}) == 13
     assert EVIDENCE_BY_CRITERION == EXPECTED_EVIDENCE_BY_CRITERION
     assert tuple(criterion.evidence for criterion in criteria) == tuple(EVIDENCE_BY_CRITERION[name] for name in CRITERION_NAMES)
     assert all(criterion.outcome in ALLOWED_OUTCOMES for criterion in criteria)
@@ -232,8 +234,9 @@ def test_held_figure5_path_live_oracle() -> None:
         quality.elementary.unsafe_rapids,
         quality.elementary.continuity_breaks,
         quality.elementary.zero_length_motions,
-        quality.elementary.degenerate_loops,
         quality.elementary.redundant_operations,
+        quality.elementary.material_plunges,
+        quality.elementary.misplaced_plunges,
         quality.cut.cap_exceedances,
         quality.cut.slotting_motions,
         quality.cut.max_engagement_step_deg,

@@ -1,8 +1,11 @@
 """Typed, operation-attributed observations for the existing path-quality gate.
 
-This module is additive.  It reproduces the twelve decisions currently made in
-``benchmarks.quality`` but does not redirect that judge; parity and convergence
-remain separate review gates.
+It makes the thirteen gated decisions of the machining-quality gate (rules
+a-f of Task 0.3: redundant counts only CUT motions, plunges into material are
+bounded by the centre-domain components, a plunge must land on the next
+motion's start, slotting is the straight subset of cap exceedances, degenerate
+loops are reported and not gated, and the engagement step is read at the
+junction) and attributes each to source operations.
 """
 
 from __future__ import annotations
@@ -27,6 +30,7 @@ from benchmarks.coverage import CoverageEstimate
 from benchmarks.coverage import measure_coverage
 from benchmarks.errors import ContradictoryPathQualityEvidenceError
 from benchmarks.errors import InvalidHeldPathEvidenceError
+from benchmarks.errors import MissingLoopSeamStationError
 from benchmarks.errors import UnreplayableOperationError
 from benchmarks.errors import ZeroLengthToolpathError
 from benchmarks.held_path_snapshot import HeldArcSnapshot
@@ -72,8 +76,9 @@ CriterionName: TypeAlias = Literal[
     "unsafe rapids",
     "continuity breaks",
     "zero-length motions",
-    "degenerate loops",
     "redundant operations",
+    "material plunges",
+    "misplaced plunges",
     "cap exceedances",
     "slotting motions",
     "max engagement step (deg)",
@@ -103,8 +108,9 @@ CRITERION_NAMES: tuple[CriterionName, ...] = (
     "unsafe rapids",
     "continuity breaks",
     "zero-length motions",
-    "degenerate loops",
     "redundant operations",
+    "material plunges",
+    "misplaced plunges",
     "cap exceedances",
     "slotting motions",
     "max engagement step (deg)",
@@ -118,8 +124,9 @@ EVIDENCE_BY_CRITERION: dict[CriterionName, EvidenceKind] = {
     "unsafe rapids": "tolerance_diagnostic",
     "continuity breaks": "tolerance_diagnostic",
     "zero-length motions": "derived_geometry",
-    "degenerate loops": "derived_geometry",
     "redundant operations": "exact_depletion_replay",
+    "material plunges": "exact_depletion_replay",
+    "misplaced plunges": "derived_geometry",
     "cap exceedances": "sampled_exact_predicate",
     "slotting motions": "sampled_exact_predicate",
     "max engagement step (deg)": "sampled_diagnostic",
@@ -132,8 +139,9 @@ CountCriterionName: TypeAlias = Literal[
     "unsafe rapids",
     "continuity breaks",
     "zero-length motions",
-    "degenerate loops",
     "redundant operations",
+    "material plunges",
+    "misplaced plunges",
     "cap exceedances",
     "slotting motions",
     "tangent breaks",
@@ -147,6 +155,19 @@ REQUIRED_FRACTION = UnitFraction(ZERO_FLOAT)
 REQUIRED_COUNT = MotionCount(ZERO_COUNT)
 REQUIRED_LOOP_STEP = ToolRadiusMultiple(2.0)
 
+# The one count criterion whose threshold is not zero: a connected centre
+# domain admits exactly one plunge into material (gate rule b), so the
+# threshold is the number of components, which is at least one for any
+# machinable pocket.
+COMPONENT_BOUNDED_COUNT_NAME = "material plunges"
+MINIMUM_CENTRE_DOMAIN_COMPONENTS = 1
+
+# Index offset from a motion to the station that holds its junction value: the
+# first station with a non-empty swept prefix. Station 0 reads the stock minus
+# the tool's own start disk, which is 0 deg by construction (Ruling
+# 0.3-f-station), so it says nothing about the junction.
+JUNCTION_STATION = 1
+
 FRACTION_NAMES = frozenset({"uncut fraction"})
 COUNT_NAMES = frozenset(
     {
@@ -154,8 +175,9 @@ COUNT_NAMES = frozenset(
         "unsafe rapids",
         "continuity breaks",
         "zero-length motions",
-        "degenerate loops",
         "redundant operations",
+        "material plunges",
+        "misplaced plunges",
         "cap exceedances",
         "slotting motions",
         "tangent breaks",
@@ -256,7 +278,10 @@ class CountCriterion:
         checked_measured = motion_count(measured, name=f"{checked_name} measured")
         checked_required = motion_count(required, name=f"{checked_name} required")
         checked_attribution = motion_count(attribution_count, name=f"{checked_name} attribution count")
-        if checked_required != REQUIRED_COUNT:
+        if checked_name == COMPONENT_BOUNDED_COUNT_NAME:
+            if checked_required < MINIMUM_CENTRE_DOMAIN_COMPONENTS:
+                raise InvalidHeldPathEvidenceError(f"{checked_name} requires a threshold of at least one centre-domain component.")
+        elif checked_required != REQUIRED_COUNT:
             raise InvalidHeldPathEvidenceError(f"{checked_name} requires an exact zero threshold.")
         if checked_measured != checked_attribution:
             raise InvalidHeldPathEvidenceError(f"{checked_name} measured count disagrees with its attribution cardinality.")
@@ -393,6 +418,9 @@ class PathQualityAttribution:
     zero_length_operations: tuple[OperationIndex, ...]
     degenerate_loop_operations: tuple[OperationIndex, ...]
     redundant_operations: tuple[OperationIndex, ...]
+    air_at_depth_operations: tuple[OperationIndex, ...]
+    material_plunge_operations: tuple[OperationIndex, ...]
+    misplaced_plunge_operations: tuple[OperationIndex, ...]
     cap_exceeded_operations: tuple[OperationIndex, ...]
     slotting_operations: tuple[OperationIndex, ...]
     max_engagement_step: Optional[MeasuredStep[Degrees]]
@@ -418,6 +446,9 @@ class PathQualityAttribution:
         zero_length_operations: tuple[OperationIndex, ...],
         degenerate_loop_operations: tuple[OperationIndex, ...],
         redundant_operations: tuple[OperationIndex, ...],
+        air_at_depth_operations: tuple[OperationIndex, ...],
+        material_plunge_operations: tuple[OperationIndex, ...],
+        misplaced_plunge_operations: tuple[OperationIndex, ...],
         cap_exceeded_operations: tuple[OperationIndex, ...],
         slotting_operations: tuple[OperationIndex, ...],
         max_engagement_step: Optional[MeasuredStep[Degrees]],
@@ -438,6 +469,9 @@ class PathQualityAttribution:
             zero_length_operations,
             degenerate_loop_operations,
             redundant_operations,
+            air_at_depth_operations,
+            material_plunge_operations,
+            misplaced_plunge_operations,
             cap_exceeded_operations,
             slotting_operations,
             max_engagement_step,
@@ -459,6 +493,9 @@ class PathQualityAttribution:
             "zero_length_operations": zero_length_operations,
             "degenerate_loop_operations": degenerate_loop_operations,
             "redundant_operations": redundant_operations,
+            "air_at_depth_operations": air_at_depth_operations,
+            "material_plunge_operations": material_plunge_operations,
+            "misplaced_plunge_operations": misplaced_plunge_operations,
             "cap_exceeded_operations": cap_exceeded_operations,
             "slotting_operations": slotting_operations,
         }
@@ -507,6 +544,8 @@ class PathQualityAttribution:
             raise InvalidHeldPathEvidenceError("every reversal pair must also be attributed as a tangent break.")
         if not tangent_pairs.isdisjoint(curvature_pairs):
             raise InvalidHeldPathEvidenceError("tangent-break and curvature-break pairs must be disjoint.")
+        if not set(redundant_operations).isdisjoint(air_at_depth_operations):
+            raise InvalidHeldPathEvidenceError("a motion that removes nothing is either redundant (a CUT) or air at depth, never both.")
         return _build_record(cls, checked)
 
 
@@ -517,8 +556,9 @@ class PathQualityAssessment:
     unsafe_rapids: CountCriterion
     continuity_breaks: CountCriterion
     zero_length_motions: CountCriterion
-    degenerate_loops: CountCriterion
     redundant_operations: CountCriterion
+    material_plunges: CountCriterion
+    misplaced_plunges: CountCriterion
     cap_exceedances: CountCriterion
     slotting_motions: CountCriterion
     max_engagement_step: DegreesCriterion
@@ -541,8 +581,9 @@ class PathQualityAssessment:
         unsafe_rapids: CountCriterion,
         continuity_breaks: CountCriterion,
         zero_length_motions: CountCriterion,
-        degenerate_loops: CountCriterion,
         redundant_operations: CountCriterion,
+        material_plunges: CountCriterion,
+        misplaced_plunges: CountCriterion,
         cap_exceedances: CountCriterion,
         slotting_motions: CountCriterion,
         max_engagement_step: DegreesCriterion,
@@ -558,8 +599,9 @@ class PathQualityAssessment:
             "unsafe_rapids": len(attribution.unsafe_rapid_operations),
             "continuity_breaks": len(attribution.continuity_break_pairs),
             "zero_length_motions": len(attribution.zero_length_operations),
-            "degenerate_loops": len(attribution.degenerate_loop_operations),
             "redundant_operations": len(attribution.redundant_operations),
+            "material_plunges": len(attribution.material_plunge_operations),
+            "misplaced_plunges": len(attribution.misplaced_plunge_operations),
             "cap_exceedances": len(attribution.cap_exceeded_operations),
             "slotting_motions": len(attribution.slotting_operations),
             "tangent_breaks": len(attribution.tangent_break_pairs),
@@ -569,8 +611,9 @@ class PathQualityAssessment:
             "unsafe_rapids": unsafe_rapids,
             "continuity_breaks": continuity_breaks,
             "zero_length_motions": zero_length_motions,
-            "degenerate_loops": degenerate_loops,
             "redundant_operations": redundant_operations,
+            "material_plunges": material_plunges,
+            "misplaced_plunges": misplaced_plunges,
             "cap_exceedances": cap_exceedances,
             "slotting_motions": slotting_motions,
             "tangent_breaks": tangent_breaks,
@@ -580,8 +623,9 @@ class PathQualityAssessment:
             "unsafe_rapids": "unsafe rapids",
             "continuity_breaks": "continuity breaks",
             "zero_length_motions": "zero-length motions",
-            "degenerate_loops": "degenerate loops",
             "redundant_operations": "redundant operations",
+            "material_plunges": "material plunges",
+            "misplaced_plunges": "misplaced plunges",
             "cap_exceedances": "cap exceedances",
             "slotting_motions": "slotting motions",
             "tangent_breaks": "tangent breaks",
@@ -598,7 +642,15 @@ class PathQualityAssessment:
                 outcome=criterion.outcome,
                 attribution_count=criterion.measured,
             )
-        canonical_counts = {field: _count(count_names[field], cardinalities[field]) for field in supplied_counts}
+        # The material-plunge threshold is the centre domain's component count,
+        # which the coverage pass measures (one predicate per reduction); it is
+        # carried by the supplied criterion, validated there as a count of at
+        # least one, and bound to the coverage record by the evidence boundary
+        # (`benchmarks.held_path_evidence`). Every other count threshold is zero.
+        required_counts = {
+            field: checked_counts["material_plunges"].required if count_names[field] == COMPONENT_BOUNDED_COUNT_NAME else REQUIRED_COUNT for field in supplied_counts
+        }
+        canonical_counts = {field: _count(count_names[field], cardinalities[field], required_counts[field]) for field in supplied_counts}
         if checked_counts != canonical_counts:
             raise ContradictoryPathQualityEvidenceError("count criteria disagree with their canonical thresholds, outcomes, or source attribution.")
 
@@ -794,6 +846,9 @@ def _validate_survey_binding(
         raise InvalidHeldPathEvidenceError("plunge count disagrees with retained plunge operation indices.")
     if type(survey.retracts) is not int or survey.retracts != len(retract_indices):
         raise InvalidHeldPathEvidenceError("retract count disagrees with retained retract operation indices.")
+    material_plunge_indices = _validate_ordered_indices(survey.material_plunge_indices, operation_count, name="survey material plunges")
+    if not set(material_plunge_indices) <= set(plunge_indices):
+        raise InvalidHeldPathEvidenceError("every plunge into material must be one of the survey's plunges.")
 
     motion_set = set(motion_indices)
     rapid_set = set(rapid_indices)
@@ -901,7 +956,14 @@ def _attribution_from_survey(
         ],
         operation_count,
     )
-    redundant = _indices([motion.index for motion in survey.motions if not motion.removes_material], operation_count)
+    # Rule (a): the label decides (Ruling 0.3-C11). A CUT owns removal, so a CUT
+    # that removes nothing is waste; a LINK or lead at the cut plane that removes
+    # nothing is a stay-down transit, reported as air at depth and still judged
+    # by the cap like every motion.
+    redundant = _indices([motion.index for motion in survey.motions if not motion.removes_material and motion.operation is OperationType.CUT], operation_count)
+    air_at_depth = _indices([motion.index for motion in survey.motions if not motion.removes_material and motion.operation is not OperationType.CUT], operation_count)
+    material_plunges = _indices(survey.material_plunge_indices, operation_count)
+    misplaced_plunges = _misplaced_plunges(snapshot, survey, operation_count)
     cap_exceeded = _indices([motion.index for motion in survey.motions if any(sample.cap_exceeded for sample in motion.samples)], operation_count)
     slotting = _indices([motion.index for motion in survey.motions if motion.slot_exceeded], operation_count)
 
@@ -923,9 +985,9 @@ def _attribution_from_survey(
             tangent.append(pair)
         elif previous.curvature != current.curvature:
             curvature.append(pair)
-        previous_peak = max((sample.engagement_deg for sample in previous.samples), default=ZERO_FLOAT)
-        current_peak = max((sample.engagement_deg for sample in current.samples), default=ZERO_FLOAT)
-        engagement_steps.append((abs(current_peak - previous_peak), pair))
+        junction = _junction_step(previous, current)
+        if junction is not None:
+            engagement_steps.append((junction, pair))
 
     loop_steps = _loop_steps(snapshot, survey, spec.tool_radius, operation_count)
     maximum_engagement = cast(Optional[MeasuredStep[Degrees]], _maximum_step(engagement_steps, "degrees"))
@@ -941,6 +1003,9 @@ def _attribution_from_survey(
         zero_length_operations=zero_length,
         degenerate_loop_operations=degenerate,
         redundant_operations=redundant,
+        air_at_depth_operations=air_at_depth,
+        material_plunge_operations=material_plunges,
+        misplaced_plunge_operations=misplaced_plunges,
         cap_exceeded_operations=cap_exceeded,
         slotting_operations=slotting,
         max_engagement_step=maximum_engagement,
@@ -953,17 +1018,93 @@ def _attribution_from_survey(
     )
 
 
+def _junction_step(previous: MotionQuality, current: MotionQuality) -> Optional[float]:
+    """The engagement change across one junction, or None when it is not read.
+
+    Gate rule (f): the value is the next motion's first station with a
+    non-empty prefix (`JUNCTION_STATION`) against the station where the
+    previous motion ends (`MotionQuality.exit_sample`: a loop's seam after the
+    full turn, Ruling 0.3-f-loop; a line's or arc's last station). A motion
+    with no such station (a zero-length move, which is one station with an
+    empty prefix) has no junction reading, and neither does a previous motion
+    with no stations. REPORTING degrees (Ruling 0.3-C6): the step is a sampled
+    diagnostic; the cap verdicts at those stations stay exact.
+
+    The leaving station is chosen by the previous motion's kind, never by
+    whether a field happens to be set: a line or an arc hands over at its last
+    station by definition; a loop hands over at its seam, which only
+    `MotionQuality.exit_sample` carries. A loop record without it is refused
+    rather than read at its last per-motion station (that reading is the I1
+    defect Ruling 0.3-f-loop fixed).
+
+    Args:
+        previous: The motion the tool leaves.
+        current: The motion it runs next without leaving the cut.
+
+    Returns:
+        ``|current[1] - exit(previous)|`` in degrees, or None.
+
+    Raises:
+        MissingLoopSeamStationError: *previous* is a loop with no seam station.
+    """
+    if not previous.samples or len(current.samples) <= JUNCTION_STATION:
+        return None
+    if previous.kind is MotionKind.LOOP:
+        if previous.exit_sample is None:
+            raise MissingLoopSeamStationError(f"motion {previous.index} is a loop without its seam station (exit_sample); its junction is read at the seam (Ruling 0.3-f-loop).")
+        leaving = previous.exit_sample
+    else:
+        leaving = previous.samples[-1]
+    return abs(current.samples[JUNCTION_STATION].engagement_deg - leaving.engagement_deg)
+
+
+def _misplaced_plunges(
+    snapshot: tuple[HeldOperationSnapshot, ...],
+    survey: PathSurvey,
+    operation_count: int,
+) -> tuple[OperationIndex, ...]:
+    """Plunges whose foot is not the next motion's start (gate rule e).
+
+    Exact: the replay injects both binary64 pairs as themselves, so equal
+    doubles are the same exact point and unequal ones are not; there is no
+    tolerance. A plunge whose next operation is not a cut-plane motion has no
+    start to land on and is misplaced.
+
+    Args:
+        snapshot: The source operations.
+        survey: The validated survey.
+        operation_count: Operations in the path.
+
+    Returns:
+        The misplaced plunges, in source order.
+
+    Raises:
+        InvalidHeldPathEvidenceError: A surveyed plunge is not a line operation.
+    """
+    starts = {motion.index: motion.start for motion in survey.motions}
+    misplaced: list[int] = []
+    for index in survey.plunge_indices:
+        plunge = snapshot[index]
+        if type(plunge) is not HeldLineSnapshot:
+            raise InvalidHeldPathEvidenceError(f"plunge {index} is not a line operation.")
+        foot = (float(plunge.end.x), float(plunge.end.y))
+        if starts.get(int(index) + NEXT_OPERATION_OFFSET) != foot:
+            misplaced.append(int(index))
+    return _indices(misplaced, operation_count)
+
+
 def _count(
     name: CountCriterionName,
     cardinality: int,
+    required: MotionCount = REQUIRED_COUNT,
 ) -> CountCriterion:
     evidence = EVIDENCE_BY_CRITERION[name]
     return CountCriterion.build(
         name=name,
         measured=MotionCount(cardinality),
-        required=REQUIRED_COUNT,
+        required=required,
         evidence=evidence,
-        outcome=_outcome(evidence, cardinality <= REQUIRED_COUNT),
+        outcome=_outcome(evidence, cardinality <= required),
         attribution_count=cardinality,
     )
 
@@ -974,7 +1115,7 @@ def assess_path_quality(
     survey: PathSurvey,
     coverage: CoverageEstimate,
 ) -> PathQualityAssessment:
-    """Reproduce the current twelve gate decisions with source attribution."""
+    """Make the thirteen gate decisions with source attribution."""
     _validate_survey_binding(spec, snapshot, survey)
     attribution = _attribution_from_survey(snapshot, survey)
     max_engagement_value = Degrees(ZERO_FLOAT if attribution.max_engagement_step is None else attribution.max_engagement_step.value)
@@ -996,8 +1137,9 @@ def assess_path_quality(
         unsafe_rapids=_count("unsafe rapids", len(attribution.unsafe_rapid_operations)),
         continuity_breaks=_count("continuity breaks", len(attribution.continuity_break_pairs)),
         zero_length_motions=_count("zero-length motions", len(attribution.zero_length_operations)),
-        degenerate_loops=_count("degenerate loops", len(attribution.degenerate_loop_operations)),
         redundant_operations=_count("redundant operations", len(attribution.redundant_operations)),
+        material_plunges=_count("material plunges", len(attribution.material_plunge_operations), MotionCount(coverage.centre_domain_components)),
+        misplaced_plunges=_count("misplaced plunges", len(attribution.misplaced_plunge_operations)),
         cap_exceedances=_count("cap exceedances", len(attribution.cap_exceeded_operations)),
         slotting_motions=_count("slotting motions", len(attribution.slotting_operations)),
         max_engagement_step=DegreesCriterion.build(

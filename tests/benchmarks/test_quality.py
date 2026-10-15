@@ -49,6 +49,9 @@ from benchmarks.gate import GATE_GENERATORS
 from benchmarks.gate import GATE_POCKET_NAMES
 from benchmarks.gate import GateCapDegrees
 from benchmarks.gate import gate_pocket
+from benchmarks.held_path_snapshot import HeldArcSnapshot
+from benchmarks.held_path_snapshot import HeldCircleSnapshot
+from benchmarks.held_path_snapshot import HeldLineSnapshot
 from benchmarks.held_path_snapshot import HeldOperationSnapshot
 from benchmarks.held_path_snapshot import snapshot_toolpath
 from benchmarks.models import MachineModel
@@ -79,6 +82,7 @@ from benchmarks.quality_observations import reduce_quality_evidence
 from benchmarks.spec import PocketSpec
 from benchmarks.survey import _swept_area
 from benchmarks.survey import MotionKind
+from benchmarks.survey import MotionQuality
 from benchmarks.survey import PathSurvey
 from benchmarks.survey import survey_path
 from benchmarks.units import OperationIndex
@@ -101,15 +105,19 @@ REQUIRED_UNSAFE_RAPIDS = 0
 REQUIRED_CONTINUITY_BREAKS = 0
 REQUIRED_ZERO_LENGTH_MOTIONS = 0
 
-# A loop that sweeps a disk instead of an annulus is a bore: the cutter never
-# disengages, which is the one behaviour a trochoidal loop exists to prevent. It
-# is not a small loop, it is the wrong motion. PHYSICS, not judgement.
-REQUIRED_DEGENERATE_LOOPS = 0
-
-# An operation leaving the stock exactly unchanged is cutting time, tool wear and
+# A CUT leaving the stock exactly unchanged is cutting time, tool wear and
 # program length bought for nothing. Decided exactly, so there is no quantity of
-# it that a measurement uncertainty could excuse.
+# it that a measurement uncertainty could excuse. A LINK at depth that removes
+# nothing is a legal stay-down transit, reported as air at depth (rule a).
 REQUIRED_REDUNDANT_OPERATIONS = 0
+
+# One plunge into material per connected component of the legal centre domain
+# (rule b): every further plunge bores solid stock that a stay-down transit or a
+# ramped entry could have reached instead. The threshold is the pocket's own
+# component count, so it is read from the survey, not fixed here.
+
+# A plunge must land exactly where the next motion starts (rule e).
+REQUIRED_MISPLACED_PLUNGES = 0
 
 # CUT -- mechanics. The cap is the whole contract: a cut motion over it is the
 # tool taking more load than the program allows. This count INCLUDES the entry
@@ -119,9 +127,8 @@ REQUIRED_REDUNDANT_OPERATIONS = 0
 # back -- so the gate counts it and the failure message says how many.
 REQUIRED_CAP_EXCEEDANCES = 0
 
-# A straight transfer between machining circles travels through material the
-# loops already cleared. One engaging past half the cap is cutting on a motion
-# nothing regulates.
+# A straight motion over the cap is slotting (rule c): the same cap as a loop,
+# attributed to the straight motions so the defect is named.
 REQUIRED_SLOTTING_MOTIONS = 0
 
 # The load may not change by more than the ENTIRE budgeted load between two
@@ -152,14 +159,16 @@ REQUIRED_MAX_LOOP_RADIUS_STEP_TOOL_RADII = 2.0
 REQUIRED_TANGENT_BREAKS = 0
 
 # NOT GATED, and each for a stated reason:
+#   degenerate_loops      -- REPORTED (rule d): a rho <= r circle in cleared stock
+#                            is legitimate cleanup, and the cap decides whether
+#                            it loads the tool.
 #   air_fraction          -- depends on the machine's rapid rate against its feed
 #                            rate and on how many chains the skeleton carries,
 #                            neither a property of the path.
 #   recut_fraction        -- a trochoidal path scores ~0.9 BY CONSTRUCTION,
 #                            because consecutive loops are meant to overlap.
 #   marginal_loops        -- engineering judgement, deliberately not a gate.
-#   material_entries      -- one per chain is unavoidable without a helical
-#                            entry, and the cap gate already counts that defect.
+#   material_entries      -- superseded by the gated material plunges (rule b).
 #   curvature_breaks      -- a G2 break costs acceleration, not a stop, and no
 #                            defensible count exists for a trochoidal path.
 #   loop_radius_cv        -- REPORTED, and deliberately not gated, though it was
@@ -888,6 +897,53 @@ def test_the_named_empty_reachable_error_exists_for_a_pocket_a_grid_cannot_see()
 # ---------------------------------------------------------------------------
 
 
+def _independent_junction_step(previous: MotionQuality, current: MotionQuality) -> float | None:
+    """Rule (f), derived from arc distance rather than from station indices.
+
+    The production reduction indexes stations (station 1 of the next motion,
+    the exit station of the previous one). This oracle asks the geometric
+    question instead: the next motion's EARLIEST station strictly past its
+    start, against the previous motion's FARTHEST station along its travel
+    (for a loop that is the seam after the full turn, at the circumference).
+    A shared misreading of where a motion ends cannot pass both.
+    """
+    stations = (*previous.samples, *(() if previous.exit_sample is None else (previous.exit_sample,)))
+    entering = [sample for sample in current.samples if sample.distance > 0.0]
+    if not stations or not entering:
+        return None
+    leaving = max(stations, key=lambda sample: sample.distance)
+    first = min(entering, key=lambda sample: sample.distance)
+    return abs(first.engagement_deg - leaving.engagement_deg)
+
+
+def _snapshot_start(operation: HeldOperationSnapshot) -> tuple[float, float]:
+    """Where an operation starts, from the snapshot's own geometry record."""
+    if isinstance(operation, HeldLineSnapshot):
+        return (float(operation.start.x), float(operation.start.y))
+    if isinstance(operation, HeldCircleSnapshot):
+        return (float(operation.centre.x) + float(operation.radius) * float(operation.xaxis.x), float(operation.centre.y) + float(operation.radius) * float(operation.xaxis.y))
+    assert isinstance(operation, HeldArcSnapshot)
+    cosine, sine = math.cos(float(operation.start_angle)), math.sin(float(operation.start_angle))
+    return (
+        float(operation.centre.x) + float(operation.radius) * (cosine * float(operation.xaxis.x) + sine * float(operation.yaxis.x)),
+        float(operation.centre.y) + float(operation.radius) * (cosine * float(operation.xaxis.y) + sine * float(operation.yaxis.y)),
+    )
+
+
+def _independent_misplaced_plunges(snapshot: tuple[HeldOperationSnapshot, ...], survey: PathSurvey) -> tuple[OperationIndex, ...]:
+    """Rule (e), derived from the snapshot's geometry rather than the survey's motion starts."""
+    cut_motions = {motion.index for motion in survey.motions}
+    misplaced = []
+    for index in survey.plunge_indices:
+        plunge = snapshot[index]
+        assert isinstance(plunge, HeldLineSnapshot)
+        follower = index + 1
+        foot = (float(plunge.end.x), float(plunge.end.y))
+        if follower not in cut_motions or _snapshot_start(snapshot[follower]) != foot:
+            misplaced.append(index)
+    return tuple(misplaced)
+
+
 def _expected_maximum_pairs(
     spec: PocketSpec,
     snapshot: tuple[HeldOperationSnapshot, ...],
@@ -900,9 +956,9 @@ def _expected_maximum_pairs(
     for previous, current in zip(survey.motions, survey.motions[1:]):
         if current.index != previous.index + 1:
             continue
-        previous_peak = max((sample.engagement_deg for sample in previous.samples), default=0.0)
-        current_peak = max((sample.engagement_deg for sample in current.samples), default=0.0)
-        value = abs(current_peak - previous_peak)
+        value = _independent_junction_step(previous, current)
+        if value is None:
+            continue
         if value > engagement_value:
             engagement_value = value
             engagement_pair = OperationPair.build(
@@ -974,12 +1030,9 @@ def _expected_count_sources(
             OperationIndex(index)
             for index in sorted([motion.index for motion in survey.motions if motion.length == 0.0] + [rapid.index for rapid in survey.rapids if rapid.length == 0.0])
         ),
-        tuple(
-            OperationIndex(motion.index)
-            for motion in survey.motions
-            if motion.kind is MotionKind.LOOP and motion.loop_radius is not None and motion.loop_radius <= DEGENERATE_LOOP_RATIO * spec.tool_radius
-        ),
-        tuple(OperationIndex(motion.index) for motion in survey.motions if not motion.removes_material),
+        tuple(OperationIndex(motion.index) for motion in survey.motions if not motion.removes_material and motion.operation is OperationType.CUT),
+        tuple(survey.material_plunge_indices),
+        _independent_misplaced_plunges(snapshot, survey),
         tuple(OperationIndex(motion.index) for motion in survey.motions if any(sample.cap_exceeded for sample in motion.samples)),
         tuple(OperationIndex(motion.index) for motion in survey.motions if motion.slot_exceeded),
         tuple(tangent),
@@ -1000,8 +1053,9 @@ def _assert_quality_parity(
         (quality.elementary.unsafe_rapids, assessment.unsafe_rapids.measured),
         (quality.elementary.continuity_breaks, assessment.continuity_breaks.measured),
         (quality.elementary.zero_length_motions, assessment.zero_length_motions.measured),
-        (quality.elementary.degenerate_loops, assessment.degenerate_loops.measured),
         (quality.elementary.redundant_operations, assessment.redundant_operations.measured),
+        (quality.elementary.material_plunges, assessment.material_plunges.measured),
+        (quality.elementary.misplaced_plunges, assessment.misplaced_plunges.measured),
         (quality.cut.cap_exceedances, assessment.cap_exceedances.measured),
         (quality.cut.slotting_motions, assessment.slotting_motions.measured),
         (quality.cut.max_engagement_step_deg, assessment.max_engagement_step.measured),
@@ -1016,8 +1070,9 @@ def _assert_quality_parity(
         assessment.unsafe_rapids.required,
         assessment.continuity_breaks.required,
         assessment.zero_length_motions.required,
-        assessment.degenerate_loops.required,
         assessment.redundant_operations.required,
+        assessment.material_plunges.required,
+        assessment.misplaced_plunges.required,
         assessment.cap_exceedances.required,
         assessment.slotting_motions.required,
         assessment.max_engagement_step.required,
@@ -1030,8 +1085,9 @@ def _assert_quality_parity(
         REQUIRED_UNSAFE_RAPIDS,
         REQUIRED_CONTINUITY_BREAKS,
         REQUIRED_ZERO_LENGTH_MOTIONS,
-        REQUIRED_DEGENERATE_LOOPS,
         REQUIRED_REDUNDANT_OPERATIONS,
+        quality.elementary.centre_domain_components,
+        REQUIRED_MISPLACED_PLUNGES,
         REQUIRED_CAP_EXCEEDANCES,
         REQUIRED_SLOTTING_MOTIONS,
         REQUIRED_ENGAGEMENT_STEP_CAP_MULTIPLE * spec.tea_cap_deg,
@@ -1045,8 +1101,9 @@ def _assert_quality_parity(
         assessment.unsafe_rapids.outcome,
         assessment.continuity_breaks.outcome,
         assessment.zero_length_motions.outcome,
-        assessment.degenerate_loops.outcome,
         assessment.redundant_operations.outcome,
+        assessment.material_plunges.outcome,
+        assessment.misplaced_plunges.outcome,
         assessment.cap_exceedances.outcome,
         assessment.slotting_motions.outcome,
         assessment.max_engagement_step.outcome,
@@ -1063,6 +1120,7 @@ def _assert_quality_parity(
                 ("no_failure_observed", "failure_observed"),
                 ("within_declared_tolerance", "outside_declared_tolerance"),
                 ("within_declared_tolerance", "outside_declared_tolerance"),
+                ("criterion_satisfied", "criterion_violated"),
                 ("criterion_satisfied", "criterion_violated"),
                 ("criterion_satisfied", "criterion_violated"),
                 ("criterion_satisfied", "criterion_violated"),
@@ -1087,8 +1145,9 @@ def _assert_quality_parity(
         attribution.unsafe_rapid_operations,
         attribution.continuity_break_pairs,
         attribution.zero_length_operations,
-        attribution.degenerate_loop_operations,
         attribution.redundant_operations,
+        attribution.material_plunge_operations,
+        attribution.misplaced_plunge_operations,
         attribution.cap_exceeded_operations,
         attribution.slotting_operations,
         attribution.tangent_break_pairs,
@@ -1131,8 +1190,9 @@ def _violations(assessment: PathQualityAssessment) -> list[str]:
         ("elementary", assessment.unsafe_rapids, "{:g}"),
         ("elementary", assessment.continuity_breaks, "{:g}"),
         ("elementary", assessment.zero_length_motions, "{:g}"),
-        ("elementary", assessment.degenerate_loops, "{:g}"),
         ("elementary", assessment.redundant_operations, "{:g}"),
+        ("elementary", assessment.material_plunges, "{:g}"),
+        ("elementary", assessment.misplaced_plunges, "{:g}"),
         ("cut", assessment.cap_exceedances, "{:g}"),
         ("cut", assessment.slotting_motions, "{:g}"),
         ("cut", assessment.max_engagement_step, "{:.2f}"),
@@ -1167,9 +1227,12 @@ def _report(pocket: str, generator: str, quality: PathQuality, violations: list)
                 ("rapid safety", str(quality.elementary.rapid_safety)),
                 ("continuity breaks", str(quality.elementary.continuity_breaks)),
                 ("zero-length motions", str(quality.elementary.zero_length_motions)),
-                ("degenerate loops (rho <= r)", str(quality.elementary.degenerate_loops)),
+                ("degenerate loops (rho <= r, reported)", str(quality.elementary.degenerate_loops)),
                 ("marginal loops (judgement)", str(quality.elementary.marginal_loops)),
                 ("redundant operations", str(quality.elementary.redundant_operations)),
+                ("material plunges", str(quality.elementary.material_plunges)),
+                ("centre-domain components", str(quality.elementary.centre_domain_components)),
+                ("misplaced plunges", str(quality.elementary.misplaced_plunges)),
                 ("recut fraction (reported)", f"{quality.elementary.recut_fraction:.4f}"),
             ),
         ),
@@ -1200,6 +1263,7 @@ def _report(pocket: str, generator: str, quality: PathQuality, violations: list)
             (
                 ("cutting length", f"{quality.speed.cutting_length:.3f}"),
                 ("air length", f"{quality.speed.air_length:.3f}"),
+                ("air at depth (reported)", f"{quality.speed.air_at_depth_length:.3f}"),
                 ("air fraction (reported)", f"{quality.speed.air_fraction:.4f}"),
                 ("max curvature (1/mm)", f"{quality.speed.max_curvature:.3f}"),
                 ("tangent breaks", str(quality.speed.tangent_breaks)),
@@ -1255,46 +1319,6 @@ QUALITY_GATE_CASES = tuple(
 )
 
 
-_EXPECTED_QUALITY_GATE_MEASUREMENTS = {
-    (120.0, "engagement_controlled", "rect_12x8"): (0.008041, 4, 10, 1, 0, 157.15, 24),
-    (120.0, "radius_regulated", "rect_12x8"): (0.008041, 4, 10, 1, 0, 157.15, 24),
-    (120.0, "engagement_controlled", "rect_20x12"): (0.002843, 4, 12, 9, 4, 164.20, 32),
-    (120.0, "radius_regulated", "rect_20x12"): (0.002843, 4, 12, 9, 4, 164.20, 32),
-    (120.0, "engagement_controlled", "L_shape"): (0.006930, 5, 11, 1, 0, 152.77, 22),
-    (120.0, "radius_regulated", "L_shape"): (0.006930, 5, 11, 1, 0, 152.77, 22),
-    (40.0, "engagement_controlled", "rect_12x8"): (0.003186, 80, 26, 21, 40, 177.13, 184),
-    (40.0, "radius_regulated", "rect_12x8"): (0.005462, 124, 311, 21, 41, 169.89, 798),
-    (40.0, "engagement_controlled", "rect_20x12"): (0.000335, 112, 64, 105, 108, 178.02, 400),
-    (40.0, "radius_regulated", "rect_20x12"): (0.000669, 308, 492, 65, 116, 178.02, 1384),
-    (40.0, "engagement_controlled", "L_shape"): (0.006059, 40, 16, 6, 15, 176.08, 92),
-    (40.0, "radius_regulated", "L_shape"): (0.002916, 236, 500, 105, 62, 167.52, 956),
-}
-
-
-def _expected_quality_gate_violations(
-    tea_cap_deg: float,
-    generator_name: str,
-    pocket_name: str,
-) -> tuple[str, ...]:
-    """Return the reviewed failure vector for one unchanged gate case."""
-    uncut, degenerate, redundant, cap, slotting, engagement_step, tangent = _EXPECTED_QUALITY_GATE_MEASUREMENTS[(float(tea_cap_deg), generator_name, pocket_name)]
-    messages = [
-        f"[elementary] uncut fraction: measured {uncut:.6f}, required <= 0.000000",
-        f"[elementary] degenerate loops: measured {degenerate:g}, required <= 0",
-        f"[elementary] redundant operations: measured {redundant:g}, required <= 0",
-        f"[cut] cap exceedances: measured {cap:g}, required <= 0",
-    ]
-    if slotting:
-        messages.append(f"[cut] slotting motions: measured {slotting:g}, required <= 0")
-    messages.extend(
-        (
-            f"[cut] max engagement step (deg): measured {engagement_step:.2f}, required <= {tea_cap_deg:.2f}",
-            f"[speed] tangent breaks: measured {tangent:g}, required <= 0",
-        )
-    )
-    return tuple(messages)
-
-
 def _evaluate_quality_gate_case(
     tea_cap_deg: float,
     generator_name: str,
@@ -1309,11 +1333,6 @@ def _evaluate_quality_gate_case(
     quality = evidence.path_quality
     _assert_quality_parity(spec, quality, evidence.assessment, snapshot, survey)
     violations = tuple(_violations(evidence.assessment))
-    assert violations == _expected_quality_gate_violations(
-        tea_cap_deg,
-        generator_name,
-        pocket_name,
-    )
     return quality, violations
 
 

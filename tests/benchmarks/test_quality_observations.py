@@ -18,6 +18,8 @@ from benchmarks.errors import ContradictoryPathQualityEvidenceError
 from benchmarks.errors import InvalidHeldPathEvidenceError
 from benchmarks.errors import UnreplayableOperationError
 from benchmarks.held_path_snapshot import HeldCircleSnapshot
+from tests.benchmarks.test_quality import _independent_junction_step
+from tests.benchmarks.test_quality import _independent_misplaced_plunges
 from benchmarks.held_path_snapshot import HeldLineSnapshot
 from benchmarks.held_path_snapshot import HeldOperationSnapshot
 from benchmarks.quality import CONTINUITY_TOOL_RADIUS_FRACTION
@@ -60,8 +62,9 @@ EXPECTED_NAMES = (
     "unsafe rapids",
     "continuity breaks",
     "zero-length motions",
-    "degenerate loops",
     "redundant operations",
+    "material plunges",
+    "misplaced plunges",
     "cap exceedances",
     "slotting motions",
     "max engagement step (deg)",
@@ -75,8 +78,9 @@ EXPECTED_EVIDENCE = {
     "unsafe rapids": "tolerance_diagnostic",
     "continuity breaks": "tolerance_diagnostic",
     "zero-length motions": "derived_geometry",
-    "degenerate loops": "derived_geometry",
     "redundant operations": "exact_depletion_replay",
+    "material plunges": "exact_depletion_replay",
+    "misplaced plunges": "derived_geometry",
     "cap exceedances": "sampled_exact_predicate",
     "slotting motions": "sampled_exact_predicate",
     "max engagement step (deg)": "sampled_diagnostic",
@@ -97,8 +101,8 @@ def _point(x: float, y: float) -> Point2[WorldXY]:
     return Point2[WorldXY].build(x, y)
 
 
-def _sample(engagement: float, *, cap: bool = False, inside: bool = True) -> EngagementSample:
-    return EngagementSample(distance=0.0, position=_point(0.0, 0.0), engagement_deg=engagement, cap_exceeded=cap, inside_centre_domain=inside)
+def _sample(engagement: float, *, cap: bool = False, inside: bool = True, distance: float = 0.0) -> EngagementSample:
+    return EngagementSample(distance=distance, position=_point(0.0, 0.0), engagement_deg=engagement, cap_exceeded=cap, inside_centre_domain=inside)
 
 
 def _motion(
@@ -132,6 +136,9 @@ def _motion(
         cap_exceeded=any(sample.cap_exceeded for sample in samples),
         slot_exceeded=slot,
         removes_material=removes,
+        # A synthetic loop declares its seam station (Ruling 0.3-f-loop) to be
+        # its last station: the junction must not guess it (R2-6).
+        exit_sample=samples[-1] if kind is MotionKind.LOOP and samples else None,
     )
 
 
@@ -224,6 +231,7 @@ def _survey(
     spec: PocketSpec = SPEC,
     plunge_indices: tuple[OperationIndex, ...] = (),
     retract_indices: tuple[OperationIndex, ...] = (),
+    material_plunge_indices: tuple[OperationIndex, ...] = (),
     source_snapshot: tuple[HeldOperationSnapshot, ...],
 ) -> PathSurvey:
     survey = PathSurvey(
@@ -235,6 +243,7 @@ def _survey(
         retracts=len(retract_indices),
         plunge_indices=plunge_indices,
         retract_indices=retract_indices,
+        material_plunge_indices=material_plunge_indices,
         final_stock=cast(Stock, object()),
         total_length=sum(motion.length for motion in motions) + sum(rapid.length for rapid in rapids),
         cut_length=sum(motion.length for motion in motions),
@@ -245,7 +254,9 @@ def _survey(
 
 
 def _coverage(uncut: int = 0) -> CoverageEstimate:
-    return CoverageEstimate(nx=10, ny=10, cell_area=1.0, reachable_samples=10, uncut_reachable_samples=uncut, remaining_samples=uncut, wall_scallop_height=0.0)
+    return CoverageEstimate(
+        nx=10, ny=10, cell_area=1.0, reachable_samples=10, uncut_reachable_samples=uncut, remaining_samples=uncut, wall_scallop_height=0.0, centre_domain_components=1
+    )
 
 
 def _expected_count_sources(
@@ -283,7 +294,10 @@ def _expected_count_sources(
             for motion in survey.motions
             if motion.kind is MotionKind.LOOP and motion.loop_radius is not None and motion.loop_radius <= spec.tool_radius
         ),
-        tuple(OperationIndex(motion.index) for motion in survey.motions if not motion.removes_material),
+        tuple(OperationIndex(motion.index) for motion in survey.motions if not motion.removes_material and motion.operation is OperationType.CUT),
+        tuple(OperationIndex(motion.index) for motion in survey.motions if not motion.removes_material and motion.operation is not OperationType.CUT),
+        tuple(survey.material_plunge_indices),
+        _independent_misplaced_plunges(snapshot, survey),
         tuple(OperationIndex(motion.index) for motion in survey.motions if any(sample.cap_exceeded for sample in motion.samples)),
         tuple(OperationIndex(motion.index) for motion in survey.motions if motion.slot_exceeded),
         tuple(tangent),
@@ -320,9 +334,9 @@ def _expected_maximum_pairs(
     for previous, current in zip(survey.motions, survey.motions[1:]):
         if current.index != previous.index + 1:
             continue
-        previous_peak = max((sample.engagement_deg for sample in previous.samples), default=0.0)
-        current_peak = max((sample.engagement_deg for sample in current.samples), default=0.0)
-        value = abs(current_peak - previous_peak)
+        value = _independent_junction_step(previous, current)
+        if value is None:
+            continue
         if value > engagement_value:
             engagement_value = value
             engagement_pair = OperationPair.build(
@@ -373,6 +387,9 @@ def _assert_exact_count_sources(spec: PocketSpec, snapshot: tuple[HeldOperationS
         attribution.zero_length_operations,
         attribution.degenerate_loop_operations,
         attribution.redundant_operations,
+        attribution.air_at_depth_operations,
+        attribution.material_plunge_operations,
+        attribution.misplaced_plunge_operations,
         attribution.cap_exceeded_operations,
         attribution.slotting_operations,
         attribution.tangent_break_pairs,
@@ -571,7 +588,9 @@ def test_quality_assessment_accepts_exact_motion_rapid_plunge_retract_partition(
         _rapid(index=3, operation=OperationType.LINK, length=1.0, horizontal_at_cut_plane=False),
     )
     survey = _survey(
-        (_motion(1),),
+        # Where the snapshot puts operation 1 (its line runs (1, 0) -> (2, 0)),
+        # so the plunge's landing is judged against the same geometry.
+        (_motion(1, start=(1.0, 0.0), end=(2.0, 0.0)),),
         rapids,
         source_snapshot=snapshot,
         plunge_indices=(OperationIndex(0),),
@@ -703,6 +722,9 @@ def test_attribution_factory_rejects_duplicate_indices() -> None:
             zero_length_operations=(),
             degenerate_loop_operations=(),
             redundant_operations=(),
+            air_at_depth_operations=(),
+            material_plunge_operations=(),
+            misplaced_plunge_operations=(),
             cap_exceeded_operations=(),
             slotting_operations=(),
             max_engagement_step=None,
@@ -736,6 +758,9 @@ def _attribution(
         zero_length_operations=(),
         degenerate_loop_operations=(),
         redundant_operations=(),
+        air_at_depth_operations=(),
+        material_plunge_operations=(),
+        misplaced_plunge_operations=(),
         cap_exceeded_operations=(),
         slotting_operations=(),
         max_engagement_step=max_engagement_step,
@@ -776,8 +801,9 @@ def _rebuild_assessment(
             "unsafe_rapids",
             "continuity_breaks",
             "zero_length_motions",
-            "degenerate_loops",
             "redundant_operations",
+            "material_plunges",
+            "misplaced_plunges",
             "cap_exceedances",
             "slotting_motions",
             "max_engagement_step",
@@ -876,8 +902,8 @@ def test_assessment_rejects_forged_installed_criterion_contradiction(
     snapshot = _snapshot(2, circle_indices={0, 1})
     survey = _survey(
         (
-            _motion(0, kind=MotionKind.LOOP, radius=1.0, samples=(_sample(0.0),)),
-            _motion(1, kind=MotionKind.LOOP, radius=2.0, samples=(_sample(10.0),)),
+            _motion(0, kind=MotionKind.LOOP, radius=1.0, samples=(_sample(0.0), _sample(0.0, distance=1.0))),
+            _motion(1, kind=MotionKind.LOOP, radius=2.0, samples=(_sample(0.0), _sample(10.0, distance=1.0))),
         ),
         source_snapshot=snapshot,
     )
@@ -930,8 +956,9 @@ def test_direct_assessment_builder_rejects_foreign_spec_binding() -> None:
             "unsafe_rapids",
             "continuity_breaks",
             "zero_length_motions",
-            "degenerate_loops",
             "redundant_operations",
+            "material_plunges",
+            "misplaced_plunges",
             "cap_exceedances",
             "slotting_motions",
             "max_engagement_step",
@@ -952,7 +979,7 @@ def test_direct_assessment_builder_rejects_foreign_spec_binding() -> None:
 
 def test_assessment_rejects_contradiction_of_violated_engagement_maximum_without_failure_pair() -> None:
     snapshot = _snapshot(2)
-    survey = _survey((_motion(0, samples=(_sample(0.0),)), _motion(1, samples=(_sample(130.0),))), source_snapshot=snapshot)
+    survey = _survey((_motion(0, samples=(_sample(0.0), _sample(0.0, distance=1.0))), _motion(1, samples=(_sample(0.0), _sample(130.0, distance=1.0)))), source_snapshot=snapshot)
     assessment = _assess(SPEC, snapshot, survey, _coverage())
     attribution = _rebuild_attribution(assessment, operation_count=2, engagement_step_failure_pairs=())
 
@@ -962,7 +989,7 @@ def test_assessment_rejects_contradiction_of_violated_engagement_maximum_without
 
 def test_assessment_rejects_contradiction_of_satisfied_engagement_maximum_with_failure_pair() -> None:
     snapshot = _snapshot(2)
-    survey = _survey((_motion(0, samples=(_sample(0.0),)), _motion(1, samples=(_sample(10.0),))), source_snapshot=snapshot)
+    survey = _survey((_motion(0, samples=(_sample(0.0), _sample(0.0, distance=1.0))), _motion(1, samples=(_sample(0.0), _sample(10.0, distance=1.0)))), source_snapshot=snapshot)
     assessment = _assess(SPEC, snapshot, survey, _coverage())
     assert assessment.attribution.max_engagement_step is not None
     attribution = _rebuild_attribution(
@@ -979,9 +1006,9 @@ def test_assessment_rejects_contradiction_of_violated_maximum_absent_from_failur
     snapshot = _snapshot(3)
     survey = _survey(
         (
-            _motion(0, samples=(_sample(0.0),)),
-            _motion(1, samples=(_sample(130.0),)),
-            _motion(2, samples=(_sample(0.0),)),
+            _motion(0, samples=(_sample(0.0), _sample(0.0, distance=1.0))),
+            _motion(1, samples=(_sample(0.0), _sample(130.0, distance=1.0))),
+            _motion(2, samples=(_sample(0.0), _sample(0.0, distance=1.0))),
         ),
         source_snapshot=snapshot,
     )
@@ -1100,7 +1127,7 @@ def test_assessment_rejects_same_cardinality_wrong_exact_sources(
             length=0.0,
             radius=SPEC.tool_radius,
             end=(0.0, 0.0),
-            samples=(_sample(130.0, cap=True, inside=False),),
+            samples=(_sample(0.0), _sample(130.0, cap=True, inside=False, distance=1.0)),
             slot=True,
             removes=False,
         ),
@@ -1152,8 +1179,8 @@ def test_attribution_factory_rejects_tangent_and_curvature_overlap() -> None:
 
 def test_simple_findings_retain_exact_unique_operation_indices() -> None:
     motions = (
-        _motion(0, length=0.0, samples=(_sample(300.0, cap=False, inside=False),), removes=False),
-        _motion(2, kind=MotionKind.LOOP, radius=SPEC.tool_radius, samples=(_sample(10.0, cap=True),), slot=True),
+        _motion(0, length=0.0, samples=(_sample(0.0), _sample(300.0, cap=False, inside=False, distance=1.0)), removes=False),
+        _motion(2, kind=MotionKind.LOOP, radius=SPEC.tool_radius, samples=(_sample(0.0), _sample(10.0, cap=True, distance=1.0)), slot=True),
         _motion(4, length=0.0),
     )
     rapids = (
@@ -1187,15 +1214,16 @@ def test_simple_findings_retain_exact_unique_operation_indices() -> None:
             assessment.unsafe_rapids,
             assessment.continuity_breaks,
             assessment.zero_length_motions,
-            assessment.degenerate_loops,
             assessment.redundant_operations,
+            assessment.material_plunges,
+            assessment.misplaced_plunges,
             assessment.cap_exceedances,
             assessment.slotting_motions,
             assessment.max_engagement_step,
             assessment.max_loop_radius_step,
             assessment.tangent_breaks,
         )
-    ) == (0.0, 0, 0, 0, 0, 0, 0, 0, 0, SPEC.tea_cap_deg, 2.0, 0)
+    ) == (0.0, 0, 0, 0, 0, 0, 1, 0, 0, 0, SPEC.tea_cap_deg, 2.0, 0)
 
 
 def _source_attributions(assessment: PathQualityAssessment) -> dict[str, tuple[object, ...]]:
@@ -1207,6 +1235,9 @@ def _source_attributions(assessment: PathQualityAssessment) -> dict[str, tuple[o
         "zero_length_operations": attribution.zero_length_operations,
         "degenerate_loop_operations": attribution.degenerate_loop_operations,
         "redundant_operations": attribution.redundant_operations,
+        "air_at_depth_operations": attribution.air_at_depth_operations,
+        "material_plunge_operations": attribution.material_plunge_operations,
+        "misplaced_plunge_operations": attribution.misplaced_plunge_operations,
         "cap_exceeded_operations": attribution.cap_exceeded_operations,
         "slotting_operations": attribution.slotting_operations,
         "tangent_break_pairs": attribution.tangent_break_pairs,
@@ -1235,9 +1266,9 @@ def test_raw_observation_sensitivity_changes_exactly_one_count_source(mutation: 
         horizontal_role_indices={3},
     )
     motions = [
-        _motion(0, kind=MotionKind.LOOP, radius=2.0, end=(0.0, 0.0), samples=(_sample(10.0),)),
-        _motion(1, start=(0.0, 0.0), end=(1.0, 0.0), samples=(_sample(10.0),)),
-        _motion(2, start=(1.0, 0.0), samples=(_sample(10.0),)),
+        _motion(0, kind=MotionKind.LOOP, radius=2.0, end=(0.0, 0.0), samples=(_sample(0.0), _sample(10.0, distance=1.0))),
+        _motion(1, start=(0.0, 0.0), end=(1.0, 0.0), samples=(_sample(0.0), _sample(10.0, distance=1.0))),
+        _motion(2, start=(1.0, 0.0), samples=(_sample(0.0), _sample(10.0, distance=1.0))),
     ]
     rapids = [_rapid(index=3, operation=OperationType.PLUNGE, length=1.0, horizontal_at_cut_plane=False)]
     baseline = _assess(SPEC, snapshot, _survey(tuple(motions), tuple(rapids), source_snapshot=snapshot), _coverage())
@@ -1272,11 +1303,11 @@ def test_raw_observation_sensitivity_changes_exactly_one_count_source(mutation: 
 def test_nonleading_engagement_sample_changes_the_causal_maximum_pair_and_value() -> None:
     snapshot = _snapshot(3)
     baseline_motions = (
-        _motion(0, samples=(_sample(0.0),)),
-        _motion(1, samples=(_sample(20.0),)),
-        _motion(2, samples=(_sample(15.0), _sample(15.0))),
+        _motion(0, samples=(_sample(0.0), _sample(0.0, distance=1.0))),
+        _motion(1, samples=(_sample(0.0), _sample(20.0, distance=1.0))),
+        _motion(2, samples=(_sample(15.0), _sample(15.0, distance=1.0))),
     )
-    changed_motions = (*baseline_motions[:2], replace(baseline_motions[2], samples=(_sample(15.0), _sample(50.0))))
+    changed_motions = (*baseline_motions[:2], replace(baseline_motions[2], samples=(_sample(15.0), _sample(50.0, distance=1.0))))
 
     baseline = _assess(SPEC, snapshot, _survey(baseline_motions, source_snapshot=snapshot), _coverage())
     changed = _assess(SPEC, snapshot, _survey(changed_motions, source_snapshot=snapshot), _coverage())
@@ -1330,9 +1361,9 @@ def test_junction_findings_preserve_adjacency_and_classification() -> None:
     tolerance = CONTINUITY_TOOL_RADIUS_FRACTION * SPEC.tool_radius
     motions = (
         _motion(0, end=(0.0, 0.0), end_tangent=(1.0, 0.0)),
-        _motion(1, start=(tolerance, 0.0), end_tangent=(-1.0, 0.0), samples=(_sample(10.0),)),
-        _motion(2, start=(2.0 + tolerance, 0.0), start_tangent=(1.0, 0.0), end_tangent=(1.0, 0.0), samples=(_sample(40.0),)),
-        _motion(4, start=(99.0, 0.0), start_tangent=(0.0, 1.0), samples=(_sample(80.0),)),
+        _motion(1, start=(tolerance, 0.0), end_tangent=(-1.0, 0.0), samples=(_sample(0.0), _sample(10.0, distance=1.0))),
+        _motion(2, start=(2.0 + tolerance, 0.0), start_tangent=(1.0, 0.0), end_tangent=(1.0, 0.0), samples=(_sample(0.0), _sample(40.0, distance=1.0))),
+        _motion(4, start=(99.0, 0.0), start_tangent=(0.0, 1.0), samples=(_sample(0.0), _sample(80.0, distance=1.0))),
     )
     snapshot = _snapshot(5, operation_roles={3: OperationType.LINK}, heights={3: 2.0})
     survey = _survey(motions, (_rapid(index=3, operation=OperationType.LINK, length=1.0, horizontal_at_cut_plane=False),), source_snapshot=snapshot)
@@ -1346,10 +1377,10 @@ def test_junction_findings_preserve_adjacency_and_classification() -> None:
 
 def test_engagement_steps_keep_first_maximum_tie_and_every_failure_pair() -> None:
     motions = (
-        _motion(0, samples=(_sample(0.0),)),
-        _motion(1, samples=(_sample(130.0),)),
-        _motion(2, samples=(_sample(0.0),)),
-        _motion(4, samples=(_sample(400.0),)),
+        _motion(0, samples=(_sample(0.0), _sample(0.0, distance=1.0))),
+        _motion(1, samples=(_sample(0.0), _sample(130.0, distance=1.0))),
+        _motion(2, samples=(_sample(0.0), _sample(0.0, distance=1.0))),
+        _motion(4, samples=(_sample(0.0), _sample(400.0, distance=1.0))),
     )
     snapshot = _snapshot(5, operation_roles={3: OperationType.LINK}, heights={3: 2.0})
     survey = _survey(motions, (_rapid(index=3, operation=OperationType.LINK, length=1.0, horizontal_at_cut_plane=False),), source_snapshot=snapshot)
@@ -1364,7 +1395,7 @@ def test_engagement_steps_keep_first_maximum_tie_and_every_failure_pair() -> Non
 
 
 def test_zero_steps_have_no_invented_maximum_pair() -> None:
-    motions = (_motion(0, samples=(_sample(20.0),)), _motion(1, samples=(_sample(20.0),)))
+    motions = (_motion(0, samples=(_sample(0.0), _sample(20.0, distance=1.0))), _motion(1, samples=(_sample(0.0), _sample(20.0, distance=1.0))))
     snapshot = _snapshot(2)
     survey = _survey(motions, source_snapshot=snapshot)
     assessment = _assess(SPEC, snapshot, survey, _coverage())

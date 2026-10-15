@@ -26,15 +26,16 @@ Corpus reports are **reporting evidence**, not geometric or continuous-engagemen
 certificates. Read them as measurements of this repository's generators on the
 corpora below, never as proof of a geometric property.
 
-!!! warning "`benchmarks/results/` has no layout enforcement"
+!!! note "`benchmarks/results/gate_vectors.json` is the single gate-results file"
 
-    The authenticated `measured-run` publisher — which required a clean committed
-    worktree, published one immutable bundle per commit under
-    `benchmarks/results/<UTC-date>-<commit-prefix>/`, and stamped build, input and
-    result identities — was removed on 2026-09-08 along with the measurement-claim
-    subsystem it belonged to. Its single-writer rule is therefore no longer checked
-    by anything: `benchmarks/results/` now holds a mix of bundle directories and
-    plain baseline JSON files. Do not rely on its shape.
+    The machining-quality gate's numbers live in one file,
+    `benchmarks/results/gate_vectors.json`, written by `pixi run gate-vectors` and
+    rendered to `benchmarks/results/gate_vectors.md`, which the docs include.
+    `pixi run gate-ratchet` refuses a commit that worsens any gated cell, or touches
+    the gate without improving one, and re-measures the file for freshness
+    ([machining quality](machining_quality.md#the-ratchet)). Only those two files are
+    enforced; the rest of `benchmarks/results/` (older bundle directories and the
+    Held baseline JSON files) carries no layout rule (Ruling 0.3-C9).
 
 ## The corpora
 

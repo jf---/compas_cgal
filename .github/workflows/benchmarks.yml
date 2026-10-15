@@ -7,7 +7,7 @@ name: benchmarks
 
 on:
   push:
-    branches: [main, master]
+    branches: [main, master, "codex/**"]
   pull_request:
     branches: [main, master]
 
@@ -24,6 +24,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+          # The gate ratchet reads benchmarks/results/gate_vectors.json at every
+          # commit of the pushed range, so the history must be present.
+          fetch-depth: 0
 
       - name: Set up pixi
         uses: prefix-dev/setup-pixi@v0.8.1
@@ -42,11 +45,46 @@ jobs:
       - name: Exact-number native gates
         run: pixi run -e default exact-gates
 
-      - name: Benchmark corpus tests
-        run: pixi run pytest tests/benchmarks -q -n auto
+      # The product gate is red on purpose (docs/red_manifest.json). The suite's
+      # reds must equal the manifest in both directions; a JUnit <error> fails it.
+      # Expected cost, from local timings: the full suite is 14:45 wall on an
+      # 8-core macOS host at 562% CPU (about 83 CPU-minutes), so about 25-30 min
+      # on a 4-core runner, plus the native build. With the ratchet the job is
+      # about 35-45 min; the workflow's concurrency group (cancel-in-progress,
+      # per ref) keeps overlapping pushes from stacking.
+      - name: Test suite, reds must equal the manifest
+        run: pixi run red-manifest
 
       - name: Strict typing gate (benchmarks)
-        run: pixi run mypy
+        run: pixi run types-benchmarks
 
       - name: Smoke corpus end to end
-        run: pixi run python -m benchmarks.cli --corpus smoke --out "${RUNNER_TEMP}/bench" --no-digits
+        run: pixi run python -m benchmarks.cli corpus --name smoke --out "${RUNNER_TEMP}/bench" --no-digits
+
+      # Every commit of the pushed range against its parent, read from the
+      # committed vectors (no measurement). A branch's first push has an
+      # all-zero `before`; a force-push after a rebase leaves `before`
+      # unreachable. In both cases the ratchet names it
+      # (UnreachableGateBaseError) and starts from the merge base with
+      # origin/main instead (GATE_FALLBACK_REF).
+      - name: Gate ratchet (per commit)
+        env:
+          GATE_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          GATE_FALLBACK_REF: origin/main
+        run: |
+          git fetch --no-tags origin main
+          if [ "$GATE_BASE" = "0000000000000000000000000000000000000000" ]; then
+            GATE_BASE="$(git merge-base origin/main HEAD)"
+          fi
+          GATE_BASE="$GATE_BASE" pixi run gate-ratchet-commits
+
+      # A fresh re-measurement of the head (gated cells and reported integers
+      # only, Ruling 0.3-CI-fresh).
+      # Expected cost, from local timings on an 8-core macOS host: the 12-case
+      # re-measurement is 2:37-2:45 wall (about 420 s CPU, bounded by the
+      # slowest case at about 160 s single-threaded), so about 4-5 min on a
+      # 4-core ubuntu-latest runner.
+      - name: Gate vector freshness (head)
+        # Advisory until ubuntu reproduces the macOS integer pins, then promote to blocking.
+        continue-on-error: true
+        run: pixi run gate-fresh

@@ -271,3 +271,7 @@ class HeldPathNotEligibleForPostQualificationError(BenchmarkError):
 
 class UnexpectedHeldPathCaseError(BenchmarkError):
     """Characterization received a Held case other than Figure 5."""
+
+
+class MissingLoopSeamStationError(BenchmarkError):
+    """A closed loop's motion record carries no seam station to read its junction at (gate rule f)."""

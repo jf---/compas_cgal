@@ -20,6 +20,12 @@ public:
         double tool_radius);
 
     bool contains(double x, double y) const;
+    // Connected components of the exact cutter-centre domain the predicate was
+    // built on: `reach_component_count` of its regularized polygon set, the
+    // codebase's one definition of a ReachSet's components. Phase 1 refuses any
+    // count but one at build, so today this reads 1; it is the count, not the
+    // constant, so lifting that refusal does not silently keep a wrong number.
+    std::size_t center_component_count() const;
     const ReachableDomainBuildAudit2&
         build_audit_for_native_gate() const;
 

@@ -201,8 +201,13 @@ full immersion to the motion immediately after it. The two are genuinely
 index-adjacent and the tool genuinely stays down, so the cutter really does
 absorb that load shock. The number is real.
 
-What the anchor exposes instead is that the criterion cannot be met alongside
-`degenerate_loops == 0`.
+What the anchor exposed, under the gate of the time, was that the criterion
+could not be met alongside `degenerate_loops == 0`. Task 0.3 resolved both
+sides: degenerate loops are reported, not gated (rule d), and the step is read
+at the junction rather than from per-motion peaks (rule f;
+[machining quality](machining_quality.md#the-gate-rules-task-03)). The
+analysis below is kept as the derivation of why the old pair was
+incompatible.
 
 ### The closed form
 
@@ -242,8 +247,10 @@ which is `rho < r`, which is `DEGENERATE_LOOP_RATIO`. Therefore:
 
 A path with no degenerate loops has entry loops peaking at 360 degrees; the
 motion after each one respects the cap; so `max_engagement_step >= 360 - cap`,
-which is 240 degrees at the corpus cap of 120. Requiring `degenerate_loops == 0`
-and `max_engagement_step <= 120` at once asks for two incompatible things.
+which is 240 degrees at the corpus cap of 120. The pre-0.3 gate required
+`degenerate_loops == 0` and `max_engagement_step <= 120` at once, which asked
+for two incompatible things; since Task 0.3 `degenerate_loops` is reported, not
+gated.
 
 !!! warning "The resolution is the entry, not the metric"
 

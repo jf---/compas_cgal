@@ -394,8 +394,9 @@ def _validate_quality(
         unsafe_rapids=assessment.unsafe_rapids,
         continuity_breaks=assessment.continuity_breaks,
         zero_length_motions=assessment.zero_length_motions,
-        degenerate_loops=assessment.degenerate_loops,
         redundant_operations=assessment.redundant_operations,
+        material_plunges=assessment.material_plunges,
+        misplaced_plunges=assessment.misplaced_plunges,
         cap_exceedances=assessment.cap_exceedances,
         slotting_motions=assessment.slotting_motions,
         max_engagement_step=assessment.max_engagement_step,
@@ -416,8 +417,9 @@ def _validate_quality(
         path_quality.elementary.unsafe_rapids,
         path_quality.elementary.continuity_breaks,
         path_quality.elementary.zero_length_motions,
-        path_quality.elementary.degenerate_loops,
         path_quality.elementary.redundant_operations,
+        path_quality.elementary.material_plunges,
+        path_quality.elementary.misplaced_plunges,
         path_quality.cut.cap_exceedances,
         path_quality.cut.slotting_motions,
         path_quality.cut.max_engagement_step_deg,
@@ -426,7 +428,7 @@ def _validate_quality(
     )
     measured = tuple(getattr(canonical_assessment, name).measured for name in _CRITERION_FIELDS)
     if projections != measured:
-        raise ContradictoryPathQualityEvidenceError("PathQuality values disagree with the twelve assessed criterion values.")
+        raise ContradictoryPathQualityEvidenceError("PathQuality values disagree with the thirteen assessed criterion values.")
     coverage = quality.coverage
     integer_scalars = (coverage.nx, coverage.ny, coverage.reachable_samples, coverage.uncut_reachable_samples, coverage.remaining_samples)
     if any(type(value) is not int or value < ZERO_COUNT for value in integer_scalars):
@@ -447,6 +449,10 @@ def _validate_quality(
         raise InvalidHeldPathEvidenceError("coverage cell area must be positive and wall scallop height non-negative.")
     if float(assessment.uncut_fraction.measured) != coverage.uncut_fraction:
         raise ContradictoryPathQualityEvidenceError("coverage uncut fraction disagrees with the assessed value.")
+    if type(coverage.centre_domain_components) is not int:
+        raise InvalidHeldPathEvidenceError("the coverage centre-domain component count must be an exact integer.")
+    if assessment.material_plunges.required != coverage.centre_domain_components:
+        raise ContradictoryPathQualityEvidenceError("the material-plunge threshold disagrees with the coverage centre-domain component count.")
     if path_quality.cut.wall_scallop_height != coverage.wall_scallop_height:
         raise ContradictoryPathQualityEvidenceError("coverage wall scallop height disagrees with PathQuality.")
     return path_quality, canonical_assessment, coverage
@@ -458,8 +464,9 @@ _CRITERION_FIELDS = (
     "unsafe_rapids",
     "continuity_breaks",
     "zero_length_motions",
-    "degenerate_loops",
     "redundant_operations",
+    "material_plunges",
+    "misplaced_plunges",
     "cap_exceedances",
     "slotting_motions",
     "max_engagement_step",

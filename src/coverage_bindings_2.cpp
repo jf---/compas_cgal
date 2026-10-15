@@ -409,7 +409,8 @@ NB_MODULE(_coverage_2, m)
             "design_boundary"_a,
             "holes"_a,
             "tool_radius"_a)
-        .def("contains", &ReachableMaterialPredicate2::contains, "x"_a, "y"_a);
+        .def("contains", &ReachableMaterialPredicate2::contains, "x"_a, "y"_a)
+        .def("center_component_count", &ReachableMaterialPredicate2::center_component_count);
 
     nb::class_<CoverageSweepRecord2>(m, "CoverageSweepRecord2")
         .def_prop_ro(

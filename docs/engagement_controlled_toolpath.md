@@ -3,11 +3,11 @@
 `compas_cgal.engagement_toolpath.engagement_controlled_toolpath` regulates the advance between
 machining circles on the measured engagement instead of a dialled-in stepover, and on the pockets
 measured so far it holds every machining circle except the unavoidable chain-entry loops at or below
-the requested cap, while cutting **55% less travel** than the unregulated generator aimed at the same
-cap. The price is generation time: **224 ms on a 12x8 pocket against 2.6 ms**, a factor of ~86 (it was
-~1000x before full-turn depletion became exact and bridge depletion stopped being a disk chain, and
-70.6 ms while the probe set was a 3-position triple that measurably could not see the loop's trailing
-side).
+the requested cap, while cutting markedly less travel than the unregulated generator aimed at the same
+cap. The price is generation time, which is one to two orders of magnitude above the unregulated
+generator's. The gated measurements of this generator, and its generation and gate times, are read from
+[`benchmarks/results/gate_vectors.md`](machining_quality.md#measured); the comparison with the unregulated generator is not a gate column and its earlier figures
+were dropped rather than kept stale (Ruling 0.3-C10).
 
 The guarantee is narrow and stated exactly, because it is easy to overclaim here:
 
@@ -28,9 +28,9 @@ The stepover is a geometric proxy for engagement through the textbook radial-imm
 `TEA = 2*acos(1 - ae/r)`, which assumes the boundary between cut and uncut material is **straight**.
 In a real trochoidal path it is the outer rim of the previous circle, so the proxy under-reads. Dialling
 a 2 mm tool to `stepover = 0.5` — the value that relation says gives exactly 120 deg — produces machining
-circles the audit measures at **136.4 deg**. The regulated generator, asked for the same 120 deg,
-produces circles measured at **119.5 deg**. Same tool, same pocket, same cap; the difference is
-measuring instead of assuming.
+circles the audit measures **above** the cap. The regulated generator, asked for the same 120 deg,
+produces circles the audit measures **at or below** it. Same tool, same pocket, same cap; the difference
+is measuring instead of assuming.
 
 ## How the advance is chosen
 
@@ -61,11 +61,7 @@ anywhere in the accept/reject path.
 | Advance resolution | `D/40 = r/20`, worth `<= ~7 deg` of TEA | `GUIDE_STEP_TOOL_DIAMETERS`, derivation in the constant's comment |
 | Advance bound | one tool diameter (engagement saturation **and** annulus overlap) | `MAX_ADVANCE_TOOL_DIAMETERS` |
 | Evaluated positions per circle | K = 33 (entry point + a uniform 32-position ring phased on the advance) | `LOOP_PROBE_COUNT`, `LOOP_PROBE_ANGLES_DEG` |
-| Regulated circles, 10x6, cap 120 deg | max 119.5 deg outside entry loops | `audit_toolpath_engagement` |
-| Unregulated circles, same cap via `stepover=0.5` | 136.4 deg | `audit_toolpath_engagement` |
-| Motions measured above cap, 12x8 | 5 regulated vs 14 unregulated | `audit_toolpath_engagement` |
-| Cut travel, 12x8 | 411.6 vs 914.3 | sum of circle circumferences and bridge lengths |
-| Generation, 12x8, 2 mm tool, cap 120 deg | 223.7 ms, vs 2.6 ms | `time.perf_counter` around each generator, best of five; was 70.6 ms with the superseded 3-probe triple, 0.226 s before the quad capsule and 2.70-3.43 s before exact-annulus depletion |
+| Gated measurements, generation and gate time, 12x8 / 20x12 / L | read from [`benchmarks/results/gate_vectors.md`](machining_quality.md#measured) | `pixi run gate-vectors` |
 | Residual stock, 10x6 | 2.35% vs 2.57%, none further than 0.28 mm from a wall | 200x120 `Stock.contains` grid |
 
 ### Why a uniform ring, and why 32 of them
@@ -275,7 +271,7 @@ A helical or ramped entry would remove them. That is not implemented here.
 | --- | --- | --- |
 | Held's trochoidal engagement control (float bisection to `eps = 1e-3`) | **stronger per evaluated position** — each verdict is an exact predicate on the exact arrangement, no tolerance in the accept/reject path | `_stock_2.engagement_at` returns `cap_exceeded` decided exactly; the surrogate crossing is `4*sin^2(theta/2)` at one declared boundary |
 | Continuous partition of each motion (`compas_cgal.adaptive`) | **weaker** — a partition bounds every centre on the motion; this bounds only the positions it evaluated | this module deliberately does not import `compas_cgal.adaptive`, and returns no witness type |
-| `trochoidal_mat_toolpath_circular` (stepover proxy) | **stronger on measured engagement, weaker on speed** | 119.5 deg vs 136.4 deg at a 120 deg target; 72.4 ms vs 2.6 ms on 12x8 |
+| `trochoidal_mat_toolpath_circular` (stepover proxy) | **stronger on measured engagement, weaker on speed** | the regulated circles stay at or below a 120 deg target where the stepover proxy's exceed it; generation is slower |
 
 ## Known limitations
 

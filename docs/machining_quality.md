@@ -12,15 +12,13 @@ neither generator currently produces a toolpath worth running.
 
 The gate in `tests/benchmarks/test_quality.py` is **red on purpose**: twelve
 cells, crossing three pockets and two generators at the default 120° cap and
-the attribution 40° cap. The approved 40–100° sweep found 40° was the sole cap
-where every pocket's generator pair diverged; from 50° through 100° the L-shape
-remained saturated, including identical 453/453-operation streams at the
-original 60° stop. The six-cell 120° snapshot below fails six or seven criteria
-per pocket. It is a specification of the target, not a description of the code.
-A quality gate that passed on the current generator would be worthless, because
-the current generator emits machining "circles" a fiftieth of the tool radius,
-ten operations per path that remove nothing, and motions at 360° of engagement
-under a 120° cap.
+the attribution 40° cap (40° is the one cap in the approved 40–100° sweep at
+which every pocket's generator pair diverged). Every cell fails several
+criteria; which ones, and by how much, is read from the pinned vectors in
+[Measured](#measured), never typed here. The gate is a specification of the
+target, not a description of the code: the current generators leave residue,
+emit cuts that remove nothing, plunge into solid stock once per chain, and
+exceed the cap on their entry cuts.
 
 ## How engagement is measured: in process
 
@@ -51,11 +49,9 @@ and threshold:
 The generators' own probe rings (`_station_is_admissible` in
 `engagement_toolpath.py` and its importers) **still decide against the static
 stock** until Task 1.1. The gate therefore measures physics that the generators
-do not yet regulate. On radius_regulated, rect_20x12 at the 40° cap, the
-in-process gate counts 65 cap-exceeding motions where the static reading
-counted 125, at the same survey cost (124 s against 130 s, 1,717 motions). The
-figures and numbers on this page that predate Task 0.1 were measured with the
-static model, and Task 0.1 does not regenerate them.
+do not yet regulate. The figures on this page predate Task 0.1 and were drawn
+with the static model; Tasks 0.1–0.3 do not regenerate them. Every gate number
+on this page is read from `benchmarks/results/gate_vectors.json`.
 
 ## The four groups
 
@@ -76,16 +72,18 @@ a named error when it is absent — `MissingMaterialModelError`,
 | | `rapid_safety`, `unsafe_rapids` | a rapid travelling in XY on the cutting plane | ▣ |
 | | `continuity_breaks` | one cut not ending where the next begins | ▣ |
 | | `zero_length_motions` | operations of no length | ▣ |
-| | `degenerate_loops` | `ρ ≤ r`: a disk sweep, not a trochoid | ▣ |
+| | `degenerate_loops` | `ρ ≤ r`: a disk sweep, not a trochoid — **reported, not gated** (rule d) | ▣ |
 | | `marginal_loops` | `r < ρ ≤ 1.5 r`: a hole too small to use | ▣ |
-| | `redundant_operations` | motions whose exact removal verdict is `NOTHING` — even a certified region containing the true sweep misses the stock; `WITHIN_BAND` counts as removing and is reported as `PathSurvey.within_band_motions` ([bracket](exactness.md#deciding-on-a-model-that-is-only-a-bound-bracket-it)) | ▣ |
+| | `redundant_operations` | **CUT** motions whose exact removal verdict is `NOTHING` (rule a; a `LINK` or lead that removes nothing is a stay-down transit, reported as `air_at_depth_length`) — even a certified region containing the true sweep misses the stock; `WITHIN_BAND` counts as removing and is reported as `PathSurvey.within_band_motions` ([bracket](exactness.md#deciding-on-a-model-that-is-only-a-bound-bracket-it)) | ▣ |
+| | `material_plunges` | plunges whose disk meets the stock's interior, gated at ≤ the centre domain's component count (rule b) | ▣ |
+| | `misplaced_plunges` | plunges whose foot is not bit-equal to the next motion's start (rule e) | ▣ |
 | | `recut_fraction` | swept area meeting no fresh material | ▣ |
 | **quality** | `max_engagement_deg`, `engagement_p95_deg`, `engagement_variance_deg2` | load level and steadiness | ▣ |
 | | `cap_exceedances` | motions the exact cap predicate fired on | ▣ |
 | | `max_chip_thickness_ratio`, `low_chip_thickness_ratio` | `h_ex / f_z` at the heavy and light ends | ▣ |
 | | `max_engagement_gradient_deg_per_length` | load **shock** within a motion | ▣ |
-| | `max_engagement_step_deg` | load shock across a junction | ▣ |
-| | `slotting_motions` | straight transfers that are really cutting | ▣ |
+| | `max_engagement_step_deg` | load shock **at** a junction: the next motion's first station with a non-empty prefix against the previous motion's last (rule f) | ▣ |
+| | `slotting_motions` | straight motions over the cap — the same cap as a loop (rule c) | ▣ |
 | | `immersion_steady_fraction`, `immersion_at_design_fraction`, `immersion_excursions` | whether the cut holds its commissioned bite | ▣ |
 | | `mean_radial_depth`, `radial_depth_variance` | removal rate per unit travel | ▣ |
 | | `wall_scallop_height` | deepest residue against a wall | ▣ |
@@ -96,10 +94,11 @@ a named error when it is absent — `MissingMaterialModelError`,
 | | `max_curvature` | where the feed ceiling is tightest | ▣ |
 | | `tangent_breaks`, `curvature_breaks` | G1 and G2 discontinuities | ▣ |
 | | `direction_reversals` | the tool turning back on itself | ▣ |
-| | `retract_count`, `reentry_count` | clearance moves and plunges | ▣ |
+| | `retract_count`, `reentry_count` | clearance moves and plunges (reported) | ▣ |
+| | `air_at_depth_length` | stay-down transits through cleared stock (reported) | ▣ |
 | | `cutting_seconds`, `air_seconds`, `total_seconds` | feed-limited cycle time | ◈ machine |
 | | `mean_cutting_feed_mm_per_s`, `feed_utilisation` | feed actually achieved against programmed | ◈ machine |
-| **longevity** | `material_entries` | impacts — the leading cause of edge chipping | ▣ |
+| **longevity** | `material_entries` | first contacts after a plunge, reported; superseded as a gate by `material_plunges` | ▣ |
 | | `engagement_length_histogram` | cumulative damage, not just the peak | ▣ |
 | | `cut_air_alternations`, `alternations_per_length` | thermal cycling | ▣ |
 | | `cutting_speed_m_per_min`, `taylor_life_minutes`, `life_fraction_consumed` | Taylor life `V·Tⁿ = C` | ◈ both |
@@ -141,94 +140,14 @@ a named error when it is absent — `MissingMaterialModelError`,
 
 ## Measured
 
-This table is the 120° snapshot; it does not report the 40° attribution cells.
-Tool ⌀2.0, cap 120°, 45 probes per motion, 200-sample coverage grid. The two
-generators return **identical motion streams** on every pocket, so their columns
-are identical in pairs — see the note below. Every number here is reproduced by
-the gate test, which prints the whole four-group measurement when it fails:
-`pixi run pytest tests/benchmarks/test_quality.py -k worth_running`.
+Every number in this section is generated: `tools/gate_table.py` renders
+`benchmarks/results/gate_vectors.json` into the table below, which this page
+includes; `tests/tools/test_gate_table.py` holds the two byte-for-byte. Gated
+criteria are bold; their `required` column is the gate's threshold. At the
+120° cap the two generators return identical motion streams, so their columns
+are identical in pairs. Regenerate with `pixi run gate-vectors`.
 
-| group | metric | required | rect_12x8<br>eng-ctrl | rect_12x8<br>radius-reg | rect_20x12<br>eng-ctrl | rect_20x12<br>radius-reg | L_shape<br>eng-ctrl | L_shape<br>radius-reg |
-| :--- | :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
-| elementary | `uncut_fraction` | 0 | 0.008041 | 0.008041 | 0.002843 | 0.002843 | 0.006930 | 0.006930 |
-| elementary | `gouge_free` | true | True | True | True | True | True | True |
-| elementary | `rapid_safety` | true | True | True | True | True | True | True |
-| elementary | `continuity_breaks` | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
-| elementary | `zero_length_motions` | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
-| elementary | `degenerate_loops` | 0 | 4 | 4 | 4 | 4 | 5 | 5 |
-| elementary | `marginal_loops` | reported | 4 | 4 | 4 | 4 | 5 | 5 |
-| elementary | `redundant_operations` | 0 | 10 | 10 | 10 | 10 | 10 | 10 |
-| elementary | `recut_fraction` | reported | 0.8974 | 0.8974 | 0.8905 | 0.8905 | 0.9274 | 0.9274 |
-| cut | `max_engagement_deg` | reported | 360.0 | 360.0 | 360.0 | 360.0 | 360.0 | 360.0 |
-| cut | `cap_exceedances` | 0 | 5 | 5 | 9 | 9 | 6 | 6 |
-| cut | `engagement_p95_deg` | reported | 119.2 | 119.2 | 114.2 | 114.2 | 115.6 | 115.6 |
-| cut | `engagement_variance_deg2` | reported | 5822 | 5822 | 4660 | 4660 | 3785 | 3785 |
-| cut | `max_chip_thickness_ratio` | reported | 1.000 | 1.000 | 1.000 | 1.000 | 1.000 | 1.000 |
-| cut | `low_chip_thickness_ratio` | reported | 0.067 | 0.067 | 0.142 | 0.142 | 0.033 | 0.033 |
-| cut | `max_engagement_gradient_deg_per_length` | reported | 82994 | 82994 | 59936 | 59936 | 57894 | 57894 |
-| cut | `max_engagement_step_deg` | <= cap | 329.5 | 329.5 | 337.5 | 337.5 | 325.4 | 325.4 |
-| cut | `slotting_motions` | 0 | 0 | 0 | 4 | 4 | 0 | 0 |
-| cut | `immersion_steady_fraction` | reported | 0.5576 | 0.5576 | 0.0828 | 0.0828 | 0.6285 | 0.6285 |
-| cut | `immersion_at_design_fraction` | reported | 0.0713 | 0.0713 | 0.0411 | 0.0411 | 0.0677 | 0.0677 |
-| cut | `immersion_excursions` | reported | 37 | 37 | 99 | 99 | 51 | 51 |
-| cut | `mean_radial_depth` | reported | 0.1953 | 0.1953 | 0.2096 | 0.2096 | 0.1461 | 0.1461 |
-| cut | `radial_depth_variance` | reported | 0.1648 | 0.1648 | 0.1221 | 0.1221 | 0.0931 | 0.0931 |
-| cut | `wall_scallop_height` | reported | 0.2105 | 0.2105 | 0.2500 | 0.2500 | 0.2700 | 0.2700 |
-| cut | `loop_radius_cv` | reported | 0.4799 | 0.4799 | 0.4655 | 0.4655 | 0.3516 | 0.3516 |
-| cut | `max_loop_radius_step` | <= 2.0 | 1.368 | 1.368 | 1.376 | 1.376 | 1.376 | 1.376 |
-| speed | `cutting_length` | reported | 411.6 | 411.6 | 1018.7 | 1018.7 | 565.3 | 565.3 |
-| speed | `air_length` | reported | 30.4 | 30.4 | 38.6 | 38.6 | 53.6 | 53.6 |
-| speed | `air_fraction` | reported | 0.0658 | 0.0658 | 0.0359 | 0.0359 | 0.0823 | 0.0823 |
-| speed | `max_curvature` | reported | 64.33 | 64.33 | 46.45 | 46.45 | 46.45 | 46.45 |
-| speed | `tangent_breaks` | 0 | 24 | 24 | 32 | 32 | 22 | 22 |
-| speed | `curvature_breaks` | reported | 20 | 20 | 40 | 40 | 60 | 60 |
-| speed | `direction_reversals` | reported | 0 | 0 | 0 | 0 | 0 | 0 |
-| speed | `retract_count` | reported | 5 | 5 | 5 | 5 | 8 | 8 |
-| speed | `reentry_count` | reported | 5 | 5 | 5 | 5 | 8 | 8 |
-| longevity | `material_entries` | reported | 5 | 5 | 5 | 5 | 8 | 8 |
-| longevity | `cut_air_alternations` | reported | 21 | 21 | 21 | 21 | 23 | 23 |
-| longevity | `alternations_per_length` | reported | 0.04546 | 0.04546 | 0.01949 | 0.01949 | 0.03534 | 0.03534 |
-
-## The gate, and what fails
-
-| | rect_12x8 | rect_20x12 | L_shape |
-| :--- | :--- | :--- | :--- |
-| criteria failed | 6 | **7** | 6 |
-| `uncut_fraction` ≤ 0 | 0.008041 | 0.002843 | 0.006930 |
-| `degenerate_loops` = 0 | 4 | 4 | 5 |
-| `redundant_operations` = 0 | 10 | 10 | 10 |
-| `cap_exceedances` = 0 | 5 | 9 | 6 |
-| `max_engagement_step_deg` ≤ 120 | 329.5 | 337.5 | 325.4 |
-| `tangent_breaks` = 0 | 24 | 32 | 22 |
-| `slotting_motions` = 0 | 0 | **4** | 0 |
-
-Reading the failures matters more than counting them.
-
-**Three are independent, genuine path defects.** The degenerate loops are
-plunges wearing a circle's name — ρ = 0.0215 against a tool radius of 1.0, at
-182° of engagement. The ten redundant operations are full-size loops
-(ρ = 2.998, 2.370, 1.998) whose sampled engagement is exactly zero: the guide
-revisits stations it has already cleared. The residue is resolution-stable —
-0.904%, 0.804% and 0.865% at grids of 100, 200 and 400 on `rect_12x8` — and it
-is not corner-confined: the farthest uncut sample sits 3.28 units from any
-polygon vertex. For comparison, the **unregulated** constant-spacing generator
-leaves 0.152% on the same pocket at the same grid, a fifth as much.
-
-**Two are the entry strategy, arriving twice.** Every cap-exceeding motion is an
-entry cut — checked by operation index, the set difference is empty on all three
-pockets — and the 329° engagement step is the drop from the 360° entry cut to
-the 30.5° bridge after it. Away from the entry both generators honour the cap:
-the worst non-entry motion measures 119.19° on `rect_12x8` and 116.36° on
-`L_shape`, against a 120° cap. A helical or pre-drilled entry would clear two of
-the six criteria on its own. `cap_exceedances` also agrees exactly — 5, 9, 6 —
-with `benchmarks.exceedance.count_truly_exceeding`, separately written code
-sampling at 12 positions rather than 45.
-
-**One fires on exactly one pocket, which is the point of adding it.**
-`slotting_motions` is 4 on `rect_20x12` and 0 on both other pockets: the corner
-defect the user first found by eye is real, is a corner phenomenon, and the
-12×8 rectangle — which has corners too — does not reproduce it at this tool and
-cap.
+--8<-- "benchmarks/results/gate_vectors.md"
 
 !!! note "The two-cap gate separates saturation from attribution"
 
@@ -240,11 +159,102 @@ cap.
     This establishes attribution at the tighter cap; it does not make either
     generator's quality cells green.
 
+## The gate rules (Task 0.3)
+
+The gate decides thirteen criteria (`benchmarks.quality_observations.CRITERION_NAMES`).
+Six rules changed what four of them mean and added two, each pinned by a
+synthetic path in `tests/benchmarks/test_gate_rules.py`:
+
+- **(a) Redundant is a CUT that removes nothing.** The operation's label decides
+  (Ruling 0.3-C11): a `CUT` owns removal, so a `CUT` whose exact verdict is
+  `NOTHING` is waste. A `LINK`, `LEAD_IN` or `LEAD_OUT` at the cut plane that
+  removes nothing is a legal stay-down transit; its length is reported as
+  `air_at_depth_length` and it is still judged by the cap like every motion. The
+  frozen generators emit no `LINK` at depth, so this rule moves none of their
+  cells: every zero-removal motion they emit is a labelled `CUT`.
+- **(b) Plunges into material are bounded by the centre domain.** At each plunge,
+  before its disk is subtracted, the replay asks the exact regularized
+  interior-intersection predicate whether the tool disk meets the stock
+  (`Stock.circle_sweep_removal` with a guide radius of zero, non-mutating). A
+  connected cutter-centre domain admits one plunge into material; every further
+  one could have been reached by a stay-down transit or a ramped entry. The
+  threshold is the domain's component count, read by the coverage pass from the
+  same `ReachableMaterialPredicate2` its grid queries
+  (`center_component_count`, one on every gate pocket), so a reduction builds
+  one predicate. The frozen generators plunge into material once per chain, so this
+  criterion now fails on every case. Retracts stay reported.
+- **(c) Slotting is a straight motion over the cap.** The same cap as a loop; the
+  half-cap threshold (`SLOT_ENGAGEMENT_FRACTION`, an engineering judgement with
+  no literature behind it) is gone, and with it the second engagement query per
+  line. Slotting is the straight-motion subset of the cap exceedances: it names
+  the defect, it does not add a threshold.
+- **(d) Degenerate loops are reported, not gated.** A `ρ ≤ r` circle in cleared
+  stock is legitimate cleanup; whether it loads the tool is the cap's question.
+  `degenerate_loops` stays in the report and in the attribution.
+- **(e) A plunge must land on the next motion's start.** Exact binary64 equality
+  of the plunge's foot and the next motion's start: the replay injects both as
+  themselves, so equal doubles are the same exact point. A plunge no cut motion
+  follows is misplaced. No frozen-generator case misplaces a plunge; the rule
+  guards the pipeline.
+- **(f) The engagement step is read at the junction.** The step between two
+  motions run back to back is the next motion's first station with a non-empty
+  swept prefix (station 1; station 0 reads 0° by construction, the tool sitting
+  in its own start disk) against the previous motion's last station (Ruling
+  0.3-f-station). The old reading — the difference of the two motions' peaks —
+  compared loads the edge never felt back to back. The step stays a reported
+  sampled diagnostic (Ruling 0.3-C6); the cap verdicts at those stations stay
+  exact. A closed loop samples its seam once, at the start, so its last
+  per-motion station sits a station spacing before it ends; its junction is
+  read at one extra station instead, the seam with the full turn as prefix
+  (`MotionQuality.exit_sample`, Ruling 0.3-f-loop). That station serves the
+  junction only and enters no other statistic.
+
+## The ratchet
+
+`benchmarks/results/gate_vectors.json` is the single results file for the gate
+(schema `gate-vectors/1`, `tools/gate_vectors.py`). Each (case, criterion) cell
+is a decimal string at the gate's report precision. `tools/gate_ratchet.py`
+compares the file at each commit with the file at its parent:
+
+- a commit **worsens** when any gated cell of a shared case rises or a case is
+  dropped; that fails on every commit, whatever it touches;
+- a commit that changes a gate path (`GATE_PATHS`: the Python gate modules and
+  `src/compas_cgal/pipeline/`; C++ kernels are out, Ruling 0.3-C3) must
+  **improve** at least one gated cell;
+- a new generator column improves iff it beats the per-(cap, pocket) minimum of
+  the existing generators on some cell and exceeds it on none (Ruling 0.3-C2,
+  option i);
+- a `rules_version` change is accepted only with a recorded approval
+  (`rebaseline: {from, approval, criteria, retired}`, the approval citing a
+  ledger ruling id; `pixi run gate-vectors` keeps an existing record), never
+  silently. It re-baselines only the gated criteria listed in `criteria` (each
+  a gated criterion of the new vectors; a newly gated criterion must be
+  listed). Every criterion the old vectors gated that the new ones do not
+  (removed, or demoted to reported) must be listed in `retired`, which may name
+  only such criteria. The two lists may not both be empty. Every unchanged
+  criterion is still checked for worsening and dropped cases on the bump
+  commit (Ruling 0.3-bump-worsens); the recorded bump itself counts as the gate
+  commit's improvement. Under one rules version the gated criteria cannot
+  change at all. Re-measure a bump with
+  `python -m tools.gate_measure --rebaseline-approval '<ruling line>' --rebaseline-criteria NAME ... --rebaseline-retired NAME ...`.
+
+`pixi run gate-ratchet` checks `GATE_BASE..HEAD` (default `HEAD^..HEAD`) and then
+re-measures the working tree for freshness: every gated cell and every reported
+integer must match exactly. Reported floats and wall-clock cells are stored for
+the reader and never compared (Ruling 0.3-CI-fresh: their last digit is not
+guaranteed to agree across platforms).
+`tests/tools/test_gate_ratchet.py` holds the semantics, including a synthetic
+regression the ratchet must refuse and a contract test that every repository
+module the gate imports is a gate path or listed with a reason. A stage exits
+when `pixi run red-manifest` and `pixi run gate-ratchet` pass and its exit-gate
+test passes (`tests/benchmarks/test_stage_exit.py`, rows in
+`benchmarks/stage_acceptance.py`).
+
 ## Elementary
 
 <figure markdown>
   ![The corner defect](assets/images/quality_corner_defect.svg)
-  <figcaption>The defect a machinist sees first. Between two ordinary trochoids
+  <figcaption><strong>Historical figure (static engagement model, drawn at commit 70049dd9, 2026-08-22); its numbers predate Tasks 0.1&ndash;0.3 and are not gate cells.</strong> The defect a machinist sees first. Between two ordinary trochoids
   the generator emits a loop of radius 0.0215 — 2.2% of the tool radius, 0.135
   long, at 182° of engagement. That is a plunge, not a trochoid: below ρ = r the
   swept region is a filled disk with no uncut core, so the cutter never
@@ -256,7 +266,7 @@ cap.
 
 <figure markdown>
   ![Coverage and residual](assets/images/quality_coverage_residual.svg)
-  <figcaption>Residue is measured against the tool-<em>reachable</em> region, never
+  <figcaption><strong>Historical figure (static engagement model, drawn at commit 70049dd9, 2026-08-22); its numbers predate Tasks 0.1&ndash;0.3 and are not gate cells.</strong> Residue is measured against the tool-<em>reachable</em> region, never
   the pocket: a sharp corner a round cutter can never enter is not residue, and
   counting it would put a floor under every path. The deliberately under-covered
   path beside it shows what the metric detects when a stepover is genuinely too
@@ -267,7 +277,7 @@ cap.
 
 <figure markdown>
   ![Chip thinning](assets/images/quality_chip_thinning.svg)
-  <figcaption>Why the cap is a proxy. The chip is <code>h(φ) = f_z sin φ</code>,
+  <figcaption><strong>Historical figure (static engagement model, drawn at commit 70049dd9, 2026-08-22); its numbers predate Tasks 0.1&ndash;0.3 and are not gate cells.</strong> Why the cap is a proxy. The chip is <code>h(φ) = f_z sin φ</code>,
   so, in the gate's in-process rim arc, <code>h_ex/f_z = sin(min(θ_rim, 90°))</code> — it rises as a sine and then
   <em>plateaus</em>, never falling. Two consequences. Below the plateau the same
   feed produces a thinner and thinner chip, so holding a tighter cap without
@@ -283,7 +293,7 @@ cap.
 
 <figure markdown>
   ![Engagement along the path](assets/images/quality_engagement_along_path.svg)
-  <figcaption>The cap is honoured almost everywhere and violated in the same
+  <figcaption><strong>Historical figure (static engagement model, drawn at commit 70049dd9, 2026-08-22); its numbers predate Tasks 0.1&ndash;0.3 and are not gate cells.</strong> The cap is honoured almost everywhere and violated in the same
   place every time. What the peak alone hides is the gradient: engagement changes
   by up to 83,000° per unit of travel within a single motion, and load shock
   damages an edge more than a high steady load does.</figcaption>
@@ -291,7 +301,7 @@ cap.
 
 <figure markdown>
   ![Engagement map](assets/images/quality_engagement_map.svg)
-  <figcaption>The same measurement placed back on the pocket, so a peak can be
+  <figcaption><strong>Historical figure (static engagement model, drawn at commit 70049dd9, 2026-08-22); its numbers predate Tasks 0.1&ndash;0.3 and are not gate cells.</strong> The same measurement placed back on the pocket, so a peak can be
   attributed to a location rather than to an operation index.</figcaption>
 </figure>
 
@@ -299,7 +309,7 @@ cap.
 
 <figure markdown>
   ![Curvature and the feed ceiling](assets/images/quality_curvature_feed.svg)
-  <figcaption>Curvature along the path, and the feed it permits under
+  <figcaption><strong>Historical figure (static engagement model, drawn at commit 70049dd9, 2026-08-22); its numbers predate Tasks 0.1&ndash;0.3 and are not gate cells.</strong> Curvature along the path, and the feed it permits under
   <code>v ≤ sqrt(a_max/κ)</code>. The tightest corner drops the achievable feed
   from 33 to 6.6 mm/s. Honestly, though: integrated over the whole path the
   ceiling costs only about 0.5% of the cycle time at this machine model, because
@@ -309,7 +319,7 @@ cap.
 
 <figure markdown>
   ![Length against feed-limited time](assets/images/quality_length_vs_time.svg)
-  <figcaption>Length and time side by side under a stated machine model. Time is
+  <figcaption><strong>Historical figure (static engagement model, drawn at commit 70049dd9, 2026-08-22); its numbers predate Tasks 0.1&ndash;0.3 and are not gate cells.</strong> Length and time side by side under a stated machine model. Time is
   a lower bound: it holds each motion to its curvature ceiling but charges
   nothing for the acceleration ramps or for the 24 tangent breaks the same path
   carries.</figcaption>
@@ -319,14 +329,14 @@ cap.
 
 <figure markdown>
   ![Time at engagement](assets/images/quality_engagement_histogram.svg)
-  <figcaption>Cumulative damage, which a peak cannot describe. Most of the cut
+  <figcaption><strong>Historical figure (static engagement model, drawn at commit 70049dd9, 2026-08-22); its numbers predate Tasks 0.1&ndash;0.3 and are not gate cells.</strong> Cumulative damage, which a peak cannot describe. Most of the cut
   length sits below 30°, which is the light end where chip thinning applies — and
   18.5 units of it sit above 180°, which is the entry cuts.</figcaption>
 </figure>
 
 <figure markdown>
   ![Entries into material](assets/images/quality_material_entries.svg)
-  <figcaption>Every entry is an impact, and impacts chip edges. Five on the
+  <figcaption><strong>Historical figure (static engagement model, drawn at commit 70049dd9, 2026-08-22); its numbers predate Tasks 0.1&ndash;0.3 and are not gate cells.</strong> Every entry is an impact, and impacts chip edges. Five on the
   rectangles, eight on the L — one per skeleton chain, because the generator has
   no entry strategy other than plunging.</figcaption>
 </figure>
@@ -337,31 +347,36 @@ Cited concepts, and — separately — the places where a number is our judgemen
 
 | Threshold | Basis |
 | :--- | :--- |
-| `degenerate_loops`: `ρ ≤ r` | **Physics.** The swept annulus is `[ρ−r, ρ+r]`; at `ρ ≤ r` it has no hole, the tool passes over its own loop centre, and there is no trochoidal relief. A qualitative boundary, tested exactly. |
+| `degenerate_loops`: `ρ ≤ r` | **Physics, reported, not gated.** The swept annulus is `[ρ−r, ρ+r]`; at `ρ ≤ r` it has no hole, the tool passes over its own loop centre, and there is no trochoidal relief. A qualitative boundary, tested exactly; the cap decides whether such a loop loads the tool. |
+| `material_plunges` ≤ components | **Derived.** One plunge into material reaches every point of a connected centre domain; a second bores solid stock a stay-down transit could have reached. Decided by an exact interior-intersection predicate. |
+| `misplaced_plunges` = 0 | **Exact.** Bit-equality of two injected doubles is equality of the exact points; there is no tolerance to choose. |
 | `max_loop_radius_step` ≤ 2 r | **Derived.** Clearance along a skeleton chain is 1-Lipschitz, so the radius change between consecutive stations cannot exceed the advance, which is capped at 1 tool diameter. A larger step did not come from advancing. |
 | chip thinning, `h_min` | **Literature.** `h_ex = f_z sin φ`; `h_min` is commonly cited at 5–30% of the cutting-edge radius, and a sharp carbide edge at ~5 µm gives `h_min` ≈ 1–2 µm. |
 | Taylor life | **Literature.** `V·Tⁿ = C`, carbide `n ≈ 0.2–0.4`. |
 | feed ceiling | **Literature.** Curvature- and jerk-limited feed scheduling, `v ≤ sqrt(a_max/κ)`. |
 | `uncut_fraction` = 0 | **Judgement**, and a mild one: a roughing pass must clear what the tool can reach. Measured on a grid, so it demands that not one reachable sample survives. |
 | `marginal_loops`: `ρ ≤ 1.5 r` | **Judgement.** At 1.5 r the uncut core is half a tool radius across. Deliberately a separate field from the physics boundary. |
-| `SLOT_ENGAGEMENT_FRACTION` = 0.5 | **Judgement.** No literature fixes where a link stops linking and starts cutting. At half a 120° cap a transfer takes about a quarter of the regulated radial bite. |
-| `max_engagement_step_deg` ≤ cap | **Judgement.** The load may not swing by more than the entire commissioned load between two motions run back to back. |
+| `slotting_motions` = 0 | **The cap itself.** A straight motion over the cap; the earlier half-cap judgement is retired. |
+| `max_engagement_step_deg` ≤ cap | **Judgement.** The load may not swing by more than the entire commissioned load across a junction between two motions run back to back, read at the junction. |
 | `tangent_breaks` = 0 | **Project goal**, not an external standard: this repository already treats tangent continuity as a design objective. |
 
 Deliberately **not** gated: `air_fraction` (depends on the machine's rapid rate,
-not on the path); `recut_fraction` (a trochoidal path scores ~0.9 by
-construction, since consecutive loops are meant to overlap); `material_entries`
-(one per chain is unavoidable without a helical entry, and the cap gate already
-counts it); `curvature_breaks`; and `loop_radius_cv` — on a rectangle the medial
+not on the path); `air_at_depth_length` (a legal transit's cost in feed time);
+`recut_fraction` (a trochoidal path scores ~0.9 by construction, since
+consecutive loops are meant to overlap); `degenerate_loops` (rule d);
+`material_entries` (superseded by the gated `material_plunges`, which asks the
+exact question of whether the plunge bored material, instead of counting first
+contacts); `curvature_breaks`; and `loop_radius_cv` — on a rectangle the medial
 axis carries a spine of constant clearance and four branches on which clearance
 falls to zero at the corners, so a coefficient of variation near 0.5 is
 *intrinsic* to placing centres on the skeleton at all. The number that would make
 a threshold defensible is the one a middle-curve implementation produces, and it
 does not exist yet.
 
-!!! note "Two tool-diameter channels are machined as 68 plunges"
+!!! note "Two tool-diameter channels are machined as plunges (historical finding, commit 70049dd9)"
 
-    A loop centred on the spine of a channel of width `W` has radius at most
+    Measured at commit 70049dd9 (2026-08-22, static engagement model); not a
+    gate cell and not re-measured since. A loop centred on the spine of a channel of width `W` has radius at most
     `W/2 − r`, so a trochoid needs `W > 4r` — an arm strictly wider than two tool
     diameters. Asked to machine a channel of exactly two, both generators emit 68
     circles at radius 0.998 against a tool radius of 1.0: every one a disk sweep.
@@ -371,9 +386,12 @@ does not exist yet.
 
 ## Regenerating
 
-Every figure on this page is produced by committed code, never a one-off script:
+Every gate number on this page is read from the pinned vectors, and every
+figure is produced by committed code, never a one-off script:
 
 ```bash
+pixi run gate-vectors      # re-measure the 12 gate cases; rewrite gate_vectors.{json,md}
+pixi run gate-ratchet      # ratchet GATE_BASE..HEAD, then check the vectors are fresh
 pixi run python -m benchmarks.cli figures
 ```
 

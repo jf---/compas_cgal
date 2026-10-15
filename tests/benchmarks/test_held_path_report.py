@@ -78,9 +78,11 @@ def test_report_is_deterministic_complete_and_bounded() -> None:
         "| TEA cap (degrees) | 80.000000 |",
         "| Reference primitives | 31 |",
         "| Projection vertices | 65 |",
-        "| Total source operations | 3 |",
+        # The all-open characterization carries a retract and two plunges
+        # (material and misplaced plunges are open conditions too).
+        "| Total source operations | 5 |",
         "| TEA-audited lateral operations | 2 |",
-        "| TEA-audit-excluded operations | 1 |",
+        "| TEA-audit-excluded operations | 3 |",
         "| Sampled material-contact operations |",
         "| Generation (seconds) | 1.000000 |",
         "| Guarded audit (seconds) | 2.000000 |",

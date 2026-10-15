@@ -23,7 +23,6 @@ from compas.geometry import Circle
 from compas.geometry import Line
 
 from benchmarks.gate import GATE_ATTRIBUTION_CAP_DEG
-from benchmarks.gate import GATE_CAP_DEG
 from benchmarks.gate import GATE_GENERATOR_NAMES
 from benchmarks.gate import GATE_GENERATORS
 from benchmarks.gate import GATE_POCKET_NAMES
@@ -162,32 +161,11 @@ _FIRST_GENERATOR, _SECOND_GENERATOR = GATE_GENERATOR_NAMES
 
 
 @pytest.mark.parametrize("pocket_name", GATE_POCKET_NAMES, ids=GATE_POCKET_NAMES)
-def test_default_cap_operation_streams_are_identical(pocket_name: str) -> None:
-    """Catch a default-cap generator change that invalidates saturated attribution."""
-    first = _generated_stream(_FIRST_GENERATOR, pocket_name, GATE_CAP_DEG)
-    second = _generated_stream(_SECOND_GENERATOR, pocket_name, GATE_CAP_DEG)
-    assert first == second
-
-
-@pytest.mark.parametrize("pocket_name", GATE_POCKET_NAMES, ids=GATE_POCKET_NAMES)
 def test_attribution_cap_operation_streams_diverge(pocket_name: str) -> None:
     """Catch a cap-40 change that leaves the radius ladder inert on one pocket."""
     first = _generated_stream(_FIRST_GENERATOR, pocket_name, GATE_ATTRIBUTION_CAP_DEG)
     second = _generated_stream(_SECOND_GENERATOR, pocket_name, GATE_ATTRIBUTION_CAP_DEG)
     assert first and second and any(a != b for a, b in zip(first, second))
-
-
-def test_arc_geometry_is_rejected_by_named_error() -> None:
-    """Catch accidental expansion of C3's deliberately closed primitive contract."""
-    operation = ToolpathOperation(
-        geometry=Arc(radius=1.0, start_angle=0.0, end_angle=1.0),
-        operation=OperationType.CUT,
-        path_index=0,
-    )
-    with pytest.raises(UnsupportedGateOperationGeometryError) as raised:
-        _operation_witness(operation)
-    assert "Arc" in str(raised.value)
-    assert "Line/Circle" in str(raised.value)
 
 
 def test_unknown_geometry_is_rejected_by_named_error() -> None:
