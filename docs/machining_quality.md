@@ -49,9 +49,10 @@ and threshold:
 The generators' own probe rings (`_station_is_admissible` in
 `engagement_toolpath.py` and its importers) **still decide against the static
 stock** until Task 1.1. The gate therefore measures physics that the generators
-do not yet regulate. The figures on this page predate Task 0.1 and were drawn
-with the static model; Tasks 0.1–0.3 do not regenerate them. Every gate number
-on this page is read from `benchmarks/results/gate_vectors.json`.
+do not yet regulate. The figures on this page are redrawn by
+`benchmarks/qualityfigures.py` under the same in-process instrument (rules 0.3);
+the tool paths they show are unchanged, only the engagement read off them is.
+Every gate number on this page is read from `benchmarks/results/gate_vectors.json`.
 
 ## The four groups
 
@@ -139,6 +140,24 @@ a named error when it is absent — `MissingMaterialModelError`,
     the same `a_e/D` the in-process measurements report.
 
 ## Measured
+
+!!! abstract "Stage 0 exit"
+
+    Stage 0 changed the instrument, not the generators. It delivered in-process
+    engagement (Task 0.1: a slot reads a half turn, not a full one), exact
+    idempotent sweeps in the replay (Task 0.2), and gate rules 0.3 with the
+    ratchet (Task 0.3, [below](#the-gate-rules-task-03)). Both generators remain
+    red on every one of the twelve cases. `gouging_motions`, `unsafe_rapids`,
+    `continuity_breaks`, `zero_length_motions`, `misplaced_plunges` and
+    `max_loop_radius_step` hold on all of them; `uncut_fraction`,
+    `redundant_operations`, `material_plunges`, `cap_exceedances` and
+    `tangent_breaks` fail on all of them; `slotting_motions` and
+    `max_engagement_step_deg` split by pocket and cap. At the 120° cap the worst
+    junction step is 140.00° on rect_20x12 (52.01° on rect_12x8, 30.39° on
+    L_shape), and every case peaks at 180.00°. From here on every gate commit
+    must improve a gated cell in the table below and may worsen none. The
+    figures before and after Stage 0 are juxtaposed on
+    [Stage 0: the gate measures physics](refactor/stage0.md).
 
 Every number in this section is generated: `tools/gate_table.py` renders
 `benchmarks/results/gate_vectors.json` into the table below, which this page
@@ -254,19 +273,21 @@ test passes (`tests/benchmarks/test_stage_exit.py`, rows in
 
 <figure markdown>
   ![The corner defect](assets/images/quality_corner_defect.svg)
-  <figcaption><strong>Historical figure (static engagement model, drawn at commit 70049dd9, 2026-08-22); its numbers predate Tasks 0.1&ndash;0.3 and are not gate cells.</strong> The defect a machinist sees first. Between two ordinary trochoids
-  the generator emits a loop of radius 0.0215 — 2.2% of the tool radius, 0.135
-  long, at 182° of engagement. That is a plunge, not a trochoid: below ρ = r the
-  swept region is a filled disk with no uncut core, so the cutter never
-  disengages. The straight cut leaving it runs 1.956 into the corner at 140°,
-  which is a slot. Contrary to the first report of this defect, the four
-  degenerate loops are <em>not</em> redundant — removing them raises residue from
-  0.284% to 0.351% — so they cut, badly, rather than cutting nothing.</figcaption>
+  <figcaption><strong>Rules 0.3, in-process engagement; labels measured at draw time, not gate cells.</strong> The defect a machinist sees first. Between two ordinary trochoids
+  the generator emits a loop a few percent of the tool radius across, engaged
+  about a half turn (radius, length and engagement are on the figure). That is
+  a plunge, not a trochoid: below ρ = r the swept region is a filled disk with no
+  uncut core, so the cutter never disengages. The straight cut leaving it runs
+  into the corner over the cap, which is a slot. Contrary to the first report of
+  this defect, the degenerate loops are not idle: removing them raised residue
+  above the <code>uncut_fraction</code> cell (measured at commit 70049dd9), so
+  they cut, badly. Whether a loop removes nothing is the exact
+  <code>redundant_operations</code> verdict in the table.</figcaption>
 </figure>
 
 <figure markdown>
   ![Coverage and residual](assets/images/quality_coverage_residual.svg)
-  <figcaption><strong>Historical figure (static engagement model, drawn at commit 70049dd9, 2026-08-22); its numbers predate Tasks 0.1&ndash;0.3 and are not gate cells.</strong> Residue is measured against the tool-<em>reachable</em> region, never
+  <figcaption><strong>Rules 0.3, in-process engagement; labels measured at draw time, not gate cells.</strong> Residue is measured against the tool-<em>reachable</em> region, never
   the pocket: a sharp corner a round cutter can never enter is not residue, and
   counting it would put a floor under every path. The deliberately under-covered
   path beside it shows what the metric detects when a stepover is genuinely too
@@ -277,66 +298,75 @@ test passes (`tests/benchmarks/test_stage_exit.py`, rows in
 
 <figure markdown>
   ![Chip thinning](assets/images/quality_chip_thinning.svg)
-  <figcaption><strong>Historical figure (static engagement model, drawn at commit 70049dd9, 2026-08-22); its numbers predate Tasks 0.1&ndash;0.3 and are not gate cells.</strong> Why the cap is a proxy. The chip is <code>h(φ) = f_z sin φ</code>,
+  <figcaption><strong>Rules 0.3, in-process engagement; labels measured at draw time, not gate cells.</strong> Why the cap is a proxy. The chip is <code>h(φ) = f_z sin φ</code>,
   so, in the gate's in-process rim arc, <code>h_ex/f_z = sin(min(θ_rim, 90°))</code> — it rises as a sine and then
   <em>plateaus</em>, never falling. Two consequences. Below the plateau the same
   feed produces a thinner and thinner chip, so holding a tighter cap without
   compensating <code>f_z</code> silently reduces the load until the edge stops
   cutting and starts rubbing; this is why a <em>lower</em> bound on engagement
   matters and why nothing else in this suite expressed one. Above it, engagement
-  can be tightened with no effect on the load at all. This generator operates
-  entirely on the rising limb — 50–110° of rim arc — so chip thinning bites
-  across its whole working range, and the caps we cannot yet deliver (20–60°)
-  sit deeper into it still. The rubbing floor uses documented <em>defaults</em>,
+  can be tightened with no effect on the load at all. Read in process, this
+  generator operates entirely on the rising limb — the band the figure marks,
+  below the 95th-percentile <code>engagement_p95_deg</code> of 57.58° on
+  rect_20x12 — so chip thinning bites across its whole working range, and the
+  shaded caps we cannot yet deliver overlap it. The rubbing floor uses documented <em>defaults</em>,
   stated on the figure, not a measurement of any real material.</figcaption>
 </figure>
 
 <figure markdown>
   ![Engagement along the path](assets/images/quality_engagement_along_path.svg)
-  <figcaption><strong>Historical figure (static engagement model, drawn at commit 70049dd9, 2026-08-22); its numbers predate Tasks 0.1&ndash;0.3 and are not gate cells.</strong> The cap is honoured almost everywhere and violated in the same
-  place every time. What the peak alone hides is the gradient: engagement changes
-  by up to 83,000° per unit of travel within a single motion, and load shock
-  damages an edge more than a high steady load does.</figcaption>
+  <figcaption><strong>Rules 0.3, in-process engagement; labels measured at draw time, not gate cells.</strong> The cap is honoured almost everywhere and violated in the same
+  places every time: the chain-entry slot at the start and the corner cuts
+  (<code>cap_exceedances</code> 9 on rect_20x12 at 120°). What the peak alone
+  hides is the gradient: engagement changes by up to 58,576.8° per unit of
+  travel within a single motion
+  (<code>max_engagement_gradient_deg_per_length</code>), and load shock damages
+  an edge more than a high steady load does.</figcaption>
 </figure>
 
 <figure markdown>
   ![Engagement map](assets/images/quality_engagement_map.svg)
-  <figcaption><strong>Historical figure (static engagement model, drawn at commit 70049dd9, 2026-08-22); its numbers predate Tasks 0.1&ndash;0.3 and are not gate cells.</strong> The same measurement placed back on the pocket, so a peak can be
-  attributed to a location rather than to an operation index.</figcaption>
+  <figcaption><strong>Rules 0.3, in-process engagement; labels measured at draw time, not gate cells.</strong> The same measurement placed back on the pocket, so a peak can be
+  attributed to a location rather than to an operation index. Read in process,
+  the heaviest motions are the corner loops and the cuts into the corners, not
+  the long trochoids along the spine.</figcaption>
 </figure>
 
 ## Speed
 
 <figure markdown>
   ![Curvature and the feed ceiling](assets/images/quality_curvature_feed.svg)
-  <figcaption><strong>Historical figure (static engagement model, drawn at commit 70049dd9, 2026-08-22); its numbers predate Tasks 0.1&ndash;0.3 and are not gate cells.</strong> Curvature along the path, and the feed it permits under
+  <figcaption><strong>Rules 0.3, in-process engagement; labels measured at draw time, not gate cells.</strong> Curvature along the path, and the feed it permits under
   <code>v ≤ sqrt(a_max/κ)</code>. The tightest corner drops the achievable feed
-  from 33 to 6.6 mm/s. Honestly, though: integrated over the whole path the
-  ceiling costs only about 0.5% of the cycle time at this machine model, because
+  well below the programmed feed. Honestly, though: integrated over the whole
+  path the ceiling costs little of the cycle time at this machine model, because
   the sharp features are short. The thesis that length is a proxy for time is
   correct in principle and small in magnitude here.</figcaption>
 </figure>
 
 <figure markdown>
   ![Length against feed-limited time](assets/images/quality_length_vs_time.svg)
-  <figcaption><strong>Historical figure (static engagement model, drawn at commit 70049dd9, 2026-08-22); its numbers predate Tasks 0.1&ndash;0.3 and are not gate cells.</strong> Length and time side by side under a stated machine model. Time is
+  <figcaption><strong>Rules 0.3, in-process engagement; labels measured at draw time, not gate cells.</strong> Length and time side by side under a stated machine model. Time is
   a lower bound: it holds each motion to its curvature ceiling but charges
-  nothing for the acceleration ramps or for the 24 tangent breaks the same path
-  carries.</figcaption>
+  nothing for the acceleration ramps or for the tangent breaks the same paths
+  carry (<code>tangent_breaks</code> 24 on rect_12x8 and 32 on rect_20x12 at
+  120°).</figcaption>
 </figure>
 
 ## Longevity
 
 <figure markdown>
   ![Time at engagement](assets/images/quality_engagement_histogram.svg)
-  <figcaption><strong>Historical figure (static engagement model, drawn at commit 70049dd9, 2026-08-22); its numbers predate Tasks 0.1&ndash;0.3 and are not gate cells.</strong> Cumulative damage, which a peak cannot describe. Most of the cut
-  length sits below 30°, which is the light end where chip thinning applies — and
-  18.5 units of it sit above 180°, which is the entry cuts.</figcaption>
+  <figcaption><strong>Rules 0.3, in-process engagement; labels measured at draw time, not gate cells.</strong> Cumulative damage, which a peak cannot describe. Read in process,
+  almost all of the cut length sits below 60° (525.960 in the 0–30° band and
+  451.970 in the 30–60° band on rect_20x12 at 120°), the light end where chip
+  thinning applies; 28.612 units sit in the top band, which is the chain-entry
+  slots.</figcaption>
 </figure>
 
 <figure markdown>
   ![Entries into material](assets/images/quality_material_entries.svg)
-  <figcaption><strong>Historical figure (static engagement model, drawn at commit 70049dd9, 2026-08-22); its numbers predate Tasks 0.1&ndash;0.3 and are not gate cells.</strong> Every entry is an impact, and impacts chip edges. Five on the
+  <figcaption><strong>Rules 0.3, in-process engagement; labels measured at draw time, not gate cells.</strong> Every entry is an impact, and impacts chip edges. Five on the
   rectangles, eight on the L — one per skeleton chain, because the generator has
   no entry strategy other than plunging.</figcaption>
 </figure>
@@ -392,7 +422,7 @@ figure is produced by committed code, never a one-off script:
 ```bash
 pixi run gate-vectors      # re-measure the 12 gate cases; rewrite gate_vectors.{json,md}
 pixi run gate-ratchet      # ratchet GATE_BASE..HEAD, then check the vectors are fresh
-pixi run python -m benchmarks.cli figures
+pixi run figures           # rebuild the extension, redraw every published figure (light theme)
 ```
 
 `benchmarks/figures.py::regenerate_every_figure` redraws the tool-path comparison
