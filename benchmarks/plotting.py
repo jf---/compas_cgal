@@ -39,6 +39,7 @@ from matplotlib.lines import Line2D
 
 from benchmarks.errors import AmbiguousPanelError
 from benchmarks.errors import EmptyComparisonError
+from benchmarks.errors import FigureDpiMismatchError
 from benchmarks.errors import MissingEngagementDataError
 from benchmarks.errors import MissingToolDiameterError
 from benchmarks.marks import POINT_MARKER_PT
@@ -77,7 +78,9 @@ SUPTITLE_HEIGHT_IN = 0.52
 MIN_PANEL_HEIGHT_IN = 1.0
 MAX_PANEL_HEIGHT_IN = 5.5
 
-# Type sizes in points, and the resolution a raster export defaults to.
+# Type sizes in points, and the one resolution every figure is built and saved
+# at (dots per inch): `save_figure` passes it to savefig explicitly, so a raster's
+# pixel size never depends on the `savefig.dpi` rc setting.
 TITLE_PT = 10.5
 SUBTITLE_PT = 8.5
 PANEL_LABEL_PT = 9.5
@@ -106,9 +109,11 @@ LABEL_HALO_ALPHA = 0.85
 # Points per inch, for converting a width in data units into a stroke weight.
 POINTS_PER_INCH = 72.0
 
-# The metadata key each format writes a wall-clock date into, and which
-# `save_drawing` omits so the file does not change when only the clock has.
-_OMITTED_DATE_KEY = {"svg": "Date", "pdf": "CreationDate"}
+# The metadata keys each format writes that are not a function of the drawing,
+# and which `save_figure` omits: a wall-clock date (svg, pdf), so the file does
+# not change when only the clock has, and the png "Software" key, which carries
+# the matplotlib version string.
+_OMITTED_METADATA_KEYS: Dict[str, Tuple[str, ...]] = {"svg": ("Date",), "pdf": ("CreationDate",), "png": ("Software",)}
 
 # Draw order. The swept envelope is a footprint under everything; the pocket
 # boundary sits above it; travel below cutting; point events and labels on top.
@@ -155,15 +160,6 @@ class ToolpathDrawing:
 def save_drawing(drawing: ToolpathDrawing, path: Path) -> Path:
     """Write a drawing to *path*, reproducibly, in the format its suffix names.
 
-    THE BYTES ARE THE POINT. A published figure is a tracked artifact, and one
-    that changes on every regeneration cannot be compared against the version
-    before it -- the diff is noise, so nobody reads it, so a real change to the
-    geometry goes unnoticed. Two matplotlib defaults break byte reproducibility:
-    a wall-clock timestamp written into the file's metadata, and element ids
-    salted per process. Both are pinned here -- the salt to the file's own stem,
-    scoped to this call rather than set as a global rcParam -- so redrawing the
-    same paths produces the same file.
-
     Args:
         drawing: The drawing to write.
         path: Destination; its suffix chooses the format.
@@ -171,14 +167,45 @@ def save_drawing(drawing: ToolpathDrawing, path: Path) -> Path:
     Returns:
         The path written.
     """
+    return save_figure(drawing.figure, path)
+
+
+def save_figure(figure: Figure, path: Path) -> Path:
+    """Write a figure to *path*, reproducibly, in the format its suffix names.
+
+    THE BYTES ARE THE POINT. A published figure is a tracked artifact, and one
+    that changes on every regeneration cannot be compared against the version
+    before it -- the diff is noise, so nobody reads it, so a real change to the
+    geometry goes unnoticed. Two matplotlib defaults break byte reproducibility:
+    metadata that is not a function of the drawing (a wall-clock timestamp, the
+    png software version), and element ids salted per process. Both are pinned
+    here -- the salt to the file's own stem, scoped to this call rather than set
+    as a global rcParam -- so redrawing the same paths produces the same file.
+    The resolution is passed explicitly as `FIGURE_DPI`, never read from the
+    `savefig.dpi` rc setting, and a figure built at any other resolution is
+    refused: its pixel-derived stroke weights were sized for that resolution.
+
+    Args:
+        figure: The matplotlib figure; it must own a canvas.
+        path: Destination; its suffix chooses the format.
+
+    Returns:
+        The path written.
+
+    Raises:
+        FigureDpiMismatchError: The figure was built at a resolution other than `FIGURE_DPI`.
+    """
+    if figure.dpi != FIGURE_DPI:
+        raise FigureDpiMismatchError(f"{path.name}: figure built at {figure.dpi} dpi; every saved figure is built and saved at FIGURE_DPI = {FIGURE_DPI}.")
     suffix = path.suffix.lstrip(".").lower()
-    date_key = _OMITTED_DATE_KEY.get(suffix)
+    omitted = _OMITTED_METADATA_KEYS.get(suffix, ())
     with rc_context({"svg.hashsalt": path.stem}):
-        drawing.figure.savefig(
+        figure.savefig(
             path,
             format=suffix,
-            facecolor=drawing.figure.get_facecolor(),
-            metadata=None if date_key is None else {date_key: None},
+            dpi=FIGURE_DPI,
+            facecolor=figure.get_facecolor(),
+            metadata={key: None for key in omitted} or None,
         )
     return path
 

@@ -9,7 +9,18 @@ Semantics (Ruling 0.3-C2), for a parent document B and a child document H:
 * IMPROVES when some gated cell of a shared case is smaller in H, or when a NEW
   case of H (a new generator column) beats, on some cell, the minimum over the
   existing generators for its (cap, pocket) and exceeds that minimum on no cell
-  (option i). A new case that does not is a stagnation, not a regression.
+  (option i), or when H appends an admission entry (Ruling 0.3-C2-amend).
+  Across a rules bump, a re-baselined criterion's minimum is read from H's
+  pre-existing cases, the only cells measured under the same definition.
+* Every NEW case of H must pass option (i) or be admitted by an entry H
+  appends to ``admissions``; otherwise the commit fails, whatever it touches
+  and whatever else improves (Ruling 0.3-C2-amend). An appended entry's cases
+  must be new. On EVERY commit, each admitted case of H (under any entry)
+  whose generator names a reference must be no worse than the reference
+  generator's case at the same (cap, pocket) on every gated cell of H,
+  re-baselined criteria included (user ruling 2026-10-15); a null reference
+  makes the admitted cells the baseline on the ruling's authority. B's entries must be H's first entries,
+  unchanged: admissions are append-only.
 * A commit that changes a path under `GATE_PATHS` must improve; one that does
   not need not (Ruling 0.3-C3).
 * A different rules version re-baselines only the criteria whose definition
@@ -46,8 +57,13 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Sequence
 
-from tools.gate_vectors import CASE_KEY_SEPARATOR
+from tools.gate_admissions import Admission
+from tools.gate_admissions import MalformedAdmissionError
+from tools.gate_case_keys import CASE_KEY_SEPARATOR
+from tools.gate_case_keys import cap_and_pocket
+from tools.gate_case_keys import case_generator
 from tools.gate_vectors import GATE_VECTORS_PATH
+from tools.gate_vectors import SCHEMA
 from tools.gate_vectors import GateVectors
 from tools.gate_vectors import MalformedGateVectorsError
 from tools.gate_vectors import load_gate_vectors
@@ -70,6 +86,9 @@ GATE_PATHS: tuple[str, ...] = (
     "src/compas_cgal/replay_classification.py",
     "src/compas_cgal/engagement.py",
     "src/compas_cgal/stock.py",
+    # Ruling 1.1-closure.
+    "src/compas_cgal/incident_loop.py",
+    "src/compas_cgal/toolpath.py",
 )
 
 
@@ -109,6 +128,30 @@ class SpuriousRetiredCriterionError(GateRulesChangedError):
     """A rules bump lists as retired a criterion the parent did not gate."""
 
 
+class UnadmittedCaseError(Exception):
+    """A new case neither beats the existing minimum (option i) nor is covered by an admission this commit adds."""
+
+
+class LegacyHeadVectorsError(Exception):
+    """The commit's vectors are not the current schema; only a parent may be read as an older one."""
+
+
+class AdmissionRecordAlteredError(Exception):
+    """An admission entry of the parent is missing or changed in the child (admissions are append-only)."""
+
+
+class AdmissionAboveReferenceError(Exception):
+    """An admitted case is worse than its reference generator's case on some gated cell."""
+
+
+class MissingReferenceCaseError(Exception):
+    """An admitted case's reference generator has no case at the same (cap, pocket)."""
+
+
+class AdmissionOfExistingCaseError(Exception):
+    """An admission this commit adds names a case the parent already pins."""
+
+
 class GateVectorsStaleError(Exception):
     """The committed vectors do not match a fresh measurement."""
 
@@ -139,19 +182,21 @@ class RatchetVerdict:
     retired: tuple[str, ...] = ()
 
 
-def _cap_and_pocket(case: str) -> tuple[str, str]:
-    cap_id, _generator, pocket = case.split(CASE_KEY_SEPARATOR)
-    return cap_id, pocket
-
-
 def _new_case_improves(base: GateVectors, head: GateVectors, case: str, compared: Sequence[str]) -> bool:
-    """Option (i): a new column improves iff it beats the per-(cap, pocket) minimum somewhere and loses nowhere."""
-    siblings = [key for key in base.cases if _cap_and_pocket(key) == _cap_and_pocket(case)]
+    """Option (i): a new column improves iff it beats the per-(cap, pocket) minimum somewhere and loses nowhere.
+
+    The minimum of a compared criterion is over the parent's cells; that of a
+    criterion a bump re-baselines is over the child's cells of the same
+    pre-existing cases, measured under the new definition.
+    """
+    siblings = [key for key in base.cases if cap_and_pocket(key) == cap_and_pocket(case) and key in head.cases]
     if not siblings:
         return False
     beats = False
-    for name in compared:
-        minimum = min(base.value(key, name) for key in siblings)
+    for criterion in head.gated:
+        name = criterion.name
+        source = base if name in compared else head
+        minimum = min(source.value(key, name) for key in siblings)
         value = head.value(case, name)
         if value > minimum:
             return False
@@ -181,9 +226,25 @@ def check_pair(base: GateVectors | None, head: GateVectors, *, touches_gate: boo
             the parent gated without listing it as retired.
         SpuriousRetiredCriterionError: A bump lists as retired a criterion the
             parent did not gate.
+        AdmissionRecordAlteredError: An admission of the parent is missing or
+            changed in the child.
+        AdmissionOfExistingCaseError: An appended admission names a case the
+            parent pins.
+        MissingReferenceCaseError: An admitted case's reference generator has
+            no case at its (cap, pocket).
+        AdmissionAboveReferenceError: An admitted case is worse than its
+            reference on a gated cell.
+        UnadmittedCaseError: A new case neither passes option (i) nor is
+            admitted by an appended entry.
+        LegacyHeadVectorsError: The commit's document is not the current
+            schema; only a parent may be read as ``gate-vectors/1``.
     """
+    if head.schema != SCHEMA:
+        raise LegacyHeadVectorsError(f"the commit's gate vectors are {head.schema!r}; write them as {SCHEMA!r} (only a parent may be an older schema).")
+    _check_references(head)
     if base is None:
         return RatchetVerdict(improved=(), rebaselined=())
+    appended = _appended_admissions(base, head)
     rebaselined = _rebaselined_criteria(base, head)
     retired = _retired_criteria(base, head)
     base_gated = {criterion.name for criterion in base.gated}
@@ -206,10 +267,93 @@ def check_pair(base: GateVectors | None, head: GateVectors, *, touches_gate: boo
                 improved.append(f"{case}/{name}: {before} -> {after}")
     if worse:
         raise GateVectorRegressionError("gate cells worsened:\n  " + "\n  ".join(worse))
-    improved.extend(f"{case} (new case beats the existing minimum)" for case in head.cases if case not in base.cases and _new_case_improves(base, head, case, compared))
+    admitted = {case: admission.ruling for admission in appended for case in admission.cases}
+    unadmitted: list[str] = []
+    for case in head.cases:
+        if case in base.cases or case in admitted:
+            continue
+        if _new_case_improves(base, head, case, compared):
+            improved.append(f"{case} (new case beats the existing minimum)")
+        else:
+            unadmitted.append(case)
+    if unadmitted:
+        raise UnadmittedCaseError(
+            f"new cases {unadmitted} neither beat the existing minimum for their (cap, pocket) somewhere while losing nowhere (option i), "
+            "nor are admitted by an entry this commit appends to 'admissions'."
+        )
+    improved.extend(f"{case} (admitted under {ruling})" for case, ruling in admitted.items())
     if touches_gate and not improved and not rebaselined and not retired:
         raise GateVectorStagnationError("the commit touches the gate and improves no gated cell.")
     return RatchetVerdict(improved=tuple(improved), rebaselined=rebaselined, retired=retired)
+
+
+def _appended_admissions(base: GateVectors, head: GateVectors) -> tuple[Admission, ...]:
+    """The admissions the child appends, each naming only new cases.
+
+    Args:
+        base: The parent's vectors.
+        head: The commit's vectors.
+
+    Returns:
+        The appended entries, in append order.
+
+    Raises:
+        AdmissionRecordAlteredError: The parent's entries are not the child's
+            first entries, unchanged.
+        AdmissionOfExistingCaseError: An appended entry names a case the
+            parent pins.
+    """
+    kept = head.admissions[: len(base.admissions)]
+    if kept != base.admissions:
+        altered = [admission.ruling for position, admission in enumerate(base.admissions) if position >= len(kept) or kept[position] != admission]
+        raise AdmissionRecordAlteredError(f"admissions are append-only: the parent's entries {altered} are missing or changed.")
+    appended = head.admissions[len(base.admissions) :]
+    for admission in appended:
+        pinned = [case for case in admission.cases if case in base.cases]
+        if pinned:
+            raise AdmissionOfExistingCaseError(f"admission {admission.ruling} names {pinned}, which the parent already pins; pre-existing cells are ratcheted, never admitted.")
+    return appended
+
+
+def _check_references(head: GateVectors) -> None:
+    """The reference rule on every commit: each admitted case of the child, under every entry, against its reference.
+
+    Between rules bumps the ratchet implies it; across a bump it is what keeps
+    a re-baselined criterion from lifting an admitted column above its
+    reference (user ruling 2026-10-15). Both sides are the child's cells.
+
+    Raises:
+        MissingReferenceCaseError: See `_check_reference`.
+        AdmissionAboveReferenceError: See `_check_reference`.
+    """
+    for admission in head.admissions:
+        for case in admission.cases:
+            _check_reference(head, admission, case)
+
+
+def _check_reference(head: GateVectors, admission: Admission, case: str) -> None:
+    """The reference rule: an admitted case is no worse than its reference on any gated cell of the child.
+
+    Raises:
+        MissingReferenceCaseError: The reference generator has no case at
+            *case*'s (cap, pocket).
+        AdmissionAboveReferenceError: *case* exceeds the reference on a gated
+            cell.
+    """
+    reference = admission.reference[case_generator(case)]
+    if reference is None:
+        return
+    cap_id, pocket = cap_and_pocket(case)
+    reference_case = CASE_KEY_SEPARATOR.join((cap_id, reference, pocket))
+    if reference_case not in head.cases:
+        raise MissingReferenceCaseError(f"admission {admission.ruling}: {case} references {reference!r}, which has no case {reference_case}.")
+    above = [
+        f"{case}/{criterion.name}: {head.value(case, criterion.name)} > {reference_case} {head.value(reference_case, criterion.name)}"
+        for criterion in head.gated
+        if head.value(case, criterion.name) > head.value(reference_case, criterion.name)
+    ]
+    if above:
+        raise AdmissionAboveReferenceError(f"admission {admission.ruling}: admitted cells exceed their reference:\n  " + "\n  ".join(above))
 
 
 def _retired_criteria(base: GateVectors, head: GateVectors) -> tuple[str, ...]:
@@ -358,6 +502,12 @@ def check_range(repo: Path, base: str, head: str) -> list[tuple[str, RatchetVerd
         GateVectorRegressionError: See `check_pair`.
         GateVectorStagnationError: See `check_pair`.
         GateRulesChangedError: See `check_pair`.
+        UnadmittedCaseError: See `check_pair`.
+        AdmissionRecordAlteredError: See `check_pair`.
+        AdmissionOfExistingCaseError: See `check_pair`.
+        MissingReferenceCaseError: See `check_pair`.
+        AdmissionAboveReferenceError: See `check_pair`.
+        LegacyHeadVectorsError: See `check_pair`.
         GitQueryError: A git query failed.
     """
     verdicts: list[tuple[str, RatchetVerdict]] = []
@@ -440,6 +590,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         GateVectorRegressionError,
         GateVectorStagnationError,
         GateRulesChangedError,
+        UnadmittedCaseError,
+        LegacyHeadVectorsError,
+        AdmissionRecordAlteredError,
+        AdmissionOfExistingCaseError,
+        MissingReferenceCaseError,
+        AdmissionAboveReferenceError,
+        MalformedAdmissionError,
         GateVectorsMissingError,
         GateVectorsStaleError,
         MalformedGateVectorsError,
@@ -453,7 +610,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 def _fresh(path: Path) -> int:
     from tools.gate_measure import measure_gate_vectors
 
-    stale = stale_cells(load_gate_vectors(path), measure_gate_vectors())
+    committed = load_gate_vectors(path)
+    stale = stale_cells(committed, measure_gate_vectors(admissions=committed.admissions))
     if stale:
         raise GateVectorsStaleError(f"{path} is stale:\n  " + "\n  ".join(stale))
     print(f"gate vectors fresh: {path}")

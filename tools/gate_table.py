@@ -10,7 +10,7 @@ vectors byte for byte.
 from __future__ import annotations
 
 from benchmarks.gate import GATE_CAP_CASES
-from tools.gate_vectors import CASE_KEY_SEPARATOR
+from tools.gate_case_keys import CASE_KEY_SEPARATOR
 from tools.gate_vectors import REQUIRED_CAP
 from tools.gate_vectors import REQUIRED_COMPONENTS
 from tools.gate_vectors import CriterionSpec

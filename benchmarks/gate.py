@@ -24,6 +24,7 @@ lengths and run times compare without normalising anything.
 
 from __future__ import annotations
 
+import math
 from typing import Callable
 from typing import Dict
 from typing import List
@@ -36,8 +37,13 @@ from benchmarks.families.analytic import rectangle
 from benchmarks.pathmetrics import CLEARANCE_Z_TOOL_DIAMETERS
 from benchmarks.spec import PocketSpec
 from compas_cgal.engagement_radial_toolpath import radius_regulated_toolpath
+from compas_cgal.engagement_rho_toolpath import rho_regulated_toolpath
 from compas_cgal.engagement_toolpath import engagement_controlled_toolpath
+from compas_cgal.pipeline.generate import generate_narrow
 from compas_cgal.toolpath import ToolpathResult
+from compas_cgal.units import ClearanceZ
+from compas_cgal.units import Radian
+from compas_cgal.units import ToolRadius
 
 # Cutter diameter for every gate instance. Matches `benchmarks.figure6`, where it
 # was chosen so the skeleton carries several chains -- and therefore bridge cuts
@@ -92,8 +98,14 @@ L_SHORT_ARM_TOOL_DIAMETERS = 5.0
 # membership without rebuilding its geometry.
 GATE_POCKET_NAMES: Tuple[str, ...] = ("rect_12x8", "rect_20x12", "L_shape")
 
-# Generator names in the order the gate reports them.
-GATE_GENERATOR_NAMES: Tuple[str, ...] = ("engagement_controlled", "radius_regulated")
+# Generator names in the order the gate reports them: the two frozen columns,
+# the rho-regulated reference column, and the product pipeline (Task 1.1).
+GATE_GENERATOR_NAMES: Tuple[str, ...] = ("engagement_controlled", "radius_regulated", "rho_regulated", "pipeline")
+
+# The two frozen generators the attribution witnesses compare (Ruling
+# 1.1-C3-nonref): fixed by name, so registering further columns never changes
+# which pair a two-generator attribution reads.
+FROZEN_PAIR: Tuple[str, str] = ("engagement_controlled", "radius_regulated")
 
 Generator = Callable[[PocketSpec], ToolpathResult]
 
@@ -200,7 +212,52 @@ def radius_regulated(spec: PocketSpec) -> ToolpathResult:
     )
 
 
+def rho_regulated(spec: PocketSpec) -> ToolpathResult:
+    """Generate *spec*'s path with the frozen rho-regulated generator, the pipeline's reference column.
+
+    The arguments have the same shape as the frozen columns' adapters,
+    `engagement_controlled` and `radius_regulated`: the pocket polygon and
+    holes, the tool diameter, the cap and the clearance height.
+
+    Args:
+        spec: The instance to machine.
+
+    Returns:
+        The generated toolpath.
+    """
+    return rho_regulated_toolpath(
+        spec.polygon,
+        tool_diameter=spec.tool_diameter,
+        tea_cap_deg=spec.tea_cap_deg,
+        holes=list(spec.holes),
+        clearance_z=CLEARANCE_Z_TOOL_DIAMETERS * spec.tool_diameter,
+    )
+
+
+def pipeline(spec: PocketSpec) -> ToolpathResult:
+    """Generate *spec*'s path with the product pipeline's narrow regime (`compas_cgal.pipeline`).
+
+    The adapter from a benchmark `PocketSpec` to the pipeline's typed arguments
+    (Ruling 1.1-gen-args): the pipeline imports nothing from `benchmarks`.
+
+    Args:
+        spec: The instance to machine.
+
+    Returns:
+        The generated toolpath, a `compas_cgal.pipeline.result.PipelineResult`.
+    """
+    return generate_narrow(
+        spec.polygon,
+        list(spec.holes),
+        ToolRadius.build(spec.tool_radius),
+        Radian(math.radians(spec.tea_cap_deg)),
+        ClearanceZ.build(CLEARANCE_Z_TOOL_DIAMETERS * spec.tool_diameter),
+    )
+
+
 GATE_GENERATORS: Dict[str, Generator] = {
     "engagement_controlled": engagement_controlled,
     "radius_regulated": radius_regulated,
+    "rho_regulated": rho_regulated,
+    "pipeline": pipeline,
 }

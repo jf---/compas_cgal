@@ -630,6 +630,47 @@ def engagement_circle_prefixes(
     gap_close_ratio: float = ...,
 ) -> list[tuple[float, float, bool]]:
     """Full-circle in-process engagement: station 0 at the authored entry, stations p>0 on the AUTHORED radius."""
+def engagement_line_exceeded(
+    stock: Stock2,
+    x0: float,
+    y0: float,
+    x1: float,
+    y1: float,
+    parameters: Sequence[float],
+    tool_radius: float,
+    cap_chord_ratio: float,
+    gap_close_ratio: float = ...,
+) -> bool:
+    """Decision-only `engagement_line_prefixes`: True iff some station is cap_exceeded (same stations, exact verdicts, early exit)."""
+def engagement_arc_exceeded(
+    stock: Stock2,
+    guide_cx: float,
+    guide_cy: float,
+    start_x: float,
+    start_y: float,
+    end_x: float,
+    end_y: float,
+    clockwise: bool,
+    parameters: Sequence[float],
+    tool_radius: float,
+    cap_chord_ratio: float,
+    gap_close_ratio: float = ...,
+) -> bool:
+    """Decision-only `engagement_arc_prefixes`: True iff some station is cap_exceeded (same stations, exact verdicts, early exit)."""
+def engagement_circle_exceeded(
+    stock: Stock2,
+    guide_cx: float,
+    guide_cy: float,
+    guide_radius: float,
+    entry_x: float,
+    entry_y: float,
+    clockwise: bool,
+    parameters: Sequence[float],
+    tool_radius: float,
+    cap_chord_ratio: float,
+    gap_close_ratio: float = ...,
+) -> bool:
+    """Decision-only `engagement_circle_prefixes`: True iff some station is cap_exceeded (same stations, exact verdicts, early exit)."""
 def certify_segment_tea(
     stock: Stock2,
     x0: float,

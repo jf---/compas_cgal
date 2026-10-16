@@ -85,3 +85,40 @@ AuditExactStationClassification2 classify_arc_swept_prefix_station_exact(
     const Epeck::FT& tool_radius,
     const Epeck::FT& cap_chord_ratio,
     const Epeck::FT& gap_close_ratio);
+
+// DECISION-ONLY station verdicts: exactly
+//   classify_*_swept_prefix_station_exact(...).disposition() == CAP_EXCEEDED,
+// computed without the clip when the static classification already decides it.
+//
+// CLIP MONOTONICITY (an exact lemma, not a shortcut on a tolerance): the clip
+// only DROPS pieces of the static engaged arcs (clip_rim_arcs keeps a sub-arc
+// of a static arc or nothing), so every in-process run lies inside one static
+// run -- the static runs are the maximal connected engaged arcs, and a
+// connected union of kept sub-arcs is connected inside the static union. Every
+// in-process gap therefore contains each static gap it meets, so a gap the
+// pessimistic closure closes in process is closed statically too, and every
+// pessimistic in-process run lies inside a pessimistic static run. The cap
+// test run_exceeds_cap is exactly "CCW span > cap" (cap <= pi: orientation
+// for spans >= pi, the monotone chord below), monotone under arc inclusion.
+// Hence static WITHIN_CAP => in-process WITHIN_CAP, and only a static
+// CAP_EXCEEDED needs the clip. Pinned station by station against the full
+// classification by tests/test_swept_prefix_decision.py.
+bool line_swept_prefix_station_exceeds_exact(
+    const Stock2& stock,
+    const EPoint& motion_start,
+    const EPoint& motion_end,
+    const Epeck::FT& parameter,
+    const Epeck::FT& tool_radius,
+    const Epeck::FT& cap_chord_ratio,
+    const Epeck::FT& gap_close_ratio);
+
+bool arc_swept_prefix_station_exceeds_exact(
+    const Stock2& stock,
+    const EPoint& guide_center,
+    const EPoint& motion_start,
+    const EPoint& station_center,
+    bool clockwise,
+    ArcPrefixExtent2 extent,
+    const Epeck::FT& tool_radius,
+    const Epeck::FT& cap_chord_ratio,
+    const Epeck::FT& gap_close_ratio);

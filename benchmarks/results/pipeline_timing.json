@@ -1,0 +1,223 @@
+{
+  "schema": "pipeline-timing/1",
+  "runs_per_case": 3,
+  "cases": {
+    "cap-120-default/engagement_controlled/rect_12x8": {
+      "runs_s": [
+        0.4595,
+        0.5031,
+        0.4278
+      ],
+      "operations": 63,
+      "digest": "10b975b787e10dcd"
+    },
+    "cap-120-default/engagement_controlled/rect_20x12": {
+      "runs_s": [
+        0.7412,
+        0.7573,
+        0.7493
+      ],
+      "operations": 91,
+      "digest": "d9e3c78985098609"
+    },
+    "cap-120-default/engagement_controlled/L_shape": {
+      "runs_s": [
+        0.7723,
+        0.7642,
+        0.7781
+      ],
+      "operations": 113,
+      "digest": "b2003f6e78c2b241"
+    },
+    "cap-120-default/radius_regulated/rect_12x8": {
+      "runs_s": [
+        0.5642,
+        0.5456,
+        0.5517
+      ],
+      "operations": 63,
+      "digest": "10b975b787e10dcd"
+    },
+    "cap-120-default/radius_regulated/rect_20x12": {
+      "runs_s": [
+        0.9032,
+        0.9106,
+        0.9079
+      ],
+      "operations": 91,
+      "digest": "d9e3c78985098609"
+    },
+    "cap-120-default/radius_regulated/L_shape": {
+      "runs_s": [
+        0.9985,
+        0.9839,
+        0.9748
+      ],
+      "operations": 113,
+      "digest": "b2003f6e78c2b241"
+    },
+    "cap-120-default/rho_regulated/rect_12x8": {
+      "runs_s": [
+        0.255,
+        0.2556,
+        0.2471
+      ],
+      "operations": 55,
+      "digest": "78ef129c7ade8f0d"
+    },
+    "cap-120-default/rho_regulated/rect_20x12": {
+      "runs_s": [
+        0.4895,
+        0.5012,
+        0.4893
+      ],
+      "operations": 83,
+      "digest": "7a7079cb1fb2ed58"
+    },
+    "cap-120-default/rho_regulated/L_shape": {
+      "runs_s": [
+        0.5393,
+        0.5687,
+        0.5278
+      ],
+      "operations": 103,
+      "digest": "e65fb26cfff74364"
+    },
+    "cap-120-default/pipeline/rect_12x8": {
+      "runs_s": [
+        0.6331,
+        0.5907,
+        0.615
+      ],
+      "operations": 53,
+      "digest": "60f097cd3b524144"
+    },
+    "cap-120-default/pipeline/rect_20x12": {
+      "runs_s": [
+        1.2475,
+        1.2124,
+        1.2134
+      ],
+      "operations": 89,
+      "digest": "21c352deec4b2ead"
+    },
+    "cap-120-default/pipeline/L_shape": {
+      "runs_s": [
+        1.163,
+        1.1691,
+        1.238
+      ],
+      "operations": 98,
+      "digest": "6334d5f5c9894008"
+    },
+    "cap-40-attribution/engagement_controlled/rect_12x8": {
+      "runs_s": [
+        4.7522,
+        4.7666,
+        4.8361
+      ],
+      "operations": 363,
+      "digest": "4027edaaad9c2559"
+    },
+    "cap-40-attribution/engagement_controlled/rect_20x12": {
+      "runs_s": [
+        17.2766,
+        17.0131,
+        16.8614
+      ],
+      "operations": 739,
+      "digest": "f2f02c02836c45b4"
+    },
+    "cap-40-attribution/engagement_controlled/L_shape": {
+      "runs_s": [
+        6.9394,
+        6.9905,
+        7.0131
+      ],
+      "operations": 523,
+      "digest": "34a8b23c771eda58"
+    },
+    "cap-40-attribution/radius_regulated/rect_12x8": {
+      "runs_s": [
+        29.4258,
+        29.9147,
+        31.6963
+      ],
+      "operations": 999,
+      "digest": "eb6b31665b032921"
+    },
+    "cap-40-attribution/radius_regulated/rect_20x12": {
+      "runs_s": [
+        45.4238,
+        44.5549,
+        44.4385
+      ],
+      "operations": 1755,
+      "digest": "9fd792b8f6fe4aa9"
+    },
+    "cap-40-attribution/radius_regulated/L_shape": {
+      "runs_s": [
+        123.056,
+        122.5648,
+        121.824
+      ],
+      "operations": 1643,
+      "digest": "55c1efcfca5c1eee"
+    },
+    "cap-40-attribution/rho_regulated/rect_12x8": {
+      "runs_s": [
+        1.8565,
+        1.8483,
+        1.8553
+      ],
+      "operations": 203,
+      "digest": "688310b5e1a3dc32"
+    },
+    "cap-40-attribution/rho_regulated/rect_20x12": {
+      "runs_s": [
+        11.5041,
+        12.8408,
+        11.6309
+      ],
+      "operations": 515,
+      "digest": "7349eaae90f73b8f"
+    },
+    "cap-40-attribution/rho_regulated/L_shape": {
+      "runs_s": [
+        7.1285,
+        7.1578,
+        7.0161
+      ],
+      "operations": 443,
+      "digest": "a3216f859701f516"
+    },
+    "cap-40-attribution/pipeline/rect_12x8": {
+      "runs_s": [
+        8.907,
+        9.0165,
+        8.8798
+      ],
+      "operations": 377,
+      "digest": "cf9eb5b401b75e67"
+    },
+    "cap-40-attribution/pipeline/rect_20x12": {
+      "runs_s": [
+        24.5825,
+        24.1812,
+        23.7796
+      ],
+      "operations": 689,
+      "digest": "a3fbf82827283ad0"
+    },
+    "cap-40-attribution/pipeline/L_shape": {
+      "runs_s": [
+        7.9031,
+        7.7974,
+        7.9697
+      ],
+      "operations": 558,
+      "digest": "f8dad88b0e0fe103"
+    }
+  },
+  "excluded": []
+}

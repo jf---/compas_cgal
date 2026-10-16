@@ -398,7 +398,14 @@ NB_MODULE(_coverage_2, m)
             "design_boundary"_a,
             "holes"_a,
             "tool_radius"_a)
-        .def("contains", &CutterCentreDomain2::contains, "x"_a, "y"_a);
+        .def("contains", &CutterCentreDomain2::contains, "x"_a, "y"_a)
+        .def(
+            "contains_segment",
+            &CutterCentreDomain2::contains_segment,
+            "ax"_a,
+            "ay"_a,
+            "bx"_a,
+            "by"_a);
 
     nb::class_<ReachableMaterialPredicate2>(
         m,

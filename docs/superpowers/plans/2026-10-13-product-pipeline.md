@@ -44,6 +44,15 @@ Sessions optimised for rigour, and nobody owned moving the gate's numbers. This 
 - **R3, entry:** a helical bore as its own operation. Its replay removes its disk at the cut plane, it is scored by ramp angle against the machine model, and the step from the helix to the first loop stays gated.
 - **R4, corners:** first, run-ins along each wall offset to the corner apex, under the cap, in the same operation. What remains is declared as named rest material for a second operation, reported separately from material that was missed.
 
+## Focus (user, 2026-10-16)
+
+Task 1.1 met acceptance and is worse than rho in no cell, but it ties rho on several gated cells (zero headroom on the L step). The architecture is as good as the reference, not yet better. Fix round 1 cost a 5–7× slowdown, and review and process overhead began to outnumber code changes. From here:
+
+1. **Land work once its gate holds.** A task closes when its gate holds. Review findings that are not load-bearing for that gate go to a later task's brief or the parking lot, not into another fix round.
+2. **Beat rho, with a time box.** Every task names the gate cell(s) it must beat rho_regulated on (strictly better, not tied) and a time box. When the time box runs out, stop and bring the measured state to the user. Never widen the scope to fill the time.
+3. **Figures and a real test cut before more tooling.** Every task ships its reproducible figures (`pixi run gate-figures`). A first physical test cut of one gate pocket, from a minimal slice of Task 3.1's fail-closed post, comes ahead of any further gate or harness tooling. Simulation-only success is not success.
+4. **Exactness where correctness lives.** The exact-decision bar stays on every machining decision: engagement, containment, gouge, plunge. Documentation polish, wording reviews and process ceremony do not get that bar.
+
 ## Where we are (re-measured by the orchestrator on 2026-10-13)
 
 | fact | evidence |

@@ -116,6 +116,21 @@ void register_engagement(nanobind::module_& m)
           "entry_x"_a, "entry_y"_a, "clockwise"_a, "parameters"_a,
           "tool_radius"_a, "cap_chord_ratio"_a, "gap_close_ratio"_a = 0.0);
 
+    // Decision-only views of the three queries above (engagement_2.h): the same
+    // seam, the same stations and exact verdicts, one bool -- any station
+    // CAP_EXCEEDED -- with an early exit. Reporting callers keep *_prefixes.
+    m.def("engagement_line_exceeded", &engagement_line_exceeded,
+          "stock"_a, "x0"_a, "y0"_a, "x1"_a, "y1"_a, "parameters"_a,
+          "tool_radius"_a, "cap_chord_ratio"_a, "gap_close_ratio"_a = 0.0);
+    m.def("engagement_arc_exceeded", &engagement_arc_exceeded,
+          "stock"_a, "guide_cx"_a, "guide_cy"_a, "start_x"_a, "start_y"_a,
+          "end_x"_a, "end_y"_a, "clockwise"_a, "parameters"_a,
+          "tool_radius"_a, "cap_chord_ratio"_a, "gap_close_ratio"_a = 0.0);
+    m.def("engagement_circle_exceeded", &engagement_circle_exceeded,
+          "stock"_a, "guide_cx"_a, "guide_cy"_a, "guide_radius"_a,
+          "entry_x"_a, "entry_y"_a, "clockwise"_a, "parameters"_a,
+          "tool_radius"_a, "cap_chord_ratio"_a, "gap_close_ratio"_a = 0.0);
+
     // Nanobind boundary for the motion certificate: x0..y1, tool_radius and the
     // angular cap enter exact-land inside certify_segment_tea (validation + exact
     // chord-surrogate injection). Returns (max_tea, cap_certified, stations),

@@ -177,8 +177,10 @@ def _subtract_operation(stock: Stock, op: ToolpathOperation, tool_radius: float)
       direction is Pythagorean, else exact end disks + a certified under-rectangle.
     - ``Circle`` -> `Stock.subtract_circle_sweep_local` with the AUTHORED
       ``g.radius``: the exact annulus, independent of where the loop starts.
-    - ``Arc`` -> arc sweep between its endpoints with the operation's turn
-      direction (a certified under-covering disk chain).
+    - ``Arc`` -> nothing when the authored radius's full-turn annulus is
+      already swept (Ruling 1.1-C2, B-minimal); else the arc sweep between its
+      endpoints with the operation's turn direction (a certified
+      under-covering disk chain).
 
     Plunges are handled by the replay (disk), not here.
 
@@ -199,6 +201,11 @@ def _subtract_operation(stock: Stock, op: ToolpathOperation, tool_radius: float)
         stock.subtract_circle_sweep_local(float(c[0]), float(c[1]), float(g.radius), tool_radius)
     elif isinstance(g, Arc):
         c = g.frame.point
+        if stock.circle_sweep_removal(float(c[0]), float(c[1]), float(g.radius), tool_radius) is SweepRemoval.NOTHING:
+            # The full-turn annulus of the authored radius is already swept, so
+            # the arc removes nothing and the stock stays exactly as it is
+            # (Ruling 1.1-C2, B-minimal).
+            return
         s = g.point_at(0.0)
         e = g.point_at(1.0)
         stock.subtract_arc_sweep(
@@ -225,10 +232,12 @@ def _operation_removal(stock: Stock, op: ToolpathOperation, tool_radius: float) 
       three-valued for a canonical quad.
     - ``Circle`` -> `Stock.circle_sweep_removal` on the authored radius: the
       annulus is exact, so REMOVES or NOTHING.
-    - ``Arc`` -> the chain the replay removes decides REMOVES (one clone and an
-      exact equality, as before); otherwise the full-turn annulus of the
-      authored radius, which contains the arc's true sweep, decides NOTHING;
-      else WITHIN_BAND.
+    - ``Arc`` -> NOTHING first, decided on the full-turn annulus of the
+      authored radius, which contains the arc's true sweep (Ruling 1.1-C2,
+      B-minimal: an air arc on an already swept annulus never reads REMOVES on
+      an ulp sliver of the replay's surrogate chain); otherwise the chain the
+      replay removes decides REMOVES (one clone and an exact equality); else
+      WITHIN_BAND.
 
     *stock* is never mutated.
 
@@ -251,13 +260,13 @@ def _operation_removal(stock: Stock, op: ToolpathOperation, tool_radius: float) 
         c = g.frame.point
         return stock.circle_sweep_removal(float(c[0]), float(c[1]), float(g.radius), tool_radius)
     if isinstance(g, Arc):
+        c = g.frame.point
+        if stock.circle_sweep_removal(float(c[0]), float(c[1]), float(g.radius), tool_radius) is SweepRemoval.NOTHING:
+            return SweepRemoval.NOTHING
         probe = stock.clone()
         _subtract_operation(probe, op, tool_radius)
         if not probe.exactly_equals(stock):
             return SweepRemoval.REMOVES
-        c = g.frame.point
-        if stock.circle_sweep_removal(float(c[0]), float(c[1]), float(g.radius), tool_radius) is SweepRemoval.NOTHING:
-            return SweepRemoval.NOTHING
         return SweepRemoval.WITHIN_BAND
     raise UnexpectedToolpathGeometryError(f"Cannot decide the removal of geometry type {type(g).__name__!r}.")
 

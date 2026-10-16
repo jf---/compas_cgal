@@ -7,7 +7,9 @@
 #include <utility>
 #include <vector>
 
+#include <CGAL/Exact_rational.h>
 #include <CGAL/Polygon_2_algorithms.h>
+#include <CGAL/Simple_cartesian.h>
 #include <CGAL/enum.h>
 #include <CGAL/number_utils.h>
 #include <CGAL/squared_distance_2.h>
@@ -34,6 +36,35 @@ bool clears_ring_boundary(
         const ReachKernel::Segment_2 edge(
             ring.points[index],
             ring.points[(index + 1) % ring.points.size()]);
+        if (CGAL::compare(
+                CGAL::squared_distance(query, edge),
+                squared_radius)
+            == CGAL::SMALLER) {
+            return false;
+        }
+    }
+    return true;
+}
+
+// Segment-segment squared distance needs no radicals, so a rational kernel
+// decides the clearance exactly, including the closed tie (a straight at
+// exactly clearance r along an offset wall), without the radical-capable
+// kernel's zero-separation cost. Its inputs are the same exact binary64
+// injections as the ring points (CanonicalReachRing2::binary64_points).
+using SegmentClearanceKernel = CGAL::Simple_cartesian<CGAL::Exact_rational>;
+
+bool segment_clears_ring_boundary(
+    const CanonicalReachRing2& ring,
+    const SegmentClearanceKernel::Segment_2& query,
+    const SegmentClearanceKernel::FT& squared_radius)
+{
+    using Point = SegmentClearanceKernel::Point_2;
+    const std::size_t count = ring.binary64_points.size();
+    for (std::size_t index = 0; index < count; ++index) {
+        const auto& p = ring.binary64_points[index];
+        const auto& q = ring.binary64_points[(index + 1) % count];
+        const SegmentClearanceKernel::Segment_2 edge(
+            Point(p[0], p[1]), Point(q[0], q[1]));
         if (CGAL::compare(
                 CGAL::squared_distance(query, edge),
                 squared_radius)
@@ -86,6 +117,37 @@ bool CutterCentreDomain2::contains(double x, double y) const
     }
     for (const CanonicalReachRing2& hole : input_.holes) {
         if (!clears_ring_boundary(hole, query, squared_radius_)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool CutterCentreDomain2::contains_segment(
+    double ax, double ay, double bx, double by) const
+{
+    if (!std::isfinite(bx) || !std::isfinite(by)) {
+        throw InvalidReachableDomainInputError(
+            "cutter-centre query coordinates must be finite binary64 values");
+    }
+    // contains() validates a's finiteness and decides a's face.
+    if (!contains(ax, ay)) {
+        return false;
+    }
+    using Point = SegmentClearanceKernel::Point_2;
+    const Point start(ax, ay);
+    const Point end(bx, by);
+    if (start == end) {
+        return true;
+    }
+    const SegmentClearanceKernel::Segment_2 query(start, end);
+    const SegmentClearanceKernel::FT radius(input_.binary64_radius);
+    const SegmentClearanceKernel::FT squared_radius = radius * radius;
+    if (!segment_clears_ring_boundary(input_.outer, query, squared_radius)) {
+        return false;
+    }
+    for (const CanonicalReachRing2& hole : input_.holes) {
+        if (!segment_clears_ring_boundary(hole, query, squared_radius)) {
             return false;
         }
     }

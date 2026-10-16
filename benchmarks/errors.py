@@ -275,3 +275,7 @@ class UnexpectedHeldPathCaseError(BenchmarkError):
 
 class MissingLoopSeamStationError(BenchmarkError):
     """A closed loop's motion record carries no seam station to read its junction at (gate rule f)."""
+
+
+class FigureDpiMismatchError(BenchmarkError):
+    """A figure handed to `benchmarks.plotting.save_figure` was built at a resolution other than `FIGURE_DPI`."""

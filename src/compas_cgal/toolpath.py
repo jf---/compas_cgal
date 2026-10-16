@@ -86,7 +86,13 @@ _OPERATION_BY_CODE = (
 
 @dataclass
 class ToolpathOperation:
-    """A single toolpath motion primitive with operation metadata."""
+    """A single toolpath motion primitive with operation metadata.
+
+    ``entry_xy`` is the EXACT tool-centre point a closed circle starts and ends
+    at, when its generator authored one (`compas_cgal.incident_loop`): there
+    ``Circle.point_at(0)`` is only a double rounding of the entry. Readers take
+    ``entry_xy`` when present and ``point_at(0)`` otherwise (Ruling 1.1-C14-A).
+    """
 
     geometry: Line | Arc | Circle
     operation: OperationType
@@ -94,6 +100,7 @@ class ToolpathOperation:
     clockwise: bool = False
     start_tangent: np.ndarray | None = None
     end_tangent: np.ndarray | None = None
+    entry_xy: tuple[float, float] | None = None
 
 
 @dataclass

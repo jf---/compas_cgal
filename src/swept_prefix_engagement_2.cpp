@@ -227,43 +227,53 @@ ArcPrefixExtent2 classify_arc_prefix_extent_exact(
         "arc swept-prefix station lies on the start ray strictly inside the motion");
 }
 
-AuditExactStationClassification2 classify_line_swept_prefix_station_exact(
-    const Stock2& stock,
+namespace {
+
+// A line station: its exact centre and the motion direction
+// (motion_end - motion_start, not normalised).
+struct LinePrefixStation2 {
+    EPoint center;
+    EVector direction;
+};
+
+LinePrefixStation2 line_prefix_station(
     const EPoint& motion_start,
     const EPoint& motion_end,
-    const FT& parameter,
-    const FT& tool_radius,
-    const FT& cap_chord_ratio,
-    const FT& gap_close_ratio)
+    const FT& parameter)
 {
     if (CGAL::sign(parameter) == CGAL::NEGATIVE
         || CGAL::compare(parameter, FT(1)) == CGAL::LARGER) {
         throw InvalidSweptPrefixInputError(
             "line swept-prefix parameter must lie in [0, 1]");
     }
-    const FT direction_x = motion_end.x() - motion_start.x();
-    const FT direction_y = motion_end.y() - motion_start.y();
-    if (CGAL::is_zero(direction_x * direction_x + direction_y * direction_y)) {
+    const EVector direction = motion_end - motion_start;
+    if (CGAL::is_zero(direction.squared_length())) {
         throw InvalidSweptPrefixInputError(
             "line swept-prefix motion must have positive length");
     }
-    const EPoint center(
-        motion_start.x() + parameter * direction_x,
-        motion_start.y() + parameter * direction_y);
-    const AuditExactStationClassification2 base =
-        classify_audit_unguarded_station_exact(
-            stock, center, tool_radius, cap_chord_ratio, gap_close_ratio);
-    if (CGAL::is_zero(parameter)) return base;
+    return {motion_start + parameter * direction, direction};
+}
+
+// The static classification clipped to the rim the line prefix has not covered.
+AuditExactStationClassification2 clip_line_prefix(
+    const AuditExactStationClassification2& base,
+    const LinePrefixStation2& station,
+    const FT& tool_radius,
+    const FT& cap_chord_ratio,
+    const FT& gap_close_ratio)
+{
+    const EPoint& center = station.center;
+    const EVector normal = station.direction.perpendicular(CGAL::COUNTERCLOCKWISE);
     const std::vector<GpsPoint> events{
-        radial_rim_point(center, -direction_y, direction_x, tool_radius, true),
-        radial_rim_point(center, -direction_y, direction_x, tool_radius, false),
+        radial_rim_point(center, normal.x(), normal.y(), tool_radius, true),
+        radial_rim_point(center, normal.x(), normal.y(), tool_radius, false),
     };
     const auto covered = [&](const GpsPoint& point) {
         const CoordNT offset_x = point.x() - CoordNT(center.x());
         const CoordNT offset_y = point.y() - CoordNT(center.y());
         return CGAL::sign(
-                   CoordNT(direction_x) * offset_x
-                   + CoordNT(direction_y) * offset_y)
+                   CoordNT(station.direction.x()) * offset_x
+                   + CoordNT(station.direction.y()) * offset_y)
             != CGAL::POSITIVE;
     };
     return classify_audit_filtered_station_exact(
@@ -275,8 +285,57 @@ AuditExactStationClassification2 classify_line_swept_prefix_station_exact(
             flatten_arcs(base), events, center, tool_radius, covered));
 }
 
-AuditExactStationClassification2 classify_arc_swept_prefix_station_exact(
+} // namespace
+
+AuditExactStationClassification2 classify_line_swept_prefix_station_exact(
     const Stock2& stock,
+    const EPoint& motion_start,
+    const EPoint& motion_end,
+    const FT& parameter,
+    const FT& tool_radius,
+    const FT& cap_chord_ratio,
+    const FT& gap_close_ratio)
+{
+    const LinePrefixStation2 station =
+        line_prefix_station(motion_start, motion_end, parameter);
+    const AuditExactStationClassification2 base =
+        classify_audit_unguarded_station_exact(
+            stock, station.center, tool_radius, cap_chord_ratio, gap_close_ratio);
+    if (CGAL::is_zero(parameter)) return base;
+    return clip_line_prefix(
+        base, station, tool_radius, cap_chord_ratio, gap_close_ratio);
+}
+
+bool line_swept_prefix_station_exceeds_exact(
+    const Stock2& stock,
+    const EPoint& motion_start,
+    const EPoint& motion_end,
+    const FT& parameter,
+    const FT& tool_radius,
+    const FT& cap_chord_ratio,
+    const FT& gap_close_ratio)
+{
+    const LinePrefixStation2 station =
+        line_prefix_station(motion_start, motion_end, parameter);
+    const AuditExactStationClassification2 base =
+        classify_audit_unguarded_station_exact(
+            stock, station.center, tool_radius, cap_chord_ratio, gap_close_ratio);
+    // CLIP MONOTONICITY (header): a static WITHIN_CAP is the in-process verdict.
+    if (base.disposition() != AuditExactStationDisposition2::CAP_EXCEEDED) {
+        return false;
+    }
+    if (CGAL::is_zero(parameter)) return true;
+    return clip_line_prefix(
+               base, station, tool_radius, cap_chord_ratio, gap_close_ratio)
+               .disposition()
+        == AuditExactStationDisposition2::CAP_EXCEEDED;
+}
+
+namespace {
+
+// The static classification clipped to the rim the arc prefix has not covered.
+AuditExactStationClassification2 clip_arc_prefix(
+    const AuditExactStationClassification2& base,
     const EPoint& guide_center,
     const EPoint& motion_start,
     const EPoint& station_center,
@@ -289,18 +348,6 @@ AuditExactStationClassification2 classify_arc_swept_prefix_station_exact(
     const FT current_x = station_center.x() - guide_center.x();
     const FT current_y = station_center.y() - guide_center.y();
     const FT guide_radius_squared = current_x * current_x + current_y * current_y;
-    if (CGAL::is_zero(guide_radius_squared)) {
-        throw InvalidSweptPrefixInputError(
-            "arc swept-prefix guide radius must be positive");
-    }
-    const AuditExactStationClassification2 base =
-        classify_audit_unguarded_station_exact(
-            stock,
-            station_center,
-            tool_radius,
-            cap_chord_ratio,
-            gap_close_ratio);
-    if (extent == ArcPrefixExtent2::ZERO) return base;
     std::vector<GpsPoint> events{
         radial_rim_point(
             station_center, current_x, current_y, tool_radius, true),
@@ -360,4 +407,76 @@ AuditExactStationClassification2 classify_arc_swept_prefix_station_exact(
             station_center,
             tool_radius,
             covered));
+}
+
+FT arc_station_guide_radius_squared(
+    const EPoint& guide_center,
+    const EPoint& station_center)
+{
+    const FT current_x = station_center.x() - guide_center.x();
+    const FT current_y = station_center.y() - guide_center.y();
+    const FT guide_radius_squared = current_x * current_x + current_y * current_y;
+    if (CGAL::is_zero(guide_radius_squared)) {
+        throw InvalidSweptPrefixInputError(
+            "arc swept-prefix guide radius must be positive");
+    }
+    return guide_radius_squared;
+}
+
+} // namespace
+
+AuditExactStationClassification2 classify_arc_swept_prefix_station_exact(
+    const Stock2& stock,
+    const EPoint& guide_center,
+    const EPoint& motion_start,
+    const EPoint& station_center,
+    bool clockwise,
+    ArcPrefixExtent2 extent,
+    const FT& tool_radius,
+    const FT& cap_chord_ratio,
+    const FT& gap_close_ratio)
+{
+    arc_station_guide_radius_squared(guide_center, station_center);
+    const AuditExactStationClassification2 base =
+        classify_audit_unguarded_station_exact(
+            stock,
+            station_center,
+            tool_radius,
+            cap_chord_ratio,
+            gap_close_ratio);
+    if (extent == ArcPrefixExtent2::ZERO) return base;
+    return clip_arc_prefix(
+        base, guide_center, motion_start, station_center, clockwise, extent,
+        tool_radius, cap_chord_ratio, gap_close_ratio);
+}
+
+bool arc_swept_prefix_station_exceeds_exact(
+    const Stock2& stock,
+    const EPoint& guide_center,
+    const EPoint& motion_start,
+    const EPoint& station_center,
+    bool clockwise,
+    ArcPrefixExtent2 extent,
+    const FT& tool_radius,
+    const FT& cap_chord_ratio,
+    const FT& gap_close_ratio)
+{
+    arc_station_guide_radius_squared(guide_center, station_center);
+    const AuditExactStationClassification2 base =
+        classify_audit_unguarded_station_exact(
+            stock,
+            station_center,
+            tool_radius,
+            cap_chord_ratio,
+            gap_close_ratio);
+    // CLIP MONOTONICITY (header): a static WITHIN_CAP is the in-process verdict.
+    if (base.disposition() != AuditExactStationDisposition2::CAP_EXCEEDED) {
+        return false;
+    }
+    if (extent == ArcPrefixExtent2::ZERO) return true;
+    return clip_arc_prefix(
+               base, guide_center, motion_start, station_center, clockwise,
+               extent, tool_radius, cap_chord_ratio, gap_close_ratio)
+               .disposition()
+        == AuditExactStationDisposition2::CAP_EXCEEDED;
 }

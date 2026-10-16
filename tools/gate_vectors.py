@@ -6,7 +6,13 @@ value is a decimal STRING at the precision the gate reports it, so a diff of the
 file is a diff of the numbers a reader sees and two files compare without float
 churn. This module owns the schema and nothing else: measuring is
 `tools.gate_measure`, comparing is `tools.gate_ratchet`, rendering is
-`tools.gate_table`.
+`tools.gate_table`; one admission entry's shape is `tools.gate_admissions`.
+
+Schema ``gate-vectors/2`` adds a seventh key, ``admissions``: the append-only
+list of ledger rulings that admitted new cases (Ruling 0.3-C2-amend). A
+``gate-vectors/1`` document (exactly the six older keys) still loads, with no
+admissions, because a parent commit is parsed with the current code; it is
+always written back as ``/2``.
 
 Criterion directions:
 
@@ -31,7 +37,18 @@ from typing import Mapping
 
 from typing_extensions import Self
 
-SCHEMA = "gate-vectors/1"
+from tools.gate_admissions import Admission
+from tools.gate_admissions import MalformedAdmissionError
+from tools.gate_admissions import ReferenceReassignedError
+from tools.gate_case_keys import is_case_key
+
+SCHEMA = "gate-vectors/2"
+
+# The schema before admissions; read (never written) so a parent commit's
+# document still parses. Its documents carry exactly `LEGACY_KEYS`.
+LEGACY_SCHEMA = "gate-vectors/1"
+LEGACY_KEYS = frozenset({"schema", "rules_version", "instrument", "criteria", "cases", "rebaseline"})
+DOCUMENT_KEYS = LEGACY_KEYS | {"admissions"}
 
 # The gate rules the vectors were measured under. A bump re-baselines only the
 # criteria its recorded approval lists as changed; every other gated criterion is
@@ -41,10 +58,6 @@ RULES_VERSION = "0.3"
 
 GATE_VECTORS_PATH = Path("benchmarks") / "results" / "gate_vectors.json"
 GATE_TABLE_PATH = Path("benchmarks") / "results" / "gate_vectors.md"
-
-# Separator of the three components of a case key: cap id, generator, pocket.
-CASE_KEY_SEPARATOR = "/"
-CASE_KEY_PARTS = 3
 
 Direction = Literal["lower", "reported", "wallclock"]
 DIRECTIONS: frozenset[str] = frozenset({"lower", "reported", "wallclock"})
@@ -238,6 +251,10 @@ class GateVectors:
         rebaseline: For a document whose rules version differs from its
             parent's, the recorded approval of that re-baseline; None
             otherwise (written as ``{}``).
+        admissions: The ledger rulings that admitted new cases, in append
+            order; empty for a ``gate-vectors/1`` document.
+        schema: The schema the document was read as; always written as
+            `SCHEMA`. The ratchet accepts `LEGACY_SCHEMA` only for a parent.
     """
 
     rules_version: str
@@ -245,6 +262,8 @@ class GateVectors:
     criteria: tuple[CriterionSpec, ...]
     cases: Mapping[str, Mapping[str, str]]
     rebaseline: RebaselineRecord | None
+    admissions: tuple[Admission, ...] = ()
+    schema: str = SCHEMA
 
     @classmethod
     def build(cls, raw: object) -> Self:
@@ -258,14 +277,17 @@ class GateVectors:
 
         Raises:
             MalformedGateVectorsError: The document violates the schema.
+            MalformedAdmissionError: An admission entry violates the schema, or
+                the admissions disagree with the document's cases.
         """
         if not isinstance(raw, dict):
             raise MalformedGateVectorsError("the gate-vectors document must be a JSON object.")
-        expected_keys = {"schema", "rules_version", "instrument", "criteria", "cases", "rebaseline"}
+        schema = raw.get("schema")
+        if schema not in (SCHEMA, LEGACY_SCHEMA):
+            raise MalformedGateVectorsError(f"schema must be {SCHEMA!r} (or the readable {LEGACY_SCHEMA!r}), got {schema!r}.")
+        expected_keys = DOCUMENT_KEYS if schema == SCHEMA else LEGACY_KEYS
         if set(raw) != expected_keys:
-            raise MalformedGateVectorsError(f"the document must have exactly the keys {sorted(expected_keys)}, got {sorted(raw)}.")
-        if raw["schema"] != SCHEMA:
-            raise MalformedGateVectorsError(f"schema must be {SCHEMA!r}, got {raw['schema']!r}.")
+            raise MalformedGateVectorsError(f"a {schema} document must have exactly the keys {sorted(expected_keys)}, got {sorted(raw)}.")
         rules_version = raw["rules_version"]
         if not isinstance(rules_version, str) or not rules_version:
             raise MalformedGateVectorsError("rules_version must be a non-empty string.")
@@ -285,14 +307,15 @@ class GateVectors:
         names = [criterion.name for criterion in criteria]
         cases: dict[str, dict[str, str]] = {}
         for key, cells in cases_raw.items():
-            if not isinstance(key, str) or len(key.split(CASE_KEY_SEPARATOR)) != CASE_KEY_PARTS:
+            if not is_case_key(key):
                 raise MalformedGateVectorsError(f"case key {key!r} must be 'cap-id/generator/pocket'.")
             if not isinstance(cells, dict) or list(cells) != names:
                 raise MalformedGateVectorsError(f"case {key!r} must carry exactly the criteria, in criteria order.")
             for criterion in criteria:
                 _decimal(cells[criterion.name], where=f"{key}/{criterion.name}")
             cases[key] = dict(cells)
-        return cls(rules_version=rules_version, instrument=dict(instrument), criteria=criteria, cases=cases, rebaseline=rebaseline)
+        admissions = _admissions(raw.get("admissions", []), cases, names)
+        return cls(rules_version=rules_version, instrument=dict(instrument), criteria=criteria, cases=cases, rebaseline=rebaseline, admissions=admissions, schema=schema)
 
     @property
     def gated(self) -> tuple[CriterionSpec, ...]:
@@ -303,6 +326,23 @@ class GateVectors:
     def freshness_checked(self) -> tuple[CriterionSpec, ...]:
         """The criteria a fresh measurement must reproduce exactly: gated cells and reported integers."""
         return tuple(criterion for criterion in self.criteria if criterion.direction == "lower" or (criterion.direction == "reported" and criterion.decimals == 0))
+
+    @property
+    def excluded(self) -> dict[str, str]:
+        """The cases currently excluded, each with the exception class its generator raises.
+
+        An exclusion holds until a later admission admits the case.
+        """
+        return replay_admissions(self.admissions)[1]
+
+    @property
+    def exempt_rows(self) -> dict[str, frozenset[str]]:
+        """Per admitted case, the stage-0 all-case row criteria it is exempt from."""
+        exempt: dict[str, frozenset[str]] = {}
+        for admission in self.admissions:
+            for case, names in admission.exempt_rows.items():
+                exempt[case] = frozenset(names)
+        return exempt
 
     def value(self, case: str, criterion: str) -> Decimal:
         """One cell as an exact decimal.
@@ -324,12 +364,88 @@ class GateVectors:
             "instrument": dict(self.instrument),
             "criteria": {criterion.name: criterion.to_json() for criterion in self.criteria},
             "rebaseline": {} if self.rebaseline is None else self.rebaseline.to_json(),
+            "admissions": [admission.to_json() for admission in self.admissions],
             "cases": {key: dict(cells) for key, cells in self.cases.items()},
         }
 
     def dumps(self) -> str:
         """The canonical text of the document: two-space indent, trailing newline."""
         return json.dumps(self.to_json(), indent=2) + "\n"
+
+
+def replay_admissions(admissions: tuple[Admission, ...]) -> tuple[set[str], dict[str, str]]:
+    """Replay the admissions in order: the admitted cases and the cases still excluded.
+
+    Args:
+        admissions: The entries, in append order.
+
+    Returns:
+        The admitted case keys and the excluded case keys with their exception
+        class names.
+
+    Raises:
+        MalformedAdmissionError: A case is admitted twice, or excluded while it
+            is admitted or already excluded.
+        ReferenceReassignedError: A later admission gives a generator another
+            reference than its first admission did.
+    """
+    admitted: set[str] = set()
+    excluded: dict[str, str] = {}
+    references: dict[str, str | None] = {}
+    for admission in admissions:
+        for generator, reference in admission.reference.items():
+            if generator in references and references[generator] != reference:
+                raise ReferenceReassignedError(
+                    f"admission {admission.ruling} references generator {generator!r} to {reference!r}; its first admission fixed {references[generator]!r}."
+                )
+            references.setdefault(generator, reference)
+        for case in admission.cases:
+            if case in admitted:
+                raise MalformedAdmissionError(f"admission {admission.ruling} admits {case!r}, which is already admitted.")
+            admitted.add(case)
+            excluded.pop(case, None)
+        for case, name in admission.excluded.items():
+            if case in admitted:
+                raise MalformedAdmissionError(f"admission {admission.ruling} excludes {case!r}, which is already admitted.")
+            if case in excluded:
+                raise MalformedAdmissionError(f"admission {admission.ruling} excludes {case!r}, which is already excluded.")
+            excluded[case] = name
+    return admitted, excluded
+
+
+def _admissions(raw: object, cases: Mapping[str, object], criteria: list[str]) -> tuple[Admission, ...]:
+    """Validate the ``admissions`` list against the document's cases and criteria.
+
+    Args:
+        raw: The decoded ``admissions`` value (``[]`` for a /1 document).
+        cases: The document's case keys.
+        criteria: The document's criterion names.
+
+    Returns:
+        The validated entries, in append order.
+
+    Raises:
+        MalformedAdmissionError: The list or an entry is malformed, an admitted
+            case is not in the document, or an excluded case is.
+        MalformedGateVectorsError: An exemption names a criterion the document
+            does not carry.
+    """
+    if not isinstance(raw, list):
+        raise MalformedAdmissionError(f"admissions must be a list, got {type(raw).__name__}.")
+    admissions = tuple(Admission.build(entry) for entry in raw)
+    admitted, excluded = replay_admissions(admissions)
+    absent = sorted(case for case in admitted if case not in cases)
+    if absent:
+        raise MalformedAdmissionError(f"admitted cases {absent} are not in the document's cases.")
+    present = sorted(case for case in excluded if case in cases)
+    if present:
+        raise MalformedAdmissionError(f"excluded cases {present} record cells; an excluded case is not in the document's cases.")
+    for admission in admissions:
+        for case, names in admission.exempt_rows.items():
+            unknown = [name for name in names if name not in criteria]
+            if unknown:
+                raise MalformedGateVectorsError(f"admission {admission.ruling} exempts {case!r} from {unknown}, which the document does not carry.")
+    return admissions
 
 
 def load_gate_vectors(path: Path) -> GateVectors:

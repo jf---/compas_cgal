@@ -23,7 +23,7 @@ from compas.geometry import Circle
 from compas.geometry import Line
 
 from benchmarks.gate import GATE_ATTRIBUTION_CAP_DEG
-from benchmarks.gate import GATE_GENERATOR_NAMES
+from benchmarks.gate import FROZEN_PAIR
 from benchmarks.gate import GATE_GENERATORS
 from benchmarks.gate import GATE_POCKET_NAMES
 from benchmarks.gate import GateCapDegrees
@@ -157,7 +157,7 @@ def _generated_stream(
     return _operation_stream_witness(result)
 
 
-_FIRST_GENERATOR, _SECOND_GENERATOR = GATE_GENERATOR_NAMES
+_FIRST_GENERATOR, _SECOND_GENERATOR = FROZEN_PAIR
 
 
 @pytest.mark.parametrize("pocket_name", GATE_POCKET_NAMES, ids=GATE_POCKET_NAMES)

@@ -7,18 +7,37 @@ import copy
 import json
 import subprocess
 from pathlib import Path
+from typing import Callable
+from typing import Iterable
 
 import pytest
 
+from benchmarks.gate import FROZEN_PAIR
 from benchmarks.gate import GATE_CAP_CASES
 from benchmarks.gate import GATE_GENERATOR_NAMES
 from benchmarks.gate import GATE_POCKET_NAMES
+import tools.gate_measure as gate_measure
 import tools.gate_ratchet as gate_ratchet
+from tools.gate_admissions import Admission
 from tools.gate_measure import MissingRebaselineApprovalError
 from tools.gate_measure import MissingRebaselineCriteriaError
+from tools.gate_measure import EmptyMeasurementError
+from tools.gate_measure import ExcludedCaseDidNotRaiseError
+from tools.gate_measure import ExcludedCaseRaisedOtherError
+from tools.gate_measure import UnknownExcludedCaseError
+from tools.gate_measure import case_key
+from tools.gate_measure import expect_exclusion
+from tools.gate_measure import gate_cases
+from tools.gate_measure import partition_cases
 from tools.gate_measure import rebaseline_for
+from tools.gate_ratchet import AdmissionAboveReferenceError
+from tools.gate_ratchet import AdmissionOfExistingCaseError
+from tools.gate_ratchet import AdmissionRecordAlteredError
+from tools.gate_ratchet import MissingReferenceCaseError
+from tools.gate_ratchet import UnadmittedCaseError
 from tools.gate_ratchet import GateRulesChangedError
 from tools.gate_ratchet import GitQueryError
+from tools.gate_ratchet import LegacyHeadVectorsError
 from tools.gate_ratchet import UnreachableGateBaseError
 from tools.gate_ratchet import check_range
 from tools.gate_ratchet import resolve_base
@@ -43,7 +62,11 @@ NEW_GENERATOR = "pipeline"
 
 
 def _committed() -> dict:
-    return json.loads(COMMITTED.read_text())
+    """The committed vectors as the frozen pair pinned them: its cases only, no admission (a synthetic-column base)."""
+    raw = json.loads(COMMITTED.read_text())
+    raw["cases"] = {key: cells for key, cells in raw["cases"].items() if key.split("/")[1] in FROZEN_PAIR}
+    raw["admissions"] = []
+    return raw
 
 
 def _bump(raw: dict, case: str, criterion: str, delta: int) -> dict:
@@ -135,7 +158,7 @@ def test_a_new_generator_column_that_beats_the_minimum_somewhere_and_loses_nowhe
 
 def test_a_new_generator_column_that_loses_anywhere_is_a_stagnation() -> None:
     raw = _committed()
-    with pytest.raises(GateVectorStagnationError):
+    with pytest.raises(UnadmittedCaseError):
         check_pair(_vectors(raw), _vectors(_with_new_column(raw, better="tangent_breaks", worse="redundant_operations")), touches_gate=True)
 
 
@@ -308,7 +331,7 @@ def test_a_malformed_rebaseline_record_is_refused_by_name(criteria: object, reas
 def test_the_vector_keys_are_the_gate_product() -> None:
     """v-P5: adding a generator to the gate fails loudly until its vectors are measured."""
     expected = {f"{cap_id}/{generator}/{pocket}" for cap_id, _cap in GATE_CAP_CASES for generator in GATE_GENERATOR_NAMES for pocket in GATE_POCKET_NAMES}
-    assert set(_committed()["cases"]) == expected
+    assert set(json.loads(COMMITTED.read_text())["cases"]) == expected
 
 
 def test_a_malformed_document_is_refused_by_name() -> None:
@@ -328,11 +351,12 @@ def test_freshness_names_every_cell_that_moved_and_ignores_wall_clock() -> None:
     assert stale_cells(_vectors(raw), _vectors(moved)) == [f"{CASE}/retract_count: committed {committed} != measured {measured}"]
 
 
-def test_the_cli_exits_one_on_a_synthetic_regression_and_zero_on_identity(tmp_path: Path) -> None:
-    raw = _committed()
+def test_the_cli_exits_one_on_a_synthetic_regression_and_zero_on_identity(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    raw = json.loads(COMMITTED.read_text())
     regressed = tmp_path / "regressed.json"
     regressed.write_text(json.dumps(_bump(raw, CASE, "cap_exceedances", +1)))
     assert main(["check-files", "--base", str(COMMITTED), "--head", str(regressed), "--touches-gate"]) == 1
+    assert f"GateVectorRegressionError: gate cells worsened:\n  {CASE}/cap_exceedances:" in capsys.readouterr().err
     assert main(["check-files", "--base", str(COMMITTED), "--head", str(COMMITTED)]) == 0
 
 
@@ -357,7 +381,7 @@ NOT_GATE: dict[str, str] = {
     "benchmarks/families/analytic.py": "pocket builders; a change moves the pockets, which the case product pins",
     "src/compas_cgal/__init__.py": "package marker",
     "src/compas_cgal/units.py": "unit NewTypes and frame-tagged points",
-    "src/compas_cgal/toolpath.py": "ToolpathResult and OperationType records",
+    "benchmarks/stage_acceptance.py": "stage acceptance rows; read to validate admission exemptions, no number flows into a cell",
 }
 
 # The frozen generators (Ruling 0.1-C1) are measured, not part of the gate: a
@@ -484,3 +508,369 @@ def test_a_failed_git_query_is_a_named_error(tmp_path: Path) -> None:
     repo, _root, _head = _repo_with_two_vector_commits(tmp_path, _committed())
     with pytest.raises(GitQueryError):
         check_range(repo, "no-such-ref", "HEAD")
+
+
+# --- Ruling 0.3-C2-amend: admission record + reference --------------------------------
+
+ADMISSION_RULING = "0.3-C2-amend"
+REFERENCE_GENERATOR = "rho_regulated"
+
+
+def _admission(*cases: str, reference: dict | None = None, ruling: str = ADMISSION_RULING) -> dict:
+    generators = {case.split("/")[1] for case in cases}
+    return {"ruling": ruling, "cases": list(cases), "reference": reference if reference is not None else dict.fromkeys(sorted(generators)), "exempt_rows": {}, "excluded": {}}
+
+
+def _new_case(raw: dict, generator: str, *, delta: dict[str, int]) -> tuple[dict, str]:
+    """*raw* plus a column *generator* on CASE's (cap, pocket), at the existing minimum shifted by *delta*."""
+    cap_id, _generator, pocket = CASE.split("/")
+    out = copy.deepcopy(raw)
+    siblings = [key for key in raw["cases"] if key.split("/")[0] == cap_id and key.split("/")[2] == pocket]
+    cells = copy.deepcopy(raw["cases"][siblings[0]])
+    for name, spec in raw["criteria"].items():
+        if spec["direction"] == "lower":
+            cells[name] = min((raw["cases"][key][name] for key in siblings), key=lambda value: float(value))
+    for name, shift in delta.items():
+        cells[name] = str(int(cells[name]) + shift)
+    key = f"{cap_id}/{generator}/{pocket}"
+    out["cases"][key] = cells
+    return out, key
+
+
+def _losing_column(raw: dict) -> tuple[dict, str]:
+    return _new_case(raw, NEW_GENERATOR, delta={"tangent_breaks": -1, "redundant_operations": +1})
+
+
+def test_an_unadmitted_losing_new_case_fails_even_when_the_gate_is_untouched() -> None:
+    """Hole (a): a commit that does not touch the gate could add a losing column unchecked."""
+    raw = _committed()
+    head, case = _losing_column(raw)
+    with pytest.raises(UnadmittedCaseError, match=case):
+        check_pair(_vectors(raw), _vectors(head), touches_gate=False)
+
+
+def test_an_unadmitted_losing_new_case_fails_even_when_another_cell_improves() -> None:
+    """Hole (b): an improvement elsewhere satisfied the stagnation check."""
+    raw = _committed()
+    head, case = _losing_column(raw)
+    base = _bump(raw, CASE, "tangent_breaks", +1)
+    with pytest.raises(UnadmittedCaseError, match=case):
+        check_pair(_vectors(base), _vectors(head), touches_gate=True)
+
+
+def test_an_unadmitted_new_case_fails_on_a_rules_bump_even_where_it_loses_only_on_a_rebaselined_criterion() -> None:
+    """Hole (c): a bump counted as the improvement; the new column is held to the head siblings on re-baselined criteria."""
+    raw = _committed()
+    head, case = _new_case(raw, NEW_GENERATOR, delta={"tangent_breaks": -1, "redundant_operations": +1})
+    head = _rules_bump(head, "redundant_operations")
+    with pytest.raises(UnadmittedCaseError, match=case):
+        check_pair(_vectors(raw), _vectors(head), touches_gate=False)
+
+
+def test_an_admitted_case_with_a_null_reference_becomes_the_baseline_and_counts_as_improving() -> None:
+    raw = _committed()
+    head, case = _losing_column(raw)
+    head["admissions"] = [_admission(case)]
+    verdict = check_pair(_vectors(raw), _vectors(head), touches_gate=True)
+    assert verdict.improved == (f"{case} (admitted under {ADMISSION_RULING})",)
+
+
+def test_an_admitted_case_at_or_below_its_reference_passes_with_the_reference_admitted_alongside() -> None:
+    raw = _committed()
+    head, rho = _new_case(raw, REFERENCE_GENERATOR, delta={"redundant_operations": +2})
+    head, pipeline = _new_case(head, NEW_GENERATOR, delta={"redundant_operations": +1})
+    head["admissions"] = [_admission(pipeline, rho, reference={NEW_GENERATOR: REFERENCE_GENERATOR, REFERENCE_GENERATOR: None})]
+    verdict = check_pair(_vectors(raw), _vectors(head), touches_gate=False)
+    assert verdict.improved == (f"{pipeline} (admitted under {ADMISSION_RULING})", f"{rho} (admitted under {ADMISSION_RULING})")
+
+
+def test_an_admitted_case_above_its_reference_on_any_gated_cell_is_refused() -> None:
+    raw = _committed()
+    head, rho = _new_case(raw, REFERENCE_GENERATOR, delta={"redundant_operations": +2})
+    head, pipeline = _new_case(head, NEW_GENERATOR, delta={"redundant_operations": +1, "tangent_breaks": +1})
+    head["admissions"] = [_admission(pipeline, rho, reference={NEW_GENERATOR: REFERENCE_GENERATOR, REFERENCE_GENERATOR: None})]
+    with pytest.raises(AdmissionAboveReferenceError, match=f"{pipeline}/tangent_breaks"):
+        check_pair(_vectors(raw), _vectors(head), touches_gate=False)
+
+
+def test_an_admission_whose_reference_case_is_absent_is_refused() -> None:
+    raw = _committed()
+    head, pipeline = _losing_column(raw)
+    head["admissions"] = [_admission(pipeline, reference={NEW_GENERATOR: REFERENCE_GENERATOR})]
+    with pytest.raises(MissingReferenceCaseError, match=REFERENCE_GENERATOR):
+        check_pair(_vectors(raw), _vectors(head), touches_gate=False)
+
+
+def test_an_existing_generator_may_be_the_reference() -> None:
+    raw = _committed()
+    head, pipeline = _new_case(raw, NEW_GENERATOR, delta={})
+    head["admissions"] = [_admission(pipeline, reference={NEW_GENERATOR: CASE.split("/")[1]})]
+    sibling = head["cases"][CASE]
+    for name, spec in raw["criteria"].items():
+        if spec["direction"] == "lower":
+            head["cases"][pipeline][name] = sibling[name]
+    assert check_pair(_vectors(raw), _vectors(head), touches_gate=False).improved == (f"{pipeline} (admitted under {ADMISSION_RULING})",)
+
+
+def test_an_admission_of_a_pre_existing_case_is_refused() -> None:
+    """Pre-existing cells are ratcheted exactly as before: an admission cannot re-baseline them."""
+    raw = _committed()
+    head = copy.deepcopy(raw)
+    head["admissions"] = [_admission(CASE)]
+    with pytest.raises(AdmissionOfExistingCaseError, match=CASE):
+        check_pair(_vectors(raw), _vectors(head), touches_gate=True)
+
+
+@pytest.mark.parametrize("how", ["removed", "edited"])
+def test_an_admission_in_the_parent_must_appear_unchanged_in_the_child(how: str) -> None:
+    raw = _committed()
+    base, case = _losing_column(raw)
+    base["admissions"] = [_admission(case)]
+    head = copy.deepcopy(base)
+    if how == "removed":
+        head["admissions"] = []
+    else:
+        head["admissions"][0]["ruling"] = "1.1-closure"
+    with pytest.raises(AdmissionRecordAlteredError):
+        check_pair(_vectors(base), _vectors(head), touches_gate=False)
+
+
+def test_an_admitted_case_is_ratcheted_from_the_next_commit() -> None:
+    raw = _committed()
+    base, case = _losing_column(raw)
+    base["admissions"] = [_admission(case)]
+    head = _bump(base, case, "redundant_operations", +1)
+    with pytest.raises(GateVectorRegressionError, match=case):
+        check_pair(_vectors(base), _vectors(head), touches_gate=False)
+    head, later = _new_case(base, "later", delta={"redundant_operations": +5})
+    head["admissions"] = [*base["admissions"], _admission(later, ruling="1.1-closure")]
+    assert check_pair(_vectors(base), _vectors(head), touches_gate=False).improved == (f"{later} (admitted under 1.1-closure)",)
+
+
+def test_a_schema_1_parent_ratchets_against_a_schema_2_child() -> None:
+    raw = _committed()
+    parent = copy.deepcopy(raw)
+    parent["schema"] = "gate-vectors/1"
+    del parent["admissions"]
+    check_pair(_vectors(parent), _vectors(raw), touches_gate=False)
+
+
+def test_the_cli_names_an_unadmitted_case(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    base = _committed()
+    head, _case = _losing_column(base)
+    base_path, path = tmp_path / "base.json", tmp_path / "head.json"
+    base_path.write_text(json.dumps(base))
+    path.write_text(json.dumps(head))
+    assert main(["check-files", "--base", str(base_path), "--head", str(path)]) == 1
+    assert "UnadmittedCaseError" in capsys.readouterr().err
+
+
+def test_the_incident_loop_and_the_toolpath_records_are_gate_paths() -> None:
+    """Ruling 1.1-closure."""
+    assert touches_gate(["src/compas_cgal/incident_loop.py"])
+    assert touches_gate(["src/compas_cgal/toolpath.py"])
+
+
+class _ListedError(Exception):
+    pass
+
+
+# The listed class by its qualified name, as an admission records it.
+LISTED = f"{__name__}._ListedError"
+
+
+class _SubclassOfListedError(_ListedError):
+    pass
+
+
+def _raise(error: Exception) -> Callable[[], object]:
+    def generate() -> object:
+        raise error
+
+    return generate
+
+
+def test_an_excluded_case_must_raise_exactly_its_listed_exception() -> None:
+    """G3: the listed class, by name, and nothing else; a listed case that does not raise is an error."""
+    case = "cap-120-default/rho_regulated/L_shape"
+    expect_exclusion(_raise(_ListedError("x")), case, LISTED)
+    with pytest.raises(ExcludedCaseRaisedOtherError, match="_SubclassOfListedError"):
+        expect_exclusion(_raise(_SubclassOfListedError("x")), case, LISTED)
+    with pytest.raises(ExcludedCaseRaisedOtherError, match="RuntimeError"):
+        expect_exclusion(_raise(RuntimeError("x")), case, LISTED)
+    with pytest.raises(ExcludedCaseDidNotRaiseError, match=case):
+        expect_exclusion(lambda: None, case, LISTED)
+
+
+def test_excluded_cases_are_measured_for_their_exception_and_record_no_cells() -> None:
+    cases = gate_cases()
+    excluded_key = case_key(cases[0][0], cases[0][2], cases[0][3])
+    measured, excluded = partition_cases(cases, {excluded_key: "pkg.errors.SomeError"})
+    assert [case_key(cap_id, generator, pocket) for cap_id, _cap, generator, pocket in measured] == [case_key(c, g, p) for c, _d, g, p in cases[1:]]
+    assert excluded == ((cases[0], "pkg.errors.SomeError"),)
+    with pytest.raises(UnknownExcludedCaseError, match="nowhere/x/y"):
+        partition_cases(cases, {"nowhere/x/y": "pkg.errors.SomeError"})
+
+
+def _admitted_pipeline_and_rho(raw: dict, *, rho_reference: dict | None = None) -> tuple[dict, str, str]:
+    """*raw* plus admitted rho and pipeline columns, pipeline referenced to rho and one below it on redundant_operations."""
+    base, rho = _new_case(raw, REFERENCE_GENERATOR, delta={"redundant_operations": +2})
+    base, pipeline = _new_case(base, NEW_GENERATOR, delta={"redundant_operations": +1})
+    reference = rho_reference if rho_reference is not None else {NEW_GENERATOR: REFERENCE_GENERATOR, REFERENCE_GENERATOR: None}
+    base["admissions"] = [_admission(pipeline, rho, reference=reference)]
+    return base, pipeline, rho
+
+
+def test_a_rules_bump_cannot_lift_an_admitted_column_above_its_reference() -> None:
+    """User ruling 2026-10-15: the reference rule binds on every commit, re-baselined criteria included."""
+    base, pipeline, _rho = _admitted_pipeline_and_rho(_committed())
+    head = _bump(_rules_bump(base, "redundant_operations"), pipeline, "redundant_operations", +2)
+    with pytest.raises(AdmissionAboveReferenceError, match=f"{pipeline}/redundant_operations"):
+        check_pair(_vectors(base), _vectors(head), touches_gate=False)
+
+
+def test_a_rules_bump_keeping_an_admitted_column_at_or_below_its_reference_passes() -> None:
+    base, pipeline, rho = _admitted_pipeline_and_rho(_committed())
+    head = _bump(_bump(_rules_bump(base, "redundant_operations"), pipeline, "redundant_operations", +3), rho, "redundant_operations", +2)
+    assert check_pair(_vectors(base), _vectors(head), touches_gate=False).rebaselined == ("redundant_operations",)
+
+
+def test_an_admitted_column_with_a_null_reference_is_not_held_to_any_reference() -> None:
+    base, pipeline, _rho = _admitted_pipeline_and_rho(_committed(), rho_reference={NEW_GENERATOR: None, REFERENCE_GENERATOR: None})
+    head = _bump(_rules_bump(base, "redundant_operations"), pipeline, "redundant_operations", +2)
+    assert check_pair(_vectors(base), _vectors(head), touches_gate=False).rebaselined == ("redundant_operations",)
+
+
+# --- Fix round 2 (review 2026-10-15) ---------------------------------------------------
+
+
+def test_an_unadmitted_case_is_not_a_stagnation() -> None:
+    """M1: one named exception per failure mode; an unadmitted case is refused whatever the commit touches."""
+    assert not issubclass(UnadmittedCaseError, GateVectorStagnationError)
+
+
+def test_touching_the_gate_with_only_an_earlier_admission_is_a_stagnation() -> None:
+    """M1 guard: an admission the parent already carries is no improvement of this commit."""
+    raw = _committed()
+    base, _case = _losing_column(raw)
+    base["admissions"] = [_admission(_case)]
+    with pytest.raises(GateVectorStagnationError):
+        check_pair(_vectors(base), _vectors(copy.deepcopy(base)), touches_gate=True)
+    check_pair(_vectors(base), _vectors(copy.deepcopy(base)), touches_gate=False)
+
+
+class _SerialPool:
+    """A stand-in for the process pool, so monkeypatched generators reach the work."""
+
+    def __init__(self, max_workers: int) -> None:
+        self.max_workers = max_workers
+
+    def __enter__(self) -> "_SerialPool":
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        return None
+
+    def map(self, function: Callable[[object], object], items: Iterable[object]) -> list[object]:
+        return [function(item) for item in items]
+
+
+@pytest.mark.parametrize(
+    ("generate", "expected"),
+    [("listed", None), ("returns", ExcludedCaseDidNotRaiseError), ("other", ExcludedCaseRaisedOtherError)],
+)
+def test_measure_runs_and_asserts_every_excluded_case(monkeypatch: pytest.MonkeyPatch, generate: str, expected: type[Exception] | None) -> None:
+    """M2: an excluded case is generated, and must raise exactly the listed class; it records no cells."""
+    cap_id, cap, generator, pocket = gate_cases()[0]
+    key = case_key(cap_id, generator, pocket)
+    behaviour = {"listed": _raise(_ListedError("x")), "returns": lambda: None, "other": _raise(RuntimeError("x"))}[generate]
+    calls: list[str] = []
+
+    def fake(_spec: object) -> object:
+        calls.append(key)
+        return behaviour()
+
+    monkeypatch.setattr(gate_measure, "ProcessPoolExecutor", _SerialPool)
+    monkeypatch.setitem(gate_measure.GATE_GENERATORS, generator, fake)
+    admission = Admission(ruling="0.3-C2-amend", cases=("x/y/z",), reference={"y": None}, exempt_rows={}, excluded={key: LISTED})
+    if expected is None:
+        vectors = gate_measure.measure_gate_vectors([(cap_id, cap, generator, pocket)], admissions=(admission,))
+        assert dict(vectors.cases) == {}
+        assert vectors.admissions == (admission,)
+    else:
+        with pytest.raises(expected, match=key):
+            gate_measure.measure_gate_vectors([(cap_id, cap, generator, pocket)], admissions=(admission,))
+    assert calls == [key]
+
+
+def test_a_measurement_of_no_case_is_refused_by_name() -> None:
+    with pytest.raises(EmptyMeasurementError):
+        gate_measure.measure_gate_vectors([])
+
+
+def _admitted_document() -> dict:
+    head, case = _losing_column(_committed())
+    head["admissions"] = [_admission(case)]
+    return head
+
+
+def test_fresh_measures_under_the_committed_admissions(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """(e): the freshness re-measurement knows the committed exclusions."""
+    raw = _admitted_document()
+    path = tmp_path / "vectors.json"
+    path.write_text(json.dumps(raw))
+    seen: list[tuple[Admission, ...]] = []
+
+    def fake(cases: object = None, *, rebaseline: object = None, admissions: tuple[Admission, ...] = ()) -> GateVectors:
+        seen.append(admissions)
+        return GateVectors.build(raw)
+
+    monkeypatch.setattr(gate_measure, "measure_gate_vectors", fake)
+    assert main(["fresh", "--vectors", str(path)]) == 0
+    assert seen == [GateVectors.build(raw).admissions]
+
+
+def test_a_re_measurement_never_drops_the_admissions(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """(e): ``gate_measure.main`` writes back the admissions it read."""
+    raw = _admitted_document()
+    path, table = tmp_path / "vectors.json", tmp_path / "vectors.md"
+    path.write_text(json.dumps(raw))
+
+    def fake(cases: object = None, *, rebaseline: RebaselineRecord | None = None, admissions: tuple[Admission, ...] = ()) -> GateVectors:
+        measured = GateVectors.build(raw)
+        return GateVectors(
+            rules_version=measured.rules_version,
+            instrument=measured.instrument,
+            criteria=measured.criteria,
+            cases=measured.cases,
+            rebaseline=rebaseline,
+            admissions=admissions,
+        )
+
+    monkeypatch.setattr(gate_measure, "measure_gate_vectors", fake)
+    assert gate_measure.main(["--write", str(path), "--table", str(table)]) == 0
+    assert json.loads(path.read_text())["admissions"] == raw["admissions"]
+
+
+def test_the_reference_rule_binds_when_the_reference_improves_on_an_ordinary_commit() -> None:
+    """(f): no bump, no new admission; rho improving below an admitted pipeline cell is refused."""
+    raw = _committed()
+    base, rho = _new_case(raw, REFERENCE_GENERATOR, delta={"redundant_operations": +2})
+    base, pipeline = _new_case(base, NEW_GENERATOR, delta={"redundant_operations": +1})
+    base["admissions"] = [_admission(pipeline, rho, reference={NEW_GENERATOR: REFERENCE_GENERATOR, REFERENCE_GENERATOR: None})]
+    head = _bump(base, rho, "redundant_operations", -2)
+    with pytest.raises(AdmissionAboveReferenceError, match=f"{pipeline}/redundant_operations"):
+        check_pair(_vectors(base), _vectors(head), touches_gate=False)
+
+
+def test_the_head_document_must_be_schema_2() -> None:
+    """(c): only a parent may be read as /1."""
+    raw = _committed()
+    legacy = copy.deepcopy(raw)
+    legacy["schema"] = "gate-vectors/1"
+    del legacy["admissions"]
+    check_pair(_vectors(legacy), _vectors(raw), touches_gate=False)
+    with pytest.raises(LegacyHeadVectorsError):
+        check_pair(_vectors(raw), _vectors(legacy), touches_gate=False)
+    with pytest.raises(LegacyHeadVectorsError):
+        check_pair(None, _vectors(legacy), touches_gate=False)

@@ -409,7 +409,7 @@ def _measure_motion(
     removal = _operation_removal(motion.stock, motion.operation, tool_radius)
     cap_exceeded = any(sample.cap_exceeded for sample in samples)
     exit_sample = _loop_seam_exit(motion, tool_radius, cap_ratio, centre_domain) if isinstance(geometry, Circle) else samples[-1]
-    start, end = _endpoints(geometry)
+    start, end = _endpoints(motion.operation)
     start_tangent, end_tangent = _tangents(motion.operation)
     return MotionQuality(
         index=motion.index,
@@ -440,8 +440,8 @@ def _loop_seam_exit(motion: CutMotion, tool_radius: float, cap_ratio: float, cen
     """The junction station of a closed loop: its seam, after the whole turn.
 
     One native prefix query at the full-turn parameter, against the stock the
-    loop started from (Ruling 0.3-f-loop). The position is the authored entry
-    ``point_at(0)``, where the loop both begins and ends.
+    loop started from (Ruling 0.3-f-loop). The position is the loop's entry
+    (`_circle_entry`), where the loop both begins and ends.
 
     Args:
         motion: The loop and the stock it is about to cut.
@@ -455,7 +455,7 @@ def _loop_seam_exit(motion: CutMotion, tool_radius: float, cap_ratio: float, cen
     geometry = motion.operation.geometry
     assert isinstance(geometry, Circle)  # guaranteed by the caller
     cx, cy = _xy(geometry.frame.point)
-    sx, sy = _xy(geometry.point_at(0.0))
+    sx, sy = _circle_entry(motion.operation)
     ((_total, max_run, exceeded),) = _stock_2.engagement_circle_prefixes(
         motion.stock.raw, cx, cy, float(geometry.radius), sx, sy, motion.operation.clockwise, [FULL_TURN_PREFIX], tool_radius, cap_ratio, NO_GAP_CLOSURE
     )
@@ -591,6 +591,14 @@ def _motion_travel_positions(motion: CutMotion, count: int) -> Sequence[Tuple[fl
         span = float(geometry.circumference)
         # The frame's parametrisation runs counter-clockwise in world XY iff its
         # normal is +Z; `_require_world_xy_curve` has already pinned it to +-Z.
+        if motion.operation.entry_xy is not None:
+            # An authored entry: station t is the entry turned by the travelled
+            # angle, so station 0 IS the entry (placement for reporting only).
+            cx, cy = _xy(geometry.frame.point)
+            sx, sy = _circle_entry(motion.operation)
+            turn = -math.tau if motion.operation.clockwise else math.tau
+            rotations = [(math.cos(turn * t), math.sin(turn * t)) for t in parameters]
+            return [(span * t, cx + cos * (sx - cx) - sin * (sy - cy), cy + sin * (sx - cx) + cos * (sy - cy)) for t, (cos, sin) in zip(parameters, rotations, strict=True)]
         frame_runs_ccw = float(geometry.frame.zaxis[2]) > 0.0
         travel_reversed = frame_runs_ccw == motion.operation.clockwise
         return [(span * t, *_xy(geometry.point_at((1.0 - t) % 1.0 if travel_reversed else t))) for t in parameters]
@@ -680,11 +688,11 @@ def _motion_prefix_samples(motion: CutMotion, count: int, tool_radius: float, ca
         x1, y1 = float(geometry.end[0]), float(geometry.end[1])
         return _stock_2.engagement_line_prefixes(raw, x0, y0, x1, y1, parameters, tool_radius, cap_ratio, NO_GAP_CLOSURE)
     if isinstance(geometry, Circle):
-        # Station 0 is the entry point_at(0) itself -- where the tool is, and
-        # where the previous motion ended; stations p > 0 lie on the AUTHORED
-        # radius, the circle the replay's annulus is built on.
+        # Station 0 is the entry itself (`_circle_entry`) -- where the tool is,
+        # and where the previous motion ended; stations p > 0 lie on the
+        # AUTHORED radius, the circle the replay's annulus is built on.
         cx, cy = _xy(geometry.frame.point)
-        sx, sy = _xy(geometry.point_at(0.0))
+        sx, sy = _circle_entry(motion.operation)
         return _stock_2.engagement_circle_prefixes(raw, cx, cy, float(geometry.radius), sx, sy, motion.operation.clockwise, parameters, tool_radius, cap_ratio, NO_GAP_CLOSURE)
     if isinstance(geometry, Arc):
         cx, cy = _xy(geometry.frame.point)
@@ -752,20 +760,42 @@ def _motion_kind(geometry: object) -> MotionKind:
     raise UnmeasurableOperationLengthError(f"Geometry {type(geometry).__name__!r} is not a toolpath primitive.")
 
 
-def _endpoints(geometry: object) -> Tuple[Tuple[float, float], Tuple[float, float]]:
-    """Cutter-centre positions where a motion starts and ends.
+def _circle_entry(operation: ToolpathOperation) -> Tuple[float, float]:
+    """Where a closed circle starts and ends: its exact entry when authored, else ``point_at(0)``.
 
-    A closed circle starts and ends at the same point -- its entry -- which is
-    what makes the continuity test meaningful across a loop.
+    An `compas_cgal.incident_loop.IncidentLoop` carries its exact entry in
+    ``entry_xy``; its ``point_at(0)`` is only a double rounding of it (Ruling
+    1.1-C14-A). Every other circle is read at ``point_at(0)``, unchanged.
 
     Args:
-        geometry: The motion's primitive.
+        operation: A circle operation.
+
+    Returns:
+        The entry.
+    """
+    if operation.entry_xy is not None:
+        return float(operation.entry_xy[0]), float(operation.entry_xy[1])
+    geometry = operation.geometry
+    assert isinstance(geometry, Circle)  # guaranteed by the caller
+    return _xy(geometry.point_at(0.0))
+
+
+def _endpoints(operation: ToolpathOperation) -> Tuple[Tuple[float, float], Tuple[float, float]]:
+    """Cutter-centre positions where a motion starts and ends.
+
+    A closed circle starts and ends at the same point -- its entry
+    (`_circle_entry`) -- which is what makes the continuity test meaningful
+    across a loop.
+
+    Args:
+        operation: The motion.
 
     Returns:
         ``(start, end)``.
     """
+    geometry = operation.geometry
     if isinstance(geometry, Circle):
-        entry = _xy(geometry.point_at(0.0))
+        entry = _circle_entry(operation)
         return entry, entry
     if isinstance(geometry, Arc):
         return _xy(geometry.point_at(0.0)), _xy(geometry.point_at(1.0))
@@ -794,7 +824,7 @@ def _tangents(operation: ToolpathOperation) -> Tuple[Tuple[float, float], Tuple[
         direction = _unit(float(geometry.end[0]) - float(geometry.start[0]), float(geometry.end[1]) - float(geometry.start[1]))
         return direction, direction
     centre = geometry.frame.point
-    start, end = _endpoints(geometry)
+    start, end = _endpoints(operation)
     turn = -1.0 if operation.clockwise else 1.0
     return (
         _perpendicular(start[0] - float(centre[0]), start[1] - float(centre[1]), turn),

@@ -7,19 +7,23 @@ from the canonical quality reduction. The gate test
 (`tests.benchmarks.test_quality`) and this measurement share that reduction, so
 the file and the test cannot disagree about what a criterion means.
 
-Run as ``pixi run gate-vectors``: twelve cases in parallel, bounded by the
-slowest (radius_regulated on L_shape at the 40-degree cap).
+Run as ``pixi run gate-vectors``: every case in parallel, bounded by the core
+count (`pool_workers`). Each case's ``generation_s`` is therefore wall-clock
+under contention; the serial timing (`tools.pipeline_timing`) is the
+generation-time authority.
 """
 
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 import time
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
+from typing import Mapping
 from typing import Sequence
 
 from benchmarks.coverage import COVERAGE_GRID_SAMPLES
@@ -36,7 +40,9 @@ from benchmarks.quality_observations import reduce_quality_evidence
 from benchmarks.survey import QUALITY_SAMPLES_PER_MOTION
 from benchmarks.survey import PathSurvey
 from benchmarks.survey import survey_path
-from tools.gate_vectors import CASE_KEY_SEPARATOR
+from tools.gate_admissions import Admission
+from tools.gate_admissions import qualified_class_name
+from tools.gate_case_keys import CASE_KEY_SEPARATOR
 from tools.gate_vectors import GATE_TABLE_PATH
 from tools.gate_vectors import GATE_VECTORS_PATH
 from tools.gate_vectors import REQUIRED_CAP
@@ -47,6 +53,7 @@ from tools.gate_vectors import Direction
 from tools.gate_vectors import GateVectors
 from tools.gate_vectors import RebaselineRecord
 from tools.gate_vectors import load_gate_vectors
+from tools.gate_vectors import replay_admissions
 
 Reader = Callable[[QualityEvidence, PathSurvey], "float | int"]
 
@@ -171,6 +178,110 @@ def measure_case(case: GateCase) -> tuple[str, dict[str, str]]:
     return case_key(cap_id, generator, pocket), cells
 
 
+class EmptyMeasurementError(Exception):
+    """A measurement asked for no case at all."""
+
+
+class ExcludedCaseDidNotRaiseError(Exception):
+    """A case an admission excludes was generated without raising."""
+
+
+class ExcludedCaseRaisedOtherError(Exception):
+    """A case an admission excludes raised an exception of another class than the listed one."""
+
+
+class UnknownExcludedCaseError(Exception):
+    """An admission excludes a case that is not a gate case."""
+
+
+def expect_exclusion(generate: Callable[[], object], case: str, expected: str) -> None:
+    """G3 (Ruling 0.3-C2-amend): an excluded case's generator raises exactly the listed class.
+
+    Exactly, by qualified name (``module.Class``): a subclass, or a same-named
+    class of another module, is another failure mode and is refused.
+
+    Args:
+        generate: Runs the case's generator.
+        case: The case key, for the error.
+        expected: The qualified exception class name the admission lists.
+
+    Raises:
+        ExcludedCaseRaisedOtherError: The generator raised another class; the
+            original exception is chained.
+        ExcludedCaseDidNotRaiseError: The generator returned.
+    """
+    try:
+        generate()
+    except Exception as error:
+        raised = qualified_class_name(error)
+        if raised != expected:
+            raise ExcludedCaseRaisedOtherError(f"{case} is excluded under {expected}, but its generator raised {raised}: {error}") from error
+        return
+    raise ExcludedCaseDidNotRaiseError(f"{case} is excluded under {expected}, but its generator returned a path; admit it in a later entry.")
+
+
+def exclude_case(item: tuple[GateCase, str]) -> str:
+    """Run one excluded case's generator and require its listed exception (see `expect_exclusion`).
+
+    Args:
+        item: The case and the exception class name its admission lists.
+
+    Returns:
+        The case key.
+    """
+    (cap_id, cap, generator, pocket), expected = item
+    spec = gate_pocket(pocket, tea_cap_deg=cap)  # type: ignore[arg-type]
+    key = case_key(cap_id, generator, pocket)
+    expect_exclusion(lambda: GATE_GENERATORS[generator](spec), key, expected)
+    return key
+
+
+def partition_cases(selected: Sequence[GateCase], excluded: Mapping[str, str]) -> tuple[tuple[GateCase, ...], tuple[tuple[GateCase, str], ...]]:
+    """Split *selected* into the cases to measure and the excluded cases with their listed exceptions.
+
+    Args:
+        selected: The cases asked for.
+        excluded: The admissions' current exclusions, case key to exception
+            class name.
+
+    Returns:
+        The cases to measure, and the excluded ones paired with their class
+        names, each in *selected* order.
+
+    Raises:
+        UnknownExcludedCaseError: An exclusion names no gate case.
+    """
+    known = {case_key(cap_id, generator, pocket) for cap_id, _cap, generator, pocket in gate_cases()}
+    unknown = sorted(set(excluded) - known)
+    if unknown:
+        raise UnknownExcludedCaseError(f"admissions exclude {unknown}, which are not gate cases.")
+    measured = tuple(case for case in selected if case_key(case[0], case[2], case[3]) not in excluded)
+    listed = tuple((case, excluded[key]) for case in selected if (key := case_key(case[0], case[2], case[3])) in excluded)
+    return measured, listed
+
+
+class UnknownCoreCountError(Exception):
+    """The interpreter cannot tell how many cores this machine has, so the pool has no bound."""
+
+
+def pool_workers(jobs: int) -> int:
+    """The process-pool size for *jobs* cases: one worker per case, never more than the cores.
+
+    Args:
+        jobs: The number of cases the pool runs.
+
+    Returns:
+        ``min(jobs, os.cpu_count())``.
+
+    Raises:
+        UnknownCoreCountError: ``os.cpu_count()`` returned None.
+    """
+    cores = os.cpu_count()
+    if cores is None:
+        raise UnknownCoreCountError("os.cpu_count() is unknown on this machine; the gate measurement will not run an unbounded pool.")
+    return min(jobs, cores)
+
+
 class MissingRebaselineApprovalError(Exception):
     """Re-measuring under a new rules version without a cited re-baseline approval."""
 
@@ -179,26 +290,45 @@ class MissingRebaselineCriteriaError(Exception):
     """Re-measuring under a new rules version without naming a criterion the bump changed or retired."""
 
 
-def measure_gate_vectors(cases: Sequence[GateCase] | None = None, *, rebaseline: RebaselineRecord | None = None) -> GateVectors:
-    """Measure *cases* (default: every gate case) in parallel.
+def measure_gate_vectors(cases: Sequence[GateCase] | None = None, *, rebaseline: RebaselineRecord | None = None, admissions: tuple[Admission, ...] = ()) -> GateVectors:
+    """Measure *cases* (default: every gate case) in parallel, at most one worker per core.
+
+    A case the admissions exclude is not measured: its generator must raise
+    exactly the listed exception, and the document records no cells for it.
+    Any other raise propagates.
 
     Args:
         cases: The cases to measure.
         rebaseline: The re-baseline record the written document carries; see
             `rebaseline_for`. None for a measurement that is only compared.
+        admissions: The admission entries the written document carries, never
+            dropped; their exclusions decide which cases are not measured.
 
     Returns:
         The measured document at the current `RULES_VERSION`.
+
+    Raises:
+        UnknownExcludedCaseError: An exclusion names no gate case.
+        ExcludedCaseRaisedOtherError: An excluded case raised another class.
+        ExcludedCaseDidNotRaiseError: An excluded case did not raise.
+        EmptyMeasurementError: No case was asked for; there is nothing to
+            measure and no document to write.
+        UnknownCoreCountError: The core count is unknown.
     """
-    selected = gate_cases() if cases is None else tuple(cases)
-    with ProcessPoolExecutor(max_workers=len(selected)) as pool:
-        measured = dict(pool.map(measure_case, selected))
+    to_measure, excluded = partition_cases(gate_cases() if cases is None else tuple(cases), replay_admissions(admissions)[1])
+    if not to_measure and not excluded:
+        raise EmptyMeasurementError("a gate measurement needs at least one case.")
+    with ProcessPoolExecutor(max_workers=pool_workers(len(to_measure) + len(excluded))) as pool:
+        exclusions = pool.map(exclude_case, excluded)
+        measured = dict(pool.map(measure_case, to_measure))
+        list(exclusions)
     return GateVectors(
         rules_version=RULES_VERSION,
         instrument={"tool_diameter": GATE_TOOL_DIAMETER, "samples_per_motion": QUALITY_SAMPLES_PER_MOTION, "coverage_grid": COVERAGE_GRID_SAMPLES},
         criteria=tuple(criterion.spec for criterion in CRITERIA),
-        cases={case_key(cap_id, generator, pocket): measured[case_key(cap_id, generator, pocket)] for cap_id, _cap, generator, pocket in selected},
+        cases={case_key(cap_id, generator, pocket): measured[case_key(cap_id, generator, pocket)] for cap_id, _cap, generator, pocket in to_measure},
         rebaseline=rebaseline,
+        admissions=admissions,
     )
 
 
@@ -263,7 +393,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     existing = load_gate_vectors(args.write) if args.write.exists() else None
     record = rebaseline_for(existing, args.rebaseline_approval, args.rebaseline_criteria, args.rebaseline_retired)
-    vectors = GateVectors.build(measure_gate_vectors(rebaseline=record).to_json())
+    vectors = GateVectors.build(measure_gate_vectors(rebaseline=record, admissions=() if existing is None else existing.admissions).to_json())
     args.write.write_text(vectors.dumps())
     args.table.write_text(render_gate_table(vectors))
     print(f"wrote {args.write} and {args.table}")

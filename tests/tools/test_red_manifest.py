@@ -11,6 +11,7 @@ from typing import Union
 
 import pytest
 
+from benchmarks.gate import GATE_GENERATOR_NAMES
 from tools.red_manifest import MalformedJUnitError
 from tools.red_manifest import MalformedManifestError
 from tools.red_manifest import JUnitFailure
@@ -48,7 +49,7 @@ def _repository_red_ids() -> list[str]:
     quality_ids = [
         (f"tests.benchmarks.test_quality::test_the_generated_path_is_worth_running[{cap}-{generator}-{pocket}]")
         for cap in ("cap-120-default", "cap-40-attribution")
-        for generator in ("engagement_controlled", "radius_regulated")
+        for generator in GATE_GENERATOR_NAMES
         for pocket in ("rect_12x8", "rect_20x12", "L_shape")
     ]
     return [*quality_ids, *ADAPTIVE_RED_IDS]

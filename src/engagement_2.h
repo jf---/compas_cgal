@@ -199,6 +199,43 @@ std::vector<EngagementSample> engagement_circle_prefixes(
     const std::vector<double>& parameters, double tool_radius,
     double cap_chord_ratio, double gap_close_ratio = 0.0);
 
+// DECISION-ONLY views of the three swept-prefix queries above: true iff SOME
+// station of `parameters` is CAP_EXCEEDED, i.e. exactly any() over the
+// cap_exceeded flags the matching *_prefixes call returns. Same inputs, same
+// validation, same station placement, same exact per-station classification;
+// three differences, none a decision: (1) the stations are PROBED in a cost
+// order (the last station first, then the rest in order) and the scan stops at
+// the first exceeding station -- a disjunction does not depend on order; (2) no
+// reporting spans are computed (they never feed a verdict), so the reporting
+// invariant RimSpanNormalizationError is not raised here; (3) the in-process
+// clip runs only at a station whose static classification is CAP_EXCEEDED
+// (CLIP MONOTONICITY, swept_prefix_engagement_2.h) and only until the first
+// exceeding station, so the clip's invariant checks (SweptPrefixRimCellError,
+// including a degenerate radial direction) never fire at a statically
+// WITHIN_CAP station or at a station after the first exceedance. Placement:
+// the arc and circle forms place every station (raising every placement error)
+// before the first classification; the line form places each station lazily
+// as it is probed, but line_prefix_motion has already validated every
+// parameter and the distinct endpoints, so no placement error is reachable
+// after it returns.
+// Use the *_prefixes calls for anything that REPORTS engagement.
+bool engagement_line_exceeded(
+    const Stock2& stock, double x0, double y0, double x1, double y1,
+    const std::vector<double>& parameters, double tool_radius,
+    double cap_chord_ratio, double gap_close_ratio = 0.0);
+
+bool engagement_arc_exceeded(
+    const Stock2& stock, double guide_cx, double guide_cy,
+    double start_x, double start_y, double end_x, double end_y, bool clockwise,
+    const std::vector<double>& parameters, double tool_radius,
+    double cap_chord_ratio, double gap_close_ratio = 0.0);
+
+bool engagement_circle_exceeded(
+    const Stock2& stock, double guide_cx, double guide_cy, double guide_radius,
+    double entry_x, double entry_y, bool clockwise,
+    const std::vector<double>& parameters, double tool_radius,
+    double cap_chord_ratio, double gap_close_ratio = 0.0);
+
 // Result of certifying the engagement cap along one linear cutter motion.
 // max_tea is the largest run TEA seen at any station visited -- a REPORTING
 // double, best-effort over the sampled stations, never a decision input.

@@ -11,7 +11,9 @@ red-manifest run is what proves it green.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
+from fnmatch import fnmatchcase
 from typing import Literal
 from typing import Union
 
@@ -26,7 +28,8 @@ class VectorRow:
     """A predicate on the pinned gate vectors.
 
     Attributes:
-        case: A case key, or `ALL_CASES`.
+        case: A case key, or an `fnmatch` pattern over case keys
+            (``"cap-120-default/pipeline/*"``); `ALL_CASES` matches every key.
         criterion: The criterion's name in the vectors.
         relation: How the cell compares with *bound*.
         bound: A decimal string.
@@ -58,6 +61,22 @@ class TestRow:
 AcceptanceRow = Union[VectorRow, TestRow]
 
 
+def matching_cases(pattern: str, cases: Sequence[str]) -> tuple[str, ...]:
+    """The case keys a row's ``case`` selects, in document order (Ruling 1.1-C15-amend).
+
+    Case-sensitive `fnmatch`: ``*`` spans the ``/`` separators, so
+    ``"*/pipeline/*"`` is every pipeline case at every cap.
+
+    Args:
+        pattern: A case key or a pattern.
+        cases: The document's case keys.
+
+    Returns:
+        The selected keys; empty when nothing matches (the caller reports it).
+    """
+    return tuple(case for case in cases if fnmatchcase(case, pattern))
+
+
 class UnknownAcceptanceCriterionError(Exception):
     """A `VectorRow` names a criterion the current gate vectors do not carry."""
 
@@ -86,5 +105,15 @@ STAGE_ACCEPTANCE: dict[str, tuple[AcceptanceRow, ...]] = {
         VectorRow(ALL_CASES, "misplaced_plunges", "==", "0", "0.3 rule (e): every frozen-generator plunge lands on its next motion's start"),
         VectorRow(ALL_CASES, "unsafe_rapids", "==", "0", "Stage 0 keeps every rapid off the cutting plane"),
         VectorRow(ALL_CASES, "zero_length_motions", "==", "0", "Stage 0 measures no zero-length motion on the gate cases"),
+    ),
+    "stage-1": (
+        VectorRow("cap-120-default/pipeline/*", "material_plunges", "==", "1", "1.1: one plunge into material per pocket at 120 deg"),
+        VectorRow("cap-120-default/pipeline/*", "redundant_operations", "==", "0", "1.1: no redundant operation at 120 deg"),
+        VectorRow("cap-120-default/pipeline/*", "degenerate_loops", "==", "0", "1.1: no degenerate loop at 120 deg"),
+        VectorRow("cap-120-default/pipeline/rect_12x8", "tangent_breaks", "<=", "0", "1.1: tangent breaks within rho_regulated's 120 deg cell"),
+        VectorRow("cap-120-default/pipeline/rect_20x12", "tangent_breaks", "<=", "0", "1.1: tangent breaks within rho_regulated's 120 deg cell"),
+        VectorRow("cap-120-default/pipeline/L_shape", "tangent_breaks", "<=", "2", "1.1: tangent breaks within rho_regulated's 120 deg cell"),
+        TestRow("tests/pipeline/test_against_rho.py::test_no_gated_cell_is_worse_than_rho_regulated", "1.1: no gated cell worse than rho_regulated, both caps"),
+        TestRow("tests/pipeline/test_generate.py::test_the_narrow_acceptance_at_120", "1.1: the narrow acceptance at 120 deg"),
     ),
 }

@@ -1,8 +1,14 @@
+import math
 from dataclasses import FrozenInstanceError
 from dataclasses import replace
+from fractions import Fraction
 
 import numpy as np
 import pytest
+from hypothesis import example
+from hypothesis import given
+from hypothesis import settings
+from hypothesis import strategies as st
 
 from compas_cgal import _coverage_2
 from compas_cgal.adaptive import reachable_domain as reachable_domain_module
@@ -825,3 +831,208 @@ def test_native_reachable_errors_are_distinct_and_audit_stays_private() -> None:
         _coverage_2.ReachableDomain2(_array(RECTANGLE[:2]), [], 1.0)
     native = _coverage_2.ReachableDomain2(_array(RECTANGLE), [], 1.0)
     assert not hasattr(native, "build_audit_for_native_gate")
+
+
+# --- Exact segment containment (CutterCentreDomain2.contains_segment) --------
+#
+# A segment [a, b] lies in the closed cutter-centre domain iff a does and the
+# segment keeps squared distance >= r^2 from every ring edge. The reference
+# below decides the same statement over Fractions of the injected doubles; it
+# shares no code with the native kernel.
+
+GATE_L_SHAPE = (
+    (0.0, 0.0),
+    (12.0, 0.0),
+    (12.0, 6.0),
+    (6.0, 6.0),
+    (6.0, 10.0),
+    (0.0, 10.0),
+)
+# A chord of length 0.985 r whose ends lie 1.0001 r from the reflex vertex
+# (6, 6) and whose middle passes 0.1296 r inside that vertex's r-disk.
+REFLEX_CHORD = (
+    (5.036273183746056, 5.732734900084135),
+    (5.732734900084135, 5.036273183746056),
+)
+# Interior stations at k / SOUNDNESS_STATIONS of a segment, exact rationals.
+SOUNDNESS_STATIONS = 34
+
+_FPt = tuple[Fraction, Fraction]
+
+
+def _f_sub(p: _FPt, q: _FPt) -> _FPt:
+    return (p[0] - q[0], p[1] - q[1])
+
+
+def _f_dot(u: _FPt, v: _FPt) -> Fraction:
+    return u[0] * v[0] + u[1] * v[1]
+
+
+def _f_cross(u: _FPt, v: _FPt) -> Fraction:
+    return u[0] * v[1] - u[1] * v[0]
+
+
+def _f_sign(x: Fraction) -> int:
+    return (x > 0) - (x < 0)
+
+
+def _f_point_segment_sqdist(p: _FPt, a: _FPt, b: _FPt) -> Fraction:
+    d = _f_sub(b, a)
+    w = _f_sub(p, a)
+    dd = _f_dot(d, d)
+    if dd == 0:
+        return _f_dot(w, w)
+    t = _f_dot(w, d)
+    if t <= 0:
+        return _f_dot(w, w)
+    if t >= dd:
+        v = _f_sub(p, b)
+        return _f_dot(v, v)
+    c = _f_cross(d, w)
+    return c * c / dd
+
+
+def _f_on_box(p: _FPt, a: _FPt, b: _FPt) -> bool:
+    return min(a[0], b[0]) <= p[0] <= max(a[0], b[0]) and min(a[1], b[1]) <= p[1] <= max(a[1], b[1])
+
+
+def _f_segments_intersect(p0: _FPt, p1: _FPt, q0: _FPt, q1: _FPt) -> bool:
+    o1 = _f_sign(_f_cross(_f_sub(p1, p0), _f_sub(q0, p0)))
+    o2 = _f_sign(_f_cross(_f_sub(p1, p0), _f_sub(q1, p0)))
+    o3 = _f_sign(_f_cross(_f_sub(q1, q0), _f_sub(p0, q0)))
+    o4 = _f_sign(_f_cross(_f_sub(q1, q0), _f_sub(p1, q0)))
+    if o1 * o2 < 0 and o3 * o4 < 0:
+        return True
+    return (
+        (o1 == 0 and _f_on_box(q0, p0, p1))
+        or (o2 == 0 and _f_on_box(q1, p0, p1))
+        or (o3 == 0 and _f_on_box(p0, q0, q1))
+        or (o4 == 0 and _f_on_box(p1, q0, q1))
+    )
+
+
+def _f_segment_segment_sqdist(p0: _FPt, p1: _FPt, q0: _FPt, q1: _FPt) -> Fraction:
+    if _f_segments_intersect(p0, p1, q0, q1):
+        return Fraction(0)
+    return min(
+        _f_point_segment_sqdist(p0, q0, q1),
+        _f_point_segment_sqdist(p1, q0, q1),
+        _f_point_segment_sqdist(q0, p0, p1),
+        _f_point_segment_sqdist(q1, p0, p1),
+    )
+
+
+def _f_edges(rings: tuple[tuple[tuple[float, float], ...], ...]) -> list[tuple[_FPt, _FPt]]:
+    edges: list[tuple[_FPt, _FPt]] = []
+    for ring in rings:
+        points = [(Fraction(x), Fraction(y)) for x, y in ring]
+        edges += [(points[i], points[(i + 1) % len(points)]) for i in range(len(points))]
+    return edges
+
+
+def _f_clears(
+    edges: list[tuple[_FPt, _FPt]],
+    radius: float,
+    a: tuple[float, float],
+    b: tuple[float, float],
+) -> bool:
+    fa = (Fraction(a[0]), Fraction(a[1]))
+    fb = (Fraction(b[0]), Fraction(b[1]))
+    squared_radius = Fraction(radius) ** 2
+    return all(_f_segment_segment_sqdist(fa, fb, e0, e1) >= squared_radius for e0, e1 in edges)
+
+
+def test_cutter_centre_domain_segment_refuses_a_reflex_corner_chord() -> None:
+    domain = _coverage_2.CutterCentreDomain2.build(_array(GATE_L_SHAPE), [], 1.0)
+    a, b = REFLEX_CHORD
+
+    assert domain.contains(*a)
+    assert domain.contains(*b)
+    assert not domain.contains_segment(*a, *b)
+    assert not domain.contains_segment(*b, *a)
+
+
+def test_cutter_centre_domain_segment_keeps_exact_closed_clearance() -> None:
+    domain = _coverage_2.CutterCentreDomain2.build(_array(RECTANGLE), [], 1.0)
+    x0 = 0.1 + 0.2 + 1.0
+    x1 = math.pi + 2.0
+    below = float(np.nextafter(1.0, 0.0))
+
+    # Clearance exactly r from the bottom wall: the domain is closed.
+    assert domain.contains_segment(x0, 1.0, x1, 1.0)
+    assert not domain.contains_segment(x0, below, x1, below)
+    # Legal start, end one ulp past the offset wall: the clearance decides.
+    assert domain.contains(x0, 2.0)
+    assert not domain.contains(x1, below)
+    assert not domain.contains_segment(x0, 2.0, x1, below)
+    # Interior point to a point past the wall: only the in-domain end passes.
+    inside, outside = (5.0, 4.0), (5.0, 0.5)
+    assert domain.contains(*inside)
+    assert not domain.contains(*outside)
+    assert not domain.contains_segment(*inside, *outside)
+    assert not domain.contains_segment(*outside, *inside)
+    # A degenerate segment is its point.
+    assert domain.contains_segment(*inside, *inside)
+    assert not domain.contains_segment(*outside, *outside)
+
+
+@pytest.mark.parametrize("coordinates", [(math.nan, 0.0), (0.0, math.inf), (-math.inf, 1.0)])
+def test_cutter_centre_domain_segment_rejects_nonfinite_ends(coordinates: tuple[float, float]) -> None:
+    domain = _coverage_2.CutterCentreDomain2.build(_array(RECTANGLE), [], 1.0)
+
+    with pytest.raises(InvalidReachableDomainInputError):
+        domain.contains_segment(5.0, 4.0, *coordinates)
+    with pytest.raises(InvalidReachableDomainInputError):
+        domain.contains_segment(*coordinates, 5.0, 4.0)
+
+
+_SEGMENT_FIXTURES = {
+    "holed": (RECTANGLE, (ISLAND,)),
+    "l_shape": (GATE_L_SHAPE, ()),
+}
+_SEGMENT_DOMAINS = {
+    name: _coverage_2.CutterCentreDomain2.build(_array(outer), [_array(hole) for hole in holes], 1.0)
+    for name, (outer, holes) in _SEGMENT_FIXTURES.items()
+}
+_SEGMENT_EDGES = {name: _f_edges((outer, *holes)) for name, (outer, holes) in _SEGMENT_FIXTURES.items()}
+# Bounding box of both fixtures, padded by one tool radius (mm).
+_BOX_COORDINATE = st.floats(min_value=-1.0, max_value=13.0, allow_nan=False, allow_infinity=False)
+# Offsets for short segments, up to two tool radii (mm).
+_SHORT_OFFSET = st.floats(min_value=-2.0, max_value=2.0, allow_nan=False, allow_infinity=False)
+
+
+@st.composite
+def _segment_query(draw: st.DrawFn) -> tuple[str, tuple[float, float], tuple[float, float]]:
+    name = draw(st.sampled_from(sorted(_SEGMENT_FIXTURES)))
+    a = (draw(_BOX_COORDINATE), draw(_BOX_COORDINATE))
+    if draw(st.booleans()):
+        b = (a[0] + draw(_SHORT_OFFSET), a[1] + draw(_SHORT_OFFSET))
+    else:
+        b = (draw(_BOX_COORDINATE), draw(_BOX_COORDINATE))
+    return name, a, b
+
+
+@settings(max_examples=300, deadline=None)
+@given(_segment_query())
+@example(("l_shape", REFLEX_CHORD[0], REFLEX_CHORD[1]))
+@example(("holed", (0.1 + 0.2 + 1.0, 1.0), (math.pi + 2.0, 1.0)))
+@example(("holed", (1.5, 2.0), (8.5, 2.0)))
+def test_cutter_centre_domain_segment_matches_rational_oracle(
+    query: tuple[str, tuple[float, float], tuple[float, float]],
+) -> None:
+    name, a, b = query
+    domain = _SEGMENT_DOMAINS[name]
+    edges = _SEGMENT_EDGES[name]
+
+    native = domain.contains_segment(*a, *b)
+
+    assert native == (domain.contains(*a) and _f_clears(edges, 1.0, a, b))
+    if native:
+        assert domain.contains(*a)
+        assert domain.contains(*b)
+        fa = (Fraction(a[0]), Fraction(a[1]))
+        fb = (Fraction(b[0]), Fraction(b[1]))
+        for k in range(1, SOUNDNESS_STATIONS):
+            t = Fraction(k, SOUNDNESS_STATIONS)
+            station = (fa[0] + t * (fb[0] - fa[0]), fa[1] + t * (fb[1] - fa[1]))
+            assert all(_f_point_segment_sqdist(station, e0, e1) >= 1 for e0, e1 in edges)

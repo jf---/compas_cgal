@@ -13,6 +13,18 @@
       "closes_with": "generator work (parked lane C4/C5 feeds this)"
     },
     {
+      "match": "^tests\\.benchmarks\\.test_quality::test_the_generated_path_is_worth_running\\[(?:cap-120-default|cap-40-attribution)-rho_regulated-(?:rect_12x8|rect_20x12|L_shape)\\]$",
+      "count": 6,
+      "reason": "rho_regulated reference column (frozen, admitted by 0.3-C2-amend with a null reference): declined corners leave uncut, one chain entry per chain, entry loops exceed the cap, redundant_operations 4/4/8 (rect_12x8/rect_20x12/L_shape) at both caps, L tangent_breaks 2; its L misplaced_plunges 3 is exempt (the admission's exempt_rows), not a failure; frozen, so it never closes",
+      "closes_with": "never (frozen reference column; retire only by a ruling)"
+    },
+    {
+      "match": "^tests\\.benchmarks\\.test_quality::test_the_generated_path_is_worth_running\\[(?:cap-120-default|cap-40-attribution)-pipeline-(?:rect_12x8|rect_20x12|L_shape)\\]$",
+      "count": 6,
+      "reason": "pipeline narrow regime (Task 1.1): declined corner stations leave uncut, the first loop into virgin stock exceeds the cap, L tangent breaks 2 (= rho's)",
+      "closes_with": "Stage 1: corner clearing (1.3), helix entry (1.2), exact links (1.6)"
+    },
+    {
       "match": "^tests\\.adaptive\\.test_generator::test_task13f_full_continuation$",
       "count": 1,
       "reason": "plan superseded (backlog D1); retirement scheduled through the auditor programme",

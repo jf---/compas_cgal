@@ -166,6 +166,10 @@ retract can occur inside a single chain, so the chain rule alone is not
 sufficient either. Both are tested, and the existing generators are unaffected
 because for them the two boundaries coincide.
 
+The chain-ordering generator itself was deleted (`9fa6eea8`). Its stay-down
+chain ordering returned, typed and gated, as `compas_cgal.pipeline` (Task 1.1);
+see [The product pipeline](pipeline.md).
+
 ```mermaid
 flowchart LR
     subgraph spine["run 0 — spine, tool down"]

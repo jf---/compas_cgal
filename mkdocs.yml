@@ -159,6 +159,7 @@ nav:
       - Held Performance: held_performance.md
       - Measurement Claims: measurement_claims.md
       - Machining Quality: machining_quality.md
+      - "Product Pipeline: Narrow Regime": pipeline.md
       - Drawing Tool Paths: toolpath_drawing.md
       - Exact Segment-Site MAT: segment_site_mat.md
       - Exact Continuous Engagement: continuous_engagement.md
@@ -175,6 +176,7 @@ nav:
       - Continuous Engagement Cost: continuous_engagement_cost.md
   - Refactor:
       - "Stage 0: the Gate Measures Physics": refactor/stage0.md
+      - "Stage 1: the Narrow-Regime Generator": refactor/stage1.md
   - API Reference:
       - compas_cgal.adaptive.motion_certificate: api/compas_cgal.adaptive.motion_certificate.md
       - compas_cgal.straight_skeleton_2: api/compas_cgal.straight_skeleton_2.md
