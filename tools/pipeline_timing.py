@@ -24,11 +24,14 @@ import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 from typing import Callable
 from typing import Sequence
 
 from benchmarks.gate import GATE_GENERATORS
 from benchmarks.gate import gate_pocket
+from compas_cgal.helix import Helix
+from compas_cgal.toolpath import ToolpathOperation
 from compas_cgal.toolpath import ToolpathResult
 from tools.gate_measure import case_key
 from tools.gate_measure import gate_cases
@@ -84,8 +87,45 @@ class CaseRun:
 Launcher = Callable[[str], CaseRun]
 
 
+def _helix_data(helix: Helix) -> dict[str, Any]:
+    """Every defining field of *helix*, as plain values in a fixed key order.
+
+    A `Helix` is no compas geometry and has no ``__data__``; its digest content
+    is its exact definition: the footprint loop (centre, radius, exact entry,
+    realised phase and chart parameter), both heights, the turn count and the
+    turn sense. Every float is a double whose ``repr`` round-trips exactly.
+    """
+    footprint = helix.footprint
+    return {
+        "footprint": {
+            "centre": (float(footprint.centre.x), float(footprint.centre.y)),
+            "radius": float(footprint.radius.value),
+            "entry": (float(footprint.entry.x), float(footprint.entry.y)),
+            "phase": float(footprint.phase),
+            "chart": footprint.chart,
+            "chart_numerator": footprint.chart_numerator,
+        },
+        "top_z": float(helix.top_z.value),
+        "bottom_z": float(helix.bottom_z.value),
+        "turns": helix.turns,
+        "clockwise": helix.clockwise,
+    }
+
+
+def _geometry_data(operation: ToolpathOperation) -> Any:
+    """The digest content of *operation*'s geometry: compas ``__data__``, or `_helix_data` for a helix."""
+    geometry = operation.geometry
+    if isinstance(geometry, Helix):
+        return _helix_data(geometry)
+    return geometry.__data__
+
+
 def ops_digest(result: ToolpathResult) -> str:
     """The truncated SHA-256 over every operation's kind, geometry type and geometry data, in order.
+
+    Line, arc and circle data is compas ``__data__``; a helix's is its
+    defining fields (`_helix_data`). Output without a helix digests exactly as
+    before the helix existed.
 
     Args:
         result: A generated path.
@@ -95,7 +135,7 @@ def ops_digest(result: ToolpathResult) -> str:
     """
     digest = hashlib.sha256()
     for operation in result.operations:
-        digest.update(repr((operation.operation, type(operation.geometry).__name__, operation.geometry.__data__)).encode())
+        digest.update(repr((operation.operation, type(operation.geometry).__name__, _geometry_data(operation))).encode())
     return digest.hexdigest()[:DIGEST_HEX_CHARS]
 
 

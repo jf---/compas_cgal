@@ -34,6 +34,8 @@ import enum
 import math
 from dataclasses import dataclass
 from typing import List
+from typing import Never
+from typing import NoReturn
 from typing import Optional
 from typing import Sequence
 from typing import Tuple
@@ -45,8 +47,11 @@ from compas.geometry import angle_vectors
 from compas.tolerance import TOL
 
 from benchmarks.depletion import CutMotion
+from benchmarks.depletion import HelixEvent
 from benchmarks.depletion import PlungeEvent
+from benchmarks.depletion import UnhandledReplayKindError
 from benchmarks.depletion import replay_events
+from benchmarks.errors import BenchmarkError
 from benchmarks.errors import InconsistentRemovalVerdictError
 from benchmarks.errors import InvalidMotionSampleCountError
 from benchmarks.errors import UnmeasurableOperationLengthError
@@ -54,15 +59,30 @@ from benchmarks.errors import UnreplayableOperationError
 from benchmarks.errors import UnsampleableMotionError
 from benchmarks.held_path_snapshot import HeldOperationSnapshot
 from benchmarks.held_path_snapshot import snapshot_toolpath
+from benchmarks.helix_observation import HelixObservation
+from benchmarks.helix_observation import helix_endpoints
+from benchmarks.helix_observation import helix_tangents
+from benchmarks.helix_observation import measure_helix
 from benchmarks.spec import PocketSpec
+from benchmarks.survey_station import NO_GAP_CLOSURE
+from benchmarks.survey_station import EngagementSample as EngagementSample  # re-exported: consumers import it from benchmarks.survey
+from benchmarks.survey_station import perpendicular
+from benchmarks.survey_station import seam_station
+from benchmarks.survey_station import swept_area as _swept_area  # re-bound: tests import `benchmarks.survey._swept_area`
+from benchmarks.survey_station import unit
 from benchmarks.units import OperationIndex
 from compas_cgal import _coverage_2
 from compas_cgal import _stock_2
 from compas_cgal.engagement import _cap_chord_ratio
 from compas_cgal.engagement import _infer_cut_height
 from compas_cgal.engagement import _operation_removal
+from compas_cgal.engagement import _unhandled_category
+from compas_cgal.helix import Helix
 from compas_cgal.replay_classification import CutPlaneRampError
+from compas_cgal.replay_classification import HelixGeometryError
+from compas_cgal.replay_classification import OffPlaneHelixError
 from compas_cgal.replay_classification import OffPlaneReplayCurveError
+from compas_cgal.replay_classification import ReplayCategory
 from compas_cgal.replay_classification import classify_operation_replay
 from compas_cgal.stock import Stock
 from compas_cgal.stock import SweepRemoval
@@ -85,11 +105,13 @@ from compas_cgal.units import WorldXY
 # stock it is about to cut.
 QUALITY_SAMPLES_PER_MOTION = 45
 
-# The engagement query is asked WITHOUT gap-closure pessimism, matching
-# `benchmarks.exceedance.NO_GAP_CLOSURE`: this is a question about the material
-# actually engaged at a position, not about what a certifier must assume could
-# happen before the next station.
-NO_GAP_CLOSURE = 0.0
+
+class UnknownToolpathGeometryError(BenchmarkError):
+    """An operation carries geometry outside ``Line | Arc | Circle | Helix``."""
+
+
+class HelixHasNoRapidVerdictError(BenchmarkError):
+    """A helix was asked for a rapid's horizontal-at-cut-plane verdict; a helix is never a rapid."""
 
 
 class MotionKind(str, enum.Enum):
@@ -104,31 +126,6 @@ class MotionKind(str, enum.Enum):
     LOOP = "loop"
     ARC = "arc"
     LINE = "line"
-
-
-@dataclass(frozen=True)
-class EngagementSample:
-    """One probed cutter position on a motion.
-
-    Attributes:
-        distance: Arc length from the motion's start to this position.
-        position: Cutter-centre position in the world XY frame.
-        engagement_deg: The largest engaged run of the cutter rim, in degrees.
-            REPORTING ONLY: this value never decides cap exceedance.
-        cap_exceeded: The exact cap predicate's verdict at this position.
-        inside_centre_domain: Whether the cutter centre lies where a tool of this
-            radius may legally be. False is a demonstrated gouge.
-
-    Each retained ``cap_exceeded`` verdict is exact. Absence of exceedance across
-    this finite station set remains sampled-negative evidence, not a certificate
-    for the continuous motion.
-    """
-
-    distance: float
-    position: Point2[WorldXY]
-    engagement_deg: float
-    cap_exceeded: bool
-    inside_centre_domain: bool
 
 
 @dataclass(frozen=True)
@@ -261,10 +258,14 @@ class PathSurvey:
             (`benchmarks.depletion.PlungeEvent`).
         retract_indices: Source operation indices of the upward clearance moves.
         final_stock: The stock after the whole path has been replayed.
-        total_length: Analytic length of every operation.
-        cut_length: Analytic length of the cut-plane motions.
+        total_length: Analytic length of every operation: *cut_length* +
+            *helix_length* + *air_length* + the plunges' lengths.
+        cut_length: Analytic length of the cut-plane motions (the sampled
+            ones; a helix is cutting too, see *helix_length*).
         air_length: Analytic length of the motions that remove nothing.
         plunge_swept_area: Area bored by the plunges, in closed form.
+        helices: The helical entries, in toolpath order. Not cap-sampled
+            (E8), so never among *motions*.
     """
 
     spec: PocketSpec
@@ -281,11 +282,22 @@ class PathSurvey:
     cut_length: float
     air_length: float
     plunge_swept_area: float
+    helices: Tuple[HelixObservation, ...]
+
+    @property
+    def helix_length(self) -> float:
+        """Analytic length of the helical entries (REPORTING): cutting, never air (M7)."""
+        return sum(helix.length for helix in self.helices)
+
+    @property
+    def helix_swept_area(self) -> float:
+        """Area bored by the helices, in closed form."""
+        return sum(helix.swept_area for helix in self.helices)
 
     @property
     def swept_area(self) -> float:
-        """Total area the tool sweeps, cut motions and plunges together."""
-        return sum(motion.swept_area for motion in self.motions) + self.plunge_swept_area
+        """Total area the tool sweeps: cut motions, plunges and helices together."""
+        return sum(motion.swept_area for motion in self.motions) + self.plunge_swept_area + self.helix_swept_area
 
     @property
     def within_band_motions(self) -> int:
@@ -338,13 +350,18 @@ def survey_path(spec: PocketSpec, result: ToolpathResult, *, samples_per_motion:
 
     stock = Stock(spec.polygon, list(spec.holes))
     motions: List[MotionQuality] = []
+    helices: List[HelixObservation] = []
     material_plunges: list[OperationIndex] = []
     for event in replay_events(spec, result, stock):
-        if isinstance(event, PlungeEvent):
+        if isinstance(event, CutMotion):
+            motions.append(_measure_motion(event, spec.tool_radius, cap_ratio, centre_domain, samples_per_motion))
+        elif isinstance(event, PlungeEvent):
             if event.into_material:
                 material_plunges.append(OperationIndex(event.index))
-            continue
-        motions.append(_measure_motion(event, spec.tool_radius, cap_ratio, centre_domain, samples_per_motion))
+        elif isinstance(event, HelixEvent):
+            helices.append(measure_helix(event, spec.tool_radius, cap_ratio, centre_domain))
+        else:
+            _unhandled_event(event)
 
     rapids, plunge_indices, retract_indices, plunge_area = _classify_non_cutting(result, spec.tool_radius)
     cut_length = sum(motion.length for motion in motions)
@@ -364,7 +381,21 @@ def survey_path(spec: PocketSpec, result: ToolpathResult, *, samples_per_motion:
         cut_length=cut_length,
         air_length=air_length,
         plunge_swept_area=plunge_area,
+        helices=tuple(helices),
     )
+
+
+def _unhandled_event(event: Never) -> NoReturn:
+    """Fail on a replay event the survey has no branch for.
+
+    Typed ``Never``: the event dispatch is an exhaustive ``isinstance`` chain
+    over `benchmarks.depletion.ReplayEvent`, so ``mypy --strict`` rejects a
+    chain missing a member; at runtime it raises by name.
+
+    Raises:
+        UnhandledReplayKindError: Always.
+    """
+    raise UnhandledReplayKindError(f"the survey has no branch for replay event {event!r}")
 
 
 def _measure_motion(
@@ -387,10 +418,13 @@ def _measure_motion(
         The motion's findings.
 
     Raises:
-        UnsampleableMotionError: The motion carries no cutter-centre path.
+        UnsampleableMotionError: The motion carries no cutter-centre path, or is
+            a helix (never cap-sampled, E8; `_measure_helix` observes it).
         UnmeasurableOperationLengthError: The motion's length is undefined.
     """
     geometry = motion.operation.geometry
+    if isinstance(geometry, Helix):
+        raise UnsampleableMotionError(f"Operation {motion.index} is a helix; a helix is not cap-sampled (E8) and is observed as a HelixObservation.")
     straight = isinstance(geometry, Line)
     positions = _motion_travel_positions(motion, samples_per_motion)
     verdicts = _motion_prefix_samples(motion, samples_per_motion, tool_radius, cap_ratio)
@@ -432,10 +466,6 @@ def _measure_motion(
     )
 
 
-# The prefix parameter of a closed loop's own end: the full turn.
-FULL_TURN_PREFIX = 1.0
-
-
 def _loop_seam_exit(motion: CutMotion, tool_radius: float, cap_ratio: float, centre_domain: "_coverage_2.CutterCentreDomain2") -> EngagementSample:
     """The junction station of a closed loop: its seam, after the whole turn.
 
@@ -454,18 +484,7 @@ def _loop_seam_exit(motion: CutMotion, tool_radius: float, cap_ratio: float, cen
     """
     geometry = motion.operation.geometry
     assert isinstance(geometry, Circle)  # guaranteed by the caller
-    cx, cy = _xy(geometry.frame.point)
-    sx, sy = _circle_entry(motion.operation)
-    ((_total, max_run, exceeded),) = _stock_2.engagement_circle_prefixes(
-        motion.stock.raw, cx, cy, float(geometry.radius), sx, sy, motion.operation.clockwise, [FULL_TURN_PREFIX], tool_radius, cap_ratio, NO_GAP_CLOSURE
-    )
-    return EngagementSample(
-        distance=float(geometry.circumference),
-        position=Point2[WorldXY].build(sx, sy),
-        engagement_deg=math.degrees(max_run),
-        cap_exceeded=exceeded,
-        inside_centre_domain=centre_domain.contains(sx, sy),
-    )
+    return seam_station(motion.stock, geometry, _circle_entry(motion.operation), motion.operation.clockwise, float(geometry.circumference), tool_radius, cap_ratio, centre_domain)
 
 
 def _validate_cut_plane_curves(operations: Sequence[ToolpathOperation]) -> None:
@@ -478,22 +497,50 @@ def _validate_cut_plane_curves(operations: Sequence[ToolpathOperation]) -> None:
     Args:
         operations: The complete toolpath operation stream.
 
+    A helix is validated here too, so a helix ending off the cutting plane is
+    refused before the replay bores anything. Its footprint is a world-XY
+    circle by construction (`compas_cgal.helix.Helix.footprint_circle`).
+
     Raises:
         UnreplayableOperationError: An engaged arc or circle is tilted or does
-            not lie on the independently established cutting plane.
+            not lie on the independently established cutting plane, or a helix
+            ends off it.
     """
-    curves = [(index, operation) for index, operation in enumerate(operations) if isinstance(operation.geometry, (Arc, Circle))]
+    curves = [(index, operation) for index, operation in enumerate(operations) if isinstance(operation.geometry, (Arc, Circle, Helix))]
     if not curves:
         return
 
     cut_z = _infer_cut_height(list(operations))
     for index, operation in curves:
-        try:
-            category = classify_operation_replay(operation, Millimetre(cut_z))
-        except (CutPlaneRampError, OffPlaneReplayCurveError) as error:
-            raise UnreplayableOperationError(f"Operation {index} ({operation.operation.value}) {error}.") from error
+        category = _replay_category(index, operation, cut_z)
         if category == "motion":
             _require_world_xy_curve(index, operation.geometry)
+        elif category == "rapid" or category == "plunge" or category == "retract" or category == "helix":
+            continue
+        else:
+            _unhandled_category(category)
+
+
+def _replay_category(index: int, operation: ToolpathOperation, cut_z: float) -> ReplayCategory:
+    """The shared cut-plane replay category, with model breaches raised by name.
+
+    Args:
+        index: Position of the operation, for the error message.
+        operation: The operation.
+        cut_z: The inferred cutting-plane height.
+
+    Returns:
+        Its replay category.
+
+    Raises:
+        UnreplayableOperationError: The operation is a ramp, an off-plane
+            curve, an off-plane helix, or a helix whose operation and geometry
+            disagree.
+    """
+    try:
+        return classify_operation_replay(operation, Millimetre(cut_z))
+    except (CutPlaneRampError, OffPlaneReplayCurveError, OffPlaneHelixError, HelixGeometryError) as error:
+        raise UnreplayableOperationError(f"Operation {index} ({operation.operation.value}) {error}.") from error
 
 
 def _require_world_xy_curve(index: int, geometry: object) -> None:
@@ -702,42 +749,6 @@ def _motion_prefix_samples(motion: CutMotion, count: int, tool_radius: float, ca
     raise UnsampleableMotionError(f"Operation {motion.index} ({motion.operation.operation.value}) has geometry {type(geometry).__name__!r}, which carries no cutter-centre path.")
 
 
-def _swept_area(geometry: object, tool_radius: float) -> float:
-    """Closed-form area swept by a tool of *tool_radius* along *geometry*.
-
-    A segment of length L sweeps a capsule, ``2 r L + pi r^2``. A guide circle of
-    radius rho sweeps an annulus of area ``4 pi rho r`` when ``rho > r``, and a
-    filled disk of area ``pi (rho + r)^2`` when it does not -- which is the same
-    boundary `benchmarks.quality.degenerate_loops` tests, arrived at from the
-    area rather than from the hole. An arc of swept angle alpha sweeps the
-    corresponding annular sector plus one full end disk.
-
-    Args:
-        geometry: The motion's primitive.
-        tool_radius: Tool radius.
-
-    Returns:
-        The swept area.
-
-    Raises:
-        UnmeasurableOperationLengthError: The primitive is not a line, arc, or
-            circle.
-    """
-    if isinstance(geometry, Circle):
-        rho = float(geometry.radius)
-        if rho > tool_radius:
-            return 4.0 * math.pi * rho * tool_radius
-        return math.pi * (rho + tool_radius) ** 2
-    if isinstance(geometry, Arc):
-        rho = float(geometry.radius)
-        alpha = float(geometry.angle)
-        inner = max(0.0, rho - tool_radius)
-        return 0.5 * alpha * ((rho + tool_radius) ** 2 - inner**2) + math.pi * tool_radius**2
-    if isinstance(geometry, Line):
-        return 2.0 * tool_radius * float(geometry.length) + math.pi * tool_radius**2
-    raise UnmeasurableOperationLengthError(f"Geometry {type(geometry).__name__!r} has no closed-form swept area.")
-
-
 def _motion_kind(geometry: object) -> MotionKind:
     """Classify a primitive.
 
@@ -787,11 +798,17 @@ def _endpoints(operation: ToolpathOperation) -> Tuple[Tuple[float, float], Tuple
     (`_circle_entry`) -- which is what makes the continuity test meaningful
     across a loop.
 
+    A helix starts and ends at its exact entry ``P`` (`_helix_endpoints`); its
+    descent from top to bottom Z is along the dropped axis.
+
     Args:
         operation: The motion.
 
     Returns:
         ``(start, end)``.
+
+    Raises:
+        UnknownToolpathGeometryError: The geometry is not a toolpath primitive.
     """
     geometry = operation.geometry
     if isinstance(geometry, Circle):
@@ -799,9 +816,11 @@ def _endpoints(operation: ToolpathOperation) -> Tuple[Tuple[float, float], Tuple
         return entry, entry
     if isinstance(geometry, Arc):
         return _xy(geometry.point_at(0.0)), _xy(geometry.point_at(1.0))
-    line = geometry
-    assert isinstance(line, Line)  # guaranteed by _motion_kind, which ran first
-    return (float(line.start[0]), float(line.start[1])), (float(line.end[0]), float(line.end[1]))
+    if isinstance(geometry, Line):
+        return (float(geometry.start[0]), float(geometry.start[1])), (float(geometry.end[0]), float(geometry.end[1]))
+    if isinstance(geometry, Helix):
+        return helix_endpoints(geometry)
+    return _not_a_primitive(operation, geometry)
 
 
 def _tangents(operation: ToolpathOperation) -> Tuple[Tuple[float, float], Tuple[float, float]]:
@@ -818,52 +837,38 @@ def _tangents(operation: ToolpathOperation) -> Tuple[Tuple[float, float], Tuple[
     Returns:
         ``(start_tangent, end_tangent)``, each a unit vector, or ``(0, 0)`` where
         the primitive is degenerate and has no direction.
+
+    Raises:
+        UnknownToolpathGeometryError: The geometry is not a toolpath primitive.
     """
     geometry = operation.geometry
     if isinstance(geometry, Line):
-        direction = _unit(float(geometry.end[0]) - float(geometry.start[0]), float(geometry.end[1]) - float(geometry.start[1]))
+        direction = unit(float(geometry.end[0]) - float(geometry.start[0]), float(geometry.end[1]) - float(geometry.start[1]))
         return direction, direction
-    centre = geometry.frame.point
-    start, end = _endpoints(operation)
-    turn = -1.0 if operation.clockwise else 1.0
-    return (
-        _perpendicular(start[0] - float(centre[0]), start[1] - float(centre[1]), turn),
-        _perpendicular(end[0] - float(centre[0]), end[1] - float(centre[1]), turn),
-    )
+    if isinstance(geometry, Helix):
+        return helix_tangents(geometry)
+    if isinstance(geometry, (Arc, Circle)):
+        centre = geometry.frame.point
+        start, end = _endpoints(operation)
+        turn = -1.0 if operation.clockwise else 1.0
+        return (
+            perpendicular(start[0] - float(centre[0]), start[1] - float(centre[1]), turn),
+            perpendicular(end[0] - float(centre[0]), end[1] - float(centre[1]), turn),
+        )
+    return _not_a_primitive(operation, geometry)
 
 
-def _perpendicular(dx: float, dy: float, turn: float) -> Tuple[float, float]:
-    """The unit travel direction at a point on a circle, given its turn sense.
+def _not_a_primitive(operation: ToolpathOperation, geometry: Never) -> NoReturn:
+    """Fail on operation geometry outside `ToolpathOperation`'s union.
 
-    Args:
-        dx: X offset from the centre to the point.
-        dy: Y offset from the centre to the point.
-        turn: ``+1`` counterclockwise, ``-1`` clockwise.
+    Typed ``Never``: each geometry dispatch is an exhaustive ``isinstance``
+    chain over ``Line | Arc | Circle | Helix``, so ``mypy --strict`` rejects a
+    chain missing a member; at runtime (an untyped caller) it raises by name.
 
-    Returns:
-        The unit tangent, or ``(0, 0)`` at the centre.
+    Raises:
+        UnknownToolpathGeometryError: Always.
     """
-    return _unit(-turn * dy, turn * dx)
-
-
-def _unit(dx: float, dy: float) -> Tuple[float, float]:
-    """Normalise a vector, returning ``(0, 0)`` when it has no length.
-
-    A zero return is a fact about the primitive -- a zero-length move has no
-    direction -- and `benchmarks.quality` counts those separately rather than
-    treating them as a direction of (1, 0).
-
-    Args:
-        dx: X component.
-        dy: Y component.
-
-    Returns:
-        The unit vector, or ``(0.0, 0.0)``.
-    """
-    norm = math.hypot(dx, dy)
-    if norm == 0.0:
-        return (0.0, 0.0)
-    return (dx / norm, dy / norm)
+    raise UnknownToolpathGeometryError(f"Operation {operation.operation.value} carries geometry {type(geometry).__name__!r}, which is not a toolpath primitive.")
 
 
 def _xy(point: Sequence[float]) -> Tuple[float, float]:
@@ -881,7 +886,8 @@ def _classify_non_cutting(
     into-material verdict, which is right for a depletion but loses the speed
     and longevity groups' inputs. This walk
     reclassifies with the SAME `_replay_kind`, so the two can never disagree
-    about what counts as cutting.
+    about what counts as cutting. A helix is skipped here: the replay yields it
+    and the survey observes it (`HelixObservation`).
 
     Args:
         result: The generated toolpath.
@@ -900,17 +906,19 @@ def _classify_non_cutting(
     plunge_indices: list[OperationIndex] = []
     retract_indices: list[OperationIndex] = []
     for index, operation in enumerate(result.operations):
-        try:
-            category = classify_operation_replay(operation, Millimetre(cut_z))
-        except (CutPlaneRampError, OffPlaneReplayCurveError) as error:
-            raise UnreplayableOperationError(f"Operation {index} ({operation.operation.value}) {error}.") from error
-        if category == "motion":
+        category = _replay_category(index, operation, cut_z)
+        if category == "motion" or category == "helix":
+            # Yielded by the replay: measured as a motion or observed as a helix.
             continue
-        if category == "plunge":
+        elif category == "plunge":
             plunge_indices.append(OperationIndex(index))
             continue
-        if category == "retract":
+        elif category == "retract":
             retract_indices.append(OperationIndex(index))
+        elif category == "rapid":
+            pass
+        else:
+            _unhandled_category(category)
         rapids.append(
             RapidMotion(
                 index=index,
@@ -934,13 +942,22 @@ def _is_horizontal_at(operation: ToolpathOperation, cut_z: float) -> bool:
 
     Returns:
         True for an XY move at the cutting plane.
+
+    Raises:
+        HelixHasNoRapidVerdictError: The operation is a helix, which is never
+            a rapid (`_classify_non_cutting` skips it).
+        UnknownToolpathGeometryError: The geometry is not a toolpath primitive.
     """
     geometry = operation.geometry
-    if not isinstance(geometry, Line):
+    if isinstance(geometry, Line):
+        if math.hypot(float(geometry.end[0]) - float(geometry.start[0]), float(geometry.end[1]) - float(geometry.start[1])) == 0.0:
+            return False
+        return max(float(geometry.start[2]), float(geometry.end[2])) <= cut_z
+    if isinstance(geometry, (Arc, Circle)):
         return float(geometry.frame.point[2]) <= cut_z
-    if math.hypot(float(geometry.end[0]) - float(geometry.start[0]), float(geometry.end[1]) - float(geometry.start[1])) == 0.0:
-        return False
-    return max(float(geometry.start[2]), float(geometry.end[2])) <= cut_z
+    if isinstance(geometry, Helix):
+        raise HelixHasNoRapidVerdictError(f"Operation {operation.operation.value} is a helix, which is never a rapid; it has no horizontal-at-cut-plane verdict.")
+    return _not_a_primitive(operation, geometry)
 
 
 def _primitive_length(index: int, operation: ToolpathOperation) -> float:
@@ -949,6 +966,7 @@ def _primitive_length(index: int, operation: ToolpathOperation) -> float:
     compas exposes `length` as a property on `Line` and `Arc` but as an
     unimplemented `Curve` method on `Circle`, whose length is `circumference`;
     reading `.length` uniformly raises `NotImplementedError` on every circle.
+    A helix's is `compas_cgal.helix.Helix.length` (REPORTING; decides nothing).
 
     Args:
         index: Position of the operation, for the error message.
@@ -958,12 +976,26 @@ def _primitive_length(index: int, operation: ToolpathOperation) -> float:
         The primitive's length.
 
     Raises:
-        UnmeasurableOperationLengthError: The primitive is not a line, arc, or
-            circle.
+        UnmeasurableOperationLengthError: The primitive is not a line, arc,
+            circle, or helix.
     """
     geometry = operation.geometry
     if isinstance(geometry, Circle):
         return float(geometry.circumference)
     if isinstance(geometry, (Arc, Line)):
         return float(geometry.length)
+    if isinstance(geometry, Helix):
+        return float(geometry.length())
+    return _unmeasurable_length(index, operation, geometry)
+
+
+def _unmeasurable_length(index: int, operation: ToolpathOperation, geometry: Never) -> NoReturn:
+    """Fail on a length asked of geometry outside ``Line | Arc | Circle | Helix``.
+
+    Typed ``Never``: `_primitive_length` is an exhaustive ``isinstance`` chain,
+    so ``mypy --strict`` rejects a chain missing a member.
+
+    Raises:
+        UnmeasurableOperationLengthError: Always.
+    """
     raise UnmeasurableOperationLengthError(f"Operation {index} ({operation.operation.value}) carries geometry {type(geometry).__name__!r}, whose length is not defined.")

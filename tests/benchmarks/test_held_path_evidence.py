@@ -128,6 +128,7 @@ def _survey(snapshot: tuple[HeldOperationSnapshot, ...], second_samples: tuple[E
         cut_length=2.0,
         air_length=1.0,
         plunge_swept_area=1.0,
+        helices=(),
     )
 
 

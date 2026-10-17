@@ -14,10 +14,16 @@ relaxation: cheap structural conditions first, exact predicates after.
 When nothing passes, the scan returns `NoAdmissibleCandidate` and takes no
 fallback (amendment D2); a caller that must still advance (the narrow forced
 advance) decides that itself and records it.
+
+`WarmStart` is the same principle one level down: the evaluation order of a
+conjunction of indexed exact probes, warm-started at the probe that refused
+last. It changes which probe is asked first, never which probes exist or how
+each is decided, so the conjunction's verdict is order-free (Task 1.2 lever L6).
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Protocol
@@ -70,3 +76,46 @@ def furthest_first(
         if all(condition(stock, origin, candidate) for condition in conditions):
             return candidate
     return NoAdmissibleCandidate(scanned=len(candidates))
+
+
+@dataclass
+class WarmStart:
+    """Evaluation-order hint for a conjunction of ``count`` indexed probes: ask the last refuser first.
+
+    A COST device, never a decision. "Some probe refuses" is a disjunction of
+    the same per-probe verdicts, so any order of asking them gives the same
+    answer; the hint only moves the index that refused last to the front and
+    keeps the rest in their natural order. Every probe is asked at most once
+    per evaluation, and an evaluation that finds no refusal has asked all of
+    them. Refusals repeat at the same index across consecutive candidates of a
+    scan (the ladder's candidates are near neighbours), so a refusal usually
+    costs one probe.
+
+    The hint is mutable state shared by the evaluations that use this
+    instance; reading or updating it never changes a verdict.
+
+    Attributes:
+        hint: The index asked first while it lies in ``range(count)``.
+    """
+
+    hint: int = 0
+
+    def first_refusal(self, count: int, refuses: Callable[[int], bool]) -> int | None:
+        """The first refusing index in warm-start order, or None when no probe refuses.
+
+        Args:
+            count: Number of probes, indexed ``0 .. count - 1``.
+            refuses: The exact per-probe verdict: True iff probe *index* refuses.
+
+        Returns:
+            A refusing index (and the hint is moved to it), or None iff no
+            index in ``range(count)`` refuses.
+        """
+        hint = self.hint  # read once: an interleaved evaluation may move it while this one runs
+        first: list[int] = [hint] if 0 <= hint < count else []
+        order: list[int] = [*first, *(index for index in range(count) if index != hint)]
+        for index in order:
+            if refuses(index):
+                self.hint = index
+                return index
+        return None

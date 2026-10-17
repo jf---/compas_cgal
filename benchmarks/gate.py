@@ -34,11 +34,13 @@ from typing import Tuple
 from compas.geometry import Polygon
 
 from benchmarks.families.analytic import rectangle
+from benchmarks.models import GATE_MACHINE
 from benchmarks.pathmetrics import CLEARANCE_Z_TOOL_DIAMETERS
 from benchmarks.spec import PocketSpec
 from compas_cgal.engagement_radial_toolpath import radius_regulated_toolpath
 from compas_cgal.engagement_rho_toolpath import rho_regulated_toolpath
 from compas_cgal.engagement_toolpath import engagement_controlled_toolpath
+from compas_cgal.helix_units import EntryRampLength
 from compas_cgal.pipeline.generate import generate_narrow
 from compas_cgal.toolpath import ToolpathResult
 from compas_cgal.units import ClearanceZ
@@ -234,11 +236,20 @@ def rho_regulated(spec: PocketSpec) -> ToolpathResult:
     )
 
 
+# The gate's declared entry ramp for the pipeline's helical entry (USER 2026-10-16
+# Q4): one tool diameter, the placeholder declared intent of
+# `EntryRampLength.default`, stated here so the adapter passes it explicitly.
+GATE_ENTRY_RAMP = EntryRampLength.default()
+
+
 def pipeline(spec: PocketSpec) -> ToolpathResult:
     """Generate *spec*'s path with the product pipeline's narrow regime (`compas_cgal.pipeline`).
 
     The adapter from a benchmark `PocketSpec` to the pipeline's typed arguments
     (Ruling 1.1-gen-args): the pipeline imports nothing from `benchmarks`.
+    The helix pitch is `GATE_MACHINE`'s own surrogate, the one the survey
+    judges the ramp by, and the entry ramp is `GATE_ENTRY_RAMP`: both are
+    passed explicitly, so generator and gate cannot disagree.
 
     Args:
         spec: The instance to machine.
@@ -252,6 +263,8 @@ def pipeline(spec: PocketSpec) -> ToolpathResult:
         ToolRadius.build(spec.tool_radius),
         Radian(math.radians(spec.tea_cap_deg)),
         ClearanceZ.build(CLEARANCE_Z_TOOL_DIAMETERS * spec.tool_diameter),
+        helix_pitch_per_radius=GATE_MACHINE.helix_pitch_per_radius,
+        entry_ramp=GATE_ENTRY_RAMP,
     )
 
 

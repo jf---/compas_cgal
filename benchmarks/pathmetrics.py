@@ -30,6 +30,8 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from typing import FrozenSet
+from typing import Never
+from typing import NoReturn
 from typing import Sequence
 from typing import Set
 
@@ -39,6 +41,7 @@ from compas.geometry import Line
 
 from benchmarks.depletion import ReplayKind
 from benchmarks.depletion import _replay_kind
+from benchmarks.depletion import _unhandled_kind
 from benchmarks.errors import UnmeasurableOperationLengthError
 from benchmarks.exceedance import exceedance_positions
 from benchmarks.spec import MAX_CAP_DEG
@@ -46,6 +49,7 @@ from benchmarks.spec import PocketSpec
 from compas_cgal.engagement import OperationEngagement
 from compas_cgal.engagement import _infer_cut_height
 from compas_cgal.engagement import audit_toolpath_engagement
+from compas_cgal.helix import Helix
 from compas_cgal.toolpath import ToolpathOperation
 from compas_cgal.toolpath import ToolpathResult
 
@@ -87,12 +91,14 @@ class PathMetrics:
 
 
 def entry_cut_indices(result: ToolpathResult) -> FrozenSet[int]:
-    """Operation indices of the first material contact after each plunge.
+    """Operation indices of the first material contact after each plunge or helix.
 
     The classification is `benchmarks.depletion`'s, so a path's entry cuts cannot
     drift away from the motions the depletion replay treats as cutting. Rapid
     moves between a plunge and the first cut remove nothing and therefore do not
-    disarm the plunge: the cut that follows them still meets virgin stock.
+    disarm the plunge: the cut that follows them still meets virgin stock. A
+    helix is an entry like a plunge: the first cut after it (the first pencil
+    member) is the entry cut, not post-entry engagement (Task 1.2, GAP 3).
 
     Args:
         result: The generated toolpath to classify.
@@ -102,17 +108,23 @@ def entry_cut_indices(result: ToolpathResult) -> FrozenSet[int]:
 
     Raises:
         UnreplayableOperationError: An operation lies outside the cut-plane model.
+        UnhandledReplayKindError: A replay kind has no branch here.
     """
     cut_z = _infer_cut_height(result.operations)
     entries: Set[int] = set()
     armed = False
     for index, operation in enumerate(result.operations):
         kind = _replay_kind(index, operation, cut_z)
-        if kind is ReplayKind.PLUNGE:
+        if kind is ReplayKind.PLUNGE or kind is ReplayKind.HELIX:
             armed = True
-        elif kind is ReplayKind.CUT and armed:
-            entries.add(index)
+        elif kind is ReplayKind.CUT:
+            if armed:
+                entries.add(index)
             armed = False
+        elif kind is ReplayKind.RAPID:
+            continue
+        else:
+            _unhandled_kind(kind)
     return frozenset(entries)
 
 
@@ -143,6 +155,7 @@ def _primitive_length(index: int, operation: ToolpathOperation) -> float:
     compas exposes `length` as a property on `Line` and `Arc` but as an
     unimplemented `Curve` method on `Circle`, whose length is `circumference`;
     reading `.length` uniformly raises `NotImplementedError` on every circle.
+    A helix's is `compas_cgal.helix.Helix.length` (REPORTING).
 
     Args:
         index: Position of the operation, for the error message.
@@ -152,14 +165,28 @@ def _primitive_length(index: int, operation: ToolpathOperation) -> float:
         The primitive's length.
 
     Raises:
-        UnmeasurableOperationLengthError: The primitive is not a line, arc, or
-            circle.
+        UnmeasurableOperationLengthError: The primitive is not a line, arc,
+            circle, or helix.
     """
     geometry = operation.geometry
     if isinstance(geometry, Circle):
         return float(geometry.circumference)
     if isinstance(geometry, (Arc, Line)):
         return float(geometry.length)
+    if isinstance(geometry, Helix):
+        return float(geometry.length())
+    return _unmeasurable_length(index, operation, geometry)
+
+
+def _unmeasurable_length(index: int, operation: ToolpathOperation, geometry: Never) -> NoReturn:
+    """Fail on a length asked of geometry outside ``Line | Arc | Circle | Helix``.
+
+    Typed ``Never``: `_primitive_length` is an exhaustive ``isinstance`` chain,
+    so ``mypy --strict`` rejects a chain missing a member.
+
+    Raises:
+        UnmeasurableOperationLengthError: Always.
+    """
     raise UnmeasurableOperationLengthError(f"Operation {index} ({operation.operation.value}) carries geometry {type(geometry).__name__!r}, whose length is not defined.")
 
 

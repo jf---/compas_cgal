@@ -107,7 +107,11 @@ STAGE_ACCEPTANCE: dict[str, tuple[AcceptanceRow, ...]] = {
         VectorRow(ALL_CASES, "zero_length_motions", "==", "0", "Stage 0 measures no zero-length motion on the gate cases"),
     ),
     "stage-1": (
-        VectorRow("cap-120-default/pipeline/*", "material_plunges", "==", "1", "1.1: one plunge into material per pocket at 120 deg"),
+        VectorRow("cap-120-default/pipeline/*", "material_plunges", "==", "1", "1.1: one plunge into material per pocket at 120 deg (1.2: PLUNGE + HELIX into material)"),
+        VectorRow("cap-120-default/pipeline/*", "cap_exceedances", "==", "0", "1.2: no cap exceedance at 120 deg (N6)"),
+        VectorRow("cap-120-default/pipeline/*", "max_engagement_step_deg", "<=", "120", "1.2: max engagement step within the 120 deg cap (N6)"),
+        VectorRow("cap-120-default/pipeline/*", "ramp_angle_violations", "==", "0", "1.2: every helix ramps within the machine's ramp cap (N6)"),
+        VectorRow("*/pipeline/*", "max_loop_radius_step", "<=", "2", "1.2-D4: back-to-back loops step by at most 2 r (coverage verdict, not a ratchet)"),
         VectorRow("cap-120-default/pipeline/*", "redundant_operations", "==", "0", "1.1: no redundant operation at 120 deg"),
         VectorRow("cap-120-default/pipeline/*", "degenerate_loops", "==", "0", "1.1: no degenerate loop at 120 deg"),
         VectorRow("cap-120-default/pipeline/rect_12x8", "tangent_breaks", "<=", "0", "1.1: tangent breaks within rho_regulated's 120 deg cell"),

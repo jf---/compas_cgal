@@ -23,6 +23,10 @@ from dataclasses import dataclass
 
 from benchmarks.errors import InvalidMachineModelError
 from benchmarks.errors import InvalidMaterialModelError
+from compas_cgal.helix_units import DEFAULT_MAX_RAMP_ANGLE_DEG
+from compas_cgal.helix_units import HelixPitchPerRadius
+from compas_cgal.helix_units import InvalidRampAngleError
+from compas_cgal.helix_units import RampAngleDegrees
 
 # Feed per tooth for the default material model, in millimetres. A mid-range
 # value for a carbide endmill in aluminium; it is the SCALE that converts the
@@ -149,6 +153,13 @@ class MachineModel:
         max_jerk_mm_per_s3: Jerk limit, used to cost each tangent break.
         spindle_rpm: Spindle speed, which with the tool diameter fixes the
             surface cutting speed a Taylor life estimate depends on.
+        max_ramp_angle_deg: Steepest helical-entry ramp the machine and tool
+            accept, degrees, in (0, 90). Default
+            `compas_cgal.helix_units.DEFAULT_MAX_RAMP_ANGLE_DEG` (plan D1, 2 deg):
+            a PLACEHOLDER until a datasheet value for the gate tool is supplied.
+            REPORTING and surrogate construction only: the ramp verdict reads
+            `helix_pitch_per_radius`, an exact rational surrogate, never this
+            angle.
     """
 
     feed_rate_mm_per_min: float
@@ -156,6 +167,7 @@ class MachineModel:
     max_acceleration_mm_per_s2: float
     max_jerk_mm_per_s3: float
     spindle_rpm: float
+    max_ramp_angle_deg: float
 
     @property
     def feed_mm_per_s(self) -> float:
@@ -166,6 +178,16 @@ class MachineModel:
     def rapid_mm_per_s(self) -> float:
         """The rapid rate in millimetres per second."""
         return self.rapid_rate_mm_per_min / 60.0
+
+    @property
+    def helix_pitch_per_radius(self) -> HelixPitchPerRadius:
+        """The exact ramp-cap surrogate ``K = 2 pi tan(max_ramp_angle)``, computed once as a double.
+
+        Every ramp verdict is an exact statement about ``K``
+        (`compas_cgal.helix.Helix.ramp_within`); the few-ulp gap to the
+        transcendental angle is the API semantic of `HelixPitchPerRadius`.
+        """
+        return HelixPitchPerRadius.from_ramp_angle(RampAngleDegrees.build(self.max_ramp_angle_deg))
 
     def curvature_limited_feed_mm_per_s(self, curvature: float) -> float:
         """The largest feed the acceleration limit allows at *curvature*.
@@ -192,6 +214,7 @@ class MachineModel:
         max_acceleration_mm_per_s2: float = DEFAULT_MAX_ACCELERATION_MM_PER_S2,
         max_jerk_mm_per_s3: float = DEFAULT_MAX_JERK_MM_PER_S3,
         spindle_rpm: float = DEFAULT_SPINDLE_RPM,
+        max_ramp_angle_deg: float = DEFAULT_MAX_RAMP_ANGLE_DEG,
     ) -> "MachineModel":
         """Validate every limit and return a frozen model.
 
@@ -201,24 +224,31 @@ class MachineModel:
             max_acceleration_mm_per_s2: Acceleration limit; finite and positive.
             max_jerk_mm_per_s3: Jerk limit; finite and positive.
             spindle_rpm: Spindle speed; must be finite and positive.
+            max_ramp_angle_deg: Ramp-angle cap, degrees; finite, in (0, 90).
 
         Returns:
             The validated model.
 
         Raises:
-            InvalidMachineModelError: A limit is NaN or non-positive.
+            InvalidMachineModelError: A limit is NaN or non-positive, or the
+                ramp angle is outside (0, 90) degrees.
         """
         _require_positive(feed_rate_mm_per_min, "feed_rate_mm_per_min", InvalidMachineModelError)
         _require_positive(rapid_rate_mm_per_min, "rapid_rate_mm_per_min", InvalidMachineModelError)
         _require_positive(max_acceleration_mm_per_s2, "max_acceleration_mm_per_s2", InvalidMachineModelError)
         _require_positive(max_jerk_mm_per_s3, "max_jerk_mm_per_s3", InvalidMachineModelError)
         _require_positive(spindle_rpm, "spindle_rpm", InvalidMachineModelError)
+        try:
+            RampAngleDegrees.build(max_ramp_angle_deg)
+        except InvalidRampAngleError as error:
+            raise InvalidMachineModelError(f"max_ramp_angle_deg: {error}") from error
         return cls(
             feed_rate_mm_per_min=feed_rate_mm_per_min,
             rapid_rate_mm_per_min=rapid_rate_mm_per_min,
             max_acceleration_mm_per_s2=max_acceleration_mm_per_s2,
             max_jerk_mm_per_s3=max_jerk_mm_per_s3,
             spindle_rpm=spindle_rpm,
+            max_ramp_angle_deg=max_ramp_angle_deg,
         )
 
 
@@ -236,3 +266,9 @@ def _require_positive(value: float, name: str, error: type) -> None:
     """
     if not math.isfinite(value) or value <= 0.0:
         raise error(f"{name} must be finite and positive, got {value!r}.")
+
+
+# The machine every gate case is measured against (`tools.gate_measure`): the
+# documented defaults, ramp cap included. A gate input -- changing it moves the
+# `ramp_angle_violations` cells -- so this module is in the gate's paths.
+GATE_MACHINE = MachineModel.build()

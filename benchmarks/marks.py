@@ -43,6 +43,8 @@ from enum import Enum
 from typing import Dict
 from typing import Literal
 from typing import Mapping
+from typing import Never
+from typing import NoReturn
 from typing import Optional
 from typing import Sequence
 
@@ -51,6 +53,7 @@ from compas.tolerance import TOL
 from benchmarks.errors import EngagementLengthMismatchError
 from benchmarks.errors import MissingEngagementDataError
 from benchmarks.errors import UnknownColourModeError
+from benchmarks.errors import UnknownOperationClassError
 from benchmarks.palette import Palette
 from benchmarks.palette import band_edges
 from benchmarks.palette import band_index
@@ -74,6 +77,7 @@ LineStyle = Literal["-", "--", "-.", ":", "none"]
 # a comparison that start with different motions still produce one legend in one
 # order.
 _ORDER_CUT = 10
+_ORDER_HELIX = 15
 _ORDER_LEAD_IN = 20
 _ORDER_LEAD_OUT = 21
 _ORDER_LINK = 30
@@ -84,8 +88,8 @@ _ORDER_PLUNGE = 300
 _ORDER_RETRACT = 301
 _ORDER_POINT_OTHER = 302
 
-_POINT_MARKERS = {"plunge": "v", "retract": "^"}
-_POINT_ORDERS = {"plunge": _ORDER_PLUNGE, "retract": _ORDER_RETRACT}
+_POINT_MARKERS: Mapping[Literal["plunge", "retract"], str] = {"plunge": "v", "retract": "^"}
+_POINT_ORDERS: Mapping[Literal["plunge", "retract"], int] = {"plunge": _ORDER_PLUNGE, "retract": _ORDER_RETRACT}
 
 
 class ColourBy(str, Enum):
@@ -165,6 +169,9 @@ def encode(
 def _operation_mark(motion: Motion, palette: Palette) -> Mark:
     """The categorical mark for one motion.
 
+    Exhaustive over `benchmarks.pathgeometry.OperationName`: a class this
+    function does not name raises rather than borrowing another's mark.
+
     Args:
         motion: The motion.
         palette: The theme's tokens.
@@ -172,26 +179,48 @@ def _operation_mark(motion: Motion, palette: Palette) -> Mark:
     Returns:
         Its mark. A plunge or retract that does have extent in the cutting plane
         is a ramp rather than a pure Z move, and is named as one instead of being
-        quietly folded into the link colour.
+        quietly folded into the link colour. A helix is the cutting entry: cut
+        ink, dotted, so it reads as cutting yet stays distinct from the loops it
+        feeds.
+
+    Raises:
+        UnknownOperationClassError: The motion names a class with no mark.
     """
     if motion.is_point:
         return _point_mark(motion, palette)
-    if motion.name == "cut":
+    name = motion.name
+    if name == "cut":
         return Mark(label="cut", order=_ORDER_CUT, colour=palette.cut, width_pt=CUT_WIDTH_PT, linestyle="-", marker="")
-    if motion.name == "lead_in":
+    if name == "helix":
+        return Mark(label="helix", order=_ORDER_HELIX, colour=palette.cut, width_pt=CUT_WIDTH_PT, linestyle=":", marker="")
+    if name == "lead_in":
         return Mark(label="lead in", order=_ORDER_LEAD_IN, colour=palette.lead, width_pt=LEAD_WIDTH_PT, linestyle=":", marker="")
-    if motion.name == "lead_out":
+    if name == "lead_out":
         return Mark(label="lead out", order=_ORDER_LEAD_OUT, colour=palette.lead, width_pt=LEAD_WIDTH_PT, linestyle="-.", marker="")
-    if motion.name == "link":
+    if name == "link":
         return Mark(label="link", order=_ORDER_LINK, colour=palette.link, width_pt=LINK_WIDTH_PT, linestyle="--", marker="")
-    return Mark(
-        label=f"{motion.name} (ramped)",
-        order=_POINT_ORDERS.get(motion.name, _ORDER_POINT_OTHER),
-        colour=palette.secondary,
-        width_pt=LINK_WIDTH_PT,
-        linestyle="--",
-        marker="",
-    )
+    if name == "plunge" or name == "retract":
+        return Mark(
+            label=f"{name} (ramped)",
+            order=_POINT_ORDERS[name],
+            colour=palette.secondary,
+            width_pt=LINK_WIDTH_PT,
+            linestyle="--",
+            marker="",
+        )
+    return _unknown_operation(name)
+
+
+def _unknown_operation(name: Never) -> NoReturn:
+    """Refuse a motion class no mark names; typed ``Never`` so a new class is a type error first.
+
+    Args:
+        name: The unnamed class (reachable at runtime only from an untyped caller).
+
+    Raises:
+        UnknownOperationClassError: Always.
+    """
+    raise UnknownOperationClassError(f"Motion class {name!r} has no mark.")
 
 
 def _point_mark(motion: Motion, palette: Palette) -> Mark:
@@ -204,11 +233,17 @@ def _point_mark(motion: Motion, palette: Palette) -> Mark:
     Returns:
         A shaped marker in secondary ink: plunge down, retract up, and a dot for
         anything else that turns out to have coincident ends.
+
+    Raises:
+        UnknownOperationClassError: The motion names a class with no mark.
     """
-    spoken = motion.name.replace("_", " ")
-    if motion.name in _POINT_MARKERS:
-        return Mark(label=spoken, order=_POINT_ORDERS[motion.name], colour=palette.secondary, width_pt=0.0, linestyle="none", marker=_POINT_MARKERS[motion.name])
-    return Mark(label=f"{spoken} (no extent)", order=_ORDER_POINT_OTHER, colour=palette.secondary, width_pt=0.0, linestyle="none", marker="o")
+    name = motion.name
+    spoken = name.replace("_", " ")
+    if name == "plunge" or name == "retract":
+        return Mark(label=spoken, order=_POINT_ORDERS[name], colour=palette.secondary, width_pt=0.0, linestyle="none", marker=_POINT_MARKERS[name])
+    if name == "cut" or name == "lead_in" or name == "lead_out" or name == "link" or name == "helix":
+        return Mark(label=f"{spoken} (no extent)", order=_ORDER_POINT_OTHER, colour=palette.secondary, width_pt=0.0, linestyle="none", marker="o")
+    return _unknown_operation(name)
 
 
 def _unencoded_mark(label: str, palette: Palette) -> Mark:

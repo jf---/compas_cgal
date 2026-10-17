@@ -57,3 +57,43 @@ class CoincidentStationsError(ValueError):
 
 class MixedTurnChainError(RuntimeError):
     """Two consecutive stations of one chain turn opposite ways, so no co-rotating link joins them (broken invariant)."""
+
+
+class FirstCutReEntryError(ValueError):
+    """A re-entry was asked to record the first cut; the first cut is its own stage."""
+
+
+class FirstCutAfterEmissionError(RuntimeError):
+    """The first cut was asked for after operations were emitted; it starts at the clearance plane with nothing emitted."""
+
+
+class InvalidEntryRiseChordRatioError(ValueError):
+    """An entry-rise chord ratio outside ``(0, 4]``, the surrogates of rise limits in ``(0, pi]``."""
+
+
+class MissingEntryRiseLimitError(RuntimeError):
+    """A pencil junction was asked of an admissibility that declares no entry-rise limit."""
+
+
+class RampOutStuckError(RuntimeError):
+    """No pencil member above the current one passes the coverage bound, the junction and the cap: the helical entry cannot ramp out to its root."""
+
+
+class HoledDomainPencilError(RuntimeError):
+    """A pencil's root disk is not contained in the design pocket (an island inside it): its members have no exact containment decision."""
+
+
+class MissingHelicalEntryError(RuntimeError):
+    """The first cut was asked of a path that declares no helical entry (helix pitch surrogate and design pocket)."""
+
+
+class UnhandledOperationGeometryError(TypeError):
+    """An operation's geometry is not one the emitter's exhaustive dispatch handles."""
+
+
+class RampOutRecordMismatchError(RuntimeError):
+    """A helical-entry record contradicts the operation stream it describes."""
+
+
+class RootLoopNotEmittedError(RuntimeError):
+    """The first cut's root loop was not emitted after its ramp-out (broken invariant: the root always removes the lune its pencil leaves)."""

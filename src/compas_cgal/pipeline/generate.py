@@ -1,13 +1,14 @@
 """The narrow-regime pipeline as typed stages: guide, entry, walk, next-chain choice, exit.
 
-`generate_narrow` machines a pocket with ONE plunge into material where the
-guide allows it: it walks a skeleton chain with the narrow ladder, then reaches
+`generate_narrow` machines a pocket with ONE entry into material, a helix
+(Task 1.2), where the guide allows it: it walks a skeleton chain with the narrow ladder, then reaches
 the next chain at depth through stock earlier chains already cleared (a link
 from `compas_cgal.pipeline.linking`), and plunges again only where no
 admissible link exists -- recording every such decision in the ledger.
 
 The stages are separate functions so later tasks replace one without touching
-the others: `enter` (plunge + root loop; 1.2 replaces it with a helix),
+the others: `enter_first_cut` (helix + tangent-pencil ramp-out + root loop),
+`re_enter` (retract, rapid, plunge + root loop, for every later entry),
 `walk` (one chain from a given station, callable per component), `choose_next`
 (the next chain and its link), `link` (emit a chosen link). The generator and
 the gate share ONE stock model: every emitted cut-plane motion depletes the
@@ -24,23 +25,38 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from dataclasses import field
+from typing import Literal
+from typing import get_args
 
 from compas.geometry import Polygon
 
+from compas_cgal.adaptive.containment import GougeContainment
 from compas_cgal.engagement import _subtract_operation
+from compas_cgal.helix import Helix
+from compas_cgal.helix_units import DEFAULT_HELIX_PITCH_PER_RADIUS
+from compas_cgal.helix_units import EntryRampLength
+from compas_cgal.helix_units import HelixPitchPerRadius
 from compas_cgal.incident_loop import IncidentLoop
 from compas_cgal.pipeline.admissibility import Admissibility
 from compas_cgal.pipeline.admissibility import cap_ratio
 from compas_cgal.pipeline.admissibility import centre_domain
+from compas_cgal.pipeline.admissibility import entry_rise_ratio
 from compas_cgal.pipeline.direction import Direction2
+from compas_cgal.pipeline.emit import arc_geometry
 from compas_cgal.pipeline.emit import arc_operation
+from compas_cgal.pipeline.emit import helix_operation
 from compas_cgal.pipeline.emit import line_operation
 from compas_cgal.pipeline.emit import loop_operation
 from compas_cgal.pipeline.emit import tessellate
 from compas_cgal.pipeline.errors import CoincidentStationsError
 from compas_cgal.pipeline.errors import EmptyNarrowPathError
+from compas_cgal.pipeline.errors import FirstCutAfterEmissionError
+from compas_cgal.pipeline.errors import FirstCutReEntryError
 from compas_cgal.pipeline.errors import InvalidClearanceHeightError
+from compas_cgal.pipeline.errors import MissingHelicalEntryError
 from compas_cgal.pipeline.errors import MixedTurnChainError
+from compas_cgal.pipeline.errors import RootLoopNotEmittedError
+from compas_cgal.pipeline.errors import SubFloorStationError
 from compas_cgal.pipeline.guide import GUIDE_STEP_TOOL_DIAMETERS
 from compas_cgal.pipeline.guide import Guide
 from compas_cgal.pipeline.guide import pipeline_spacing
@@ -60,6 +76,11 @@ from compas_cgal.pipeline.narrow import OrientedChain
 from compas_cgal.pipeline.narrow import advance_ladder
 from compas_cgal.pipeline.narrow import advance_window
 from compas_cgal.pipeline.narrow import orientations
+from compas_cgal.pipeline.pencil import PencilConditions
+from compas_cgal.pipeline.pencil import RampOut
+from compas_cgal.pipeline.pencil import TangentPencil
+from compas_cgal.pipeline.pencil import entry_containment
+from compas_cgal.pipeline.result import EntryKind
 from compas_cgal.pipeline.result import ForcedDecision
 from compas_cgal.pipeline.result import ForcedDecisionLedger
 from compas_cgal.pipeline.result import ForcedEntry
@@ -68,6 +89,7 @@ from compas_cgal.pipeline.result import LinkKind
 from compas_cgal.pipeline.result import LinkRecord
 from compas_cgal.pipeline.result import OmittedLoop
 from compas_cgal.pipeline.result import PipelineResult
+from compas_cgal.pipeline.result import RampOutRecord
 from compas_cgal.stock import Stock
 from compas_cgal.stock import SweepRemoval
 from compas_cgal.toolpath import RADIAL_CLEARANCE_FRACTION
@@ -75,6 +97,7 @@ from compas_cgal.toolpath import OperationType
 from compas_cgal.toolpath import ToolpathOperation
 from compas_cgal.units import Clearance
 from compas_cgal.units import ClearanceZ
+from compas_cgal.units import CutPlane
 from compas_cgal.units import CutZ
 from compas_cgal.units import Point2
 from compas_cgal.units import Radian
@@ -88,6 +111,20 @@ PLUNGE_GUIDE_RADIUS = 0.0
 
 # Most skeleton chains the guide may emit; more raises GuideTruncatedError.
 DEFAULT_MAX_PASSES = 1000
+
+
+@dataclass(frozen=True)
+class HelicalEntry:
+    """What the first cut's helical entry needs beyond the admissibility.
+
+    Attributes:
+        pitch_per_radius: The machine's exact ramp-cap surrogate the helix descends by.
+        pocket: The design pocket's exact containment authority (P-D,
+            `pencil.entry_containment`).
+    """
+
+    pitch_per_radius: HelixPitchPerRadius
+    pocket: GougeContainment
 
 
 @dataclass
@@ -104,6 +141,9 @@ class PathState:
         omitted: Loops skipped as removing nothing.
         links: Cut-plane links emitted between loops.
         path_index: Path index of the current chain walk.
+        helical_entry: The first cut's declarations (helix pitch surrogate,
+            design pocket), or None for a path that never enters by a first cut;
+            `enter_first_cut` raises `MissingHelicalEntryError` on None.
     """
 
     stock: Stock
@@ -115,6 +155,7 @@ class PathState:
     omitted: list[OmittedLoop] = field(default_factory=list)
     links: list[LinkRecord] = field(default_factory=list)
     path_index: int = 0
+    helical_entry: HelicalEntry | None = None
 
     @property
     def tool_radius(self) -> float:
@@ -124,6 +165,13 @@ class PathState:
         """Label *op* by its exact removal, append it, and deplete the stock through the gate's dispatch."""
         removal = self.admissibility.removal(self.stock, op)
         op.operation = OperationType.LINK if removal is SweepRemoval.NOTHING else OperationType.CUT
+        self.operations.append(op)
+        _subtract_operation(self.stock, op, self.tool_radius)
+        return removal
+
+    def emit_entry(self, op: ToolpathOperation) -> SweepRemoval:
+        """Append an entry operation AS IS (no CUT/LINK relabel, amendment M5) and deplete the stock through the gate's dispatch."""
+        removal = self.admissibility.removal(self.stock, op)
         self.operations.append(op)
         _subtract_operation(self.stock, op, self.tool_radius)
         return removal
@@ -243,7 +291,7 @@ def _piece_admissible(admissibility: Admissibility, stock: Stock, piece: LinkPie
     """
     if isinstance(piece, LinePiece):
         return admissibility.straight_in_domain(piece.start, piece.end) and admissibility.straight_within_cap(stock, piece.start, piece.end)
-    geometry = arc_operation(piece.centre, piece.start, piece.end, clockwise, CutZ.build(0.0), 0, OperationType.LINK).geometry
+    geometry = arc_geometry(piece.centre, piece.start, piece.end, CutZ.build(0.0))
     start, end = geometry.point_at(0.0), geometry.point_at(1.0)
     emitted_start = Point2[WorldXY].build(float(start[0]), float(start[1]))
     emitted_end = Point2[WorldXY].build(float(end[0]), float(end[1]))
@@ -302,31 +350,115 @@ def emit_link(path: PathState, link: Link, clockwise: bool) -> None:
 _LINK_KINDS: dict[type, LinkKind] = {SameCircleArc: LinkKind.SAME_CIRCLE_ARC, BeltLink: LinkKind.BELT, StraightLink: LinkKind.STRAIGHT}
 
 
-def enter(path: PathState, chain: OrientedChain, station: int, reason: ForcedEntryReason, from_point: Point2[WorldXY] | None) -> None:
-    """The entry stage: retract and rapid if the tool is down, plunge onto the station's exact entry, cut its root loop.
+ReEntryReason = Literal[ForcedEntryReason.NO_ADMISSIBLE_LINK, ForcedEntryReason.RADIUS_STEP_SPLIT]
 
-    One stage, so a later entry (a helix) replaces it whole: the plunge and
-    the root loop together. The walk that follows starts at this station with
-    ``emit_start_loop=False``.
+_RE_ENTRY_REASONS: frozenset[ForcedEntryReason] = frozenset(get_args(ReEntryReason))
 
-    Args:
-        path: The generation state.
-        chain: The chain entered.
-        station: The station entered at, in walk order.
-        reason: Why the entry is forced.
-        from_point: Where the tool is at the cut plane, or None before the first cut.
-    """
+
+def _plunge_onto_root(path: PathState, chain: OrientedChain, station: int, reason: ForcedEntryReason) -> None:
+    """Plunge from the clearance plane onto the station's exact entry, record the entry, cut the root loop."""
     loop = chain.loops[station]
     assert loop is not None
     entry = loop.entry
-    if from_point is not None:
-        path.operations.append(line_operation(from_point, from_point, path.cut.value, path.clearance.value, OperationType.RETRACT, path.path_index))
-        path.operations.append(line_operation(from_point, entry, path.clearance.value, path.clearance.value, OperationType.LINK, path.path_index))
     into_material = _plunge_into_material(path.stock, entry, path.tool_radius)
     path.operations.append(line_operation(entry, entry, path.clearance.value, path.cut.value, OperationType.PLUNGE, path.path_index))
     path.stock.subtract_disk(entry.x, entry.y, path.tool_radius)
     path.records.append(ForcedEntry(path_index=path.path_index, entry=entry, reason=reason, into_material=into_material))
     emit_loop(path, chain, station)
+
+
+def enter_first_cut(path: PathState, chain: OrientedChain, station: int) -> RampOutRecord:
+    """The first-cut stage: helix down at the root's exact entry, ramp out along its tangent pencil, cut the root loop.
+
+    The only producer of the ledger's `ForcedEntryReason.FIRST_CUT` entry
+    (root = this station, USER 2026-10-16 Q5). The tool starts at the
+    clearance plane above the root's exact entry ``P`` with nothing emitted
+    (no rapid: there is no prior position, and a zero-length rapid is a
+    defect), and:
+
+    1. descends ONE ``HELIX`` operation (ramp turns + one flat closing turn,
+       `compas_cgal.helix.Helix`) on the pencil's footprint (``rho_h <= r``),
+       emitted as is (`PathState.emit_entry`); the bore depletes the stock;
+    2. ramps out along the root's tangent pencil (`pencil.RampOut`): per
+       member one furthest-first scan, the coverage bound ``drho <= r``, the
+       junction at the declared entry-rise limit, then the full in-process
+       cap; members are emitted as CUT circles (`PathState.emit_motion`);
+    3. ends the ramp-out on the root loop, cut by `emit_loop` exactly as
+       before; the walk that follows starts at this station with
+       ``emit_start_loop=False``.
+
+    Re-entries (`re_enter`) stay plunges: they enter cleared stock (D7).
+
+    Args:
+        path: The generation state, with no operation emitted yet; its
+            admissibility must declare the entry-rise limit.
+        chain: The chain entered.
+        station: The station entered at, in walk order.
+
+    Returns:
+        Where the helix, the members and the root loop sit in the stream.
+
+    Raises:
+        FirstCutAfterEmissionError: *path* already holds operations.
+        MissingHelicalEntryError: *path* declares no helical entry.
+        SubFloorStationError: *station* does not clear the degeneracy floor.
+        HoledDomainPencilError: An island lies inside the root's pencil.
+        MissingEntryRiseLimitError: The admissibility declares no entry-rise limit.
+        RampOutStuckError: No pencil member admits the junction and the cap.
+        RootLoopNotEmittedError: The root loop was skipped as removing nothing
+            (unreachable: the root's swept disk minus the last member's is a
+            lune of positive area inside the certified pocket).
+    """
+    if path.operations:
+        raise FirstCutAfterEmissionError(f"the first cut starts with nothing emitted, but the path holds {len(path.operations)} operation(s).")
+    if path.helical_entry is None:
+        raise MissingHelicalEntryError("the first cut needs a declared helical entry (helix pitch surrogate and design pocket); build the path with helical_entry.")
+    root = chain.loops[station]
+    if root is None:
+        raise SubFloorStationError(f"the first cut's station {station} does not clear the degeneracy floor: no root loop exists.")
+    clockwise = chain.stations[station].clockwise
+    tool = path.admissibility.tool
+    ramp = RampOut.build(TangentPencil.build(root, tool, path.helical_entry.pocket), tool, PencilConditions(path.admissibility, clockwise).ordered)
+    footprint = ramp.footprint
+    helix = Helix.build(footprint, CutPlane.build(path.cut, path.clearance), path.helical_entry.pitch_per_radius, clockwise)
+    into_material = path.stock.circle_sweep_removal(footprint.centre.x, footprint.centre.y, footprint.radius.value, path.tool_radius) is SweepRemoval.REMOVES
+    helix_index = len(path.operations)
+    path.emit_entry(helix_operation(helix, path.path_index))
+    path.records.append(ForcedEntry(path_index=path.path_index, entry=root.entry, reason=ForcedEntryReason.FIRST_CUT, into_material=into_material, entry_kind=EntryKind.HELIX))
+    member = ramp.next_member(path.stock, footprint)
+    while not ramp.is_root(member):
+        path.emit_motion(loop_operation(member, path.cut, path.path_index, clockwise))
+        member = ramp.next_member(path.stock, member)
+    root_index = len(path.operations)
+    emit_loop(path, chain, station)
+    if len(path.operations) != root_index + 1:
+        raise RootLoopNotEmittedError(f"the first cut's root loop at station {station} was not emitted after its ramp-out.")
+    return RampOutRecord.build(path.operations, path.path_index, helix_index, range(helix_index + 1, root_index), root_index)
+
+
+def re_enter(path: PathState, chain: OrientedChain, station: int, reason: ReEntryReason, from_point: Point2[WorldXY]) -> None:
+    """The re-entry stage: retract, rapid at the clearance plane, plunge onto the station's exact entry, cut its root loop.
+
+    Serves the two re-entry reasons only; the first cut is `enter_first_cut`.
+    The walk that follows starts at this station with ``emit_start_loop=False``.
+
+    Args:
+        path: The generation state.
+        chain: The chain entered.
+        station: The station entered at, in walk order.
+        reason: Why the re-entry is forced.
+        from_point: Where the tool is at the cut plane.
+
+    Raises:
+        FirstCutReEntryError: *reason* is not a re-entry reason (it is FIRST_CUT).
+    """
+    if reason not in _RE_ENTRY_REASONS:
+        raise FirstCutReEntryError(f"re_enter records a re-entry, not {reason!r}: the first cut is enter_first_cut.")
+    loop = chain.loops[station]
+    assert loop is not None
+    path.operations.append(line_operation(from_point, from_point, path.cut.value, path.clearance.value, OperationType.RETRACT, path.path_index))
+    path.operations.append(line_operation(from_point, loop.entry, path.clearance.value, path.clearance.value, OperationType.LINK, path.path_index))
+    _plunge_onto_root(path, chain, station, reason)
 
 
 @dataclass(frozen=True)
@@ -481,8 +613,10 @@ def generate_narrow(
     cut: CutZ | None = None,
     climb: bool = True,
     max_passes: int = DEFAULT_MAX_PASSES,
+    helix_pitch_per_radius: HelixPitchPerRadius = DEFAULT_HELIX_PITCH_PER_RADIUS,
+    entry_ramp: EntryRampLength | None = None,
 ) -> PipelineResult:
-    """Machine a pocket in the narrow regime with one plunge into material where the guide allows.
+    """Machine a pocket in the narrow regime with one helical entry into material where the guide allows.
 
     Args:
         polygon: Outer pocket boundary in world XY.
@@ -493,6 +627,13 @@ def generate_narrow(
         cut: Cut plane; ``z = 0`` by default.
         climb: Climb milling (clockwise loops).
         max_passes: Most skeleton chains the guide may emit.
+        helix_pitch_per_radius: The machine's exact ramp-cap surrogate for the
+            first cut's helix. Default: the D1 placeholder angle, kept only for
+            pre-existing callers (the typecheck contract); the gate adapter
+            passes its machine's value explicitly.
+        entry_ramp: Declared entry ramp of the helix's pencil junctions. None:
+            `EntryRampLength.default` (one tool diameter, a placeholder), kept
+            for the same callers; the gate adapter passes it explicitly.
 
     Returns:
         The path, its ledger, and what the rules left out.
@@ -503,6 +644,7 @@ def generate_narrow(
         GuideTruncatedError: *max_passes* truncated the guide.
         EmptyPipelineGuideError: The guide emitted no station.
         InvalidEngagementCapError: *cap* is outside ``(0, pi]``.
+        RampOutStuckError: The helical entry cannot ramp out to its root.
     """
     cut_plane = CutZ.build(0.0) if cut is None else cut
     if not clearance_z.value > cut_plane.value:
@@ -521,13 +663,20 @@ def generate_narrow(
     pending = [offered for offered in (orientations(chain, tool) for chain in guide.chains) if offered]
     if not pending:
         raise EmptyNarrowPathError(f"the guide produced {len(guide.chains)} chain(s), but no station clears the degeneracy floor at tool radius {tool.value!r}.")
-    admissibility = Admissibility.build(tool, cap_ratio(cap), centre_domain(polygon, holes, tool))
-    path = PathState(stock=Stock(polygon, holes=holes), admissibility=admissibility, cut=cut_plane, clearance=clearance_z)
+    ramp = EntryRampLength.default() if entry_ramp is None else entry_ramp
+    admissibility = Admissibility.build(tool, cap_ratio(cap), centre_domain(polygon, holes, tool), entry_rise_ratio=entry_rise_ratio(cap, ramp))
+    path = PathState(
+        stock=Stock(polygon, holes=holes),
+        admissibility=admissibility,
+        cut=cut_plane,
+        clearance=clearance_z,
+        helical_entry=HelicalEntry(pitch_per_radius=helix_pitch_per_radius, pocket=entry_containment(polygon, holes, tool)),
+    )
     conditions = LoopConditions(admissibility)
     window = advance_window(GUIDE_STEP_TOOL_DIAMETERS)
     first = pending.pop(0)[0]
     path.records.extend(first.declined)
-    enter(path, first, first.first, ForcedEntryReason.FIRST_CUT, None)
+    ramp_out = enter_first_cut(path, first, first.first)
     end = walk_chain(path, first, first.first, window, conditions, emit_start_loop=False)
     while pending:
         path.path_index += 1
@@ -535,7 +684,7 @@ def generate_narrow(
         pending.pop(choice.pending)
         path.records.extend(choice.chain.declined)
         if choice.link is None:
-            enter(path, choice.chain, choice.chain.first, ForcedEntryReason.NO_ADMISSIBLE_LINK, end.loop.entry)
+            re_enter(path, choice.chain, choice.chain.first, ForcedEntryReason.NO_ADMISSIBLE_LINK, end.loop.entry)
             end = walk_chain(path, choice.chain, choice.chain.first, window, conditions, emit_start_loop=False)
             continue
         emit_link(path, choice.link, choice.chain.entry_station.clockwise)
@@ -548,6 +697,7 @@ def generate_narrow(
         ledger=ForcedDecisionLedger.build(path.records),
         omitted=tuple(path.omitted),
         links=tuple(path.links),
+        ramp_out=ramp_out,
     )
 
 
@@ -568,6 +718,6 @@ def walk_chain(path: PathState, chain: OrientedChain, start: int, window: int, c
     """
     end = walk(path, chain, start, emit_start_loop, window, conditions)
     while end.resume is not None:
-        enter(path, chain, end.resume, ForcedEntryReason.RADIUS_STEP_SPLIT, end.loop.entry)
+        re_enter(path, chain, end.resume, ForcedEntryReason.RADIUS_STEP_SPLIT, end.loop.entry)
         end = walk(path, chain, end.resume, False, window, conditions)
     return end

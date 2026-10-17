@@ -34,7 +34,9 @@ from benchmarks.gate import GATE_POCKET_NAMES
 from benchmarks.gate import GATE_TOOL_DIAMETER
 from benchmarks.gate import gate_pocket
 from benchmarks.held_path_snapshot import snapshot_toolpath
+from benchmarks.models import GATE_MACHINE
 from benchmarks.quality import ENGAGEMENT_BANDS_DEG
+from benchmarks.quality import ramp_angle_violations
 from benchmarks.quality_observations import QualityEvidence
 from benchmarks.quality_observations import reduce_quality_evidence
 from benchmarks.survey import QUALITY_SAMPLES_PER_MOTION
@@ -87,6 +89,11 @@ def _band_reader(position: int) -> Reader:
 # Counts are stored with no decimals; ratios and fractions at four or six; the
 # precisions of the gated criteria are the gate's own report precisions
 # (`tests.benchmarks.test_quality._violations`).
+#
+# Rules "1.2" (Ruling 1.2-D2): `ramp_angle_violations` is newly gated, decided
+# exactly against `GATE_MACHINE`'s ramp surrogate; `max_loop_radius_step` is
+# retired from the ratchet to a reported cell bound by the stage row
+# ``<= 2`` (D4, `benchmarks.stage_acceptance`).
 CRITERIA: tuple[MeasuredCriterion, ...] = (
     _criterion("uncut_fraction", "elementary", "lower", 6, "0", lambda e, _s: float(e.assessment.uncut_fraction.measured)),
     _criterion("gouging_motions", "elementary", "lower", 0, "0", lambda e, _s: int(e.assessment.gouging_motions.measured)),
@@ -96,6 +103,7 @@ CRITERIA: tuple[MeasuredCriterion, ...] = (
     _criterion("redundant_operations", "elementary", "lower", 0, "0", lambda e, _s: int(e.assessment.redundant_operations.measured)),
     _criterion("material_plunges", "elementary", "lower", 0, REQUIRED_COMPONENTS, lambda e, _s: int(e.assessment.material_plunges.measured)),
     _criterion("misplaced_plunges", "elementary", "lower", 0, "0", lambda e, _s: int(e.assessment.misplaced_plunges.measured)),
+    _criterion("ramp_angle_violations", "elementary", "lower", 0, "0", lambda _e, s: len(ramp_angle_violations(s, GATE_MACHINE))),
     _criterion("degenerate_loops", "elementary", "reported", 0, None, lambda e, _s: e.path_quality.elementary.degenerate_loops),
     _criterion("marginal_loops", "elementary", "reported", 0, None, lambda e, _s: e.path_quality.elementary.marginal_loops),
     _criterion("recut_fraction", "elementary", "reported", 4, None, lambda e, _s: e.path_quality.elementary.recut_fraction),
@@ -104,7 +112,7 @@ CRITERIA: tuple[MeasuredCriterion, ...] = (
     _criterion("cap_exceedances", "cut", "lower", 0, "0", lambda e, _s: int(e.assessment.cap_exceedances.measured)),
     _criterion("slotting_motions", "cut", "lower", 0, "0", lambda e, _s: int(e.assessment.slotting_motions.measured)),
     _criterion("max_engagement_step_deg", "cut", "lower", 2, REQUIRED_CAP, lambda e, _s: float(e.assessment.max_engagement_step.measured)),
-    _criterion("max_loop_radius_step", "cut", "lower", 3, "2", lambda e, _s: float(e.assessment.max_loop_radius_step.measured)),
+    _criterion("max_loop_radius_step", "cut", "reported", 3, None, lambda e, _s: float(e.assessment.max_loop_radius_step.measured)),
     _criterion("max_engagement_deg", "cut", "reported", 2, None, lambda e, _s: e.path_quality.cut.max_engagement_deg),
     _criterion("engagement_p95_deg", "cut", "reported", 2, None, lambda e, _s: e.path_quality.cut.engagement_p95_deg),
     _criterion("engagement_variance_deg2", "cut", "reported", 1, None, lambda e, _s: e.path_quality.cut.engagement_variance_deg2),

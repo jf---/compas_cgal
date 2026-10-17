@@ -20,12 +20,11 @@ from compas_cgal.pipeline.direction import Direction2
 from compas_cgal.pipeline.errors import MixedTurnChainError
 from compas_cgal.pipeline.generate import LoopConditions
 from compas_cgal.pipeline.generate import PathState
-from compas_cgal.pipeline.generate import enter
+from compas_cgal.pipeline.generate import enter_first_cut
 from compas_cgal.pipeline.generate import walk_chain
 from compas_cgal.pipeline.guide import GuideChain
 from compas_cgal.pipeline.guide import GuideStation
 from compas_cgal.pipeline.narrow import OrientedChain
-from compas_cgal.pipeline.result import ForcedEntryReason
 from compas_cgal.stock import Stock
 from compas_cgal.units import ClearanceZ
 from compas_cgal.units import CutZ
@@ -80,6 +79,6 @@ def test_the_walk_raises_on_a_mixed_turn_chain(monkeypatch: pytest.MonkeyPatch) 
     chain = _chain([True, False, True])
     state, admissibility = _path()
     monkeypatch.setattr(LoopConditions, "loop_admissible_at_rest", lambda *_args: False)
-    enter(state, chain, chain.first, ForcedEntryReason.FIRST_CUT, None)
+    enter_first_cut(state, chain, chain.first)
     with pytest.raises(MixedTurnChainError):
         walk_chain(state, chain, chain.first, WALK_WINDOW, LoopConditions(admissibility), emit_start_loop=False)

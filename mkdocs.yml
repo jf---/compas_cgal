@@ -160,6 +160,7 @@ nav:
       - Measurement Claims: measurement_claims.md
       - Machining Quality: machining_quality.md
       - "Product Pipeline: Narrow Regime": pipeline.md
+      - "Fail-Closed Post: First Test Cut": post.md
       - Drawing Tool Paths: toolpath_drawing.md
       - Exact Segment-Site MAT: segment_site_mat.md
       - Exact Continuous Engagement: continuous_engagement.md

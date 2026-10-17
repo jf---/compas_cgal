@@ -89,6 +89,25 @@ GATE_PATHS: tuple[str, ...] = (
     # Ruling 1.1-closure.
     "src/compas_cgal/incident_loop.py",
     "src/compas_cgal/toolpath.py",
+    # Task 1.2 amendment M7: gate inputs 1.2 edits. The snapshot is the stream
+    # the survey and the quality reduction read; gate_measure owns the criterion
+    # table (gated flag, precision, threshold). The closure test's `tools/gate_`
+    # prefix exemption covers the ratchet tooling, not this table: gate_measure
+    # is gated here regardless.
+    "benchmarks/held_path_snapshot.py",
+    "tools/gate_measure.py",
+    # Task 1.2: the core helix model sits outside `pipeline/` (the toolpath
+    # layer carries it as operation geometry); its turn count and ramp verdict
+    # decide the bore.
+    "src/compas_cgal/helix.py",
+    "src/compas_cgal/helix_units.py",
+    # Task 1.2 set B split these out of `benchmarks/survey.py`; they carry the
+    # survey's measurements, so they are gated like it.
+    "benchmarks/helix_observation.py",
+    "benchmarks/survey_station.py",
+    # Ruling 1.2-models: the machine model carries the max-ramp limit the
+    # survey reads, so it decides a gate cell.
+    "benchmarks/models.py",
 )
 
 

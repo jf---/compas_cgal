@@ -18,6 +18,7 @@ import math
 from dataclasses import dataclass
 from typing import Any
 from typing import List
+from typing import Literal
 from typing import Optional
 from typing import Sequence
 from typing import Tuple
@@ -31,6 +32,8 @@ from benchmarks.errors import EmptyToolpathError
 from benchmarks.errors import UnknownOperationClassError
 from benchmarks.errors import UnplottableBoundaryError
 from benchmarks.errors import UnplottableGeometryError
+from compas_cgal.helix import HELIX_CLOSING_TURNS
+from compas_cgal.helix import Helix
 
 # Angular step a curved primitive is resampled at, chosen so that the chord is
 # invisible for ANY radius rather than for the radii this corpus happens to draw.
@@ -48,14 +51,19 @@ MIN_ARC_SAMPLES = 8
 # Padding around the drawn geometry, as a fraction of its longer side.
 MARGIN_FRACTION = 0.04
 
-# Operation classes whose motion removes material. Everything else is travel.
-CUTTING_OPERATIONS = frozenset({"cut", "lead_in", "lead_out"})
+# The operation classes a drawing names, one per value of the kernel's
+# `OperationType` (pinned by `tests/benchmarks/test_helix_pathgeometry.py`).
+OperationName = Literal["cut", "lead_in", "lead_out", "link", "retract", "plunge", "helix"]
+
+# Operation classes whose motion removes material. Everything else is travel. A
+# helix bores its footprint disk on the way down, so it cuts.
+CUTTING_OPERATIONS: frozenset[OperationName] = frozenset({"cut", "lead_in", "lead_out", "helix"})
 
 # Every operation class a drawing handles, which is exactly the set the kernel's
 # `OperationType` defines. An unknown class is an error rather than a default
 # stroke: a figure that silently draws an unrecognised motion as a cut is worse
 # than one that refuses to be drawn.
-KNOWN_OPERATIONS = frozenset({"cut", "lead_in", "lead_out", "link", "retract", "plunge"})
+KNOWN_OPERATIONS: frozenset[OperationName] = frozenset({"cut", "lead_in", "lead_out", "link", "retract", "plunge", "helix"})
 
 
 @dataclass(frozen=True)
@@ -69,12 +77,13 @@ class Motion:
         points: The motion resampled in the XY plane, in travel order.
         length: Summed length of the resampled polyline.
         is_point: True when the motion has no extent in XY -- a plunge, a
-            retract, or a link between coincident ends.
+            retract, or a link between coincident ends. A helix has the extent
+            of its footprint circle.
         is_cutting: True when the motion removes material.
     """
 
     index: int
-    name: str
+    name: OperationName
     path_index: int
     points: Tuple[Tuple[float, float], ...]
     length: float
@@ -119,7 +128,7 @@ def drawable_motions(result: Any) -> Tuple[Motion, ...]:
     return tuple(motions)
 
 
-def _operation_name(index: int, operation: Any) -> str:
+def _operation_name(index: int, operation: Any) -> OperationName:
     """The operation's class as a lower-case string.
 
     Args:
@@ -134,9 +143,10 @@ def _operation_name(index: int, operation: Any) -> str:
     """
     raw = operation.operation
     name = str(getattr(raw, "value", raw)).lower()
-    if name not in KNOWN_OPERATIONS:
-        raise UnknownOperationClassError(f"Operation {index} is of class {name!r}; this module draws {sorted(KNOWN_OPERATIONS)}.")
-    return name
+    for known in KNOWN_OPERATIONS:
+        if known == name:
+            return known
+    raise UnknownOperationClassError(f"Operation {index} is of class {name!r}; this module draws {sorted(KNOWN_OPERATIONS)}.")
 
 
 def _sample(index: int, geometry: Any) -> Tuple[Tuple[float, float], ...]:
@@ -144,10 +154,12 @@ def _sample(index: int, geometry: Any) -> Tuple[Tuple[float, float], ...]:
 
     Curved primitives are sampled from their own parametrisation, so a circle is
     drawn as a circle whatever tessellation the generator emitted alongside it.
+    A helix is drawn as its plan view: every turn of its footprint circle, the
+    flat closing turn included, in its own turn sense (`_sample_helix`).
 
     Args:
         index: Position in the stream, for the error message.
-        geometry: A compas line, arc or circle.
+        geometry: A compas line, arc or circle, or a `compas_cgal.helix.Helix`.
 
     Returns:
         The sampled points.
@@ -155,6 +167,8 @@ def _sample(index: int, geometry: Any) -> Tuple[Tuple[float, float], ...]:
     Raises:
         UnplottableGeometryError: The primitive carries no path to sample.
     """
+    if isinstance(geometry, Helix):
+        return _sample_helix(geometry)
     if isinstance(geometry, Circle):
         count = _arc_samples(2.0 * math.pi)
         return tuple(_xy(geometry.point_at(step / count)) for step in range(count + 1))
@@ -164,6 +178,63 @@ def _sample(index: int, geometry: Any) -> Tuple[Tuple[float, float], ...]:
     if isinstance(geometry, Line):
         return (_xy(geometry.start), _xy(geometry.end))
     raise UnplottableGeometryError(f"Operation {index} carries geometry of type {type(geometry).__name__!r}, which has no drawable path.")
+
+
+def _sample_helix(helix: Helix) -> Tuple[Tuple[float, float], ...]:
+    """The plan view of a helix op, from its own parametrisation, in travel order.
+
+    Station ``t`` in ``[0, 1]`` is the exact entry ``P`` turned about the
+    footprint centre by ``t * (turns + HELIX_CLOSING_TURNS)`` full turns in the
+    helix's sense: the ramp turns, then the flat closing turn at ``bottom_z``
+    (user ruling Q6). The descent is along Z, which a plan view drops
+    (`helix_elevation` draws it). The two ends are the exact entry and exit
+    (the same point: every turn is whole), not a rounding of the last
+    rotation. REPORTING only: a drawing decides nothing.
+
+    Args:
+        helix: The helix.
+
+    Returns:
+        The sampled points, ``turns + HELIX_CLOSING_TURNS`` times round the
+        footprint circle.
+    """
+    turn = (-math.tau if helix.clockwise else math.tau) * (helix.turns + HELIX_CLOSING_TURNS)
+    count = _arc_samples(turn)
+    cx, cy = float(helix.footprint.centre.x), float(helix.footprint.centre.y)
+    entry = (float(helix.entry_xy.x), float(helix.entry_xy.y))
+    exit_ = (float(helix.exit_xy.x), float(helix.exit_xy.y))
+    dx, dy = entry[0] - cx, entry[1] - cy
+    interior = []
+    for step in range(1, count):
+        angle = turn * step / count
+        cosine, sine = math.cos(angle), math.sin(angle)
+        interior.append((cx + cosine * dx - sine * dy, cy + sine * dx + cosine * dy))
+    return (entry, *interior, exit_)
+
+
+def helix_elevation(helix: Helix) -> Tuple[Tuple[float, float], ...]:
+    """The side elevation of a helix op: Z against plan arc length, in travel order.
+
+    The ramp descends linearly from ``top_z`` to ``bottom_z`` over ``turns``
+    footprint circumferences, then the closing turn runs flat at ``bottom_z``
+    for `HELIX_CLOSING_TURNS` more (user ruling Q6). Both pieces are straight
+    in this chart, so their three corners are the whole profile; the ends are
+    the op's exact top and bottom heights. REPORTING only.
+
+    Args:
+        helix: The helix.
+
+    Returns:
+        ``(arc length mm, z mm)`` at the ramp start, the ramp end and the
+        closing turn's end.
+    """
+    circumference = math.tau * float(helix.footprint.radius.value)
+    top, bottom = float(helix.top_z.value), float(helix.bottom_z.value)
+    return (
+        (0.0, top),
+        (helix.turns * circumference, bottom),
+        ((helix.turns + HELIX_CLOSING_TURNS) * circumference, bottom),
+    )
 
 
 def _arc_samples(angle: float) -> int:

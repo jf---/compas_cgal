@@ -372,8 +372,6 @@ def test_touching_a_gate_path_is_detected_and_a_doc_change_is_not() -> None:
 NOT_GATE: dict[str, str] = {
     "benchmarks/errors.py": "named exceptions only; no number flows through it",
     "benchmarks/units.py": "unit NewTypes and validators; cannot change a measured value without failing validation",
-    "benchmarks/held_path_snapshot.py": "immutable record of the authored stream; a change is caught by survey binding",
-    "benchmarks/models.py": "material and machine models; calibrated outcomes are not gate cells",
     "benchmarks/pathmetrics.py": "clearance height constant for the frozen generators' call",
     "benchmarks/exceedance.py": "reached only through benchmarks.pathmetrics; the runner's demonstrated-exceedance count, no gate cell",
     "src/compas_cgal/errors.py": "named exceptions only",

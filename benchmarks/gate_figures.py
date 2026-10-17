@@ -14,7 +14,11 @@ never stacked. Each panel is drawn by `benchmarks.plotting.draw_toolpath` into
 its own axes (operation-class encoding: cut / lead / link strokes, plunge and
 retract as point markers, arcs resampled from their own parametrisation); the
 row then gets one equal-aspect view shared by every panel, so they compare
-directly, and one figure legend. ``--overview`` also stacks each cap's three
+directly, and one figure legend. A panel whose path enters by a HELIX also
+gets an entry inset in its own column right of the row (`draw_entry_inset`):
+a zoomed plan of the helix footprint, its bore disk, the pencil members, the
+root loop and the entry P, over a side elevation of Z against plan arc length
+showing the ramp turns and the flat closing turn. ``--overview`` also stacks each cap's three
 pocket rows into one sheet (not published).
 
 Run (rebuilds the editable extension and re-measures every plotted case
@@ -47,9 +51,12 @@ from pathlib import Path
 from typing import Mapping
 from typing import Sequence
 
+from compas.geometry import Circle
+from matplotlib.axes import Axes
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
+from matplotlib.patches import Circle as DiskPatch
 from PIL import Image
 
 from benchmarks.gate import GATE_CAP_CASES
@@ -58,19 +65,27 @@ from benchmarks.gate import GATE_GENERATORS
 from benchmarks.gate import GATE_POCKET_NAMES
 from benchmarks.gate import GateCapDegrees
 from benchmarks.gate import gate_pocket
+from benchmarks.marks import CUT_WIDTH_PT
+from benchmarks.marks import LINK_WIDTH_PT
 from benchmarks.marks import POINT_MARKER_PT
 from benchmarks.marks import Mark
 from benchmarks.marks import encode
 from benchmarks.marks import legend_entries
+from benchmarks.palette import Palette
 from benchmarks.palette import Theme
 from benchmarks.palette import palette_for
+from benchmarks.pathgeometry import MARGIN_FRACTION
+from benchmarks.pathgeometry import Motion
 from benchmarks.pathgeometry import closed_rings
 from benchmarks.pathgeometry import drawable_motions
+from benchmarks.pathgeometry import helix_elevation
 from benchmarks.pathgeometry import view_bounds
 from benchmarks.plotting import FIGURE_DPI
 from benchmarks.plotting import ColourBy
 from benchmarks.plotting import draw_toolpath
 from benchmarks.plotting import save_figure
+from compas_cgal.helix import HELIX_CLOSING_TURNS
+from compas_cgal.helix import Helix
 from compas_cgal.toolpath import ToolpathResult
 from tools.gate_measure import case_key
 from tools.gate_measure import measure_case
@@ -126,6 +141,29 @@ PROVENANCE_PT = 8.0
 CAPTION_PT = 7.5
 LEGEND_PT = 8.0
 
+# Entry inset (brief §6): one column right of the row per panel whose path
+# enters by a HELIX. The plan zoom sits over a short side elevation; both are
+# labelled (`Axes.get_label`) so a test can find them. Inches.
+ENTRY_PLAN_LABEL = "entry-plan:{name}"
+ENTRY_ELEVATION_LABEL = "entry-elevation:{name}"
+INSET_WIDTH_IN = 2.6
+# Elevation block: the axes plus room under it for tick labels and the axis label.
+ELEVATION_AXES_IN = 0.55
+ELEVATION_LABELS_IN = 0.4
+ELEVATION_GAP_IN = 0.15
+# The plan zoom never shrinks below this, so a flat pocket's row grows instead.
+INSET_MIN_PLAN_IN = 1.4
+# Left room inside the inset column for the elevation's Z tick labels.
+ELEVATION_LEFT_IN = 0.4
+TICK_PT = 6.5
+# The bore's legend swatch is a thick stroke in the bore's fill colour.
+BORE_SWATCH_PT = 6.0
+# Legend order of the inset entries: after every motion mark of `benchmarks.marks`.
+_ORDER_BORE = 400
+_ORDER_MEMBER = 401
+_ORDER_ROOT = 402
+_ORDER_ENTRY_POINT = 403
+
 CELL_SEPARATOR = "  ·  "
 CHANGE_ARROW = " → "
 
@@ -169,6 +207,32 @@ class VectorsSource:
 
     vectors: GateVectors
     label: str
+
+
+class MultipleHelixEntriesError(Exception):
+    """A path carries more than one HELIX op; the entry inset draws the one first cut."""
+
+
+class HelixWithoutRootLoopError(Exception):
+    """A HELIX op is not followed by a loop entered at its exact entry P (the root loop)."""
+
+
+@dataclass(frozen=True)
+class EntryGroup:
+    """The helical entry of one path: the HELIX op, the pencil members and the root loop.
+
+    Attributes:
+        helix: The helix.
+        helix_index: Its position in the operation stream.
+        member_indices: The pencil members, in stream order: every loop right
+            after the helix entered at its exact entry P, except the last.
+        root_index: The root loop: the last of those loops.
+    """
+
+    helix: Helix
+    helix_index: int
+    member_indices: tuple[int, ...]
+    root_index: int
 
 
 class MissingPanelLegendError(RuntimeError):
@@ -419,11 +483,14 @@ def draw_row(
     palette = palette_for(Theme.LIGHT)
     rings = closed_rings(boundary, holes)
     motions = {name: drawable_motions(result) for name, result in panels.items()}
+    entries_of = {name: group for name, group in ((name, entry_group(result)) for name, result in panels.items()) if group is not None}
     xmin, xmax, ymin, ymax = view_bounds(rings, [motion for row in motions.values() for motion in row], None)
     panel_height = PANEL_WIDTH_IN * (ymax - ymin) / (xmax - xmin)
+    elevation_block = ELEVATION_GAP_IN + ELEVATION_AXES_IN + ELEVATION_LABELS_IN
+    body = max(panel_height, INSET_MIN_PLAN_IN + elevation_block) if entries_of else panel_height
     count = len(panels)
-    width = 2.0 * SIDE_MARGIN_IN + count * PANEL_WIDTH_IN + (count - 1) * PANEL_GAP_IN
-    height = FIGURE_HEADER_IN + PANEL_CAPTION_IN + panel_height + LEGEND_STRIP_IN
+    width = 2.0 * SIDE_MARGIN_IN + count * PANEL_WIDTH_IN + (count - 1) * PANEL_GAP_IN + len(entries_of) * (PANEL_GAP_IN + INSET_WIDTH_IN)
+    height = FIGURE_HEADER_IN + PANEL_CAPTION_IN + body + LEGEND_STRIP_IN
     figure = Figure(figsize=(width, height), dpi=FIGURE_DPI, facecolor=palette.surface)
     FigureCanvasAgg(figure)
 
@@ -445,6 +512,23 @@ def draw_row(
         for label, mark in legend_entries(encode(motions[name], ColourBy.OPERATION, palette, None)).items():
             entries.setdefault(label, mark)
 
+    top = (LEGEND_STRIP_IN + body) / height
+    for slot, (name, group) in enumerate(entries_of.items()):
+        left_in = SIDE_MARGIN_IN + count * (PANEL_WIDTH_IN + PANEL_GAP_IN) + slot * (INSET_WIDTH_IN + PANEL_GAP_IN)
+        plan_height = body - elevation_block
+        plan = figure.add_axes((left_in / width, top - plan_height / height, INSET_WIDTH_IN / width, plan_height / height))
+        elevation = figure.add_axes(
+            (
+                (left_in + ELEVATION_LEFT_IN) / width,
+                bottom + ELEVATION_LABELS_IN / height,
+                (INSET_WIDTH_IN - ELEVATION_LEFT_IN) / width,
+                ELEVATION_AXES_IN / height,
+            )
+        )
+        draw_entry_inset(plan, elevation, name=name, group=group, motions=motions[name], tool_radius=0.5 * tool_diameter, palette=palette)
+        for label, mark in entry_inset_marks(palette).items():
+            entries.setdefault(label, mark)
+
     figure.text(SIDE_MARGIN_IN / width, 1.0 - 0.08 / height, title, ha="left", va="top", color=palette.ink, fontsize=TITLE_PT)
     figure.text(SIDE_MARGIN_IN / width, 1.0 - 0.32 / height, provenance, ha="left", va="top", color=palette.secondary, fontsize=PROVENANCE_PT)
     ordered = sorted(entries.values(), key=lambda mark: (mark.order, mark.label))
@@ -456,6 +540,175 @@ def draw_row(
     for text in legend.get_texts():
         text.set_color(palette.ink)
     return figure
+
+
+def entry_group(result: ToolpathResult) -> EntryGroup | None:
+    """The helical entry of *result*, read off its operation stream.
+
+    The pencil members and the root loop are the circles that follow the
+    helix and carry its exact entry P as their ``entry_xy`` (Ruling
+    1.1-C14-A: every member is internally tangent at P and the walk emits the
+    root loop from P); the run stops at the first operation that is not one.
+    Equality of the emitted doubles is the contract here, not a tolerance:
+    they are all written from the one exact P.
+
+    Args:
+        result: The path.
+
+    Returns:
+        The entry, or None when the path carries no HELIX op.
+
+    Raises:
+        MultipleHelixEntriesError: More than one HELIX op.
+        HelixWithoutRootLoopError: No loop at P follows the helix.
+    """
+    operations = list(result.operations)
+    helices = [index for index, operation in enumerate(operations) if isinstance(operation.geometry, Helix)]
+    if not helices:
+        return None
+    if len(helices) > 1:
+        raise MultipleHelixEntriesError(f"the path carries HELIX ops at {helices}; the entry inset draws the single first cut.")
+    (index,) = helices
+    helix = operations[index].geometry
+    assert isinstance(helix, Helix)
+    entry = (helix.entry_xy.x, helix.entry_xy.y)
+    loops: list[int] = []
+    for later in range(index + 1, len(operations)):
+        operation = operations[later]
+        if not (isinstance(operation.geometry, Circle) and operation.entry_xy == entry):
+            break
+        loops.append(later)
+    if not loops:
+        raise HelixWithoutRootLoopError(f"the HELIX op at {index} is not followed by a loop entered at its entry {entry}; there is no root loop to draw.")
+    return EntryGroup(helix=helix, helix_index=index, member_indices=tuple(loops[:-1]), root_index=loops[-1])
+
+
+def entry_inset_bounds(group: EntryGroup, motions: Sequence[Motion], tool_radius: float) -> tuple[float, float, float, float]:
+    """The entry inset's view: the bore disk and every entry loop, padded.
+
+    The padding is `MARGIN_FRACTION` of the longer side plus one tool radius,
+    so the root loop's swept width would fit inside the view too.
+
+    Args:
+        group: The entry.
+        motions: The path's motions, indexed as its operations.
+        tool_radius: Cutter radius r; the bore is ``disk(c_h, rho_h + r)``.
+
+    Returns:
+        ``(xmin, xmax, ymin, ymax)``.
+    """
+    cx, cy = float(group.helix.footprint.centre.x), float(group.helix.footprint.centre.y)
+    bore = float(group.helix.footprint.radius.value) + tool_radius
+    points = [point for index in (*group.member_indices, group.root_index) for point in motions[index].points]
+    xs = [cx - bore, cx + bore, *(x for x, _ in points)]
+    ys = [cy - bore, cy + bore, *(y for _, y in points)]
+    xmin, xmax, ymin, ymax = min(xs), max(xs), min(ys), max(ys)
+    margin = MARGIN_FRACTION * max(xmax - xmin, ymax - ymin) + tool_radius
+    return (xmin - margin, xmax + margin, ymin - margin, ymax + margin)
+
+
+def entry_inset_marks(palette: Palette) -> dict[str, Mark]:
+    """The legend entries the entry inset adds, by label.
+
+    Args:
+        palette: The theme's tokens.
+
+    Returns:
+        Bore, pencil member, root loop and entry point marks.
+    """
+    marks = (
+        Mark(label="bore (footprint + r)", order=_ORDER_BORE, colour=palette.grid, width_pt=BORE_SWATCH_PT, linestyle="-", marker=""),
+        Mark(label="pencil member", order=_ORDER_MEMBER, colour=palette.cut, width_pt=LINK_WIDTH_PT, linestyle="-", marker=""),
+        Mark(label="root loop", order=_ORDER_ROOT, colour=palette.cut, width_pt=CUT_WIDTH_PT, linestyle="-", marker=""),
+        Mark(label="P (helix entry)", order=_ORDER_ENTRY_POINT, colour=palette.ink, width_pt=0.0, linestyle="none", marker="o"),
+    )
+    return {mark.label: mark for mark in marks}
+
+
+def draw_entry_inset(
+    plan: Axes,
+    elevation: Axes,
+    *,
+    name: str,
+    group: EntryGroup,
+    motions: Sequence[Motion],
+    tool_radius: float,
+    palette: Palette,
+) -> None:
+    """Draw one path's entry: a plan zoom and a Z-against-arc-length elevation.
+
+    The plan draws the bore disk, the helix as its plan projection (its own
+    mark, `benchmarks.marks`), the pencil members, the root loop and P, inside
+    a full zoom-window frame; the elevation draws the helix op's ramp and its flat
+    closing turn (`benchmarks.pathgeometry.helix_elevation`). REPORTING only.
+
+    Args:
+        plan: The plan axes.
+        elevation: The elevation axes.
+        name: The panel's generator, for titles and labels.
+        group: The entry.
+        motions: The path's motions, indexed as its operations.
+        tool_radius: Cutter radius r.
+        palette: The theme's tokens.
+    """
+    marks = entry_inset_marks(palette)
+    helix = group.helix
+    xmin, xmax, ymin, ymax = entry_inset_bounds(group, motions, tool_radius)
+    plan.set_label(ENTRY_PLAN_LABEL.format(name=name))
+    plan.set_facecolor(palette.surface)
+    plan.set_xlim(xmin, xmax)
+    plan.set_ylim(ymin, ymax)
+    # "box", not the row's "datalim": the zoom's limits are the contract (they
+    # hold the bore and the root loop), so the axes box shrinks to fit instead.
+    plan.set_aspect("equal", adjustable="box", anchor="N")
+    plan.apply_aspect()
+    # A zoom window, framed on all four sides: the pocket rings are not drawn,
+    # because the zoom clips them to partial walls that read as a cut frame.
+    plan.set_xticks([])
+    plan.set_yticks([])
+    for spine in plan.spines.values():
+        spine.set_color(palette.secondary)
+        spine.set_linewidth(LINK_WIDTH_PT)
+    centre = (float(helix.footprint.centre.x), float(helix.footprint.centre.y))
+    plan.add_patch(DiskPatch(centre, float(helix.footprint.radius.value) + tool_radius, facecolor=palette.grid, edgecolor="none", zorder=1))
+    helix_mark = encode([motions[group.helix_index]], ColourBy.OPERATION, palette, None)[group.helix_index]
+    strokes = [(group.helix_index, helix_mark)]
+    strokes += [(index, marks["pencil member"]) for index in group.member_indices]
+    strokes.append((group.root_index, marks["root loop"]))
+    for index, mark in strokes:
+        points = motions[index].points
+        plan.plot([x for x, _ in points], [y for _, y in points], color=mark.colour, linewidth=mark.width_pt, linestyle=mark.linestyle, solid_joinstyle="round", zorder=3)
+    point = marks["P (helix entry)"]
+    plan.plot([helix.entry_xy.x], [helix.entry_xy.y], color=point.colour, linestyle="none", marker=point.marker, markersize=POINT_MARKER_PT, markeredgewidth=0.0, zorder=4)
+    plan.set_title(
+        f"{name}  ·  entry (zoom)\nhelix {helix.turns} + {HELIX_CLOSING_TURNS} flat turns  ·  {len(group.member_indices)} members",
+        loc="left",
+        fontsize=CAPTION_PT,
+        color=palette.ink,
+        linespacing=1.3,
+    )
+
+    profile = helix_elevation(helix)
+    elevation.set_label(ENTRY_ELEVATION_LABEL.format(name=name))
+    elevation.set_facecolor(palette.surface)
+    ramp, flat = profile[:2], profile[1:]
+    # The ramp in the helix mark; the flat closing turn solid in the same ink, so
+    # the one op's two parts read apart even when the flat turn is a short tail.
+    elevation.plot([s for s, _ in ramp], [z for _, z in ramp], color=helix_mark.colour, linewidth=helix_mark.width_pt, linestyle=helix_mark.linestyle, zorder=3)
+    elevation.plot([s for s, _ in flat], [z for _, z in flat], color=helix_mark.colour, linewidth=helix_mark.width_pt, linestyle="-", solid_capstyle="butt", zorder=3)
+    ramp_end, closed = profile[1][0], profile[-1][0]
+    top, bottom = profile[0][1], profile[-1][1]
+    elevation.text(0.5 * ramp_end, 0.5 * (top + bottom), f"  ramp ×{helix.turns}", ha="left", va="bottom", fontsize=TICK_PT, color=palette.secondary)
+    elevation.text(closed, top, f"flat closing turn ×{HELIX_CLOSING_TURNS} at bottom Z", ha="right", va="top", fontsize=TICK_PT, color=palette.secondary)
+    elevation.set_xlim(0.0, closed)
+    elevation.set_ylim(bottom - 0.1 * (top - bottom), top + 0.1 * (top - bottom))
+    elevation.set_xlabel("plan arc length (mm)", fontsize=TICK_PT, color=palette.secondary, labelpad=1.0)
+    elevation.set_ylabel("Z (mm)", fontsize=TICK_PT, color=palette.secondary, labelpad=1.0)
+    elevation.tick_params(labelsize=TICK_PT, colors=palette.secondary, length=2.0, pad=1.0)
+    for side in ("top", "right"):
+        elevation.spines[side].set_visible(False)
+    for side in ("left", "bottom"):
+        elevation.spines[side].set_color(palette.secondary)
 
 
 def overview(paths: Sequence[Path], out_dir: Path) -> Path:

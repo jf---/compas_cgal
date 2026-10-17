@@ -22,6 +22,8 @@ never a geometric truth.
 import math
 from dataclasses import dataclass
 from typing import Iterable
+from typing import Never
+from typing import NoReturn
 
 from compas.geometry import Arc
 from compas.geometry import Circle
@@ -29,10 +31,11 @@ from compas.geometry import Line
 from compas.geometry import Polygon
 
 from compas_cgal import _stock_2  # type: ignore
+from compas_cgal.helix import Helix
 from compas_cgal.replay_classification import AUDIT_ENGAGED as AUDIT_ENGAGED
 from compas_cgal.replay_classification import CutPlaneRampError
+from compas_cgal.replay_classification import OffPlaneHelixError
 from compas_cgal.replay_classification import OffPlaneReplayCurveError
-from compas_cgal.replay_classification import ReplayCategory
 from compas_cgal.replay_classification import classify_operation_replay
 from compas_cgal.replay_classification import infer_operation_cut_height
 from compas_cgal.replay_classification import minimum_cut_height
@@ -68,6 +71,24 @@ class InvalidToolDiameterError(ValueError):
 
 class UnexpectedToolpathGeometryError(ValueError):
     """A motion's geometry is outside the audit's cut-plane replay model (e.g. a 3D ramp)."""
+
+
+class UnhandledReplayCategoryError(RuntimeError):
+    """A replay category reached a dispatch that has no branch for it."""
+
+
+def _unhandled_category(category: Never) -> NoReturn:
+    """Fail on a replay category no dispatch branch handles.
+
+    Typed ``Never`` like ``typing.assert_never``: every category dispatch is an
+    exhaustive ``==`` chain over `ReplayCategory` ending here, so ``mypy
+    --strict`` rejects a chain missing a member; at runtime it raises a named
+    error, never a silent default.
+
+    Raises:
+        UnhandledReplayCategoryError: Always.
+    """
+    raise UnhandledReplayCategoryError(f"no dispatch branch for replay category {category!r}")
 
 
 @dataclass(frozen=True)
@@ -181,6 +202,11 @@ def _subtract_operation(stock: Stock, op: ToolpathOperation, tool_radius: float)
       already swept (Ruling 1.1-C2, B-minimal); else the arc sweep between its
       endpoints with the operation's turn direction (a certified
       under-covering disk chain).
+    - ``Helix`` -> `Stock.subtract_circle_sweep_local` on the footprint: the
+      bore, the exact full-turn sweep of the footprint loop. It is the disk
+      of radius ``rho_h + r`` when ``rho_h <= r`` (enforced by
+      `compas_cgal.pipeline.pencil.helix_footprint`); for ``rho_h > r`` the
+      replay removes the true annulus.
 
     Plunges are handled by the replay (disk), not here.
 
@@ -191,10 +217,13 @@ def _subtract_operation(stock: Stock, op: ToolpathOperation, tool_radius: float)
 
     Raises:
         UnexpectedToolpathGeometryError: If the geometry is not a supported
-            ``Line``/``Arc``/``Circle`` primitive.
+            ``Line``/``Arc``/``Circle``/``Helix`` primitive.
     """
     g = op.geometry
-    if isinstance(g, Line):
+    if isinstance(g, Helix):
+        footprint = g.footprint
+        stock.subtract_circle_sweep_local(float(footprint.centre.x), float(footprint.centre.y), float(footprint.radius.value), tool_radius)
+    elif isinstance(g, Line):
         stock.subtract_line_sweep_local(float(g.start[0]), float(g.start[1]), float(g.end[0]), float(g.end[1]), tool_radius)
     elif isinstance(g, Circle):
         c = g.frame.point
@@ -238,6 +267,8 @@ def _operation_removal(stock: Stock, op: ToolpathOperation, tool_radius: float) 
       an ulp sliver of the replay's surrogate chain); otherwise the chain the
       replay removes decides REMOVES (one clone and an exact equality); else
       WITHIN_BAND.
+    - ``Helix`` -> `Stock.circle_sweep_removal` on the footprint: the bore is
+      exact, so REMOVES or NOTHING.
 
     *stock* is never mutated.
 
@@ -251,9 +282,12 @@ def _operation_removal(stock: Stock, op: ToolpathOperation, tool_radius: float) 
 
     Raises:
         UnexpectedToolpathGeometryError: If the geometry is not a supported
-            ``Line``/``Arc``/``Circle`` primitive.
+            ``Line``/``Arc``/``Circle``/``Helix`` primitive.
     """
     g = op.geometry
+    if isinstance(g, Helix):
+        footprint = g.footprint
+        return stock.circle_sweep_removal(float(footprint.centre.x), float(footprint.centre.y), float(footprint.radius.value), tool_radius)
     if isinstance(g, Line):
         return stock.line_sweep_removal(float(g.start[0]), float(g.start[1]), float(g.end[0]), float(g.end[1]), tool_radius)
     if isinstance(g, Circle):
@@ -366,7 +400,13 @@ def _certify_arc_engagement(stock: Stock, geometry: Arc | Circle, tool_radius: f
 
 
 def _unmeasured(op_index: int, operation: OperationType) -> OperationEngagement:
-    """Engagement record for a move that engages no material (retract/plunge/clearance link)."""
+    """Engagement record for a move that is not cap-sampled.
+
+    Rapids and retracts engage no material. A plunge and a helix bore their
+    disk but are not cap-sampled by design (E8): a bore into virgin stock is
+    full immersion by construction, and the motion after it is measured
+    against the bored stock.
+    """
     return OperationEngagement(op_index=op_index, operation=operation, max_tea=0.0, cap_certified=True, stations=0)
 
 
@@ -393,27 +433,13 @@ def _infer_cut_height(operations: list[ToolpathOperation]) -> float:
     return float(infer_operation_cut_height(operations))
 
 
-def _replay_line(
-    stock: Stock,
-    op_index: int,
-    op: ToolpathOperation,
-    tool_radius: float,
-    tea_cap: float,
-    category: ReplayCategory,
-) -> OperationEngagement:
-    """Replay a single linear operation: classify by height, measure + subtract if engaged."""
-    operation = op.operation
+def _replay_line(stock: Stock, op_index: int, op: ToolpathOperation, tool_radius: float, tea_cap: float) -> OperationEngagement:
+    """Replay one engaged cut-plane linear motion: certify against the current stock, then subtract."""
     g = op.geometry
-    assert isinstance(g, Line)
-    if category == "plunge":
-        stock.subtract_disk(float(g.end[0]), float(g.end[1]), tool_radius)
-        return _unmeasured(op_index, operation)
-    if category != "motion":
-        return _unmeasured(op_index, operation)
-
-    # Cut-height engaged linear motion. Certify against the material this move
-    # actually sees, THEN deplete -- measuring before subtraction is what makes a
-    # slotting cut report full immersion instead of its own post-cut void.
+    assert isinstance(g, Line)  # guaranteed by _replay_motion's dispatch
+    # Certify against the material this move actually sees, THEN deplete --
+    # measuring before subtraction is what makes a slotting cut report full
+    # immersion instead of its own post-cut void.
     max_tea, cap_certified, stations = _stock_2.certify_segment_tea(
         stock.raw,
         float(g.start[0]),
@@ -424,38 +450,63 @@ def _replay_line(
         tea_cap,
     )
     _subtract_operation(stock, op, tool_radius)
-    return OperationEngagement(op_index, operation, max_tea, cap_certified, stations)
+    return OperationEngagement(op_index, op.operation, max_tea, cap_certified, stations)
 
 
-def _replay_arc(
-    stock: Stock,
-    op_index: int,
-    op: ToolpathOperation,
-    tool_radius: float,
-    tea_cap: float,
-    category: ReplayCategory,
-) -> OperationEngagement:
-    """Replay a single circular operation: measure (station sampling) + subtract if engaged."""
-    operation = op.operation
-    if category != "motion":
-        return _unmeasured(op_index, operation)
+def _replay_arc(stock: Stock, op_index: int, op: ToolpathOperation, tool_radius: float, tea_cap: float) -> OperationEngagement:
+    """Replay one engaged cut-plane circular motion: measure (station sampling), then subtract."""
     geometry = op.geometry
-    assert isinstance(geometry, (Arc, Circle))  # guaranteed by _replay_operation's Line dispatch
+    assert isinstance(geometry, (Arc, Circle))  # guaranteed by _replay_motion's dispatch
     max_tea, cap_certified, stations = _certify_arc_engagement(stock, geometry, tool_radius, tea_cap)
     _subtract_operation(stock, op, tool_radius)
-    return OperationEngagement(op_index, operation, max_tea, cap_certified, stations)
+    return OperationEngagement(op_index, op.operation, max_tea, cap_certified, stations)
+
+
+def _replay_motion(stock: Stock, op_index: int, op: ToolpathOperation, tool_radius: float, tea_cap: float) -> OperationEngagement:
+    """Replay one ``"motion"`` operation by its geometry.
+
+    Raises:
+        UnexpectedToolpathGeometryError: The motion is not a ``Line``, ``Arc``
+            or ``Circle``.
+    """
+    if isinstance(op.geometry, Line):
+        return _replay_line(stock, op_index, op, tool_radius, tea_cap)
+    if isinstance(op.geometry, (Arc, Circle)):
+        return _replay_arc(stock, op_index, op, tool_radius, tea_cap)
+    raise UnexpectedToolpathGeometryError(f"Operation {op_index} ({op.operation.value}) is a motion with geometry type {type(op.geometry).__name__!r}.")
 
 
 def _replay_operation(stock: Stock, op_index: int, op: ToolpathOperation, tool_radius: float, tea_cap: float, cut_z: float) -> OperationEngagement:
-    """Replay one operation against the depleting stock, returning its engagement record."""
+    """Replay one operation against the depleting stock, returning its engagement record.
+
+    An exhaustive dispatch over `ReplayCategory`: ``"motion"`` is measured and
+    subtracted; ``"plunge"`` bores the tool disk at its foot and ``"helix"``
+    its exact bore (`_subtract_operation`), both unmeasured by design (E8);
+    ``"rapid"`` and ``"retract"`` remove nothing.
+
+    Raises:
+        UnexpectedToolpathGeometryError: The operation lies outside the
+            cut-plane model.
+        UnhandledReplayCategoryError: The category has no branch here.
+    """
     try:
         category = classify_operation_replay(op, Millimetre(cut_z))
-    except (CutPlaneRampError, OffPlaneReplayCurveError) as error:
+    except (CutPlaneRampError, OffPlaneReplayCurveError, OffPlaneHelixError) as error:
         raise UnexpectedToolpathGeometryError(f"Operation {op_index} ({op.operation.value}) {error}.") from error
-    if isinstance(op.geometry, Line):
-        return _replay_line(stock, op_index, op, tool_radius, tea_cap, category)
-    # Arc / Circle: planar cut motions, always at the cutting plane by construction.
-    return _replay_arc(stock, op_index, op, tool_radius, tea_cap, category)
+    if category == "motion":
+        return _replay_motion(stock, op_index, op, tool_radius, tea_cap)
+    if category == "plunge":
+        g = op.geometry
+        assert isinstance(g, Line)  # only a line classifies as a plunge
+        stock.subtract_disk(float(g.end[0]), float(g.end[1]), tool_radius)
+        return _unmeasured(op_index, op.operation)
+    if category == "helix":
+        assert isinstance(op.geometry, Helix)  # only a helix classifies as a helix
+        _subtract_operation(stock, op, tool_radius)
+        return _unmeasured(op_index, op.operation)
+    if category == "rapid" or category == "retract":
+        return _unmeasured(op_index, op.operation)
+    _unhandled_category(category)
 
 
 def audit_toolpath_engagement(
@@ -471,8 +522,9 @@ def audit_toolpath_engagement(
     ``result.operations`` in order: each engaged motion at the cutting plane is
     measured for tool-engagement angle against the CURRENT stock and then removes
     its own swept material, so every measurement reflects the material that move
-    truly sees. Retracts, plunges, and clearance-height links interact with no
-    material and are recorded as unmeasured. The audit never modifies the
+    truly sees. Retracts and clearance-height links interact with no material;
+    plunges and helices bore their disk without being cap-sampled (E8). All
+    four are recorded as unmeasured. The audit never modifies the
     toolpath; an unregulated generator is reported as violating.
 
     Args:
@@ -493,6 +545,7 @@ def audit_toolpath_engagement(
         InvalidToolDiameterError: If *tool_diameter* is not strictly positive.
         UnexpectedToolpathGeometryError: If an operation's geometry is outside the
             cut-plane replay model.
+        UnhandledReplayCategoryError: If a replay category has no dispatch branch.
         InvalidPolygonError: If *polygon* or a hole is non-planar or degenerate.
     """
     if not (tea_cap > 0.0 and tea_cap <= math.pi):

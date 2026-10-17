@@ -6,6 +6,14 @@ bounded by the centre-domain components, a plunge must land on the next
 motion's start, slotting is the straight subset of cap exceedances, degenerate
 loops are reported and not gated, and the engagement step is read at the
 junction) and attributes each to source operations.
+
+A helical entry (Task 1.2, rules "1.2") is an entry event, not a motion: it is
+never cap-sampled (E8), it counts as a plunge into material when its exact
+bore met the stock (Q3(a)), rule (e) covers its exit (N7), and its exit pairs
+with the next motion for continuity, tangency and the junction step. It is no
+loop-radius-step operand and it splits a loop run. Its ramp verdict needs a
+machine and is `benchmarks.quality.ramp_angle_violations`, outside the
+thirteen.
 """
 
 from __future__ import annotations
@@ -14,14 +22,17 @@ import math
 from dataclasses import dataclass
 from typing import Generic
 from typing import Literal
+from typing import NoReturn
 from typing import Optional
 from typing import Sequence
 from typing import Type
 from typing import TypeVar
 from typing import Union
 from typing import cast
+from typing import get_args
 from typing import overload
 
+from typing_extensions import Never
 from typing_extensions import Self
 from typing_extensions import TypeAlias
 
@@ -35,8 +46,10 @@ from benchmarks.errors import UnreplayableOperationError
 from benchmarks.errors import ZeroLengthToolpathError
 from benchmarks.held_path_snapshot import HeldArcSnapshot
 from benchmarks.held_path_snapshot import HeldCircleSnapshot
+from benchmarks.held_path_snapshot import HeldHelixSnapshot
 from benchmarks.held_path_snapshot import HeldLineSnapshot
 from benchmarks.held_path_snapshot import HeldOperationSnapshot
+from benchmarks.helix_observation import HelixObservation
 from benchmarks.quality import CONTINUITY_TOOL_RADIUS_FRACTION
 from benchmarks.quality import DEGENERATE_LOOP_RATIO
 from benchmarks.quality import TANGENT_CONTINUITY_SLACK
@@ -61,8 +74,10 @@ from benchmarks.units import motion_count
 from benchmarks.units import operation_index
 from benchmarks.units import tool_radius_multiple
 from compas_cgal.replay_classification import CutPlaneRampError
+from compas_cgal.replay_classification import OffPlaneHelixError
 from compas_cgal.replay_classification import OffPlaneReplayCurveError
 from compas_cgal.replay_classification import ReplayCategory
+from compas_cgal.replay_classification import classify_helix_replay
 from compas_cgal.replay_classification import classify_line_replay
 from compas_cgal.replay_classification import classify_planar_replay
 from compas_cgal.replay_classification import line_cut_height_anchor
@@ -183,6 +198,10 @@ COUNT_NAMES = frozenset(
         "tangent breaks",
     }
 )
+# Every cut-plane replay category, one partition cell each (5-way since Task
+# 1.2), read off the Literal so a new category cannot be left out of the binding.
+REPLAY_CATEGORIES: tuple[ReplayCategory, ...] = get_args(ReplayCategory)
+
 DEGREES_NAMES = frozenset({"max engagement step (deg)"})
 TOOL_RADIUS_MULTIPLE_NAMES = frozenset({"max loop radius step (tool radii)"})
 SAMPLED_EVIDENCE = frozenset({"sampled_diagnostic", "sampled_exact_predicate"})
@@ -751,14 +770,35 @@ def _adjacent_motion_pairs(motions: Sequence[MotionQuality]) -> Sequence[tuple[M
     return [(previous, current) for previous, current in zip(motions, motions[1:]) if current.index == previous.index + NEXT_OPERATION_OFFSET]
 
 
-def _snapshot_kind(operation: HeldOperationSnapshot) -> MotionKind:
-    if type(operation) is HeldLineSnapshot:
+class HelixHasNoMotionKindError(InvalidHeldPathEvidenceError):
+    """A helix source was asked for a `MotionKind`; a survey routes a helix as an entry event, never a motion or rapid."""
+
+
+SNAPSHOT_RECORD_TYPES = (HeldLineSnapshot, HeldArcSnapshot, HeldCircleSnapshot, HeldHelixSnapshot)
+
+
+def _unsupported_snapshot(operation: Never) -> NoReturn:
+    raise InvalidHeldPathEvidenceError(f"source snapshot contains an unsupported operation record {type(operation).__name__!r}.")
+
+
+def snapshot_motion_kind(operation: HeldOperationSnapshot) -> MotionKind:
+    """The survey `MotionKind` of one snapshot record; the one kind dispatch for snapshot consumers.
+
+    Raises:
+        HelixHasNoMotionKindError: *operation* is a helix (a survey entry event).
+        InvalidHeldPathEvidenceError: *operation* is no exact snapshot record.
+    """
+    if type(operation) not in SNAPSHOT_RECORD_TYPES:
+        raise InvalidHeldPathEvidenceError("source snapshot contains an unsupported operation record.")
+    if isinstance(operation, HeldLineSnapshot):
         return MotionKind.LINE
-    if type(operation) is HeldArcSnapshot:
+    if isinstance(operation, HeldArcSnapshot):
         return MotionKind.ARC
-    if type(operation) is HeldCircleSnapshot:
+    if isinstance(operation, HeldCircleSnapshot):
         return MotionKind.LOOP
-    raise InvalidHeldPathEvidenceError("source snapshot contains an unsupported operation record.")
+    if isinstance(operation, HeldHelixSnapshot):
+        raise HelixHasNoMotionKindError(f"source operation {operation.ordinal} is a helical entry; it has no survey motion kind.")
+    _unsupported_snapshot(operation)
 
 
 def _snapshot_cut_height(snapshot: tuple[HeldOperationSnapshot, ...]) -> float:
@@ -779,6 +819,10 @@ def _snapshot_cut_height(snapshot: tuple[HeldOperationSnapshot, ...]) -> float:
             )
             if anchor is not None:
                 line_anchors.append(anchor)
+        elif isinstance(operation, HeldHelixSnapshot):
+            # Independent cut-plane evidence, like a plunge foot (parity with
+            # `replay_classification.infer_operation_cut_height`).
+            line_anchors.append(Millimetre(float(operation.bottom_z)))
         elif operation.operation in {OperationType.CUT, OperationType.LEAD_IN, OperationType.LEAD_OUT}:
             curve_heights.append(Millimetre(float(operation.centre.z)))
     return float(minimum_cut_height(line_anchors if line_anchors else curve_heights))
@@ -804,12 +848,20 @@ def _snapshot_replay_category(
                 ),
                 cut_z=Millimetre(cut_height),
             )
-        return classify_planar_replay(
-            operation.operation,
-            motion_z=Millimetre(float(operation.centre.z)),
-            cut_z=Millimetre(cut_height),
-        )
-    except (CutPlaneRampError, OffPlaneReplayCurveError) as error:
+        if isinstance(operation, HeldHelixSnapshot):
+            return classify_helix_replay(
+                operation.operation,
+                bottom_z=Millimetre(float(operation.bottom_z)),
+                cut_z=Millimetre(cut_height),
+            )
+        if isinstance(operation, (HeldArcSnapshot, HeldCircleSnapshot)):
+            return classify_planar_replay(
+                operation.operation,
+                motion_z=Millimetre(float(operation.centre.z)),
+                cut_z=Millimetre(cut_height),
+            )
+        _unsupported_snapshot(operation)
+    except (CutPlaneRampError, OffPlaneReplayCurveError, OffPlaneHelixError) as error:
         replay_error = UnreplayableOperationError(f"Operation {operation.ordinal} ({operation.operation.value}) {error}.")
         replay_error.__cause__ = error
         raise InvalidHeldPathEvidenceError(str(replay_error)) from replay_error
@@ -849,43 +901,70 @@ def _validate_survey_binding(
     material_plunge_indices = _validate_ordered_indices(survey.material_plunge_indices, operation_count, name="survey material plunges")
     if not set(material_plunge_indices) <= set(plunge_indices):
         raise InvalidHeldPathEvidenceError("every plunge into material must be one of the survey's plunges.")
+    helix_indices = _validate_ordered_indices([helix.index for helix in survey.helices], operation_count, name="survey helices")
 
     motion_set = set(motion_indices)
     rapid_set = set(rapid_indices)
     plunge_set = set(plunge_indices)
     retract_set = set(retract_indices)
+    helix_set = set(helix_indices)
     if not retract_set <= rapid_set:
         raise InvalidHeldPathEvidenceError("every retained retract must have one non-cutting motion observation.")
     pure_rapid_set = rapid_set - retract_set
-    categories = (motion_set, pure_rapid_set, plunge_set, retract_set)
+    categories = (motion_set, pure_rapid_set, plunge_set, retract_set, helix_set)
     for position, observed_category in enumerate(categories):
         if any(observed_category & later for later in categories[position + NEXT_OPERATION_OFFSET :]):
-            raise InvalidHeldPathEvidenceError("motion, rapid, plunge, and retract observations must be disjoint.")
+            raise InvalidHeldPathEvidenceError("motion, rapid, plunge, retract, and helix observations must be disjoint.")
     if set().union(*categories) != set(range(operation_count)):
-        raise InvalidHeldPathEvidenceError("motion, rapid, plunge, and retract observations must exactly partition the operation snapshot.")
+        raise InvalidHeldPathEvidenceError("motion, rapid, plunge, retract, and helix observations must exactly partition the operation snapshot.")
 
     cut_height = _snapshot_cut_height(snapshot)
-    expected_categories: dict[str, set[OperationIndex]] = {"motion": set(), "rapid": set(), "plunge": set(), "retract": set()}
+    expected_categories: dict[ReplayCategory, set[OperationIndex]] = {category: set() for category in REPLAY_CATEGORIES}
     for index, operation in enumerate(snapshot):
         expected_category = _snapshot_replay_category(operation, cut_height)
         expected_categories[expected_category].add(OperationIndex(index))
-    observed_categories: dict[str, set[OperationIndex]] = {
+    observed_categories: dict[ReplayCategory, set[OperationIndex]] = {
         "motion": motion_set,
         "rapid": pure_rapid_set,
         "plunge": plunge_set,
         "retract": retract_set,
+        "helix": helix_set,
     }
     if observed_categories != expected_categories:
         raise InvalidHeldPathEvidenceError("survey categories disagree with the source snapshot's cut-plane replay classification.")
 
     for motion in survey.motions:
         source = snapshot[motion.index]
-        if motion.operation is not source.operation or motion.kind is not _snapshot_kind(source):
+        if motion.operation is not source.operation or motion.kind is not snapshot_motion_kind(source):
             raise InvalidHeldPathEvidenceError("cut-motion role or primitive kind disagrees with the source snapshot.")
     for rapid in survey.rapids:
         source = snapshot[rapid.index]
-        if rapid.operation is not source.operation or rapid.kind is not _snapshot_kind(source):
+        if rapid.operation is not source.operation or rapid.kind is not snapshot_motion_kind(source):
             raise InvalidHeldPathEvidenceError("rapid-motion role or primitive kind disagrees with the source snapshot.")
+    for helix in survey.helices:
+        _validate_helix_binding(helix, snapshot[helix.index])
+
+
+def _validate_helix_binding(helix: HelixObservation, source: HeldOperationSnapshot) -> None:
+    """Bind one helix observation to its snapshot record: the same exact helix, entry, turns and pitch.
+
+    Exact: the observed `Helix` must equal the record's exact round trip
+    (`HeldHelixSnapshot.helix`: centre, radius, chart, entry, top and bottom
+    Z, turns, turn sense), because the gated ramp verdict reads it; the entry
+    doubles are the snapshot's exact ``P``; the pitch is a `Fraction` on both
+    sides.
+
+    Raises:
+        InvalidHeldPathEvidenceError: The record is not a helix, or the
+            observation's helix, ends, turns or pitch disagree with it.
+    """
+    if not isinstance(source, HeldHelixSnapshot):
+        raise InvalidHeldPathEvidenceError(f"survey helix {helix.index} has no helix record in the source snapshot.")
+    entry = (float(source.entry.x), float(source.entry.y))
+    if helix.helix != source.helix():
+        raise InvalidHeldPathEvidenceError(f"survey helix {helix.index} is not its source helix record's exact helix.")
+    if helix.start != entry or helix.end != entry or helix.turns != source.turns or helix.pitch != source.pitch:
+        raise InvalidHeldPathEvidenceError(f"survey helix {helix.index} disagrees with its source helix record (entry, turns or pitch).")
 
 
 def _maximum_step(steps: Sequence[tuple[float, OperationPair]], unit: Literal["degrees", "tool_radius_multiple"]) -> Optional[StepFinding]:
@@ -906,7 +985,10 @@ def _loop_steps(
     tool_radius: float,
     operation_count: int,
 ) -> list[tuple[float, OperationPair]]:
-    rapid_indices = sorted(rapid.index for rapid in survey.rapids)
+    # A rapid splits a run, and so does a helix: it is an entry, never a loop
+    # step operand (it is not among the motions at all), and the loops either
+    # side of it are not run back to back.
+    rapid_indices = sorted([rapid.index for rapid in survey.rapids] + [helix.index for helix in survey.helices])
     chain_of = {int(operation.ordinal): operation.path_index for operation in snapshot}
     runs: list[list[tuple[int, float]]] = [[]]
     position = ZERO_COUNT
@@ -962,7 +1044,9 @@ def _attribution_from_survey(
     # by the cap like every motion.
     redundant = _indices([motion.index for motion in survey.motions if not motion.removes_material and motion.operation is OperationType.CUT], operation_count)
     air_at_depth = _indices([motion.index for motion in survey.motions if not motion.removes_material and motion.operation is not OperationType.CUT], operation_count)
-    material_plunges = _indices(survey.material_plunge_indices, operation_count)
+    # Q3(a): a plunge into material is a PLUNGE or a HELIX whose exact bore met
+    # the stock's interior; the key "material plunges" is kept.
+    material_plunges = _indices(sorted([*survey.material_plunge_indices, *(helix.index for helix in survey.helices if helix.into_material)]), operation_count)
     misplaced_plunges = _misplaced_plunges(snapshot, survey, operation_count)
     cap_exceeded = _indices([motion.index for motion in survey.motions if any(sample.cap_exceeded for sample in motion.samples)], operation_count)
     slotting = _indices([motion.index for motion in survey.motions if motion.slot_exceeded], operation_count)
@@ -988,6 +1072,24 @@ def _attribution_from_survey(
         junction = _junction_step(previous, current)
         if junction is not None:
             engagement_steps.append((junction, pair))
+    motion_at = {motion.index: motion for motion in survey.motions}
+    for helix in survey.helices:
+        following = motion_at.get(helix.index + NEXT_OPERATION_OFFSET)
+        if following is None:
+            continue
+        pair = OperationPair.build(previous=OperationIndex(helix.index), current=OperationIndex(following.index), operation_count=operation_count)
+        if math.hypot(following.start[0] - helix.end[0], following.start[1] - helix.end[1]) > continuity_tolerance:
+            continuity.append(pair)
+        dot = helix.end_tangent[0] * following.start_tangent[0] + helix.end_tangent[1] * following.start_tangent[1]
+        if dot < ZERO_FLOAT:
+            reversals.append(pair)
+            tangent.append(pair)
+        elif dot < UNIT_DOT - TANGENT_CONTINUITY_SLACK:
+            tangent.append(pair)
+        elif helix.curvature != following.curvature:
+            curvature.append(pair)
+        if len(following.samples) > JUNCTION_STATION:
+            engagement_steps.append((abs(following.samples[JUNCTION_STATION].engagement_deg - helix.exit_sample.engagement_deg), pair))
 
     loop_steps = _loop_steps(snapshot, survey, spec.tool_radius, operation_count)
     maximum_engagement = cast(Optional[MeasuredStep[Degrees]], _maximum_step(engagement_steps, "degrees"))
@@ -1063,12 +1165,14 @@ def _misplaced_plunges(
     survey: PathSurvey,
     operation_count: int,
 ) -> tuple[OperationIndex, ...]:
-    """Plunges whose foot is not the next motion's start (gate rule e).
+    """Plunges whose foot, and helices whose exit, is not the next motion's start (gate rule e, N7).
 
     Exact: the replay injects both binary64 pairs as themselves, so equal
     doubles are the same exact point and unequal ones are not; there is no
-    tolerance. A plunge whose next operation is not a cut-plane motion has no
-    start to land on and is misplaced.
+    tolerance. A plunge or helix whose next operation is not a cut-plane motion
+    has no start to land on and is misplaced. A helix exits at its footprint's
+    exact entry ``P`` (the snapshot record's ``entry``); the next motion's start
+    is read from its ``entry_xy`` (Ruling 1.1-C14-A).
 
     Args:
         snapshot: The source operations.
@@ -1090,7 +1194,13 @@ def _misplaced_plunges(
         foot = (float(plunge.end.x), float(plunge.end.y))
         if starts.get(int(index) + NEXT_OPERATION_OFFSET) != foot:
             misplaced.append(int(index))
-    return _indices(misplaced, operation_count)
+    for helix in survey.helices:
+        record = snapshot[helix.index]
+        if not isinstance(record, HeldHelixSnapshot):
+            raise InvalidHeldPathEvidenceError(f"helix {helix.index} is not a helix record.")
+        if starts.get(helix.index + NEXT_OPERATION_OFFSET) != (float(record.entry.x), float(record.entry.y)):
+            misplaced.append(helix.index)
+    return _indices(sorted(misplaced), operation_count)
 
 
 def _count(
@@ -1176,8 +1286,8 @@ class QualityEvidence:
 
 
 def _material_entry_count(survey: PathSurvey) -> int:
-    """Count first cut contacts after plunges from the validated survey."""
-    plunge_indices = set(survey.plunge_indices)
+    """Count first cut contacts after plunges and helical entries from the validated survey."""
+    plunge_indices = set(survey.plunge_indices) | {helix.index for helix in survey.helices}
     motion_indices = {motion.index for motion in survey.motions}
     armed = False
     entries = 0

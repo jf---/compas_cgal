@@ -10,6 +10,7 @@ from typing import Final
 from typing import NewType
 from typing import Self
 from typing import TypeAlias
+from typing import assert_never
 
 import numpy as np
 from compas.geometry import Arc
@@ -25,6 +26,8 @@ from compas_cgal.adaptive.canonical import encode_tagged_union
 from compas_cgal.engagement_audit.errors import InvalidAuditOperationError
 from compas_cgal.engagement_audit.errors import NonFiniteAuditGeometryError
 from compas_cgal.engagement_audit.records import OperationDigest
+from compas_cgal.helix import Helix
+from compas_cgal.incident_loop import IncidentLoop
 from compas_cgal.toolpath import OperationType
 from compas_cgal.toolpath import ToolpathOperation
 from compas_cgal.units import Direction3
@@ -161,6 +164,58 @@ class ArcOperationSnapshot:
 
 
 OperationSnapshot: TypeAlias = LineOperationSnapshot | CircleOperationSnapshot | ArcOperationSnapshot
+"""The snapshots the native audit classifies (`classification._native_classification`)."""
+
+
+class UnsupportedAuditHelixError(InvalidAuditOperationError):
+    """A HELIX operation reached native audit ingress, which has no helix motion."""
+
+
+class AuditHelixGeometryError(InvalidAuditOperationError):
+    """A HELIX role without `Helix` geometry, or `Helix` geometry under another role."""
+
+
+@dataclass(frozen=True)
+class HelixOperationSnapshot:
+    """One coherent observation of a HELIX operation.
+
+    The core `Helix` is already an immutable exact value (frozen, validated in
+    its own ``__post_init__``), so it is held as is; its identity bytes encode
+    every defining field (see `_helix_bytes`).
+    """
+
+    helix: Helix
+    operation: OperationType
+    path_index: int
+    clockwise: bool
+    start_tangent: TangentSnapshot
+    end_tangent: TangentSnapshot
+
+    def __post_init__(self) -> None:
+        if type(self.helix) is not Helix or type(self.helix.footprint) is not IncidentLoop:
+            raise AuditHelixGeometryError("helix snapshot requires an exact Helix on an exact IncidentLoop.")
+        if self.operation is not OperationType.HELIX:
+            raise AuditHelixGeometryError(f"Helix geometry must carry the HELIX role, not {self.operation!r}.")
+        _validate_metadata_snapshot(self.operation, self.path_index, self.clockwise, self.start_tangent, self.end_tangent)
+        if self.clockwise is not self.helix.clockwise:
+            raise AuditHelixGeometryError("operation clockwise flag contradicts the helix turn sense.")
+
+    @classmethod
+    def build(
+        cls,
+        *,
+        helix: Helix,
+        operation: OperationType,
+        path_index: int,
+        clockwise: bool,
+        start_tangent: TangentSnapshot,
+        end_tangent: TangentSnapshot,
+    ) -> Self:
+        return cls(helix, operation, path_index, clockwise, start_tangent, end_tangent)
+
+
+IdentitySnapshot: TypeAlias = OperationSnapshot | HelixOperationSnapshot
+"""Every snapshot that has a canonical identity: the native-audited kinds plus the helix."""
 
 
 def _validate_metadata_snapshot(
@@ -255,11 +310,35 @@ def _operation_metadata(
 
 
 def snapshot_toolpath_operation(operation: ToolpathOperation) -> OperationSnapshot:
-    """Read one mutable COMPAS operation exactly once into immutable scalars."""
+    """Read one mutable COMPAS operation exactly once into immutable scalars for the native audit.
+
+    Raises:
+        UnsupportedAuditHelixError: *operation* is a HELIX; the native audit
+            has no helix motion, so it is refused by name, never classified.
+    """
+    snapshot = snapshot_identity_operation(operation)
+    if isinstance(snapshot, HelixOperationSnapshot):
+        raise UnsupportedAuditHelixError("a HELIX operation has no native audit motion; it cannot enter the authenticated stream.")
+    return snapshot
+
+
+def snapshot_identity_operation(operation: ToolpathOperation) -> IdentitySnapshot:
+    """Read one mutable operation exactly once into an immutable snapshot, HELIX included."""
     if type(operation) is not ToolpathOperation:
         raise InvalidAuditOperationError("operation must be an exact ToolpathOperation, not a subclass.")
     role, path_index, clockwise, start_tangent, end_tangent = _operation_metadata(operation)
     geometry = operation.geometry
+    if isinstance(geometry, Helix):
+        return HelixOperationSnapshot.build(
+            helix=geometry,
+            operation=role,
+            path_index=path_index,
+            clockwise=clockwise,
+            start_tangent=start_tangent,
+            end_tangent=end_tangent,
+        )
+    if role is OperationType.HELIX:
+        raise AuditHelixGeometryError(f"a HELIX operation must carry Helix geometry, not {type(geometry).__name__!r}.")
     if isinstance(geometry, Line):
         if type(geometry) is not Line:
             raise InvalidAuditOperationError("line geometry must be exact Line, not a subclass.")
@@ -341,7 +420,38 @@ def _frame_bytes(
     )
 
 
-def _geometry_bytes(snapshot: OperationSnapshot) -> bytes:
+def _point2_bytes(x: float, y: float) -> bytes:
+    return encode_sequence((encode_binary64(x), encode_binary64(y)))
+
+
+def _helix_bytes(helix: Helix) -> bytes:
+    """Every defining value of a helix, each double encoded exactly (a double IS a rational).
+
+    The pitch is not encoded: it is exactly ``(top - bottom) / turns`` of
+    encoded fields. ``phase`` is the footprint's stored realised phase.
+    """
+    footprint = helix.footprint
+    return encode_tagged_union(
+        b"compas-cgal-helix-v1",
+        encode_component_map(
+            {
+                b"bottom-z": encode_binary64(float(helix.bottom_z.value)),
+                b"centre": _point2_bytes(float(footprint.centre.x), float(footprint.centre.y)),
+                b"chart": encode_integer(footprint.chart),
+                b"chart-numerator": encode_integer(footprint.chart_numerator),
+                b"entry": _point2_bytes(float(footprint.entry.x), float(footprint.entry.y)),
+                b"phase": encode_binary64(float(footprint.phase)),
+                b"radius": encode_binary64(float(footprint.radius.value)),
+                b"top-z": encode_binary64(float(helix.top_z.value)),
+                b"turns": encode_integer(helix.turns),
+            }
+        ),
+    )
+
+
+def _geometry_bytes(snapshot: IdentitySnapshot) -> bytes:
+    if isinstance(snapshot, HelixOperationSnapshot):
+        return _helix_bytes(snapshot.helix)
     if isinstance(snapshot, LineOperationSnapshot):
         return encode_tagged_union(
             b"compas-line-v1",
@@ -364,18 +474,20 @@ def _geometry_bytes(snapshot: OperationSnapshot) -> bytes:
                 }
             ),
         )
-    return encode_tagged_union(
-        b"compas-circle-v1",
-        encode_component_map(
-            {
-                b"frame": _frame_bytes(snapshot.center, snapshot.xaxis, snapshot.yaxis),
-                b"radius": encode_binary64(float(snapshot.radius.value)),
-            }
-        ),
-    )
+    if isinstance(snapshot, CircleOperationSnapshot):
+        return encode_tagged_union(
+            b"compas-circle-v1",
+            encode_component_map(
+                {
+                    b"frame": _frame_bytes(snapshot.center, snapshot.xaxis, snapshot.yaxis),
+                    b"radius": encode_binary64(float(snapshot.radius.value)),
+                }
+            ),
+        )
+    assert_never(snapshot)
 
 
-def canonical_operation_snapshot_bytes(snapshot: OperationSnapshot) -> bytes:
+def canonical_operation_snapshot_bytes(snapshot: IdentitySnapshot) -> bytes:
     """Encode every audit-relevant scalar from one immutable observation."""
     return encode_tagged_union(
         b"toolpath-operation-v1",
@@ -393,8 +505,8 @@ def canonical_operation_snapshot_bytes(snapshot: OperationSnapshot) -> bytes:
 
 
 def canonical_toolpath_operation_bytes(operation: ToolpathOperation) -> bytes:
-    """Snapshot and encode one mutable legacy operation."""
-    return canonical_operation_snapshot_bytes(snapshot_toolpath_operation(operation))
+    """Snapshot and encode one mutable legacy operation, HELIX included."""
+    return canonical_operation_snapshot_bytes(snapshot_identity_operation(operation))
 
 
 def operation_digest(source_bytes: bytes) -> OperationDigest:

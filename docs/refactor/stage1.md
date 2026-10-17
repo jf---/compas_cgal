@@ -21,6 +21,12 @@ The reference rule now binds `pipeline` on every commit. The stage-0 rows
 pipeline case. How the stages work is on
 [The product pipeline](../pipeline.md); this page keeps the Stage 1 record.
 
+Task 1.2 replaces the first plunge with a helical entry and a tangent-pencil
+ramp-out, aimed at the one exceedance left on every case, the full-immersion
+root loop after the plunge. Its record is in
+[Task 1.2: the helical entry](#task-12-the-helical-entry); its gate results
+are pending.
+
 ## Measured
 
 The pinned vectors, rendered by `tools.gate_table`. Compare the `pipeline`
@@ -230,6 +236,168 @@ tree, so it always describes the code it ships with.
 - **Still red in the product test.** Uncut material at declined corners (Task
   1.3), the cap exceedance of the entry loop after the plunge (Task 1.2), and
   the L's tangent breaks (Task 1.6).
+
+## Task 1.2: the helical entry
+
+Task 1.2 enters each pocket with one `HELIX` operation at the root loop's
+exact entry, closes the bore with one flat turn, ramps out along the root's
+tangent pencil to the root loop, and then walks as in Task 1.1. Its target is
+`cap_exceedances` = 0 on all six cases, strictly below `rho_regulated` (1 / 5
+/ 1 at 120°, 5 / 5 / 6 at 40°), where Task 1.1 sits at 1 everywhere: the
+full-immersion root loop after the plunge, op 1, on every case (probe P8).
+The mechanism is on [The helical entry](../pipeline.md#the-helical-entry).
+
+!!! warning "Status: under verification"
+    Every part below is built and reviewed; the gate run, the serial timing
+    run and the figures are pending. Time box: two working days from
+    2026-10-16, one dispatch plus at most one fix round (user decision Q2).
+
+### What changed
+
+- **A0, fail-loud replay classifier.** `replay_classification` decides every
+  operation through one exhaustive `REPLAY_RULE_BY_OPERATION` table. A new
+  `OperationType` without a rule raises `UnclassifiedOperationError`; before,
+  it fell through to "rapid" silently, and depletion would have skipped the
+  bore. Every rule dispatch ends in a `Never`-typed raise
+  (`UnhandledReplayRuleError`), so mypy flags a missing branch.
+- **Entry-stage split.** `generate.enter` became two stages:
+  `enter_first_cut`, the only producer of `FIRST_CUT` (now the helix), and
+  `re_enter` for `NO_ADMISSIBLE_LINK` and `RADIUS_STEP_SPLIT`. A first cut
+  after anything was emitted raises `FirstCutAfterEmissionError`; a re-entry
+  with reason `FIRST_CUT` raises `FirstCutReEntryError`. `enter` is deleted
+  and its six test callers renamed (user go).
+- **L6, ring warm start.** The at-rest ring asks its last refusing position
+  first, then the rest in natural order (`ladder.WarmStart`). The ring is a
+  conjunction of order-free exact probes on one stock, so verdicts and op
+  digests are unchanged on all six cases; ring probes drop to 0.75–0.85 of
+  1.1's. Kept by user decision. The one observable change: an internal
+  invariant error can surface at a different probe than before.
+- **Helix core.** `OperationType.HELIX`; `compas_cgal.helix.Helix` with the
+  exact turns rule and the closing turn; `compas_cgal.helix_units`
+  (`RampAngleDegrees`, `HelixPitchPerRadius`, `EntryRampLength`);
+  `pipeline/pencil.py` (`TangentPencil`, `helix_footprint`, `RampOut`,
+  `PencilStepCondition`). Native operation codes are decoded by
+  `decode_native_operation`, which raises outside the six native kinds
+  (a −1 used to wrap silently to `PLUNGE`).
+- **Consumer wiring.** Every geometry dispatch outside the frozen generators
+  has an explicit `Helix` branch or a named raise: replay and depletion
+  (exact bore `disk(c_h, ρ_h + r)`, `HelixEvent`), the survey
+  (`HelixObservation`, split into `helix_observation.py` and
+  `survey_station.py` to keep `survey.py` under 1k lines), path geometry and
+  marks, the held snapshot (`HeldHelixSnapshot`), operation identity, emit
+  (`emit.helix_operation`, tangents as unit XY with z = 0, the repo
+  convention), and the timing digest. Op digests stayed equal to 1.1's on all
+  six cases until the generator emitted a helix.
+- **Rules bump "1.2"** (one rebaseline record, approval "Ruling 1.2-D2",
+  user-approved 2026-10-16):
+    - `material_plunges` counts `PLUNGE` and `HELIX` into material; key kept;
+    - `ramp_angle_violations` is newly gated, == 0, against `GATE_MACHINE`;
+    - `max_engagement_step_deg` is re-baselined for the (helix, next motion)
+      pair;
+    - `cap_exceedances` and `misplaced_plunges` are listed because their
+      definitions change (the helix is excluded from cap sampling; rule (e)
+      covers the helix exit);
+    - `max_loop_radius_step` is retired from the ratchet and demoted to a
+      verdict row `≤ 2r` on every pipeline case;
+    - new 120° stage rows: `cap_exceedances == 0`,
+      `max_engagement_step_deg <= 120`, `ramp_angle_violations == 0`.
+- **Generation-time rule amended.** A case passes when its 1.2 median is at
+  most the slowest 1.1 run plus `C_pencil`, the pencil's own measured
+  decision cost, measured in the same session.
+- **Gate closure.** `GATE_PATHS` gains `helix.py`, `helix_units.py`,
+  `held_path_snapshot.py`, `tools/gate_measure.py`, `benchmarks/models.py`
+  and the two survey splits; a new test keeps `NOT_GATE` and `GATE_PATHS`
+  disjoint.
+
+### User decisions and their reasons
+
+| decision | ruling | reason |
+| --- | --- | --- |
+| Q1 beat-rho cell | `cap_exceedances`, both caps, all pockets, target 0 | The helix exists to remove exactly the one remaining exceedance; 0 is strictly below rho on all six cases. The other tied cells (L step, L tangent breaks, 40° rect_20x12 uncut) stay must-not-exceed-rho. |
+| Q2 time box | 2 days, one dispatch plus at most one fix round | Focus rule: land when the gate holds; when the box runs out, bring the measured state. |
+| Q3 bump contents | material entries incl. helix, ramp violations gated, step re-baselined, in one record | Keeping the `material_plunges` key keeps 1.1's row truthful; a ramp limit that is only reported cannot fail a commit. |
+| Q4 plunge junctions | not gated; declared `EntryRampLength` = 2r, θ_e = cap·π/45 at station 1, pencil and helix junctions only | Gating plunge junctions makes every step cell 180° (probe P7), a vacuous comparison. θ_e is declared intent with an exact surrogate injected once, not a number chased from rho's cell. |
+| Q5 root | 1.1's `FIRST_CUT` station; medial-axis vertex to Task 2.5 | The guide-widest root on the L walks chain 0 from a cleared corner and worsens the L step 10.00 → 34.38° at 120° (probe C8-A). |
+| Q6 bore bottom | one flat closing turn at ρ_h in the same `HELIX` op; helix and closing turn excluded from cap sampling; bore removed at the end | Without it the replay removes a full disk while a helical wedge up to one pitch remains. |
+| D1 ramp angle | `max_ramp_angle_deg` = 2°, placeholder | No datasheet value in the repo; flagged at the parameter. |
+| D4 loop step | `max_loop_radius_step` demoted to a `≤ 2r` verdict row | The pencil's steps (0.34 on the 120° L) exceed 1.1's 0.106 but pass exact coverage `|Δc| + Δρ ≤ 2r` with uncut unchanged; a ratchet on the cell would be number-chasing. |
+| D6 generation time | GT rule amended with `C_pencil` | Even the admitted members' own cap decisions exceed 1.1's run-to-run margin on 5 of 6 cases: new work, not a regression. |
+| M8 type gates | `helix.py`, `helix_units.py`, `pencil.py`, `helix_observation.py`, `survey_station.py` under `mypy --strict` | New package code meets the engineering bar. The two `benchmarks/` modules join `types-benchmarks`, which CI runs; that change is held for a separate go. |
+| L6 | keep the ring warm start | Order-free verdicts, 15–25% fewer ring probes. |
+
+### Gate results — pending gate run
+
+To be filled from `benchmarks/results/gate_vectors.md` and
+`benchmarks/results/pipeline_timing.md` after the 1.2 gate run. "1.1" is the
+Task 1.1 commit's cell; "rho" is `rho_regulated` at the same cap and pocket.
+`generation_s` is the serial median from `pixi run pipeline-timing`.
+
+| case | criterion | pipeline 1.2 | pipeline 1.1 | rho |
+| --- | --- | --- | --- | --- |
+| 120 rect_12x8 | cap_exceedances | pending | pending | pending |
+| 120 rect_12x8 | max_engagement_step_deg | pending | pending | pending |
+| 120 rect_12x8 | max_loop_radius_step | pending | pending | pending |
+| 120 rect_12x8 | uncut_fraction | pending | pending | pending |
+| 120 rect_12x8 | generation_s | pending | pending | pending |
+| 120 rect_20x12 | cap_exceedances | pending | pending | pending |
+| 120 rect_20x12 | max_engagement_step_deg | pending | pending | pending |
+| 120 rect_20x12 | max_loop_radius_step | pending | pending | pending |
+| 120 rect_20x12 | uncut_fraction | pending | pending | pending |
+| 120 rect_20x12 | generation_s | pending | pending | pending |
+| 120 L_shape | cap_exceedances | pending | pending | pending |
+| 120 L_shape | max_engagement_step_deg | pending | pending | pending |
+| 120 L_shape | max_loop_radius_step | pending | pending | pending |
+| 120 L_shape | uncut_fraction | pending | pending | pending |
+| 120 L_shape | generation_s | pending | pending | pending |
+| 40 rect_12x8 | cap_exceedances | pending | pending | pending |
+| 40 rect_12x8 | max_engagement_step_deg | pending | pending | pending |
+| 40 rect_12x8 | max_loop_radius_step | pending | pending | pending |
+| 40 rect_12x8 | uncut_fraction | pending | pending | pending |
+| 40 rect_12x8 | generation_s | pending | pending | pending |
+| 40 rect_20x12 | cap_exceedances | pending | pending | pending |
+| 40 rect_20x12 | max_engagement_step_deg | pending | pending | pending |
+| 40 rect_20x12 | max_loop_radius_step | pending | pending | pending |
+| 40 rect_20x12 | uncut_fraction | pending | pending | pending |
+| 40 rect_20x12 | generation_s | pending | pending | pending |
+| 40 L_shape | cap_exceedances | pending | pending | pending |
+| 40 L_shape | max_engagement_step_deg | pending | pending | pending |
+| 40 L_shape | max_loop_radius_step | pending | pending | pending |
+| 40 L_shape | uncut_fraction | pending | pending | pending |
+| 40 L_shape | generation_s | pending | pending | pending |
+
+### Known open defect: CW arcs stored as their complement
+
+`emit.arc_operation` stores a clockwise arc as `Arc(ρ, 0, ccw angle S→E)` in
+a +Z frame plus a `clockwise` flag, so its compas point set is the CCW
+complement: 270° for a 90° fillet, the opposite semicircle for the L's 180°
+half-turns. Every pipeline `Arc` is clockwise (3, 3 and 6 LINK arcs per
+pocket); the frozen columns emit none.
+
+- **Gated cells are unaffected**: 0 of 12 gated criteria change in 24 of 24
+  cases when the arcs are rebuilt with the true CW point set. Every cutting
+  decision reads the endpoints and the flag, never the compas
+  parametrisation.
+- **Reported cells and figures are wrong**: path, cutting and air-at-depth
+  length (Δ = πr per 90° fillet, e.g. 120° rect_12x8 path length 358.560 →
+  348.824), `recut_fraction`, the length-weighted engagement statistics, and
+  the drawn arc midpoints (off by about 2 mm on fillets, 4 mm on half-turns).
+  Off the gate path, `engagement._certify_arc_engagement` and
+  `exceedance._sample_positions` read the wrong points too.
+- **Not fixed in 1.2.** The fix changes every pipeline digest, reported cell
+  and figure, so it is its own Stage 1 commit, scoped by the user.
+
+### Known limits of Task 1.2
+
+- **Re-entries stay plunges.** No gate pocket re-enters material; a pocket
+  that does would need a helix at every material entry.
+- **The root is the 1.1 start station**, not the maximum-clearance point
+  (Task 2.5).
+- **The pencil assumes a simply connected domain.** A holed domain needs an
+  exact per-member containment condition (Task 1.7).
+- **θ_e is sampled at station 1**, nothing between; the arc-length gate is a
+  separate rules amendment.
+- **Ramp angle and entry ramp are placeholders** until tool and machine
+  values are supplied.
 
 ## Figures
 

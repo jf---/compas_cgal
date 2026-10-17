@@ -36,6 +36,7 @@ from compas_cgal import _toolpath  # type: ignore
 # eager vector-typed default arguments, or its import would require these
 # registrations to exist first (std::bad_cast at module init).
 from compas_cgal import _types_std  # noqa: F401  # type: ignore
+from compas_cgal.helix import Helix
 from compas_cgal.types import PolylinesNumpy
 
 __all__ = [
@@ -59,6 +60,10 @@ class InvalidPolygonError(ValueError):
     """The input polygon violates a precondition (planarity, simplicity, orientation)."""
 
 
+class UnknownNativeOperationCodeError(ValueError):
+    """The backend emitted an operation code outside the native code table."""
+
+
 class DegeneratePrimitiveError(ValueError):
     """The backend emitted a primitive whose geometry cannot be reconstructed."""
 
@@ -72,6 +77,7 @@ class OperationType(str, Enum):
     LINK = "link"
     RETRACT = "retract"
     PLUNGE = "plunge"
+    HELIX = "helix"
 
 
 _OPERATION_BY_CODE = (
@@ -82,6 +88,29 @@ _OPERATION_BY_CODE = (
     OperationType.RETRACT,
     OperationType.PLUNGE,
 )
+"""Native operation codes, positional: the C++ backend emits exactly these six.
+
+HELIX is Python-authored only and deliberately absent, so a stray native code
+cannot decode to it (see `decode_native_operation`).
+"""
+
+
+def decode_native_operation(code: int) -> OperationType:
+    """Decode one native operation code.
+
+    Args:
+        code: The backend's positional operation code.
+
+    Returns:
+        The native operation type at *code*.
+
+    Raises:
+        UnknownNativeOperationCodeError: *code* is not in ``[0, 6)`` (a
+            negative index would otherwise wrap silently).
+    """
+    if not 0 <= code < len(_OPERATION_BY_CODE):
+        raise UnknownNativeOperationCodeError(f"native operation code {code} is outside [0, {len(_OPERATION_BY_CODE)}).")
+    return _OPERATION_BY_CODE[code]
 
 
 @dataclass
@@ -92,9 +121,11 @@ class ToolpathOperation:
     at, when its generator authored one (`compas_cgal.incident_loop`): there
     ``Circle.point_at(0)`` is only a double rounding of the entry. Readers take
     ``entry_xy`` when present and ``point_at(0)`` otherwise (Ruling 1.1-C14-A).
+    A ``HELIX`` operation carries a `compas_cgal.helix.Helix` and
+    ``entry_xy`` = its footprint entry, where it both starts and ends.
     """
 
-    geometry: Line | Arc | Circle
+    geometry: Line | Arc | Circle | Helix
     operation: OperationType
     path_index: int
     clockwise: bool = False
@@ -222,7 +253,7 @@ def _matrices_to_operations(
         path_index = int(meta[i, 0])
         ptype = int(meta[i, 1])
         clockwise = bool(meta[i, 2] > 0.5)
-        operation = _OPERATION_BY_CODE[int(meta[i, 3])]
+        operation = decode_native_operation(int(meta[i, 3]))
 
         if ptype == 0:
             geom: Line | Arc | Circle = _row_to_line(starts[i], ends[i])

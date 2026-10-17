@@ -63,6 +63,7 @@ from benchmarks.coverage import COVERAGE_GRID_SAMPLES
 from benchmarks.errors import MissingMachineModelError
 from benchmarks.errors import MissingMaterialModelError
 from benchmarks.held_path_snapshot import snapshot_toolpath
+from benchmarks.helix_observation import HelixObservation
 from benchmarks.models import MachineModel
 from benchmarks.models import MaterialModel
 from benchmarks.spec import PocketSpec
@@ -194,11 +195,12 @@ class ElementaryQuality:
             NOTHING (gate rule a). A LINK or lead at the cut plane that removes
             nothing is a stay-down transit, reported as
             `SpeedQuality.air_at_depth_length`, not counted here. EXACT.
-        material_plunges: Plunges whose disk met the stock's interior when it
-            was bored. Gated at no more than *centre_domain_components* (rule
-            b). EXACT.
-        misplaced_plunges: Plunges whose foot is not bit-equal to the next
-            motion's start, or that no cut motion follows (rule e). EXACT.
+        material_plunges: Plunges and helical entries whose bore met the
+            stock's interior when it was bored (Ruling 1.2-D2, Q3(a)). Gated at
+            no more than *centre_domain_components* (rule b). EXACT.
+        misplaced_plunges: Plunges whose foot, and helices whose exit, is not
+            bit-equal to the next motion's start, or that no cut motion follows
+            (rule e, N7). EXACT.
         centre_domain_components: Connected components of the legal
             cutter-centre domain; each admits one plunge into material.
         recut_fraction: Share of the swept area that met no fresh material --
@@ -321,7 +323,11 @@ class SpeedQuality:
     """What the path costs a machine that has to execute it.
 
     Attributes:
-        cutting_length: Length of the cut-plane motions.
+        cutting_length: Length of the cut-plane motions and the helical
+            entries: a helix (closing turn included) is a feed move (Q6, M7).
+            Like a cut-plane motion that removes nothing, a helix into
+            already-cleared stock still counts here; whether it loads the
+            edge is `LongevityQuality.cut_air_alternations`' question.
         air_length: Length of the motions that remove nothing.
         air_fraction: Air over total.
         max_curvature: Largest path curvature, in reciprocal length. The feed
@@ -333,7 +339,8 @@ class SpeedQuality:
             full stop.
         direction_reversals: Junctions where the tool turns back on itself.
         retract_count: Upward clearance moves.
-        reentry_count: Downward plunges, each of which is a re-entry.
+        reentry_count: Downward plunges and helical entries, each of which is
+            a re-entry.
         air_at_depth_length: Length of the cut-plane LINK and lead motions that
             remove nothing: staying down through cleared material, which is a
             legal transit (gate rule a) and costs feed time, not a rapid.
@@ -356,7 +363,7 @@ class LongevityQuality:
     """What the path costs the tool.
 
     Attributes:
-        material_entries: Cut motions that are the first contact after a plunge.
+        material_entries: Cut motions that are the first contact after a plunge or a helical entry.
             Each is an impact, and impacts are the leading cause of edge
             chipping.
         engagement_length_histogram: Cut length spent in each band of
@@ -634,7 +641,7 @@ def _speed(survey: PathSurvey, assessment: PathQualityAssessment) -> SpeedQualit
     """
     air_at_depth = set(assessment.attribution.air_at_depth_operations)
     return SpeedQuality(
-        cutting_length=survey.cut_length,
+        cutting_length=survey.cut_length + survey.helix_length,
         air_length=survey.air_length,
         air_fraction=survey.air_length / survey.total_length,
         max_curvature=max((motion.curvature for motion in survey.motions), default=0.0),
@@ -642,7 +649,7 @@ def _speed(survey: PathSurvey, assessment: PathQualityAssessment) -> SpeedQualit
         curvature_breaks=len(assessment.attribution.curvature_break_pairs),
         direction_reversals=len(assessment.attribution.reversal_pairs),
         retract_count=survey.retracts,
-        reentry_count=survey.plunges,
+        reentry_count=survey.plunges + len(survey.helices),
         air_at_depth_length=sum(motion.length for motion in survey.motions if motion.index in air_at_depth),
     )
 
@@ -652,7 +659,7 @@ def _longevity(survey: PathSurvey, material_entries: int) -> LongevityQuality:
 
     Args:
         survey: The replay's findings.
-        material_entries: Cut motions that are the first contact after a plunge.
+        material_entries: Cut motions that are the first contact after a plunge or a helical entry.
 
     Returns:
         The tool-cost group.
@@ -772,7 +779,12 @@ def machine_outcome(survey: PathSurvey, machine: Optional[MachineModel]) -> Mach
 
     Each cut motion is held to ``min(feed, sqrt(a_max / kappa))`` for its whole
     length, which is exact for a circle (constant curvature) and exact for a
-    straight move (no bound). It IGNORES the acceleration ramps into and out of
+    straight move (no bound). A helical entry is cutting (it is in
+    `SpeedQuality.cutting_length`) and is timed the same way, because
+    `MachineModel` defines no separate ramp feed: at the helix's SPACE
+    curvature ``rho_h / (rho_h^2 + c^2)``, ``c = pitch / (2 pi)``
+    (`helix_space_curvature`), the least curvature on its length (a flat
+    closing turn has ``1 / rho_h``), so the lower bound stays a lower bound. It IGNORES the acceleration ramps into and out of
     each motion and the jerk cost of the tangent breaks `SpeedQuality` counts, so
     it is a LOWER BOUND on cycle time -- an optimistic one, and the honest
     direction for a claim about a path being fast.
@@ -789,9 +801,11 @@ def machine_outcome(survey: PathSurvey, machine: Optional[MachineModel]) -> Mach
     """
     if machine is None:
         raise MissingMachineModelError("Cycle time needs a MachineModel; feed, rapid rate and the acceleration limit are properties of a machine, not of the path.")
-    cutting = sum(motion.length / machine.curvature_limited_feed_mm_per_s(motion.curvature) for motion in survey.motions if motion.length > 0.0)
+    cutting = sum(motion.length / machine.curvature_limited_feed_mm_per_s(motion.curvature) for motion in survey.motions if motion.length > 0.0) + sum(
+        helix.length / machine.curvature_limited_feed_mm_per_s(helix_space_curvature(helix)) for helix in survey.helices
+    )
     air = survey.air_length / machine.rapid_mm_per_s
-    mean_feed = 0.0 if cutting <= 0.0 else survey.cut_length / cutting
+    mean_feed = 0.0 if cutting <= 0.0 else (survey.cut_length + survey.helix_length) / cutting
     return MachineOutcome(
         cutting_seconds=cutting,
         air_seconds=air,
@@ -799,6 +813,48 @@ def machine_outcome(survey: PathSurvey, machine: Optional[MachineModel]) -> Mach
         mean_cutting_feed_mm_per_s=mean_feed,
         feed_utilisation=0.0 if machine.feed_mm_per_s <= 0.0 else mean_feed / machine.feed_mm_per_s,
     )
+
+
+def ramp_angle_violations(survey: PathSurvey, machine: Optional[MachineModel]) -> Tuple[int, ...]:
+    """The helical entries steeper than *machine*'s ramp cap (Ruling 1.2-D2, Q3(b)): EXACT.
+
+    Each helix is decided by `benchmarks.helix_observation.HelixObservation.ramp_within_limit`,
+    the exact surrogate check ``pitch <= exact(K) * rho_h``. Only helices are
+    scored: a plunge is not a ramp, and plunges into material are gated by
+    ``material_plunges``. A path without a helix has none. The ramp cap is a
+    property of the machine and tool, so this verdict lives beside the other
+    machine-derived outcomes rather than in the geometry-only `PathQuality`.
+
+    Args:
+        survey: The replay's findings.
+        machine: The machine whose ramp cap applies. Required.
+
+    Returns:
+        The violating helices' operation indices, in toolpath order.
+
+    Raises:
+        MissingMachineModelError: *machine* is None.
+    """
+    if machine is None:
+        raise MissingMachineModelError("A ramp-angle verdict needs a MachineModel; the ramp cap is a property of the machine and tool, not of the path.")
+    return tuple(helix.index for helix in survey.helices if not helix.ramp_within_limit(machine))
+
+
+def helix_space_curvature(helix: HelixObservation) -> float:
+    """REPORTING: curvature of the helix in space, ``rho / (rho^2 + c^2)`` with ``c = pitch / (2 pi)``, 1/mm.
+
+    At most the plan-view ``1 / rho``; a feed-limited time on it is a lower
+    bound. Feeds only `machine_outcome`; decides nothing.
+
+    Args:
+        helix: The helix observation.
+
+    Returns:
+        The space curvature.
+    """
+    radius = float(helix.helix.footprint.radius.value)
+    lead = float(helix.pitch) / (2.0 * math.pi)
+    return radius / (radius * radius + lead * lead)
 
 
 def tool_life_outcome(survey: PathSurvey, material: Optional[MaterialModel], machine: Optional[MachineModel]) -> ToolLifeOutcome:
@@ -1188,7 +1244,10 @@ def _cut_air_alternations(survey: PathSurvey) -> int:
     """Transitions between cutting and not cutting, over the whole operation stream.
 
     A cut motion that engages nothing counts as air: the edge is not loaded, so
-    it is not a thermal cycle whatever the operation is labelled.
+    it is not a thermal cycle whatever the operation is labelled. A helical
+    entry is loaded when its exact bore met the stock (``into_material``) and
+    is air otherwise -- the same convention as a cut motion that engages
+    nothing, which still counts in `SpeedQuality.cutting_length`.
 
     Args:
         survey: The replay's findings.
@@ -1196,7 +1255,11 @@ def _cut_air_alternations(survey: PathSurvey) -> int:
     Returns:
         The number of transitions.
     """
-    states = [(motion.index, motion.is_engaged) for motion in survey.motions] + [(rapid.index, False) for rapid in survey.rapids]
+    states = (
+        [(motion.index, motion.is_engaged) for motion in survey.motions]
+        + [(rapid.index, False) for rapid in survey.rapids]
+        + [(helix.index, helix.into_material) for helix in survey.helices]
+    )
     ordered = [engaged for _, engaged in sorted(states)]
     return sum(1 for previous, current in zip(ordered, ordered[1:]) if previous != current)
 

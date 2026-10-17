@@ -40,7 +40,7 @@ from compas_cgal.pipeline.errors import CoincidentStationsError
 from compas_cgal.pipeline.errors import LedgerInvariantError
 from compas_cgal.pipeline.generate import LoopConditions
 from compas_cgal.pipeline.generate import PathState
-from compas_cgal.pipeline.generate import enter
+from compas_cgal.pipeline.generate import enter_first_cut
 from compas_cgal.pipeline.generate import walk_chain
 from benchmarks.pathmetrics import CLEARANCE_Z_TOOL_DIAMETERS
 from compas_cgal.pipeline.generate import DEFAULT_MAX_PASSES
@@ -184,7 +184,7 @@ def test_a_chain_split_at_an_unbridgeable_step_is_re_entered_as_a_forced_entry()
     assert chain is not None
     admissibility = Admissibility.build(TOOL, cap_ratio(Radian(3.0)), centre_domain(RECT_12X8, [], TOOL))
     path = PathState(stock=Stock(RECT_12X8), admissibility=admissibility, cut=CutZ.build(0.0), clearance=ClearanceZ.build(4.0))
-    enter(path, chain, chain.first, ForcedEntryReason.FIRST_CUT, None)
+    enter_first_cut(path, chain, chain.first)
     end = walk_chain(path, chain, chain.first, 3, LoopConditions(admissibility), emit_start_loop=False)
     assert DeclinedRun(chain=0, first_station=1, last_station=6, cause=DeclineCause.RADIUS_STEP) in path.records
     split = [record for record in path.records if isinstance(record, ForcedEntry) and record.reason is ForcedEntryReason.RADIUS_STEP_SPLIT]
@@ -213,7 +213,7 @@ def test_the_entry_stage_is_the_plunge_and_the_root_loop() -> None:
     """The entry stage is one stage: `enter` plunges and cuts the root loop; the walk after it does not cut it again."""
     chain = _synthetic_chain([2.0, 2.0, 2.0])
     path, admissibility = _synthetic_path()
-    enter(path, chain, chain.first, ForcedEntryReason.FIRST_CUT, None)
+    enter_first_cut(path, chain, chain.first)
     root = chain.loops[chain.first]
     assert root is not None
     assert [op.operation for op in path.operations] == [OperationType.PLUNGE, OperationType.CUT]
@@ -271,7 +271,7 @@ def test_the_at_rest_ring_refuses_a_candidate_the_in_process_checks_admit() -> N
     """
     chain = _synthetic_chain([2.0, 2.0, 2.0])
     path, admissibility = _synthetic_path()
-    enter(path, chain, chain.first, ForcedEntryReason.FIRST_CUT, None)
+    enter_first_cut(path, chain, chain.first)
     conditions = LoopConditions(admissibility)
     origin, candidate = chain.candidate(chain.first), chain.candidate(chain.first + 1)
     assert conditions.bridge_admissible(path.stock, origin, candidate)
@@ -285,7 +285,7 @@ def test_the_ladders_loop_condition_leaves_station_zero_to_the_ring(monkeypatch:
     """Perf round 2: the ring's entry probe IS the loop's station 0 (same point, same stock), so the conjunction asks it once."""
     chain = _synthetic_chain([2.0, 2.0, 2.0])
     path, admissibility = _synthetic_path()
-    enter(path, chain, chain.first, ForcedEntryReason.FIRST_CUT, None)
+    enter_first_cut(path, chain, chain.first)
     asked: list[list[float]] = []
     native = _stock_2.engagement_circle_exceeded
 
@@ -307,7 +307,7 @@ def test_every_ladder_condition_reads_one_unchanged_stock(monkeypatch: pytest.Mo
     """The station-0 reuse never crosses a stock mutation: one conjunction, one stock object, never mutated during the scan."""
     chain = _synthetic_chain([2.0, 2.0, 2.0, 2.0])
     path, admissibility = _synthetic_path()
-    enter(path, chain, chain.first, ForcedEntryReason.FIRST_CUT, None)
+    enter_first_cut(path, chain, chain.first)
     before = path.stock.clone()
     seen: list[tuple[int, bool]] = []
 

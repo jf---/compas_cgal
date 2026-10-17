@@ -249,6 +249,7 @@ def _survey(
         cut_length=sum(motion.length for motion in motions),
         air_length=sum(rapid.length for rapid in rapids),
         plunge_swept_area=0.0,
+        helices=(),
     )
     return survey
 

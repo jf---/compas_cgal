@@ -54,7 +54,7 @@ DOCUMENT_KEYS = LEGACY_KEYS | {"admissions"}
 # criteria its recorded approval lists as changed; every other gated criterion is
 # still ratcheted across the bump (Rulings 0.3-C2, 0.3-bump-worsens): never
 # silently.
-RULES_VERSION = "0.3"
+RULES_VERSION = "1.2"
 
 GATE_VECTORS_PATH = Path("benchmarks") / "results" / "gate_vectors.json"
 GATE_TABLE_PATH = Path("benchmarks") / "results" / "gate_vectors.md"

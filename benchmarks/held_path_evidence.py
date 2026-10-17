@@ -15,17 +15,14 @@ from benchmarks.errors import ContradictoryEngagementEvidenceError
 from benchmarks.errors import ContradictoryPathQualityEvidenceError
 from benchmarks.errors import InvalidHeldPathEvidenceError
 from benchmarks.errors import UnexpectedHeldPathCaseError
-from benchmarks.held_path_snapshot import HeldArcSnapshot
-from benchmarks.held_path_snapshot import HeldCircleSnapshot
-from benchmarks.held_path_snapshot import HeldLineSnapshot
 from benchmarks.held_path_snapshot import HeldOperationSnapshot
 from benchmarks.held_reference_cases import HeldReferenceCase
 from benchmarks.held_reference_cases import load_held_reference_case
 from benchmarks.quality import PathQuality
 from benchmarks.quality_observations import PathQualityAssessment
 from benchmarks.quality_observations import QualityEvidence
+from benchmarks.quality_observations import snapshot_motion_kind
 from benchmarks.survey import EngagementSample
-from benchmarks.survey import MotionKind
 from benchmarks.survey import MotionQuality
 from benchmarks.survey import PathSurvey
 from benchmarks.survey import RapidMotion
@@ -62,16 +59,6 @@ def _ordered_indices(values: object, operation_count: int, *, name: str) -> tupl
     if checked != tuple(sorted(checked)) or len(set(checked)) != len(checked):
         raise InvalidHeldPathEvidenceError(f"{name} must contain unique indices in source order.")
     return checked
-
-
-def _snapshot_kind(operation: HeldOperationSnapshot) -> MotionKind:
-    if type(operation) is HeldLineSnapshot:
-        return MotionKind.LINE
-    if type(operation) is HeldArcSnapshot:
-        return MotionKind.ARC
-    if type(operation) is HeldCircleSnapshot:
-        return MotionKind.LOOP
-    raise InvalidHeldPathEvidenceError("snapshot contains an unsupported operation record.")
 
 
 @dataclass(frozen=True, init=False)
@@ -283,7 +270,7 @@ def _validate_snapshot(snapshot: object) -> int:
         raise InvalidHeldPathEvidenceError("Figure 5 characterization requires a non-empty immutable snapshot.")
     typed = cast(tuple[HeldOperationSnapshot, ...], snapshot)
     for expected, operation in enumerate(typed):
-        _snapshot_kind(operation)
+        snapshot_motion_kind(operation)
         if operation.ordinal != expected:
             raise InvalidHeldPathEvidenceError("snapshot ordinals must cover source operations in order.")
     return len(typed)
@@ -342,7 +329,7 @@ def _validate_survey(
         if type(motion) is not MotionQuality:
             raise InvalidHeldPathEvidenceError("survey motions must contain exact MotionQuality records.")
         source = snapshot[motion.index]
-        if motion.operation is not source.operation or motion.kind is not _snapshot_kind(source):
+        if motion.operation is not source.operation or motion.kind is not snapshot_motion_kind(source):
             raise InvalidHeldPathEvidenceError("survey motion role or primitive kind disagrees with the source snapshot.")
         if type(motion.samples) is not tuple:
             raise InvalidHeldPathEvidenceError("survey samples must be retained in immutable tuples.")
@@ -350,7 +337,7 @@ def _validate_survey(
         if type(rapid) is not RapidMotion:
             raise InvalidHeldPathEvidenceError("survey rapids must contain exact RapidMotion records.")
         source = snapshot[rapid.index]
-        if rapid.operation is not source.operation or rapid.kind is not _snapshot_kind(source):
+        if rapid.operation is not source.operation or rapid.kind is not snapshot_motion_kind(source):
             raise InvalidHeldPathEvidenceError("survey rapid role or primitive kind disagrees with the source snapshot.")
     return motion_set, all_indices - motion_set
 
