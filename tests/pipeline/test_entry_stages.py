@@ -33,6 +33,7 @@ from compas_cgal.pipeline.guide import GuideChain
 from compas_cgal.pipeline.guide import GuideStation
 from compas_cgal.pipeline.narrow import OrientedChain
 from compas_cgal.pipeline.pencil import entry_containment
+from compas_cgal.pipeline.result import EntryKind
 from compas_cgal.pipeline.result import ForcedEntry
 from compas_cgal.pipeline.result import ForcedEntryReason
 from compas_cgal.stock import Stock
@@ -93,7 +94,7 @@ def test_the_first_cut_is_its_own_stage() -> None:
     assert operations[0] is OperationType.HELIX and set(operations[1:]) == {OperationType.CUT}
     assert all(op.entry_xy == entry for op in path.operations)
     assert path.operations[-1].geometry.radius == root.radius.value
-    assert path.records == [ForcedEntry(path_index=0, entry=root.entry, reason=ForcedEntryReason.FIRST_CUT, into_material=True)]
+    assert path.records == [ForcedEntry(path_index=0, entry=root.entry, reason=ForcedEntryReason.FIRST_CUT, into_material=True, entry_kind=EntryKind.HELIX)]
 
 
 def test_the_re_entry_stage_refuses_a_first_cut_by_name() -> None:

@@ -31,14 +31,18 @@ from benchmarks.survey import MotionKind
 from benchmarks.survey import PathSurvey
 from benchmarks.survey import survey_path
 from compas_cgal import _stock_2
+from compas_cgal.helix_units import DEFAULT_HELIX_PITCH_PER_RADIUS
+from compas_cgal.helix_units import EntryRampLength
 from compas_cgal.incident_loop import IncidentLoop
 from compas_cgal.pipeline.admissibility import Admissibility
 from compas_cgal.pipeline.admissibility import cap_ratio
 from compas_cgal.pipeline.admissibility import loop_parameters
 from compas_cgal.pipeline.admissibility import centre_domain
+from compas_cgal.pipeline.admissibility import entry_rise_ratio
 from compas_cgal.pipeline.errors import CoincidentStationsError
 from compas_cgal.pipeline.errors import LedgerInvariantError
 from compas_cgal.pipeline.generate import LoopConditions
+from compas_cgal.pipeline.generate import HelicalEntry
 from compas_cgal.pipeline.generate import PathState
 from compas_cgal.pipeline.generate import enter_first_cut
 from compas_cgal.pipeline.generate import walk_chain
@@ -54,8 +58,10 @@ from compas_cgal.pipeline.direction import Direction2
 from compas_cgal.pipeline.narrow import Advance
 from compas_cgal.pipeline.narrow import OrientedChain
 from compas_cgal.pipeline.narrow import advance_ladder
+from compas_cgal.pipeline.pencil import entry_containment
 from compas_cgal.pipeline.result import DeclineCause
 from compas_cgal.pipeline.result import DeclinedRun
+from compas_cgal.pipeline.result import EntryKind
 from compas_cgal.pipeline.result import ForcedDecisionLedger
 from compas_cgal.pipeline.result import ForcedEntry
 from compas_cgal.pipeline.result import ForcedEntryReason
@@ -102,7 +108,7 @@ def test_one_plunge_into_material_and_one_first_cut(cap: float, pocket: str) -> 
     entries = result.ledger.entries
     assert [entry.reason for entry in entries].count(ForcedEntryReason.FIRST_CUT) == 1
     plunge_feet = {(op.geometry.end[0], op.geometry.end[1]) for op in (result.operations[int(i)] for i in survey.material_plunge_indices)}
-    assert {(entry.entry.x, entry.entry.y) for entry in entries if entry.into_material} == plunge_feet
+    assert {(entry.entry.x, entry.entry.y) for entry in entries if entry.into_material and entry.entry_kind is EntryKind.PLUNGE} == plunge_feet
 
 
 @pytest.mark.parametrize(("cap", "pocket"), CASES)
@@ -171,6 +177,19 @@ def test_ledger_has_exactly_one_first_cut() -> None:
 
 RECT_12X8 = Polygon([[-6.0, -4.0, 0.0], [6.0, -4.0, 0.0], [6.0, 4.0, 0.0], [-6.0, 4.0, 0.0]])
 TOOL = ToolRadius.build(1.0)
+# The synthetic chains below ignore the pocket walls (their end loops sweep past x = +-6),
+# so the helical entry's pencil-containment pocket (P-D, not under test here) is widened in x.
+SYNTHETIC_ENTRY_POCKET = Polygon([[-9.0, -4.0, 0.0], [9.0, -4.0, 0.0], [9.0, 4.0, 0.0], [-9.0, 4.0, 0.0]])
+SYNTHETIC_CAP = Radian(3.0)
+
+
+def _synthetic_admissibility() -> Admissibility:
+    return Admissibility.build(TOOL, cap_ratio(SYNTHETIC_CAP), centre_domain(RECT_12X8, [], TOOL), entry_rise_ratio=entry_rise_ratio(SYNTHETIC_CAP, EntryRampLength.default()))
+
+
+def _synthetic_state(admissibility: Admissibility) -> PathState:
+    helical_entry = HelicalEntry(pitch_per_radius=DEFAULT_HELIX_PITCH_PER_RADIUS, pocket=entry_containment(SYNTHETIC_ENTRY_POCKET, [], TOOL))
+    return PathState(stock=Stock(RECT_12X8), admissibility=admissibility, cut=CutZ.build(0.0), clearance=ClearanceZ.build(4.0), helical_entry=helical_entry)
 
 
 def test_a_chain_split_at_an_unbridgeable_step_is_re_entered_as_a_forced_entry() -> None:
@@ -182,8 +201,8 @@ def test_a_chain_split_at_an_unbridgeable_step_is_re_entered_as_a_forced_entry()
     )
     chain = OrientedChain.build(GuideChain(stations=stations, origin=0), TOOL)
     assert chain is not None
-    admissibility = Admissibility.build(TOOL, cap_ratio(Radian(3.0)), centre_domain(RECT_12X8, [], TOOL))
-    path = PathState(stock=Stock(RECT_12X8), admissibility=admissibility, cut=CutZ.build(0.0), clearance=ClearanceZ.build(4.0))
+    admissibility = _synthetic_admissibility()
+    path = _synthetic_state(admissibility)
     enter_first_cut(path, chain, chain.first)
     end = walk_chain(path, chain, chain.first, 3, LoopConditions(admissibility), emit_start_loop=False)
     assert DeclinedRun(chain=0, first_station=1, last_station=6, cause=DeclineCause.RADIUS_STEP) in path.records
@@ -205,21 +224,23 @@ def _synthetic_chain(radii: list[float]) -> OrientedChain:
 
 
 def _synthetic_path() -> tuple[PathState, Admissibility]:
-    admissibility = Admissibility.build(TOOL, cap_ratio(Radian(3.0)), centre_domain(RECT_12X8, [], TOOL))
-    return PathState(stock=Stock(RECT_12X8), admissibility=admissibility, cut=CutZ.build(0.0), clearance=ClearanceZ.build(4.0)), admissibility
+    admissibility = _synthetic_admissibility()
+    return _synthetic_state(admissibility), admissibility
 
 
-def test_the_entry_stage_is_the_plunge_and_the_root_loop() -> None:
-    """The entry stage is one stage: `enter` plunges and cuts the root loop; the walk after it does not cut it again."""
+def test_the_entry_stage_is_the_helix_the_pencil_and_the_root_loop() -> None:
+    """The entry stage is one stage: `enter_first_cut` descends the helix, cuts the pencil members and the root loop; the walk after it does not cut it again."""
     chain = _synthetic_chain([2.0, 2.0, 2.0])
     path, admissibility = _synthetic_path()
-    enter_first_cut(path, chain, chain.first)
+    record = enter_first_cut(path, chain, chain.first)
     root = chain.loops[chain.first]
     assert root is not None
-    assert [op.operation for op in path.operations] == [OperationType.PLUNGE, OperationType.CUT]
+    operations = [op.operation for op in path.operations]
+    assert operations[0] is OperationType.HELIX and operations[1:] == [OperationType.CUT] * (len(operations) - 1)
+    assert record.root_operation == len(path.operations) - 1
     assert path.operations[-1].entry_xy == (root.entry.x, root.entry.y)
     walk_chain(path, chain, chain.first, 3, LoopConditions(admissibility), emit_start_loop=False)
-    assert [op.entry_xy for op in path.operations].count((root.entry.x, root.entry.y)) == 1
+    assert [op.entry_xy for op in path.operations[record.root_operation + 1 :]].count((root.entry.x, root.entry.y)) == 0
 
 
 def test_coincident_consecutive_stations_raise_by_name() -> None:

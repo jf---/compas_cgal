@@ -15,16 +15,21 @@ from compas.geometry import Polygon
 
 from compas_cgal.pipeline.admissibility import Admissibility
 from compas_cgal.pipeline.admissibility import cap_ratio
+from compas_cgal.helix_units import DEFAULT_HELIX_PITCH_PER_RADIUS
+from compas_cgal.helix_units import EntryRampLength
 from compas_cgal.pipeline.admissibility import centre_domain
+from compas_cgal.pipeline.admissibility import entry_rise_ratio
 from compas_cgal.pipeline.direction import Direction2
 from compas_cgal.pipeline.errors import MixedTurnChainError
 from compas_cgal.pipeline.generate import LoopConditions
+from compas_cgal.pipeline.generate import HelicalEntry
 from compas_cgal.pipeline.generate import PathState
 from compas_cgal.pipeline.generate import enter_first_cut
 from compas_cgal.pipeline.generate import walk_chain
 from compas_cgal.pipeline.guide import GuideChain
 from compas_cgal.pipeline.guide import GuideStation
 from compas_cgal.pipeline.narrow import OrientedChain
+from compas_cgal.pipeline.pencil import entry_containment
 from compas_cgal.stock import Stock
 from compas_cgal.units import ClearanceZ
 from compas_cgal.units import CutZ
@@ -43,6 +48,9 @@ GUIDE_RADIUS = 2.0
 # A permissive cap (radians, below pi) so only the turn rule is under test.
 PERMISSIVE_CAP = Radian(3.0)
 WALK_WINDOW = 3
+# The synthetic chain ignores the pocket walls (its first loop sweeps past x = -6),
+# so the helical entry's pencil-containment pocket (P-D, not under test here) is widened in x.
+SYNTHETIC_ENTRY_POCKET = Polygon([[-9.0, -4.0, 0.0], [9.0, -4.0, 0.0], [9.0, 4.0, 0.0], [-9.0, 4.0, 0.0]])
 
 
 def _chain(turns: list[bool]) -> OrientedChain:
@@ -61,8 +69,11 @@ def _chain(turns: list[bool]) -> OrientedChain:
 
 
 def _path() -> tuple[PathState, Admissibility]:
-    admissibility = Admissibility.build(TOOL, cap_ratio(PERMISSIVE_CAP), centre_domain(RECT_12X8, [], TOOL))
-    return PathState(stock=Stock(RECT_12X8), admissibility=admissibility, cut=CutZ.build(0.0), clearance=ClearanceZ.build(4.0)), admissibility
+    admissibility = Admissibility.build(
+        TOOL, cap_ratio(PERMISSIVE_CAP), centre_domain(RECT_12X8, [], TOOL), entry_rise_ratio=entry_rise_ratio(PERMISSIVE_CAP, EntryRampLength.default())
+    )
+    helical_entry = HelicalEntry(pitch_per_radius=DEFAULT_HELIX_PITCH_PER_RADIUS, pocket=entry_containment(SYNTHETIC_ENTRY_POCKET, [], TOOL))
+    return PathState(stock=Stock(RECT_12X8), admissibility=admissibility, cut=CutZ.build(0.0), clearance=ClearanceZ.build(4.0), helical_entry=helical_entry), admissibility
 
 
 def test_the_bridge_condition_raises_on_a_mixed_turn_pair() -> None:
