@@ -16,12 +16,12 @@ from benchmarks.errors import InvalidHeldPathEvidenceError
 from benchmarks.errors import InvalidHeldPathReportContextError
 from benchmarks.held_path_evidence import HeldFigure5Characterization
 from benchmarks.held_post_qualification import post_qualification_failures
-from benchmarks.quality_observations import CRITERION_NAMES
-from benchmarks.quality_observations import CountCriterion
-from benchmarks.quality_observations import DegreesCriterion
-from benchmarks.quality_observations import FractionCriterion
+from benchmarks.quality_criteria import CRITERION_NAMES
+from benchmarks.quality_criteria import CountCriterion
+from benchmarks.quality_criteria import DegreesCriterion
+from benchmarks.quality_criteria import FractionCriterion
+from benchmarks.quality_criteria import ToolRadiusMultipleCriterion
 from benchmarks.quality_observations import PathQualityAssessment
-from benchmarks.quality_observations import ToolRadiusMultipleCriterion
 
 Criterion: TypeAlias = Union[FractionCriterion, CountCriterion, DegreesCriterion, ToolRadiusMultipleCriterion]
 _CRITERION_ACCESSORS: tuple[tuple[str, Callable[[PathQualityAssessment], Criterion]], ...] = (

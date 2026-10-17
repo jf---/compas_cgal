@@ -19,9 +19,9 @@ from benchmarks.held_path_snapshot import HeldOperationSnapshot
 from benchmarks.held_reference_cases import HeldReferenceCase
 from benchmarks.held_reference_cases import load_held_reference_case
 from benchmarks.quality import PathQuality
+from benchmarks.quality_binding import snapshot_motion_kind
 from benchmarks.quality_observations import PathQualityAssessment
 from benchmarks.quality_observations import QualityEvidence
-from benchmarks.quality_observations import snapshot_motion_kind
 from benchmarks.survey import EngagementSample
 from benchmarks.survey import MotionQuality
 from benchmarks.survey import PathSurvey

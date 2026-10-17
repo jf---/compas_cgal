@@ -80,6 +80,10 @@ GATE_PATHS: tuple[str, ...] = (
     "benchmarks/depletion.py",
     "benchmarks/quality.py",
     "benchmarks/quality_observations.py",
+    # Task 1.2 H1 split these out of `benchmarks/quality_observations.py`; they
+    # carry its criterion records and survey binding, so they are gated like it.
+    "benchmarks/quality_criteria.py",
+    "benchmarks/quality_binding.py",
     "benchmarks/coverage.py",
     "benchmarks/gate.py",
     "benchmarks/spec.py",

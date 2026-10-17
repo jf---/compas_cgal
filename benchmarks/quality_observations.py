@@ -14,27 +14,20 @@ with the next motion for continuity, tangency and the junction step. It is no
 loop-radius-step operand and it splits a loop run. Its ramp verdict needs a
 machine and is `benchmarks.quality.ramp_angle_violations`, outside the
 thirteen.
+The criterion and record types live in `benchmarks.quality_criteria`; the
+snapshot dispatch and survey binding in `benchmarks.quality_binding`.
 """
 
 from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Generic
 from typing import Literal
-from typing import NoReturn
 from typing import Optional
 from typing import Sequence
-from typing import Type
-from typing import TypeVar
-from typing import Union
 from typing import cast
-from typing import get_args
-from typing import overload
 
-from typing_extensions import Never
 from typing_extensions import Self
-from typing_extensions import TypeAlias
 
 from benchmarks.coverage import COVERAGE_GRID_SAMPLES
 from benchmarks.coverage import CoverageEstimate
@@ -42,14 +35,10 @@ from benchmarks.coverage import measure_coverage
 from benchmarks.errors import ContradictoryPathQualityEvidenceError
 from benchmarks.errors import InvalidHeldPathEvidenceError
 from benchmarks.errors import MissingLoopSeamStationError
-from benchmarks.errors import UnreplayableOperationError
 from benchmarks.errors import ZeroLengthToolpathError
-from benchmarks.held_path_snapshot import HeldArcSnapshot
-from benchmarks.held_path_snapshot import HeldCircleSnapshot
 from benchmarks.held_path_snapshot import HeldHelixSnapshot
 from benchmarks.held_path_snapshot import HeldLineSnapshot
 from benchmarks.held_path_snapshot import HeldOperationSnapshot
-from benchmarks.helix_observation import HelixObservation
 from benchmarks.quality import CONTINUITY_TOOL_RADIUS_FRACTION
 from benchmarks.quality import DEGENERATE_LOOP_RATIO
 from benchmarks.quality import TANGENT_CONTINUITY_SLACK
@@ -59,6 +48,32 @@ from benchmarks.quality import _elementary
 from benchmarks.quality import _longevity
 from benchmarks.quality import _program
 from benchmarks.quality import _speed
+from benchmarks.quality_binding import NEXT_OPERATION_OFFSET
+from benchmarks.quality_binding import ZERO_COUNT
+from benchmarks.quality_binding import HelixHasNoMotionKindError as HelixHasNoMotionKindError
+from benchmarks.quality_binding import _indices
+from benchmarks.quality_binding import _snapshot_cut_height as _snapshot_cut_height
+from benchmarks.quality_binding import _snapshot_replay_category as _snapshot_replay_category
+from benchmarks.quality_binding import _validate_survey_binding
+from benchmarks.quality_binding import snapshot_motion_kind as snapshot_motion_kind
+from benchmarks.quality_criteria import COMPONENT_BOUNDED_COUNT_NAME
+from benchmarks.quality_criteria import CRITERION_NAMES as CRITERION_NAMES
+from benchmarks.quality_criteria import EVIDENCE_BY_CRITERION as EVIDENCE_BY_CRITERION
+from benchmarks.quality_criteria import REQUIRED_COUNT
+from benchmarks.quality_criteria import REQUIRED_FRACTION
+from benchmarks.quality_criteria import REQUIRED_LOOP_STEP
+from benchmarks.quality_criteria import ZERO_FLOAT
+from benchmarks.quality_criteria import CountCriterion as CountCriterion
+from benchmarks.quality_criteria import CountCriterionName
+from benchmarks.quality_criteria import DegreesCriterion as DegreesCriterion
+from benchmarks.quality_criteria import FractionCriterion as FractionCriterion
+from benchmarks.quality_criteria import MeasuredStep as MeasuredStep
+from benchmarks.quality_criteria import OperationPair as OperationPair
+from benchmarks.quality_criteria import PathQualityAttribution as PathQualityAttribution
+from benchmarks.quality_criteria import StepFinding
+from benchmarks.quality_criteria import ToolRadiusMultipleCriterion as ToolRadiusMultipleCriterion
+from benchmarks.quality_criteria import _build_record as _build_record
+from benchmarks.quality_criteria import _outcome
 from benchmarks.spec import PocketSpec
 from benchmarks.survey import MotionKind
 from benchmarks.survey import MotionQuality
@@ -67,505 +82,17 @@ from benchmarks.units import Degrees
 from benchmarks.units import MotionCount
 from benchmarks.units import OperationIndex
 from benchmarks.units import ToolRadiusMultiple
-from benchmarks.units import UnitFraction
 from benchmarks.units import closed_unit_fraction
-from benchmarks.units import degrees_value
-from benchmarks.units import motion_count
-from benchmarks.units import operation_index
-from benchmarks.units import tool_radius_multiple
-from compas_cgal.replay_classification import CutPlaneRampError
-from compas_cgal.replay_classification import OffPlaneHelixError
-from compas_cgal.replay_classification import OffPlaneReplayCurveError
-from compas_cgal.replay_classification import ReplayCategory
-from compas_cgal.replay_classification import classify_helix_replay
-from compas_cgal.replay_classification import classify_line_replay
-from compas_cgal.replay_classification import classify_planar_replay
-from compas_cgal.replay_classification import line_cut_height_anchor
-from compas_cgal.replay_classification import minimum_cut_height
 from compas_cgal.toolpath import OperationType
-from compas_cgal.units import Millimetre
 
-CriterionName: TypeAlias = Literal[
-    "uncut fraction",
-    "gouging motions",
-    "unsafe rapids",
-    "continuity breaks",
-    "zero-length motions",
-    "redundant operations",
-    "material plunges",
-    "misplaced plunges",
-    "cap exceedances",
-    "slotting motions",
-    "max engagement step (deg)",
-    "max loop radius step (tool radii)",
-    "tangent breaks",
-]
-EvidenceKind: TypeAlias = Literal[
-    "guarded_replay_certificate",
-    "sampled_exact_predicate",
-    "exact_depletion_replay",
-    "sampled_diagnostic",
-    "derived_geometry",
-    "tolerance_diagnostic",
-]
-ObservationOutcome: TypeAlias = Literal[
-    "no_failure_observed",
-    "failure_observed",
-    "criterion_satisfied",
-    "criterion_violated",
-    "within_declared_tolerance",
-    "outside_declared_tolerance",
-]
-
-CRITERION_NAMES: tuple[CriterionName, ...] = (
-    "uncut fraction",
-    "gouging motions",
-    "unsafe rapids",
-    "continuity breaks",
-    "zero-length motions",
-    "redundant operations",
-    "material plunges",
-    "misplaced plunges",
-    "cap exceedances",
-    "slotting motions",
-    "max engagement step (deg)",
-    "max loop radius step (tool radii)",
-    "tangent breaks",
-)
-
-EVIDENCE_BY_CRITERION: dict[CriterionName, EvidenceKind] = {
-    "uncut fraction": "sampled_diagnostic",
-    "gouging motions": "sampled_diagnostic",
-    "unsafe rapids": "tolerance_diagnostic",
-    "continuity breaks": "tolerance_diagnostic",
-    "zero-length motions": "derived_geometry",
-    "redundant operations": "exact_depletion_replay",
-    "material plunges": "exact_depletion_replay",
-    "misplaced plunges": "derived_geometry",
-    "cap exceedances": "sampled_exact_predicate",
-    "slotting motions": "sampled_exact_predicate",
-    "max engagement step (deg)": "sampled_diagnostic",
-    "max loop radius step (tool radii)": "derived_geometry",
-    "tangent breaks": "tolerance_diagnostic",
-}
-
-CountCriterionName: TypeAlias = Literal[
-    "gouging motions",
-    "unsafe rapids",
-    "continuity breaks",
-    "zero-length motions",
-    "redundant operations",
-    "material plunges",
-    "misplaced plunges",
-    "cap exceedances",
-    "slotting motions",
-    "tangent breaks",
-]
-
-ZERO_FLOAT = 0.0
-ZERO_COUNT = 0
 UNIT_DOT = 1.0
-NEXT_OPERATION_OFFSET = 1
-REQUIRED_FRACTION = UnitFraction(ZERO_FLOAT)
-REQUIRED_COUNT = MotionCount(ZERO_COUNT)
-REQUIRED_LOOP_STEP = ToolRadiusMultiple(2.0)
 
-# The one count criterion whose threshold is not zero: a connected centre
-# domain admits exactly one plunge into material (gate rule b), so the
-# threshold is the number of components, which is at least one for any
-# machinable pocket.
-COMPONENT_BOUNDED_COUNT_NAME = "material plunges"
-MINIMUM_CENTRE_DOMAIN_COMPONENTS = 1
 
 # Index offset from a motion to the station that holds its junction value: the
 # first station with a non-empty swept prefix. Station 0 reads the stock minus
 # the tool's own start disk, which is 0 deg by construction (Ruling
 # 0.3-f-station), so it says nothing about the junction.
 JUNCTION_STATION = 1
-
-FRACTION_NAMES = frozenset({"uncut fraction"})
-COUNT_NAMES = frozenset(
-    {
-        "gouging motions",
-        "unsafe rapids",
-        "continuity breaks",
-        "zero-length motions",
-        "redundant operations",
-        "material plunges",
-        "misplaced plunges",
-        "cap exceedances",
-        "slotting motions",
-        "tangent breaks",
-    }
-)
-# Every cut-plane replay category, one partition cell each (5-way since Task
-# 1.2), read off the Literal so a new category cannot be left out of the binding.
-REPLAY_CATEGORIES: tuple[ReplayCategory, ...] = get_args(ReplayCategory)
-
-DEGREES_NAMES = frozenset({"max engagement step (deg)"})
-TOOL_RADIUS_MULTIPLE_NAMES = frozenset({"max loop radius step (tool radii)"})
-SAMPLED_EVIDENCE = frozenset({"sampled_diagnostic", "sampled_exact_predicate"})
-EXACT_OR_DERIVED_EVIDENCE = frozenset({"exact_depletion_replay", "derived_geometry"})
-
-CriterionT = TypeVar("CriterionT")
-StepUnitT = TypeVar("StepUnitT", Degrees, ToolRadiusMultiple)
-
-
-def _build_record(record_type: Type[CriterionT], values: dict[str, object]) -> CriterionT:
-    record = object.__new__(record_type)
-    for name, value in values.items():
-        object.__setattr__(record, name, value)
-    return record
-
-
-def _criterion_name(value: object, allowed: frozenset[str]) -> CriterionName:
-    if not isinstance(value, str) or value not in allowed:
-        raise InvalidHeldPathEvidenceError(f"criterion name {value!r} does not belong to this unit domain.")
-    return cast(CriterionName, value)
-
-
-def _evidence(name: CriterionName, value: object) -> EvidenceKind:
-    expected = EVIDENCE_BY_CRITERION[name]
-    if value != expected:
-        raise InvalidHeldPathEvidenceError(f"{name} requires evidence kind {expected!r}, got {value!r}.")
-    return expected
-
-
-def _outcome(evidence: EvidenceKind, satisfied: bool) -> ObservationOutcome:
-    if evidence in SAMPLED_EVIDENCE:
-        return "no_failure_observed" if satisfied else "failure_observed"
-    if evidence in EXACT_OR_DERIVED_EVIDENCE:
-        return "criterion_satisfied" if satisfied else "criterion_violated"
-    if evidence == "tolerance_diagnostic":
-        return "within_declared_tolerance" if satisfied else "outside_declared_tolerance"
-    raise InvalidHeldPathEvidenceError("guarded replay evidence is not valid for a path-quality criterion.")
-
-
-def _validated_outcome(evidence: EvidenceKind, measured: float, required: float, value: object) -> ObservationOutcome:
-    expected = _outcome(evidence, measured <= required)
-    if value != expected:
-        raise InvalidHeldPathEvidenceError(f"outcome {value!r} contradicts the measured and required values; expected {expected!r}.")
-    return expected
-
-
-@dataclass(frozen=True, init=False)
-class FractionCriterion:
-    name: CriterionName
-    measured: UnitFraction
-    required: UnitFraction
-    evidence: EvidenceKind
-    outcome: ObservationOutcome
-
-    def __init__(self) -> None:
-        raise TypeError("FractionCriterion must be created with FractionCriterion.build().")
-
-    @classmethod
-    def build(cls, *, name: CriterionName, measured: UnitFraction, required: UnitFraction, evidence: EvidenceKind, outcome: ObservationOutcome) -> Self:
-        checked_name = _criterion_name(name, FRACTION_NAMES)
-        checked_measured = closed_unit_fraction(measured, name=f"{checked_name} measured")
-        checked_required = closed_unit_fraction(required, name=f"{checked_name} required")
-        if checked_required != REQUIRED_FRACTION:
-            raise InvalidHeldPathEvidenceError("uncut fraction requires an exact zero threshold.")
-        checked_evidence = _evidence(checked_name, evidence)
-        checked_outcome = _validated_outcome(checked_evidence, checked_measured, checked_required, outcome)
-        return _build_record(cls, {"name": checked_name, "measured": checked_measured, "required": checked_required, "evidence": checked_evidence, "outcome": checked_outcome})
-
-
-@dataclass(frozen=True, init=False)
-class CountCriterion:
-    name: CriterionName
-    measured: MotionCount
-    required: MotionCount
-    evidence: EvidenceKind
-    outcome: ObservationOutcome
-
-    def __init__(self) -> None:
-        raise TypeError("CountCriterion must be created with CountCriterion.build().")
-
-    @classmethod
-    def build(
-        cls,
-        *,
-        name: CountCriterionName,
-        measured: MotionCount,
-        required: MotionCount,
-        evidence: EvidenceKind,
-        outcome: ObservationOutcome,
-        attribution_count: int,
-    ) -> Self:
-        checked_name = _criterion_name(name, COUNT_NAMES)
-        checked_measured = motion_count(measured, name=f"{checked_name} measured")
-        checked_required = motion_count(required, name=f"{checked_name} required")
-        checked_attribution = motion_count(attribution_count, name=f"{checked_name} attribution count")
-        if checked_name == COMPONENT_BOUNDED_COUNT_NAME:
-            if checked_required < MINIMUM_CENTRE_DOMAIN_COMPONENTS:
-                raise InvalidHeldPathEvidenceError(f"{checked_name} requires a threshold of at least one centre-domain component.")
-        elif checked_required != REQUIRED_COUNT:
-            raise InvalidHeldPathEvidenceError(f"{checked_name} requires an exact zero threshold.")
-        if checked_measured != checked_attribution:
-            raise InvalidHeldPathEvidenceError(f"{checked_name} measured count disagrees with its attribution cardinality.")
-        checked_evidence = _evidence(checked_name, evidence)
-        checked_outcome = _validated_outcome(checked_evidence, checked_measured, checked_required, outcome)
-        return _build_record(cls, {"name": checked_name, "measured": checked_measured, "required": checked_required, "evidence": checked_evidence, "outcome": checked_outcome})
-
-
-@dataclass(frozen=True, init=False)
-class DegreesCriterion:
-    name: CriterionName
-    measured: Degrees
-    required: Degrees
-    evidence: EvidenceKind
-    outcome: ObservationOutcome
-
-    def __init__(self) -> None:
-        raise TypeError("DegreesCriterion must be created with DegreesCriterion.build().")
-
-    @classmethod
-    def build(cls, *, name: CriterionName, measured: Degrees, required: Degrees, evidence: EvidenceKind, outcome: ObservationOutcome) -> Self:
-        checked_name = _criterion_name(name, DEGREES_NAMES)
-        checked_measured = degrees_value(measured, name=f"{checked_name} measured")
-        checked_required = degrees_value(required, name=f"{checked_name} required")
-        if checked_measured < ZERO_FLOAT or checked_required <= ZERO_FLOAT:
-            raise InvalidHeldPathEvidenceError("engagement steps must be non-negative and their case-cap threshold positive.")
-        checked_evidence = _evidence(checked_name, evidence)
-        checked_outcome = _validated_outcome(checked_evidence, checked_measured, checked_required, outcome)
-        return _build_record(cls, {"name": checked_name, "measured": checked_measured, "required": checked_required, "evidence": checked_evidence, "outcome": checked_outcome})
-
-
-@dataclass(frozen=True, init=False)
-class ToolRadiusMultipleCriterion:
-    name: CriterionName
-    measured: ToolRadiusMultiple
-    required: ToolRadiusMultiple
-    evidence: EvidenceKind
-    outcome: ObservationOutcome
-
-    def __init__(self) -> None:
-        raise TypeError("ToolRadiusMultipleCriterion must be created with ToolRadiusMultipleCriterion.build().")
-
-    @classmethod
-    def build(
-        cls,
-        *,
-        name: CriterionName,
-        measured: ToolRadiusMultiple,
-        required: ToolRadiusMultiple,
-        evidence: EvidenceKind,
-        outcome: ObservationOutcome,
-    ) -> Self:
-        checked_name = _criterion_name(name, TOOL_RADIUS_MULTIPLE_NAMES)
-        checked_measured = tool_radius_multiple(measured, name=f"{checked_name} measured")
-        checked_required = tool_radius_multiple(required, name=f"{checked_name} required")
-        if checked_required != REQUIRED_LOOP_STEP:
-            raise InvalidHeldPathEvidenceError("loop-radius step requires an exact two-tool-radii threshold.")
-        checked_evidence = _evidence(checked_name, evidence)
-        checked_outcome = _validated_outcome(checked_evidence, checked_measured, checked_required, outcome)
-        return _build_record(cls, {"name": checked_name, "measured": checked_measured, "required": checked_required, "evidence": checked_evidence, "outcome": checked_outcome})
-
-
-@dataclass(frozen=True, init=False)
-class OperationPair:
-    previous: OperationIndex
-    current: OperationIndex
-
-    def __init__(self) -> None:
-        raise TypeError("OperationPair must be created with OperationPair.build().")
-
-    @classmethod
-    def build(cls, *, previous: OperationIndex, current: OperationIndex, operation_count: int) -> Self:
-        checked_previous = operation_index(previous, operation_count=operation_count)
-        checked_current = operation_index(current, operation_count=operation_count)
-        if checked_previous >= checked_current:
-            raise InvalidHeldPathEvidenceError("an operation pair must follow forward source order.")
-        return _build_record(cls, {"previous": checked_previous, "current": checked_current})
-
-
-@dataclass(frozen=True, init=False)
-class MeasuredStep(Generic[StepUnitT]):
-    value: StepUnitT
-    pair: OperationPair
-    unit: Literal["degrees", "tool_radius_multiple"]
-
-    def __init__(self) -> None:
-        raise TypeError("MeasuredStep must be created with MeasuredStep.build().")
-
-    @classmethod
-    @overload
-    def build(cls, *, value: Degrees, pair: OperationPair, unit: Literal["degrees"]) -> MeasuredStep[Degrees]: ...
-
-    @classmethod
-    @overload
-    def build(
-        cls,
-        *,
-        value: ToolRadiusMultiple,
-        pair: OperationPair,
-        unit: Literal["tool_radius_multiple"],
-    ) -> MeasuredStep[ToolRadiusMultiple]: ...
-
-    @classmethod
-    def build(
-        cls,
-        *,
-        value: Union[Degrees, ToolRadiusMultiple],
-        pair: OperationPair,
-        unit: Literal["degrees", "tool_radius_multiple"],
-    ) -> Union[MeasuredStep[Degrees], MeasuredStep[ToolRadiusMultiple]]:
-        if type(pair) is not OperationPair:
-            raise InvalidHeldPathEvidenceError("a measured step requires one validated operation pair.")
-        if unit == "degrees":
-            checked_degrees = degrees_value(value, name="measured engagement step")
-            if checked_degrees < ZERO_FLOAT:
-                raise InvalidHeldPathEvidenceError("measured engagement step must be non-negative.")
-            return _build_record(cls, {"value": checked_degrees, "pair": pair, "unit": unit})
-        if unit == "tool_radius_multiple":
-            checked_multiple = tool_radius_multiple(value, name="measured loop-radius step")
-            return _build_record(cls, {"value": checked_multiple, "pair": pair, "unit": unit})
-        raise InvalidHeldPathEvidenceError(f"measured step unit {unit!r} is not supported.")
-
-
-StepFinding: TypeAlias = Union[MeasuredStep[Degrees], MeasuredStep[ToolRadiusMultiple]]
-
-
-@dataclass(frozen=True, init=False)
-class PathQualityAttribution:
-    operation_count: int
-    uncut_operations: tuple[OperationIndex, ...]
-    gouging_operations: tuple[OperationIndex, ...]
-    unsafe_rapid_operations: tuple[OperationIndex, ...]
-    continuity_break_pairs: tuple[OperationPair, ...]
-    zero_length_operations: tuple[OperationIndex, ...]
-    degenerate_loop_operations: tuple[OperationIndex, ...]
-    redundant_operations: tuple[OperationIndex, ...]
-    air_at_depth_operations: tuple[OperationIndex, ...]
-    material_plunge_operations: tuple[OperationIndex, ...]
-    misplaced_plunge_operations: tuple[OperationIndex, ...]
-    cap_exceeded_operations: tuple[OperationIndex, ...]
-    slotting_operations: tuple[OperationIndex, ...]
-    max_engagement_step: Optional[MeasuredStep[Degrees]]
-    engagement_step_failure_pairs: tuple[OperationPair, ...]
-    max_loop_radius_step: Optional[MeasuredStep[ToolRadiusMultiple]]
-    loop_radius_step_failure_pairs: tuple[OperationPair, ...]
-    tangent_break_pairs: tuple[OperationPair, ...]
-    curvature_break_pairs: tuple[OperationPair, ...]
-    reversal_pairs: tuple[OperationPair, ...]
-
-    def __init__(self) -> None:
-        raise TypeError("PathQualityAttribution must be created with PathQualityAttribution.build().")
-
-    @classmethod
-    def build(
-        cls,
-        *,
-        operation_count: int,
-        uncut_operations: tuple[OperationIndex, ...],
-        gouging_operations: tuple[OperationIndex, ...],
-        unsafe_rapid_operations: tuple[OperationIndex, ...],
-        continuity_break_pairs: tuple[OperationPair, ...],
-        zero_length_operations: tuple[OperationIndex, ...],
-        degenerate_loop_operations: tuple[OperationIndex, ...],
-        redundant_operations: tuple[OperationIndex, ...],
-        air_at_depth_operations: tuple[OperationIndex, ...],
-        material_plunge_operations: tuple[OperationIndex, ...],
-        misplaced_plunge_operations: tuple[OperationIndex, ...],
-        cap_exceeded_operations: tuple[OperationIndex, ...],
-        slotting_operations: tuple[OperationIndex, ...],
-        max_engagement_step: Optional[MeasuredStep[Degrees]],
-        engagement_step_failure_pairs: tuple[OperationPair, ...],
-        max_loop_radius_step: Optional[MeasuredStep[ToolRadiusMultiple]],
-        loop_radius_step_failure_pairs: tuple[OperationPair, ...],
-        tangent_break_pairs: tuple[OperationPair, ...],
-        curvature_break_pairs: tuple[OperationPair, ...],
-        reversal_pairs: tuple[OperationPair, ...],
-    ) -> Self:
-        if type(operation_count) is not int or operation_count < ZERO_COUNT:
-            raise InvalidHeldPathEvidenceError("operation count must be an exact non-negative integer.")
-        component_values = (
-            uncut_operations,
-            gouging_operations,
-            unsafe_rapid_operations,
-            continuity_break_pairs,
-            zero_length_operations,
-            degenerate_loop_operations,
-            redundant_operations,
-            air_at_depth_operations,
-            material_plunge_operations,
-            misplaced_plunge_operations,
-            cap_exceeded_operations,
-            slotting_operations,
-            max_engagement_step,
-            engagement_step_failure_pairs,
-            max_loop_radius_step,
-            loop_radius_step_failure_pairs,
-            tangent_break_pairs,
-            curvature_break_pairs,
-            reversal_pairs,
-        )
-        if operation_count == ZERO_COUNT and any(component_values):
-            raise InvalidHeldPathEvidenceError("zero operations require a wholly empty standalone attribution.")
-        if uncut_operations:
-            raise InvalidHeldPathEvidenceError("uncut stock is spatial aggregate evidence and cannot name operations.")
-        index_fields = {
-            "uncut_operations": uncut_operations,
-            "gouging_operations": gouging_operations,
-            "unsafe_rapid_operations": unsafe_rapid_operations,
-            "zero_length_operations": zero_length_operations,
-            "degenerate_loop_operations": degenerate_loop_operations,
-            "redundant_operations": redundant_operations,
-            "air_at_depth_operations": air_at_depth_operations,
-            "material_plunge_operations": material_plunge_operations,
-            "misplaced_plunge_operations": misplaced_plunge_operations,
-            "cap_exceeded_operations": cap_exceeded_operations,
-            "slotting_operations": slotting_operations,
-        }
-        pair_fields = {
-            "continuity_break_pairs": continuity_break_pairs,
-            "engagement_step_failure_pairs": engagement_step_failure_pairs,
-            "loop_radius_step_failure_pairs": loop_radius_step_failure_pairs,
-            "tangent_break_pairs": tangent_break_pairs,
-            "curvature_break_pairs": curvature_break_pairs,
-            "reversal_pairs": reversal_pairs,
-        }
-        checked: dict[str, object] = {"operation_count": operation_count}
-        for name, indices in index_fields.items():
-            checked[name] = _indices(indices, operation_count) if indices else ()
-        for name, pairs in pair_fields.items():
-            checked[name] = _validated_pairs(pairs, operation_count)
-        for name, step in (
-            ("max_engagement_step", max_engagement_step),
-            ("max_loop_radius_step", max_loop_radius_step),
-        ):
-            if step is not None and type(step) is not MeasuredStep:
-                raise InvalidHeldPathEvidenceError(f"{name} must be one validated measured step or None.")
-            if step is not None:
-                expected_unit = "degrees" if name == "max_engagement_step" else "tool_radius_multiple"
-                if getattr(step, "unit", None) != expected_unit:
-                    raise InvalidHeldPathEvidenceError(f"{name} requires a measured step in {expected_unit!r}.")
-                checked_pair = OperationPair.build(
-                    previous=step.pair.previous,
-                    current=step.pair.current,
-                    operation_count=operation_count,
-                )
-                if name == "max_engagement_step":
-                    checked[name] = MeasuredStep.build(value=cast(Degrees, step.value), pair=checked_pair, unit="degrees")
-                else:
-                    checked[name] = MeasuredStep.build(
-                        value=cast(ToolRadiusMultiple, step.value),
-                        pair=checked_pair,
-                        unit="tool_radius_multiple",
-                    )
-            else:
-                checked[name] = None
-        tangent_pairs = set(tangent_break_pairs)
-        reversal_pair_set = set(reversal_pairs)
-        curvature_pairs = set(curvature_break_pairs)
-        if not reversal_pair_set <= tangent_pairs:
-            raise InvalidHeldPathEvidenceError("every reversal pair must also be attributed as a tangent break.")
-        if not tangent_pairs.isdisjoint(curvature_pairs):
-            raise InvalidHeldPathEvidenceError("tangent-break and curvature-break pairs must be disjoint.")
-        if not set(redundant_operations).isdisjoint(air_at_depth_operations):
-            raise InvalidHeldPathEvidenceError("a motion that removes nothing is either redundant (a CUT) or air at depth, never both.")
-        return _build_record(cls, checked)
 
 
 @dataclass(frozen=True, init=False)
@@ -744,227 +271,12 @@ class PathQualityAssessment:
         return _build_record(cls, values)
 
 
-def _indices(values: Sequence[int], operation_count: int) -> tuple[OperationIndex, ...]:
-    typed = tuple(operation_index(value, operation_count=operation_count) for value in values)
-    if len(set(typed)) != len(typed):
-        raise InvalidHeldPathEvidenceError("operation attribution must contain unique indices.")
-    return typed
-
-
-def _validated_pairs(values: Sequence[OperationPair], operation_count: int) -> tuple[OperationPair, ...]:
-    checked: list[OperationPair] = []
-    for value in values:
-        if type(value) is not OperationPair:
-            raise InvalidHeldPathEvidenceError("pair attribution requires validated operation pairs.")
-        checked.append(OperationPair.build(previous=value.previous, current=value.current, operation_count=operation_count))
-    if len(set(checked)) != len(checked):
-        raise InvalidHeldPathEvidenceError("pair attribution must contain unique operation pairs.")
-    return tuple(checked)
-
-
 def _pair(previous: MotionQuality, current: MotionQuality, operation_count: int) -> OperationPair:
     return OperationPair.build(previous=OperationIndex(previous.index), current=OperationIndex(current.index), operation_count=operation_count)
 
 
 def _adjacent_motion_pairs(motions: Sequence[MotionQuality]) -> Sequence[tuple[MotionQuality, MotionQuality]]:
     return [(previous, current) for previous, current in zip(motions, motions[1:]) if current.index == previous.index + NEXT_OPERATION_OFFSET]
-
-
-class HelixHasNoMotionKindError(InvalidHeldPathEvidenceError):
-    """A helix source was asked for a `MotionKind`; a survey routes a helix as an entry event, never a motion or rapid."""
-
-
-SNAPSHOT_RECORD_TYPES = (HeldLineSnapshot, HeldArcSnapshot, HeldCircleSnapshot, HeldHelixSnapshot)
-
-
-def _unsupported_snapshot(operation: Never) -> NoReturn:
-    raise InvalidHeldPathEvidenceError(f"source snapshot contains an unsupported operation record {type(operation).__name__!r}.")
-
-
-def snapshot_motion_kind(operation: HeldOperationSnapshot) -> MotionKind:
-    """The survey `MotionKind` of one snapshot record; the one kind dispatch for snapshot consumers.
-
-    Raises:
-        HelixHasNoMotionKindError: *operation* is a helix (a survey entry event).
-        InvalidHeldPathEvidenceError: *operation* is no exact snapshot record.
-    """
-    if type(operation) not in SNAPSHOT_RECORD_TYPES:
-        raise InvalidHeldPathEvidenceError("source snapshot contains an unsupported operation record.")
-    if isinstance(operation, HeldLineSnapshot):
-        return MotionKind.LINE
-    if isinstance(operation, HeldArcSnapshot):
-        return MotionKind.ARC
-    if isinstance(operation, HeldCircleSnapshot):
-        return MotionKind.LOOP
-    if isinstance(operation, HeldHelixSnapshot):
-        raise HelixHasNoMotionKindError(f"source operation {operation.ordinal} is a helical entry; it has no survey motion kind.")
-    _unsupported_snapshot(operation)
-
-
-def _snapshot_cut_height(snapshot: tuple[HeldOperationSnapshot, ...]) -> float:
-    line_anchors: list[Millimetre] = []
-    curve_heights: list[Millimetre] = []
-    for operation in snapshot:
-        if isinstance(operation, HeldLineSnapshot):
-            anchor = line_cut_height_anchor(
-                operation.operation,
-                start_z=Millimetre(float(operation.start.z)),
-                end_z=Millimetre(float(operation.end.z)),
-                xy_travel=Millimetre(
-                    math.hypot(
-                        float(operation.end.x) - float(operation.start.x),
-                        float(operation.end.y) - float(operation.start.y),
-                    )
-                ),
-            )
-            if anchor is not None:
-                line_anchors.append(anchor)
-        elif isinstance(operation, HeldHelixSnapshot):
-            # Independent cut-plane evidence, like a plunge foot (parity with
-            # `replay_classification.infer_operation_cut_height`).
-            line_anchors.append(Millimetre(float(operation.bottom_z)))
-        elif operation.operation in {OperationType.CUT, OperationType.LEAD_IN, OperationType.LEAD_OUT}:
-            curve_heights.append(Millimetre(float(operation.centre.z)))
-    return float(minimum_cut_height(line_anchors if line_anchors else curve_heights))
-
-
-def _snapshot_replay_category(
-    operation: HeldOperationSnapshot,
-    cut_height: float,
-) -> ReplayCategory:
-    try:
-        if isinstance(operation, HeldLineSnapshot):
-            z_start = float(operation.start.z)
-            z_end = float(operation.end.z)
-            return classify_line_replay(
-                operation.operation,
-                start_z=Millimetre(z_start),
-                end_z=Millimetre(z_end),
-                xy_travel=Millimetre(
-                    math.hypot(
-                        float(operation.end.x) - float(operation.start.x),
-                        float(operation.end.y) - float(operation.start.y),
-                    )
-                ),
-                cut_z=Millimetre(cut_height),
-            )
-        if isinstance(operation, HeldHelixSnapshot):
-            return classify_helix_replay(
-                operation.operation,
-                bottom_z=Millimetre(float(operation.bottom_z)),
-                cut_z=Millimetre(cut_height),
-            )
-        if isinstance(operation, (HeldArcSnapshot, HeldCircleSnapshot)):
-            return classify_planar_replay(
-                operation.operation,
-                motion_z=Millimetre(float(operation.centre.z)),
-                cut_z=Millimetre(cut_height),
-            )
-        _unsupported_snapshot(operation)
-    except (CutPlaneRampError, OffPlaneReplayCurveError, OffPlaneHelixError) as error:
-        replay_error = UnreplayableOperationError(f"Operation {operation.ordinal} ({operation.operation.value}) {error}.")
-        replay_error.__cause__ = error
-        raise InvalidHeldPathEvidenceError(str(replay_error)) from replay_error
-
-
-def _validate_ordered_indices(values: Sequence[int], operation_count: int, *, name: str) -> tuple[OperationIndex, ...]:
-    checked = _indices(values, operation_count)
-    if tuple(checked) != tuple(sorted(checked)):
-        raise InvalidHeldPathEvidenceError(f"{name} must retain source operation order.")
-    return checked
-
-
-def _validate_survey_binding(
-    spec: PocketSpec,
-    snapshot: tuple[HeldOperationSnapshot, ...],
-    survey: PathSurvey,
-) -> None:
-    if survey.spec is not spec:
-        raise InvalidHeldPathEvidenceError("path survey must retain the exact PocketSpec supplied for assessment.")
-    if type(snapshot) is not tuple or type(survey.source_snapshot) is not tuple or survey.source_snapshot != snapshot:
-        raise InvalidHeldPathEvidenceError("path survey source snapshot disagrees with the supplied operation snapshot.")
-    operation_count = len(snapshot)
-    if operation_count == ZERO_COUNT:
-        raise InvalidHeldPathEvidenceError("a Figure 5 quality assessment requires at least one operation.")
-    for expected, operation in enumerate(snapshot):
-        if operation.ordinal != expected:
-            raise InvalidHeldPathEvidenceError("snapshot ordinals must cover source operations in order.")
-
-    motion_indices = _validate_ordered_indices([motion.index for motion in survey.motions], operation_count, name="survey motions")
-    rapid_indices = _validate_ordered_indices([rapid.index for rapid in survey.rapids], operation_count, name="survey rapids")
-    plunge_indices = _validate_ordered_indices(survey.plunge_indices, operation_count, name="survey plunges")
-    retract_indices = _validate_ordered_indices(survey.retract_indices, operation_count, name="survey retracts")
-    if type(survey.plunges) is not int or survey.plunges != len(plunge_indices):
-        raise InvalidHeldPathEvidenceError("plunge count disagrees with retained plunge operation indices.")
-    if type(survey.retracts) is not int or survey.retracts != len(retract_indices):
-        raise InvalidHeldPathEvidenceError("retract count disagrees with retained retract operation indices.")
-    material_plunge_indices = _validate_ordered_indices(survey.material_plunge_indices, operation_count, name="survey material plunges")
-    if not set(material_plunge_indices) <= set(plunge_indices):
-        raise InvalidHeldPathEvidenceError("every plunge into material must be one of the survey's plunges.")
-    helix_indices = _validate_ordered_indices([helix.index for helix in survey.helices], operation_count, name="survey helices")
-
-    motion_set = set(motion_indices)
-    rapid_set = set(rapid_indices)
-    plunge_set = set(plunge_indices)
-    retract_set = set(retract_indices)
-    helix_set = set(helix_indices)
-    if not retract_set <= rapid_set:
-        raise InvalidHeldPathEvidenceError("every retained retract must have one non-cutting motion observation.")
-    pure_rapid_set = rapid_set - retract_set
-    categories = (motion_set, pure_rapid_set, plunge_set, retract_set, helix_set)
-    for position, observed_category in enumerate(categories):
-        if any(observed_category & later for later in categories[position + NEXT_OPERATION_OFFSET :]):
-            raise InvalidHeldPathEvidenceError("motion, rapid, plunge, retract, and helix observations must be disjoint.")
-    if set().union(*categories) != set(range(operation_count)):
-        raise InvalidHeldPathEvidenceError("motion, rapid, plunge, retract, and helix observations must exactly partition the operation snapshot.")
-
-    cut_height = _snapshot_cut_height(snapshot)
-    expected_categories: dict[ReplayCategory, set[OperationIndex]] = {category: set() for category in REPLAY_CATEGORIES}
-    for index, operation in enumerate(snapshot):
-        expected_category = _snapshot_replay_category(operation, cut_height)
-        expected_categories[expected_category].add(OperationIndex(index))
-    observed_categories: dict[ReplayCategory, set[OperationIndex]] = {
-        "motion": motion_set,
-        "rapid": pure_rapid_set,
-        "plunge": plunge_set,
-        "retract": retract_set,
-        "helix": helix_set,
-    }
-    if observed_categories != expected_categories:
-        raise InvalidHeldPathEvidenceError("survey categories disagree with the source snapshot's cut-plane replay classification.")
-
-    for motion in survey.motions:
-        source = snapshot[motion.index]
-        if motion.operation is not source.operation or motion.kind is not snapshot_motion_kind(source):
-            raise InvalidHeldPathEvidenceError("cut-motion role or primitive kind disagrees with the source snapshot.")
-    for rapid in survey.rapids:
-        source = snapshot[rapid.index]
-        if rapid.operation is not source.operation or rapid.kind is not snapshot_motion_kind(source):
-            raise InvalidHeldPathEvidenceError("rapid-motion role or primitive kind disagrees with the source snapshot.")
-    for helix in survey.helices:
-        _validate_helix_binding(helix, snapshot[helix.index])
-
-
-def _validate_helix_binding(helix: HelixObservation, source: HeldOperationSnapshot) -> None:
-    """Bind one helix observation to its snapshot record: the same exact helix, entry, turns and pitch.
-
-    Exact: the observed `Helix` must equal the record's exact round trip
-    (`HeldHelixSnapshot.helix`: centre, radius, chart, entry, top and bottom
-    Z, turns, turn sense), because the gated ramp verdict reads it; the entry
-    doubles are the snapshot's exact ``P``; the pitch is a `Fraction` on both
-    sides.
-
-    Raises:
-        InvalidHeldPathEvidenceError: The record is not a helix, or the
-            observation's helix, ends, turns or pitch disagree with it.
-    """
-    if not isinstance(source, HeldHelixSnapshot):
-        raise InvalidHeldPathEvidenceError(f"survey helix {helix.index} has no helix record in the source snapshot.")
-    entry = (float(source.entry.x), float(source.entry.y))
-    if helix.helix != source.helix():
-        raise InvalidHeldPathEvidenceError(f"survey helix {helix.index} is not its source helix record's exact helix.")
-    if helix.start != entry or helix.end != entry or helix.turns != source.turns or helix.pitch != source.pitch:
-        raise InvalidHeldPathEvidenceError(f"survey helix {helix.index} disagrees with its source helix record (entry, turns or pitch).")
 
 
 def _maximum_step(steps: Sequence[tuple[float, OperationPair]], unit: Literal["degrees", "tool_radius_multiple"]) -> Optional[StepFinding]:

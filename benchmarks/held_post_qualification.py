@@ -10,7 +10,7 @@ from benchmarks.errors import HeldPathNotEligibleForPostQualificationError
 from benchmarks.errors import InvalidHeldPathEvidenceError
 from benchmarks.held_path_evidence import HeldFigure5Characterization
 from benchmarks.held_path_snapshot import HeldOperationSnapshot
-from benchmarks.quality_observations import CRITERION_NAMES
+from benchmarks.quality_criteria import CRITERION_NAMES
 
 _OPEN_OUTCOMES = frozenset(
     {
