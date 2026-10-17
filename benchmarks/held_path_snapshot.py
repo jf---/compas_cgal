@@ -28,6 +28,7 @@ from benchmarks.units import operation_index
 from compas_cgal.helix import Helix
 from compas_cgal.helix import HelixDescentError
 from compas_cgal.helix import HelixTurnsError
+from compas_cgal.incident_loop import INCIDENCE_CHART_COUNT
 from compas_cgal.incident_loop import INCIDENCE_CHART_DENOMINATOR
 from compas_cgal.incident_loop import IncidentLoop
 from compas_cgal.incident_loop import LoopEntryIncidenceError
@@ -394,37 +395,12 @@ class InvalidHeldHelixSnapshotError(InvalidHeldOperationSnapshotError):
     """A HELIX operation or helix record is malformed or contradicts itself."""
 
 
-HELIX_CHART_COUNT = 4  # Quarter charts of `IncidentLoop.chart`, [0, 3]; incident_loop exposes no public count (`_QUARTERS` is private).
-
-
 def _helix_point(value: object, *, name: str) -> Point2[WorldXY]:
     if type(value) is not Point2:
         raise InvalidHeldHelixSnapshotError(f"{name} must be one typed world-XY point.")
     _finite(getattr(value, "x", None), name=f"{name}.x")
     _finite(getattr(value, "y", None), name=f"{name}.y")
     return cast(Point2[WorldXY], value)
-
-
-def _footprint_chart_agrees(footprint: IncidentLoop) -> bool:
-    """The exact check that chart, numerator and phase describe the entry direction.
-
-    Mirrors the public atlas definition documented in `compas_cgal.incident_loop`
-    (quarter 0 is ``((Q^2 - j^2), 2 j Q) / (Q^2 + j^2)`` reduced, each further
-    quarter a quarter-turn rotation; ``Q = INCIDENCE_CHART_DENOMINATOR``):
-    ``(P - c) * m == (a, b) * rho`` over the rationals, and ``phase`` is the
-    authored ``atan2(b, a)``.
-    """
-    q = INCIDENCE_CHART_DENOMINATOR
-    j = footprint.chart_numerator
-    a, b, m = q * q - j * j, 2 * j * q, q * q + j * j
-    divisor = math.gcd(a, b)
-    a, b, m = a // divisor, b // divisor, m // divisor
-    for _ in range(footprint.chart):
-        a, b = -b, a
-    rho = Fraction(footprint.radius.value)
-    dx = Fraction(footprint.entry.x) - Fraction(footprint.centre.x)
-    dy = Fraction(footprint.entry.y) - Fraction(footprint.centre.y)
-    return dx * m == a * rho and dy * m == b * rho and float(footprint.phase) == math.atan2(b, a)
 
 
 def _helix_tangent(helix: Helix) -> Direction3[WorldXYZ]:
@@ -498,6 +474,15 @@ class HeldHelixSnapshot:
     ) -> Self:
         """Validate one helix record.
 
+        The phase is not an independent input: it is derived from
+        ``(chart, chart_numerator)`` by `compas_cgal.incident_loop.chart_phase`,
+        the one computation `IncidentLoop.build` stores. The record's phase must
+        equal that derived double (`IncidentLoop.certifies_chart`), which holds
+        bit-identically by construction; the equality is a consistency check on
+        a derived value, not a decision on a transcendental. The direction
+        itself is checked exactly, ``(P - c) m == (a, b) rho`` over the
+        rationals.
+
         Raises:
             InvalidHeldHelixSnapshotError: the role is not HELIX, a value is
                 untyped or non-finite, the turn count is not a positive integer,
@@ -513,7 +498,7 @@ class HeldHelixSnapshot:
             raise InvalidHeldHelixSnapshotError(str(error)) from None
         if operation is not OperationType.HELIX:
             raise InvalidHeldHelixSnapshotError(f"a helix record must carry the HELIX role, not {operation!r}.")
-        if type(chart) is not int or not 0 <= chart < HELIX_CHART_COUNT or type(chart_numerator) is not int or not 0 <= chart_numerator <= INCIDENCE_CHART_DENOMINATOR:
+        if type(chart) is not int or not 0 <= chart < INCIDENCE_CHART_COUNT or type(chart_numerator) is not int or not 0 <= chart_numerator <= INCIDENCE_CHART_DENOMINATOR:
             raise InvalidHeldHelixSnapshotError("helix footprint chart parameter must be exact integers in range.")
         if type(turns) is not int:
             raise InvalidHeldHelixSnapshotError(f"helix turns must be an exact int; got {turns!r}.")
@@ -538,7 +523,7 @@ class HeldHelixSnapshot:
         )
         if not footprint.certifies_incidence():
             raise InvalidHeldHelixSnapshotError(f"helix footprint entry {footprint.entry!r} is not exactly on its circle.")
-        if not _footprint_chart_agrees(footprint):
+        if not footprint.certifies_chart():
             raise InvalidHeldHelixSnapshotError("helix footprint chart, numerator or phase contradicts its exact entry direction.")
         try:
             helix = Helix(

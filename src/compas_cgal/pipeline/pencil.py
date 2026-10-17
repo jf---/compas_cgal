@@ -8,12 +8,12 @@ With the reduced Pythagorean direction ``(a, b, m)`` of ``P - c_root``
 the root at ``P`` for ``0 < s <= s_root``. Every coordinate is a ``2^-K`` grid
 value, hence an exact double, and incidence is certified over the rationals.
 
-The direction is read from the root's EXACT geometry, not from its chart
-fields: ``(a, b) / m`` is ``(P - c_root) / rho_root`` in lowest terms, which
-equals the atlas triple of `compas_cgal.incident_loop` for every loop that
-module authors (its triple is reduced, so ``gcd(a, b, m) == 1``). This keeps
-the module on public names only; `incident_loop` exposes no public chart-triple
-helper.
+The direction is the root's atlas triple, `compas_cgal.incident_loop.chart_triple`
+of its ``(chart, chart_numerator)``, and the root must certify it exactly
+(`IncidentLoop.certifies_chart`: ``(P - c_root) m == (a, b) rho_root`` over the
+rationals); a root whose chart fields contradict its geometry is refused by
+`RootChartContradictionError`. The triple is reduced (``gcd(a, b) == 1``), so it
+is ``(P - c_root) / rho_root`` in lowest terms.
 
 THE RAMP-OUT (Task 1.2, N1). From the helix footprint to the root, one member
 per `ladder.furthest_first` scan over the pencil's rungs (the root first, then
@@ -66,6 +66,8 @@ from compas_cgal.incident_loop import INCIDENCE_GRID_EXPONENT
 from compas_cgal.incident_loop import IncidentLoop
 from compas_cgal.incident_loop import IncidentLoopRadiusBelowQuantumError
 from compas_cgal.incident_loop import LoopEntryIncidenceError
+from compas_cgal.incident_loop import chart_triple
+from compas_cgal.incident_loop import exact_double
 from compas_cgal.pipeline.admissibility import Admissibility
 from compas_cgal.pipeline.errors import HoledDomainPencilError
 from compas_cgal.pipeline.errors import RampOutStuckError
@@ -93,6 +95,10 @@ PENCIL_RUNG_TOOL_RADII = Fraction(1, 100)
 
 class RootOffChartGridError(ValueError):
     """A root loop is not an integer number of grid steps along its entry direction, so no pencil exists at its entry."""
+
+
+class RootChartContradictionError(ValueError):
+    """A root loop's chart parameter or phase contradicts its exact entry direction, so its pencil direction is undefined."""
 
 
 class HelixFootprintExceedsRootError(ValueError):
@@ -135,13 +141,15 @@ class TangentPencil:
 
         Raises:
             LoopEntryIncidenceError: *root* fails its incidence certificate.
+            ChartParameterRangeError: *root*'s chart parameter is out of range.
+            RootChartContradictionError: *root*'s chart fields contradict its entry direction.
             RootOffChartGridError: ``rho_root 2^K / m`` is not an integer.
             HoledDomainPencilError: ``disk(c_root, rho_root + r)`` is not in the pocket.
         """
         pencil = cls.on_grid(root)
         disk = Fraction(root.radius.value) + Fraction(tool.value)
         try:
-            pocket.certify_entry_disk(center=root.centre, radius=EntryRadius.build(_exact_float(disk)), tool_radius=tool)
+            pocket.certify_entry_disk(center=root.centre, radius=EntryRadius.build(exact_double(disk)), tool_radius=tool)
         except GougeContainmentError as error:
             raise HoledDomainPencilError(f"the pencil's swept disk (centre {root.centre!r}, radius {float(disk)!r} mm) is not in the design pocket: {error}") from error
         return pencil
@@ -158,11 +166,15 @@ class TangentPencil:
 
         Raises:
             LoopEntryIncidenceError: *root* fails its incidence certificate.
+            ChartParameterRangeError: *root*'s chart parameter is out of range.
+            RootChartContradictionError: *root*'s chart fields contradict its entry direction.
             RootOffChartGridError: ``rho_root 2^K / m`` is not an integer.
         """
         if not root.certifies_incidence():
             raise LoopEntryIncidenceError(f"root {root!r} fails its incidence certificate.")
-        a, b, m = _entry_direction(root)
+        if not root.certifies_chart():
+            raise RootChartContradictionError(f"root {root!r} chart ({root.chart}, {root.chart_numerator}) or phase contradicts its exact entry direction.")
+        a, b, m = chart_triple(root.chart, root.chart_numerator)
         root_steps = Fraction(root.radius.value) * _GRID / m
         if root_steps.denominator != 1:
             raise RootOffChartGridError(f"root radius {root.radius.value!r} mm is not an integer grid step {m}/2^{INCIDENCE_GRID_EXPONENT} mm.")
@@ -183,8 +195,8 @@ class TangentPencil:
         """
         px, py = Fraction(self.root.entry.x), Fraction(self.root.entry.y)
         loop = IncidentLoop(
-            centre=Point2[WorldXY](Millimetre(_exact_float(px - Fraction(steps * self.a, _GRID))), Millimetre(_exact_float(py - Fraction(steps * self.b, _GRID)))),
-            radius=GuideRadius(Millimetre(_exact_float(Fraction(steps * self.hypotenuse, _GRID)))),
+            centre=Point2[WorldXY](Millimetre(exact_double(px - Fraction(steps * self.a, _GRID))), Millimetre(exact_double(py - Fraction(steps * self.b, _GRID)))),
+            radius=GuideRadius(Millimetre(exact_double(Fraction(steps * self.hypotenuse, _GRID)))),
             entry=self.root.entry,
             phase=self.root.phase,
             chart=self.root.chart,
@@ -250,6 +262,8 @@ def helix_footprint(root: IncidentLoop, tool: ToolRadius) -> IncidentLoop:
     Raises:
         LoopEntryIncidenceError: *root* fails its incidence certificate, or a
             member value is not an exact double (broken invariant).
+        ChartParameterRangeError: *root*'s chart parameter is out of range.
+        RootChartContradictionError: *root*'s chart fields contradict its entry direction.
         RootOffChartGridError: ``rho_root 2^K / m`` is not an integer.
         IncidentLoopRadiusBelowQuantumError: ``r`` is below one grid step.
         HelixFootprintExceedsRootError: ``s > s_root``.
@@ -421,38 +435,3 @@ class RampOut:
                 f"({got.scanned} rung(s) scanned toward root radius {self.pencil.root.radius.value!r} mm)."
             )
         return got
-
-
-def _entry_direction(root: IncidentLoop) -> tuple[int, int, int]:
-    """The reduced integer direction ``(a, b, m)`` of ``P - c_root``, ``a^2 + b^2 = m^2``.
-
-    Args:
-        root: An incidence-certified loop.
-
-    Returns:
-        ``(a, b, m)`` with ``(a, b) / m == (P - c_root) / rho_root`` and ``m``
-        the least common denominator.
-    """
-    radius = Fraction(root.radius.value)
-    cos = (Fraction(root.entry.x) - Fraction(root.centre.x)) / radius
-    sin = (Fraction(root.entry.y) - Fraction(root.centre.y)) / radius
-    m = math.lcm(cos.denominator, sin.denominator)
-    return int(cos * m), int(sin * m), m
-
-
-def _exact_float(value: Fraction) -> float:
-    """The double equal to a grid rational.
-
-    Args:
-        value: A ``2^-K`` grid rational within the supported magnitude.
-
-    Returns:
-        ``float(value)``.
-
-    Raises:
-        LoopEntryIncidenceError: *value* is not exactly a double.
-    """
-    emitted = float(value)
-    if Fraction(emitted) != value:
-        raise LoopEntryIncidenceError(f"grid value {value!r} is not an exact double.")
-    return emitted

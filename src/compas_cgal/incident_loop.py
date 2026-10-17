@@ -63,8 +63,10 @@ INCIDENCE_PHASE_BOUND_RAD = 1.0 / INCIDENCE_CHART_DENOMINATOR
 # 2^-(K+1) = 4.5e-13 mm.
 INCIDENCE_CENTRE_BOUND_MM = 2.0 ** -(INCIDENCE_GRID_EXPONENT + 1)
 
+# Number of quarter charts of the atlas: `IncidentLoop.chart` is in [0, 3].
+INCIDENCE_CHART_COUNT = 4
+
 _QUARTER_TURN = math.pi / 2.0
-_QUARTERS = 4
 
 
 class NonFiniteIncidentLoopPhaseError(ValueError):
@@ -81,6 +83,10 @@ class IncidentLoopRadiusBelowQuantumError(ValueError):
 
 class LoopEntryIncidenceError(RuntimeError):
     """The emitted doubles fail the exact incidence certificate (broken invariant)."""
+
+
+class ChartParameterRangeError(ValueError):
+    """A chart index is outside ``[0, INCIDENCE_CHART_COUNT)`` or a numerator outside ``[0, Q]``."""
 
 
 @dataclass(frozen=True)
@@ -133,7 +139,7 @@ class IncidentLoop:
             raise IncidentLoopRangeError(f"incident loop supports |coordinate|, radius <= {INCIDENCE_COORDINATE_BOUND_MM} mm; got ({cx!r}, {cy!r}), {target_radius!r}.")
 
         chart, numerator = _chart_parameter(target_phase)
-        a, b, hypotenuse = _chart_triple(chart, numerator)
+        a, b, hypotenuse = chart_triple(chart, numerator)
         grid = 2**INCIDENCE_GRID_EXPONENT
         steps = round(Fraction(target_radius) * grid / hypotenuse)
         if steps < 1:
@@ -144,12 +150,12 @@ class IncidentLoop:
         exact_radius = Fraction(steps * hypotenuse, grid)
         exact_ex = exact_cx + Fraction(steps * a, grid)
         exact_ey = exact_cy + Fraction(steps * b, grid)
-        emitted = tuple(_exact_double(value) for value in (exact_cx, exact_cy, exact_radius, exact_ex, exact_ey))
+        emitted = tuple(exact_double(value) for value in (exact_cx, exact_cy, exact_radius, exact_ex, exact_ey))
         loop = cls(
             centre=Point2[WorldXY](Millimetre(emitted[0]), Millimetre(emitted[1])),
             radius=GuideRadius(Millimetre(emitted[2])),
             entry=Point2[WorldXY](Millimetre(emitted[3]), Millimetre(emitted[4])),
-            phase=Radian(math.atan2(b, a)),
+            phase=chart_phase(chart, numerator),
             chart=chart,
             chart_numerator=numerator,
         )
@@ -166,6 +172,29 @@ class IncidentLoop:
         dx = Fraction(self.entry.x) - Fraction(self.centre.x)
         dy = Fraction(self.entry.y) - Fraction(self.centre.y)
         return dx * dx + dy * dy == Fraction(self.radius.value) ** 2
+
+    def certifies_chart(self) -> bool:
+        """The exact check that *chart*, *chart_numerator* and *phase* describe the entry direction.
+
+        ``(entry - centre) * m == (a, b) * radius`` over the rationals for the
+        chart triple ``(a, b, m)``, and *phase* is the double `chart_phase`
+        derives from ``(chart, chart_numerator)``. The phase comparison is a
+        consistency check on a DERIVED value, not a transcendental decision:
+        `build` stores exactly `chart_phase`'s result, so the two doubles are
+        bit-identical by construction and any difference is a contradicting
+        record.
+
+        Returns:
+            True iff all three agree exactly.
+
+        Raises:
+            ChartParameterRangeError: The chart parameter is out of range.
+        """
+        a, b, m = chart_triple(self.chart, self.chart_numerator)
+        rho = Fraction(self.radius.value)
+        dx = Fraction(self.entry.x) - Fraction(self.centre.x)
+        dy = Fraction(self.entry.y) - Fraction(self.centre.y)
+        return dx * m == a * rho and dy * m == b * rho and self.phase == chart_phase(self.chart, self.chart_numerator)
 
     def circle(self) -> Circle:
         """The loop as a compas `Circle` carrying the authored centre and radius.
@@ -195,13 +224,13 @@ def _chart_parameter(phase: float) -> tuple[int, int]:
     turned = math.fmod(phase, math.tau)
     if turned < 0.0:
         turned += math.tau
-    chart = min(int(turned // _QUARTER_TURN), _QUARTERS - 1)
+    chart = min(int(turned // _QUARTER_TURN), INCIDENCE_CHART_COUNT - 1)
     local = turned - chart * _QUARTER_TURN
     numerator = round(math.tan(local / 2.0) * INCIDENCE_CHART_DENOMINATOR)
     return chart, min(max(numerator, 0), INCIDENCE_CHART_DENOMINATOR)
 
 
-def _chart_triple(chart: int, numerator: int) -> tuple[int, int, int]:
+def chart_triple(chart: int, numerator: int) -> tuple[int, int, int]:
     """The reduced Pythagorean triple ``(a, b, m)`` of a chart point, ``a^2 + b^2 = m^2``.
 
     Mirrors the atlas of ``src/exact_circle_chart_atlas_2.h``: quarter 0 is
@@ -214,7 +243,12 @@ def _chart_triple(chart: int, numerator: int) -> tuple[int, int, int]:
 
     Returns:
         ``(a, b, m)`` with ``gcd(a, b) == 1``.
+
+    Raises:
+        ChartParameterRangeError: *chart* or *numerator* is out of range.
     """
+    if not 0 <= chart < INCIDENCE_CHART_COUNT or not 0 <= numerator <= INCIDENCE_CHART_DENOMINATOR:
+        raise ChartParameterRangeError(f"chart parameter ({chart!r}, {numerator!r}) is outside [0, {INCIDENCE_CHART_COUNT}) x [0, {INCIDENCE_CHART_DENOMINATOR}].")
     q = INCIDENCE_CHART_DENOMINATOR
     a, b, m = q * q - numerator * numerator, 2 * numerator * q, q * q + numerator * numerator
     divisor = math.gcd(a, b)
@@ -224,7 +258,29 @@ def _chart_triple(chart: int, numerator: int) -> tuple[int, int, int]:
     return a, b, m
 
 
-def _exact_double(value: Fraction) -> float:
+def chart_phase(chart: int, numerator: int) -> Radian:
+    """The phase of a chart point: ``atan2(b, a)`` of its `chart_triple`.
+
+    The ONE computation of a loop's phase: `IncidentLoop.build` stores this
+    result, so a phase re-derived here from ``(chart, numerator)`` is
+    bit-identical to the stored one. The phase REPORTS the exact direction;
+    it decides nothing.
+
+    Args:
+        chart: Quarter index in ``[0, 3]``.
+        numerator: Chart numerator ``j`` in ``[0, Q]``.
+
+    Returns:
+        The direction angle, rad.
+
+    Raises:
+        ChartParameterRangeError: *chart* or *numerator* is out of range.
+    """
+    a, b, _ = chart_triple(chart, numerator)
+    return Radian(math.atan2(b, a))
+
+
+def exact_double(value: Fraction) -> float:
     """The double equal to *value*, which the grid construction guarantees exists.
 
     Args:
