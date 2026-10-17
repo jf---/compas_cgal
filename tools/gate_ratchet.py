@@ -112,6 +112,14 @@ GATE_PATHS: tuple[str, ...] = (
     # Ruling 1.2-models: the machine model carries the max-ramp limit the
     # survey reads, so it decides a gate cell.
     "benchmarks/models.py",
+    # Task 1.2: the pencil's island check imports the containment modules;
+    # they decide containment, so they are gate inputs.
+    "src/compas_cgal/adaptive/canonical.py",
+    "src/compas_cgal/adaptive/containment.py",
+    "src/compas_cgal/adaptive/errors.py",
+    "src/compas_cgal/adaptive/policy.py",
+    "src/compas_cgal/adaptive/reachable_domain.py",
+    "src/compas_cgal/motion.py",
 )
 
 
