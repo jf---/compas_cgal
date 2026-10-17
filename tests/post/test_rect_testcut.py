@@ -157,7 +157,7 @@ def test_envelope_violation_raises(rect_result: PipelineResult, setup: PostSetup
         post_operations(rect_result.operations, rebuild(setup, envelope=short), rect_source)
 
 
-def test_unaccepted_plunge_raises(rect_result: PipelineResult, setup: PostSetup, rect_source: SourcePath) -> None:
+def test_helix_entry_rect_posts_with_no_accepted_plunge(rect_result: PipelineResult, setup: PostSetup, rect_source: SourcePath) -> None:
     # The HELIX entry is feed motion, not a plunge, and the rect has no other entry: nothing to accept.
     # The over-allowance refusal itself is pinned in test_checks.test_second_plunge_raises.
     assert rect_result.operations[0].operation is OperationType.HELIX

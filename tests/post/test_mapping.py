@@ -96,7 +96,7 @@ def test_unknown_operation_raises(setup: PostSetup) -> None:
         map_operations([_plunge(), helix, _retract()], setup, SOURCE)
 
 
-def test_helix_entry_has_no_mapping_yet(setup: PostSetup) -> None:
+def test_helix_on_a_non_helix_geometry_raises(setup: PostSetup) -> None:
     helix = ToolpathOperation(geometry=Line([0.0, 0.0, 0.0], [0.0, 0.0, 0.0]), operation=OperationType.HELIX, path_index=0)
     with pytest.raises(UnsupportedOperationError, match="HELIX"):
         map_operations([_plunge(), helix, _retract()], setup, SOURCE)
