@@ -60,13 +60,14 @@ def test_the_plan_view_sweeps_the_ramp_and_the_closing_turn(clockwise: bool) -> 
 @pytest.mark.parametrize("clockwise", [True, False])
 def test_the_elevation_ramps_then_closes_flat_at_bottom_z(clockwise: bool) -> None:
     helix = make_helix(clockwise, centre=CENTRE, radius=FOOTPRINT_RADIUS, phase=PHASE)
-    profile = helix_elevation(helix)
     top, bottom = float(helix.top_z.value), float(helix.bottom_z.value)
-    circumference = math.tau * float(helix.footprint.radius.value)
-    ramp_end = helix.turns * circumference
-    assert profile[0] == (0.0, top)
-    assert profile[-1] == ((helix.turns + HELIX_CLOSING_TURNS) * circumference, bottom)
-    assert all(b[0] > a[0] for a, b in zip(profile, profile[1:]))
-    # The last ring -- everything past the ramp -- is at bottom_z exactly.
-    assert [z for s, z in profile if s >= ramp_end] == [bottom, bottom]
-    assert all(top >= z >= bottom for _, z in profile)
+    (s0, z0), (ramp_end, ramp_z), (closed, closed_z) = helix_elevation(helix)
+    assert (s0, z0) == (0.0, top)
+    # The last ring -- the flat closing turn -- is at bottom_z exactly.
+    assert ramp_z == bottom and closed_z == bottom
+    assert 0.0 < ramp_end < closed
+    # Pinned against the helix's own lengths, not this module's formula: the
+    # flat segment is `closing_turn_length()`, and the ramp's plan run with its
+    # descent makes up the 3D `ramp_length()`.
+    assert TOL.is_close(closed - ramp_end, helix.closing_turn_length())
+    assert TOL.is_close(math.hypot(ramp_end, top - bottom), helix.ramp_length())

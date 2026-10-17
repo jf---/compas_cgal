@@ -215,11 +215,13 @@ def _sample_helix(helix: Helix) -> Tuple[Tuple[float, float], ...]:
 def helix_elevation(helix: Helix) -> Tuple[Tuple[float, float], ...]:
     """The side elevation of a helix op: Z against plan arc length, in travel order.
 
-    The ramp descends linearly from ``top_z`` to ``bottom_z`` over ``turns``
-    footprint circumferences, then the closing turn runs flat at ``bottom_z``
-    for `HELIX_CLOSING_TURNS` more (user ruling Q6). Both pieces are straight
-    in this chart, so their three corners are the whole profile; the ends are
-    the op's exact top and bottom heights. REPORTING only.
+    The ramp descends linearly from ``top_z`` to ``bottom_z`` over its plan run,
+    ``turns`` footprint circumferences (the plan projection of
+    `Helix.ramp_length`, which is the 3D length); the closing turn then runs
+    flat at ``bottom_z`` for the helix's own `Helix.closing_turn_length` (user
+    ruling Q6). Both pieces are straight in this chart, so their three corners
+    are the whole profile; the heights are the op's exact top and bottom.
+    REPORTING only.
 
     Args:
         helix: The helix.
@@ -228,12 +230,12 @@ def helix_elevation(helix: Helix) -> Tuple[Tuple[float, float], ...]:
         ``(arc length mm, z mm)`` at the ramp start, the ramp end and the
         closing turn's end.
     """
-    circumference = math.tau * float(helix.footprint.radius.value)
+    ramp_plan = helix.turns * math.tau * float(helix.footprint.radius.value)
     top, bottom = float(helix.top_z.value), float(helix.bottom_z.value)
     return (
         (0.0, top),
-        (helix.turns * circumference, bottom),
-        ((helix.turns + HELIX_CLOSING_TURNS) * circumference, bottom),
+        (ramp_plan, bottom),
+        (ramp_plan + float(helix.closing_turn_length()), bottom),
     )
 
 

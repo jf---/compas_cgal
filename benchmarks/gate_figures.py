@@ -51,7 +51,6 @@ from pathlib import Path
 from typing import Mapping
 from typing import Sequence
 
-from compas.geometry import Circle
 from matplotlib.axes import Axes
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.figure import Figure
@@ -86,6 +85,7 @@ from benchmarks.plotting import draw_toolpath
 from benchmarks.plotting import save_figure
 from compas_cgal.helix import HELIX_CLOSING_TURNS
 from compas_cgal.helix import Helix
+from compas_cgal.pipeline.result import PipelineResult
 from compas_cgal.toolpath import ToolpathResult
 from tools.gate_measure import case_key
 from tools.gate_measure import measure_case
@@ -209,12 +209,13 @@ class VectorsSource:
     label: str
 
 
-class MultipleHelixEntriesError(Exception):
-    """A path carries more than one HELIX op; the entry inset draws the one first cut."""
+class UnrecordedHelixEntryError(Exception):
+    """A path carries a HELIX op that no generator `RampOutRecord` accounts for.
 
-
-class HelixWithoutRootLoopError(Exception):
-    """A HELIX op is not followed by a loop entered at its exact entry P (the root loop)."""
+    The entry inset reads the helix, the pencil members and the root loop from
+    the generator's record (brief N2); it never re-derives them from the
+    stream, so a helix without a record has no drawable entry.
+    """
 
 
 @dataclass(frozen=True)
@@ -224,9 +225,9 @@ class EntryGroup:
     Attributes:
         helix: The helix.
         helix_index: Its position in the operation stream.
-        member_indices: The pencil members, in stream order: every loop right
-            after the helix entered at its exact entry P, except the last.
-        root_index: The root loop: the last of those loops.
+        member_indices: The pencil members, in stream order; empty when the
+            first scan admitted the root.
+        root_index: The root loop.
     """
 
     helix: Helix
@@ -483,7 +484,11 @@ def draw_row(
     palette = palette_for(Theme.LIGHT)
     rings = closed_rings(boundary, holes)
     motions = {name: drawable_motions(result) for name, result in panels.items()}
-    entries_of = {name: group for name, group in ((name, entry_group(result)) for name, result in panels.items()) if group is not None}
+    entries_of: dict[str, EntryGroup] = {}
+    for name, result in panels.items():
+        group = entry_group(result)
+        if group is not None:
+            entries_of[name] = group
     xmin, xmax, ymin, ymax = view_bounds(rings, [motion for row in motions.values() for motion in row], None)
     panel_height = PANEL_WIDTH_IN * (ymax - ymin) / (xmax - xmin)
     elevation_block = ELEVATION_GAP_IN + ELEVATION_AXES_IN + ELEVATION_LABELS_IN
@@ -526,7 +531,7 @@ def draw_row(
             )
         )
         draw_entry_inset(plan, elevation, name=name, group=group, motions=motions[name], tool_radius=0.5 * tool_diameter, palette=palette)
-        for label, mark in entry_inset_marks(palette).items():
+        for label, mark in entry_inset_marks(palette, group).items():
             entries.setdefault(label, mark)
 
     figure.text(SIDE_MARGIN_IN / width, 1.0 - 0.08 / height, title, ha="left", va="top", color=palette.ink, fontsize=TITLE_PT)
@@ -543,44 +548,36 @@ def draw_row(
 
 
 def entry_group(result: ToolpathResult) -> EntryGroup | None:
-    """The helical entry of *result*, read off its operation stream.
+    """The helical entry of *result*, as its generator recorded it.
 
-    The pencil members and the root loop are the circles that follow the
-    helix and carry its exact entry P as their ``entry_xy`` (Ruling
-    1.1-C14-A: every member is internally tangent at P and the walk emits the
-    root loop from P); the run stops at the first operation that is not one.
-    Equality of the emitted doubles is the contract here, not a tolerance:
-    they are all written from the one exact P.
+    The helix, the pencil members and the root loop are read from the
+    pipeline's `RampOutRecord` (brief N2), which the generator validated
+    against the stream when it emitted the entry. Nothing is inferred from
+    coincident entries: a walk loop entered at P after the root, or a root the
+    walk skipped, would make any such inference misclassify silently.
 
     Args:
-        result: The path.
+        result: The path; a `PipelineResult` carries the record.
 
     Returns:
         The entry, or None when the path carries no HELIX op.
 
     Raises:
-        MultipleHelixEntriesError: More than one HELIX op.
-        HelixWithoutRootLoopError: No loop at P follows the helix.
+        UnrecordedHelixEntryError: A HELIX op is not the one a record names
+            (the path carries no record, or a second helix).
     """
     operations = list(result.operations)
     helices = [index for index, operation in enumerate(operations) if isinstance(operation.geometry, Helix)]
-    if not helices:
+    record = result.ramp_out if isinstance(result, PipelineResult) else None
+    if record is None:
+        if helices:
+            raise UnrecordedHelixEntryError(f"HELIX ops at {helices} on a {type(result).__name__}, which carries no RampOutRecord to read the entry from.")
         return None
-    if len(helices) > 1:
-        raise MultipleHelixEntriesError(f"the path carries HELIX ops at {helices}; the entry inset draws the single first cut.")
-    (index,) = helices
-    helix = operations[index].geometry
+    if helices != [record.helix_operation]:
+        raise UnrecordedHelixEntryError(f"HELIX ops at {helices}; the ramp-out record names only {record.helix_operation}.")
+    helix = operations[record.helix_operation].geometry
     assert isinstance(helix, Helix)
-    entry = (helix.entry_xy.x, helix.entry_xy.y)
-    loops: list[int] = []
-    for later in range(index + 1, len(operations)):
-        operation = operations[later]
-        if not (isinstance(operation.geometry, Circle) and operation.entry_xy == entry):
-            break
-        loops.append(later)
-    if not loops:
-        raise HelixWithoutRootLoopError(f"the HELIX op at {index} is not followed by a loop entered at its entry {entry}; there is no root loop to draw.")
-    return EntryGroup(helix=helix, helix_index=index, member_indices=tuple(loops[:-1]), root_index=loops[-1])
+    return EntryGroup(helix=helix, helix_index=record.helix_operation, member_indices=tuple(record.members), root_index=record.root_operation)
 
 
 def entry_inset_bounds(group: EntryGroup, motions: Sequence[Motion], tool_radius: float) -> tuple[float, float, float, float]:
@@ -607,21 +604,21 @@ def entry_inset_bounds(group: EntryGroup, motions: Sequence[Motion], tool_radius
     return (xmin - margin, xmax + margin, ymin - margin, ymax + margin)
 
 
-def entry_inset_marks(palette: Palette) -> dict[str, Mark]:
-    """The legend entries the entry inset adds, by label.
+def entry_inset_marks(palette: Palette, group: EntryGroup) -> dict[str, Mark]:
+    """The marks the entry inset draws, by label: exactly those it draws, so the legend names nothing absent.
 
     Args:
         palette: The theme's tokens.
+        group: The entry; the pencil-member mark is present only when it has members.
 
     Returns:
-        Bore, pencil member, root loop and entry point marks.
+        Bore, pencil member (when any), root loop and entry point marks.
     """
-    marks = (
-        Mark(label="bore (footprint + r)", order=_ORDER_BORE, colour=palette.grid, width_pt=BORE_SWATCH_PT, linestyle="-", marker=""),
-        Mark(label="pencil member", order=_ORDER_MEMBER, colour=palette.cut, width_pt=LINK_WIDTH_PT, linestyle="-", marker=""),
-        Mark(label="root loop", order=_ORDER_ROOT, colour=palette.cut, width_pt=CUT_WIDTH_PT, linestyle="-", marker=""),
-        Mark(label="P (helix entry)", order=_ORDER_ENTRY_POINT, colour=palette.ink, width_pt=0.0, linestyle="none", marker="o"),
-    )
+    marks = [Mark(label="bore (footprint + r)", order=_ORDER_BORE, colour=palette.grid, width_pt=BORE_SWATCH_PT, linestyle="-", marker="")]
+    if group.member_indices:
+        marks.append(Mark(label="pencil member", order=_ORDER_MEMBER, colour=palette.cut, width_pt=LINK_WIDTH_PT, linestyle="-", marker=""))
+    marks.append(Mark(label="root loop", order=_ORDER_ROOT, colour=palette.cut, width_pt=CUT_WIDTH_PT, linestyle="-", marker=""))
+    marks.append(Mark(label="P (helix entry)", order=_ORDER_ENTRY_POINT, colour=palette.ink, width_pt=0.0, linestyle="none", marker="o"))
     return {mark.label: mark for mark in marks}
 
 
@@ -651,7 +648,7 @@ def draw_entry_inset(
         tool_radius: Cutter radius r.
         palette: The theme's tokens.
     """
-    marks = entry_inset_marks(palette)
+    marks = entry_inset_marks(palette, group)
     helix = group.helix
     xmin, xmax, ymin, ymax = entry_inset_bounds(group, motions, tool_radius)
     plan.set_label(ENTRY_PLAN_LABEL.format(name=name))
