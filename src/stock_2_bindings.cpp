@@ -23,6 +23,7 @@ namespace nb = nanobind;
 using namespace nb::literals;
 
 void register_held_disk_contour_2(nb::module_& module);
+void register_held_boundary_clearance_2(nb::module_& module);
 
 namespace {
 
@@ -42,6 +43,7 @@ std::vector<ExactCenterParameter2> to_exact_center_parameters(
 NB_MODULE(_stock_2, m)
 {
     register_held_disk_contour_2(m);
+    register_held_boundary_clearance_2(m);
     register_audit_classification_2(m);
     register_audit_identity_2(m);
     register_audit_replay_2(m);
