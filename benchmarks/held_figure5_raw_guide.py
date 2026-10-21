@@ -6,6 +6,7 @@ import math
 from dataclasses import dataclass
 from dataclasses import field
 from fractions import Fraction
+from functools import cached_property
 from typing import NewType
 
 from benchmarks.held_reference_cases import CANONICAL_CASE_NAMES
@@ -13,11 +14,13 @@ from benchmarks.held_reference_cases import HeldReferenceCase
 from compas_cgal.engagement_toolpath import GUIDE_STEP_TOOL_DIAMETERS
 from compas_cgal.engagement_toolpath import _guide_chains
 from compas_cgal.engagement_toolpath import _GuideStation
+from compas_cgal.held_boundary_clearance import BoundaryClearanceSite
 from compas_cgal.held_boundary_clearance import HeldBoundaryClearanceIndex
 from compas_cgal.toolpath import RADIAL_CLEARANCE_FRACTION
 from compas_cgal.units import GuideRadius
 from compas_cgal.units import Millimetre
 from compas_cgal.units import Point2
+from compas_cgal.units import SquaredMillimetre
 from compas_cgal.units import WorldXY
 
 ProjectionBoundarySegmentId = NewType("ProjectionBoundarySegmentId", int)
@@ -162,7 +165,7 @@ class Figure5RawGuideDerived:
     rational_boundary_segments: tuple[RationalSegment, ...] | None = None
     boundary_side_lengths: tuple[float, ...] | None = None
     boundary_side_offsets: tuple[float, ...] | None = None
-    station_boundary_analyses: tuple[tuple[_StationBoundaryAnalysis, ...], ...] | None = None
+    station_boundary_analyses: tuple[tuple[_NativeStationBoundaryAnalysis, ...], ...] | None = None
 
 
 @dataclass(frozen=True)
@@ -255,7 +258,7 @@ class Figure5RawGuide:
         return self.derived.boundary_side_offsets
 
     @property
-    def station_boundary_analyses(self) -> tuple[tuple[_StationBoundaryAnalysis, ...], ...]:
+    def station_boundary_analyses(self) -> tuple[tuple[_NativeStationBoundaryAnalysis, ...], ...]:
         """Every station's exact boundary analysis, one native batch per guide, indexed [run][ordinal]."""
         if self.derived.station_boundary_analyses is None:
             self.derived.station_boundary_analyses = _native_station_boundary_analyses(self)
@@ -367,9 +370,29 @@ class _StationBoundaryAnalysis:
     distance_admissible_sites: tuple[ProjectionBoundarySite, ...]
 
 
+@dataclass(frozen=True)
+class _NativeStationBoundaryAnalysis:
+    """The native batch entry: the admissible sites and, aligned, their clearance sites.
+
+    The clearance sites keep the native integers; ``records`` materialises the
+    exact Fraction records of ``_StationBoundaryAnalysis`` only when read (the
+    oracle comparisons and the single-hypothesis path), never on the bulk path.
+    """
+
+    distance_admissible_sites: tuple[ProjectionBoundarySite, ...]
+    clearance_sites: tuple[BoundaryClearanceSite, ...]
+
+    @cached_property
+    def records(self) -> tuple[tuple[ProjectionBoundarySite, RationalPoint, Fraction], ...]:
+        return tuple(
+            (site, (clearance.footpoint[0], clearance.footpoint[1]), clearance.squared_distance)
+            for site, clearance in zip(self.distance_admissible_sites, self.clearance_sites, strict=True)
+        )
+
+
 def _native_station_boundary_analyses(
     guide: Figure5RawGuide,
-) -> tuple[tuple[_StationBoundaryAnalysis, ...], ...]:
+) -> tuple[tuple[_NativeStationBoundaryAnalysis, ...], ...]:
     """Analyse every station in one spatially indexed exact native batch.
 
     Decides the same admissible set as ``_analyze_station_boundary``: the ring
@@ -381,19 +404,13 @@ def _native_station_boundary_analyses(
     gap = Millimetre(float(guide.site_budget.admissible_distance_gap))
     rows = iter(index.distance_admissible_sites(stations, gap))
     segment_count = guide.boundary_segment_count
-    analyses: list[tuple[_StationBoundaryAnalysis, ...]] = []
+    analyses: list[tuple[_NativeStationBoundaryAnalysis, ...]] = []
     for run in guide.runs:
-        run_analyses: list[_StationBoundaryAnalysis] = []
+        run_analyses: list[_NativeStationBoundaryAnalysis] = []
         for _ in run.stations:
-            records = tuple(
-                (
-                    ProjectionBoundarySite.build(ProjectionBoundarySegmentId(site.segment), site.parameter, segment_count),
-                    (site.footpoint[0], site.footpoint[1]),
-                    site.squared_distance,
-                )
-                for site in next(rows)
-            )
-            run_analyses.append(_StationBoundaryAnalysis(records, tuple(record[0] for record in records)))
+            clearance_sites = next(rows)
+            sites = tuple(ProjectionBoundarySite.build(ProjectionBoundarySegmentId(site.segment), site.parameter, segment_count) for site in clearance_sites)
+            run_analyses.append(_NativeStationBoundaryAnalysis(sites, clearance_sites))
         analyses.append(tuple(run_analyses))
     return tuple(analyses)
 
@@ -401,7 +418,7 @@ def _native_station_boundary_analyses(
 def _native_station_boundary(
     guide: Figure5RawGuide,
     station: Figure5RawGuideStation,
-) -> _StationBoundaryAnalysis:
+) -> _NativeStationBoundaryAnalysis:
     """The generator's station analysis: the guide's cached native batch entry."""
     _require_owned_station(guide, station)
     return guide.station_boundary_analyses[int(station.run_id)][int(station.ordinal_on_run)]
@@ -452,19 +469,51 @@ def _hypothesis_from_record(
     tool_radius: float,
     squared_tool_radius: Fraction,
 ) -> ProjectionAdmissibleBoundaryHypothesis:
-    """Paper geometry from one admissible record.
+    """Paper geometry from one admissible Fraction record.
 
     Decides ``clearance**2 > r**2`` exactly (``squared_tool_radius`` is the
     exact square of the double ``tool_radius``); everything after it reports.
     """
     if squared_clearance <= squared_tool_radius:
         raise InvalidProjectionAdmissibleHypothesisError("Figure 5 projected-boundary hypothesis has no positive paper-derived radius.")
+    return _hypothesis_geometry(guide, station, site, admissible, float(footpoint_exact[0]), float(footpoint_exact[1]), float(squared_clearance), tool_radius)
+
+
+def _hypothesis_from_clearance(
+    guide: Figure5RawGuide,
+    station: Figure5RawGuideStation,
+    site: ProjectionBoundarySite,
+    admissible: tuple[ProjectionBoundarySite, ...],
+    clearance_site: BoundaryClearanceSite,
+    tool_radius: float,
+    squared_tool_radius: SquaredMillimetre,
+) -> ProjectionAdmissibleBoundaryHypothesis:
+    """``_hypothesis_from_record`` on the native integers: no Fraction is built.
+
+    The verdict ``clearance**2 > r**2`` is decided exactly in integers; the
+    doubles are the correctly rounded quotients, equal to ``float`` of the
+    record's Fractions.
+    """
+    if not clearance_site.squared_distance_exceeds(squared_tool_radius):
+        raise InvalidProjectionAdmissibleHypothesisError("Figure 5 projected-boundary hypothesis has no positive paper-derived radius.")
+    footpoint_x, footpoint_y = clearance_site.footpoint_doubles
+    return _hypothesis_geometry(guide, station, site, admissible, footpoint_x, footpoint_y, clearance_site.squared_distance_double, tool_radius)
+
+
+def _hypothesis_geometry(
+    guide: Figure5RawGuide,
+    station: Figure5RawGuideStation,
+    site: ProjectionBoundarySite,
+    admissible: tuple[ProjectionBoundarySite, ...],
+    footpoint_x: float,
+    footpoint_y: float,
+    squared_clearance: float,
+    tool_radius: float,
+) -> ProjectionAdmissibleBoundaryHypothesis:
+    """The reported paper geometry of one admitted record; decides nothing."""
     middle = station.middle_point
-    footpoint = _WORLD_POINT.build(
-        float(footpoint_exact[0]),
-        float(footpoint_exact[1]),
-    )
-    clearance = math.sqrt(float(squared_clearance))
+    footpoint = _WORLD_POINT.build(footpoint_x, footpoint_y)
+    clearance = math.sqrt(squared_clearance)
     direction_x = (float(middle.x) - float(footpoint.x)) / clearance
     direction_y = (float(middle.y) - float(footpoint.y)) / clearance
     radius = (clearance - tool_radius) / 2.0
@@ -494,7 +543,7 @@ def _build_projection_admissible_hypothesis(
     guide: Figure5RawGuide,
     station: Figure5RawGuideStation,
     site: ProjectionBoundarySite,
-    analysis: _StationBoundaryAnalysis,
+    analysis: _StationBoundaryAnalysis | _NativeStationBoundaryAnalysis,
 ) -> ProjectionAdmissibleBoundaryHypothesis:
     admissible = analysis.distance_admissible_sites
     if site not in admissible:
@@ -524,17 +573,18 @@ def build_distance_admissible_hypotheses(
 ) -> tuple[ProjectionAdmissibleBoundaryHypothesis, ...]:
     """Build every distance-admissible hypothesis without claiming ownership.
 
-    The native analysis records exactly the admissible sites, in order (its
-    ``distance_admissible_sites`` is built from the records), so each record
-    is used directly: no membership test, no record search.
+    The native analysis holds exactly the admissible sites, aligned with
+    their clearance sites, so each is used directly: no membership test, no
+    record search, and no Fraction (the clearance verdict is decided in
+    integers).
     """
     analysis = _native_station_boundary(guide, station)
     admissible = analysis.distance_admissible_sites
     tool_radius = float(guide.case.tool_radius.value)
-    squared_tool_radius = _exact_square(tool_radius)
+    squared_tool_radius = SquaredMillimetre(_exact_square(tool_radius))
     return tuple(
-        _hypothesis_from_record(guide, station, site, admissible, footpoint, squared_clearance, tool_radius, squared_tool_radius)
-        for site, footpoint, squared_clearance in analysis.records
+        _hypothesis_from_clearance(guide, station, site, admissible, clearance_site, tool_radius, squared_tool_radius)
+        for site, clearance_site in zip(admissible, analysis.clearance_sites, strict=True)
     )
 
 
