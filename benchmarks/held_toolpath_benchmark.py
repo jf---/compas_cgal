@@ -38,6 +38,10 @@ from benchmarks.held_figure5_path import build_figure5_approximate_path
 from benchmarks.held_figure5_path import build_held_reference_path
 from benchmarks.held_figure5_raw_guide import build_figure5_raw_guide
 from benchmarks.held_figure5_raw_guide import build_held_reference_raw_guide
+from benchmarks.held_omega_toolpath import OmegaGeneratedToolpath
+from benchmarks.held_omega_toolpath import PathDomain
+from benchmarks.held_omega_toolpath import generate_omega
+from benchmarks.held_omega_toolpath import omega_metrics
 from benchmarks.held_reference_cases import HeldReferenceCase
 from benchmarks.held_reference_cases import load_held_reference_case
 from benchmarks.held_reference_figures import figure7_inward_offset
@@ -320,6 +324,32 @@ def generate(workload: str) -> GeneratedToolpath:
     return GENERATORS[workload]()
 
 
+def generate_on(workload: str, domain: PathDomain) -> GeneratedToolpath | OmegaGeneratedToolpath:
+    """The workload's path decided on ``domain``: the float polygon Ω (published) or the exact Ω*.
+
+    Raises:
+        UnknownWorkloadError: ``workload`` is not in ``GENERATORS``.
+    """
+    if domain is PathDomain.OMEGA:
+        if workload not in GENERATORS:
+            raise UnknownWorkloadError(f"unknown workload {workload!r}; known: {list(GENERATORS)}")
+        return generate_omega(workload)
+    return generate(workload)
+
+
+def omega_summary_lines(paths: Mapping[str, OmegaGeneratedToolpath]) -> list[str]:
+    """One reported line per Ω* path (generation time and the counts the polygon summary prints)."""
+    lines = []
+    for name, path in paths.items():
+        m = omega_metrics(path)
+        stages = " ".join(f"{stage} {seconds:.2f}" for stage, seconds in path.stage_seconds.items())
+        lines.append(
+            f"{name:<44} {path.generation_seconds:8.2f} s [{stages}]  circles {m.circles:>5}  connectors {m.connectors:>5}  length {m.path_length_mm:12.3f} mm  "
+            f"max eng {m.max_engagement_deg:8.4f} deg  seam {m.seam}  limited {m.limited_circles}  arc/line pieces {m.arc_connector_pieces}/{m.line_connector_pieces}"
+        )
+    return lines
+
+
 def figure5_refined(validate: bool = False) -> WorkloadRun:
     return _finish(generate_figure5_refined(), validate)
 
@@ -487,7 +517,19 @@ def main() -> None:
     parser.add_argument("--output", type=pathlib.Path, required=True)
     parser.add_argument("--workloads", nargs="+", default=list(WORKLOADS), choices=list(WORKLOADS))
     parser.add_argument("--validate", action="store_true", help="also run the exact coverage replay on its own clock")
+    parser.add_argument("--domain", choices=[domain.value for domain in PathDomain], default=PathDomain.POLYGON.value, help="centre domain the paths are decided on")
     args = parser.parse_args()
+    if PathDomain(args.domain) is PathDomain.OMEGA:
+        paths = {name: generate_omega(name) for name in args.workloads}
+        record = {
+            name: {"metrics": dataclasses.asdict(omega_metrics(path)), "stage_seconds": path.stage_seconds, "generation_seconds": path.generation_seconds}
+            for name, path in paths.items()
+        }
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        print("\n".join(omega_summary_lines(paths)))
+        print(f"RECORD {args.output}")
+        return
     benchmark = measure(tuple(args.workloads), validate=args.validate)
     write_json(benchmark, args.output)
     print("\n".join(summary_lines(benchmark)))

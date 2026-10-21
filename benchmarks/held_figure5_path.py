@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from dataclasses import dataclass
 from dataclasses import replace
 from fractions import Fraction
+from typing import Any
+from typing import Generic
 from typing import NamedTuple
+from typing import Protocol
+from typing import TypeVar
 
 from benchmarks.errors import BenchmarkError
 from benchmarks.held_figure5_boundary_path import Figure5BoundaryPath
@@ -27,6 +32,7 @@ from benchmarks.held_standard_placement import StandardPlacement
 from benchmarks.held_standard_placement import predecessor_overlap_margin
 from benchmarks.held_standard_placement import select_next_in_span
 from compas_cgal.motion import EngagementCap
+from compas_cgal.units import GuideRadius
 from compas_cgal.units import Millimetre
 from compas_cgal.units import Point2
 from compas_cgal.units import ToolRadius
@@ -70,13 +76,35 @@ class _CanonicalHypothesis:
     source_run_ids: tuple[GuideRunId, ...]
 
 
+class LaneCircle(Protocol):
+    """What lane grouping reads of a placed circle (polygon-Ω or Ω* circles)."""
+
+    @property
+    def run_id(self) -> GuideRunId: ...
+
+    @property
+    def station_ordinal(self) -> GuideRunStationOrdinal: ...
+
+    @property
+    def source_boundary_site(self) -> ProjectionBoundarySite: ...
+
+    @property
+    def center(self) -> Point2[WorldXY]: ...
+
+    @property
+    def radius(self) -> GuideRadius: ...
+
+
+LaneCircleT = TypeVar("LaneCircleT", bound=LaneCircle)
+
+
 @dataclass(frozen=True)
-class _PlacementLane:
+class _PlacementLane(Generic[LaneCircleT]):
     """One monotone source-side sequence safe for predecessor placement."""
 
     source_segment: int
     direction: int
-    circles: tuple[Figure5CounterclockwiseCircle, ...]
+    circles: tuple[LaneCircleT, ...]
 
 
 def _site_key(site: ProjectionBoundarySite) -> tuple[int, Fraction]:
@@ -304,8 +332,8 @@ def _parameter_direction(first: Fraction, second: Fraction) -> int:
 
 
 def _continuation_score(
-    tail: Figure5CounterclockwiseCircle,
-    head: Figure5CounterclockwiseCircle,
+    tail: LaneCircle,
+    head: LaneCircle,
 ) -> tuple[Fraction, float, float]:
     return (
         abs(head.source_boundary_site.parameter - tail.source_boundary_site.parameter),
@@ -318,8 +346,8 @@ def _continuation_score(
 
 
 def _run_side_fragment(
-    circles: tuple[Figure5CounterclockwiseCircle, ...],
-) -> _PlacementLane:
+    circles: tuple[LaneCircleT, ...],
+) -> _PlacementLane[LaneCircleT]:
     if not circles:
         raise Figure5PathIntegrationError("A continuous placement lane cannot be empty.")
     direction = next(
@@ -346,18 +374,31 @@ def _run_side_fragment(
 def _continuous_placement_lanes(
     circles: tuple[Figure5CounterclockwiseCircle, ...],
     tool_radius: ToolRadius,
-) -> tuple[_PlacementLane, ...]:
+) -> tuple[_PlacementLane[Figure5CounterclockwiseCircle], ...]:
+    return continuous_placement_lanes(circles, tool_radius, _circle_station_key, _paper_candidate)
+
+
+def continuous_placement_lanes(
+    circles: tuple[LaneCircleT, ...],
+    tool_radius: ToolRadius,
+    station_key: Callable[[LaneCircleT], Any],
+    paper_candidate: Callable[[LaneCircleT], PaperCircleCandidate],
+) -> tuple[_PlacementLane[LaneCircleT], ...]:
+    """Group circles into monotone per-run, per-source-side lanes and join compatible lanes.
+
+    ``station_key`` orders the circles of one (run, source side); it must be a
+    total order (the polygon path's key ends in the boundary site, the Ω* path's
+    in the exact ∂Ω* site key).
+    """
     by_run_side: dict[
         tuple[GuideRunId, int],
-        list[Figure5CounterclockwiseCircle],
+        list[LaneCircleT],
     ] = {}
     for circle in circles:
         key = circle.run_id, int(circle.source_boundary_site.segment_id)
         by_run_side.setdefault(key, []).append(circle)
 
-    emitted_fragments = tuple(
-        _run_side_fragment(tuple(sorted(by_run_side[key], key=_circle_station_key))) for key in sorted(by_run_side, key=lambda item: (int(item[0]), item[1]))
-    )
+    emitted_fragments = tuple(_run_side_fragment(tuple(sorted(by_run_side[key], key=station_key))) for key in sorted(by_run_side, key=lambda item: (int(item[0]), item[1])))
     fragments = tuple(
         sorted(
             emitted_fragments,
@@ -371,7 +412,7 @@ def _continuous_placement_lanes(
             ),
         )
     )
-    lanes: list[_PlacementLane] = []
+    lanes: list[_PlacementLane[LaneCircleT]] = []
     # Lane indices per (source_segment, direction), in creation order; a merge
     # replaces lanes[index] with the same key, so the index never goes stale.
     lanes_by_key: dict[tuple[int, int], list[int]] = {}
@@ -394,8 +435,8 @@ def _continuous_placement_lanes(
                 and advances == fragment.direction
                 and float(
                     predecessor_overlap_margin(
-                        _paper_candidate(tail),
-                        _paper_candidate(head),
+                        paper_candidate(tail),
+                        paper_candidate(head),
                         tool_radius,
                     )
                 )
