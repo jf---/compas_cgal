@@ -1,0 +1,62 @@
+{
+  "samples": 3,
+  "load_average_1m_at_end": 346.6,
+  "cases": [
+    {
+      "case": "figure5",
+      "pieces": 46,
+      "members": 62,
+      "hypotheses": 31742,
+      "projected": 31742,
+      "beyond_gap": 0,
+      "exact_predicates": 6243,
+      "construction_wall_s": 0.103,
+      "construction_cpu_s": 0.079,
+      "construction_native_s": 0.065,
+      "projection_wall_s": 0.575,
+      "projection_cpu_s": 0.276
+    },
+    {
+      "case": "figure8_upper",
+      "pieces": 104,
+      "members": 140,
+      "hypotheses": 62730,
+      "projected": 62730,
+      "beyond_gap": 0,
+      "exact_predicates": 25732,
+      "construction_wall_s": 0.278,
+      "construction_cpu_s": 0.188,
+      "construction_native_s": 0.194,
+      "projection_wall_s": 1.114,
+      "projection_cpu_s": 0.599
+    },
+    {
+      "case": "figure8_crossed_skis",
+      "pieces": 92,
+      "members": 116,
+      "hypotheses": 32204,
+      "projected": 32204,
+      "beyond_gap": 0,
+      "exact_predicates": 12283,
+      "construction_wall_s": 0.168,
+      "construction_cpu_s": 0.138,
+      "construction_native_s": 0.119,
+      "projection_wall_s": 0.585,
+      "projection_cpu_s": 0.391
+    },
+    {
+      "case": "figure8_monstera",
+      "pieces": 487,
+      "members": 634,
+      "hypotheses": 120272,
+      "projected": 120272,
+      "beyond_gap": 0,
+      "exact_predicates": 19342,
+      "construction_wall_s": 1.262,
+      "construction_cpu_s": 0.805,
+      "construction_native_s": 0.898,
+      "projection_wall_s": 1.222,
+      "projection_cpu_s": 0.908
+    }
+  ]
+}

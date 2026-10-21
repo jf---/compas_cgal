@@ -468,6 +468,14 @@ add_nanobind_module(
     "src/stock_2_bindings.cpp;src/held_disk_contour_2.cpp;src/held_contour_clearance_2.cpp;src/held_disk_contour_2_bindings.cpp;src/held_boundary_clearance_2.cpp;src/held_boundary_clearance_2_bindings.cpp;src/engagement_2.cpp;src/swept_prefix_engagement_2.cpp;src/engagement_2_bindings.cpp;src/audit_identity_bindings_2.cpp;src/audit_replay_bindings_2.cpp;src/audit_classification_2.cpp")
 target_link_libraries(_stock_2 PRIVATE continuous_tea_exact_core)
 target_sources(_stock_2 PRIVATE src/stock_circle_redundancy_2.cpp)
+# Exact Held centre domain (docs/held_exact_centre_domain.md). CORE-free by
+# design: Gps_circle_segment_traits_2<Epeck> on the declared (Pythagorean)
+# boundary; it links no exact core library and must never define CGAL_USE_CORE.
+add_nanobind_module(
+    _held_centre_domain_2
+    "src/held_centre_domain_2.cpp;src/held_centre_domain_query_2.cpp;src/held_centre_domain_2_bindings.cpp"
+)
+target_include_directories(_held_centre_domain_2 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 add_nanobind_module(
     _continuous_tea_2
     "src/continuous_tea_2.cpp;src/continuous_tea_2/bind_partition_records.cpp"
