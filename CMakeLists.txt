@@ -468,14 +468,6 @@ add_nanobind_module(
     "src/stock_2_bindings.cpp;src/held_disk_contour_2.cpp;src/held_contour_clearance_2.cpp;src/held_disk_contour_2_bindings.cpp;src/held_boundary_clearance_2.cpp;src/held_boundary_clearance_2_bindings.cpp;src/engagement_2.cpp;src/swept_prefix_engagement_2.cpp;src/engagement_2_bindings.cpp;src/audit_identity_bindings_2.cpp;src/audit_replay_bindings_2.cpp;src/audit_classification_2.cpp")
 target_link_libraries(_stock_2 PRIVATE continuous_tea_exact_core)
 target_sources(_stock_2 PRIVATE src/stock_circle_redundancy_2.cpp)
-# Exact Held centre domain (docs/held_exact_centre_domain.md). CORE-free by
-# design: Gps_circle_segment_traits_2<Epeck> on the declared (Pythagorean)
-# boundary; it links no exact core library and must never define CGAL_USE_CORE.
-add_nanobind_module(
-    _held_centre_domain_2
-    "src/held_centre_domain_2.cpp;src/held_centre_domain_query_2.cpp;src/held_centre_domain_2_bindings.cpp"
-)
-target_include_directories(_held_centre_domain_2 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 add_nanobind_module(
     _continuous_tea_2
     "src/continuous_tea_2.cpp;src/continuous_tea_2/bind_partition_records.cpp"
@@ -494,6 +486,40 @@ add_nanobind_module(_coverage_2 src/coverage_bindings_2.cpp)
 target_sources(_coverage_2 PRIVATE src/remaining_material_2.cpp)
 target_link_libraries(_coverage_2 PRIVATE coverage_exact_core)
 target_compile_definitions(_coverage_2 PRIVATE CGAL_USE_CORE=1)
+# Exact coverage certificate (docs/held_coverage_certificate.md). CORE-free by
+# design: it links no exact core library and must never define CGAL_USE_CORE.
+set(COVERAGE_CERTIFICATE_2_SOURCES
+    src/coverage_certificate_2/kernel_2.cpp
+    src/coverage_certificate_2/regions_2.cpp
+    src/coverage_certificate_2/target_2.cpp
+    src/coverage_certificate_2/lazy_crossings_2.cpp
+    src/coverage_certificate_2/circle_sweep_2.cpp
+    src/coverage_certificate_2/witness_2.cpp
+    src/coverage_certificate_2/tower_2.cpp
+    src/coverage_certificate_2/separation_2.cpp
+    src/coverage_certificate_2/lines_2.cpp
+    src/coverage_certificate_2/line_crossings_2.cpp
+    src/coverage_certificate_2/circle_events_2.cpp
+    src/coverage_certificate_2/line_sweep_2.cpp
+    src/coverage_certificate_2/line_witness_2.cpp
+    src/coverage_certificate_2/target_decision_2.cpp
+    src/coverage_certificate_2/exact_target_2.cpp
+    src/coverage_certificate_2/vertex_events_2.cpp
+    src/coverage_certificate_2/driver_support_2.cpp
+    src/coverage_certificate_2/exact_certificate_2.cpp
+    src/coverage_certificate_2/certificate_2.cpp
+    src/coverage_certificate_2/bindings_2.cpp
+)
+add_nanobind_module(_coverage_certificate_2 "${COVERAGE_CERTIFICATE_2_SOURCES}")
+target_include_directories(_coverage_certificate_2 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+# Exact Held centre domain (docs/held_exact_centre_domain.md). CORE-free by
+# design: Gps_circle_segment_traits_2<Epeck> on the declared (Pythagorean)
+# boundary; it links no exact core library and must never define CGAL_USE_CORE.
+add_nanobind_module(
+    _held_centre_domain_2
+    "src/held_centre_domain_2.cpp;src/held_centre_domain_query_2.cpp;src/held_centre_domain_2_bindings.cpp"
+)
+target_include_directories(_held_centre_domain_2 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 add_nanobind_module(
     _containment_2
     "src/containment_2_bindings.cpp;src/containment_2.cpp"
