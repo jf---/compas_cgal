@@ -520,6 +520,28 @@ add_nanobind_module(
     "src/held_centre_domain_2.cpp;src/held_centre_domain_query_2.cpp;src/held_centre_domain_2_bindings.cpp"
 )
 target_include_directories(_held_centre_domain_2 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+# Native declared-boundary clearance oracle (Omega* gouge audit). CORE-free:
+# Epeck FT + Sqrt_extension (the circle-segment traits' CoordNT), AABB_tree
+# pruning; reporting views evaluated without FMA contraction (they follow the
+# Python oracle's binary64 views, which pick the reported primitive).
+set(HELD_DECLARED_CLEARANCE_2_SOURCES
+    src/held_declared_clearance_2/one_root_2.cpp
+    src/held_declared_clearance_2/reporting_2.cpp
+    src/held_declared_clearance_2/distance_2.cpp
+    src/held_declared_clearance_2/primitives_2.cpp
+    src/held_declared_clearance_2/elements_2.cpp
+    src/held_declared_clearance_2/candidates_2.cpp
+    src/held_declared_clearance_2/crossings_2.cpp
+    src/held_declared_clearance_2/owner_lemma_2.cpp
+    src/held_declared_clearance_2/primitive_index_2.cpp
+    src/held_declared_clearance_2/boxes_2.cpp
+    src/held_declared_clearance_2/declared_clearance_2.cpp
+    src/held_declared_clearance_2/wire_2.cpp
+    src/held_declared_clearance_2/bindings_2.cpp
+)
+add_nanobind_module(_held_declared_clearance_2 "${HELD_DECLARED_CLEARANCE_2_SOURCES}")
+target_include_directories(_held_declared_clearance_2 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_compile_options(_held_declared_clearance_2 PRIVATE $<$<CXX_COMPILER_ID:Clang,AppleClang,GNU>:-ffp-contract=off>)
 add_nanobind_module(
     _containment_2
     "src/containment_2_bindings.cpp;src/containment_2.cpp"
