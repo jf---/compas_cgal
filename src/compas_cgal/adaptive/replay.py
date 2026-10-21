@@ -3,7 +3,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import cast
 
-from compas.geometry import Polygon  # type: ignore[import-untyped]
+from compas.geometry import Polygon
 
 from compas_cgal.adaptive.advancing_segment_trial import evaluate_advancing_segment_trial
 from compas_cgal.adaptive.candidates import DerivedCandidateCursor

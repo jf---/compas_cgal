@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from dataclasses import field
 from typing import Self
 
-from compas.geometry import Polygon  # type: ignore[import-untyped]
+from compas.geometry import Polygon
 
 from compas_cgal.adaptive.candidates import MiddleCurveCandidate
 from compas_cgal.adaptive.canonical import encode_bytes

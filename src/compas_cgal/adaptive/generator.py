@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Self
 from typing import TypeAlias
 from typing import cast
+from typing import final
 
 from compas_cgal.adaptive.bootstrap import InitialCandidateEvaluator
 from compas_cgal.adaptive.bootstrap import InitialCandidateTransaction
@@ -45,6 +46,7 @@ from compas_cgal.adaptive.operation import EffectiveCapDecision
 from compas_cgal.adaptive.operation import FullCapDecision
 from compas_cgal.adaptive.operation import NoNeckScope
 from compas_cgal.adaptive.operation import OrientedNeckScope
+from compas_cgal.adaptive.operation import RetraceSegmentOperation
 from compas_cgal.adaptive.operation import RouteNodeId
 from compas_cgal.adaptive.operation import RouteRetraceDecision
 from compas_cgal.adaptive.replay_trace import ReplayLateralWitness
@@ -295,6 +297,7 @@ def _activate_completed_incident_routes(
     return current
 
 
+@final
 @dataclass(frozen=True)
 class TraversalCommit:
     """Immutable atomic binding for one physical and global continuation."""
@@ -505,6 +508,13 @@ def _derive_route_retrace_decision(
         raise InvalidRouteRetraceDecisionError(
             "incident route activation requires no physical retrace.",
         )
+    # `_route_retrace_required` has already rejected both None cases; rebinding narrows the types.
+    completed_route_index = terminal.active_route_index
+    activated_route_index = activated.active_route_index
+    if completed_route_index is None or activated_route_index is None:
+        raise InvalidRouteRetraceDecisionError(
+            "route trigger requires one exact terminal-to-active transition.",
+        )
     if source_commit.physical_child_digest != physical.digest or source_commit.traversal_after != terminal:
         raise InvalidRouteRetraceDecisionError(
             "route retrace source is not the final physical/global commit.",
@@ -557,8 +567,8 @@ def _derive_route_retrace_decision(
         )
 
     return RouteRetraceDecision.build(
-        completed_route_index=terminal.active_route_index,
-        activated_route_index=activated.active_route_index,
+        completed_route_index=completed_route_index,
+        activated_route_index=activated_route_index,
         completed_exit_node_id=RouteNodeId(
             bytes(terminal.active_cursor.route_step.exit_node_id),
         ),
@@ -576,6 +586,7 @@ def _derive_route_retrace_decision(
     )
 
 
+@final
 @dataclass(frozen=True)
 class RouteRetraceCommit:
     """Atomic physical return and exact global route activation."""
@@ -699,11 +710,17 @@ class RouteRetraceCommit:
             raise InvalidRouteRetraceCommitError(
                 "retrace transaction contradicts route activation.",
             )
+        # `RouteRetraceTransaction.validate` has already required this exact type; rebinding narrows it.
+        retrace_operation = transaction.segment_witness.operation
+        if type(retrace_operation) is not RetraceSegmentOperation:
+            raise InvalidRouteRetraceCommitError(
+                "retrace transaction requires one exact retrace operation.",
+            )
         if (
             transaction.parent_state_digest != physical_before.digest
             or transaction.result_state_digest != physical_after.digest
-            or physical_after.operations != physical_before.operations + (transaction.segment_witness.operation,)
-            or physical_after.phase_point != transaction.segment_witness.operation.motion.end
+            or physical_after.operations != physical_before.operations + (retrace_operation,)
+            or physical_after.phase_point != retrace_operation.motion.end
             or physical_after.traversal != physical_before.traversal
             or physical_after.passages != physical_before.passages
         ):
