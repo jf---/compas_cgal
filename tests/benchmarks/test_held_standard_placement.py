@@ -47,7 +47,13 @@ def test_predecessor_engagement_uses_paper_overlap_correction_branch() -> None:
 
 def test_bisection_selects_cap_target_on_transformed_candidate_circle() -> None:
     predecessor = _candidate(0.0)
-    target_spacing = 0.5857864376269049
+    # 0x1.2bec333018865p-1: exactly one ulp (2^-53) below the binary64
+    # fl(2 - fl(sqrt 2)) = 0x1.2bec333018866p-1, which itself sits 0.87 ulp below
+    # the real 2 - sqrt 2; so the fixture is about 1.87 ulp below the real value.
+    # The exact surrogate of the binary64 pi/2 cap rejects fl(2 - fl(sqrt 2))
+    # (sub-ulp straddle; float acos said equal).
+    target_spacing = 0.5857864376269047
+    assert target_spacing == math.nextafter(2.0 - math.sqrt(2.0), 0.0)
     candidates = (
         _candidate(0.25),
         _candidate(target_spacing),

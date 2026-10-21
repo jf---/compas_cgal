@@ -10,8 +10,8 @@ from benchmarks.held_figure5_path import build_held_reference_path
 from benchmarks.held_figure5_raw_guide import build_held_reference_raw_guide
 from benchmarks.held_reference_cases import load_held_reference_case
 from benchmarks.held_reference_figures import figure7_inward_offset
-from benchmarks.held_standard_placement import maximum_predecessor_engagement
 from compas_cgal.motion import EngagementCap
+from tests.benchmarks.held_engagement_reference_oracle import reference_engagement
 
 
 def test_figure8_upper_emits_connected_capped_standard_draft() -> None:
@@ -27,4 +27,4 @@ def test_figure8_upper_emits_connected_capped_standard_draft() -> None:
         transition = _transition(components[0], lengths, previous, current)
         assert transition.samples[0] == previous.contact_point
         assert transition.samples[-1] == current.contact_point
-        assert float(maximum_predecessor_engagement(_paper_candidate(previous), _paper_candidate(current), case.tool_radius)) <= float(cap.theta)
+        assert reference_engagement(_paper_candidate(previous), _paper_candidate(current), case.tool_radius).within(cap)

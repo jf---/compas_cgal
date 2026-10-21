@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from dataclasses import field
 from fractions import Fraction
 from typing import NewType
 
@@ -12,6 +13,7 @@ from benchmarks.held_reference_cases import HeldReferenceCase
 from compas_cgal.engagement_toolpath import GUIDE_STEP_TOOL_DIAMETERS
 from compas_cgal.engagement_toolpath import _guide_chains
 from compas_cgal.engagement_toolpath import _GuideStation
+from compas_cgal.held_boundary_clearance import HeldBoundaryClearanceIndex
 from compas_cgal.toolpath import RADIAL_CLEARANCE_FRACTION
 from compas_cgal.units import GuideRadius
 from compas_cgal.units import Millimetre
@@ -26,6 +28,14 @@ GuideRunStationOrdinal = NewType("GuideRunStationOrdinal", int)
 # The fixed Figure 5 configuration currently emits 126 runs. This bound is only
 # a loud truncation guard for the rendering seam, not a machining policy.
 FIGURE5_MAX_GUIDE_RUNS = 1000
+
+
+RationalPoint = tuple[Fraction, Fraction]
+RationalSegment = tuple[RationalPoint, RationalPoint]
+
+
+def _rational_point(point: Point2[WorldXY]) -> RationalPoint:
+    return Fraction.from_float(float(point.x)), Fraction.from_float(float(point.y))
 
 
 class InvalidFigure5RawGuideError(ValueError):
@@ -136,6 +146,22 @@ class Figure5RawGuideRun:
         return cls(GuideRunId(run_index), stations)
 
 
+@dataclass
+class Figure5RawGuideDerived:
+    """Memo of a guide's pure derived values: the only mutable part of a guide.
+
+    Each slot is a pure function of the owning guide's frozen fields, filled
+    on first read. The guide owns exactly one, created in its ``__init__``
+    (``init=False``), so ``dataclasses.replace`` never shares it between guides
+    and the frozen guide's own attributes are never written after construction.
+    """
+
+    rational_boundary_segments: tuple[RationalSegment, ...] | None = None
+    boundary_side_lengths: tuple[float, ...] | None = None
+    boundary_side_offsets: tuple[float, ...] | None = None
+    station_boundary_analyses: tuple[tuple[_StationBoundaryAnalysis, ...], ...] | None = None
+
+
 @dataclass(frozen=True)
 class Figure5RawGuide:
     """Boundary evidence plus every emitted pre-engagement-thinning station."""
@@ -144,6 +170,7 @@ class Figure5RawGuide:
     site_budget: Figure5BoundarySiteBudget
     boundary_length: Millimetre
     runs: tuple[Figure5RawGuideRun, ...]
+    derived: Figure5RawGuideDerived = field(default_factory=Figure5RawGuideDerived, init=False, repr=False, compare=False)
 
     @classmethod
     def build(
@@ -189,6 +216,48 @@ class Figure5RawGuide:
     def boundary_segment_count(self) -> int:
         return len(self.case.projection.points)
 
+    @property
+    def rational_boundary_segments(self) -> tuple[RationalSegment, ...]:
+        """Closed projected ring as exact segments, injected once per guide."""
+        if self.derived.rational_boundary_segments is None:
+            points = tuple(_rational_point(point) for point in self.case.projection.points)
+            self.derived.rational_boundary_segments = tuple(zip(points, (*points[1:], points[0])))
+        return self.derived.rational_boundary_segments
+
+    @property
+    def boundary_side_lengths(self) -> tuple[float, ...]:
+        """Reporting double length of every projected side, in ring order."""
+        if self.derived.boundary_side_lengths is None:
+            points = self.case.projection.points
+            self.derived.boundary_side_lengths = tuple(
+                math.hypot(
+                    float(end.x) - float(start.x),
+                    float(end.y) - float(start.y),
+                )
+                for start, end in zip(points, (*points[1:], points[0]))
+            )
+        return self.derived.boundary_side_lengths
+
+    @property
+    def boundary_side_offsets(self) -> tuple[float, ...]:
+        """Reporting arclength at the start of every side.
+
+        Each entry is ``sum(lengths[:k])`` itself, not a running total: Python's
+        float ``sum`` is compensated, so a running prefix would differ in the
+        last bits from the per-site sum this cache replaces.
+        """
+        if self.derived.boundary_side_offsets is None:
+            lengths = self.boundary_side_lengths
+            self.derived.boundary_side_offsets = tuple(sum(lengths[:ordinal]) for ordinal in range(len(lengths)))
+        return self.derived.boundary_side_offsets
+
+    @property
+    def station_boundary_analyses(self) -> tuple[tuple[_StationBoundaryAnalysis, ...], ...]:
+        """Every station's exact boundary analysis, one native batch per guide, indexed [run][ordinal]."""
+        if self.derived.station_boundary_analyses is None:
+            self.derived.station_boundary_analyses = _native_station_boundary_analyses(self)
+        return self.derived.station_boundary_analyses
+
 
 @dataclass(frozen=True)
 class ProjectionAdmissibleBoundaryHypothesis:
@@ -206,17 +275,8 @@ class ProjectionAdmissibleBoundaryHypothesis:
     guide_radius: GuideRadius
 
 
-RationalPoint = tuple[Fraction, Fraction]
-RationalSegment = tuple[RationalPoint, RationalPoint]
-
-
-def _rational_point(point: Point2[WorldXY]) -> RationalPoint:
-    return Fraction.from_float(float(point.x)), Fraction.from_float(float(point.y))
-
-
 def _boundary_segments(guide: Figure5RawGuide) -> tuple[RationalSegment, ...]:
-    points = tuple(_rational_point(point) for point in guide.case.projection.points)
-    return tuple(zip(points, (*points[1:], points[0])))
+    return guide.rational_boundary_segments
 
 
 def _project_exact(
@@ -258,10 +318,7 @@ def _within_distance_gap(
     return remainder * remainder <= 4 * minimum_squared * gap_squared
 
 
-def _station_records(
-    guide: Figure5RawGuide,
-    station: Figure5RawGuideStation,
-) -> tuple[tuple[ProjectionBoundarySite, RationalPoint, Fraction], ...]:
+def _require_owned_station(guide: Figure5RawGuide, station: Figure5RawGuideStation) -> None:
     run_index = int(station.run_id)
     station_index = int(station.ordinal_on_run)
     if run_index < 0 or run_index >= len(guide.runs):
@@ -269,6 +326,13 @@ def _station_records(
     run = guide.runs[run_index]
     if station_index < 0 or station_index >= len(run.stations) or run.stations[station_index] != station:
         raise InvalidFigure5RawGuideError("Boundary-side query requires a station owned by its raw guide.")
+
+
+def _station_records(
+    guide: Figure5RawGuide,
+    station: Figure5RawGuideStation,
+) -> tuple[tuple[ProjectionBoundarySite, RationalPoint, Fraction], ...]:
+    _require_owned_station(guide, station)
     middle = _rational_point(station.middle_point)
     records: dict[ProjectionBoundarySite, tuple[RationalPoint, Fraction]] = {}
     for ordinal, segment in enumerate(_boundary_segments(guide)):
@@ -290,14 +354,61 @@ def _station_records(
 
 @dataclass(frozen=True)
 class _StationBoundaryAnalysis:
+    """Exact (site, footpoint, squared distance) records plus the admissible sites.
+
+    The Fraction path records every ring segment; the native path records only
+    the admissible sites. Hypotheses read records of admissible sites only.
+    """
+
     records: tuple[tuple[ProjectionBoundarySite, RationalPoint, Fraction], ...]
     distance_admissible_sites: tuple[ProjectionBoundarySite, ...]
+
+
+def _native_station_boundary_analyses(
+    guide: Figure5RawGuide,
+) -> tuple[tuple[_StationBoundaryAnalysis, ...], ...]:
+    """Analyse every station in one spatially indexed exact native batch.
+
+    Decides the same admissible set as ``_analyze_station_boundary``: the ring
+    and stations are injected exactly, and the gap is the same double the
+    Fraction path injects with ``Fraction.from_float``.
+    """
+    index = HeldBoundaryClearanceIndex.build(guide.case.projection.points)
+    stations = tuple(station.middle_point for run in guide.runs for station in run.stations)
+    gap = Millimetre(float(guide.site_budget.admissible_distance_gap))
+    rows = iter(index.distance_admissible_sites(stations, gap))
+    segment_count = guide.boundary_segment_count
+    analyses: list[tuple[_StationBoundaryAnalysis, ...]] = []
+    for run in guide.runs:
+        run_analyses: list[_StationBoundaryAnalysis] = []
+        for _ in run.stations:
+            records = tuple(
+                (
+                    ProjectionBoundarySite.build(ProjectionBoundarySegmentId(site.segment), site.parameter, segment_count),
+                    (site.footpoint[0], site.footpoint[1]),
+                    site.squared_distance,
+                )
+                for site in next(rows)
+            )
+            run_analyses.append(_StationBoundaryAnalysis(records, tuple(record[0] for record in records)))
+        analyses.append(tuple(run_analyses))
+    return tuple(analyses)
+
+
+def _native_station_boundary(
+    guide: Figure5RawGuide,
+    station: Figure5RawGuideStation,
+) -> _StationBoundaryAnalysis:
+    """The generator's station analysis: the guide's cached native batch entry."""
+    _require_owned_station(guide, station)
+    return guide.station_boundary_analyses[int(station.run_id)][int(station.ordinal_on_run)]
 
 
 def _analyze_station_boundary(
     guide: Figure5RawGuide,
     station: Figure5RawGuideStation,
 ) -> _StationBoundaryAnalysis:
+    """Brute-force Fraction analysis over every ring segment; the equivalence oracle."""
     records = _station_records(guide, station)
     minimum_squared = min(record[2] for record in records)
     gap = Fraction.from_float(float(guide.site_budget.admissible_distance_gap))
@@ -310,23 +421,15 @@ def distance_admissible_boundary_sites(
     station: Figure5RawGuideStation,
 ) -> tuple[ProjectionBoundarySite, ...]:
     """Report every projected site inside the recorded distance-gap budget."""
-    return _analyze_station_boundary(guide, station).distance_admissible_sites
+    return _native_station_boundary(guide, station).distance_admissible_sites
 
 
 def _boundary_arclength(
     guide: Figure5RawGuide,
     site: ProjectionBoundarySite,
 ) -> Millimetre:
-    points = guide.case.projection.points
-    lengths = tuple(
-        math.hypot(
-            float(end.x) - float(start.x),
-            float(end.y) - float(start.y),
-        )
-        for start, end in zip(points, (*points[1:], points[0]))
-    )
     ordinal = int(site.segment_id)
-    arclength = sum(lengths[:ordinal]) + float(site.parameter) * lengths[ordinal]
+    arclength = guide.boundary_side_offsets[ordinal] + float(site.parameter) * guide.boundary_side_lengths[ordinal]
     return Millimetre(arclength % float(guide.boundary_length))
 
 
@@ -386,7 +489,7 @@ def build_projection_admissible_hypothesis(
         guide,
         station,
         site,
-        _analyze_station_boundary(guide, station),
+        _native_station_boundary(guide, station),
     )
 
 
@@ -395,7 +498,7 @@ def build_distance_admissible_hypotheses(
     station: Figure5RawGuideStation,
 ) -> tuple[ProjectionAdmissibleBoundaryHypothesis, ...]:
     """Build every distance-admissible hypothesis without claiming ownership."""
-    analysis = _analyze_station_boundary(guide, station)
+    analysis = _native_station_boundary(guide, station)
     return tuple(
         _build_projection_admissible_hypothesis(
             guide,

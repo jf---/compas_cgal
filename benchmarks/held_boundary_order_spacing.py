@@ -17,7 +17,7 @@ from benchmarks.held_figure5_path import HypothesisFigure5Path
 from benchmarks.held_figure5_path import _paper_candidate
 from benchmarks.held_figure5_raw_guide import GuideRunId
 from benchmarks.held_standard_placement import StandardPlacementFragmentationError
-from benchmarks.held_standard_placement import maximum_predecessor_engagement
+from benchmarks.held_standard_placement import exact_predecessor_engagement
 from compas_cgal.motion import EngagementCap
 from compas_cgal.units import Point2
 from compas_cgal.units import ToolRadius
@@ -53,13 +53,13 @@ def select_boundary_ordered_sources(
         required = any(run not in represented and remaining[run] == 0 for run in circle_sources[index])
         if not required:
             try:
-                angle = maximum_predecessor_engagement(_paper_candidate(circles[selected[-1]]), _paper_candidate(circles[index + 1]), tool_radius)
+                engagement = exact_predecessor_engagement(_paper_candidate(circles[selected[-1]]), _paper_candidate(circles[index + 1]), tool_radius)
             except StandardPlacementFragmentationError:
                 # An inadmissible jump retains its source for bounded repair;
                 # it never becomes an accepted unresolved transition.
                 required = True
             else:
-                required = float(angle) > float(cap.theta)
+                required = not engagement.within(cap)
         if required:
             selected.append(index)
             represented.update(circle_sources[index])

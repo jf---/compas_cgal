@@ -20,10 +20,11 @@ from benchmarks.held_figure5_raw_guide import ProjectionBoundarySegmentId
 from benchmarks.held_figure5_raw_guide import ProjectionBoundarySite
 from benchmarks.held_figure5_raw_guide import build_distance_admissible_hypotheses
 from benchmarks.held_reference_contacts import qualify_reference_contacts
+from benchmarks.held_standard_placement import OrderedPlacementSpan
 from benchmarks.held_standard_placement import PaperCircleCandidate
 from benchmarks.held_standard_placement import StandardPlacement
 from benchmarks.held_standard_placement import predecessor_overlap_margin
-from benchmarks.held_standard_placement import select_next_standard_candidate
+from benchmarks.held_standard_placement import select_next_in_span
 from compas_cgal import _circle_geometry_2
 from compas_cgal.motion import EngagementCap
 from compas_cgal.units import Millimetre
@@ -156,25 +157,31 @@ def _boundary_neighborhood_owners(
         )
         for neighborhood in neighborhoods:
             candidates = tuple(hypothesis for hypothesis in station_hypotheses if int(hypothesis.projected_boundary_site.segment_id) in neighborhood)
-            distances = {
-                hypothesis: _exact_squared_distance(
+            # Parallel tuples, not hypothesis-keyed dicts: equal hypotheses carry
+            # equal distances, so the dict only cost a dataclass hash per entry.
+            distances = tuple(
+                _exact_squared_distance(
                     hypothesis.middle_point,
                     hypothesis.boundary_footpoint,
                 )
                 for hypothesis in candidates
-            }
-            minimum = min(distances.values())
-            owners.extend(hypothesis for hypothesis in candidates if distances[hypothesis] == minimum)
+            )
+            minimum = min(distances)
+            owners.extend(hypothesis for hypothesis, distance in zip(candidates, distances, strict=True) if distance == minimum)
 
-    start_distances = {
-        hypothesis: _exact_squared_distance(
+    start_distances = tuple(
+        _exact_squared_distance(
             published_start_center,
             hypothesis.contact_point,
         )
         for hypothesis in hypotheses
-    }
-    start_minimum = min(start_distances.values())
-    owners.extend(hypothesis for hypothesis in hypotheses if start_distances[hypothesis] == start_minimum and hypothesis not in owners)
+    )
+    start_minimum = min(start_distances)
+    # Only exact start-distance ties reach the membership scan (one or two per
+    # workload), so a list scan beats hashing every owner into a set.
+    for hypothesis, distance in zip(hypotheses, start_distances, strict=True):
+        if distance == start_minimum and hypothesis not in owners:
+            owners.append(hypothesis)
     return tuple(owners)
 
 
@@ -417,13 +424,12 @@ def build_hypothesis_figure5_path(
         stops.append(len(paper_candidates) - 1)
         cursor = 0
         for stop in stops:
+            if cursor >= stop:
+                continue
+            span_start = cursor
+            span = OrderedPlacementSpan.build(paper_candidates[span_start : stop + 1], tool_radius, cap)
             while cursor < stop:
-                placement = select_next_standard_candidate(
-                    paper_candidates[cursor],
-                    paper_candidates[cursor + 1 : stop + 1],
-                    tool_radius,
-                    cap,
-                )
+                placement = select_next_in_span(span, cursor - span_start)
                 cursor += placement.candidate_advance
                 selected_item = lane_items[cursor]
                 selected_items_list.append(selected_item)
