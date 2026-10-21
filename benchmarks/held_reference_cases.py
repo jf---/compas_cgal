@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import json
 import math
+from collections.abc import Callable
 from collections.abc import Mapping
+from collections.abc import Sequence
 from dataclasses import dataclass
 from fractions import Fraction
 from pathlib import Path
@@ -36,6 +38,9 @@ from benchmarks.held_reference_geometry import SourcePrimitive
 from benchmarks.held_reference_geometry import SourceToWorld
 from benchmarks.held_reference_geometry import project_boundary
 from benchmarks.held_reference_geometry import reconstruct_source_path
+from benchmarks.held_reference_reconstruction_cache import ReconstructionCache
+from benchmarks.held_reference_reconstruction_cache_errors import ReconstructionCacheError
+from benchmarks.held_reference_reconstruction_identity import ReconstructionBuildIdentity
 from benchmarks.spec import PocketSpec
 from compas_cgal.errors import InvalidUnitValueError
 from compas_cgal.units import Millimetre
@@ -54,6 +59,9 @@ CANONICAL_CASE_NAMES = (
     "figure8_monstera",
 )
 DATA_DIRECTORY = Path(__file__).with_name("data") / "held_pfeiffer_2025"
+# Content-addressed reconstruction cache, under the gitignored build tree, never in the repo.
+DEFAULT_RECONSTRUCTION_CACHE = ReconstructionCache.build(Path(__file__).resolve().parents[1] / "build" / "held-case-cache")
+SourcePathReconstructor: TypeAlias = Callable[[Sequence[SourcePrimitive], SourceToWorld, Millimetre], ReferenceReconstruction]
 _CITATION_AUTHORS = ("Martin Held", "Josef Pfeiffer")
 _CITATION_TITLE = "Trochoidal Tool Paths for Pocket Machining with Full Control of the Tool Engagement Angle"
 _CITATION_DOI = "10.14733/cadaps.2025.731-747"
@@ -744,7 +752,12 @@ def _parse_reference(values: object) -> tuple[ReferencePrimitive, ...]:
     return tuple(parsed)
 
 
-def validate_case_payload(payload: object, *, expected_name: str) -> HeldReferenceCase:
+def validate_case_payload(
+    payload: object,
+    *,
+    expected_name: str,
+    reconstruct: SourcePathReconstructor = reconstruct_source_path,
+) -> HeldReferenceCase:
     document = _mapping(payload)
     _require_finite_json(document)
     if "version" in document and document["version"] != 1:
@@ -797,7 +810,7 @@ def validate_case_payload(payload: object, *, expected_name: str) -> HeldReferen
             raise MalformedHeldReferenceCaseError("Reconstruction limit must equal one quarter of the normalized stroke width.")
         if not _matches_within_one_binary64_representation_step(_number(projection_record["deviation_limit_mm"]), _number(analytic["reconstruction_limit_mm"]) / 2.0):
             raise MalformedHeldReferenceCaseError("Projection limit must be half the reconstruction limit.")
-        reconstruction = reconstruct_source_path(sources, transform, Millimetre(_number(analytic["reconstruction_limit_mm"])))
+        reconstruction = reconstruct(sources, transform, Millimetre(_number(analytic["reconstruction_limit_mm"])))
         recorded_primitives = _parse_reference(analytic["primitives"])
         recorded_reconstruction = ReferenceReconstruction.build(
             recorded_primitives,
@@ -876,23 +889,88 @@ def validate_case_payload(payload: object, *, expected_name: str) -> HeldReferen
         raise MalformedHeldReferenceCaseError(f"{expected_name}: malformed Held-Pfeiffer case: {error}.") from error
 
 
-def decode_case_document(data: bytes, *, expected_name: str) -> HeldReferenceCase:
+class _ReplayReconstruction:
+    """Reconstructor that returns a cache entry filed under this exact document and code identity."""
+
+    def __init__(self, reconstruction: ReferenceReconstruction) -> None:
+        self._reconstruction = reconstruction
+
+    def __call__(self, sources: Sequence[SourcePrimitive], transform: SourceToWorld, limit: Millimetre) -> ReferenceReconstruction:
+        return self._reconstruction
+
+
+class _RecordedReconstruction:
+    """Reconstructor that computes fresh and keeps the single result for the cache."""
+
+    def __init__(self) -> None:
+        self._results: list[ReferenceReconstruction] = []
+
+    def __call__(self, sources: Sequence[SourcePrimitive], transform: SourceToWorld, limit: Millimetre) -> ReferenceReconstruction:
+        result = reconstruct_source_path(sources, transform, limit)
+        self._results.append(result)
+        return result
+
+    @property
+    def result(self) -> ReferenceReconstruction:
+        if len(self._results) != 1:
+            raise ReconstructionCacheError(f"case validation reconstructed {len(self._results)} times; the cache requires exactly one.")
+        return self._results[0]
+
+
+def decode_case_document(
+    data: bytes,
+    *,
+    expected_name: str,
+    reconstruction_cache: ReconstructionCache | None = None,
+) -> HeldReferenceCase:
+    """Decode and fully validate one case document.
+
+    With a cache, the certified source-path reconstruction (the dominant load
+    cost) is read from the entry content-addressed by the document bytes and
+    the deciding code; every other check still runs. A miss computes fresh and
+    stores the result only after the whole case validated.
+
+    Args:
+        data: The case document bytes.
+        expected_name: Case name the document must carry.
+        reconstruction_cache: Where reconstructions are cached; ``None`` always reconstructs.
+
+    Raises:
+        MalformedHeldReferenceCaseError: The document is invalid.
+        ReconstructionCacheError: A cache entry is corrupted, misfiled, or cannot be written.
+    """
     try:
         payload = json.loads(data, object_pairs_hook=_reject_duplicate_pairs, parse_constant=_reject_constant)
     except (UnicodeError, json.JSONDecodeError) as error:
         raise MalformedHeldReferenceCaseError(f"{expected_name}: invalid JSON: {error}.") from error
-    return validate_case_payload(payload, expected_name=expected_name)
+    if reconstruction_cache is None:
+        return validate_case_payload(payload, expected_name=expected_name)
+    identity = ReconstructionBuildIdentity.for_document(data)
+    cached = reconstruction_cache.load(identity)
+    if cached is not None:
+        return validate_case_payload(payload, expected_name=expected_name, reconstruct=_ReplayReconstruction(cached))
+    recorder = _RecordedReconstruction()
+    case = validate_case_payload(payload, expected_name=expected_name, reconstruct=recorder)
+    reconstruction_cache.store(identity, recorder.result)
+    return case
 
 
-def load_held_reference_case(name: str) -> HeldReferenceCase:
+def load_held_reference_case(
+    name: str,
+    *,
+    reconstruction_cache: ReconstructionCache | None = DEFAULT_RECONSTRUCTION_CACHE,
+) -> HeldReferenceCase:
     if name not in CANONICAL_CASE_NAMES:
         raise UnknownHeldReferenceCaseError(f"Unknown Held-Pfeiffer reference case {name!r}.")
     try:
         data = (DATA_DIRECTORY / f"{name}.json").read_bytes()
     except OSError as error:
         raise MalformedHeldReferenceCaseError(f"Cannot read committed case {name!r}: {error}.") from error
-    return decode_case_document(data, expected_name=name)
+    return decode_case_document(data, expected_name=name, reconstruction_cache=reconstruction_cache)
 
 
-def load_all_held_reference_cases() -> tuple[HeldReferenceCase, ...]:
-    return tuple(load_held_reference_case(name) for name in CANONICAL_CASE_NAMES)
+def load_all_held_reference_cases(
+    *,
+    reconstruction_cache: ReconstructionCache | None = DEFAULT_RECONSTRUCTION_CACHE,
+) -> tuple[HeldReferenceCase, ...]:
+    return tuple(load_held_reference_case(name, reconstruction_cache=reconstruction_cache) for name in CANONICAL_CASE_NAMES)

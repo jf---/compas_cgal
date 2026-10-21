@@ -21,6 +21,7 @@ from benchmarks.held_reference_geometry import ReferenceLine
 from benchmarks.held_reference_geometry import ReferenceReconstruction
 from benchmarks.held_reference_geometry import PolygonProjection
 from benchmarks.held_reference_geometry import project_boundary
+from benchmarks.held_reference_reconstruction_cache import ReconstructionCache
 from compas_cgal.units import Millimetre
 from compas_cgal.units import Point2
 from compas_cgal.units import ToolRadius
@@ -45,6 +46,11 @@ def _install_payload(
     directory.mkdir()
     (directory / f"{name}.json").write_text(json.dumps(payload))
     monkeypatch.setattr(cases_module, "DATA_DIRECTORY", directory)
+
+
+def _load_installed(tmp_path: Path) -> HeldReferenceCase:
+    """Load the installed figure5 through a tmp cache: modified documents never enter the default cache."""
+    return load_held_reference_case("figure5", reconstruction_cache=ReconstructionCache.build(tmp_path / "held-case-cache"))
 
 
 def _factory_kwargs(case: HeldReferenceCase) -> dict[str, object]:
@@ -192,10 +198,10 @@ def test_loader_applies_directional_one_step_bound_contract(
     _install_payload(monkeypatch, tmp_path, payload)
 
     if accepted:
-        load_held_reference_case("figure5")
+        _load_installed(tmp_path)
     else:
         with pytest.raises(MalformedHeldReferenceCaseError):
-            load_held_reference_case("figure5")
+            _load_installed(tmp_path)
 
 
 @pytest.mark.parametrize(
@@ -235,10 +241,10 @@ def test_source_bounds_allow_one_outward_representation_step_only(
     _install_payload(monkeypatch, tmp_path, payload)
 
     if accepted:
-        load_held_reference_case("figure5")
+        _load_installed(tmp_path)
     else:
         with pytest.raises(MalformedHeldReferenceCaseError):
-            load_held_reference_case("figure5")
+            _load_installed(tmp_path)
 
 
 @pytest.mark.parametrize("coordinate", [0, 1])
@@ -261,10 +267,10 @@ def test_source_origin_allows_one_symmetric_representation_step_only(
     _install_payload(monkeypatch, tmp_path, payload)
 
     if accepted:
-        load_held_reference_case("figure5")
+        _load_installed(tmp_path)
     else:
         with pytest.raises(MalformedHeldReferenceCaseError):
-            load_held_reference_case("figure5")
+            _load_installed(tmp_path)
 
 
 @pytest.mark.parametrize(
@@ -293,10 +299,10 @@ def test_derived_scalars_allow_one_symmetric_representation_step_only(
     _install_payload(monkeypatch, tmp_path, payload)
 
     if accepted:
-        load_held_reference_case("figure5")
+        _load_installed(tmp_path)
     else:
         with pytest.raises(MalformedHeldReferenceCaseError):
-            load_held_reference_case("figure5")
+            _load_installed(tmp_path)
 
 
 def test_public_factory_rejects_mixed_boundary_and_reconstruction() -> None:
