@@ -12,7 +12,7 @@ from matplotlib.figure import Figure
 from benchmarks.errors import BenchmarkError
 from benchmarks.held_figure5_boundary_path import Figure5BoundaryTransition
 from benchmarks.held_figure5_boundary_path import Figure5CounterclockwiseCircle
-from benchmarks.held_motion_coverage import InvalidCoverageMotionError
+from benchmarks.held_motion_coverage import connector_pairs
 from benchmarks.held_reference_cases import HeldReferenceCase
 from compas_cgal import _coverage_2
 from compas_cgal.units import Point2
@@ -35,14 +35,11 @@ def replay_exact_motion_coverage(
     """Return exact target-minus-sweeps; no precleared disk is assumed.
 
     Full circles use their stored radius, injected separately from the center.
-    Connector samples define the emitted straight segments. All constructions,
+    Connector samples define the emitted straight segments, including the
+    closing seam connector of a closed path. All constructions,
     unions, and residual predicates belong to native CGAL.
     """
-    if not circles or len(transitions) != len(circles) - 1:
-        raise InvalidCoverageMotionError("A complete circle path requires exactly one connector per adjacency.")
-    for first, second, transition in zip(circles, circles[1:], transitions):
-        if len(transition.samples) < 2 or transition.samples[0] != first.contact_point or transition.samples[-1] != second.contact_point:
-            raise InvalidCoverageMotionError("Connector endpoints must match the emitted circle contacts.")
+    connector_pairs(circles, transitions)
     polygon = np.array([(float(p.x), float(p.y), 0.0) for p in boundary], dtype=np.float64)
     target = _coverage_2.ExactRegion2.from_polygon(polygon, [])
     circle_rows = np.array([(float(circle.center.x), float(circle.center.y), float(circle.radius.value)) for circle in circles], dtype=np.float64)

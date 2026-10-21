@@ -1,9 +1,13 @@
 """Time the Held toolpath generators and gate their results against a recorded baseline.
 
 Five concrete workloads call the existing pipelines stage by stage: guide,
-inward offset, initial placement, engagement refinement, connectors. Each run
-records the toolpath's counts and lengths with the time, so a regression in
-geometry is caught as surely as a regression in speed. The exact coverage
+inward offset, initial placement, engagement refinement, connectors. The
+connectors close the loop: the last runs CCW from the last circle back to the
+first unless their contacts coincide. Each generator returns its path as a
+:class:`GeneratedToolpath`, which other consumers (the gouge audit) reuse
+instead of repeating the stages. Each run records the toolpath's counts and
+lengths with the time, so a regression in geometry is caught as surely as a
+regression in speed. The exact coverage
 replay is validation, not generation, and is timed on its own clock only when
 asked for.
 """
@@ -24,10 +28,10 @@ from typing import Any
 from benchmarks.errors import BenchmarkError
 from benchmarks.held_boundary_order_spacing import refine_boundary_ordered_path
 from benchmarks.held_exact_motion_coverage import require_full_motion_coverage
+from benchmarks.held_figure5_boundary_path import Figure5BoundaryConnectors
 from benchmarks.held_figure5_boundary_path import Figure5BoundaryTransition
 from benchmarks.held_figure5_boundary_path import Figure5CounterclockwiseCircle
-from benchmarks.held_figure5_boundary_path import _side_lengths
-from benchmarks.held_figure5_boundary_path import _transition
+from benchmarks.held_figure5_boundary_path import Figure5SeamClosure
 from benchmarks.held_figure5_engagement_refinement import refine_figure5_engagement
 from benchmarks.held_figure5_path import _paper_candidate
 from benchmarks.held_figure5_path import build_figure5_approximate_path
@@ -75,12 +79,26 @@ class UnknownWorkloadError(ToolpathBenchmarkError):
 
 @dataclass(frozen=True)
 class ToolpathMetrics:
+    """Counts and reported doubles of one generated path.
+
+    ``max_engagement_deg`` and ``unresolved_engagements`` cover the successor
+    pairs ``circles[i] -> circles[i + 1]``. The seam pair (last -> first) is
+    reported apart, and only when the seam connector is emitted: ``seam`` is the
+    ``Figure5SeamClosure`` value, ``seam_engagement_deg`` the standard
+    predecessor engagement of ``circles[0]`` after ``circles[-1]`` (``None`` for
+    a coincident seam or an unresolved model, see ``seam_unresolved``). No cap
+    decision is made on it.
+    """
+
     circles: int
     connectors: int
     path_length_mm: float
     max_engagement_deg: float
     containment_rejections: int
     unresolved_engagements: int = 0
+    seam: str = Figure5SeamClosure.CONNECTOR.value
+    seam_engagement_deg: float | None = None
+    seam_unresolved: bool = False
 
 
 @dataclass(frozen=True)
@@ -129,6 +147,30 @@ class Finding:
     message: str
 
 
+@dataclass(frozen=True)
+class GeneratedToolpath:
+    """One workload's generated path: the circles and their closed connectors.
+
+    ``transitions[i]`` runs ``circles[i]`` to ``circles[i + 1]``; with a
+    ``CONNECTOR`` seam the last runs ``circles[-1]`` back to ``circles[0]``.
+    """
+
+    workload: str
+    case: HeldReferenceCase
+    boundary: tuple[Point2[WorldXY], ...]
+    circles: tuple[Figure5CounterclockwiseCircle, ...]
+    connectors: Figure5BoundaryConnectors
+    stage_seconds: dict[str, float]
+
+    @property
+    def transitions(self) -> tuple[Figure5BoundaryTransition, ...]:
+        return self.connectors.transitions
+
+    @property
+    def generation_seconds(self) -> float:
+        return sum(self.stage_seconds.values())
+
+
 class _Stages:
     """Stage clocks of one generation; every stage is disjoint and the total is their sum."""
 
@@ -143,23 +185,34 @@ class _Stages:
         self.seconds[stage] = time.perf_counter() - self._started
 
 
-def _metrics(
-    case: HeldReferenceCase, circles: tuple[Figure5CounterclockwiseCircle, ...], transitions: tuple[Figure5BoundaryTransition, ...], boundary: tuple[Point2[WorldXY], ...]
-) -> ToolpathMetrics:
+def _engagement_deg(case: HeldReferenceCase, first: Figure5CounterclockwiseCircle, second: Figure5CounterclockwiseCircle) -> float | None:
+    """Reported standard predecessor engagement of ``second`` after ``first``; ``None`` when the model is unresolved."""
+    try:
+        return math.degrees(float(maximum_predecessor_engagement(_paper_candidate(first), _paper_candidate(second), case.tool_radius)))
+    except StandardPlacementFragmentationError:
+        return None
+
+
+def _metrics(path: GeneratedToolpath) -> ToolpathMetrics:
+    circles, transitions = path.circles, path.transitions
     length = sum(2 * math.pi * float(circle.radius.value) for circle in circles)
     for transition in transitions:
         samples = transition.samples
         length += sum(math.dist((float(a.x), float(a.y)), (float(b.x), float(b.y))) for a, b in zip(samples, samples[1:]))
     max_engagement = 0.0
     unresolved = 0
-    for first, second in zip(circles, circles[1:]):
-        try:
-            angle = math.degrees(float(maximum_predecessor_engagement(_paper_candidate(first), _paper_candidate(second), case.tool_radius)))
-        except StandardPlacementFragmentationError:
+    for first, second in zip(circles[:-1], circles[1:], strict=True):
+        angle = _engagement_deg(path.case, first, second)
+        if angle is None:
             unresolved += 1
             continue
         max_engagement = max(max_engagement, angle)
-    rejections, _ = _containment_report(circles, boundary)
+    seam_angle: float | None = None
+    seam_unresolved = False
+    if path.connectors.seam is Figure5SeamClosure.CONNECTOR and len(circles) > 1:
+        seam_angle = _engagement_deg(path.case, circles[-1], circles[0])
+        seam_unresolved = seam_angle is None
+    rejections, _ = _containment_report(circles, path.boundary)
     return ToolpathMetrics(
         circles=len(circles),
         connectors=len(transitions),
@@ -167,25 +220,23 @@ def _metrics(
         max_engagement_deg=max_engagement,
         containment_rejections=rejections,
         unresolved_engagements=unresolved,
+        seam=path.connectors.seam.value,
+        seam_engagement_deg=seam_angle,
+        seam_unresolved=seam_unresolved,
     )
 
 
-def _connectors(boundary: tuple[Point2[WorldXY], ...], circles: tuple[Figure5CounterclockwiseCircle, ...]) -> tuple[Figure5BoundaryTransition, ...]:
-    lengths = _side_lengths(boundary)
-    return tuple(_transition(boundary, lengths, a, b) for a, b in zip(circles, circles[1:]))
-
-
-def _finish(name: str, case: HeldReferenceCase, circles, transitions, boundary, stages: _Stages, validate: bool) -> WorkloadRun:
-    metrics = _metrics(case, circles, transitions, boundary)
+def _finish(path: GeneratedToolpath, validate: bool) -> WorkloadRun:
+    metrics = _metrics(path)
     validation: float | None = None
     if validate:
         started = time.perf_counter()
-        require_full_motion_coverage(case, circles, transitions, pathlib.Path("build/held-toolpath-benchmark") / f"{name}.exact-coverage.json")
+        require_full_motion_coverage(path.case, path.circles, path.transitions, pathlib.Path("build/held-toolpath-benchmark") / f"{path.workload}.exact-coverage.json")
         validation = time.perf_counter() - started
-    return WorkloadRun(workload=name, metrics=metrics, stage_seconds=dict(stages.seconds), generation_seconds=sum(stages.seconds.values()), validation_seconds=validation)
+    return WorkloadRun(workload=path.workload, metrics=metrics, stage_seconds=dict(path.stage_seconds), generation_seconds=path.generation_seconds, validation_seconds=validation)
 
 
-def figure5_refined(validate: bool = False) -> WorkloadRun:
+def generate_figure5_refined() -> GeneratedToolpath:
     """Figure 5 standard-model draft: publisher-start polygon proposal, corner-aware engagement refinement."""
     case = load_held_reference_case("figure5")
     stages = _Stages()
@@ -203,12 +254,12 @@ def figure5_refined(validate: bool = False) -> WorkloadRun:
     refined = refine_figure5_engagement(result.path.circles, components[0], case.tool_radius, cap)
     stages.stop("refine")
     stages.start()
-    transitions = _connectors(components[0], refined.circles)
+    connectors = Figure5BoundaryConnectors.build(components[0], refined.circles)
     stages.stop("connectors")
-    return _finish("figure5_refined", case, refined.circles, transitions, components[0], stages, validate)
+    return GeneratedToolpath("figure5_refined", case, components[0], refined.circles, connectors, dict(stages.seconds))
 
 
-def _figure8(name: str, case_name: str, *, spacing: str, qualify_contacts: bool, corner_approaches: bool, validate: bool) -> WorkloadRun:
+def _generate_figure8(name: str, case_name: str, *, spacing: str, qualify_contacts: bool, corner_approaches: bool) -> GeneratedToolpath:
     case = load_held_reference_case(case_name)
     stages = _Stages()
     stages.start()
@@ -228,25 +279,65 @@ def _figure8(name: str, case_name: str, *, spacing: str, qualify_contacts: bool,
         refined = refine_figure5_engagement(result.path.circles, components[0], case.tool_radius, cap, corner_approaches=corner_approaches)
     stages.stop("refine")
     stages.start()
-    transitions = _connectors(components[0], refined.circles)
+    connectors = Figure5BoundaryConnectors.build(components[0], refined.circles)
     stages.stop("connectors")
-    return _finish(name, case, refined.circles, transitions, components[0], stages, validate)
+    return GeneratedToolpath(name, case, components[0], refined.circles, connectors, dict(stages.seconds))
+
+
+def generate_figure8_upper_lane() -> GeneratedToolpath:
+    return _generate_figure8("figure8_upper_lane", "figure8_upper", spacing="lane", qualify_contacts=False, corner_approaches=False)
+
+
+def generate_figure8_upper_boundary() -> GeneratedToolpath:
+    return _generate_figure8("figure8_upper_boundary", "figure8_upper", spacing="boundary", qualify_contacts=False, corner_approaches=False)
+
+
+def generate_figure8_crossed_skis_boundary() -> GeneratedToolpath:
+    return _generate_figure8("figure8_crossed_skis_boundary", "figure8_crossed_skis", spacing="boundary", qualify_contacts=False, corner_approaches=False)
+
+
+def generate_figure8_monstera_boundary_qualified_corners() -> GeneratedToolpath:
+    return _generate_figure8("figure8_monstera_boundary_qualified_corners", "figure8_monstera", spacing="boundary", qualify_contacts=True, corner_approaches=True)
+
+
+GENERATORS: dict[str, Callable[[], GeneratedToolpath]] = {
+    "figure5_refined": generate_figure5_refined,
+    "figure8_upper_lane": generate_figure8_upper_lane,
+    "figure8_upper_boundary": generate_figure8_upper_boundary,
+    "figure8_crossed_skis_boundary": generate_figure8_crossed_skis_boundary,
+    "figure8_monstera_boundary_qualified_corners": generate_figure8_monstera_boundary_qualified_corners,
+}
+
+
+def generate(workload: str) -> GeneratedToolpath:
+    """Run one workload's generator stage by stage.
+
+    Raises:
+        UnknownWorkloadError: ``workload`` is not in ``GENERATORS``.
+    """
+    if workload not in GENERATORS:
+        raise UnknownWorkloadError(f"unknown workload {workload!r}; known: {list(GENERATORS)}")
+    return GENERATORS[workload]()
+
+
+def figure5_refined(validate: bool = False) -> WorkloadRun:
+    return _finish(generate_figure5_refined(), validate)
 
 
 def figure8_upper_lane(validate: bool = False) -> WorkloadRun:
-    return _figure8("figure8_upper_lane", "figure8_upper", spacing="lane", qualify_contacts=False, corner_approaches=False, validate=validate)
+    return _finish(generate_figure8_upper_lane(), validate)
 
 
 def figure8_upper_boundary(validate: bool = False) -> WorkloadRun:
-    return _figure8("figure8_upper_boundary", "figure8_upper", spacing="boundary", qualify_contacts=False, corner_approaches=False, validate=validate)
+    return _finish(generate_figure8_upper_boundary(), validate)
 
 
 def figure8_crossed_skis_boundary(validate: bool = False) -> WorkloadRun:
-    return _figure8("figure8_crossed_skis_boundary", "figure8_crossed_skis", spacing="boundary", qualify_contacts=False, corner_approaches=False, validate=validate)
+    return _finish(generate_figure8_crossed_skis_boundary(), validate)
 
 
 def figure8_monstera_boundary_qualified_corners(validate: bool = False) -> WorkloadRun:
-    return _figure8("figure8_monstera_boundary_qualified_corners", "figure8_monstera", spacing="boundary", qualify_contacts=True, corner_approaches=True, validate=validate)
+    return _finish(generate_figure8_monstera_boundary_qualified_corners(), validate)
 
 
 WORKLOADS: dict[str, Callable[..., WorkloadRun]] = {
@@ -380,8 +471,13 @@ def summary_lines(benchmark: ToolpathBenchmark) -> list[str]:
         m = run.metrics
         stages = " ".join(f"{stage} {seconds:.2f}" for stage, seconds in run.stage_seconds.items())
         validation = "" if run.validation_seconds is None else f"  validation {run.validation_seconds:.1f} s"
+        if m.seam_engagement_deg is not None:
+            seam = f"seam {m.seam_engagement_deg:8.4f} deg"
+        else:
+            seam = f"seam {'unresolved' if m.seam_unresolved else m.seam}"
         lines.append(
-            f"{name:<44} {run.generation_seconds:8.2f} s [{stages}]  circles {m.circles:>5}  connectors {m.connectors:>5}  length {m.path_length_mm:12.3f} mm  max eng {m.max_engagement_deg:8.4f} deg  rejections {m.containment_rejections}{validation}"
+            f"{name:<44} {run.generation_seconds:8.2f} s [{stages}]  circles {m.circles:>5}  connectors {m.connectors:>5}  length {m.path_length_mm:12.3f} mm  "
+            f"max eng {m.max_engagement_deg:8.4f} deg  {seam}  rejections {m.containment_rejections}{validation}"
         )
     return lines
 

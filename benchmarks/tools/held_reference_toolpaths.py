@@ -9,8 +9,7 @@ from pathlib import Path
 
 from benchmarks.held_boundary_order_spacing import refine_boundary_ordered_path
 from benchmarks.held_exact_motion_coverage import require_full_motion_coverage
-from benchmarks.held_figure5_boundary_path import _side_lengths
-from benchmarks.held_figure5_boundary_path import _transition
+from benchmarks.held_figure5_boundary_path import Figure5BoundaryConnectors
 from benchmarks.held_figure5_engagement_refinement import refine_figure5_engagement
 from benchmarks.held_figure5_path import build_held_reference_path
 from benchmarks.held_figure5_raw_guide import build_held_reference_raw_guide
@@ -54,10 +53,11 @@ def main() -> None:
             print(f"{case.name}: {len(selected)} boundary-order sources, {len(refined.circles)} refined circles", flush=True)
         else:
             refined = refine_figure5_engagement(circles, components[0], case.tool_radius, cap, corner_approaches=args.corner_approaches)
-            render_distribution(case, result, refined, Path("docs/assets/images") / f"held_{case.name}_circle_distribution.png")
+            render_distribution(
+                case, result, refined, Figure5BoundaryConnectors.build(components[0], refined.circles), Path("docs/assets/images") / f"held_{case.name}_circle_distribution.png"
+            )
         circles = refined.circles
-    lengths = _side_lengths(components[0])
-    transitions = tuple(_transition(components[0], lengths, a, b) for a, b in zip(circles, circles[1:]))
+    transitions = Figure5BoundaryConnectors.build(components[0], circles).transitions
     suffix = f"{args.stage}_boundary" if args.spacing == "boundary" else args.stage
     if args.qualify_contacts:
         suffix += "_qualified_contacts"

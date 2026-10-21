@@ -11,6 +11,8 @@ from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.figure import Figure
 
 from benchmarks.held_figure5_boundary_path import Figure5BoundaryPath
+from benchmarks.held_motion_coverage import InvalidCoverageMotionError
+from benchmarks.held_motion_coverage import connector_pairs
 from benchmarks.held_reference_cases import HeldReferenceCase
 from benchmarks.tools.held_contour_bound_plot import _length
 from benchmarks.tools.held_toolpath_progress import _draw_motion
@@ -28,9 +30,23 @@ def render_coverage_preserving_comparison(
     bounds: tuple[Radian, ...],
     output: Path,
 ) -> None:
-    """Render actual supplied paths; no absolute coverage claim is inferred."""
-    if any(not path.circles or len(path.transitions) != len(path.circles) - 1 for path in (before, after)) or len(bounds) != len(after.circles) - 1:
-        raise InvalidCoveragePreservingPlotError("Comparison requires connected paths and one bound per emitted successor.")
+    """Render actual supplied paths; no absolute coverage claim is inferred.
+
+    Both paths are open or closed connector sequences (``connector_pairs``);
+    the bounds cover the successor pairs only, never the seam pair.
+
+    Raises:
+        InvalidCoveragePreservingPlotError: a path is empty, its connector count
+            is neither open nor closed, a connector misses its circle contacts,
+            or ``bounds`` is not one per emitted successor.
+    """
+    try:
+        connector_pairs(before.circles, before.transitions)
+        connector_pairs(after.circles, after.transitions)
+    except InvalidCoverageMotionError as error:
+        raise InvalidCoveragePreservingPlotError(f"Comparison requires connected circle sequences: {error}") from error
+    if len(bounds) != len(after.circles) - 1:
+        raise InvalidCoveragePreservingPlotError("Comparison requires one bound per emitted successor.")
     angles = tuple(map(math.degrees, bounds))
     before_length = _length(before.circles, before.transitions)
     after_length = _length(after.circles, after.transitions)

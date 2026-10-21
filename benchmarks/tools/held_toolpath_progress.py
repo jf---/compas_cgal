@@ -13,14 +13,14 @@ from matplotlib.collections import LineCollection
 from matplotlib.figure import Figure
 
 from benchmarks.held_exact_motion_coverage import require_full_motion_coverage
+from benchmarks.held_figure5_boundary_path import Figure5BoundaryConnectors
 from benchmarks.held_figure5_boundary_path import Figure5BoundaryTransition
 from benchmarks.held_figure5_boundary_path import Figure5CounterclockwiseCircle
-from benchmarks.held_figure5_boundary_path import _side_lengths
-from benchmarks.held_figure5_boundary_path import _transition
 from benchmarks.held_figure5_engagement_refinement import refine_figure5_engagement
 from benchmarks.held_figure5_path import _paper_candidate
 from benchmarks.held_figure5_path import build_figure5_approximate_path
 from benchmarks.held_figure5_raw_guide import build_figure5_raw_guide
+from benchmarks.held_motion_coverage import connector_pairs
 from benchmarks.held_reference_cases import HeldReferenceCase
 from benchmarks.held_reference_cases import load_held_reference_case
 from benchmarks.held_reference_figures import figure7_inward_offset
@@ -52,10 +52,16 @@ def render_path(
 
     The lower panel recomputes the standard predecessor model from that order;
     it does not certify depleted-stock engagement or entry/connector safety.
+    A closed path (one connector per circle) also reports the seam pair, last
+    circle back to the first, at successor index ``len(circles)``; it is a
+    reported value only and colours no circle.
     """
+    pairs = connector_pairs(circles, transitions)
+    # A lone circle's closing lap returns to itself: no seam pair to report.
+    seam_pair = len(circles) > 1 and len(pairs) == len(circles)
     measured = []
     unresolved = []
-    for index, (first, second) in enumerate(zip(circles, circles[1:]), start=1):
+    for index, (first, second, _) in enumerate(pairs[: len(circles) - 1 + seam_pair], start=1):
         try:
             angle = math.degrees(float(maximum_predecessor_engagement(_paper_candidate(first), _paper_candidate(second), case.tool_radius)))
         except StandardPlacementFragmentationError:
@@ -64,7 +70,8 @@ def render_path(
             angle = math.nan
             unresolved.append(index)
         measured.append(angle)
-    angles = tuple(measured)
+    # The seam pair is reported, never used to colour circles[0].
+    angles = tuple(measured[: len(circles) - 1])
     cap = float(case.tea_cap)
     figure = Figure(figsize=(13, 10), facecolor="#faf9f5")
     FigureCanvasAgg(figure)
@@ -72,9 +79,12 @@ def render_path(
     path_axis = figure.add_subplot(grid[0])
     engagement_axis = figure.add_subplot(grid[1])
     _draw_motion(path_axis, case, circles, transitions, angles, cap)
-    indices = np.arange(1, len(circles))
-    engagement_axis.plot(indices, angles, color=PATH_COLOR, linewidth=0.8)
-    failed = [(index, angle) for index, angle in zip(indices, angles) if angle > cap]
+    indices = np.arange(1, len(measured) + 1)
+    engagement_axis.plot(indices[: len(angles)], angles, color=PATH_COLOR, linewidth=0.8)
+    seam = measured[-1] if seam_pair else None
+    if seam is not None and math.isfinite(seam):
+        engagement_axis.scatter([len(circles)], [seam], marker="D", color="#b77c29", s=24, zorder=3, label="Seam pair (last to first)")
+    failed = [(index, angle) for index, angle in zip(indices, measured) if angle > cap]
     if failed:
         engagement_axis.scatter([item[0] for item in failed], [item[1] for item in failed], color=FAILURE_COLOR, s=9, zorder=3)
     if unresolved:
@@ -84,8 +94,11 @@ def render_path(
     engagement_axis.legend(loc="upper right", frameon=False)
     engagement_axis.grid(alpha=0.2)
     maximum = max((angle for angle in angles if math.isfinite(angle)), default=0.0)
+    seam_text = "" if seam is None else (" · seam unresolved" if not math.isfinite(seam) else f" · seam {seam:.2f}°")
     figure.suptitle(title, x=0.075, ha="left", fontsize=19, fontweight="bold")
-    figure.text(0.075, 0.935, f"{len(circles):,} circles · {len(transitions):,} connectors · {len(failed):,} over cap · {len(unresolved)} unresolved · max known {maximum:.2f}°")
+    figure.text(
+        0.075, 0.935, f"{len(circles):,} circles · {len(transitions):,} connectors · {len(failed):,} over cap · {len(unresolved)} unresolved · max known {maximum:.2f}°{seam_text}"
+    )
     figure.text(0.075, 0.035, scope, fontsize=9)
     figure.text(0.075, 0.015, "Predecessor-circle model only; entry, connectors, depleted-stock engagement and coverage require separate checks.", fontsize=9)
     figure.subplots_adjust(left=0.075, right=0.97, top=0.90, bottom=0.10, hspace=0.22)
@@ -177,8 +190,7 @@ def main() -> None:
     if args.refine:
         refined = refine_figure5_engagement(circles, components[0], case.tool_radius, EngagementCap.build(math.radians(float(case.tea_cap))))
         circles = refined.circles
-        lengths = _side_lengths(components[0])
-        transitions = tuple(_transition(components[0], lengths, a, b) for a, b in zip(circles, circles[1:]))
+        transitions = Figure5BoundaryConnectors.build(components[0], circles).transitions
         rejected, excess = _containment_report(circles, components[0])
         output = Path("docs/assets/images/held_figure5_engagement_refined.png")
         title = "Figure 5 · corner-aware engagement refinement"

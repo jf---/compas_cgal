@@ -10,6 +10,8 @@ import numpy as np
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.figure import Figure
 
+from benchmarks.held_figure5_boundary_path import Figure5BoundaryConnectors
+from benchmarks.held_figure5_boundary_path import Figure5SeamClosure
 from benchmarks.held_figure5_engagement_refinement import Figure5EngagementRefinement
 from benchmarks.held_figure5_path import HypothesisFigure5Path
 from benchmarks.held_figure5_path import _paper_candidate
@@ -17,15 +19,26 @@ from benchmarks.held_reference_cases import HeldReferenceCase
 from benchmarks.held_standard_placement import maximum_predecessor_engagement
 
 
-def render_distribution(case: HeldReferenceCase, initial: HypothesisFigure5Path, refined: Figure5EngagementRefinement, output: Path) -> None:
+def render_distribution(
+    case: HeldReferenceCase, initial: HypothesisFigure5Path, refined: Figure5EngagementRefinement, connectors: Figure5BoundaryConnectors, output: Path
+) -> None:
     """Plot source/inserted centres and final pairwise engagement, without selection.
 
     The JSON sibling records reporting measurements. Angles are predecessor-only;
     circle circumference excludes connectors and is not complete path length.
+    The pairs are those the emitted motion joins: every successor pair plus,
+    when ``connectors`` emits the seam connector, the seam pair (last circle,
+    then the first). The seam angle is also reported on its own; it is
+    reporting only, no cap decision.
     """
     circles = refined.circles
     original = frozenset(refined.original_indices)
-    angles = np.array([math.degrees(float(maximum_predecessor_engagement(_paper_candidate(a), _paper_candidate(b), case.tool_radius))) for a, b in zip(circles, circles[1:])])
+    seam_emitted = connectors.seam is Figure5SeamClosure.CONNECTOR and len(circles) > 1
+    successors = circles[1:] + (circles[:1] if seam_emitted else ())
+    pairs = list(zip(circles[: len(successors)], successors, strict=True))
+    angles = np.array([math.degrees(float(maximum_predecessor_engagement(_paper_candidate(a), _paper_candidate(b), case.tool_radius))) for a, b in pairs])
+    # The successor of each pair: circles[1:], then circles[0] for the seam.
+    successor_centers = np.array([(float(b.center.x), float(b.center.y)) for _, b in pairs]).reshape((-1, 2))
     centers = np.array([(float(circle.center.x), float(circle.center.y)) for circle in circles])
     inserted = np.array([index not in original for index in range(len(circles))])
     cap = float(case.tea_cap)
@@ -39,6 +52,9 @@ def render_distribution(case: HeldReferenceCase, initial: HypothesisFigure5Path,
         "source_runs": len(initial.reached_run_ids),
         "initial_terminal_selections": sum(record.placement.reached_terminal for record in initial.placements),
         "initial_forced_selections": sum(record.placement.forced for record in initial.placements),
+        "seam": connectors.seam.value,
+        "seam_pair_engagement_degrees": float(angles[-1]) if seam_emitted else None,
+        "final_pairs": len(pairs),
         "final_pairs_over_cap": int((angles > cap).sum()),
         "final_pairs_below_half_cap": int((angles < cap / 2).sum()),
         "final_angle_quantiles_degrees": dict(zip(("min", "q25", "median", "q75", "max"), np.quantile(angles, [0, 0.25, 0.5, 0.75, 1]).tolist())),
@@ -57,7 +73,7 @@ def render_distribution(case: HeldReferenceCase, initial: HypothesisFigure5Path,
     source_axis.scatter(*centers[inserted].T, s=4, color="#c34c32", label="Inserted circles")
     source_axis.set_title("Where refinement adds circle centres")
     source_axis.legend(frameon=False, fontsize=8)
-    colored = angle_axis.scatter(*centers[1:].T, c=angles, s=5, vmin=0, vmax=cap, cmap="viridis")
+    colored = angle_axis.scatter(*successor_centers.T, c=angles, s=5, vmin=0, vmax=cap, cmap="viridis")
     angle_axis.set_title("Final predecessor engagement at each centre")
     figure.colorbar(colored, ax=angle_axis, label="Degrees")
     bars = count_axis.bar(("Initial", "Refined"), (len(initial.path.circles), len(circles)), color=("#087e8b", "#c34c32"))
@@ -65,7 +81,8 @@ def render_distribution(case: HeldReferenceCase, initial: HypothesisFigure5Path,
     count_axis.set(ylabel="Machining circles", ylim=(0, len(circles) * 1.15), title=f"{len(original):,} source circles + {int(inserted.sum()):,} insertions")
     histogram_axis.hist(angles, bins=np.linspace(0, max(cap, float(angles.max())), 21), color="#087e8b")
     histogram_axis.axvline(cap, color="#c34c32", linestyle="--", label=f"{cap:g}° cap")
-    histogram_axis.set(xlabel="Final predecessor engagement / degrees", ylabel="Successor pairs", title="Cap compliance does not imply efficient spacing")
+    pairs_label = "Successor pairs (incl. seam)" if seam_emitted else "Successor pairs"
+    histogram_axis.set(xlabel="Final predecessor engagement / degrees", ylabel=pairs_label, title="Cap compliance does not imply efficient spacing")
     histogram_axis.legend(frameon=False)
     figure.suptitle(f"{case.name.replace('_', ' ')} · circle distribution", fontsize=18, x=0.08, ha="left")
     figure.text(0.08, 0.035, "Centre maps, not toolpaths. Publisher-derived start; no contour-aware, coverage or machining qualification.", fontsize=9)

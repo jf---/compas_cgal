@@ -23,6 +23,38 @@ class InvalidCoverageMotionError(ValueError):
     """A circle sequence lacks its connecting motions."""
 
 
+def connector_pairs(
+    circles: tuple[Figure5CounterclockwiseCircle, ...],
+    transitions: tuple[Figure5BoundaryTransition, ...],
+) -> tuple[tuple[Figure5CounterclockwiseCircle, Figure5CounterclockwiseCircle, Figure5BoundaryTransition], ...]:
+    """Pair every emitted connector with the circles it joins.
+
+    ``transitions[i]`` runs ``circles[i]`` to ``circles[i + 1]``. A closed path
+    (one connector per circle, as ``Figure5BoundaryConnectors.build`` emits for a
+    ``CONNECTOR`` seam) adds the seam pair ``circles[-1]`` to ``circles[0]``; an
+    open path (a ``COINCIDENT`` seam, a prefix, or a hand-built open motion) has
+    one fewer. The count alone selects the pairing; every endpoint is checked.
+
+    Raises:
+        InvalidCoverageMotionError: ``circles`` is empty, the connector count is
+            neither open nor closed, or a connector does not run between the
+            stored contacts of the circles it joins.
+    """
+    if not circles:
+        raise InvalidCoverageMotionError("A circle path requires at least one circle.")
+    if len(transitions) == len(circles):
+        successors = circles[1:] + circles[:1]
+    elif len(transitions) == len(circles) - 1:
+        successors = circles[1:]
+    else:
+        raise InvalidCoverageMotionError(f"{len(circles)} circles take {len(circles) - 1} (open) or {len(circles)} (closed) connectors, not {len(transitions)}.")
+    pairs = tuple(zip(circles[: len(successors)], successors, transitions, strict=True))
+    for first, second, transition in pairs:
+        if len(transition.samples) < 2 or transition.samples[0] != first.contact_point or transition.samples[-1] != second.contact_point:
+            raise InvalidCoverageMotionError("Connector endpoints must match the emitted circle contacts.")
+    return pairs
+
+
 def replay_circle_connector_stock(
     boundary: tuple[Point2[WorldXY], ...],
     circles: tuple[Figure5CounterclockwiseCircle, ...],
@@ -34,12 +66,9 @@ def replay_circle_connector_stock(
     Final subtraction commutes, so circles precede connectors in this replay.
     This function does not claim to measure engagement during the motion.
     """
-    if not circles or len(transitions) != len(circles) - 1:
-        raise InvalidCoverageMotionError("Coverage replay requires a nonempty circle sequence and its connectors.")
+    connector_pairs(circles, transitions)
     stock = replay_circle_stock(boundary, circles, tool_radius)
     for transition in transitions:
-        if len(transition.samples) < 2:
-            raise InvalidCoverageMotionError("A connector requires at least its two endpoints.")
         for first, second in zip(transition.samples, transition.samples[1:]):
             if first == second:
                 continue

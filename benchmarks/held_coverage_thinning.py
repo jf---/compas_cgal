@@ -14,6 +14,7 @@ from benchmarks.held_figure5_boundary_path import Figure5BoundaryTransition
 from benchmarks.held_figure5_boundary_path import Figure5CounterclockwiseCircle
 from benchmarks.held_figure5_raw_guide import GuideRunId
 from benchmarks.held_motion_coverage import InvalidCoverageMotionError
+from benchmarks.held_motion_coverage import connector_pairs
 from compas_cgal import _stock_2
 from compas_cgal.motion import EngagementCap
 from compas_cgal.units import Millimetre
@@ -59,14 +60,14 @@ def thin_covered_contour_path(
     the removed circle contributes no required material beyond the replacement.
     Returns selected indices, motion, bound reports, and conservative remaining
     stock. This preserves source coverage; it does not certify source completeness.
+    A closed dense path (one connector per circle) keeps its seam connector, from
+    the always-retained last circle back to the first, unchanged and unbounded:
+    the seam pair carries no engagement bound here.
     """
     if not circles or len(circles) != len(circle_sources) or any(not runs or len(set(runs)) != len(runs) for runs in circle_sources):
         raise InvalidContourSpacingInputError("Each dense source circle requires distinct nonempty source attribution.")
-    if len(transitions) != len(circles) - 1:
-        raise InvalidCoverageMotionError("The dense path requires one connector per circle adjacency.")
-    for first, second, transition in zip(circles, circles[1:], transitions):
-        if len(transition.samples) < 2 or transition.samples[0] != first.contact_point or transition.samples[-1] != second.contact_point:
-            raise InvalidCoverageMotionError("Dense connector endpoints must match their circle contacts.")
+    connector_pairs(circles, transitions)
+    closed = len(transitions) == len(circles)
     radius = float(tool_radius.value)
     stock = _stock_2.Stock2(np.array([(float(p.x), float(p.y), 0.0) for p in design_boundary], dtype=np.float64), [])
     first_row = _row(circles[0])
@@ -107,6 +108,13 @@ def thin_covered_contour_path(
         contour.append((current[0], current[1]), current[2])
         if index < len(transitions):
             pending = transitions[index]
+    if closed:
+        # The last circle is always retained, so the seam connector runs from a
+        # retained circle back to circles[0] unchanged and keeps its sweep.
+        seam = transitions[-1]
+        connectors.append(seam)
+        for start, end in zip(seam.samples, seam.samples[1:]):
+            stock.subtract_line_sweep(float(start.x), float(start.y), float(end.x), float(end.y), radius)
     expected = {run for runs in circle_sources for run in runs}
     if represented != expected:
         raise InvalidContourSpacingInputError("Coverage thinning lost source attribution.")

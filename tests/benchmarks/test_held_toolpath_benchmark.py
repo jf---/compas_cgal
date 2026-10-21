@@ -13,9 +13,10 @@ def _identity(cpu: str = "Apple M1 Max") -> record.MachineIdentity:
 
 
 def _run(name: str, seconds: float, circles: int = 100, length: float = 1234.5, engagement: float = 79.99, rejections: int = 0) -> tb.WorkloadRun:
+    # Held paths close: one connector per circle, the last runs back to the first.
     return tb.WorkloadRun(
         workload=name,
-        metrics=tb.ToolpathMetrics(circles=circles, connectors=circles - 1, path_length_mm=length, max_engagement_deg=engagement, containment_rejections=rejections),
+        metrics=tb.ToolpathMetrics(circles=circles, connectors=circles, path_length_mm=length, max_engagement_deg=engagement, containment_rejections=rejections),
         stage_seconds={"guide": seconds * 0.1, "offset": seconds * 0.1, "initial": seconds * 0.6, "refine": seconds * 0.1, "connectors": seconds * 0.1},
         generation_seconds=seconds,
     )
@@ -77,3 +78,12 @@ def test_path_length_ignores_reporting_round_off_only() -> None:
     assert tb.compare(same, baseline, ceilings=CEILINGS) == []
     with pytest.raises(AssertionError):
         assert tb.compare(_benchmark({"figure5_refined": _run("figure5_refined", 20.0, length=1235.5)}), baseline, ceilings=CEILINGS) == []
+
+
+def test_seam_engagement_round_trips_and_is_reported_not_gated() -> None:
+    run = _run("figure5_refined", 20.0)
+    seamed = tb.WorkloadRun(run.workload, tb.ToolpathMetrics(**{**run.metrics.__dict__, "seam_engagement_deg": 123.0}), run.stage_seconds, run.generation_seconds)
+    benchmark = _benchmark({"figure5_refined": seamed})
+    assert tb.ToolpathBenchmark.from_json(benchmark.to_json()) == benchmark
+    assert tb.compare(benchmark, _benchmark({"figure5_refined": run}), ceilings=CEILINGS) == []
+    assert "seam 123.0000 deg" in tb.summary_lines(benchmark)[1]

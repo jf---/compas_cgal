@@ -17,10 +17,9 @@ from benchmarks.held_boundary_order_spacing import refine_boundary_ordered_path
 from benchmarks.held_contour_bound_spacing import select_contour_bound_path
 from benchmarks.held_coverage_path import build_coverage_preserving_path
 from benchmarks.held_exact_motion_coverage import require_full_motion_coverage
+from benchmarks.held_figure5_boundary_path import Figure5BoundaryConnectors
 from benchmarks.held_figure5_boundary_path import Figure5BoundaryPath
 from benchmarks.held_figure5_boundary_path import Figure5CounterclockwiseCircle
-from benchmarks.held_figure5_boundary_path import _side_lengths
-from benchmarks.held_figure5_boundary_path import _transition
 from benchmarks.held_figure5_engagement_refinement import refine_figure5_engagement
 from benchmarks.held_figure5_path import build_figure5_approximate_path
 from benchmarks.held_figure5_path import build_held_reference_path
@@ -68,7 +67,7 @@ def prepared_paths(request: pytest.FixtureRequest) -> PreparedPaths:
 
 @pytest.mark.parametrize("algorithm", ("standard", "contour_bound", "coverage_preserving"))
 def test_full_declared_pocket_is_covered(prepared_paths: PreparedPaths, algorithm: Literal["standard", "contour_bound", "coverage_preserving"]) -> None:
-    """Require continuous cutter coverage, including every emitted connector."""
+    """Require continuous cutter coverage, including every emitted connector and the seam connector."""
     case, boundary, baseline, draft, corrected = prepared_paths
     output = Path("build/held-coverage-corpus") / f"{case.name}_{algorithm}.json"
     if algorithm == "coverage_preserving":
@@ -77,6 +76,5 @@ def test_full_declared_pocket_is_covered(prepared_paths: PreparedPaths, algorith
         require_full_motion_coverage(case, corrected.circles, corrected.transitions, output)
         return
     circles = baseline if algorithm == "standard" else draft
-    lengths = _side_lengths(boundary)
-    transitions = tuple(_transition(boundary, lengths, first, second) for first, second in zip(circles, circles[1:]))
+    transitions = Figure5BoundaryConnectors.build(boundary, circles).transitions
     require_full_motion_coverage(case, circles, transitions, output)

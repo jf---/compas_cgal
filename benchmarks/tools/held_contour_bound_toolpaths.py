@@ -11,9 +11,8 @@ from benchmarks.held_contour_bound_spacing import select_contour_bound_path
 from benchmarks.held_coverage_path import build_coverage_preserving_path
 from benchmarks.held_exact_motion_coverage import IncompleteMotionCoverageError
 from benchmarks.held_exact_motion_coverage import report_full_motion_coverage
+from benchmarks.held_figure5_boundary_path import Figure5BoundaryConnectors
 from benchmarks.held_figure5_boundary_path import Figure5BoundaryPath
-from benchmarks.held_figure5_boundary_path import _side_lengths
-from benchmarks.held_figure5_boundary_path import _transition
 from benchmarks.held_figure5_engagement_refinement import refine_figure5_engagement
 from benchmarks.held_figure5_path import build_figure5_approximate_path
 from benchmarks.held_figure5_path import build_held_reference_path
@@ -58,9 +57,8 @@ def main() -> None:
     )
     reached = {run for index in selected for run in source.circle_sources[index]}
     print(f"{case.name}: {len(refined.circles)} circles, {len(reached)} source runs, max bound {max(map(math.degrees, bounds)):.6f} degrees", flush=True)
-    lengths = _side_lengths(components[0])
-    transitions = tuple(_transition(components[0], lengths, a, b) for a, b in zip(refined.circles, refined.circles[1:]))
-    baseline_transitions = tuple(_transition(components[0], lengths, a, b) for a, b in zip(baseline.circles, baseline.circles[1:]))
+    transitions = Figure5BoundaryConnectors.build(components[0], refined.circles).transitions
+    baseline_transitions = Figure5BoundaryConnectors.build(components[0], baseline.circles).transitions
     if args.coverage_preserving:
         before = Figure5BoundaryPath(refined.circles, transitions, source.reached_run_ids)
         dense, corrected, bounds, stock = build_coverage_preserving_path(

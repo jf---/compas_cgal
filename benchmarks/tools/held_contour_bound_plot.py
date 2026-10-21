@@ -12,6 +12,8 @@ from matplotlib.figure import Figure
 
 from benchmarks.held_figure5_boundary_path import Figure5BoundaryTransition
 from benchmarks.held_figure5_boundary_path import Figure5CounterclockwiseCircle
+from benchmarks.held_motion_coverage import InvalidCoverageMotionError
+from benchmarks.held_motion_coverage import connector_pairs
 from benchmarks.held_reference_cases import HeldReferenceCase
 from benchmarks.tools.held_toolpath_progress import _draw_motion
 from compas_cgal.units import Radian
@@ -34,9 +36,18 @@ def render_contour_bound_comparison(
     bounds: tuple[Radian, ...],
     output: Path,
 ) -> None:
-    """Render supplied motion and native bound reports without reselection."""
-    if not baseline or not circles or len(bounds) != len(circles) - 1 or len(transitions) != len(bounds) or len(baseline_transitions) != len(baseline) - 1:
-        raise InvalidContourBoundPlotError("Comparison requires connected circle sequences and one bound per successor.")
+    """Render supplied motion and native bound reports without reselection.
+
+    Both motions are open or closed connector sequences (``connector_pairs``);
+    the bounds cover the successor pairs only, never the seam pair.
+    """
+    try:
+        connector_pairs(baseline, baseline_transitions)
+        connector_pairs(circles, transitions)
+    except InvalidCoverageMotionError as error:
+        raise InvalidContourBoundPlotError(f"Comparison requires connected circle sequences: {error}") from error
+    if len(bounds) != len(circles) - 1:
+        raise InvalidContourBoundPlotError("Comparison requires one bound per successor.")
     angles = tuple(map(math.degrees, bounds))
     baseline_length, current_length = _length(baseline, baseline_transitions), _length(circles, transitions)
     figure = Figure(figsize=(13, 9), facecolor="#faf9f5")

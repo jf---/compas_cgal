@@ -4,10 +4,9 @@ from __future__ import annotations
 
 from benchmarks.held_contour_bound_spacing import select_contour_bound_path
 from benchmarks.held_coverage_thinning import thin_covered_contour_path
+from benchmarks.held_figure5_boundary_path import Figure5BoundaryConnectors
 from benchmarks.held_figure5_boundary_path import Figure5BoundaryPath
 from benchmarks.held_figure5_boundary_path import Figure5CounterclockwiseCircle
-from benchmarks.held_figure5_boundary_path import _side_lengths
-from benchmarks.held_figure5_boundary_path import _transition
 from benchmarks.held_figure5_raw_guide import GuideRunId
 from compas_cgal import _stock_2
 from compas_cgal.motion import EngagementCap
@@ -31,7 +30,7 @@ def build_coverage_preserving_path(
 
     Geometry reconstruction and bound refinement precede the coverage invariant.
     Subsequent deletion preserves actual connector samples and never changes a
-    circle. Source completeness and containment remain separate qualifications.
+    circle. Both paths close with the seam connector back to the first circle. Source completeness and containment remain separate qualifications.
     """
     _, refined, _ = select_contour_bound_path(
         circles,
@@ -45,8 +44,7 @@ def build_coverage_preserving_path(
     dense_sources: list[tuple[GuideRunId, ...]] = [(circle.run_id,) for circle in refined.circles]
     for original, emitted in enumerate(refined.original_indices):
         dense_sources[emitted] = circle_sources[original]
-    lengths = _side_lengths(center_boundary)
-    transitions = tuple(_transition(center_boundary, lengths, first, second) for first, second in zip(refined.circles, refined.circles[1:]))
+    transitions = Figure5BoundaryConnectors.build(center_boundary, refined.circles).transitions
     reached = frozenset(run for sources in dense_sources for run in sources)
     dense = Figure5BoundaryPath(refined.circles, transitions, reached)
     _, path, bounds, stock = thin_covered_contour_path(
