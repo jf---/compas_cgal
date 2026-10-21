@@ -6,6 +6,7 @@ import math
 from dataclasses import dataclass
 from dataclasses import replace
 from fractions import Fraction
+from typing import NamedTuple
 
 from benchmarks.errors import BenchmarkError
 from benchmarks.held_figure5_boundary_path import Figure5BoundaryPath
@@ -16,16 +17,15 @@ from benchmarks.held_figure5_raw_guide import Figure5RawGuide
 from benchmarks.held_figure5_raw_guide import GuideRunId
 from benchmarks.held_figure5_raw_guide import GuideRunStationOrdinal
 from benchmarks.held_figure5_raw_guide import ProjectionAdmissibleBoundaryHypothesis
-from benchmarks.held_figure5_raw_guide import ProjectionBoundarySegmentId
 from benchmarks.held_figure5_raw_guide import ProjectionBoundarySite
 from benchmarks.held_figure5_raw_guide import build_distance_admissible_hypotheses
-from benchmarks.held_reference_contacts import qualify_reference_contacts
+from benchmarks.held_offset_contact_projection import project_bounded_offset_contacts
+from benchmarks.held_reference_contacts import qualify_reference_contact_sites
 from benchmarks.held_standard_placement import OrderedPlacementSpan
 from benchmarks.held_standard_placement import PaperCircleCandidate
 from benchmarks.held_standard_placement import StandardPlacement
 from benchmarks.held_standard_placement import predecessor_overlap_margin
 from benchmarks.held_standard_placement import select_next_in_span
-from compas_cgal import _circle_geometry_2
 from compas_cgal.motion import EngagementCap
 from compas_cgal.units import Millimetre
 from compas_cgal.units import Point2
@@ -83,21 +83,30 @@ def _site_key(site: ProjectionBoundarySite) -> tuple[int, Fraction]:
     return int(site.segment_id), site.parameter
 
 
+_CircleGeometryKey = tuple[float, float, float, float, float]
+
+
 def _circle_geometry_key(
     hypothesis: ProjectionAdmissibleBoundaryHypothesis,
-) -> tuple[Fraction, Fraction, Fraction, Fraction, Fraction]:
+) -> _CircleGeometryKey:
+    """Exact circle identity: centre, radius and contact as raw doubles.
+
+    Finite doubles compare, order and hash exactly as their ``Fraction``
+    values do (``-0.0 == 0.0`` in both), so the doubles are the exact key
+    without ``Fraction.from_float`` normalisation.
+    """
     return (
-        Fraction.from_float(float(hypothesis.center.x)),
-        Fraction.from_float(float(hypothesis.center.y)),
-        Fraction.from_float(float(hypothesis.guide_radius.value)),
-        Fraction.from_float(float(hypothesis.contact_point.x)),
-        Fraction.from_float(float(hypothesis.contact_point.y)),
+        float(hypothesis.center.x),
+        float(hypothesis.center.y),
+        float(hypothesis.guide_radius.value),
+        float(hypothesis.contact_point.x),
+        float(hypothesis.contact_point.y),
     )
 
 
 def _hypothesis_order_key(
     hypothesis: ProjectionAdmissibleBoundaryHypothesis,
-) -> tuple[tuple[Fraction, Fraction, Fraction, Fraction, Fraction], int, Fraction, int, int]:
+) -> tuple[_CircleGeometryKey, int, Fraction, int, int]:
     return (
         _circle_geometry_key(hypothesis),
         int(hypothesis.projected_boundary_site.segment_id),
@@ -114,6 +123,52 @@ def _exact_squared_distance(
     delta_x = Fraction.from_float(float(second.x)) - Fraction.from_float(float(first.x))
     delta_y = Fraction.from_float(float(second.y)) - Fraction.from_float(float(first.y))
     return delta_x * delta_x + delta_y * delta_y
+
+
+class _DyadicSquaredDistance(NamedTuple):
+    """Exact squared distance ``numerator / 4**exponent`` in mm².
+
+    Every finite double is a dyadic rational ``n / 2**k``, so the squared
+    distance between two double points is an integer over ``4**k`` for the
+    largest coordinate ``k``. Comparison is integer shift and compare: the
+    same exact decisions as the ``Fraction`` value, without gcd normalisation.
+    """
+
+    numerator: int
+    exponent: int
+
+
+def _dyadic_squared_distance(
+    first: Point2[WorldXY],
+    second: Point2[WorldXY],
+) -> _DyadicSquaredDistance:
+    first_x, first_x_scale = float(first.x).as_integer_ratio()
+    first_y, first_y_scale = float(first.y).as_integer_ratio()
+    second_x, second_x_scale = float(second.x).as_integer_ratio()
+    second_y, second_y_scale = float(second.y).as_integer_ratio()
+    # All four denominators are powers of two, so the largest is a common one.
+    scale = max(first_x_scale, first_y_scale, second_x_scale, second_y_scale)
+    delta_x = second_x * (scale // second_x_scale) - first_x * (scale // first_x_scale)
+    delta_y = second_y * (scale // second_y_scale) - first_y * (scale // first_y_scale)
+    return _DyadicSquaredDistance(delta_x * delta_x + delta_y * delta_y, scale.bit_length() - 1)
+
+
+def _dyadic_compare(first: _DyadicSquaredDistance, second: _DyadicSquaredDistance) -> int:
+    """Exact sign of ``first - second``."""
+    shift = 2 * (first.exponent - second.exponent)
+    if shift >= 0:
+        left, right = first.numerator, second.numerator << shift
+    else:
+        left, right = first.numerator << -shift, second.numerator
+    return (left > right) - (left < right)
+
+
+def _dyadic_minimum(distances: tuple[_DyadicSquaredDistance, ...]) -> _DyadicSquaredDistance:
+    minimum = distances[0]
+    for distance in distances[1:]:
+        if _dyadic_compare(distance, minimum) < 0:
+            minimum = distance
+    return minimum
 
 
 def _cyclic_boundary_neighborhoods(
@@ -134,73 +189,87 @@ def _cyclic_boundary_neighborhoods(
     return tuple(neighborhoods)
 
 
-def _boundary_neighborhood_owners(
+def _boundary_neighborhood_owner_indices(
     hypotheses: tuple[ProjectionAdmissibleBoundaryHypothesis, ...],
     segment_count: int,
     published_start_center: Point2[WorldXY],
-) -> tuple[ProjectionAdmissibleBoundaryHypothesis, ...]:
-    by_station: dict[
-        tuple[GuideRunId, GuideRunStationOrdinal],
-        list[ProjectionAdmissibleBoundaryHypothesis],
-    ] = {}
-    for hypothesis in hypotheses:
+) -> tuple[int, ...]:
+    """Indices of the owning hypotheses, in emission order.
+
+    Indices, not hypotheses, so callers can carry parallel data (offset sites)
+    through ownership without hashing any hypothesis.
+    """
+    by_station: dict[tuple[GuideRunId, GuideRunStationOrdinal], list[int]] = {}
+    for index, hypothesis in enumerate(hypotheses):
         by_station.setdefault(
             (hypothesis.run_id, hypothesis.station_ordinal),
             [],
-        ).append(hypothesis)
+        ).append(index)
 
-    owners: list[ProjectionAdmissibleBoundaryHypothesis] = []
-    for station_hypotheses in by_station.values():
+    owners: list[int] = []
+    for station_indices in by_station.values():
         neighborhoods = _cyclic_boundary_neighborhoods(
-            {int(hypothesis.projected_boundary_site.segment_id) for hypothesis in station_hypotheses},
+            {int(hypotheses[index].projected_boundary_site.segment_id) for index in station_indices},
             segment_count,
         )
         for neighborhood in neighborhoods:
-            candidates = tuple(hypothesis for hypothesis in station_hypotheses if int(hypothesis.projected_boundary_site.segment_id) in neighborhood)
-            # Parallel tuples, not hypothesis-keyed dicts: equal hypotheses carry
-            # equal distances, so the dict only cost a dataclass hash per entry.
+            candidates = tuple(index for index in station_indices if int(hypotheses[index].projected_boundary_site.segment_id) in neighborhood)
             distances = tuple(
-                _exact_squared_distance(
-                    hypothesis.middle_point,
-                    hypothesis.boundary_footpoint,
+                _dyadic_squared_distance(
+                    hypotheses[index].middle_point,
+                    hypotheses[index].boundary_footpoint,
                 )
-                for hypothesis in candidates
+                for index in candidates
             )
-            minimum = min(distances)
-            owners.extend(hypothesis for hypothesis, distance in zip(candidates, distances, strict=True) if distance == minimum)
+            minimum = _dyadic_minimum(distances)
+            owners.extend(index for index, distance in zip(candidates, distances, strict=True) if _dyadic_compare(distance, minimum) == 0)
 
     start_distances = tuple(
-        _exact_squared_distance(
+        _dyadic_squared_distance(
             published_start_center,
             hypothesis.contact_point,
         )
         for hypothesis in hypotheses
     )
-    start_minimum = min(start_distances)
+    start_minimum = _dyadic_minimum(start_distances)
     # Only exact start-distance ties reach the membership scan (one or two per
-    # workload), so a list scan beats hashing every owner into a set.
-    for hypothesis, distance in zip(hypotheses, start_distances, strict=True):
-        if distance == start_minimum and hypothesis not in owners:
-            owners.append(hypothesis)
+    # workload), so a list scan beats hashing every owner into a set. The scan
+    # is by hypothesis equality, as before: an equal hypothesis already owned
+    # suppresses the start owner.
+    for index, distance in enumerate(start_distances):
+        if _dyadic_compare(distance, start_minimum) == 0 and hypotheses[index] not in (hypotheses[owner] for owner in owners):
+            owners.append(index)
     return tuple(owners)
+
+
+def _boundary_neighborhood_owners(
+    hypotheses: tuple[ProjectionAdmissibleBoundaryHypothesis, ...],
+    segment_count: int,
+    published_start_center: Point2[WorldXY],
+) -> tuple[ProjectionAdmissibleBoundaryHypothesis, ...]:
+    return tuple(hypotheses[index] for index in _boundary_neighborhood_owner_indices(hypotheses, segment_count, published_start_center))
+
+
+def _canonical_indices(
+    hypotheses: tuple[ProjectionAdmissibleBoundaryHypothesis, ...],
+) -> tuple[tuple[int, tuple[GuideRunId, ...]], ...]:
+    """Representative index and source runs of each distinct circle, in key order."""
+    grouped: dict[_CircleGeometryKey, list[int]] = {}
+    for index, hypothesis in enumerate(hypotheses):
+        grouped.setdefault(_circle_geometry_key(hypothesis), []).append(index)
+    return tuple(
+        (
+            min(group, key=lambda index: _hypothesis_order_key(hypotheses[index])),
+            tuple(sorted({hypotheses[index].run_id for index in group}, key=int)),
+        )
+        for _, group in sorted(grouped.items())
+    )
 
 
 def _canonicalize(
     hypotheses: tuple[ProjectionAdmissibleBoundaryHypothesis, ...],
 ) -> tuple[_CanonicalHypothesis, ...]:
-    grouped: dict[
-        tuple[Fraction, Fraction, Fraction, Fraction, Fraction],
-        list[ProjectionAdmissibleBoundaryHypothesis],
-    ] = {}
-    for hypothesis in hypotheses:
-        grouped.setdefault(_circle_geometry_key(hypothesis), []).append(hypothesis)
-    return tuple(
-        _CanonicalHypothesis(
-            min(group, key=_hypothesis_order_key),
-            tuple(sorted({candidate.run_id for candidate in group}, key=int)),
-        )
-        for _, group in sorted(grouped.items())
-    )
+    return tuple(_CanonicalHypothesis(hypotheses[index], runs) for index, runs in _canonical_indices(hypotheses))
 
 
 def _paper_candidate(circle: Figure5CounterclockwiseCircle) -> PaperCircleCandidate:
@@ -303,22 +372,25 @@ def _continuous_placement_lanes(
         )
     )
     lanes: list[_PlacementLane] = []
+    # Lane indices per (source_segment, direction), in creation order; a merge
+    # replaces lanes[index] with the same key, so the index never goes stale.
+    lanes_by_key: dict[tuple[int, int], list[int]] = {}
     for fragment in fragments:
+        lane_key = fragment.source_segment, fragment.direction
         if fragment.direction == 0:
+            lanes_by_key.setdefault(lane_key, []).append(len(lanes))
             lanes.append(fragment)
             continue
         compatible = []
         head = fragment.circles[0]
-        for index, lane in enumerate(lanes):
-            tail = lane.circles[-1]
+        for index in lanes_by_key.get(lane_key, ()):
+            tail = lanes[index].circles[-1]
             advances = _parameter_direction(
                 tail.source_boundary_site.parameter,
                 head.source_boundary_site.parameter,
             )
             if (
-                lane.source_segment == fragment.source_segment
-                and lane.direction == fragment.direction
-                and tail.run_id != head.run_id
+                tail.run_id != head.run_id
                 and advances == fragment.direction
                 and float(
                     predecessor_overlap_margin(
@@ -331,12 +403,14 @@ def _continuous_placement_lanes(
             ):
                 compatible.append(index)
         if not compatible:
+            lanes_by_key.setdefault(lane_key, []).append(len(lanes))
             lanes.append(fragment)
             continue
         scores = {index: _continuation_score(lanes[index].circles[-1], head) for index in compatible}
         best_score = min(scores.values())
         nearest = [index for index, score in scores.items() if score == best_score]
         if len(nearest) != 1:
+            lanes_by_key.setdefault(lane_key, []).append(len(lanes))
             lanes.append(fragment)
             continue
         index = nearest[0]
@@ -360,27 +434,38 @@ def build_hypothesis_figure5_path(
     start_evidence_bound: Millimetre,
     tool_radius: ToolRadius,
     cap: EngagementCap,
-    offset_sites: dict[ProjectionAdmissibleBoundaryHypothesis, ProjectionBoundarySite] | None = None,
+    offset_sites: tuple[ProjectionBoundarySite, ...] | None = None,
     preserve_source_runs: bool = False,
 ) -> HypothesisFigure5Path:
-    """Place distinct admissible hypotheses and emit one CCW boundary path."""
+    """Place distinct admissible hypotheses and emit one CCW boundary path.
+
+    ``offset_sites``, when given, is parallel to ``hypotheses``: entry ``i`` is
+    the resolved offset contact of hypothesis ``i``.
+    """
     if not hypotheses or not reached_run_ids:
         raise Figure5PathIntegrationError("Figure 5 integration requires hypotheses and a reached-run ledger.")
     if len(inward_components) != 1 or not inward_components[0]:
         raise Figure5PathIntegrationError("Figure 5 neighborhood ownership requires one non-empty boundary cycle.")
-    owned_hypotheses = _boundary_neighborhood_owners(
+    if offset_sites is not None and len(offset_sites) != len(hypotheses):
+        raise Figure5PathIntegrationError("Offset sites must be parallel to the hypotheses.")
+    owner_indices = _boundary_neighborhood_owner_indices(
         hypotheses,
         len(inward_components[0]),
         published_start_center,
     )
-    canonical = _canonicalize(owned_hypotheses)
+    owned_hypotheses = tuple(hypotheses[index] for index in owner_indices)
+    canonical_indices = _canonical_indices(owned_hypotheses)
+    canonical = tuple(_CanonicalHypothesis(owned_hypotheses[index], runs) for index, runs in canonical_indices)
+    # Sites ride along by index; only the hypotheses handed to the boundary
+    # path are ever hashed into its lookup.
+    canonical_sites = None if offset_sites is None else tuple(offset_sites[owner_indices[index]] for index, _ in canonical_indices)
     by_origin = {
         _origin_key(
             item.hypothesis.run_id,
             item.hypothesis.station_ordinal,
             item.hypothesis.projected_boundary_site,
-        ): item
-        for item in canonical
+        ): position
+        for position, item in enumerate(canonical)
     }
     representatives = tuple(item.hypothesis for item in canonical)
     representative_runs = frozenset(item.hypothesis.run_id for item in canonical)
@@ -393,14 +478,14 @@ def build_hypothesis_figure5_path(
         tool_radius=tool_radius,
         boundary_evidence_bound=boundary_evidence_bound,
         start_evidence_bound=start_evidence_bound,
-        offset_sites=offset_sites,
+        offset_sites=None if canonical_sites is None else dict(zip(representatives, canonical_sites, strict=True)),
     )
-    selected_items_list = []
+    selected_positions: list[int] = []
     placements = []
     placement_lanes = _continuous_placement_lanes(ordered_path.circles, tool_radius)
     for lane in placement_lanes:
         lane_circles = lane.circles
-        lane_items = tuple(
+        lane_positions = tuple(
             by_origin[
                 _origin_key(
                     circle.run_id,
@@ -410,8 +495,9 @@ def build_hypothesis_figure5_path(
             ]
             for circle in lane_circles
         )
+        lane_items = tuple(canonical[position] for position in lane_positions)
         paper_candidates = tuple(_paper_candidate(circle) for circle in lane_circles)
-        selected_items_list.append(lane_items[0])
+        selected_positions.append(lane_positions[0])
         # Joining lanes must not let a spacing jump erase a whole source run.
         # The corpus draft anchors each run before engagement refinement.
         stops = []
@@ -432,7 +518,7 @@ def build_hypothesis_figure5_path(
                 placement = select_next_in_span(span, cursor - span_start)
                 cursor += placement.candidate_advance
                 selected_item = lane_items[cursor]
-                selected_items_list.append(selected_item)
+                selected_positions.append(lane_positions[cursor])
                 placements.append(
                     Figure5PlacementRecord(
                         selected_item.hypothesis.projected_boundary_site,
@@ -441,7 +527,7 @@ def build_hypothesis_figure5_path(
                     )
                 )
 
-    selected_items = tuple(selected_items_list)
+    selected_items = tuple(canonical[position] for position in selected_positions)
     selected_runs = frozenset(run_id for item in selected_items for run_id in item.source_run_ids)
     if selected_runs != reached_run_ids:
         raise MissingFigure5GuideRunError("Engagement placement did not preserve every reached Figure 5 guide run.")
@@ -456,7 +542,7 @@ def build_hypothesis_figure5_path(
         tool_radius=tool_radius,
         boundary_evidence_bound=boundary_evidence_bound,
         start_evidence_bound=start_evidence_bound,
-        offset_sites=offset_sites,
+        offset_sites=None if canonical_sites is None else dict(zip(selected_hypotheses, (canonical_sites[position] for position in selected_positions), strict=True)),
     )
     sources_by_origin = {
         _origin_key(
@@ -516,26 +602,24 @@ def build_held_reference_path(
     if start is None or start_radius is None:
         raise Figure5PathIntegrationError("Canonical Figure 5 requires its published start-circle evidence.")
     hypotheses = tuple(hypothesis for run in guide.runs for station in run.stations for hypothesis in build_distance_admissible_hypotheses(guide, station))
-    offset_sites = None
+    offset_sites: tuple[ProjectionBoundarySite, ...] | None = None
     rejected_contacts: tuple[ProjectionAdmissibleBoundaryHypothesis, ...] = ()
     if project_contacts:
         if len(inward_components) != 1:
             raise Figure5PathIntegrationError("Reference draft requires one connected inward boundary.")
         component = inward_components[0]
         if qualify_contacts:
-            offset_sites, rejected_contacts = qualify_reference_contacts(hypotheses, component, guide.site_budget.admissible_distance_gap)
-            hypotheses = tuple(offset_sites)
+            qualified = qualify_reference_contact_sites(hypotheses, component, guide.site_budget.admissible_distance_gap)
+            # Hypotheses are pairwise distinct by construction (one per native
+            # site of one (run, station)), so the parallel form drops nothing
+            # the hypothesis-keyed form would have merged.
+            hypotheses, offset_sites, rejected_contacts = qualified.hypotheses, qualified.sites, qualified.rejected
         else:
-            boundary = [(float(p.x), float(p.y)) for p in component]
-            offset_sites = {}
-            for hypothesis in hypotheses:
-                side, parameter = _circle_geometry_2.project_boundary_contact(
-                    boundary,
-                    (float(hypothesis.contact_point.x), float(hypothesis.contact_point.y)),
-                    float(guide.site_budget.admissible_distance_gap),
-                )
-                # Existing site representation; all projection decisions belong to CGAL.
-                offset_sites[hypothesis] = ProjectionBoundarySite.build(ProjectionBoundarySegmentId(side), Fraction(parameter), len(component))
+            offset_sites = project_bounded_offset_contacts(
+                tuple(hypothesis.contact_point for hypothesis in hypotheses),
+                component,
+                guide.site_budget.admissible_distance_gap,
+            )
     reached = frozenset(run.run_id for run in guide.runs)
     start_evidence_bound = Millimetre(float(guide.site_budget.reconstruction_bound) + float(guide.site_budget.projection_bound))
     result = build_hypothesis_figure5_path(

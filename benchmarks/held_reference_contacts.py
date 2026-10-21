@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-from fractions import Fraction
+from dataclasses import dataclass
 
 from benchmarks.errors import BenchmarkError
 from benchmarks.held_figure5_raw_guide import ProjectionAdmissibleBoundaryHypothesis
-from benchmarks.held_figure5_raw_guide import ProjectionBoundarySegmentId
 from benchmarks.held_figure5_raw_guide import ProjectionBoundarySite
-from compas_cgal import _circle_geometry_2
+from benchmarks.held_offset_contact_projection import project_offset_contacts
 from compas_cgal.units import Millimetre
 from compas_cgal.units import Point2
 from compas_cgal.units import WorldXY
@@ -18,32 +17,55 @@ class MissingReferenceContactRunError(BenchmarkError):
     """The qualified offset contacts cannot represent every input guide run."""
 
 
+@dataclass(frozen=True)
+class QualifiedReferenceContacts:
+    """Bounded contacts with their offset sites (parallel tuples) and the rejected evidence."""
+
+    hypotheses: tuple[ProjectionAdmissibleBoundaryHypothesis, ...]
+    sites: tuple[ProjectionBoundarySite, ...]
+    rejected: tuple[ProjectionAdmissibleBoundaryHypothesis, ...]
+
+
+def qualify_reference_contact_sites(
+    hypotheses: tuple[ProjectionAdmissibleBoundaryHypothesis, ...],
+    boundary: tuple[Point2[WorldXY], ...],
+    evidence_bound: Millimetre,
+) -> QualifiedReferenceContacts:
+    """Separate bounded contacts from distance rejections, in input order.
+
+    Projection, tie and distance decisions are exact, in one clearance batch
+    (``project_offset_contacts``); site parameters are the correctly rounded
+    exact parameters. A rejected hypothesis is preserved verbatim; ambiguous
+    projections and malformed geometry raise. Empty input or loss of an
+    entire source run also raises. Equal input hypotheses stay separate
+    entries; ``qualify_reference_contacts`` merges them.
+    """
+    if not hypotheses:
+        raise MissingReferenceContactRunError("Contact qualification requires input guide hypotheses.")
+    projected = project_offset_contacts(tuple(hypothesis.contact_point for hypothesis in hypotheses), boundary, evidence_bound)
+    qualified = tuple((hypothesis, site) for hypothesis, site in zip(hypotheses, projected, strict=True) if site is not None)
+    missing = {hypothesis.run_id for hypothesis in hypotheses} - {hypothesis.run_id for hypothesis, _ in qualified}
+    if missing:
+        raise MissingReferenceContactRunError(f"No bounded offset contact for guide runs {sorted(map(int, missing))}.")
+    return QualifiedReferenceContacts(
+        tuple(hypothesis for hypothesis, _ in qualified),
+        tuple(site for _, site in qualified),
+        tuple(hypothesis for hypothesis, site in zip(hypotheses, projected, strict=True) if site is None),
+    )
+
+
 def qualify_reference_contacts(
     hypotheses: tuple[ProjectionAdmissibleBoundaryHypothesis, ...],
     boundary: tuple[Point2[WorldXY], ...],
     evidence_bound: Millimetre,
 ) -> tuple[dict[ProjectionAdmissibleBoundaryHypothesis, ProjectionBoundarySite], tuple[ProjectionAdmissibleBoundaryHypothesis, ...]]:
-    """Separate bounded contacts from native distance rejections.
+    """``qualify_reference_contact_sites`` keyed by hypothesis.
 
-    CGAL owns projection, tie handling and distance decisions. Returned site
-    parameters are approximate construction views. A rejected hypothesis is
-    preserved verbatim; ambiguous projections and malformed geometry raise.
-    Empty input or loss of an entire source run also raises.
+    Raises:
+        MissingReferenceContactRunError: empty input, or a run with no
+            bounded contact.
+        _circle_geometry_2.AmbiguousBoundaryProjectionError: a bounded
+            contact has distinct nearest points at equal distance.
     """
-    if not hypotheses:
-        raise MissingReferenceContactRunError("Contact qualification requires input guide hypotheses.")
-    polygon = [(float(point.x), float(point.y)) for point in boundary]
-    sites = {}
-    rejected = []
-    for hypothesis in hypotheses:
-        try:
-            side, parameter = _circle_geometry_2.project_boundary_contact(polygon, (float(hypothesis.contact_point.x), float(hypothesis.contact_point.y)), float(evidence_bound))
-        except _circle_geometry_2.BoundaryProjectionDistanceError:
-            rejected.append(hypothesis)
-        else:
-            # Representation bridge only; projection arithmetic stays native.
-            sites[hypothesis] = ProjectionBoundarySite.build(ProjectionBoundarySegmentId(side), Fraction(parameter), len(boundary))
-    missing = {hypothesis.run_id for hypothesis in hypotheses} - {hypothesis.run_id for hypothesis in sites}
-    if missing:
-        raise MissingReferenceContactRunError(f"No bounded offset contact for guide runs {sorted(map(int, missing))}.")
-    return sites, tuple(rejected)
+    qualified = qualify_reference_contact_sites(hypotheses, boundary, evidence_bound)
+    return dict(zip(qualified.hypotheses, qualified.sites, strict=True)), qualified.rejected
