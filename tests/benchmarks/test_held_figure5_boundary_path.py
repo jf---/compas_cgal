@@ -1,9 +1,14 @@
 from fractions import Fraction
 
 import pytest
+from hypothesis import given
+from hypothesis import strategies as st
 
 from benchmarks.held_figure5_boundary_path import AmbiguousFigure5BoundaryPathError
 from benchmarks.held_figure5_boundary_path import DisconnectedFigure5BoundaryPathError
+from benchmarks.held_figure5_boundary_path import Figure5BoundaryConnectors
+from benchmarks.held_figure5_boundary_path import Figure5BoundaryPath
+from benchmarks.held_figure5_boundary_path import Figure5SeamClosure
 from benchmarks.held_figure5_boundary_path import MissingFigure5GuideRunError
 from benchmarks.held_figure5_boundary_path import build_figure5_boundary_path
 from benchmarks.held_figure5_raw_guide import GuideRunId
@@ -60,7 +65,7 @@ def _candidate(
     )
 
 
-def _build(candidates: tuple[ProjectionAdmissibleBoundaryHypothesis, ...], *, start_index: int = 0):
+def _build(candidates: tuple[ProjectionAdmissibleBoundaryHypothesis, ...], *, start_index: int = 0) -> Figure5BoundaryPath:
     start = candidates[start_index]
     return build_figure5_boundary_path(
         inward_components=(SQUARE,),
@@ -259,3 +264,92 @@ def test_actual_figure5_endpoint_hypothesis_resolves_locally_into_bounded_offset
     assert path.circles[0].clockwise is False
     assert path.transitions[0].boundary_progress > 0.0
     assert path.transitions[0].samples[0] == path.transitions[0].samples[-1]
+
+
+# --- Closing seam connector -------------------------------------------------
+
+SQUARE_PERIMETER_MM = 16.0
+
+
+def test_closing_connector_runs_ccw_from_last_contact_to_first_along_the_loop() -> None:
+    candidates = (
+        _candidate(0, 0, Fraction(1, 4), (1.0, 1.0)),
+        _candidate(1, 1, Fraction(1, 2), (3.0, 2.0)),
+        _candidate(2, 3, Fraction(3, 4), (1.0, 1.0)),
+    )
+    circles = _build(candidates).circles
+
+    connectors = Figure5BoundaryConnectors.build(SQUARE, circles)
+
+    assert connectors.seam is Figure5SeamClosure.CONNECTOR
+    assert len(connectors.transitions) == len(circles)
+    closing = connectors.transitions[-1]
+    assert closing.samples == (circles[-1].contact_point, _point(0.0, 0.0), circles[0].contact_point)
+    assert closing.within_fan is False
+    assert float(closing.boundary_progress) == 2.0
+    assert connectors.seam_progress == closing.boundary_progress
+    assert sum(float(transition.boundary_progress) for transition in connectors.transitions) == SQUARE_PERIMETER_MM
+
+
+def test_coincident_seam_emits_no_zero_length_motion() -> None:
+    candidates = (
+        _candidate(0, 0, Fraction(1, 4), (1.0, 0.8), 0.8, station=0),
+        _candidate(0, 0, Fraction(1, 4), (1.0, 1.2), 1.2, station=1),
+        _candidate(1, 1, Fraction(1, 2), (3.0, 2.0)),
+    )
+    fan_first, fan_second, far = _build(candidates).circles
+    assert fan_first.contact_point == fan_second.contact_point
+
+    connectors = Figure5BoundaryConnectors.build(SQUARE, (fan_second, far, fan_first))
+
+    assert connectors.seam is Figure5SeamClosure.COINCIDENT
+    assert len(connectors.transitions) == 2
+    assert float(connectors.seam_progress) == 0.0
+    assert connectors.transitions[-1].samples[-1] == fan_first.contact_point
+
+
+def test_single_circle_closes_with_one_full_lap() -> None:
+    circles = _build((_candidate(0, 0, Fraction(1, 2), (2.0, 1.0)),)).circles
+
+    connectors = Figure5BoundaryConnectors.build(SQUARE, circles)
+
+    assert connectors.seam is Figure5SeamClosure.CONNECTOR
+    assert len(connectors.transitions) == 1
+    assert float(connectors.seam_progress) == SQUARE_PERIMETER_MM
+
+
+def test_connectors_reject_an_empty_circle_sequence() -> None:
+    with pytest.raises(DisconnectedFigure5BoundaryPathError, match="selected candidates"):
+        Figure5BoundaryConnectors.build(SQUARE, ())
+
+
+def test_boundary_path_transitions_are_the_closed_connectors() -> None:
+    candidates = (
+        _candidate(0, 0, Fraction(1, 4), (1.0, 1.0)),
+        _candidate(1, 2, Fraction(1, 2), (2.0, 3.0)),
+    )
+    path = _build(candidates)
+
+    assert path.transitions == Figure5BoundaryConnectors.build(SQUARE, path.circles).transitions
+
+
+_SITES = st.sets(st.tuples(st.integers(0, 3), st.integers(1, 7)), min_size=1, max_size=12)
+
+
+@given(sites=_SITES, data=st.data())
+def test_closed_connectors_chain_contacts_and_sum_to_one_loop(sites: set[tuple[int, int]], data: st.DataObject) -> None:
+    ordered = sorted(sites)
+    candidates = tuple(_candidate(index, side, Fraction(eighth, 8), (2.0, 2.0)) for index, (side, eighth) in enumerate(ordered))
+    start = data.draw(st.integers(0, len(candidates) - 1))
+    circles = _build(candidates, start_index=start).circles
+
+    connectors = Figure5BoundaryConnectors.build(SQUARE, circles)
+
+    assert connectors.seam is Figure5SeamClosure.CONNECTOR
+    assert len(connectors.transitions) == len(circles)
+    for index, transition in enumerate(connectors.transitions):
+        assert transition.samples[0] == circles[index].contact_point
+        assert transition.samples[-1] == circles[(index + 1) % len(circles)].contact_point
+        assert float(transition.boundary_progress) > 0.0
+    # Dyadic sites on an integer square: every progress is exact in binary64.
+    assert sum(float(transition.boundary_progress) for transition in connectors.transitions) == SQUARE_PERIMETER_MM

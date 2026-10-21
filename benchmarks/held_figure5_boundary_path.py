@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from dataclasses import field
+from enum import Enum
 from fractions import Fraction
 from typing import Literal
 
@@ -73,6 +74,68 @@ class Figure5BoundaryTransition:
     samples: tuple[Point2[WorldXY], ...]
     boundary_progress: Millimetre
     within_fan: bool
+
+
+class Figure5SeamClosure(Enum):
+    """How the boundary-ordered loop closes from the last contact back to the first.
+
+    CONNECTOR: a CCW offset connector is emitted as real motion, so the strip
+    between the last and first contact is cut like any other connector.
+    COINCIDENT: the last and first contact are the same point; the loop is
+    already closed and no zero-length motion is emitted.
+    """
+
+    CONNECTOR = "connector"
+    COINCIDENT = "coincident"
+
+
+@dataclass(frozen=True)
+class Figure5BoundaryConnectors:
+    """The connectors of one closed boundary-ordered traversal.
+
+    ``transitions[i]`` runs from ``circles[i]`` to ``circles[i + 1]``; with a
+    ``CONNECTOR`` seam the last one runs from ``circles[-1]`` back to
+    ``circles[0]``, so there are as many connectors as circles. With a
+    ``COINCIDENT`` seam there is one fewer.
+    """
+
+    transitions: tuple[Figure5BoundaryTransition, ...]
+    seam: Figure5SeamClosure
+    seam_progress: Millimetre
+
+    @classmethod
+    def build(
+        cls,
+        boundary: tuple[Point2[WorldXY], ...],
+        circles: tuple[Figure5CounterclockwiseCircle, ...],
+    ) -> Figure5BoundaryConnectors:
+        """Connect consecutive contacts CCW along the offset loop and close the seam.
+
+        Args:
+            boundary: The CCW radius-one inward-offset cycle the contacts lie on.
+            circles: The circles in emission order.
+
+        Returns:
+            The open connectors plus the closing seam connector, unless the last
+            and first contact coincide exactly.
+
+        Raises:
+            DisconnectedFigure5BoundaryPathError: ``circles`` is empty or the
+                boundary is not one valid cycle.
+            AmbiguousFigure5BoundaryPathError: A connector has no strictly
+                positive CCW progress, or a fan does not share its contact.
+        """
+        if not circles:
+            raise DisconnectedFigure5BoundaryPathError("Figure 5 requires selected candidates on the inward-offset cycle.")
+        _validate_boundary(boundary)
+        lengths = _side_lengths(boundary)
+        opened = tuple(_transition(boundary, lengths, start, end) for start, end in zip(circles, circles[1:]))
+        last, first = circles[-1], circles[0]
+        # A lone circle's seam is the whole loop: one full CCW lap.
+        if last is not first and last.contact_point == first.contact_point:
+            return cls(opened, Figure5SeamClosure.COINCIDENT, Millimetre(0.0))
+        closing = _transition(boundary, lengths, last, first)
+        return cls((*opened, closing), Figure5SeamClosure.CONNECTOR, closing.boundary_progress)
 
 
 @dataclass(frozen=True)
@@ -299,6 +362,5 @@ def build_figure5_boundary_path(
     seed_site = next(iter(seed_sites))
     seed = next(index for index, circle in enumerate(ordered) if _site_key(circle.boundary_site) == seed_site)
     phased = ordered[seed:] + ordered[:seed]
-    lengths = _side_lengths(component)
-    transitions = tuple(_transition(component, lengths, circle, phased[(index + 1) % len(phased)]) for index, circle in enumerate(phased))
-    return Figure5BoundaryPath(phased, transitions, reached_run_ids)
+    connectors = Figure5BoundaryConnectors.build(component, phased)
+    return Figure5BoundaryPath(phased, connectors.transitions, reached_run_ids)
