@@ -162,6 +162,24 @@ def _site_key(site: ProjectionBoundarySite) -> tuple[int, Fraction]:
     return int(site.segment_id), site.parameter
 
 
+def _dyadic_lerp(start: float, end: float, parameter: Fraction) -> float:
+    """Correctly rounded double of the exact ``start + parameter * (end - start)``.
+
+    Every finite double is ``n / 2**k``; over the common power-of-two
+    denominator ``d`` the exact lerp with ``parameter = p / q`` is
+    ``(S*q + p*(E - S)) / (q*d)`` in integers. CPython's ``int / int`` rounds
+    correctly, as ``float(Fraction)`` does (it is the same division), so the
+    result is the Fraction lerp's double bit for bit, without gcd reductions.
+    """
+    start_numerator, start_denominator = start.as_integer_ratio()
+    end_numerator, end_denominator = end.as_integer_ratio()
+    denominator = max(start_denominator, end_denominator)
+    scaled_start = start_numerator * (denominator // start_denominator)
+    scaled_end = end_numerator * (denominator // end_denominator)
+    numerator, parameter_denominator = parameter.numerator, parameter.denominator
+    return (scaled_start * parameter_denominator + numerator * (scaled_end - scaled_start)) / (parameter_denominator * denominator)
+
+
 def _canonical_offset_point(
     component: tuple[Point2[WorldXY], ...],
     site: ProjectionBoundarySite,
@@ -169,13 +187,12 @@ def _canonical_offset_point(
     side_index = int(site.segment_id)
     if side_index >= len(component):
         raise AmbiguousFigure5BoundaryPathError("A Figure 5 hypothesis names no radius-one offset side.")
-    start = _rational(component[side_index])
-    end = _rational(component[(side_index + 1) % len(component)])
-    point = (
-        start[0] + site.parameter * (end[0] - start[0]),
-        start[1] + site.parameter * (end[1] - start[1]),
+    start = component[side_index]
+    end = component[(side_index + 1) % len(component)]
+    return Point2[WorldXY].build(
+        _dyadic_lerp(float(start.x), float(end.x), site.parameter),
+        _dyadic_lerp(float(start.y), float(end.y), site.parameter),
     )
-    return Point2[WorldXY].build(float(point[0]), float(point[1]))
 
 
 def _project_to_offset_side(

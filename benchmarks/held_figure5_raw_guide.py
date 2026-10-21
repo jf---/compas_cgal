@@ -31,6 +31,9 @@ FIGURE5_MAX_GUIDE_RUNS = 1000
 
 
 RationalPoint = tuple[Fraction, Fraction]
+# The subscripted alias, built once: ``Point2[WorldXY].build`` per call pays typing's
+# alias lookup and attribute forwarding on the hypothesis hot path (95k calls on Figure 5).
+_WORLD_POINT = Point2[WorldXY]
 RationalSegment = tuple[RationalPoint, RationalPoint]
 
 
@@ -433,23 +436,31 @@ def _boundary_arclength(
     return Millimetre(arclength % float(guide.boundary_length))
 
 
-def _build_projection_admissible_hypothesis(
+def _exact_square(value: float) -> Fraction:
+    """Exact square of a double, injected once with ``Fraction.from_float``."""
+    exact = Fraction.from_float(value)
+    return exact * exact
+
+
+def _hypothesis_from_record(
     guide: Figure5RawGuide,
     station: Figure5RawGuideStation,
     site: ProjectionBoundarySite,
-    analysis: _StationBoundaryAnalysis,
+    admissible: tuple[ProjectionBoundarySite, ...],
+    footpoint_exact: RationalPoint,
+    squared_clearance: Fraction,
+    tool_radius: float,
+    squared_tool_radius: Fraction,
 ) -> ProjectionAdmissibleBoundaryHypothesis:
-    admissible = analysis.distance_admissible_sites
-    if site not in admissible:
-        raise InadmissibleFigure5BoundarySideError(f"Projected boundary site {int(site.segment_id)}:{site.parameter} is outside the Figure 5 evidence budget.")
-    footpoint_exact, squared_clearance = next((footpoint, distance) for record_site, footpoint, distance in analysis.records if record_site == site)
+    """Paper geometry from one admissible record.
 
-    tool_radius = float(guide.case.tool_radius.value)
-    exact_tool_radius = Fraction.from_float(tool_radius)
-    if squared_clearance <= exact_tool_radius * exact_tool_radius:
+    Decides ``clearance**2 > r**2`` exactly (``squared_tool_radius`` is the
+    exact square of the double ``tool_radius``); everything after it reports.
+    """
+    if squared_clearance <= squared_tool_radius:
         raise InvalidProjectionAdmissibleHypothesisError("Figure 5 projected-boundary hypothesis has no positive paper-derived radius.")
     middle = station.middle_point
-    footpoint = Point2[WorldXY].build(
+    footpoint = _WORLD_POINT.build(
         float(footpoint_exact[0]),
         float(footpoint_exact[1]),
     )
@@ -457,11 +468,11 @@ def _build_projection_admissible_hypothesis(
     direction_x = (float(middle.x) - float(footpoint.x)) / clearance
     direction_y = (float(middle.y) - float(footpoint.y)) / clearance
     radius = (clearance - tool_radius) / 2.0
-    contact = Point2[WorldXY].build(
+    contact = _WORLD_POINT.build(
         float(footpoint.x) + tool_radius * direction_x,
         float(footpoint.y) + tool_radius * direction_y,
     )
-    center = Point2[WorldXY].build(
+    center = _WORLD_POINT.build(
         float(contact.x) + radius * direction_x,
         float(contact.y) + radius * direction_y,
     )
@@ -477,6 +488,20 @@ def _build_projection_admissible_hypothesis(
         center,
         GuideRadius.build(radius),
     )
+
+
+def _build_projection_admissible_hypothesis(
+    guide: Figure5RawGuide,
+    station: Figure5RawGuideStation,
+    site: ProjectionBoundarySite,
+    analysis: _StationBoundaryAnalysis,
+) -> ProjectionAdmissibleBoundaryHypothesis:
+    admissible = analysis.distance_admissible_sites
+    if site not in admissible:
+        raise InadmissibleFigure5BoundarySideError(f"Projected boundary site {int(site.segment_id)}:{site.parameter} is outside the Figure 5 evidence budget.")
+    footpoint_exact, squared_clearance = next((footpoint, distance) for record_site, footpoint, distance in analysis.records if record_site == site)
+    tool_radius = float(guide.case.tool_radius.value)
+    return _hypothesis_from_record(guide, station, site, admissible, footpoint_exact, squared_clearance, tool_radius, _exact_square(tool_radius))
 
 
 def build_projection_admissible_hypothesis(
@@ -497,16 +522,19 @@ def build_distance_admissible_hypotheses(
     guide: Figure5RawGuide,
     station: Figure5RawGuideStation,
 ) -> tuple[ProjectionAdmissibleBoundaryHypothesis, ...]:
-    """Build every distance-admissible hypothesis without claiming ownership."""
+    """Build every distance-admissible hypothesis without claiming ownership.
+
+    The native analysis records exactly the admissible sites, in order (its
+    ``distance_admissible_sites`` is built from the records), so each record
+    is used directly: no membership test, no record search.
+    """
     analysis = _native_station_boundary(guide, station)
+    admissible = analysis.distance_admissible_sites
+    tool_radius = float(guide.case.tool_radius.value)
+    squared_tool_radius = _exact_square(tool_radius)
     return tuple(
-        _build_projection_admissible_hypothesis(
-            guide,
-            station,
-            site,
-            analysis,
-        )
-        for site in analysis.distance_admissible_sites
+        _hypothesis_from_record(guide, station, site, admissible, footpoint, squared_clearance, tool_radius, squared_tool_radius)
+        for site, footpoint, squared_clearance in analysis.records
     )
 
 
