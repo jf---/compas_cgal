@@ -148,15 +148,25 @@ nav:
       - Straight Skeleton Weighted Offset: examples/example_straight_skeleton_2_interior_straight_skeleton_weighted_offset_polygon.md
       - Straight Skeleton With Holes: examples/example_straight_skeleton_2_interior_straight_skeleton_with_holes.md
       - Toolpath Trochoidal MAT: examples/example_toolpath_trochoidal_mat.md
+  - Performance:
+      - Overview: performance.md
+      - Held Performance: held_performance.md
+      - Continuous Engagement Cost: continuous_engagement_cost.md
   - Design Notes:
       - Exact-Kernel Discipline: exactness.md
       - Number Types and Filtering: number_types.md
       - Truthful Engagement Audit: engagement_audit.md
       - Benchmark Corpus: benchmarks.md
+      - "Held Figure 5: 2D Path Characterization": benchmarks/held_figure5_2d_path.md
       - Held–Pfeiffer Reference Pockets: held_pfeiffer_reference_pockets.md
       - Held Motion Coverage: held_motion_coverage.md
+      - Held Coverage Certificate: held_coverage_certificate.md
+      - Held Exact Centre Domain: held_exact_centre_domain.md
+      - Held Coverage-Preserving Selection: held_coverage_preserving_selection.md
+      - Held Connector Engagement: held_connector_engagement.md
+      - Held Actual-Stock Engine: held_actual_stock_engine.md
+      - Held Qualification: held_qualification.md
       - Held Toolpath Gallery: held_toolpath_gallery.md
-      - Held Performance: held_performance.md
       - Measurement Claims: measurement_claims.md
       - Machining Quality: machining_quality.md
       - "Product Pipeline: Narrow Regime": pipeline.md
@@ -174,7 +184,6 @@ nav:
       - Loop Radius Degeneracy: loop_radius_degeneracy.md
       - Machining Metric Validity: machining_metric_validity.md
       - The Oblique-Edge Cliff: oblique_edge_cost.md
-      - Continuous Engagement Cost: continuous_engagement_cost.md
   - Refactor:
       - "Stage 0: the Gate Measures Physics": refactor/stage0.md
       - "Stage 1: the Narrow-Regime Generator": refactor/stage1.md
