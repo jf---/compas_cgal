@@ -25,8 +25,10 @@ hypotheses still read the projection ring: they propose, Ω* decides.
 from __future__ import annotations
 
 import functools
+from collections.abc import Callable
 from dataclasses import dataclass
 from fractions import Fraction
+from typing import TypeVar
 
 from benchmarks.errors import BenchmarkError
 from benchmarks.held_centre_domain_supports import PieceKind
@@ -35,11 +37,9 @@ from benchmarks.held_dyadic_interval import Interval
 from benchmarks.held_exact_centre_domain import ContactBeyondGapError
 from benchmarks.held_exact_centre_domain import DecidedContact
 from benchmarks.held_figure5_path import _canonical_indices
-from benchmarks.held_figure5_path import _cyclic_boundary_neighborhoods
-from benchmarks.held_figure5_path import _dyadic_compare
-from benchmarks.held_figure5_path import _dyadic_minimum
-from benchmarks.held_figure5_path import _dyadic_squared_distance
 from benchmarks.held_figure5_path import _PlacementLane
+from benchmarks.held_figure5_path import _station_neighborhood_owners
+from benchmarks.held_figure5_path import _with_start_owners
 from benchmarks.held_figure5_path import continuous_placement_lanes
 from benchmarks.held_figure5_raw_guide import GuideRunId
 from benchmarks.held_figure5_raw_guide import GuideRunStationOrdinal
@@ -60,6 +60,8 @@ from compas_cgal.units import Millimetre
 from compas_cgal.units import Point2
 from compas_cgal.units import ToolRadius
 from compas_cgal.units import WorldXY
+
+T = TypeVar("T")
 
 
 class OmegaPathIntegrationError(BenchmarkError):
@@ -176,19 +178,8 @@ def _owner_indices(
     by_station: dict[tuple[GuideRunId, GuideRunStationOrdinal], list[int]] = {}
     for index, hypothesis in enumerate(hypotheses):
         by_station.setdefault((hypothesis.run_id, hypothesis.station_ordinal), []).append(index)
-    owners: list[int] = []
-    for station_indices in by_station.values():
-        for neighborhood in _cyclic_boundary_neighborhoods({pieces[index] for index in station_indices}, piece_count):
-            candidates = tuple(index for index in station_indices if pieces[index] in neighborhood)
-            distances = tuple(_dyadic_squared_distance(hypotheses[index].middle_point, hypotheses[index].boundary_footpoint) for index in candidates)
-            minimum = _dyadic_minimum(distances)
-            owners.extend(index for index, distance in zip(candidates, distances, strict=True) if _dyadic_compare(distance, minimum) == 0)
-    start_distances = tuple(_dyadic_squared_distance(published_start_center, hypothesis.contact_point) for hypothesis in hypotheses)
-    start_minimum = _dyadic_minimum(start_distances)
-    for index, distance in enumerate(start_distances):
-        if _dyadic_compare(distance, start_minimum) == 0 and hypotheses[index] not in (hypotheses[owner] for owner in owners):
-            owners.append(index)
-    return tuple(owners)
+    owners = _station_neighborhood_owners(hypotheses, by_station, pieces, piece_count)
+    return _with_start_owners(hypotheses, owners, published_start_center)
 
 
 def _compare_circles(first: OmegaCircle, second: OmegaCircle) -> int:
@@ -222,19 +213,67 @@ def _paper(circle: OmegaCircle) -> PaperCircleCandidate:
     return circle.paper_candidate()
 
 
-def phase_from_start(circles: tuple[OmegaCircle, ...], start: Point2[WorldXY], start_bound: Millimetre) -> tuple[OmegaCircle, ...]:
-    """Sort by the exact ∂Ω* order and rotate to the site exactly nearest the published start.
+@dataclass(frozen=True)
+class _StartOrder:
+    """Circles in the exact ∂Ω* emission order, with what a later restriction reuses.
+
+    ``position`` maps ``id(circle)`` to its index in ``circles``; ``boxes`` are
+    the enclosures of each circle's squared distance to the published start.
+    """
+
+    circles: tuple[OmegaCircle, ...]
+    position: dict[int, int]
+    boxes: tuple[Interval, ...]
+    origin: ExactPoint2[WorldXY]
+
+
+def _start_order(circles: tuple[OmegaCircle, ...], start: Point2[WorldXY]) -> _StartOrder:
+    """Sort by :data:`circle_order_key` and enclose every site's squared distance to ``start``."""
+    ordered = tuple(sorted(circles, key=circle_order_key))
+    origin = ExactPoint2[WorldXY].from_binary64(float(start.x), float(start.y))
+    origin_x, origin_y = Interval.of(origin.x), Interval.of(origin.y)
+    boxes = []
+    for circle in ordered:
+        x, y = circle.site.point_box()
+        boxes.append((x - origin_x).square() + (y - origin_y).square())
+    return _StartOrder(ordered, {id(circle): index for index, circle in enumerate(ordered)}, tuple(boxes), origin)
+
+
+def _restricted_order(subset: tuple[T, ...], position: dict[int, int], compare: Callable[[T, T], int]) -> tuple[T, ...]:
+    """``sorted(subset, key=cmp_to_key(compare))`` for a subset of an already sorted sequence, without re-sorting by ``compare``.
+
+    ``position`` is each element's index (by ``id``) in ``sorted(full, key=cmp_to_key(compare))``,
+    and ``compare`` is a strict weak order. Then the result is the same sequence:
+
+    - if ``compare(a, b) < 0``, ``a`` precedes ``b`` in the full sorted order,
+      so ordering the subset by ``position`` keeps every strictly ordered pair;
+    - compare-equal elements are contiguous in the full order (between two
+      equal elements every element is equal to both, by transitivity), hence
+      contiguous in the subset ordered by ``position``;
+    - ``sorted`` is stable: within a compare-equal run it keeps the subset's own
+      order, which the run reorder below restores (the full sort kept the full
+      sequence's order there instead).
+
+    ``compare`` is called only on the ``len(subset) - 1`` neighbours.
+    """
+    by_position = sorted(range(len(subset)), key=lambda index: position[id(subset[index])])
+    result: list[T] = []
+    run = [by_position[0]] if by_position else []
+    for index in by_position[1:]:
+        if compare(subset[run[-1]], subset[index]) != 0:
+            result.extend(subset[member] for member in sorted(run))
+            run = []
+        run.append(index)
+    result.extend(subset[member] for member in sorted(run))
+    return tuple(result)
+
+
+def _phase(ordered: tuple[OmegaCircle, ...], boxes: tuple[Interval, ...], origin: ExactPoint2[WorldXY], start_bound: Millimetre) -> tuple[OmegaCircle, ...]:
+    """Rotate ``ordered`` to the site exactly nearest ``origin`` (``boxes`` enclose each squared distance).
 
     Raises:
         AmbiguousOmegaStartError: Nearest site beyond ``start_bound``, or two distinct nearest sites.
     """
-    ordered = sorted(circles, key=circle_order_key)
-    origin = ExactPoint2[WorldXY].from_binary64(float(start.x), float(start.y))
-    origin_box = (Interval.of(origin.x), Interval.of(origin.y))
-    boxes = []
-    for circle in ordered:
-        x, y = circle.site.point_box()
-        boxes.append((x - origin_box[0]).square() + (y - origin_box[1]).square())
     # Filter: only sites whose enclosure can reach the least upper end compete exactly.
     ceiling = min(box.hi for box in boxes)
     competing = [index for index, box in enumerate(boxes) if box.lo <= ceiling]
@@ -250,7 +289,32 @@ def phase_from_start(circles: tuple[OmegaCircle, ...], start: Point2[WorldXY], s
     if any(not ordered[index].site.same_position(ordered[nearest[0]].site) for index in nearest):
         raise AmbiguousOmegaStartError("The published start has no unique nearest ∂Ω* site.")
     seed = nearest[0]
-    return tuple(ordered[seed:] + ordered[:seed])
+    return ordered[seed:] + ordered[:seed]
+
+
+def phase_from_start(circles: tuple[OmegaCircle, ...], start: Point2[WorldXY], start_bound: Millimetre) -> tuple[OmegaCircle, ...]:
+    """Sort by the exact ∂Ω* order and rotate to the site exactly nearest the published start.
+
+    Raises:
+        AmbiguousOmegaStartError: Nearest site beyond ``start_bound``, or two distinct nearest sites.
+    """
+    order = _start_order(circles, start)
+    return _phase(order.circles, order.boxes, order.origin, start_bound)
+
+
+def _phase_subset_from_start(order: _StartOrder, subset: tuple[OmegaCircle, ...], start_bound: Millimetre) -> tuple[OmegaCircle, ...]:
+    """``phase_from_start(subset, ...)`` for circles drawn from ``order``, reusing its sort and enclosures.
+
+    The order is :func:`_restricted_order` (the same sequence ``sorted`` gives),
+    the enclosures are the ones ``order`` computed from the same sites and
+    origin, so the seed decision runs on identical inputs.
+
+    Raises:
+        AmbiguousOmegaStartError: See :func:`phase_from_start`.
+    """
+    ordered = _restricted_order(subset, order.position, _compare_circles)
+    boxes = tuple(order.boxes[order.position[id(circle)]] for circle in ordered)
+    return _phase(ordered, boxes, order.origin, start_bound)
 
 
 def _merge_identical_circles(placed: list[tuple[OmegaCircle, tuple[GuideRunId, ...]]]) -> tuple[tuple[OmegaCircle, ...], dict[int, tuple[GuideRunId, ...]]]:
@@ -374,7 +438,8 @@ def build_omega_hypothesis_path(
         provenance = (hypothesis.run_id, hypothesis.station_ordinal, hypothesis.projected_boundary_site)
         placed.append((place_local(contacts.site(owners[index]), float(hypothesis.guide_radius.value), provenance), runs))
     circles, runs_of = _merge_identical_circles(placed)
-    ordered = phase_from_start(circles, published_start_center, start_evidence_bound)
+    order = _start_order(circles, published_start_center)
+    ordered = _phase(order.circles, order.boxes, order.origin, start_evidence_bound)
     lanes = _split_at_gaps(_fold_coincident_centres(continuous_placement_lanes(ordered, tool_radius, _station_key, _paper), runs_of), tool_radius)
     selected: list[OmegaCircle] = []
     placements: list[OmegaPlacementRecord] = []
@@ -407,7 +472,7 @@ def build_omega_hypothesis_path(
         raise MissingOmegaGuideRunError("Engagement placement did not preserve every reached guide run.")
     # A circle reached by two lanes is emitted once (the polygon path keyed the same circle by origin).
     unique = tuple({id(circle): circle for circle in selected}.values())
-    phased = phase_from_start(unique, published_start_center, start_evidence_bound)
+    phased = _phase_subset_from_start(order, unique, start_evidence_bound)
     return OmegaHypothesisPath(
         phased,
         tuple(runs_of[id(circle)] for circle in phased),

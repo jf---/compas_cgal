@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable
+from collections.abc import Iterable
 from dataclasses import dataclass
 from dataclasses import replace
 from fractions import Fraction
@@ -23,7 +24,7 @@ from benchmarks.held_figure5_raw_guide import GuideRunId
 from benchmarks.held_figure5_raw_guide import GuideRunStationOrdinal
 from benchmarks.held_figure5_raw_guide import ProjectionAdmissibleBoundaryHypothesis
 from benchmarks.held_figure5_raw_guide import ProjectionBoundarySite
-from benchmarks.held_figure5_raw_guide import build_distance_admissible_hypotheses
+from benchmarks.held_figure5_raw_guide import build_guide_distance_admissible_hypotheses
 from benchmarks.held_offset_contact_projection import project_bounded_offset_contacts
 from benchmarks.held_reference_contacts import qualify_reference_contact_sites
 from benchmarks.held_standard_placement import OrderedPlacementSpan
@@ -199,6 +200,45 @@ def _dyadic_minimum(distances: tuple[_DyadicSquaredDistance, ...]) -> _DyadicSqu
     return minimum
 
 
+class _CommonScaleSquaredDistances(NamedTuple):
+    """Exact squared distances ``numerators[i] / 4**exponent`` in mm², one exponent for all.
+
+    With one shared denominator, the exact order and equality of the squared
+    distances are the order and equality of the integer numerators, so an
+    argmin is the builtin ``min`` and a tie is ``==``.
+    """
+
+    numerators: tuple[int, ...]
+    exponent: int
+
+
+def _common_scale_squared_distances(
+    pairs: Iterable[tuple[Point2[WorldXY], Point2[WorldXY]]],
+) -> _CommonScaleSquaredDistances:
+    """Exact squared distance of every double point pair over one power-of-two denominator.
+
+    Every finite double is ``n / 2**k``; the largest ``k`` over all coordinates
+    is a common denominator of every coordinate, so every difference is an
+    integer over ``2**k`` and every squared distance an integer over ``4**k``.
+    """
+    ratios = [
+        (
+            float(first.x).as_integer_ratio(),
+            float(first.y).as_integer_ratio(),
+            float(second.x).as_integer_ratio(),
+            float(second.y).as_integer_ratio(),
+        )
+        for first, second in pairs
+    ]
+    scale = max((denominator for row in ratios for _, denominator in row), default=1)
+    numerators = []
+    for (first_x, first_x_scale), (first_y, first_y_scale), (second_x, second_x_scale), (second_y, second_y_scale) in ratios:
+        delta_x = second_x * (scale // second_x_scale) - first_x * (scale // first_x_scale)
+        delta_y = second_y * (scale // second_y_scale) - first_y * (scale // first_y_scale)
+        numerators.append(delta_x * delta_x + delta_y * delta_y)
+    return _CommonScaleSquaredDistances(tuple(numerators), scale.bit_length() - 1)
+
+
 def _cyclic_boundary_neighborhoods(
     segment_ids: set[int],
     segment_count: int,
@@ -234,38 +274,53 @@ def _boundary_neighborhood_owner_indices(
             [],
         ).append(index)
 
+    owners = _station_neighborhood_owners(
+        hypotheses,
+        by_station,
+        tuple(int(hypothesis.projected_boundary_site.segment_id) for hypothesis in hypotheses),
+        segment_count,
+    )
+    return _with_start_owners(hypotheses, owners, published_start_center)
+
+
+def _station_neighborhood_owners(
+    hypotheses: tuple[ProjectionAdmissibleBoundaryHypothesis, ...],
+    by_station: dict[tuple[GuideRunId, GuideRunStationOrdinal], list[int]],
+    segments: tuple[int, ...],
+    segment_count: int,
+) -> list[int]:
+    """Every exactly nearest hypothesis (middle point to footpoint) of each station's cyclic neighbourhoods.
+
+    One common-scale pass decides every squared distance exactly, so each
+    neighbourhood's argmin and its ties are integer ``min`` and ``==``.
+    """
+    distances = _common_scale_squared_distances((hypothesis.middle_point, hypothesis.boundary_footpoint) for hypothesis in hypotheses).numerators
     owners: list[int] = []
     for station_indices in by_station.values():
-        neighborhoods = _cyclic_boundary_neighborhoods(
-            {int(hypotheses[index].projected_boundary_site.segment_id) for index in station_indices},
-            segment_count,
-        )
-        for neighborhood in neighborhoods:
-            candidates = tuple(index for index in station_indices if int(hypotheses[index].projected_boundary_site.segment_id) in neighborhood)
-            distances = tuple(
-                _dyadic_squared_distance(
-                    hypotheses[index].middle_point,
-                    hypotheses[index].boundary_footpoint,
-                )
-                for index in candidates
-            )
-            minimum = _dyadic_minimum(distances)
-            owners.extend(index for index, distance in zip(candidates, distances, strict=True) if _dyadic_compare(distance, minimum) == 0)
+        for neighborhood in _cyclic_boundary_neighborhoods({segments[index] for index in station_indices}, segment_count):
+            candidates = [index for index in station_indices if segments[index] in neighborhood]
+            minimum = min(distances[index] for index in candidates)
+            owners.extend(index for index in candidates if distances[index] == minimum)
+    return owners
 
-    start_distances = tuple(
-        _dyadic_squared_distance(
-            published_start_center,
-            hypothesis.contact_point,
-        )
-        for hypothesis in hypotheses
-    )
-    start_minimum = _dyadic_minimum(start_distances)
-    # Only exact start-distance ties reach the membership scan (one or two per
-    # workload), so a list scan beats hashing every owner into a set. The scan
-    # is by hypothesis equality, as before: an equal hypothesis already owned
-    # suppresses the start owner.
+
+def _with_start_owners(
+    hypotheses: tuple[ProjectionAdmissibleBoundaryHypothesis, ...],
+    owners: list[int],
+    published_start_center: Point2[WorldXY],
+) -> tuple[int, ...]:
+    """``owners`` plus every hypothesis whose contact is exactly nearest the published start, unless an equal one is owned.
+
+    One common-scale pass decides every start distance exactly (integer ``min``
+    and ``==``). Only exact ties reach the membership scan (one or two per
+    workload), so a list scan beats hashing every owner into a set. The scan is
+    by hypothesis equality: an equal hypothesis already owned suppresses the
+    start owner.
+    """
+    start_distances = _common_scale_squared_distances((published_start_center, hypothesis.contact_point) for hypothesis in hypotheses).numerators
+    start_minimum = min(start_distances)
     for index, distance in enumerate(start_distances):
-        if _dyadic_compare(distance, start_minimum) == 0 and hypotheses[index] not in (hypotheses[owner] for owner in owners):
+        if distance == start_minimum and hypotheses[index] not in (hypotheses[owner] for owner in owners):
             owners.append(index)
     return tuple(owners)
 
@@ -640,7 +695,7 @@ def build_held_reference_path(
     start_radius = guide.case.start_marker_radius
     if start is None or start_radius is None:
         raise Figure5PathIntegrationError("Canonical Figure 5 requires its published start-circle evidence.")
-    hypotheses = tuple(hypothesis for run in guide.runs for station in run.stations for hypothesis in build_distance_admissible_hypotheses(guide, station))
+    hypotheses = build_guide_distance_admissible_hypotheses(guide)
     offset_sites: tuple[ProjectionBoundarySite, ...] | None = None
     rejected_contacts: tuple[ProjectionAdmissibleBoundaryHypothesis, ...] = ()
     if project_contacts:
