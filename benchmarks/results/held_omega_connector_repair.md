@@ -1,0 +1,14 @@
+Recorded 2026-10-22T16:47:43+00:00 at commit `35a7a299af` (dirty tree) on Apple M1 Max.
+
+**Ω\* connector repair.** Refused before: the repair stage's exact gate on the NOTHING-stage circles. Refused after: a fresh
+exact assessment of the emitted path (its tiers equal the stage's verdicts). Inserted per repaired connector: count × circles.
+Gouge: gouging circles / connectors by the exact audit. Stage s = gate s + pass s (+ bookkeeping); stage / rest is the
+same-process ratio to the other generation stages.
+
+| workload | circles before → after | refused before → after | inserted | per repaired connector | first refused sweep | seam repaired | gouge before / after | stage s | gate s | pass s | gen s | stage / rest | load |
+|---|---|---|---:|---|---|---|---|---:|---:|---:|---:|---:|---|
+| `figure5_refined` | 1803 → 1804 | 1 → 0 | 1 | 1×1 | offset_line 1 | no | 0/0 / 0/0 | 1.56 | 1.51 | 0.047 | 5.18 | 0.43 | 50–47 |
+| `figure8_upper_lane` | 4011 → 4012 | 1 → 0 | 1 | 1×1 | offset_arc 1 | no | 0/0 / 0/0 | 3.23 | 3.15 | 0.079 | 11.78 | 0.38 | 47–44 |
+| `figure8_upper_boundary` | 1256 → 1270 | 14 → 0 | 14 | 14×1 | offset_arc 13, offset_line 1 | no | 0/0 / 0/0 | 1.71 | 1.66 | 0.050 | 7.42 | 0.30 | 44–42 |
+| `figure8_crossed_skis_boundary` | 1430 → 1442 | 12 → 0 | 12 | 12×1 | offset_arc 12 | no | 0/0 / 0/0 | 2.08 | 2.03 | 0.051 | 6.15 | 0.51 | 42–38 |
+| `figure8_monstera_boundary_qualified_corners` | 3934 → 3983 | 49 → 0 | 49 | 49×1 | offset_line 30, offset_arc 19 | no | 0/0 / 0/0 | 4.02 | 3.81 | 0.212 | 16.63 | 0.32 | 38–35 |

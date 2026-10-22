@@ -1,0 +1,387 @@
+{
+  "build": {
+    "commit": "35a7a299afb1ab221c7de898bbf977c7d043e2ed",
+    "dirty": true,
+    "package_version": "0.9.1",
+    "recorded_at": "2026-10-22T16:47:43+00:00"
+  },
+  "machine": {
+    "cpu_brand": "Apple M1 Max",
+    "machine": "arm64",
+    "python": "3.12.13",
+    "system": "Darwin"
+  },
+  "workloads": [
+    {
+      "cap_deg": 80.0,
+      "circles_after": 1804,
+      "circles_before": 1803,
+      "connector_repair_seconds": 1.5596283329941798,
+      "first_refusal_kinds": {
+        "offset_line": 1
+      },
+      "fresh_tiers_equal_repair_verdicts": true,
+      "generation_cpu_seconds": 4.225733,
+      "generation_seconds": 5.180235166015336,
+      "generation_wall_seconds": 5.424885125015862,
+      "gouge_after": [
+        0,
+        0
+      ],
+      "gouge_before": [
+        0,
+        0
+      ],
+      "inserted": 1,
+      "inserted_per_action": [
+        1
+      ],
+      "load_1min_before_after": [
+        50.18896484375,
+        47.37109375
+      ],
+      "refused_after": 0,
+      "refused_before": 1,
+      "repair_gate_seconds": 1.5083387499907985,
+      "repair_pass_seconds": 0.04688650000025518,
+      "repaired_connectors": [
+        92
+      ],
+      "seam_repaired": false,
+      "stage_over_rest": 0.4307643455704284,
+      "tiers_after": {
+        "refused": 0,
+        "stationary": 0,
+        "tier 1": 1803,
+        "tier 1b": 1
+      },
+      "workload": "figure5_refined"
+    },
+    {
+      "cap_deg": 80.0,
+      "circles_after": 4012,
+      "circles_before": 4011,
+      "connector_repair_seconds": 3.2342532080074307,
+      "first_refusal_kinds": {
+        "offset_arc": 1
+      },
+      "fresh_tiers_equal_repair_verdicts": true,
+      "generation_cpu_seconds": 9.823940999999998,
+      "generation_seconds": 11.77988129100413,
+      "generation_wall_seconds": 12.016591083985986,
+      "gouge_after": [
+        0,
+        0
+      ],
+      "gouge_before": [
+        0,
+        0
+      ],
+      "inserted": 1,
+      "inserted_per_action": [
+        1
+      ],
+      "load_1min_before_after": [
+        47.37109375,
+        43.79931640625
+      ],
+      "refused_after": 0,
+      "refused_before": 1,
+      "repair_gate_seconds": 3.149807125009829,
+      "repair_pass_seconds": 0.07878654199885204,
+      "repaired_connectors": [
+        3900
+      ],
+      "seam_repaired": false,
+      "stage_over_rest": 0.3784687534486375,
+      "tiers_after": {
+        "refused": 0,
+        "stationary": 0,
+        "tier 1": 4012,
+        "tier 1b": 0
+      },
+      "workload": "figure8_upper_lane"
+    },
+    {
+      "cap_deg": 80.0,
+      "circles_after": 1270,
+      "circles_before": 1256,
+      "connector_repair_seconds": 1.7072744159959257,
+      "first_refusal_kinds": {
+        "offset_arc": 13,
+        "offset_line": 1
+      },
+      "fresh_tiers_equal_repair_verdicts": true,
+      "generation_cpu_seconds": 6.627203999999999,
+      "generation_seconds": 7.422516250953777,
+      "generation_wall_seconds": 7.686501667019911,
+      "gouge_after": [
+        0,
+        0
+      ],
+      "gouge_before": [
+        0,
+        0
+      ],
+      "inserted": 14,
+      "inserted_per_action": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "load_1min_before_after": [
+        43.79931640625,
+        42.224609375
+      ],
+      "refused_after": 0,
+      "refused_before": 14,
+      "repair_gate_seconds": 1.6552619579888415,
+      "repair_pass_seconds": 0.05044054100289941,
+      "repaired_connectors": [
+        40,
+        75,
+        86,
+        104,
+        554,
+        669,
+        679,
+        783,
+        811,
+        899,
+        921,
+        963,
+        1219,
+        1235
+      ],
+      "seam_repaired": false,
+      "stage_over_rest": 0.29872304012635303,
+      "tiers_after": {
+        "refused": 0,
+        "stationary": 0,
+        "tier 1": 1270,
+        "tier 1b": 0
+      },
+      "workload": "figure8_upper_boundary"
+    },
+    {
+      "cap_deg": 80.0,
+      "circles_after": 1442,
+      "circles_before": 1430,
+      "connector_repair_seconds": 2.078302458015969,
+      "first_refusal_kinds": {
+        "offset_arc": 12
+      },
+      "fresh_tiers_equal_repair_verdicts": true,
+      "generation_cpu_seconds": 5.431368999999997,
+      "generation_seconds": 6.152663584070979,
+      "generation_wall_seconds": 6.322586666996358,
+      "gouge_after": [
+        0,
+        0
+      ],
+      "gouge_before": [
+        0,
+        0
+      ],
+      "inserted": 12,
+      "inserted_per_action": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "load_1min_before_after": [
+        42.224609375,
+        37.81103515625
+      ],
+      "refused_after": 0,
+      "refused_before": 12,
+      "repair_gate_seconds": 2.025137624994386,
+      "repair_pass_seconds": 0.0512929999968037,
+      "repaired_connectors": [
+        15,
+        356,
+        366,
+        414,
+        784,
+        1042,
+        1048,
+        1073,
+        1086,
+        1171,
+        1402,
+        1410
+      ],
+      "seam_repaired": false,
+      "stage_over_rest": 0.5100928449188009,
+      "tiers_after": {
+        "refused": 0,
+        "stationary": 0,
+        "tier 1": 1442,
+        "tier 1b": 0
+      },
+      "workload": "figure8_crossed_skis_boundary"
+    },
+    {
+      "cap_deg": 80.0,
+      "circles_after": 3983,
+      "circles_before": 3934,
+      "connector_repair_seconds": 4.023760792013491,
+      "first_refusal_kinds": {
+        "offset_arc": 19,
+        "offset_line": 30
+      },
+      "fresh_tiers_equal_repair_verdicts": true,
+      "generation_cpu_seconds": 15.364526999999995,
+      "generation_seconds": 16.633615375001682,
+      "generation_wall_seconds": 17.084493250004016,
+      "gouge_after": [
+        0,
+        0
+      ],
+      "gouge_before": [
+        0,
+        0
+      ],
+      "inserted": 49,
+      "inserted_per_action": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "load_1min_before_after": [
+        37.81103515625,
+        35.38427734375
+      ],
+      "refused_after": 0,
+      "refused_before": 49,
+      "repair_gate_seconds": 3.8052237080119085,
+      "repair_pass_seconds": 0.2124902909854427,
+      "repaired_connectors": [
+        20,
+        23,
+        354,
+        370,
+        371,
+        373,
+        588,
+        707,
+        708,
+        912,
+        913,
+        916,
+        917,
+        970,
+        980,
+        1228,
+        1355,
+        1356,
+        1357,
+        1488,
+        1515,
+        1879,
+        1889,
+        1941,
+        1942,
+        1943,
+        1947,
+        1955,
+        2214,
+        2219,
+        2220,
+        2276,
+        2277,
+        2278,
+        2279,
+        2294,
+        2527,
+        2528,
+        2627,
+        2903,
+        2925,
+        3025,
+        3026,
+        3239,
+        3240,
+        3430,
+        3655,
+        3657,
+        3819
+      ],
+      "seam_repaired": false,
+      "stage_over_rest": 0.31909652609649436,
+      "tiers_after": {
+        "refused": 0,
+        "stationary": 0,
+        "tier 1": 3983,
+        "tier 1b": 0
+      },
+      "workload": "figure8_monstera_boundary_qualified_corners"
+    }
+  ]
+}

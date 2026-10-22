@@ -1,0 +1,48 @@
+Recorded 2026-10-22T16:46:02+00:00 at commit `35a7a299af` (dirty tree) on Apple M1 Max.
+
+**Ω\* connector gate.** Tiers 1 / 1b of the exact connector certificate over every connector of the emitted path (after
+the `connector_repair` stage), seam and junction lines included.
+A refusal means "not proved", never "violated". Gate s is the exact path build plus the assessment; gen s is Ω\* generation in the same process
+(it includes the repair stage's own gate).
+
+| workload | certified / total | tier 1 / 1b / refused | seam | refused sweeps by kind | refusal reasons | gate s | gen s | gate / gen | load |
+|---|---:|---|---|---|---|---:|---:|---:|---|
+| `figure5_refined` | 1804 / 1804 | 1803 / 1 / 0 | tier 1b | none | none | 1.07 | 4.41 | 0.24 | 109–95 |
+| `figure8_upper_lane` | 4012 / 4012 | 4012 / 0 / 0 | tier 1 | none | none | 2.52 | 11.35 | 0.22 | 95–75 |
+| `figure8_upper_boundary` | 1270 / 1270 | 1270 / 0 / 0 | tier 1 | none | none | 0.90 | 7.88 | 0.11 | 70–60 |
+| `figure8_crossed_skis_boundary` | 1442 / 1442 | 1442 / 0 / 0 | tier 1 | none | none | 1.06 | 7.88 | 0.13 | 60–52 |
+| `figure8_monstera_boundary_qualified_corners` | 3983 / 3983 | 3983 / 0 / 0 | tier 1 | none | none | 2.47 | 20.80 | 0.12 | 52–56 |
+
+**Before repair.** The same gate on the NOTHING-stage circles, the input of the `connector_repair` stage; every refused
+connector here is one the stage repaired. Refused sweeps ° is the tier-1 bound over the refused sweeps (reporting only).
+
+| workload | certified / total | tier 1 / 1b / refused | refused connectors | refused sweeps by kind | refusal reasons | refused sweeps ° | gate s |
+|---|---:|---|---|---|---|---|---:|
+| `figure5_refined` before repair | 1802 / 1803 | 1801 / 1 / 1 | 92 | circle_junction 1, offset_line 1 | not proved at the bisection depth 2 | 82.94–82.94 | 1.43 |
+| `figure8_upper_lane` before repair | 4010 / 4011 | 4010 / 0 / 1 | 3900 | circle_junction 1, offset_arc 1 | not proved at the bisection depth 2 | 80.41–80.41 | 2.98 |
+| `figure8_upper_boundary` before repair | 1242 / 1256 | 1242 / 0 / 14 | 40, 75, 86, 104, 554, 669, 679, 783, 811, 899, 921, 963, 1219, 1235 | circle_junction 14, offset_arc 13, junction_arc 1, offset_line 1 | not proved at the bisection depth 29 | 80.41–98.55 | 1.75 |
+| `figure8_crossed_skis_boundary` before repair | 1418 / 1430 | 1418 / 0 / 12 | 15, 356, 366, 414, 784, 1042, 1048, 1073, 1086, 1171, 1402, 1410 | offset_arc 14, circle_junction 12, junction_arc 2 | not proved at the bisection depth 28 | 80.45–95.46 | 2.37 |
+| `figure8_monstera_boundary_qualified_corners` before repair | 3885 / 3934 | 3885 / 0 / 49 | 20, 23, 354, 370, 371, 373, 588, 707, 708, 912, 913, 916, 917, 970, 980, 1228, 1355, 1356, 1357, 1488, 1515, 1879, 1889, 1941, 1942, 1943, 1947, 1955, 2214, 2219, 2220, 2276, 2277, 2278, 2279, 2294, 2527, 2528, 2627, 2903, 2925, 3025, 3026, 3239, 3240, 3430, 3655, 3657, 3819 | circle_junction 49, offset_line 31, offset_arc 20, junction_arc 1 | not proved at the bisection depth 101 | 80.05–109.24 | 3.84 |
+
+**Tier-1 bound (reporting only).** The lemma's bound against the circle just cut, in degrees:
+over each refused sweep, and over the worst sweep of each tier-1 connector.
+
+| workload | cap ° | refused sweeps ° | tier-1 connectors, worst sweep ° |
+|---|---:|---|---|
+| `figure5_refined` | 80 | — | 0.00–77.58 |
+| `figure8_upper_lane` | 80 | — | 0.00–77.34 |
+| `figure8_upper_boundary` | 80 | — | 0.00–79.26 |
+| `figure8_crossed_skis_boundary` | 80 | — | 0.02–78.85 |
+| `figure8_monstera_boundary_qualified_corners` | 80 | — | 0.00–79.95 |
+
+**Junction model against the emitted path.** Structure mismatches: connectors whose exact sweeps are not
+`J_i → q_i`, the emitted ∂Ω\* pieces (same exact endpoints and supports), `q_{i+1} → J_{i+1}`. Gaps are reported binary64 mm:
+`J` the modelled junction, `q` the emitted site, `P` the emitted `contact_point`.
+
+| workload | structure mismatches | J on circle | J = q | P on circle | junction lines | fans | max \|J−q\| free / limited | max \|P−q\| free / limited | max \|J−P\| free / limited |
+|---|---:|---|---:|---|---:|---:|---|---|---|
+| `figure5_refined` | 0 | 1804 / 1804 | 78 | 101 / 1804 | 3452 | 12 | 1.5e-14 / — | 1.5e-14 / — | 1.6e-14 / — |
+| `figure8_upper_lane` | 0 | 4012 / 4012 | 0 | 0 / 4012 | 8024 | 34 | 1.6e-14 / 7.9e-15 | 1.5e-14 / 7.9e-15 | 1.6e-14 / 7.9e-15 |
+| `figure8_upper_boundary` | 0 | 1270 / 1270 | 0 | 0 / 1270 | 2540 | 0 | 1.6e-14 / 2.2e-16 | 1.5e-14 / 7.1e-15 | 1.6e-14 / 7.1e-15 |
+| `figure8_crossed_skis_boundary` | 0 | 1442 / 1442 | 0 | 0 / 1442 | 2884 | 0 | 1.7e-13 / 3.6e-15 | 1.7e-13 / 1.4e-14 | 4.4e-14 / 1.5e-14 |
+| `figure8_monstera_boundary_qualified_corners` | 0 | 3983 / 3983 | 30 | 48 / 3983 | 7906 | 1 | 2e-14 / 1.8e-15 | 2e-14 / 1.4e-14 | 2e-14 / 1.4e-14 |

@@ -1,0 +1,635 @@
+{
+  "build": {
+    "commit": "35a7a299afb1ab221c7de898bbf977c7d043e2ed",
+    "dirty": true,
+    "package_version": "0.9.1",
+    "recorded_at": "2026-10-22T16:46:02+00:00"
+  },
+  "machine": {
+    "cpu_brand": "Apple M1 Max",
+    "machine": "arm64",
+    "python": "3.12.13",
+    "system": "Darwin"
+  },
+  "workloads": [
+    {
+      "assessment_seconds": 0.594175207981607,
+      "cap_deg": 80.0,
+      "certified": 1804,
+      "circles": 1804,
+      "closed": true,
+      "connectors": 1804,
+      "first_refusal_kind_per_connector": {},
+      "gate_over_generation": 0.24376403354130782,
+      "gate_seconds": 1.0745768329652492,
+      "generation_seconds": 4.408266541024204,
+      "junction_model": {
+        "contact_point_exactly_on_circle": 101,
+        "fan_connectors": 12,
+        "gaps": {
+          "free": {
+            "circles": 1804,
+            "max_contact_to_site_mm": 1.464821375527116e-14,
+            "max_junction_to_contact_mm": 1.5888218580782548e-14,
+            "max_junction_to_site_mm": 1.464821375527116e-14
+          },
+          "limited": {
+            "circles": 0,
+            "max_contact_to_site_mm": 0.0,
+            "max_junction_to_contact_mm": 0.0,
+            "max_junction_to_site_mm": 0.0
+          }
+        },
+        "junction_equals_site": 78,
+        "junction_lines": 3452,
+        "junctions_exactly_on_circle": 1804,
+        "structure_mismatches": []
+      },
+      "load_1min_before_after": [
+        108.64404296875,
+        94.56689453125
+      ],
+      "path_build_seconds": 0.48040162498364225,
+      "pre_repair": {
+        "certified": 1802,
+        "circles": 1803,
+        "connectors": 1803,
+        "gate_seconds": 1.4255484989844263,
+        "refusals_by_kind": {
+          "circle_junction": 1,
+          "offset_line": 1
+        },
+        "refusals_by_reason": {
+          "not proved at the bisection depth": 2
+        },
+        "refused_connectors": [
+          92
+        ],
+        "refused_sweeps_deg": [
+          82.94127069349798,
+          82.94127069349798
+        ],
+        "tiers": {
+          "refused": 1,
+          "stationary": 0,
+          "tier 1": 1801,
+          "tier 1b": 1
+        }
+      },
+      "refusals_by_kind": {},
+      "refusals_by_reason": {},
+      "refused_connectors": [],
+      "repair_inserted": 1,
+      "repair_stage_gate_seconds": 1.2871790420031175,
+      "repaired_connectors": [
+        92
+      ],
+      "seam_tier": "tier 1b",
+      "sweeps_by_kind": {
+        "circle_junction": 3452,
+        "junction_arc": 15,
+        "offset_arc": 1277,
+        "offset_line": 546
+      },
+      "tier_1_bound": {
+        "refused_sweeps_deg": null,
+        "tier_1_connectors_worst_sweep_deg": [
+          4.517745464638367e-06,
+          77.58049748783827
+        ]
+      },
+      "tiers": {
+        "refused": 0,
+        "stationary": 0,
+        "tier 1": 1803,
+        "tier 1b": 1
+      },
+      "workload": "figure5_refined"
+    },
+    {
+      "assessment_seconds": 1.4005730419885367,
+      "cap_deg": 80.0,
+      "certified": 4012,
+      "circles": 4012,
+      "closed": true,
+      "connectors": 4012,
+      "first_refusal_kind_per_connector": {},
+      "gate_over_generation": 0.22176660641546092,
+      "gate_seconds": 2.5161142499709968,
+      "generation_seconds": 11.345776041940553,
+      "junction_model": {
+        "contact_point_exactly_on_circle": 0,
+        "fan_connectors": 34,
+        "gaps": {
+          "free": {
+            "circles": 4003,
+            "max_contact_to_site_mm": 1.502702346173435e-14,
+            "max_junction_to_contact_mm": 1.5888218580782548e-14,
+            "max_junction_to_site_mm": 1.5888218580782548e-14
+          },
+          "limited": {
+            "circles": 9,
+            "max_contact_to_site_mm": 7.944109290391274e-15,
+            "max_junction_to_contact_mm": 7.944109290391274e-15,
+            "max_junction_to_site_mm": 7.944109290391274e-15
+          }
+        },
+        "junction_equals_site": 0,
+        "junction_lines": 8024,
+        "junctions_exactly_on_circle": 4012,
+        "structure_mismatches": []
+      },
+      "load_1min_before_after": [
+        94.56689453125,
+        75.06201171875
+      ],
+      "path_build_seconds": 1.11554120798246,
+      "pre_repair": {
+        "certified": 4010,
+        "circles": 4011,
+        "connectors": 4011,
+        "gate_seconds": 2.982027208985528,
+        "refusals_by_kind": {
+          "circle_junction": 1,
+          "offset_arc": 1
+        },
+        "refusals_by_reason": {
+          "not proved at the bisection depth": 2
+        },
+        "refused_connectors": [
+          3900
+        ],
+        "refused_sweeps_deg": [
+          80.40513087306375,
+          80.40513087306375
+        ],
+        "tiers": {
+          "refused": 1,
+          "stationary": 0,
+          "tier 1": 4010,
+          "tier 1b": 0
+        }
+      },
+      "refusals_by_kind": {},
+      "refusals_by_reason": {},
+      "refused_connectors": [],
+      "repair_inserted": 1,
+      "repair_stage_gate_seconds": 3.217420791013865,
+      "repaired_connectors": [
+        3900
+      ],
+      "seam_tier": "tier 1",
+      "sweeps_by_kind": {
+        "circle_junction": 8024,
+        "junction_arc": 38,
+        "offset_arc": 3727,
+        "offset_line": 317
+      },
+      "tier_1_bound": {
+        "refused_sweeps_deg": null,
+        "tier_1_connectors_worst_sweep_deg": [
+          2.9575586669421963e-06,
+          77.3363702219722
+        ]
+      },
+      "tiers": {
+        "refused": 0,
+        "stationary": 0,
+        "tier 1": 4012,
+        "tier 1b": 0
+      },
+      "workload": "figure8_upper_lane"
+    },
+    {
+      "assessment_seconds": 0.5567072909907438,
+      "cap_deg": 80.0,
+      "certified": 1270,
+      "circles": 1270,
+      "closed": true,
+      "connectors": 1270,
+      "first_refusal_kind_per_connector": {},
+      "gate_over_generation": 0.11390377059180203,
+      "gate_seconds": 0.8971995409810916,
+      "generation_seconds": 7.876820374949602,
+      "junction_model": {
+        "contact_point_exactly_on_circle": 0,
+        "fan_connectors": 0,
+        "gaps": {
+          "free": {
+            "circles": 1268,
+            "max_contact_to_site_mm": 1.464821375527116e-14,
+            "max_junction_to_contact_mm": 1.5888218580782548e-14,
+            "max_junction_to_site_mm": 1.5888218580782548e-14
+          },
+          "limited": {
+            "circles": 2,
+            "max_contact_to_site_mm": 7.105427357601002e-15,
+            "max_junction_to_contact_mm": 7.105427357601002e-15,
+            "max_junction_to_site_mm": 2.220446049250313e-16
+          }
+        },
+        "junction_equals_site": 0,
+        "junction_lines": 2540,
+        "junctions_exactly_on_circle": 1270,
+        "structure_mismatches": []
+      },
+      "load_1min_before_after": [
+        70.01171875,
+        59.71630859375
+      ],
+      "path_build_seconds": 0.3404922499903478,
+      "pre_repair": {
+        "certified": 1242,
+        "circles": 1256,
+        "connectors": 1256,
+        "gate_seconds": 1.7542098749836441,
+        "refusals_by_kind": {
+          "circle_junction": 14,
+          "junction_arc": 1,
+          "offset_arc": 13,
+          "offset_line": 1
+        },
+        "refusals_by_reason": {
+          "not proved at the bisection depth": 29
+        },
+        "refused_connectors": [
+          40,
+          75,
+          86,
+          104,
+          554,
+          669,
+          679,
+          783,
+          811,
+          899,
+          921,
+          963,
+          1219,
+          1235
+        ],
+        "refused_sweeps_deg": [
+          80.40513087306375,
+          98.54871803663241
+        ],
+        "tiers": {
+          "refused": 14,
+          "stationary": 0,
+          "tier 1": 1242,
+          "tier 1b": 0
+        }
+      },
+      "refusals_by_kind": {},
+      "refusals_by_reason": {},
+      "refused_connectors": [],
+      "repair_inserted": 14,
+      "repair_stage_gate_seconds": 1.9670960000075866,
+      "repaired_connectors": [
+        40,
+        75,
+        86,
+        104,
+        554,
+        669,
+        679,
+        783,
+        811,
+        899,
+        921,
+        963,
+        1219,
+        1235
+      ],
+      "seam_tier": "tier 1",
+      "sweeps_by_kind": {
+        "circle_junction": 2540,
+        "junction_arc": 37,
+        "offset_arc": 1225,
+        "offset_line": 112
+      },
+      "tier_1_bound": {
+        "refused_sweeps_deg": null,
+        "tier_1_connectors_worst_sweep_deg": [
+          0.0008512735516011238,
+          79.25849905390623
+        ]
+      },
+      "tiers": {
+        "refused": 0,
+        "stationary": 0,
+        "tier 1": 1270,
+        "tier 1b": 0
+      },
+      "workload": "figure8_upper_boundary"
+    },
+    {
+      "assessment_seconds": 0.551292000018293,
+      "cap_deg": 80.0,
+      "certified": 1442,
+      "circles": 1442,
+      "closed": true,
+      "connectors": 1442,
+      "first_refusal_kind_per_connector": {},
+      "gate_over_generation": 0.1343094838021939,
+      "gate_seconds": 1.0577351670071948,
+      "generation_seconds": 7.8753572500136215,
+      "junction_model": {
+        "contact_point_exactly_on_circle": 0,
+        "fan_connectors": 0,
+        "gaps": {
+          "free": {
+            "circles": 1440,
+            "max_contact_to_site_mm": 1.6846616511079115e-13,
+            "max_junction_to_contact_mm": 4.3944641265813476e-14,
+            "max_junction_to_site_mm": 1.6762823581954336e-13
+          },
+          "limited": {
+            "circles": 2,
+            "max_contact_to_site_mm": 1.4210854715202004e-14,
+            "max_junction_to_contact_mm": 1.464821375527116e-14,
+            "max_junction_to_site_mm": 3.552713678800501e-15
+          }
+        },
+        "junction_equals_site": 0,
+        "junction_lines": 2884,
+        "junctions_exactly_on_circle": 1442,
+        "structure_mismatches": []
+      },
+      "load_1min_before_after": [
+        59.71630859375,
+        52.005859375
+      ],
+      "path_build_seconds": 0.5064431669889018,
+      "pre_repair": {
+        "certified": 1418,
+        "circles": 1430,
+        "connectors": 1430,
+        "gate_seconds": 2.3749419579980895,
+        "refusals_by_kind": {
+          "circle_junction": 12,
+          "junction_arc": 2,
+          "offset_arc": 14
+        },
+        "refusals_by_reason": {
+          "not proved at the bisection depth": 28
+        },
+        "refused_connectors": [
+          15,
+          356,
+          366,
+          414,
+          784,
+          1042,
+          1048,
+          1073,
+          1086,
+          1171,
+          1402,
+          1410
+        ],
+        "refused_sweeps_deg": [
+          80.4512608274966,
+          95.46026744149908
+        ],
+        "tiers": {
+          "refused": 12,
+          "stationary": 0,
+          "tier 1": 1418,
+          "tier 1b": 0
+        }
+      },
+      "refusals_by_kind": {},
+      "refusals_by_reason": {},
+      "refused_connectors": [],
+      "repair_inserted": 12,
+      "repair_stage_gate_seconds": 2.185299999982817,
+      "repaired_connectors": [
+        15,
+        356,
+        366,
+        414,
+        784,
+        1042,
+        1048,
+        1073,
+        1086,
+        1171,
+        1402,
+        1410
+      ],
+      "seam_tier": "tier 1",
+      "sweeps_by_kind": {
+        "circle_junction": 2884,
+        "junction_arc": 41,
+        "offset_arc": 1460,
+        "offset_line": 33
+      },
+      "tier_1_bound": {
+        "refused_sweeps_deg": null,
+        "tier_1_connectors_worst_sweep_deg": [
+          0.017515415716633363,
+          78.84985705202172
+        ]
+      },
+      "tiers": {
+        "refused": 0,
+        "stationary": 0,
+        "tier 1": 1442,
+        "tier 1b": 0
+      },
+      "workload": "figure8_crossed_skis_boundary"
+    },
+    {
+      "assessment_seconds": 1.3492254170123488,
+      "cap_deg": 80.0,
+      "certified": 3983,
+      "circles": 3983,
+      "closed": true,
+      "connectors": 3983,
+      "first_refusal_kind_per_connector": {},
+      "gate_over_generation": 0.11889762969502204,
+      "gate_seconds": 2.473163334012497,
+      "generation_seconds": 20.800779127021087,
+      "junction_model": {
+        "contact_point_exactly_on_circle": 48,
+        "fan_connectors": 1,
+        "gaps": {
+          "free": {
+            "circles": 3964,
+            "max_contact_to_site_mm": 2.0097183471152322e-14,
+            "max_junction_to_contact_mm": 2.0097183471152322e-14,
+            "max_junction_to_site_mm": 2.0097183471152322e-14
+          },
+          "limited": {
+            "circles": 19,
+            "max_contact_to_site_mm": 1.4210854715202004e-14,
+            "max_junction_to_contact_mm": 1.4210854715202004e-14,
+            "max_junction_to_site_mm": 1.7763568394002505e-15
+          }
+        },
+        "junction_equals_site": 30,
+        "junction_lines": 7906,
+        "junctions_exactly_on_circle": 3983,
+        "structure_mismatches": []
+      },
+      "load_1min_before_after": [
+        52.005859375,
+        55.7763671875
+      ],
+      "path_build_seconds": 1.1239379170001484,
+      "pre_repair": {
+        "certified": 3885,
+        "circles": 3934,
+        "connectors": 3934,
+        "gate_seconds": 3.8361535420117434,
+        "refusals_by_kind": {
+          "circle_junction": 49,
+          "junction_arc": 1,
+          "offset_arc": 20,
+          "offset_line": 31
+        },
+        "refusals_by_reason": {
+          "not proved at the bisection depth": 101
+        },
+        "refused_connectors": [
+          20,
+          23,
+          354,
+          370,
+          371,
+          373,
+          588,
+          707,
+          708,
+          912,
+          913,
+          916,
+          917,
+          970,
+          980,
+          1228,
+          1355,
+          1356,
+          1357,
+          1488,
+          1515,
+          1879,
+          1889,
+          1941,
+          1942,
+          1943,
+          1947,
+          1955,
+          2214,
+          2219,
+          2220,
+          2276,
+          2277,
+          2278,
+          2279,
+          2294,
+          2527,
+          2528,
+          2627,
+          2903,
+          2925,
+          3025,
+          3026,
+          3239,
+          3240,
+          3430,
+          3655,
+          3657,
+          3819
+        ],
+        "refused_sweeps_deg": [
+          80.05377028390477,
+          109.24426884562594
+        ],
+        "tiers": {
+          "refused": 49,
+          "stationary": 0,
+          "tier 1": 3885,
+          "tier 1b": 0
+        }
+      },
+      "refusals_by_kind": {},
+      "refusals_by_reason": {},
+      "refused_connectors": [],
+      "repair_inserted": 49,
+      "repair_stage_gate_seconds": 4.670327208004892,
+      "repaired_connectors": [
+        20,
+        23,
+        354,
+        370,
+        371,
+        373,
+        588,
+        707,
+        708,
+        912,
+        913,
+        916,
+        917,
+        970,
+        980,
+        1228,
+        1355,
+        1356,
+        1357,
+        1488,
+        1515,
+        1879,
+        1889,
+        1941,
+        1942,
+        1943,
+        1947,
+        1955,
+        2214,
+        2219,
+        2220,
+        2276,
+        2277,
+        2278,
+        2279,
+        2294,
+        2527,
+        2528,
+        2627,
+        2903,
+        2925,
+        3025,
+        3026,
+        3239,
+        3240,
+        3430,
+        3655,
+        3657,
+        3819
+      ],
+      "seam_tier": "tier 1",
+      "sweeps_by_kind": {
+        "circle_junction": 7906,
+        "junction_arc": 223,
+        "offset_arc": 1922,
+        "offset_line": 2324
+      },
+      "tier_1_bound": {
+        "refused_sweeps_deg": null,
+        "tier_1_connectors_worst_sweep_deg": [
+          0.0,
+          79.9535476633879
+        ]
+      },
+      "tiers": {
+        "refused": 0,
+        "stationary": 0,
+        "tier 1": 3983,
+        "tier 1b": 0
+      },
+      "workload": "figure8_monstera_boundary_qualified_corners"
+    }
+  ]
+}

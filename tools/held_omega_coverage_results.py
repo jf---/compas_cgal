@@ -1,0 +1,231 @@
+"""Results of the exact coverage certificate of every emitted Ω* path against T(Ω*), for the Held docs.
+
+Two modes:
+
+- ``--measure`` (minutes): generates every Ω* workload
+  (:func:`benchmarks.held_omega_toolpath.generate_omega`, connector repair
+  included), then certifies the emitted path against the exact target
+  T(Ω*) = Ω* ⊕ D_r (:func:`benchmarks.held_coverage_target.exact_coverage_target`):
+  every circle is a full-circle sweep, every emitted connector an exact ∂Ω*
+  connector sweep built from its sub-pieces
+  (:class:`compas_cgal.coverage_certificate.exact_connectors.ExactConnectorSweep`).
+  It records the verdict, the witnesses by kind, the region / piece / edge
+  counts, and the certificate's wall and CPU seconds with the load. The raw
+  record goes to ``benchmarks/results/held_omega_coverage.json``, then the
+  table is rendered.
+- default: renders ``benchmarks/results/held_omega_coverage.md`` from that JSON
+  without measuring.
+
+Region count, one definition. The certificate's ``region_count`` is the number
+of swept regions it cuts into the arrangement: one per full-circle cut, plus
+one composite region per ∂Ω* piece. The exact connectors are not one region
+each: their sub-pieces must cover ∂Ω*, so their swept set is exactly
+∂Ω* ⊕ D_r, which the certificate represents piece by piece
+(``ConnectorSet::build`` in ``src/coverage_certificate_2/exact_connectors_2.cpp``).
+Hence ``regions == circles + omega_pieces``; this tool checks that equality and
+fails loudly on a breach. The connector sub-pieces (``sub_pieces``) are
+validated and recorded, but are not regions. Before the per-piece merge the
+certificate counted one region per connector sub-piece, ``circles + sub_pieces``:
+that is the larger count of older driver runs (e.g. 2616 = 1256 + 1360 on
+``figure8_upper_boundary``, against 1360 = 1256 + 104 now).
+
+Both files are written by this tool; do not edit them. Times are seconds on a
+shared machine with the 1-minute load average beside each; CPU seconds are the
+process's (all threads). Only same-process ratios are meaningful.
+"""
+
+from __future__ import annotations
+
+import argparse
+import collections
+import gc
+import json
+import os
+import pathlib
+import time
+from collections.abc import Sequence
+from dataclasses import asdict
+from typing import Any
+
+from benchmarks.errors import BenchmarkError
+from benchmarks.held_coverage_target import exact_coverage_target
+from benchmarks.held_omega_toolpath import OMEGA_WORKLOADS
+from benchmarks.held_omega_toolpath import OmegaGeneratedToolpath
+from benchmarks.held_omega_toolpath import generate_omega
+from benchmarks.held_one_root import OneRootPoint2
+from benchmarks.performance_record import REPOSITORY
+from benchmarks.performance_record import build_identity
+from benchmarks.performance_record import machine_identity
+from compas_cgal.coverage_certificate.certificate import CoverageCertificate
+from compas_cgal.coverage_certificate.errors import UncoveredPocketError
+from compas_cgal.coverage_certificate.exact_connectors import ExactConnectorPiece
+from compas_cgal.coverage_certificate.exact_connectors import ExactConnectorSweep
+from compas_cgal.coverage_certificate.exact_target import ExactCentreDomainTarget
+from compas_cgal.coverage_certificate.exact_target import OneRootPoint
+from compas_cgal.coverage_certificate.sweeps import FullCircleSweep
+from compas_cgal.coverage_certificate.target import CentreDomain
+from compas_cgal.coverage_certificate.target import OneRootMillimetre
+from compas_cgal.units import Point2
+from compas_cgal.units import WorldXY
+
+RESULTS = REPOSITORY / "benchmarks" / "results"
+JSON_PATH = RESULTS / "held_omega_coverage.json"
+MARKDOWN_PATH = RESULTS / "held_omega_coverage.md"
+# Half width, mm, of the placeholder polygonal centre domain the certificate API
+# takes beside an exact target: it only carries polygon-connector sites, and an
+# Ω* path has none, so any non-degenerate square works; 1 mm around circle 0.
+PLACEHOLDER_DOMAIN_HALF_WIDTH_MM = 1.0
+
+
+class RegionAccountingError(BenchmarkError):
+    """The certificate's region count is not one region per circle plus one per ∂Ω* piece."""
+
+
+def _one_root(point: OneRootPoint2) -> OneRootPoint:
+    return OneRootPoint.build(OneRootMillimetre(point.x.rational, point.x.coefficient), OneRootMillimetre(point.y.rational, point.y.coefficient), point.radicand)
+
+
+def exact_connector_sweeps(path: OmegaGeneratedToolpath, target: ExactCentreDomainTarget) -> tuple[list[ExactConnectorSweep], int]:
+    """One exact sweep per emitted connector (its ∂Ω* sub-pieces, in travel order) and the sub-piece count.
+
+    A fan connector (no pieces) sweeps nothing beyond its circle and gives an
+    empty sweep. A sub-piece is ``full`` when it is a whole closed piece (an
+    Ω* circle travelled once round).
+    """
+    domain = path.loop.domain
+    index = {id(piece): i for i, piece in enumerate(domain.pieces)}
+    sweeps = []
+    sub_pieces = 0
+    for connector in path.connectors.connectors:
+        pieces = []
+        for sub in connector.pieces:
+            closed = sub.piece.source == sub.piece.target
+            pieces.append(ExactConnectorPiece.build(target, index[id(sub.piece)], _one_root(sub.start), _one_root(sub.end), full=closed and sub.start == sub.end))
+        sub_pieces += len(pieces)
+        sweeps.append(ExactConnectorSweep.build(pieces))
+    return sweeps, sub_pieces
+
+
+def _placeholder_domain(path: OmegaGeneratedToolpath) -> CentreDomain:
+    x, y, h = float(path.circles[0].center.x), float(path.circles[0].center.y), PLACEHOLDER_DOMAIN_HALF_WIDTH_MM
+    return CentreDomain.build([Point2[WorldXY].build(x - h, y - h), Point2[WorldXY].build(x + h, y - h), Point2[WorldXY].build(x + h, y + h), Point2[WorldXY].build(x - h, y + h)])
+
+
+def check_region_accounting(regions: int, circles: int, omega_pieces: int) -> None:
+    """Fail loudly unless ``regions == circles + omega_pieces`` (the module docstring's definition).
+
+    Raises:
+        RegionAccountingError: The certificate counted regions some other way.
+    """
+    if regions != circles + omega_pieces:
+        raise RegionAccountingError(f"certificate reports {regions} regions, expected circles + ∂Ω* pieces = {circles} + {omega_pieces}")
+
+
+def measure_workload(workload: str) -> dict[str, Any]:
+    """Generate one workload and certify its emitted path against T(Ω*); return the row."""
+    gc.collect()
+    path = generate_omega(workload)
+    target = exact_coverage_target(path.declared, path.loop.domain)
+    connectors, sub_pieces = exact_connector_sweeps(path, target)
+    cuts = [FullCircleSweep.build(circle.center, circle.radius) for circle in path.circles]
+    gc.collect()
+    load_before = os.getloadavg()[0]
+    wall, cpu = time.perf_counter(), time.process_time()
+    row: dict[str, Any] = {
+        "workload": workload,
+        "circles": len(cuts),
+        "connectors": len(connectors),
+        "sub_pieces": sub_pieces,
+        "omega_pieces": len(target.pieces),
+        "vertex_disks": len(target.vertex_disks),
+        "repair_inserted": path.repair.inserted,
+        "generation_seconds": path.generation_seconds,
+    }
+    try:
+        certificate = CoverageCertificate.build(_placeholder_domain(path), path.case.tool_radius, cuts, exact_target=target, exact_connectors=connectors)
+    except UncoveredPocketError as error:
+        row.update(
+            verdict="UNCOVERED",
+            witnesses=len(error.witnesses),
+            witnesses_by_kind=dict(collections.Counter(w.piece_kind.name for w in error.witnesses)),
+            undecided_edges=error.undecided_edge_count,
+            regions=None,
+            pieces=None,
+            edges=None,
+        )
+    else:
+        check_region_accounting(certificate.region_count, len(cuts), len(target.pieces))
+        row.update(
+            verdict="COVERED",
+            witnesses=0,
+            witnesses_by_kind={},
+            undecided_edges=0,
+            regions=certificate.region_count,
+            pieces=certificate.piece_count,
+            edges=certificate.edge_count,
+        )
+    row["certificate_wall_seconds"] = time.perf_counter() - wall
+    row["certificate_cpu_seconds"] = time.process_time() - cpu
+    row["load_1min_before_after"] = [load_before, os.getloadavg()[0]]
+    return row
+
+
+def measure(workloads: Sequence[str]) -> dict[str, Any]:
+    """Every workload in one process, sequentially; return the record."""
+    build, machine = build_identity(), machine_identity()
+    rows = []
+    for workload in workloads:
+        rows.append(measure_workload(workload))
+        print(f"coverage {workload} {rows[-1]['verdict']}", flush=True)
+    return {"build": asdict(build), "machine": asdict(machine), "workloads": rows}
+
+
+def _kinds(counts: dict[str, int]) -> str:
+    return ", ".join(f"{kind} {count}" for kind, count in sorted(counts.items(), key=lambda item: (-item[1], item[0]))) or "—"
+
+
+def _count(value: int | None) -> str:
+    return "—" if value is None else str(value)
+
+
+def render(record: dict[str, Any]) -> str:
+    """The Markdown table of one record."""
+    build = record["build"]
+    lines = [
+        f"Recorded {build['recorded_at']} at commit `{build['commit'][:10]}`{' (dirty tree)' if build['dirty'] else ''} on {record['machine']['cpu_brand']}.",
+        "",
+        "**Ω\\* coverage against T(Ω\\*).** The emitted path (after connector repair): full circles plus exact ∂Ω\\* connectors,",
+        "certified exactly against T(Ω\\*) = Ω\\* ⊕ D_r. Regions = circles + ∂Ω\\* pieces (the connectors' swept set is ∂Ω\\* ⊕ D_r,",
+        "one composite region per piece); sub-pieces are the connectors' own ∂Ω\\* pieces, validated but not regions.",
+        "",
+        "| workload | verdict | witnesses | circles | connectors | sub-pieces | ∂Ω\\* pieces | regions | edges | cert wall s | cert CPU s | gen s | load |",
+        "|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|",
+    ]
+    for row in record["workloads"]:
+        load = row["load_1min_before_after"]
+        witnesses = f"{row['witnesses']}" + (f" ({_kinds(row['witnesses_by_kind'])})" if row["witnesses"] else "")
+        lines.append(
+            f"| `{row['workload']}` | {row['verdict']} | {witnesses} | {row['circles']} | {row['connectors']} | {row['sub_pieces']} | {row['omega_pieces']} "
+            f"| {_count(row['regions'])} | {_count(row['edges'])} | {row['certificate_wall_seconds']:.2f} | {row['certificate_cpu_seconds']:.2f} "
+            f"| {row['generation_seconds']:.2f} | {load[0]:.0f}–{load[1]:.0f} |"
+        )
+    return "\n".join(lines) + "\n"
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--measure", action="store_true", help="re-measure (minutes) before rendering")
+    parser.add_argument("--json", type=pathlib.Path, default=JSON_PATH)
+    parser.add_argument("--markdown", type=pathlib.Path, default=MARKDOWN_PATH)
+    parser.add_argument("--workloads", nargs="+", default=list(OMEGA_WORKLOADS), choices=list(OMEGA_WORKLOADS))
+    args = parser.parse_args()
+    if args.measure:
+        record = measure(args.workloads)
+        args.json.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    record = json.loads(args.json.read_text(encoding="utf-8"))
+    args.markdown.write_text(render(record), encoding="utf-8")
+    print(f"WROTE {args.json} {args.markdown}")
+
+
+if __name__ == "__main__":
+    main()

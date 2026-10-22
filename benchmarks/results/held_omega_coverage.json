@@ -1,0 +1,131 @@
+{
+  "build": {
+    "commit": "35a7a299afb1ab221c7de898bbf977c7d043e2ed",
+    "dirty": true,
+    "package_version": "0.9.1",
+    "recorded_at": "2026-10-22T16:48:50+00:00"
+  },
+  "machine": {
+    "cpu_brand": "Apple M1 Max",
+    "machine": "arm64",
+    "python": "3.12.13",
+    "system": "Darwin"
+  },
+  "workloads": [
+    {
+      "certificate_cpu_seconds": 1.8719169999999998,
+      "certificate_wall_seconds": 2.772538541990798,
+      "circles": 1804,
+      "connectors": 1804,
+      "edges": 1533102,
+      "generation_seconds": 4.455848165991483,
+      "load_1min_before_after": [
+        33.99169921875,
+        33.99169921875
+      ],
+      "omega_pieces": 46,
+      "pieces": 2839,
+      "regions": 1850,
+      "repair_inserted": 1,
+      "sub_pieces": 1838,
+      "undecided_edges": 0,
+      "verdict": "COVERED",
+      "vertex_disks": 15,
+      "witnesses": 0,
+      "witnesses_by_kind": {},
+      "workload": "figure5_refined"
+    },
+    {
+      "certificate_cpu_seconds": 5.0561659999999975,
+      "certificate_wall_seconds": 5.289448083000025,
+      "circles": 4012,
+      "connectors": 4012,
+      "edges": 4170766,
+      "generation_seconds": 11.284291166986804,
+      "load_1min_before_after": [
+        33.146484375,
+        31.69287109375
+      ],
+      "omega_pieces": 104,
+      "pieces": 6321,
+      "regions": 4116,
+      "repair_inserted": 1,
+      "sub_pieces": 4082,
+      "undecided_edges": 0,
+      "verdict": "COVERED",
+      "vertex_disks": 34,
+      "witnesses": 0,
+      "witnesses_by_kind": {},
+      "workload": "figure8_upper_lane"
+    },
+    {
+      "certificate_cpu_seconds": 1.9017209999999984,
+      "certificate_wall_seconds": 2.109964958013734,
+      "circles": 1270,
+      "connectors": 1270,
+      "edges": 565390,
+      "generation_seconds": 6.5539075400156435,
+      "load_1min_before_after": [
+        30.99658203125,
+        31.47705078125
+      ],
+      "omega_pieces": 104,
+      "pieces": 2201,
+      "regions": 1374,
+      "repair_inserted": 14,
+      "sub_pieces": 1374,
+      "undecided_edges": 0,
+      "verdict": "COVERED",
+      "vertex_disks": 34,
+      "witnesses": 0,
+      "witnesses_by_kind": {},
+      "workload": "figure8_upper_boundary"
+    },
+    {
+      "certificate_cpu_seconds": 1.580886999999997,
+      "certificate_wall_seconds": 1.6505938330083154,
+      "circles": 1442,
+      "connectors": 1442,
+      "edges": 341194,
+      "generation_seconds": 5.4955372079857625,
+      "load_1min_before_after": [
+        29.6767578125,
+        29.6767578125
+      ],
+      "omega_pieces": 92,
+      "pieces": 2164,
+      "regions": 1534,
+      "repair_inserted": 12,
+      "sub_pieces": 1534,
+      "undecided_edges": 0,
+      "verdict": "COVERED",
+      "vertex_disks": 24,
+      "witnesses": 0,
+      "witnesses_by_kind": {},
+      "workload": "figure8_crossed_skis_boundary"
+    },
+    {
+      "certificate_cpu_seconds": 5.461371,
+      "certificate_wall_seconds": 6.918972041021334,
+      "circles": 3983,
+      "connectors": 3983,
+      "edges": 1210313,
+      "generation_seconds": 15.784971626009792,
+      "load_1min_before_after": [
+        24.6611328125,
+        23.72705078125
+      ],
+      "omega_pieces": 487,
+      "pieces": 6991,
+      "regions": 4470,
+      "repair_inserted": 49,
+      "sub_pieces": 4469,
+      "undecided_edges": 0,
+      "verdict": "COVERED",
+      "vertex_disks": 138,
+      "witnesses": 0,
+      "witnesses_by_kind": {},
+      "workload": "figure8_monstera_boundary_qualified_corners"
+    }
+  ]
+}

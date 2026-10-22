@@ -1,0 +1,13 @@
+Recorded 2026-10-22T16:48:50+00:00 at commit `35a7a299af` (dirty tree) on Apple M1 Max.
+
+**Ω\* coverage against T(Ω\*).** The emitted path (after connector repair): full circles plus exact ∂Ω\* connectors,
+certified exactly against T(Ω\*) = Ω\* ⊕ D_r. Regions = circles + ∂Ω\* pieces (the connectors' swept set is ∂Ω\* ⊕ D_r,
+one composite region per piece); sub-pieces are the connectors' own ∂Ω\* pieces, validated but not regions.
+
+| workload | verdict | witnesses | circles | connectors | sub-pieces | ∂Ω\* pieces | regions | edges | cert wall s | cert CPU s | gen s | load |
+|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| `figure5_refined` | COVERED | 0 | 1804 | 1804 | 1838 | 46 | 1850 | 1533102 | 2.77 | 1.87 | 4.46 | 34–34 |
+| `figure8_upper_lane` | COVERED | 0 | 4012 | 4012 | 4082 | 104 | 4116 | 4170766 | 5.29 | 5.06 | 11.28 | 33–32 |
+| `figure8_upper_boundary` | COVERED | 0 | 1270 | 1270 | 1374 | 104 | 1374 | 565390 | 2.11 | 1.90 | 6.55 | 31–31 |
+| `figure8_crossed_skis_boundary` | COVERED | 0 | 1442 | 1442 | 1534 | 92 | 1534 | 341194 | 1.65 | 1.58 | 5.50 | 30–30 |
+| `figure8_monstera_boundary_qualified_corners` | COVERED | 0 | 3983 | 3983 | 4469 | 487 | 4470 | 1210313 | 6.92 | 5.46 | 15.78 | 25–24 |
