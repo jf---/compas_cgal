@@ -68,7 +68,11 @@ class FigureSummary:
     the reported seam pair (None: open path; NaN: unresolved). ``coverage`` is
     None when no certificate was run. ``inserted_sources`` are the source
     indices a certificate-gated coverage repair re-inserted (None: no repair
-    ran; empty: the repair needed none).
+    ran; empty: the repair needed none). ``containment_rejections`` is the
+    count of circles the exact native cutter-centre domain rejects
+    (``held_containment_report``; None: the run did not check containment);
+    ``max_protrusion_mm`` is that report's largest radius-minus-clearance
+    over the rejected circles, a binary64 report only (None: not checked).
     """
 
     figure: str
@@ -80,6 +84,8 @@ class FigureSummary:
     seam_deg: float | None
     coverage: CoverageSummary | None
     inserted_sources: tuple[int, ...] | None = None
+    containment_rejections: int | None = None
+    max_protrusion_mm: float | None = None
 
     @classmethod
     def build(
@@ -94,19 +100,27 @@ class FigureSummary:
         seam_deg: float | None,
         coverage: CoverageSummary | None,
         inserted_sources: tuple[int, ...] | None = None,
+        containment_rejections: int | None = None,
+        max_protrusion_mm: float | None = None,
     ) -> FigureSummary:
         """Validate the counts.
 
         Raises:
             InvalidFigureSummaryError: no circle, a connector count that is
-                neither open (n - 1) nor closed (n), a negative count, or
-                inserted sources that repeat or are negative.
+                neither open (n - 1) nor closed (n), a negative count
+                (containment rejections included), a protrusion that is
+                negative or not finite, or inserted sources that repeat or are
+                negative.
         """
         if circles < 1 or connectors not in (circles - 1, circles) or over_cap < 0 or unresolved < 0:
             raise InvalidFigureSummaryError(f"{figure}: {circles} circles, {connectors} connectors, {over_cap} over cap, {unresolved} unresolved.")
         if inserted_sources is not None and (len(set(inserted_sources)) != len(inserted_sources) or any(source < 0 for source in inserted_sources)):
             raise InvalidFigureSummaryError(f"{figure}: inserted sources {inserted_sources} repeat or are negative.")
-        return cls(figure, circles, connectors, over_cap, unresolved, max_known_deg, seam_deg, coverage, inserted_sources)
+        if containment_rejections is not None and containment_rejections < 0:
+            raise InvalidFigureSummaryError(f"{figure}: {containment_rejections} containment rejections.")
+        if max_protrusion_mm is not None and not (math.isfinite(max_protrusion_mm) and max_protrusion_mm >= 0.0):
+            raise InvalidFigureSummaryError(f"{figure}: maximum protrusion {max_protrusion_mm} mm.")
+        return cls(figure, circles, connectors, over_cap, unresolved, max_known_deg, seam_deg, coverage, inserted_sources, containment_rejections, max_protrusion_mm)
 
     def to_json(self) -> str:
         seam = None if self.seam_deg is None or math.isnan(self.seam_deg) else self.seam_deg
@@ -124,6 +138,8 @@ class FigureSummary:
                     "seam_unresolved": self.seam_deg is not None and math.isnan(self.seam_deg),
                     "coverage": None if self.coverage is None else self.coverage.to_dict(),
                     "inserted_sources": None if self.inserted_sources is None else list(self.inserted_sources),
+                    "containment_rejections": self.containment_rejections,
+                    "max_protrusion_mm": self.max_protrusion_mm,
                 },
                 indent=2,
                 allow_nan=False,
@@ -153,6 +169,9 @@ class FigureSummary:
             seam_deg=seam,
             coverage=coverage,
             inserted_sources=None if raw["inserted_sources"] is None else tuple(int(source) for source in raw["inserted_sources"]),
+            # Optional within version 2: sidecars written before these fields carry no containment report.
+            containment_rejections=None if raw.get("containment_rejections") is None else int(raw["containment_rejections"]),
+            max_protrusion_mm=None if raw.get("max_protrusion_mm") is None else float(raw["max_protrusion_mm"]),
         )
 
 

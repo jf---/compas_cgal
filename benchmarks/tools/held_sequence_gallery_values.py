@@ -62,6 +62,11 @@ def _count(value: int) -> str:
     return f"{value:,}"
 
 
+def _protrusion(value: float) -> str:
+    """Two significant digits, as the figure subtitle prints it (``6.6e-15``)."""
+    return f"{value:.2g}"
+
+
 def _listing(values: tuple[int, ...]) -> str:
     """``744``, ``744 and 1273``, ``1, 2 and 3``; ``none`` for an empty tuple."""
     words = [str(value) for value in values]
@@ -90,6 +95,10 @@ def _path_values(summary: FigureSummary) -> dict[str, str]:
     if summary.inserted_sources is not None:
         values["inserted_sources"] = _listing(summary.inserted_sources)
         values["inserted_count"] = _count(len(summary.inserted_sources))
+    if summary.containment_rejections is not None:
+        values["containment_rejections"] = _count(summary.containment_rejections)
+    if summary.max_protrusion_mm is not None:
+        values["max_protrusion_mm"] = _protrusion(summary.max_protrusion_mm)
     if summary.coverage is not None:
         values["witnesses"] = _count(summary.coverage.witnesses)
         values["sites"] = _count(summary.coverage.sites)

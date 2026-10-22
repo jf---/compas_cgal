@@ -48,6 +48,8 @@ def render_path(
     coverage: CoverageVerdict | None = None,
     mode: ColourMode = ColourMode.RUN,
     inserted_sources: tuple[int, ...] | None = None,
+    containment_rejections: int | None = None,
+    max_protrusion_mm: float | None = None,
 ) -> None:
     """Render the supplied execution order without sorting or selecting moves, as a sequence plot.
 
@@ -60,7 +62,9 @@ def render_path(
     the path, if one was run. The printed metrics and verdict are also
     written beside the figure (``held_sequence_summary``) for the docs;
     ``inserted_sources`` (a certified repair's re-inserted sources) is
-    printed on the figure and recorded there.
+    printed on the figure and recorded there, as are ``containment_rejections``
+    and ``max_protrusion_mm`` (the exact containment report's count and its
+    reported protrusion, if the caller ran it).
     """
     angles, seam = emitted_engagement(case, circles, transitions)
     cap = float(case.tea_cap)
@@ -91,6 +95,8 @@ def render_path(
         seam_deg=seam,
         coverage=None if coverage is None else CoverageSummary.from_verdict(coverage, join_mm=data.tool_radius),
         inserted_sources=inserted_sources,
+        containment_rejections=containment_rejections,
+        max_protrusion_mm=max_protrusion_mm,
     )
     summary_path(output).write_text(summary.to_json())
 
@@ -158,14 +164,17 @@ def main() -> None:
     output = args.output_dir / "held_figure5_toolpath_current.png"
     title = "Figure 5 · full-path failure map"
     scope = "Polygon guide, publisher-derived start, original lane placement. Over-cap moves are defects, not accepted motion."
+    rejected: int | None = None
+    protrusion: float | None = None
     if args.refine:
         # The published path is the benchmark generator's own (seam closed, connector post-gate), not a re-derivation.
         generated = generate("figure5_refined")
         circles, transitions = generated.circles, generated.transitions
         rejected, excess = containment_report(circles, components[0])
+        protrusion = float(excess)
         output = args.output_dir / "held_figure5_engagement_refined.png"
         title = "Figure 5 · corner-aware engagement refinement"
-        scope = f"Publisher-start polygon proposal · {rejected:,} exact containment rejections · max reported protrusion {float(excess):.2g} mm · not machining-qualified."
+        scope = f"Publisher-start polygon proposal · {rejected:,} exact containment rejections · max reported protrusion {protrusion:.2g} mm · not machining-qualified."
         print(scope)
     if args.stock_prefix is not None:
         if args.stock_prefix > len(circles):
@@ -183,6 +192,8 @@ def main() -> None:
         title=title,
         scope=scope,
         coverage=certify_path_coverage(components[0], circles, case.tool_radius),
+        containment_rejections=rejected,
+        max_protrusion_mm=protrusion,
     )
     if args.check_coverage:
         require_full_motion_coverage(case, circles, transitions, output.with_suffix(".exact-coverage.json"))

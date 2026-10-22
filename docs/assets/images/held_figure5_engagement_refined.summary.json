@@ -13,5 +13,7 @@
     "witnesses": 0,
     "sites": 0
   },
-  "inserted_sources": null
+  "inserted_sources": null,
+  "containment_rejections": 1010,
+  "max_protrusion_mm": 6.63358257213531e-15
 }

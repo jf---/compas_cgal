@@ -1676,8 +1676,8 @@ connector's own engagement is certified separately
 | Full CCW circles | 1,532 | <!-- gv:fig5_refined.circles -->2,004<!-- /gv --> |
 | Successors above 80 degrees | 108 | 0 |
 | Maximum predecessor engagement | 180 degrees | 79.992 degrees |
-| Largest reported radius/clearance excess | 0.057 mm | 6.7e-15 mm |
-| Exact full-disk containment rejections | 801 | 1,012 |
+| Largest reported radius/clearance excess | 0.057 mm | <!-- gv:fig5_refined.max_protrusion_mm -->6.6e-15<!-- /gv --> mm |
+| Exact full-disk containment rejections | 801 | <!-- gv:fig5_refined.containment_rejections -->1,010<!-- /gv --> |
 
 The initial vector-interpolation proposal eliminated engagement violations but
 introduced local corner protrusions of 0.013 mm. The retained construction
@@ -1702,8 +1702,8 @@ motion and five native boundary witnesses: exact tangency versus a positive
 gap, the near-tangent regression, known intersection coordinates, polygon
 turns, and invalid-input errors. Strict typing includes the new native stub.
 The regenerated plot retains <!-- gv:fig5_refined.circles -->2,004<!-- /gv --> circles and zero over-cap successors
-(successor maximum 79.99°). Exact containment rejects 1,012 circles (figure
-footer; it was 1,013 and then 1,010 in earlier runs). This is still a failed
+(successor maximum 79.99°). Exact containment rejects <!-- gv:fig5_refined.containment_rejections -->1,010<!-- /gv --> circles (figure
+footer and its summary sidecar). This is still a failed
 containment gate, not a tolerance-based acceptance.
 
 The focused suite passes 21 tests, including complete Figure 5 final-order
@@ -1716,7 +1716,7 @@ strict containment count.
 **Maturity: incomplete.** Zero violations establish the existing approximate
 predecessor model's limit on these circles. They do not establish depleted-stock
 engagement, safe entry/connector cutting, analytic segment/arc ownership, or
-machining qualification. Exact native containment still rejects 1,012
+machining qualification. Exact native containment still rejects <!-- gv:fig5_refined.containment_rejections -->1,010<!-- /gv -->
 float-backed near-tangent circles; the small reported excess must not be used
 as a tolerance to turn those failures into passes. The publisher-derived start
 and source guide selection also remain. Full Task 5 acceptance stays open.

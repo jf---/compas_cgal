@@ -373,6 +373,58 @@ def test_inserted_sources_must_be_distinct_and_non_negative() -> None:
             FigureSummary.build(figure="r.png", circles=2, connectors=2, over_cap=0, unresolved=0, max_known_deg=1.0, seam_deg=None, coverage=None, inserted_sources=bad)
 
 
+def test_refined_figure_summary_carries_its_containment_rejections(tmp_path: Path) -> None:
+    from benchmarks.tools.held_sequence_gallery_values import gallery_values
+    from benchmarks.tools.held_sequence_summary import FigureSummary
+    from benchmarks.tools.held_sequence_summary import summary_path
+
+    summary = FigureSummary.build(
+        figure="held_figure5_engagement_refined.png",
+        circles=2004,
+        connectors=2004,
+        over_cap=0,
+        unresolved=0,
+        max_known_deg=79.99,
+        seam_deg=180.0,
+        coverage=None,
+        containment_rejections=1012,
+        max_protrusion_mm=6.6123e-15,
+    )
+    assert FigureSummary.from_json(summary.to_json()) == summary
+    summary_path(tmp_path / "held_figure5_engagement_refined.png").write_text(summary.to_json())
+    values = gallery_values(tmp_path)
+    assert values["fig5_refined.containment_rejections"] == "1,012"
+    # Printed as the figure subtitle prints it.
+    assert values["fig5_refined.max_protrusion_mm"] == "6.6e-15"
+
+
+def test_a_summary_without_a_containment_report_offers_no_containment_key(tmp_path: Path) -> None:
+    from benchmarks.tools.held_sequence_gallery_values import gallery_values
+
+    _write_summary(tmp_path, "held_figure5_engagement_refined", circles=2004, covered=True)
+    values = gallery_values(tmp_path)
+    assert "fig5_refined.circles" in values
+    assert "fig5_refined.containment_rejections" not in values
+    assert "fig5_refined.max_protrusion_mm" not in values
+
+
+def test_containment_rejections_must_be_non_negative() -> None:
+    from benchmarks.tools.held_sequence_summary import FigureSummary
+    from benchmarks.tools.held_sequence_summary import InvalidFigureSummaryError
+
+    with pytest.raises(InvalidFigureSummaryError):
+        FigureSummary.build(figure="r.png", circles=2, connectors=2, over_cap=0, unresolved=0, max_known_deg=1.0, seam_deg=None, coverage=None, containment_rejections=-1)
+
+
+def test_max_protrusion_must_be_finite_and_non_negative() -> None:
+    from benchmarks.tools.held_sequence_summary import FigureSummary
+    from benchmarks.tools.held_sequence_summary import InvalidFigureSummaryError
+
+    for bad in (-1e-15, math.nan, math.inf):
+        with pytest.raises(InvalidFigureSummaryError):
+            FigureSummary.build(figure="r.png", circles=2, connectors=2, over_cap=0, unresolved=0, max_known_deg=1.0, seam_deg=None, coverage=None, max_protrusion_mm=bad)
+
+
 def test_a_zoom_whose_bands_agg_would_clip_at_the_canvas_fails_loud() -> None:
     # Agg cuts unfilled stroke paths at the canvas edge (+1 px) before stroking, so a
     # band wider than the gap between the axes and the canvas edge loses paint inside
