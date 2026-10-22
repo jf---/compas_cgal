@@ -91,6 +91,15 @@ def filtered_sign(enclosure: Interval, exact: Callable[[], int]) -> int:
     return exact() if sign is None else sign
 
 
+# Recently boxed point objects kept for reuse. Consecutive sweeps of one
+# connector share their endpoint OBJECTS (figure5_refined: 10 574 endpoint
+# references, 3 620 distinct objects), and the reuse is local: a sweep's end
+# is the next sweep's start. 16 entries cover that lookback with margin; a
+# miss only recomputes the same enclosure.
+_BOX_MEMO_POINTS = 16
+_box_memo: dict[int, tuple[OneRootPoint2, PointBox]] = {}
+
+
 @dataclass(frozen=True)
 class PointBox:
     """Interval enclosures of an exact point's coordinates (filter only)."""
@@ -99,8 +108,22 @@ class PointBox:
     y: Interval
 
     @classmethod
-    def of(cls, point: OneRootPoint2) -> Self:
-        return cls(Interval.of_one_root(point.x), Interval.of_one_root(point.y))
+    def of(cls, point: OneRootPoint2) -> PointBox:
+        """The enclosure of ``point``, reused when this very object was boxed recently.
+
+        A point is immutable and its enclosure a deterministic function of it,
+        so reuse returns exactly what a recomputation would. The memo keeps a
+        strong reference to each point, so an ``id`` in it is never reused by
+        another object while its entry lives.
+        """
+        entry = _box_memo.get(id(point))
+        if entry is not None and entry[0] is point:
+            return entry[1]
+        box = PointBox(Interval.of_one_root(point.x), Interval.of_one_root(point.y))
+        _box_memo[id(point)] = (point, box)
+        if len(_box_memo) > _BOX_MEMO_POINTS:
+            del _box_memo[next(iter(_box_memo))]
+        return box
 
     @classmethod
     def of_exact(cls, point: ExactPoint2[WorldXY]) -> Self:
@@ -108,7 +131,9 @@ class PointBox:
 
 
 def points_apart(first: OneRootPoint2, second: OneRootPoint2) -> bool:
-    """Exact ``first != second``: disjoint interval enclosures decide, else exact comparison."""
+    """Exact ``first != second``: one object is equal to itself, disjoint interval enclosures decide, else exact comparison."""
+    if first is second:
+        return False
     one, other = PointBox.of(first), PointBox.of(second)
     if (one.x - other.x).sign() is not None or (one.y - other.y).sign() is not None:
         return True

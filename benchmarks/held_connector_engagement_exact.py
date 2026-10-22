@@ -39,6 +39,7 @@ from benchmarks.held_connector_engagement_range import DiscontinuousConnectorErr
 from benchmarks.held_connector_engagement_range import PriorCircle
 from benchmarks.held_connector_engagement_range import RangeEngagementLemma
 from benchmarks.held_connector_engagement_range import SweepKind
+from benchmarks.held_connector_engagement_range import points_apart
 from benchmarks.held_dyadic_interval import FRACTION_BITS
 from benchmarks.held_dyadic_interval import Interval
 from benchmarks.held_figure5_boundary_path import Figure5BoundaryConnectors
@@ -90,7 +91,7 @@ class ExactConnector:
             DiscontinuousConnectorError: a sweep does not start exactly at the previous end.
         """
         for k, (first, second) in enumerate(zip(sweeps, sweeps[1:])):
-            if first.end != second.start:
+            if points_apart(first.end, second.start):
                 raise DiscontinuousConnectorError(f"sweep {k + 1} starts at {second.start!r}, not at the previous end {first.end!r}")
         return cls(tuple(sweeps))
 
@@ -124,9 +125,9 @@ class ExactConnectorPath:
         for k, connector in enumerate(connectors):
             start, end = junctions[k], junctions[(k + 1) % count]
             if connector.sweeps:
-                joined = connector.sweeps[0].start == start and connector.sweeps[-1].end == end
+                joined = not points_apart(connector.sweeps[0].start, start) and not points_apart(connector.sweeps[-1].end, end)
             else:
-                joined = start == end
+                joined = not points_apart(start, end)
             if not joined:
                 raise InvalidConnectorEngagementInputError(f"connector {k} does not run between the junctions of circles {k} and {(k + 1) % count}")
         return cls(tuple(circles), tuple(connectors), tuple(junctions))

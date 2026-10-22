@@ -33,6 +33,7 @@ Exactness:
 
 from __future__ import annotations
 
+import functools
 import math
 from dataclasses import dataclass
 from dataclasses import field
@@ -46,6 +47,7 @@ from benchmarks.held_connector_engagement_range import PriorCircle
 from benchmarks.held_connector_engagement_range import SquaredDistance
 from benchmarks.held_connector_engagement_range import SweepKind
 from benchmarks.held_connector_engagement_range import filtered_sign
+from benchmarks.held_connector_engagement_range import points_apart
 from benchmarks.held_connector_engagement_range import squared_distance
 from benchmarks.held_declared_boundary import ExactPoint2
 from benchmarks.held_declared_boundary import Sense
@@ -68,6 +70,9 @@ class ArcSweep:
     """The tool centre moving on the circle ``(centre, radius)`` from ``start`` to ``end`` in ``sense``.
 
     ``start == end`` is a full turn (a zero-length arc is never a sweep).
+    ``full`` is that exact decision, made once at construction
+    (:func:`benchmarks.held_connector_engagement_range.points_apart`: interval
+    filter, then the exact cross-root comparison).
     """
 
     centre: ExactPoint2[WorldXY]
@@ -79,11 +84,13 @@ class ArcSweep:
     centre_box: PointBox = field(init=False, repr=False, compare=False)
     start_box: PointBox = field(init=False, repr=False, compare=False)
     end_box: PointBox = field(init=False, repr=False, compare=False)
+    full: bool = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "centre_box", PointBox.of_exact(self.centre))
         object.__setattr__(self, "start_box", PointBox.of(self.start))
         object.__setattr__(self, "end_box", PointBox.of(self.end))
+        object.__setattr__(self, "full", not points_apart(self.start, self.end))
 
     @classmethod
     def build(cls, centre: ExactPoint2[WorldXY], radius: Fraction, sense: Sense, start: OneRootPoint2, end: OneRootPoint2, kind: SweepKind = SweepKind.ARC) -> Self:
@@ -99,11 +106,6 @@ class ArcSweep:
             if not on_circle(centre, Fraction(radius), point):
                 raise PointOffSweepSupportError(f"{point!r} is not on the circle about {centre!r} of radius {radius}")
         return cls(centre, Fraction(radius), sense, start, end, kind)
-
-    @property
-    def full(self) -> bool:
-        """A whole turn from ``start`` back to it."""
-        return self.start == self.end
 
     def _orientation(self, first: OneRootPoint2, first_box: PointBox, second: OneRootPoint2, second_box: PointBox) -> int:
         q = self.centre_box
@@ -128,6 +130,11 @@ class ArcSweep:
             return 0 if side > 0 else 1
         return 0 if self._dot(self.start, self.start_box, point, box) > 0 else 1
 
+    @functools.cached_property
+    def _end_half_turn(self) -> int:
+        """:meth:`_half_turn` of ``end``: exact, of immutable data, computed once."""
+        return self._half_turn(self.end, self.end_box)
+
     def order(self, point: OneRootPoint2) -> int:
         """Exact order of the direction of ``point`` against ``end``, by swept angle from ``start`` in ``sense``.
 
@@ -136,7 +143,7 @@ class ArcSweep:
         :func:`benchmarks.held_one_root.compare_on_arc`, sign-filtered).
         """
         box = PointBox.of(point)
-        first, second = self._half_turn(point, box), self._half_turn(self.end, self.end_box)
+        first, second = self._half_turn(point, box), self._end_half_turn
         if first != second:
             return -1 if first < second else 1
         return -self.sense * self._orientation(point, box, self.end, self.end_box)
