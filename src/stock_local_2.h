@@ -14,6 +14,14 @@ public:
     using std::runtime_error::runtime_error;
 };
 
+// The flood met a bounded face that does not have exactly one outer CCB after
+// the planar repair at the entry of the local update (gps_ccb_repair_2.h): the
+// invariant the flood and Arrangement_2::remove_edge rely on is broken.
+class LocalDepletionTopologyError : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
+
 // A bounded removal region described the way a LOCAL subtraction needs it,
 // rather than as the point set a global difference consumes.
 //

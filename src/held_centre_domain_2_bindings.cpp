@@ -140,6 +140,7 @@ NB_MODULE(_held_centre_domain_2, m)
         .def("components", &components_wire)
         .def_prop_ro("member_count", &hcd::CentreDomain2::member_count)
         .def_prop_ro("construction_seconds", &hcd::CentreDomain2::construction_seconds)
+        .def_prop_ro("refiled_outer_ccbs", &hcd::CentreDomain2::refiled_outer_ccbs)
         .def(
             "locate",
             [](const hcd::CentreDomain2& domain, const RationalWire& x, const RationalWire& y) {

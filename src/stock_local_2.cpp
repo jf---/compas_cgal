@@ -1,5 +1,7 @@
 #include "stock_local_2.h"
 
+#include "gps_ccb_repair_2.h"
+
 #include <algorithm>
 #include <functional>
 #include <string>
@@ -215,6 +217,17 @@ void flood_region_faces(Arr& arrangement,
                 "local depletion flood reached the unbounded face; the removal "
                 "region's boundary does not separate its interior.");
         }
+        // I0 restored the planar one-outer-CCB invariant (a second outer CCB is
+        // a Gps misfile, gps_ccb_repair_2.h) and insertion preserves it, so a
+        // breach here is a contract failure. `outer_ccb()`'s own precondition is
+        // compiled out of release builds; checking it explicitly keeps the flood
+        // from silently walking one cycle of a misfiled face.
+        if (face->number_of_outer_ccbs() != 1) {
+            throw LocalDepletionTopologyError(
+                "local depletion flood reached a bounded face with "
+                + std::to_string(face->number_of_outer_ccbs())
+                + " outer CCBs after the planar repair.");
+        }
         walk_ccb(face->outer_ccb());
         for (auto hole = face->inner_ccbs_begin(); hole != face->inner_ccbs_end(); ++hole) {
             walk_ccb(*hole);
@@ -329,6 +342,11 @@ LocalRemovalRegion local_annulus_region(const EPoint& center,
 
 void subtract_region_local(Gps& set, const LocalRemovalRegion& region)
 {
+    // I0: insertion's hole relocation, the flood and Arrangement_2::remove_edge
+    // all rely on the planar one-outer-CCB invariant, which a preceding
+    // Gps::difference/join can break (gps_ccb_repair_2.h). Restore it exactly
+    // before touching the arrangement.
+    refile_misfiled_outer_ccbs(set);
     Arr& arrangement = set.arrangement();
 
     std::vector<Arr::Face_handle> inside;

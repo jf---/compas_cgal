@@ -552,6 +552,14 @@ std::string selected_face_record(
         throw ReachableArrangementTopologyError(
             "selected-cell record requires a bounded selected face");
     }
+    // Defence only: this arrangement is built by plain CGAL::insert, which keeps
+    // the planar one-outer-CCB invariant. `outer_ccb()`'s precondition is
+    // compiled out of release builds, so a breach of that invariant would
+    // otherwise drop a cycle silently.
+    if (face->number_of_outer_ccbs() != 1) {
+        throw ReachableArrangementTopologyError(
+            "selected-cell record requires exactly one outer boundary cycle");
+    }
     const std::string outer = cycle_record(
         ccb_halfedges(face->outer_ccb()),
         "outer",

@@ -108,6 +108,9 @@ public:
     [[nodiscard]] const std::vector<Component>& components() const { return components_; }
     [[nodiscard]] std::size_t member_count() const { return member_count_; }
     [[nodiscard]] double construction_seconds() const { return construction_seconds_; }
+    /// Outer CCBs the Gps difference misfiled and the build re-filed as holes
+    /// (gps_ccb_repair_2.h); reporting only.
+    [[nodiscard]] std::size_t refiled_outer_ccbs() const { return refiled_outer_ccbs_; }
 
     /// Exact location of a rational point relative to the closed set Omega*.
     [[nodiscard]] Location locate(const RationalPoint& point) const;
@@ -129,6 +132,7 @@ private:
     std::vector<QueryPiece> query_pieces_;
     std::size_t member_count_ = 0;
     double construction_seconds_ = 0.0;
+    std::size_t refiled_outer_ccbs_ = 0;
 };
 
 [[nodiscard]] FT rational_from_text(const std::string& numerator, const std::string& denominator);

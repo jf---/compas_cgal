@@ -38,6 +38,9 @@ class CentreDomain2:
     def member_count(self) -> int: ...
     @property
     def construction_seconds(self) -> float: ...
+    @property
+    def refiled_outer_ccbs(self) -> int:
+        """Outer CCBs the Gps difference misfiled and the build re-filed as holes (reporting only)."""
     def locate(self, x: _RationalWire, y: _RationalWire) -> int:
         """``1`` interior, ``0`` boundary, ``-1`` exterior."""
     def nearest(self, x: _RationalWire, y: _RationalWire) -> _NearestWire: ...

@@ -1,5 +1,7 @@
 #include "held_centre_domain_2.h"
 
+#include "gps_ccb_repair_2.h"
+
 #include <CGAL/Fraction_traits.h>
 
 #include <algorithm>
@@ -417,6 +419,10 @@ std::unique_ptr<CentreDomain2> CentreDomain2::build(const std::vector<Primitive>
     removed.join(members.begin(), members.end());
     result->domain_ = std::make_unique<Gps>(pocket);
     result->domain_->difference(removed);
+    // The Gps boolean can file a hole as a second outer CCB (gps_ccb_repair_2.h);
+    // the cycle extraction below and every later reader need the planar
+    // invariant, so it is restored exactly where it breaks.
+    result->refiled_outer_ccbs_ = refile_misfiled_outer_ccbs(*result->domain_);
     result->member_count_ = members.size();
 
     const auto& arrangement = result->domain_->arrangement();
@@ -425,6 +431,12 @@ std::unique_ptr<CentreDomain2> CentreDomain2::build(const std::vector<Primitive>
         if (!face->has_outer_ccb()) throw BrokenCentreDomainChainError("a contained face of the centre domain is unbounded");
         if (face->isolated_vertices_begin() != face->isolated_vertices_end()) {
             throw BrokenCentreDomainChainError("a contained face of the centre domain has an isolated vertex");
+        }
+        // Post-condition of the repair above: `outer_ccb()` requires exactly one
+        // outer CCB and that precondition is compiled out of release builds, so
+        // a planar-invariant breach would otherwise silently drop a cycle.
+        if (face->number_of_outer_ccbs() != 1) {
+            throw BrokenCentreDomainChainError("a contained face of the centre domain has more than one outer boundary cycle");
         }
         Component component;
         component.cycles.push_back(extract_cycle(face->outer_ccb(), radii, result->query_pieces_));

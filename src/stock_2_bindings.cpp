@@ -5,6 +5,7 @@
 #include "stock_2.h"
 #include "stock_line_sweep_2.h"
 #include "stock_local_2.h"
+#include "gps_ccb_repair_2.h"
 
 #include <cmath>
 #include <cstdint>
@@ -111,6 +112,7 @@ NB_MODULE(_stock_2, m)
     // path, surfaced as a RuntimeError so it can never be confused with -- or
     // caught alongside -- a malformed-input rejection.
     nb::exception<LocalDepletionEscapedError>(m, "LocalDepletionEscapedError");
+    nb::exception<LocalDepletionTopologyError>(m, "LocalDepletionTopologyError", PyExc_RuntimeError);
 
     nb::class_<DepletionTrace>(m, "DepletionTrace")
         .def_prop_ro("center_count", [](const DepletionTrace& trace) {
@@ -321,6 +323,9 @@ NB_MODULE(_stock_2, m)
         .def("subtract_arc_sweep_local", &Stock2::subtract_arc_sweep_local,
              "cx"_a, "cy"_a, "sx"_a, "sy"_a, "ex"_a, "ey"_a, "cw"_a, "tool_radius"_a)
         .def("representation_is_valid", &Stock2::representation_is_valid)
+        // Diagnostic: re-file the outer CCBs CGAL's Gps boolean misfiled (gps_ccb_repair_2.h)
+        // and return how many; 0 on a planar arrangement. Same point set before and after.
+        .def("refile_misfiled_outer_ccbs", [](Stock2& stock) { return refile_misfiled_outer_ccbs(stock.set()); })
         .def(
             "arrangement_stats",
             [](const Stock2& stock) {
