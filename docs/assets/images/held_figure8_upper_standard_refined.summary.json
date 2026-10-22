@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "figure": "held_figure8_upper_standard_refined.png",
+  "circles": 4160,
+  "connectors": 4160,
+  "over_cap": 0,
+  "unresolved": 0,
+  "max_known_deg": 79.99339561007837,
+  "seam_deg": 76.62890481130493,
+  "seam_unresolved": false,
+  "coverage": {
+    "covered": true,
+    "witnesses": 0,
+    "sites": 0
+  },
+  "inserted_sources": null
+}

@@ -8,28 +8,29 @@ from pathlib import Path
 
 import numpy as np
 from matplotlib.axes import Axes
-from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.collections import LineCollection
-from matplotlib.figure import Figure
 
 from benchmarks.held_containment_report import containment_report
 from benchmarks.held_exact_motion_coverage import require_full_motion_coverage
-from benchmarks.held_figure5_boundary_path import Figure5BoundaryConnectors
 from benchmarks.held_figure5_boundary_path import Figure5BoundaryTransition
 from benchmarks.held_figure5_boundary_path import Figure5CounterclockwiseCircle
-from benchmarks.held_figure5_engagement_refinement import refine_figure5_engagement
-from benchmarks.held_figure5_path import _paper_candidate
 from benchmarks.held_figure5_path import build_figure5_approximate_path
 from benchmarks.held_figure5_raw_guide import build_figure5_raw_guide
-from benchmarks.held_motion_coverage import connector_pairs
 from benchmarks.held_reference_cases import HeldReferenceCase
 from benchmarks.held_reference_cases import load_held_reference_case
 from benchmarks.held_reference_figures import figure7_inward_offset
-from benchmarks.held_standard_placement import StandardPlacementFragmentationError
-from benchmarks.held_standard_placement import maximum_predecessor_engagement
+from benchmarks.held_toolpath_benchmark import generate
 from benchmarks.tools.held_contour_contact_plot import render_contour_contacts
+from benchmarks.tools.held_sequence_coverage import certify_path_coverage
+from benchmarks.tools.held_sequence_plot import ColourMode
+from benchmarks.tools.held_sequence_plot import CoverageVerdict
+from benchmarks.tools.held_sequence_plot import emitted_engagement
+from benchmarks.tools.held_sequence_plot import plot_data
+from benchmarks.tools.held_sequence_plot import render_sequence
+from benchmarks.tools.held_sequence_summary import CoverageSummary
+from benchmarks.tools.held_sequence_summary import FigureSummary
+from benchmarks.tools.held_sequence_summary import summary_path
 from benchmarks.tools.held_stock_plot import render_circle_stock_prefix
-from compas_cgal.motion import EngagementCap
 
 TURN_DISPLAY_SAMPLES = 96  # Display resolution only; no geometric decisions.
 PATH_COLOR = "#087e8b"
@@ -44,63 +45,54 @@ def render_path(
     *,
     title: str,
     scope: str,
+    coverage: CoverageVerdict | None = None,
+    mode: ColourMode = ColourMode.RUN,
+    inserted_sources: tuple[int, ...] | None = None,
 ) -> None:
-    """Render the supplied execution order without sorting or selecting moves.
+    """Render the supplied execution order without sorting or selecting moves, as a sequence plot.
 
-    The lower panel recomputes the standard predecessor model from that order;
-    it does not certify depleted-stock engagement or entry/connector safety.
-    A closed path (one connector per circle) also reports the seam pair, last
-    circle back to the first, at successor index ``len(circles)``; it is a
-    reported value only and colours no circle.
+    Each motion's swept band is painted in emission order (``held_sequence_plot``),
+    coloured per guide run by default. The lower panel recomputes the standard
+    predecessor model from that order; it does not certify depleted-stock
+    engagement or entry/connector safety. A closed path (one connector per
+    circle) also reports the seam pair, last circle back to the first; it is a
+    reported value only. ``coverage`` is the certificate verdict drawn over
+    the path, if one was run. The printed metrics and verdict are also
+    written beside the figure (``held_sequence_summary``) for the docs;
+    ``inserted_sources`` (a certified repair's re-inserted sources) is
+    printed on the figure and recorded there.
     """
-    pairs = connector_pairs(circles, transitions)
-    # A lone circle's closing lap returns to itself: no seam pair to report.
-    seam_pair = len(circles) > 1 and len(pairs) == len(circles)
-    measured = []
-    unresolved = []
-    for index, (first, second, _) in enumerate(pairs[: len(circles) - 1 + seam_pair], start=1):
-        try:
-            angle = math.degrees(float(maximum_predecessor_engagement(_paper_candidate(first), _paper_candidate(second), case.tool_radius)))
-        except StandardPlacementFragmentationError:
-            # Missing model evidence is visibly unresolved, never a passing
-            # angle. NaN breaks the plot at this adjacency.
-            angle = math.nan
-            unresolved.append(index)
-        measured.append(angle)
-    # The seam pair is reported, never used to colour circles[0].
-    angles = tuple(measured[: len(circles) - 1])
+    angles, seam = emitted_engagement(case, circles, transitions)
     cap = float(case.tea_cap)
-    figure = Figure(figsize=(13, 10), facecolor="#faf9f5")
-    FigureCanvasAgg(figure)
-    grid = figure.add_gridspec(2, 1, height_ratios=(3, 1))
-    path_axis = figure.add_subplot(grid[0])
-    engagement_axis = figure.add_subplot(grid[1])
-    _draw_motion(path_axis, case, circles, transitions, angles, cap)
-    indices = np.arange(1, len(measured) + 1)
-    engagement_axis.plot(indices[: len(angles)], angles, color=PATH_COLOR, linewidth=0.8)
-    seam = measured[-1] if seam_pair else None
-    if seam is not None and math.isfinite(seam):
-        engagement_axis.scatter([len(circles)], [seam], marker="D", color="#b77c29", s=24, zorder=3, label="Seam pair (last to first)")
-    failed = [(index, angle) for index, angle in zip(indices, measured) if angle > cap]
-    if failed:
-        engagement_axis.scatter([item[0] for item in failed], [item[1] for item in failed], color=FAILURE_COLOR, s=9, zorder=3)
-    if unresolved:
-        engagement_axis.scatter(unresolved, [185] * len(unresolved), marker="x", color="#6e39a6", s=24, label="Unresolved model (marker only)")
-    engagement_axis.axhline(cap, color=FAILURE_COLOR, linestyle="--", linewidth=1, label=f"{cap:g}° cap")
-    engagement_axis.set(xlabel="Successor index in emitted order", ylabel="Engagement / degrees", ylim=(0, 190))
-    engagement_axis.legend(loc="upper right", frameon=False)
-    engagement_axis.grid(alpha=0.2)
+    # Successor pairs only; the seam pair is reported on its own.
+    failed = sum(1 for angle in angles if angle > cap)
+    unresolved = sum(1 for angle in angles if not math.isfinite(angle))
     maximum = max((angle for angle in angles if math.isfinite(angle)), default=0.0)
-    seam_text = "" if seam is None else (" · seam unresolved" if not math.isfinite(seam) else f" · seam {seam:.2f}°")
-    figure.suptitle(title, x=0.075, ha="left", fontsize=19, fontweight="bold")
-    figure.text(
-        0.075, 0.935, f"{len(circles):,} circles · {len(transitions):,} connectors · {len(failed):,} over cap · {len(unresolved)} unresolved · max known {maximum:.2f}°{seam_text}"
+    seam_text = "" if seam is None else (" · seam unresolved" if not math.isfinite(seam) else f" · seam {seam:.2f}°{' (over cap)' if seam > cap else ''}")
+    data = plot_data(workload=output.stem, title=title, case=case, circles=circles, transitions=transitions, engagement_deg=angles, coverage=coverage)
+    render_sequence(
+        data,
+        output,
+        mode,
+        subtitle=f"{len(circles):,} circles · {len(transitions):,} connectors · {failed:,} over cap · {unresolved} unresolved · max known {maximum:.2f}°{seam_text}",
+        notes=(
+            scope,
+            "Predecessor-circle model only; entry, connectors and depleted-stock engagement require separate checks.",
+            *(() if inserted_sources is None else (f"Certificate-gated coverage repair re-inserted source(s) {', '.join(map(str, inserted_sources)) or 'none'}.",)),
+        ),
     )
-    figure.text(0.075, 0.035, scope, fontsize=9)
-    figure.text(0.075, 0.015, "Predecessor-circle model only; entry, connectors, depleted-stock engagement and coverage require separate checks.", fontsize=9)
-    figure.subplots_adjust(left=0.075, right=0.97, top=0.90, bottom=0.10, hspace=0.22)
-    output.parent.mkdir(parents=True, exist_ok=True)
-    figure.savefig(output, dpi=180, facecolor=figure.get_facecolor())
+    summary = FigureSummary.build(
+        figure=output.name,
+        circles=len(circles),
+        connectors=len(transitions),
+        over_cap=failed,
+        unresolved=unresolved,
+        max_known_deg=maximum,
+        seam_deg=seam,
+        coverage=None if coverage is None else CoverageSummary.from_verdict(coverage, join_mm=data.tool_radius),
+        inserted_sources=inserted_sources,
+    )
+    summary_path(output).write_text(summary.to_json())
 
 
 def _draw_motion(
@@ -148,10 +140,11 @@ def _draw_motion(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--refine", action="store_true", help="Repair corner circles and subdivide over-cap gaps; report remaining containment failures.")
+    parser.add_argument("--refine", action="store_true", help="The generator's refined path (figure5_refined: seam closed, connector post-gate); report containment failures.")
     parser.add_argument("--stock-prefix", type=int, help="Also render native circle-only stock after this many emitted circles.")
     parser.add_argument("--contour-prefix", type=int, help="Inspect native exposed-contour contacts on this many existing circles.")
     parser.add_argument("--check-coverage", action="store_true", help="Also run the exact full-motion coverage replay; unworkable at this size, see docs/held_motion_coverage.md.")
+    parser.add_argument("--output-dir", type=Path, default=Path("docs/assets/images"), help="Directory every figure is written to.")
     args = parser.parse_args()
     if args.stock_prefix is not None and args.stock_prefix <= 0:
         parser.error("Stock prefix must be positive.")
@@ -162,26 +155,26 @@ def main() -> None:
     components = figure7_inward_offset(case).components
     result = build_figure5_approximate_path(guide, components)
     circles, transitions = result.path.circles, result.path.transitions
-    output = Path("docs/assets/images/held_figure5_toolpath_current.png")
+    output = args.output_dir / "held_figure5_toolpath_current.png"
     title = "Figure 5 · full-path failure map"
     scope = "Polygon guide, publisher-derived start, original lane placement. Over-cap moves are defects, not accepted motion."
     if args.refine:
-        refined = refine_figure5_engagement(circles, components[0], case.tool_radius, EngagementCap.build(math.radians(float(case.tea_cap))))
-        circles = refined.circles
-        transitions = Figure5BoundaryConnectors.build(components[0], circles).transitions
+        # The published path is the benchmark generator's own (seam closed, connector post-gate), not a re-derivation.
+        generated = generate("figure5_refined")
+        circles, transitions = generated.circles, generated.transitions
         rejected, excess = containment_report(circles, components[0])
-        output = Path("docs/assets/images/held_figure5_engagement_refined.png")
+        output = args.output_dir / "held_figure5_engagement_refined.png"
         title = "Figure 5 · corner-aware engagement refinement"
         scope = f"Publisher-start polygon proposal · {rejected:,} exact containment rejections · max reported protrusion {float(excess):.2g} mm · not machining-qualified."
         print(scope)
     if args.stock_prefix is not None:
         if args.stock_prefix > len(circles):
             parser.error("Stock prefix exceeds emitted circle count.")
-        render_circle_stock_prefix(case, circles[: args.stock_prefix], Path("docs/assets/images") / f"held_figure5_circle_stock_{args.stock_prefix}.png")
+        render_circle_stock_prefix(case, circles[: args.stock_prefix], args.output_dir / f"held_figure5_circle_stock_{args.stock_prefix}.png")
     if args.contour_prefix is not None:
         if args.contour_prefix > len(circles):
             parser.error("Contour prefix exceeds emitted circle count.")
-        render_contour_contacts(case, circles[: args.contour_prefix], Path("docs/assets/images") / f"held_figure5_contour_contacts_{args.contour_prefix}.png")
+        render_contour_contacts(case, circles[: args.contour_prefix], args.output_dir / f"held_figure5_contour_contacts_{args.contour_prefix}.png")
     render_path(
         case,
         circles,
@@ -189,6 +182,7 @@ def main() -> None:
         output,
         title=title,
         scope=scope,
+        coverage=certify_path_coverage(components[0], circles, case.tool_radius),
     )
     if args.check_coverage:
         require_full_motion_coverage(case, circles, transitions, output.with_suffix(".exact-coverage.json"))

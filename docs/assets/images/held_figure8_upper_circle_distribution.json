@@ -2,22 +2,25 @@
   "case": "figure8_upper",
   "model": "standard predecessor only; approximate polygon draft",
   "initial_circles": 3114,
-  "refined_circles": 4183,
-  "inserted_circles": 1069,
+  "refined_circles": 4180,
+  "inserted_circles": 1066,
   "placement_lanes": 480,
   "source_runs": 275,
   "initial_terminal_selections": 487,
   "initial_forced_selections": 255,
+  "seam": "connector",
+  "seam_pair_engagement_degrees": 76.62890481130493,
+  "final_pairs": 4180,
   "final_pairs_over_cap": 0,
-  "final_pairs_below_half_cap": 1795,
+  "final_pairs_below_half_cap": 1791,
   "final_angle_quantiles_degrees": {
     "min": 0.0,
-    "q25": 6.763599914288995,
-    "median": 56.91827411020949,
-    "q75": 71.21764660453368,
+    "q25": 6.763674830836841,
+    "median": 56.926001692198504,
+    "q75": 71.23594568382444,
     "max": 79.99339561007837
   },
   "initial_circle_circumference_mm": 37756.97587853905,
-  "refined_circle_circumference_mm": 43954.79234158543,
-  "inserted_circle_circumference_mm": 6265.9188021556565
+  "refined_circle_circumference_mm": 43863.70475575583,
+  "inserted_circle_circumference_mm": 6174.831216326063
 }

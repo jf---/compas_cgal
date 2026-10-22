@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "figure": "held_figure8_crossed_skis_standard_refined_boundary.png",
+  "circles": 1621,
+  "connectors": 1621,
+  "over_cap": 0,
+  "unresolved": 0,
+  "max_known_deg": 79.99556005814694,
+  "seam_deg": 25.295484092986598,
+  "seam_unresolved": false,
+  "coverage": {
+    "covered": true,
+    "witnesses": 0,
+    "sites": 0
+  },
+  "inserted_sources": null
+}

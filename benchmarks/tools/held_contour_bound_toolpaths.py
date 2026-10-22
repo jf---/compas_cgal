@@ -23,6 +23,7 @@ from benchmarks.held_reference_cases import load_held_reference_case
 from benchmarks.held_reference_figures import figure7_inward_offset
 from benchmarks.tools.held_contour_bound_plot import render_contour_bound_comparison
 from benchmarks.tools.held_coverage_preserving_plot import render_coverage_preserving_comparison
+from benchmarks.tools.held_sequence_coverage import certify_path_coverage
 from compas_cgal.motion import EngagementCap
 
 
@@ -34,6 +35,7 @@ def main() -> None:
     parser.add_argument("--qualify-contacts", action="store_true", help="Retain bounded contact representatives and report rejected hypotheses.")
     parser.add_argument("--corner-approaches", action="store_true", help="Partition concave corner approach, rotation and departure.")
     parser.add_argument("--coverage-preserving", action="store_true", help="Reproduce the rejected dense-source preservation experiment; not the selected local-repair approach.")
+    parser.add_argument("--output-dir", type=Path, default=Path("docs/assets/images"), help="Directory every figure and report is written to.")
     args = parser.parse_args()
     if args.case == "figure5" and args.qualify_contacts:
         parser.error("Figure 5 uses its established unprojected source contacts.")
@@ -70,8 +72,17 @@ def main() -> None:
             cap,
             corner_approaches=args.corner_approaches,
         )
-        output = Path("docs/assets/images") / f"held_{case.name}_coverage_preserving.png"
-        render_coverage_preserving_comparison(case, before, corrected, bounds, output)
+        output = args.output_dir / f"held_{case.name}_coverage_preserving.png"
+        render_coverage_preserving_comparison(
+            case,
+            before,
+            corrected,
+            bounds,
+            output,
+            before_coverage=certify_path_coverage(components[0], before.circles, case.tool_radius),
+            after_coverage=certify_path_coverage(components[0], corrected.circles, case.tool_radius),
+            dense_circles=len(dense.circles),
+        )
         print(f"{case.name}: {len(dense.circles)} dense -> {len(corrected.circles)} retained; conservative residual empty={stock.is_empty()}; plot {output}", flush=True)
         # Publish the actual path before the more expensive absolute gate.
         if not args.exact_coverage:
@@ -81,7 +92,7 @@ def main() -> None:
         if not residual.is_empty():
             raise IncompleteMotionCoverageError(f"{case.name}: coverage-preserving path still leaves full-design residual material; see exact-coverage report.")
         return
-    output = Path("docs/assets/images") / f"held_{case.name}_contour_bound.png"
+    output = args.output_dir / f"held_{case.name}_contour_bound.png"
     render_contour_bound_comparison(case, baseline.circles, baseline_transitions, refined.circles, transitions, bounds, output)
     if args.check_coverage:
         lost, gained = compare_sampled_motion_coverage(case, baseline.circles, baseline_transitions, refined.circles, transitions, output.with_suffix(".coverage.json"))

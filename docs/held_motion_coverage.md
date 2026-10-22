@@ -1,5 +1,11 @@
 # Held motion coverage
 
+!!! danger "The figures on this page are unqualified: they gouge, and Monstera leaves uncut islands"
+    Every Held path drawn here is a draft. An exact audit finds gouges at the
+    concave arcs of every published pocket path, and the published Monstera
+    path leaves two uncut interior islands. No coverage claim on this page
+    qualifies a path for machining. See [Held qualification](held_qualification.md).
+
 !!! danger "Exact full-motion coverage replay: set aside on 2026-09-08 as unworkable"
     The exact replay behind every "complete coverage" claim on this page,
     `remaining_material` on `Exact_predicates_exact_constructions_kernel_with_sqrt`,
@@ -583,13 +589,16 @@ share the same uncut island.
 | Figure 7 engagement maps | Reuse coverage of the corresponding complete emitted motion |
 | Construction diagrams, source overlays, stock prefixes | Explicit intermediate scope; no complete-pocket claim |
 
-The Figure 5 progress, reference-corpus, and contour-bound CLIs now invoke the
-full-motion gate automatically. The contour comparison writes both baseline and
-draft reports before rejecting incomplete coverage. Its optional sampled check
+Since 2026-09-08 the Figure 5 progress, reference-corpus, and contour-bound
+CLIs no longer invoke the full-motion gate by default (see the warning at the
+top of this page); it runs only when asked: `--check-coverage`, or
+`--exact-coverage` for the contour-bound CLI. When it runs, the contour comparison writes both baseline
+and draft reports before rejecting incomplete coverage. Its optional sampled check
 remains a diagnostic only.
 
 Figure 6's repository comparison, controlled-cap measurements, and
-constant-spacing trials also require exact coverage before accepting metrics.
+constant-spacing trials run the same replay only with `exact_coverage=True`;
+by default their metrics are coverage-unqualified.
 `benchmarks.toolpath_coverage` classifies actual operations, includes actual
 plunge disks, and excludes clearance travel and retracts. It handles planar
 segments and full circles. Partial arcs and nonplanar cutting motions raise
@@ -611,9 +620,23 @@ runs remain explicit acceptance work, not passing omissions.
 
 ## Rejected dense-source preservation experiment
 
-**September 7 visual feedback:** Figure 8 upper grew from 738 to 3,065 circles
-and from 13,874.3 to 36,238.5 mm (+161.2%). This is an unacceptable response to
-localized coverage deficits. The invariant below preserves every dense-source
+**Length cost is the argument.** The exact coverage certificate decides both
+paths of each comparison: Figure 8 upper compact <!-- gv:upper_covpres.before_verdict -->CERTIFIED COVERED<!-- /gv -->,
+dense-preserving <!-- gv:upper_covpres.verdict -->CERTIFIED COVERED<!-- /gv -->; Figure 5 compact
+<!-- gv:fig5_covpres.before_verdict -->CERTIFIED COVERED<!-- /gv -->, dense-preserving <!-- gv:fig5_covpres.verdict -->CERTIFIED COVERED<!-- /gv -->.
+Where both are covered the experiment buys no coverage; it only adds path
+length. Figure 8 upper grows from <!-- gv:upper_covpres.before_circles -->636<!-- /gv --> to
+<!-- gv:upper_covpres.circles -->3,021<!-- /gv --> circles (of <!-- gv:upper_covpres.dense_circles -->3,162<!-- /gv -->
+dense) and from <!-- gv:upper_covpres.before_length_mm -->11,485.4<!-- /gv --> to
+<!-- gv:upper_covpres.length_mm -->35,182.3<!-- /gv --> mm (<!-- gv:upper_covpres.length_change -->+206.3%<!-- /gv -->);
+maximum reported bound <!-- gv:upper_covpres.max_bound -->79.993<!-- /gv -->°. Numbers from
+`pixi run held-contour-bound-toolpaths --case figure8_upper --coverage-preserving`
+and its JSON below.
+
+**September 7 visual feedback** (counts of that run: 738 to 3,065 circles,
+13,874.3 to 36,238.5 mm, +161.2%) rejected this as an unacceptable response to
+localized coverage deficits; the certificate has since shown that the compact
+path has no such deficit. The invariant below preserves every dense-source
 sweep rather than repairing only uncovered reachable material. It is retained
 as an experimental comparison, not the selected algorithm. Remaining dense
 Monstera and crossed-skis runs were stopped.
@@ -625,11 +648,13 @@ validated. No coordinate-specific repair or arbitrary gap tolerance is accepted.
 
 ![Rejected Figure 8 upper densification: compact path left, dense-source preservation right](assets/images/held_figure8_upper_coverage_preserving.png)
 
-**Why rejected:** the localized coverage problem does not justify the global
-density increase visible on the right. The reported engagement bound stays below
-80 degrees, but that does not justify a 161.2% path-length increase. Conservative
-stock remains nonempty even though the 0.25 mm display grid finds no residual
-points. [Measured comparison](assets/images/held_figure8_upper_coverage_preserving.json).
+**Why rejected:** the compact panel is already
+<!-- gv:upper_covpres.before_verdict -->CERTIFIED COVERED<!-- /gv --> (verdicts in the panel titles), so the global
+density increase visible on the right buys nothing. The reported engagement
+bound stays below 80 degrees, but that does not justify a
+<!-- gv:upper_covpres.length_change -->+206.3%<!-- /gv --> path-length increase. Both panels paint swept bands in emission order
+(circle: annulus R ± r; connector: capsule) on one shared colour ramp; white
+inside the pocket is uncut. [Measured comparison](assets/images/held_figure8_upper_coverage_preserving.json).
 
 `build_coverage_preserving_path` repairs and engagement-refines every source
 circle before thinning. `thin_covered_contour_path` then deletes circles without
@@ -660,16 +685,24 @@ preserves a deliberately detouring connector chain exactly. The older
 engagement-only algorithm remains independently testable and its failure below
 has not been hidden.
 
-Figure 5 currently retains 1,558 of 1,619 dense circles. Its path is 23,822.7 mm
-versus the old 13,086.7 mm (+82%); maximum reported bound is 79.992 degrees.
-Generation took 68.74 seconds. This preserves dense-source coverage but incurs
-an unacceptable length cost; it is not an accepted toolpath improvement.
+Figure 5 currently retains <!-- gv:fig5_covpres.circles -->1,520<!-- /gv --> of
+<!-- gv:fig5_covpres.dense_circles -->1,586<!-- /gv --> dense circles. Its path is
+<!-- gv:fig5_covpres.length_mm -->22,325.8<!-- /gv --> mm versus <!-- gv:fig5_covpres.before_length_mm -->11,573.8<!-- /gv --> mm
+for the <!-- gv:fig5_covpres.before_circles -->433<!-- /gv -->-circle engagement-only path
+(<!-- gv:fig5_covpres.length_change -->+92.9%<!-- /gv -->); maximum reported bound is
+<!-- gv:fig5_covpres.max_bound -->79.992<!-- /gv --> degrees (`pixi run held-contour-bound-toolpaths --case
+figure5 --coverage-preserving`, JSON below). The 68.74 s generation time is
+from the 2026-09-07 run and was not re-measured. The compact path is already
+<!-- gv:fig5_covpres.before_verdict -->CERTIFIED COVERED<!-- /gv -->, so the experiment preserves coverage the
+compact path has, at an unacceptable length cost; it is not an accepted
+toolpath improvement.
 
 ![Figure 5 coverage-preserving comparison](assets/images/held_figure5_coverage_preserving.png)
 
 **Experimental comparison:** compact path left; dense-source preservation
-right. The +82% length cost is retained as negative evidence, not a selected
-repair. [Measured comparison](assets/images/held_figure5_coverage_preserving.json).
+right (<!-- gv:fig5_covpres.before_verdict -->CERTIFIED COVERED<!-- /gv --> and <!-- gv:fig5_covpres.verdict -->CERTIFIED COVERED<!-- /gv -->). The
+<!-- gv:fig5_covpres.length_change -->+92.9%<!-- /gv --> length cost is retained as negative
+evidence, not a selected repair. [Measured comparison](assets/images/held_figure5_coverage_preserving.json).
 
 Conservative replay leaves one quarter-radius grid sample at
 `(47.25024912893663, 45.75)` mm. Native `ReachableMaterialPredicate2` confirms it

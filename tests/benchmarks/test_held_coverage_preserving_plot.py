@@ -16,6 +16,7 @@ from benchmarks.held_figure5_raw_guide import ProjectionBoundarySite
 from benchmarks.held_reference_cases import load_held_reference_case
 from benchmarks.tools.held_coverage_preserving_plot import InvalidCoveragePreservingPlotError
 from benchmarks.tools.held_coverage_preserving_plot import render_coverage_preserving_comparison
+from benchmarks.tools.held_sequence_plot import CoverageVerdict
 from compas_cgal.units import GuideRadius
 from compas_cgal.units import Millimetre
 from compas_cgal.units import Point2
@@ -68,3 +69,17 @@ def test_rejects_bound_count_other_than_successor_count(tmp_path: Path) -> None:
     path = _path((2, 4, 5), closed=True)
     with pytest.raises(InvalidCoveragePreservingPlotError, match="bound"):
         render_coverage_preserving_comparison(load_held_reference_case("figure5"), path, path, (Radian(0.5), Radian(0.6), Radian(0.7)), tmp_path / "plot.png")
+
+
+def test_report_records_the_dense_count_and_both_certificate_verdicts(tmp_path: Path) -> None:
+    before, after = _path((2, 3, 4, 5), closed=True), _path((2, 4, 5), closed=True)
+    output = tmp_path / "plot.png"
+    uncovered = CoverageVerdict.build(covered=False, witnesses=((3.0, 1.0),), piece_kinds=("annulus_outer",))
+    covered = CoverageVerdict.build(covered=True, witnesses=(), piece_kinds=())
+    render_coverage_preserving_comparison(
+        load_held_reference_case("figure5"), before, after, (Radian(0.5), Radian(0.6)), output, before_coverage=uncovered, after_coverage=covered, dense_circles=7
+    )
+    report = json.loads(output.with_suffix(".json").read_text())
+    assert report["dense_circles"] == 7
+    assert report["before_coverage"] == {"covered": False, "witnesses": 1, "sites": 1}
+    assert report["after_coverage"] == {"covered": True, "witnesses": 0, "sites": 0}

@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "figure": "held_figure5_engagement_refined.png",
+  "circles": 2004,
+  "connectors": 2004,
+  "over_cap": 0,
+  "unresolved": 0,
+  "max_known_deg": 79.99206786713134,
+  "seam_deg": 180.0,
+  "seam_unresolved": false,
+  "coverage": {
+    "covered": true,
+    "witnesses": 0,
+    "sites": 0
+  },
+  "inserted_sources": null
+}

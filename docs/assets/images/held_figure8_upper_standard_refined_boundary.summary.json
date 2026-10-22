@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "figure": "held_figure8_upper_standard_refined_boundary.png",
+  "circles": 1690,
+  "connectors": 1690,
+  "over_cap": 0,
+  "unresolved": 0,
+  "max_known_deg": 79.99289553628017,
+  "seam_deg": 76.62890481130493,
+  "seam_unresolved": false,
+  "coverage": {
+    "covered": true,
+    "witnesses": 0,
+    "sites": 0
+  },
+  "inserted_sources": null
+}

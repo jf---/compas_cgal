@@ -8,17 +8,28 @@ acceptance matrix. Checker regression tests pass; full-corpus acceptance and
 shared generator repairs remain open. Monstera has two sampled residual
 candidates shared by its standard and contour-bound drafts.
 
-**Figure 5 coverage-preserving deletion:** the repaired dense source has 1,619
-circles; native local deletion retains 1,558, compared with the earlier 468-circle
-engagement-only draft. Analytic motion length increases from 13,086.7 to
-23,822.7 mm (+82.0%); maximum reported engagement bound is 79.992°. Native
-generation took 68.74 s. This preserves source swept material and actual connector
-waypoints; it does not prove source completeness, containment, or entry safety.
+**Figure 5 coverage-preserving deletion:** the exact coverage certificate finds
+the engagement-only path <!-- gv:fig5_covpres.before_verdict -->CERTIFIED COVERED<!-- /gv --> and the
+coverage-preserving path <!-- gv:fig5_covpres.verdict -->CERTIFIED COVERED<!-- /gv -->, so the extra length is
+pure cost. The repaired dense source has <!-- gv:fig5_covpres.dense_circles -->1,586<!-- /gv -->
+circles; native local deletion retains <!-- gv:fig5_covpres.circles -->1,520<!-- /gv -->, against the
+<!-- gv:fig5_covpres.before_circles -->433<!-- /gv -->-circle engagement-only draft. Analytic motion
+length increases from <!-- gv:fig5_covpres.before_length_mm -->11,573.8<!-- /gv --> to
+<!-- gv:fig5_covpres.length_mm -->22,325.8<!-- /gv --> mm (<!-- gv:fig5_covpres.length_change -->+92.9%<!-- /gv -->); maximum
+reported engagement bound is <!-- gv:fig5_covpres.max_bound -->79.992<!-- /gv -->°. Counts, lengths,
+verdicts and bound come from
+`pixi run held-contour-bound-toolpaths --case figure5 --coverage-preserving`
+(the JSON below). The 68.74 s
+generation time is from the 2026-09-07 run and was not re-measured. This
+preserves source swept material and actual connector waypoints; it does not
+prove source completeness, containment, or entry safety.
 
 ![Figure 5 engagement-only and coverage-preserving paths](assets/images/held_figure5_coverage_preserving.png)
 
 [Measured comparison](assets/images/held_figure5_coverage_preserving.json).
-Conservative stock replay remains nonempty: the quarter-tool-radius inspection
+Both panels paint swept bands in emission order (circle: annulus R ± r;
+connector: capsule), coloured by position within each guide run; white inside
+the pocket is uncut. Before the coverage certificate, conservative stock replay remained nonempty: the quarter-tool-radius inspection
 grid retains one residual point at `(47.25024912893663, 45.75)` mm. This is a
 diagnostic residual candidate, not yet a proved physical gap. Complete-coverage
 acceptance remains open. Actual path and residual comparisons must be shown at
@@ -1356,6 +1367,15 @@ as a repair while the source circles themselves fail containment.
 
 ![Complete Figure 5 motion and remaining engagement failures](assets/images/held_figure5_toolpath_current.png)
 
+The figure paints each motion's swept band in emission order (circle: annulus
+R ± r; connector and seam: capsule), coloured by position within each guide
+run; white inside the pocket is uncut. <!-- gv:fig5_current.circles -->1,532<!-- /gv --> circles,
+<!-- gv:fig5_current.over_cap -->108<!-- /gv --> over-cap successors, maximum known
+<!-- gv:fig5_current.max_deg -->180.00<!-- /gv -->° (binary64 reports of the predecessor
+model, not the exact engagement gate). Coverage certificate:
+<!-- gv:fig5_current.verdict -->CERTIFIED COVERED<!-- /gv -->. Rebuild with
+`pixi run held-figure5-toolpath-progress`.
+
 ### Approved reproduction and performance sequence
 
 The active [reproduction plan](superpowers/plans/2026-09-05-held-paper-figure-reproduction.md)
@@ -1513,6 +1533,9 @@ survive any spacing change.
 
 ![Upper pocket circle distribution and final predecessor engagement](assets/images/held_figure8_upper_circle_distribution.png)
 
+This diagnostic keeps its scatter/histogram style; it has no path panel and
+was not converted to the swept-band rendering.
+
 Reproduce with `pixi run held-reference-toolpaths --case figure8_upper`.
 Each refined corpus run now emits a distribution PNG and a strict-JSON sibling
 with counts, angle quantiles, and circle circumference in millimetres. Circle
@@ -1526,7 +1549,7 @@ The prepared Figure 8 inputs now reach the existing guide, circle placement,
 engagement refinement, and complete-motion renderer through additive
 `build_held_reference_raw_guide` and `build_held_reference_path` entry points.
 The original Figure 5 entry points retain their behavior. Generate a selected
-case with `pixi run held-reference-toolpaths --case figure8_crossed_skis`;
+case with `pixi run held-reference-toolpaths --case figure8_crossed_skis --spacing boundary`;
 `--stage initial` exposes the pre-refinement proposal explicitly.
 
 The first upper-pocket run exposed an invalid assumption: source-boundary side
@@ -1608,11 +1631,26 @@ pixi run held-reference-toolpaths --case figure8_monstera --spacing boundary --q
 
 ![Monstera standard-model draft with corner approaches](assets/images/held_figure8_monstera_standard_refined_boundary_qualified_contacts_corner_approaches.png)
 
+The figure paints swept bands in emission order (circle: annulus R ± r;
+connector: capsule), coloured by position within each guide run; white inside
+the pocket is uncut. The current generator emits <!-- gv:monstera.circles -->4,428<!-- /gv --> circles
+and <!-- gv:monstera.connectors -->4,428<!-- /gv --> connectors (closed path, seam included); the
+4,367 above is the earlier measurement. Coverage certificate:
+<!-- gv:monstera.verdict -->NOT COVERED<!-- /gv -->, <!-- gv:monstera.witnesses -->8<!-- /gv --> exact witnesses at
+<!-- gv:monstera.sites -->2<!-- /gv --> site(s), ringed and labelled on the figure. The
+certificate-gated repair (`refine_boundary_ordered_path_certified`) is not the
+path shown.
+
 These are standard-model drafts. The paper's Figure 8 paths are contour-aware;
-depleted-stock spacing, containment, coverage, and machining qualification
-remain open. This output must not be labeled a completed Figure 8 reproduction.
+depleted-stock spacing, containment and machining qualification remain open;
+coverage verdicts are on each figure. This output must not be labeled a completed Figure 8 reproduction.
 
 ![Upper-pocket standard-model draft](assets/images/held_figure8_upper_standard_refined.png)
+
+Same swept-band rendering: <!-- gv:upper_lane.circles -->4,160<!-- /gv --> circles,
+<!-- gv:upper_lane.connectors -->4,160<!-- /gv --> connectors. Coverage certificate:
+<!-- gv:upper_lane.verdict -->CERTIFIED COVERED<!-- /gv -->. Rebuild with
+`pixi run held-reference-toolpaths --case figure8_upper`.
 
 ![Crossed-skis standard-model draft](assets/images/held_figure8_crossed_skis_standard_refined.png)
 
@@ -1625,16 +1663,21 @@ normals against the active side, limits radii at convex corners, inserts
 shared-contact fans at concave corners, and subdivides offending intervals by
 physical boundary distance. Every final adjacent circle pair is checked with
 one carried predecessor; depth or circle-budget exhaustion raises instead of
-forcing a successor. The output has an explicit first/last contact and 2,012
-connectors, without adding an unchecked closing motion.
+forcing a successor. The current output is the benchmark generator's closed
+path: <!-- gv:fig5_refined.circles -->2,004<!-- /gv --> circles and <!-- gv:fig5_refined.connectors -->2,004<!-- /gv -->
+connectors, the last being the closing seam from circles[-1] back to
+circles[0]. The seam pair reports <!-- gv:fig5_refined.seam_deg -->180.00<!-- /gv -->° (figure subtitle). By user ruling of
+2026-10-21 that pair is report-only and circles[0] is not re-cut; the seam
+connector's own engagement is certified separately
+([Held connector engagement](held_connector_engagement.md)).
 
 | Measured property | Tagged baseline | Refined polygon proposal |
 | --- | ---: | ---: |
-| Full CCW circles | 1,532 | 2,013 |
+| Full CCW circles | 1,532 | <!-- gv:fig5_refined.circles -->2,004<!-- /gv --> |
 | Successors above 80 degrees | 108 | 0 |
 | Maximum predecessor engagement | 180 degrees | 79.992 degrees |
 | Largest reported radius/clearance excess | 0.057 mm | 6.7e-15 mm |
-| Exact full-disk containment rejections | 801 | 1,010 |
+| Exact full-disk containment rejections | 801 | 1,012 |
 
 The initial vector-interpolation proposal eliminated engagement violations but
 introduced local corner protrusions of 0.013 mm. The retained construction
@@ -1658,9 +1701,10 @@ The native migration passes 22 affected tests, including complete Figure 5
 motion and five native boundary witnesses: exact tangency versus a positive
 gap, the near-tangent regression, known intersection coordinates, polygon
 turns, and invalid-input errors. Strict typing includes the new native stub.
-The regenerated plot retains 2,013 circles and zero over-cap successors. Float
-construction changes the exact containment rejection count from 1,013 to 1,010;
-this is still a failed containment gate, not a tolerance-based acceptance.
+The regenerated plot retains <!-- gv:fig5_refined.circles -->2,004<!-- /gv --> circles and zero over-cap successors
+(successor maximum 79.99°). Exact containment rejects 1,012 circles (figure
+footer; it was 1,013 and then 1,010 in earlier runs). This is still a failed
+containment gate, not a tolerance-based acceptance.
 
 The focused suite passes 21 tests, including complete Figure 5 final-order
 engagement, retained family/contact mapping, connector joints, convex limits,
@@ -1672,12 +1716,19 @@ strict containment count.
 **Maturity: incomplete.** Zero violations establish the existing approximate
 predecessor model's limit on these circles. They do not establish depleted-stock
 engagement, safe entry/connector cutting, analytic segment/arc ownership, or
-machining qualification. Exact native containment still rejects 1,010
+machining qualification. Exact native containment still rejects 1,012
 float-backed near-tangent circles; the small reported excess must not be used
 as a tolerance to turn those failures into passes. The publisher-derived start
 and source guide selection also remain. Full Task 5 acceptance stays open.
 
 ![Refined Figure 5 motion and engagement below the requested cap](assets/images/held_figure5_engagement_refined.png)
+
+Swept bands painted in emission order (circle: annulus R ± r; connector and
+seam: capsule), coloured by position within each guide run; white inside the
+pocket is uncut. Coverage certificate: <!-- gv:fig5_refined.verdict -->CERTIFIED COVERED<!-- /gv -->. The
+subtitle's seam value (<!-- gv:fig5_refined.seam_deg -->180.00<!-- /gv -->°) is the closing seam pair, which the successor strip
+does not show. Counts, rejections and verdict are printed by
+`pixi run held-figure5-toolpath-progress --refine`.
 
 ## Figure 5 exact connector checkpoint
 

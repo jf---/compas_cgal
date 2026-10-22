@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "figure": "held_figure8_monstera_standard_refined_boundary_qualified_contacts_corner_approaches_certified_repair.png",
+  "circles": 4430,
+  "connectors": 4430,
+  "over_cap": 0,
+  "unresolved": 0,
+  "max_known_deg": 79.99836670926365,
+  "seam_deg": 73.09290479135299,
+  "seam_unresolved": false,
+  "coverage": {
+    "covered": true,
+    "witnesses": 0,
+    "sites": 0
+  },
+  "inserted_sources": [
+    744,
+    1273
+  ]
+}
