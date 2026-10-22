@@ -16,7 +16,7 @@ import numpy as np
 from compas.geometry import Polygon
 from compas.tolerance import TOL
 
-from compas_cgal import _stock_2  # type: ignore
+from compas_cgal import _stock_2
 from compas_cgal.toolpath import InvalidPolygonError
 
 

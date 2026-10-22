@@ -29,13 +29,12 @@ from compas.geometry import Line
 from compas.geometry import Polygon
 from compas.tolerance import TOL
 
-from compas_cgal import _toolpath  # type: ignore
-
 # Side-effect import: registers the bound std::vector types (nb::bind_vector)
 # that _toolpath signatures resolve at call time.  _toolpath must not declare
 # eager vector-typed default arguments, or its import would require these
 # registrations to exist first (std::bad_cast at module init).
-from compas_cgal import _types_std  # noqa: F401  # type: ignore
+import compas_cgal._types_std  # noqa: F401
+from compas_cgal import _toolpath  # type: ignore
 from compas_cgal.helix import Helix
 from compas_cgal.types import PolylinesNumpy
 

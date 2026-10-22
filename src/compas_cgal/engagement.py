@@ -30,7 +30,7 @@ from compas.geometry import Circle
 from compas.geometry import Line
 from compas.geometry import Polygon
 
-from compas_cgal import _stock_2  # type: ignore
+from compas_cgal import _stock_2
 from compas_cgal.helix import Helix
 from compas_cgal.replay_classification import AUDIT_ENGAGED as AUDIT_ENGAGED
 from compas_cgal.replay_classification import CutPlaneRampError
