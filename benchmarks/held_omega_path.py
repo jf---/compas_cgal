@@ -13,7 +13,8 @@ path made on the float offset polygon is made here on Ω*
   (:mod:`benchmarks.held_omega_sites`), the seed is the site exactly nearest the
   published start;
 - **circles**: binary64 on the inward normal, safe against their own support
-  (:func:`benchmarks.held_omega_circles.place_local`); global containment is
+  (:func:`benchmarks.held_omega_circles.place_local`, all decided in one native
+  batch by :func:`benchmarks.held_omega_circles.place_local_batch`); global containment is
   enforced on the emitted circles by the refinement.
 
 A contact decided exactly onto a convex vertex of Ω* admits no tangent circle
@@ -45,7 +46,7 @@ from benchmarks.held_figure5_raw_guide import GuideRunId
 from benchmarks.held_figure5_raw_guide import GuideRunStationOrdinal
 from benchmarks.held_figure5_raw_guide import ProjectionAdmissibleBoundaryHypothesis
 from benchmarks.held_omega_circles import OmegaCircle
-from benchmarks.held_omega_circles import place_local
+from benchmarks.held_omega_circles import place_local_batch
 from benchmarks.held_omega_sites import OmegaLoop
 from benchmarks.held_omega_sites import OmegaSite
 from benchmarks.held_standard_placement import OrderedPlacementSpan
@@ -432,11 +433,14 @@ def build_omega_hypothesis_path(
     )
     owned = tuple(hypotheses[index] for index in owners)
     canonical = _canonical_indices(owned)
-    placed: list[tuple[OmegaCircle, tuple[GuideRunId, ...]]] = []
-    for index, runs in canonical:
-        hypothesis = owned[index]
-        provenance = (hypothesis.run_id, hypothesis.station_ordinal, hypothesis.projected_boundary_site)
-        placed.append((place_local(contacts.site(owners[index]), float(hypothesis.guide_radius.value), provenance), runs))
+    canonical_hypotheses = [owned[index] for index, _ in canonical]
+    batch = place_local_batch(
+        contacts.loop,
+        [contacts.decisions[owners[index]] for index, _ in canonical],
+        [float(hypothesis.guide_radius.value) for hypothesis in canonical_hypotheses],
+        [(hypothesis.run_id, hypothesis.station_ordinal, hypothesis.projected_boundary_site) for hypothesis in canonical_hypotheses],
+    )
+    placed: list[tuple[OmegaCircle, tuple[GuideRunId, ...]]] = [(circle, runs) for circle, (_, runs) in zip(batch, canonical, strict=True)]
     circles, runs_of = _merge_identical_circles(placed)
     order = _start_order(circles, published_start_center)
     ordered = _phase(order.circles, order.boxes, order.origin, start_evidence_bound)
