@@ -30,6 +30,11 @@ FrameT = TypeVar("FrameT")
 
 
 def _finite(value: object, name: str) -> float:
+    # Fast path: a finite exact ``float`` is already its own validated value
+    # (``float(value)`` would return it unchanged). Everything else, including
+    # float subclasses, ints and the error cases, takes the full check below.
+    if type(value) is float and math.isfinite(value):
+        return value
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise InvalidUnitValueError(f"{name} must be a finite real number.")
     try:
@@ -85,14 +90,24 @@ def _components3(args: tuple[object, ...], name: str) -> tuple[float, float, flo
     raise InvalidUnitValueError(f"{name} requires three scalars or one three-component sequence.")
 
 
+# The four vector units' ``__post_init__`` writes a component back only when
+# validation changed it (an int widened to float): ``_finite`` returns a finite
+# ``float`` itself, and rewriting the same object is a no-op that costs a quarter
+# of the construction.
+
+
 @dataclass(frozen=True)
 class Point2(Generic[FrameT]):
     x: Millimetre
     y: Millimetre
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "x", Millimetre(_finite(self.x, "Point2.x")))
-        object.__setattr__(self, "y", Millimetre(_finite(self.y, "Point2.y")))
+        x = _finite(self.x, "Point2.x")
+        if x is not self.x:
+            object.__setattr__(self, "x", Millimetre(x))
+        y = _finite(self.y, "Point2.y")
+        if y is not self.y:
+            object.__setattr__(self, "y", Millimetre(y))
 
     @classmethod
     @overload
@@ -104,6 +119,11 @@ class Point2(Generic[FrameT]):
 
     @classmethod
     def build(cls, *args: object) -> Self:  # pyright: ignore[reportInconsistentOverload]
+        if len(args) == 2:
+            x, y = args
+            # Two finite doubles: ``__post_init__`` is the one validation.
+            if type(x) is float and type(y) is float and math.isfinite(x) and math.isfinite(y):
+                return cls(Millimetre(x), Millimetre(y))
         x, y = _components(args, cls.__name__)
         return cls(Millimetre(x), Millimetre(y))
 
@@ -114,8 +134,12 @@ class Vector2(Generic[FrameT]):
     y: Millimetre
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "x", Millimetre(_finite(self.x, "Vector2.x")))
-        object.__setattr__(self, "y", Millimetre(_finite(self.y, "Vector2.y")))
+        x = _finite(self.x, "Vector2.x")
+        if x is not self.x:
+            object.__setattr__(self, "x", Millimetre(x))
+        y = _finite(self.y, "Vector2.y")
+        if y is not self.y:
+            object.__setattr__(self, "y", Millimetre(y))
 
     @classmethod
     @overload
@@ -127,6 +151,11 @@ class Vector2(Generic[FrameT]):
 
     @classmethod
     def build(cls, *args: object) -> Self:  # pyright: ignore[reportInconsistentOverload]
+        if len(args) == 2:
+            x, y = args
+            # Two finite doubles: ``__post_init__`` is the one validation.
+            if type(x) is float and type(y) is float and math.isfinite(x) and math.isfinite(y):
+                return cls(Millimetre(x), Millimetre(y))
         x, y = _components(args, cls.__name__)
         return cls(Millimetre(x), Millimetre(y))
 
@@ -138,9 +167,15 @@ class Point3(Generic[FrameT]):
     z: Millimetre
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "x", Millimetre(_finite(self.x, "Point3.x")))
-        object.__setattr__(self, "y", Millimetre(_finite(self.y, "Point3.y")))
-        object.__setattr__(self, "z", Millimetre(_finite(self.z, "Point3.z")))
+        x = _finite(self.x, "Point3.x")
+        if x is not self.x:
+            object.__setattr__(self, "x", Millimetre(x))
+        y = _finite(self.y, "Point3.y")
+        if y is not self.y:
+            object.__setattr__(self, "y", Millimetre(y))
+        z = _finite(self.z, "Point3.z")
+        if z is not self.z:
+            object.__setattr__(self, "z", Millimetre(z))
 
     @classmethod
     @overload
@@ -152,6 +187,11 @@ class Point3(Generic[FrameT]):
 
     @classmethod
     def build(cls, *args: object) -> Self:  # pyright: ignore[reportInconsistentOverload]
+        if len(args) == 3:
+            x, y, z = args
+            # Three finite doubles: ``__post_init__`` is the one validation.
+            if type(x) is float and type(y) is float and type(z) is float and math.isfinite(x) and math.isfinite(y) and math.isfinite(z):
+                return cls(Millimetre(x), Millimetre(y), Millimetre(z))
         x, y, z = _components3(args, cls.__name__)
         return cls(Millimetre(x), Millimetre(y), Millimetre(z))
 
@@ -163,9 +203,15 @@ class Direction3(Generic[FrameT]):
     z: DirectionComponent
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "x", DirectionComponent(_finite(self.x, "Direction3.x")))
-        object.__setattr__(self, "y", DirectionComponent(_finite(self.y, "Direction3.y")))
-        object.__setattr__(self, "z", DirectionComponent(_finite(self.z, "Direction3.z")))
+        x = _finite(self.x, "Direction3.x")
+        if x is not self.x:
+            object.__setattr__(self, "x", DirectionComponent(x))
+        y = _finite(self.y, "Direction3.y")
+        if y is not self.y:
+            object.__setattr__(self, "y", DirectionComponent(y))
+        z = _finite(self.z, "Direction3.z")
+        if z is not self.z:
+            object.__setattr__(self, "z", DirectionComponent(z))
 
     @classmethod
     @overload
@@ -177,6 +223,11 @@ class Direction3(Generic[FrameT]):
 
     @classmethod
     def build(cls, *args: object) -> Self:  # pyright: ignore[reportInconsistentOverload]
+        if len(args) == 3:
+            x, y, z = args
+            # Three finite doubles: ``__post_init__`` is the one validation.
+            if type(x) is float and type(y) is float and type(z) is float and math.isfinite(x) and math.isfinite(y) and math.isfinite(z):
+                return cls(DirectionComponent(x), DirectionComponent(y), DirectionComponent(z))
         x, y, z = _components3(args, cls.__name__)
         return cls(DirectionComponent(x), DirectionComponent(y), DirectionComponent(z))
 

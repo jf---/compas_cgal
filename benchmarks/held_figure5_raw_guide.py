@@ -9,14 +9,21 @@ from fractions import Fraction
 from functools import cached_property
 from typing import NewType
 
+import numpy as np
+
 from benchmarks.held_reference_cases import CANONICAL_CASE_NAMES
 from benchmarks.held_reference_cases import HeldReferenceCase
+from compas_cgal import _toolpath  # type: ignore[attr-defined]
+from compas_cgal.engagement_toolpath import GUIDE_SAMPLES_PER_RADIAN
 from compas_cgal.engagement_toolpath import GUIDE_STEP_TOOL_DIAMETERS
-from compas_cgal.engagement_toolpath import _guide_chains
-from compas_cgal.engagement_toolpath import _GuideStation
+from compas_cgal.engagement_toolpath import GUIDE_STEPOVER_ADVANCE_MULTIPLE
+from compas_cgal.engagement_toolpath import EmptyGuideError
 from compas_cgal.held_boundary_clearance import BoundaryClearanceSite
 from compas_cgal.held_boundary_clearance import HeldBoundaryClearanceIndex
 from compas_cgal.toolpath import RADIAL_CLEARANCE_FRACTION
+from compas_cgal.toolpath import _holes_to_vertex_arrays
+from compas_cgal.toolpath import _polygon_to_ccw_vertices
+from compas_cgal.toolpath import _warn_if_truncated
 from compas_cgal.units import GuideRadius
 from compas_cgal.units import Millimetre
 from compas_cgal.units import Point2
@@ -32,11 +39,29 @@ GuideRunStationOrdinal = NewType("GuideRunStationOrdinal", int)
 # a loud truncation guard for the rendering seam, not a machining policy.
 FIGURE5_MAX_GUIDE_RUNS = 1000
 
+# The native guide request of ``compas_cgal.engagement_toolpath._guide_chains``,
+# spelled out because the stations are read straight from the native rows: the
+# arguments ``trochoidal_mat_toolpath_circular`` fills in by default (no radius
+# clamp, unscaled clearance, 20 samples per arc, cut plane z = 0, no clearance
+# plane) and the ones ``_guide_chains`` sets (no leads, links or final retract,
+# nearest-entry order, conventional turn).
+_GUIDE_MIN_TROCHOID_RADIUS = 0.0
+_GUIDE_MAX_TROCHOID_RADIUS = math.inf
+_GUIDE_MAT_SCALE = 1.0
+_GUIDE_SAMPLES_PER_CYCLE = 20
+_GUIDE_LEAD = 0.0
+_GUIDE_CUT_Z = 0.0
+_GUIDE_CLIMB = False
+
+# Native primitive-type codes of a meta row (``toolpath._matrices_to_operations``):
+# 0 line and 1 arc are bridges, 2 is a machining circle, the station.
+_NATIVE_BRIDGE_PRIMITIVES = (0, 1)
+_NATIVE_CIRCLE_PRIMITIVE = 2
+
 
 RationalPoint = tuple[Fraction, Fraction]
-# The subscripted alias, built once: ``Point2[WorldXY].build`` per call pays typing's
-# alias lookup and attribute forwarding on the hypothesis hot path (95k calls on Figure 5).
-_WORLD_POINT = Point2[WorldXY]
+# The canonical parameter of a site at a ring vertex, built once.
+_ZERO_PARAMETER = Fraction(0)
 RationalSegment = tuple[RationalPoint, RationalPoint]
 
 
@@ -46,6 +71,10 @@ def _rational_point(point: Point2[WorldXY]) -> RationalPoint:
 
 class InvalidFigure5RawGuideError(ValueError):
     """The requested input cannot define the canonical Figure 5 raw guide."""
+
+
+class UnknownNativeGuidePrimitiveError(ValueError):
+    """A native guide row carries a primitive-type code outside line, arc and circle."""
 
 
 class InadmissibleFigure5BoundarySideError(ValueError):
@@ -73,14 +102,20 @@ class ProjectionBoundarySite:
     ) -> "ProjectionBoundarySite":
         if segment_count <= 0 or not 0 <= int(segment_id) < segment_count:
             raise InvalidFigure5RawGuideError("Projected boundary site has no segment in the closed ring.")
-        if not Fraction(0) <= parameter <= Fraction(1):
+        # Exact integer tests on the normalised rational n/d (d > 0): 0 <= n/d <= 1
+        # is 0 <= n <= d, n/d == 1 is n == d, n/d == 0 is n == 0. No Fraction is
+        # built or compared (484k sites on Monstera).
+        numerator = parameter.numerator
+        denominator = parameter.denominator
+        if not 0 <= numerator <= denominator:
             raise InvalidFigure5RawGuideError("Projected boundary side parameter must lie in the closed unit interval.")
         canonical_segment = int(segment_id)
         canonical_parameter = parameter
-        if parameter == 1:
+        if numerator == denominator:
             canonical_segment = (canonical_segment + 1) % segment_count
-            canonical_parameter = Fraction(0)
-        vertex_id = ProjectionBoundaryVertexId(canonical_segment) if canonical_parameter == 0 else None
+            canonical_parameter = _ZERO_PARAMETER
+            numerator = 0
+        vertex_id = ProjectionBoundaryVertexId(canonical_segment) if numerator == 0 else None
         return cls(
             ProjectionBoundarySegmentId(canonical_segment),
             canonical_parameter,
@@ -123,14 +158,14 @@ class Figure5RawGuideStation:
         cls,
         run_id: int,
         ordinal_on_run: int,
-        station: _GuideStation,
+        middle_point: Point2[WorldXY],
     ) -> "Figure5RawGuideStation":
         if run_id < 0 or ordinal_on_run < 0:
             raise InvalidFigure5RawGuideError("Figure 5 guide identities must be non-negative.")
         return cls(
             GuideRunId(run_id),
             GuideRunStationOrdinal(ordinal_on_run),
-            Point2[WorldXY].build(station.cx, station.cy),
+            middle_point,
         )
 
 
@@ -512,16 +547,19 @@ def _hypothesis_geometry(
 ) -> ProjectionAdmissibleBoundaryHypothesis:
     """The reported paper geometry of one admitted record; decides nothing."""
     middle = station.middle_point
-    footpoint = _WORLD_POINT.build(footpoint_x, footpoint_y)
+    # ``Point2.build``, not the ``Point2[WorldXY]`` alias: the alias forwards every
+    # attribute through typing (hot path, 95k calls on Figure 5); the frame is in
+    # the annotation and the built value is the same.
+    footpoint: Point2[WorldXY] = Point2.build(footpoint_x, footpoint_y)
     clearance = math.sqrt(squared_clearance)
     direction_x = (float(middle.x) - float(footpoint.x)) / clearance
     direction_y = (float(middle.y) - float(footpoint.y)) / clearance
     radius = (clearance - tool_radius) / 2.0
-    contact = _WORLD_POINT.build(
+    contact: Point2[WorldXY] = Point2.build(
         float(footpoint.x) + tool_radius * direction_x,
         float(footpoint.y) + tool_radius * direction_y,
     )
-    center = _WORLD_POINT.build(
+    center: Point2[WorldXY] = Point2.build(
         float(contact.x) + radius * direction_x,
         float(contact.y) + radius * direction_y,
     )
@@ -599,21 +637,71 @@ def build_held_reference_raw_guide(case: HeldReferenceCase) -> Figure5RawGuide:
     """Extract unthinned stations for a prepared Figure 5 or Figure 8 pocket."""
     if type(case) is not HeldReferenceCase or case.name not in CANONICAL_CASE_NAMES:
         raise InvalidFigure5RawGuideError("Raw guide requires a canonical Held reference case.")
-    spec = case.pocket_spec()
-    source_runs = _guide_chains(
-        spec.polygon,
-        spec.tool_diameter,
-        GUIDE_STEP_TOOL_DIAMETERS * spec.tool_diameter,
-        RADIAL_CLEARANCE_FRACTION * spec.tool_diameter,
-        False,
-        FIGURE5_MAX_GUIDE_RUNS,
-        list(spec.holes),
-    )
     runs = tuple(
         Figure5RawGuideRun.build(
             run_index,
-            tuple(Figure5RawGuideStation.build(run_index, ordinal, station) for ordinal, station in enumerate(source_run)),
+            tuple(Figure5RawGuideStation.build(run_index, ordinal, Point2.build(cx, cy)) for ordinal, (cx, cy) in enumerate(centres)),
         )
-        for run_index, source_run in enumerate(source_runs)
+        for run_index, centres in enumerate(_guide_station_centres(case))
     )
     return Figure5RawGuide.build_reference(case, runs)
+
+
+def _guide_station_centres(case: HeldReferenceCase) -> list[list[tuple[float, float]]]:
+    """Every station centre of ``_guide_chains``' guide, read straight from the native rows.
+
+    The same native request as ``compas_cgal.engagement_toolpath._guide_chains``;
+    the circle rows, grouped by runs of equal ``path_index`` in emission order,
+    are its chains. The raw guide reads only the centre doubles, so no compas
+    operation is built for the rows (they were discarded after two doubles each).
+
+    Raises:
+        UnknownNativeGuidePrimitiveError: A row's primitive type is not a line, arc or circle.
+        EmptyGuideError: The guide emitted no machining circle.
+    """
+    spec = case.pocket_spec()
+    guide_step = GUIDE_STEP_TOOL_DIAMETERS * spec.tool_diameter
+    meta, _starts, _ends, centres, _radii, _polyline, _start_tangents, _end_tangents, skipped = _toolpath.trochoidal_mat_toolpath_circular(
+        _polygon_to_ccw_vertices(spec.polygon),
+        _holes_to_vertex_arrays(list(spec.holes)),
+        float(spec.tool_diameter),
+        float(GUIDE_STEPOVER_ADVANCE_MULTIPLE * guide_step),
+        float(guide_step),
+        _GUIDE_MIN_TROCHOID_RADIUS,
+        _GUIDE_MAX_TROCHOID_RADIUS,
+        _GUIDE_MAT_SCALE,
+        float(RADIAL_CLEARANCE_FRACTION * spec.tool_diameter),
+        _GUIDE_SAMPLES_PER_CYCLE,
+        FIGURE5_MAX_GUIDE_RUNS,
+        _GUIDE_CLIMB,
+        _GUIDE_LEAD,
+        _GUIDE_LEAD,
+        False,
+        True,
+        _GUIDE_CUT_Z,
+        0.0,
+        False,
+        False,
+        float(GUIDE_SAMPLES_PER_RADIAN),
+    )
+    _warn_if_truncated(int(skipped), FIGURE5_MAX_GUIDE_RUNS)
+    runs: list[list[tuple[float, float]]] = []
+    current_index: int | None = None
+    meta_rows: list[list[float]] = np.asarray(meta, dtype=np.float64).tolist()
+    centre_rows: list[list[float]] = np.asarray(centres, dtype=np.float64).tolist()
+    for meta_row, centre in zip(meta_rows, centre_rows, strict=True):
+        primitive = int(meta_row[1])
+        if primitive != _NATIVE_CIRCLE_PRIMITIVE:
+            if primitive not in _NATIVE_BRIDGE_PRIMITIVES:
+                raise UnknownNativeGuidePrimitiveError(f"native guide row has primitive type {primitive}; expected 0 (line), 1 (arc) or 2 (circle).")
+            continue
+        path_index = int(meta_row[0])
+        if path_index != current_index:
+            runs.append([])
+            current_index = path_index
+        runs[-1].append((centre[0], centre[1]))
+    if not runs:
+        raise EmptyGuideError(
+            f"The straight-skeleton guide produced no machining circles for tool_diameter={spec.tool_diameter!r}; the pocket admits no gouge-free trochoid at this tool size."
+        )
+    return runs
