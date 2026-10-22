@@ -131,23 +131,6 @@ def _successor_disk_is_cleared(predecessor: PaperCircleCandidate, candidate: Pap
     )
 
 
-def _resolvability_floor(
-    first: PaperCircleCandidate,
-    second: PaperCircleCandidate,
-    tool_radius: ToolRadius,
-) -> float:
-    values = (
-        float(first.center.x),
-        float(first.center.y),
-        float(second.center.x),
-        float(second.center.y),
-        _radius(first),
-        _radius(second),
-        float(tool_radius.value),
-    )
-    return max(math.ulp(abs(value)) for value in values)
-
-
 def _overlap_margin(
     predecessor: PaperCircleCandidate,
     candidate: PaperCircleCandidate,
@@ -160,11 +143,18 @@ def predecessor_overlap_margin(
     predecessor: PaperCircleCandidate,
     candidate: PaperCircleCandidate,
     tool_radius: ToolRadius,
-) -> Millimetre:
-    """Return the paper Eq. 4 overlap margin for one ordered pair."""
+) -> OverlapMargin:
+    """Return the paper Eq. 4 overlap margin for one ordered pair, exactly.
+
+    Compare it with ``0`` (``margin > 0``) to decide the overlap domain; that
+    comparison is the exact sign. ``float(margin)`` is for reporting only and
+    is the exact value rounded; ``StandardPlacement.overlap_margin`` instead
+    reports the binary64 evaluation ``_overlap_margin`` (kept so the path
+    digests hold), so the two reports can differ in the last bits.
+    """
     if type(predecessor) is not PaperCircleCandidate or type(candidate) is not PaperCircleCandidate or type(tool_radius) is not ToolRadius:
         raise InvalidStandardPlacementInputError("Overlap margin requires two paper circles and a tool radius.")
-    return Millimetre(_overlap_margin(predecessor, candidate, tool_radius))
+    return _exact_overlap_margin(predecessor, candidate, tool_radius)
 
 
 def _clamped_unit(value: float) -> float:
@@ -328,11 +318,89 @@ class PredecessorEngagementCosine:
         return Radian(math.acos(min(1.0, max(-1.0, self.numerator.reported_ratio(self.denominator)))))
 
 
-def _common_integers(values: tuple[float, ...]) -> tuple[int, ...]:
-    """Exactly inject doubles as integers over their common power-of-two denominator."""
+def _dyadic_injection(values: tuple[float, ...]) -> tuple[tuple[int, ...], int]:
+    """Exactly inject doubles as integers over their common power-of-two denominator ``scale``."""
     ratios = tuple(value.as_integer_ratio() for value in values)
     scale = max(denominator for _, denominator in ratios)
-    return tuple(numerator * (scale // denominator) for numerator, denominator in ratios)
+    return tuple(numerator * (scale // denominator) for numerator, denominator in ratios), scale
+
+
+def _common_integers(values: tuple[float, ...]) -> tuple[int, ...]:
+    """Exactly inject doubles as integers over their common power-of-two denominator."""
+    return _dyadic_injection(values)[0]
+
+
+class OverlapMarginComparisonError(BenchmarkError):
+    """An exact overlap margin was compared with something other than zero."""
+
+
+@dataclass(frozen=True, eq=False)
+class OverlapMargin:
+    """Exact Eq. 4 overlap margin ``2r - d - rho + rho_prev`` as ``value / scale``.
+
+    ``value`` lies in ``Z[sqrt(D)]`` with ``D`` the squared centre spacing over
+    the common dyadic scale of the injected doubles; ``scale > 0``, so the
+    margin's sign is ``value.sign()``. Comparisons, equality included, are
+    defined against ``0`` only (the overlap domain is the decision
+    ``margin > 0``); truthiness raises, so no caller decides on ``bool``.
+    """
+
+    value: _Surd
+    scale: int
+
+    def sign(self) -> int:
+        """Exact sign of the margin: -1, 0 or +1."""
+        return self.value.sign()
+
+    def _against_zero(self, other: object) -> int:
+        if type(other) is not int or other != 0:
+            raise OverlapMarginComparisonError("An exact overlap margin is compared with 0 only.")
+        return self.sign()
+
+    def __gt__(self, other: object) -> bool:
+        return self._against_zero(other) > 0
+
+    def __ge__(self, other: object) -> bool:
+        return self._against_zero(other) >= 0
+
+    def __lt__(self, other: object) -> bool:
+        return self._against_zero(other) < 0
+
+    def __le__(self, other: object) -> bool:
+        return self._against_zero(other) <= 0
+
+    def __eq__(self, other: object) -> bool:
+        return self._against_zero(other) == 0
+
+    def __ne__(self, other: object) -> bool:
+        return self._against_zero(other) != 0
+
+    def __bool__(self) -> bool:
+        raise OverlapMarginComparisonError("An exact overlap margin has no truth value; compare it with 0.")
+
+    def __float__(self) -> float:
+        # Reporting conversion only; never feeds a decision.
+        return self.value.reported_ratio(self.scale)
+
+
+def _exact_overlap_margin(
+    predecessor: PaperCircleCandidate,
+    candidate: PaperCircleCandidate,
+    tool_radius: ToolRadius,
+) -> OverlapMargin:
+    (px, py, cx, cy, previous_radius, radius, tool), scale = _dyadic_injection(
+        (
+            float(predecessor.center.x),
+            float(predecessor.center.y),
+            float(candidate.center.x),
+            float(candidate.center.y),
+            float(predecessor.guide_radius.value),
+            float(candidate.guide_radius.value),
+            float(tool_radius.value),
+        )
+    )
+    squared_spacing = (cx - px) ** 2 + (cy - py) ** 2
+    return OverlapMargin(_Surd(2 * tool - radius + previous_radius, -1, squared_spacing), scale)
 
 
 def exact_predecessor_engagement(
@@ -457,12 +525,22 @@ class _BisectionStopBand:
         return self.floor is None or cosine.reaches(self.floor)
 
 
-def _validated_spacings(
+def _coincident_centres(first: PaperCircleCandidate, second: PaperCircleCandidate) -> bool:
+    # Binary64 equality is equality of the exactly injected rationals.
+    return float(first.center.x) == float(second.center.x) and float(first.center.y) == float(second.center.y)
+
+
+def _advancing_spacings(
     predecessor: PaperCircleCandidate,
     candidates: Sequence[PaperCircleCandidate],
-    tool_radius: ToolRadius,
 ) -> tuple[float, ...]:
-    """Centre spacing of every consecutive ordered pair, each one resolvable."""
+    """Centre spacing of every consecutive ordered pair, each one an exact advance.
+
+    The only restart the exact model cannot place is a zero one: every
+    engagement and overlap decision is exact over the injected doubles, so
+    distinct centres any distance apart, sub-ulp included, are placeable. The
+    returned spacings are reported progress only.
+    """
     if not candidates:
         raise InvalidStandardPlacementInputError("Standard placement requires at least one successor candidate.")
     spacings = []
@@ -470,10 +548,9 @@ def _validated_spacings(
     for candidate in candidates:
         if type(candidate) is not PaperCircleCandidate:
             raise InvalidStandardPlacementInputError("Standard placement candidates must be typed paper circles.")
-        spacing = _center_spacing(previous, candidate)
-        if spacing <= _resolvability_floor(previous, candidate, tool_radius):
-            raise StandardPlacementResolutionError("Ordered paper candidates contain a zero or binary64-unresolvable restart.")
-        spacings.append(spacing)
+        if _coincident_centres(previous, candidate):
+            raise StandardPlacementResolutionError("Ordered paper candidates contain a zero restart (coincident centres).")
+        spacings.append(_center_spacing(previous, candidate))
         previous = candidate
     return tuple(spacings)
 
@@ -489,11 +566,10 @@ def _running_progress(spacings: Sequence[float]) -> float:
 def _validate_ordered_progress(
     predecessor: PaperCircleCandidate,
     candidates: Sequence[PaperCircleCandidate],
-    tool_radius: ToolRadius,
 ) -> tuple[float, ...]:
     progress = []
     total = 0.0
-    for spacing in _validated_spacings(predecessor, candidates, tool_radius):
+    for spacing in _advancing_spacings(predecessor, candidates):
         total += spacing
         progress.append(total)
     return tuple(progress)
@@ -522,10 +598,18 @@ class OrderedPlacementSpan:
         tool_radius: ToolRadius,
         cap: EngagementCap,
     ) -> Self:
+        """Build a span, refusing only exact zero restarts (coincident centres).
+
+        Distinct centres, sub-ulp apart included, are placeable: every
+        placement decision is exact over the injected doubles.
+
+        Raises:
+            InvalidStandardPlacementInputError: Untyped candidates, tool radius or cap.
+            StandardPlacementResolutionError: Two consecutive candidates share a centre.
+        """
         if not candidates or type(candidates[0]) is not PaperCircleCandidate or type(tool_radius) is not ToolRadius or type(cap) is not EngagementCap:
             raise InvalidStandardPlacementInputError("Standard placement requires a paper predecessor, tool radius, and cap.")
-        spacings = _validated_spacings(candidates[0], candidates[1:], tool_radius)
-        return cls(tuple(candidates), spacings, tool_radius, cap)
+        return cls(tuple(candidates), _advancing_spacings(candidates[0], candidates[1:]), tool_radius, cap)
 
 
 def select_next_in_span(span: OrderedPlacementSpan, cursor: int) -> StandardPlacement:
@@ -556,7 +640,7 @@ def select_next_standard_candidate(
     """Bisect ordered candidates for Section 2.4's next standard placement."""
     if type(predecessor) is not PaperCircleCandidate or type(tool_radius) is not ToolRadius or type(cap) is not EngagementCap:
         raise InvalidStandardPlacementInputError("Standard placement requires a paper predecessor, tool radius, and cap.")
-    progress = _validate_ordered_progress(predecessor, candidates, tool_radius)
+    progress = _validate_ordered_progress(predecessor, candidates)
     return _bisect_next_candidate(predecessor, candidates, 0, len(candidates), tool_radius, cap, progress.__getitem__)
 
 
@@ -596,8 +680,7 @@ def _bisect_next_candidate(
 
     if best is None:
         forced = True
-        first_margin = _overlap_margin(predecessor, candidates[first], tool_radius)
-        if first_margin <= 0.0:
+        if _exact_overlap_margin(predecessor, candidates[first], tool_radius) <= 0:
             raise StandardPlacementFragmentationError("The first successor exceeds the paper swept-disk overlap bound.")
         selected_index = 0
         cosine = exact_predecessor_engagement(
@@ -617,8 +700,9 @@ def _bisect_next_candidate(
     cap_excess = max(0.0, float(engagement) - cap_angle)
     candidate = candidates[first + selected_index]
     spacing = _center_spacing(predecessor, candidate)
-    margin = _overlap_margin(predecessor, candidate, tool_radius)
-    if margin <= 0.0:
+    # Reachable at cap = pi: outside the overlap domain the exact engagement is
+    # the full slot, which a half-turn cap admits as a non-forced selection.
+    if _exact_overlap_margin(predecessor, candidate, tool_radius) <= 0:
         raise StandardPlacementFragmentationError("Selected successor violates the paper swept-disk overlap bound.")
     return StandardPlacement(
         candidate=candidate,
@@ -628,7 +712,8 @@ def _bisect_next_candidate(
         maximum_engagement=engagement,
         cap_shortfall=Radian(cap_shortfall),
         cap_excess=Radian(cap_excess),
-        overlap_margin=Millimetre(margin),
+        # Reported in the binary64 evaluation order it was always reported in.
+        overlap_margin=Millimetre(_overlap_margin(predecessor, candidate, tool_radius)),
         reached_terminal=reached_terminal,
         forced=forced,
     )

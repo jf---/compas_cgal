@@ -140,8 +140,9 @@ def _old_validate_ordered_progress(
         if type(candidate) is not PaperCircleCandidate:
             raise placement_module.InvalidStandardPlacementInputError("Standard placement candidates must be typed paper circles.")
         spacing = placement_module._center_spacing(previous, candidate)
-        if spacing <= placement_module._resolvability_floor(previous, candidate, tool_radius):
-            raise placement_module.StandardPlacementResolutionError("Ordered paper candidates contain a zero or binary64-unresolvable restart.")
+        # Exact rule: only coincident centres (equal injected rationals) refuse.
+        if (float(previous.center.x), float(previous.center.y)) == (float(candidate.center.x), float(candidate.center.y)):
+            raise placement_module.StandardPlacementResolutionError("Ordered paper candidates contain a zero restart (coincident centres).")
         total += spacing
         progress.append(total)
         previous = candidate
@@ -333,7 +334,7 @@ def _candidate(x: float, y: float, radius: float) -> PaperCircleCandidate:
 @st.composite
 def _lane(draw: st.DrawFn) -> tuple[PaperCircleCandidate, ...]:
     count = draw(st.integers(min_value=2, max_value=14))
-    # Steps include zero and one-ulp restarts so the resolvability check fires.
+    # Steps include zero and one-ulp restarts: the zero one refuses, the one-ulp one places.
     steps = draw(st.lists(st.one_of(st.floats(min_value=0.02, max_value=1.6, allow_nan=False), st.just(0.0), st.just(5e-324)), min_size=count, max_size=count))
     radii = draw(st.lists(st.one_of(st.just(1.0), st.floats(min_value=0.2, max_value=2.0, allow_nan=False)), min_size=count, max_size=count))
     wobble = draw(st.lists(st.sampled_from((0.0, 0.0, 0.1, -0.05)), min_size=count, max_size=count))

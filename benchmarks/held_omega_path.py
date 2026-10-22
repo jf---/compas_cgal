@@ -29,6 +29,7 @@ from dataclasses import dataclass
 from fractions import Fraction
 
 from benchmarks.errors import BenchmarkError
+from benchmarks.held_centre_domain_supports import PieceKind
 from benchmarks.held_declared_boundary import ExactPoint2
 from benchmarks.held_dyadic_interval import Interval
 from benchmarks.held_exact_centre_domain import ContactBeyondGapError
@@ -50,8 +51,7 @@ from benchmarks.held_omega_sites import OmegaSite
 from benchmarks.held_standard_placement import OrderedPlacementSpan
 from benchmarks.held_standard_placement import PaperCircleCandidate
 from benchmarks.held_standard_placement import StandardPlacement
-from benchmarks.held_standard_placement import _center_spacing
-from benchmarks.held_standard_placement import _resolvability_floor
+from benchmarks.held_standard_placement import _coincident_centres
 from benchmarks.held_standard_placement import predecessor_overlap_margin
 from benchmarks.held_standard_placement import select_next_in_span
 from compas_cgal.motion import EngagementCap
@@ -134,13 +134,45 @@ def decide_omega_sites(
     return OmegaContactSites(loop, tuple(kept), tuple(sites), tuple(beyond), tuple(vertex))
 
 
+def _junction_bridged_indices(piece_kinds: tuple[PieceKind, ...]) -> tuple[tuple[int, ...], int]:
+    """Ownership index of every ∂Ω* piece, junction arcs bridged, and the bridged count.
+
+    Non-junction pieces are numbered in loop order; a junction arc takes the
+    index of the non-junction piece before it, cyclically. Decided by piece
+    kind only.
+
+    Raises:
+        OmegaPathIntegrationError: ∂Ω* has no non-junction piece.
+    """
+    first = next((index for index, kind in enumerate(piece_kinds) if kind is not PieceKind.JUNCTION_ARC), None)
+    if first is None:
+        raise OmegaPathIntegrationError("∂Ω* has no offset piece to own a station.")
+    bridged = [0] * len(piece_kinds)
+    current = -1
+    for step in range(len(piece_kinds)):
+        index = (first + step) % len(piece_kinds)
+        if piece_kinds[index] is not PieceKind.JUNCTION_ARC:
+            current += 1
+        bridged[index] = current
+    return tuple(bridged), current + 1
+
+
 def _owner_indices(
     hypotheses: tuple[ProjectionAdmissibleBoundaryHypothesis, ...],
     pieces: tuple[int, ...],
-    piece_count: int,
+    piece_kinds: tuple[PieceKind, ...],
     published_start_center: Point2[WorldXY],
 ) -> tuple[int, ...]:
-    """The polygon path's neighbourhood ownership with ∂Ω* pieces as the cyclic neighbourhood."""
+    """The polygon path's neighbourhood ownership over ∂Ω* pieces, junction arcs bridged.
+
+    A junction arc offsets a G1 junction of the declared boundary (chord down
+    to zero); hypotheses almost never decide onto one, so a station straddling
+    it lands on the pieces either side. Bridging keeps that station one
+    neighbourhood, as the polygon rule's projection ring (which has no junction
+    element) does. Pieces separated by an offset piece stay separate.
+    """
+    bridged, piece_count = _junction_bridged_indices(piece_kinds)
+    pieces = tuple(bridged[piece] for piece in pieces)
     by_station: dict[tuple[GuideRunId, GuideRunStationOrdinal], list[int]] = {}
     for index, hypothesis in enumerate(hypotheses):
         by_station.setdefault((hypothesis.run_id, hypothesis.station_ordinal), []).append(index)
@@ -241,22 +273,21 @@ def _merge_identical_circles(placed: list[tuple[OmegaCircle, tuple[GuideRunId, .
     return tuple(circles), runs_of
 
 
-def _merge_unresolvable(
-    lanes: tuple[_PlacementLane[OmegaCircle], ...], runs_of: dict[int, tuple[GuideRunId, ...]], tool_radius: ToolRadius
-) -> tuple[_PlacementLane[OmegaCircle], ...]:
-    """Fold a lane circle into its predecessor when standard placement cannot resolve their spacing.
+def _fold_coincident_centres(lanes: tuple[_PlacementLane[OmegaCircle], ...], runs_of: dict[int, tuple[GuideRunId, ...]]) -> tuple[_PlacementLane[OmegaCircle], ...]:
+    """Fold a lane circle into its predecessor when both share one centre exactly.
 
-    Two exact ∂Ω* sites ulps apart place circles whose binary64 centres are
-    within the placement's resolvability floor (``StandardPlacementResolutionError``
-    otherwise). The predecessor stays and carries the folded circle's runs
-    (``runs_of`` is updated in place).
+    A zero restart is the one the exact standard placement cannot place
+    (``StandardPlacementResolutionError``); identical circles are already one
+    circle, so what folds here is a coincident centre at another radius. Distinct
+    centres, sub-ulp apart included, stay: every placement decision is exact. The
+    predecessor stays and carries the folded circle's runs (``runs_of`` is
+    updated in place).
     """
     merged: list[_PlacementLane[OmegaCircle]] = []
     for lane in lanes:
         kept = [lane.circles[0]]
         for circle in lane.circles[1:]:
-            previous, candidate = kept[-1].paper_candidate(), circle.paper_candidate()
-            if _center_spacing(previous, candidate) <= _resolvability_floor(previous, candidate, tool_radius):
+            if _coincident_centres(kept[-1].paper_candidate(), circle.paper_candidate()):
                 runs_of[id(kept[-1])] = tuple(sorted({*runs_of[id(kept[-1])], *runs_of[id(circle)]}, key=int))
                 continue
             kept.append(circle)
@@ -271,14 +302,14 @@ def _split_at_gaps(lanes: tuple[_PlacementLane[OmegaCircle], ...], tool_radius: 
     convex vertex, circles merged into another run's identical circle), and
     standard placement refuses a successor beyond the overlap bound. The split
     uses the rule the lane joiner and the placement use
-    (:func:`benchmarks.held_standard_placement.predecessor_overlap_margin` > 0),
-    so every resulting lane is one the placement accepts.
+    (:func:`benchmarks.held_standard_placement.predecessor_overlap_margin` > 0,
+    an exact sign), so every resulting lane is one the placement accepts.
     """
     split: list[_PlacementLane[OmegaCircle]] = []
     for lane in lanes:
         start = 0
         for index in range(1, len(lane.circles)):
-            if float(predecessor_overlap_margin(lane.circles[index - 1].paper_candidate(), lane.circles[index].paper_candidate(), tool_radius)) <= 0.0:
+            if predecessor_overlap_margin(lane.circles[index - 1].paper_candidate(), lane.circles[index].paper_candidate(), tool_radius) <= 0:
                 split.append(_PlacementLane(lane.source_segment, lane.direction, lane.circles[start:index]))
                 start = index
         split.append(_PlacementLane(lane.source_segment, lane.direction, lane.circles[start:]))
@@ -332,7 +363,9 @@ def build_omega_hypothesis_path(
     radius_gap = abs(Fraction(float(published_start_radius)) - Fraction(float(tool_radius.value)))
     if radius_gap > Fraction(float(start_evidence_bound)):
         raise OmegaPathIntegrationError("The published start radius does not match the tool evidence.")
-    owners = _owner_indices(hypotheses, tuple(decision.piece.index for decision in contacts.decisions), len(contacts.loop.pieces), published_start_center)
+    owners = _owner_indices(
+        hypotheses, tuple(decision.piece.index for decision in contacts.decisions), tuple(piece.kind for piece in contacts.loop.pieces), published_start_center
+    )
     owned = tuple(hypotheses[index] for index in owners)
     canonical = _canonical_indices(owned)
     placed: list[tuple[OmegaCircle, tuple[GuideRunId, ...]]] = []
@@ -342,7 +375,7 @@ def build_omega_hypothesis_path(
         placed.append((place_local(contacts.site(owners[index]), float(hypothesis.guide_radius.value), provenance), runs))
     circles, runs_of = _merge_identical_circles(placed)
     ordered = phase_from_start(circles, published_start_center, start_evidence_bound)
-    lanes = _split_at_gaps(_merge_unresolvable(continuous_placement_lanes(ordered, tool_radius, _station_key, _paper), runs_of, tool_radius), tool_radius)
+    lanes = _split_at_gaps(_fold_coincident_centres(continuous_placement_lanes(ordered, tool_radius, _station_key, _paper), runs_of), tool_radius)
     selected: list[OmegaCircle] = []
     placements: list[OmegaPlacementRecord] = []
     for lane in lanes:

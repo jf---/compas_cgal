@@ -140,16 +140,16 @@ def test_radius_change_controls_overlap_without_forcing_uniform_center_spacing()
 
 
 def test_non_resolvable_candidate_restart_fails_loudly() -> None:
+    # Exact rule: only a zero restart (coincident centres) is unplaceable; a
+    # one-ulp restart is a distinct circle and is decided exactly.
     predecessor = _candidate(1.0)
-    next_x = math.nextafter(1.0, math.inf)
+    cap = EngagementCap.build(math.radians(80.0))
 
     with pytest.raises(StandardPlacementResolutionError):
-        select_next_standard_candidate(
-            predecessor,
-            (_candidate(next_x),),
-            TOOL_RADIUS,
-            EngagementCap.build(math.radians(80.0)),
-        )
+        select_next_standard_candidate(predecessor, (_candidate(1.0),), TOOL_RADIUS, cap)
+
+    placement = select_next_standard_candidate(predecessor, (_candidate(math.nextafter(1.0, math.inf)),), TOOL_RADIUS, cap)
+    assert float(placement.center_spacing) == math.ulp(1.0)
 
 
 def test_gap_beyond_paper_overlap_bound_fails_loudly() -> None:

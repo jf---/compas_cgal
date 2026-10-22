@@ -433,14 +433,12 @@ def continuous_placement_lanes(
             if (
                 tail.run_id != head.run_id
                 and advances == fragment.direction
-                and float(
-                    predecessor_overlap_margin(
-                        paper_candidate(tail),
-                        paper_candidate(head),
-                        tool_radius,
-                    )
+                and predecessor_overlap_margin(
+                    paper_candidate(tail),
+                    paper_candidate(head),
+                    tool_radius,
                 )
-                > 0.0
+                > 0
             ):
                 compatible.append(index)
         if not compatible:
