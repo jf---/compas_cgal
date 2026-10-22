@@ -111,35 +111,35 @@ def _largest_double(estimate: float, holds: Callable[[Fraction], bool]) -> float
 def local_radius_bound(site: OmegaSite, centre: ExactPoint2[WorldXY], wanted: float) -> float:
     """``wanted`` when its circle about ``centre`` stays on the interior side of the site's whole support, else the largest binary64 radius that does."""
     support = site.piece.support
-    holds: Callable[[Fraction], bool]
     if isinstance(support, OffsetLineSupport):
         clearance = support.normal[0] * centre.x + support.normal[1] * centre.y - support.level
-        estimate = float(clearance)
 
-        def holds(radius: Fraction) -> bool:
+        def within(radius: Fraction) -> bool:
             return radius <= clearance
 
-    else:
-        dx, dy = centre.minus(support.centre)
-        squared = dx * dx + dy * dy
-        rho = support.radius
-        if support.sense == -1:
+        if within(Fraction(wanted)):
+            return wanted
+        return _largest_double(min(float(clearance), wanted), within)
+    dx, dy = centre.minus(support.centre)
+    squared = dx * dx + dy * dy
+    rho = support.radius
+    sense = support.sense
+
+    def holds(radius: Fraction) -> bool:
+        if sense == -1:
             # Ω* is outside the circle: R <= √D - ρ'  ⇔  R + ρ' <= 0 or (R + ρ')² <= D.
-            estimate = math.sqrt(float(squared)) - float(rho)
-
-            def holds(radius: Fraction) -> bool:
-                return radius + rho <= 0 or (radius + rho) ** 2 <= squared
-
-        else:
-            # Ω* is inside the circle: R <= ρ' - √D  ⇔  ρ' - R >= 0 and D <= (ρ' - R)².
-            estimate = float(rho) - math.sqrt(float(squared))
-
-            def holds(radius: Fraction) -> bool:
-                return rho - radius >= 0 and squared <= (rho - radius) ** 2
+            return radius + rho <= 0 or (radius + rho) ** 2 <= squared
+        # Ω* is inside the circle: R <= ρ' - √D  ⇔  ρ' - R >= 0 and D <= (ρ' - R)².
+        return rho - radius >= 0 and squared <= (rho - radius) ** 2
 
     if holds(Fraction(wanted)):
         return wanted
-    return _largest_double(min(estimate, wanted), holds)
+    # Estimate without cancellation: √D - ρ' = (D - ρ'²)/(√D + ρ'), the numerator
+    # rounded from its exact value. It only seeds the walk (a few ulps off costs
+    # a few exact steps; the cancelled ρ' - √D costs one per ulp of ρ'); the
+    # exact predicate decides, so the value is the same largest binary64.
+    gap = float(squared - rho * rho) / (math.sqrt(float(squared)) + float(rho))
+    return _largest_double(min(-sense * gap, wanted), holds)
 
 
 @dataclass(frozen=True)

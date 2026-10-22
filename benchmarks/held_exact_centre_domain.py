@@ -340,12 +340,18 @@ class PointLocation(enum.Enum):
 
 @dataclass(frozen=True)
 class CentreDomainArrangement:
-    """What the native construction returns, matched to supports: faces, attributed unreachable parts, vertex disks."""
+    """What the native construction returns, matched to supports: faces, vertex disks, and (on first access) attributed unreachable parts."""
 
     components: tuple[CentreDomainComponent, ...]
-    unreachable: tuple[UnreachableAttribution, ...]
     vertex_disks: tuple[VertexDisk, ...]
+    boundary: DeclaredBoundary = field(compare=False, repr=False)
+    supports: CentreDomainSupports = field(compare=False, repr=False)
     native: Any = field(compare=False, repr=False)
+
+    @functools.cached_property
+    def unreachable(self) -> tuple[UnreachableAttribution, ...]:
+        """Every unreached stretch of ∂P, attributed exactly on first access (generation never reads it)."""
+        return _attribute_unreachable(self.boundary, self.supports, self.components, self.native)
 
 
 @dataclass(frozen=True)
@@ -871,8 +877,7 @@ def construct_centre_domain_arrangement(boundary: DeclaredBoundary, supports: Ce
         )
         components.append(CentreDomainComponent(matched[0], matched[1:]))
     frozen = tuple(components)
-    unreachable = _attribute_unreachable(boundary, supports, frozen, native.handle)
-    return CentreDomainArrangement(frozen, unreachable, _vertex_disks(frozen, supports.tool_radius), native.handle)
+    return CentreDomainArrangement(frozen, _vertex_disks(frozen, supports.tool_radius), boundary, supports, native.handle)
 
 
 # ---------------------------------------------------------------------------
@@ -888,9 +893,9 @@ class CentreDomain:
 
     supports: CentreDomainSupports
     components: tuple[CentreDomainComponent, ...]
-    unreachable: tuple[UnreachableAttribution, ...]
     vertex_disks: tuple[VertexDisk, ...]
     identity: CentreDomainIdentity
+    boundary: DeclaredBoundary = field(compare=False, repr=False)
     native: Any = field(compare=False, repr=False)
 
     @classmethod
@@ -914,7 +919,16 @@ class CentreDomain:
         supports = CentreDomainSupports.build(boundary, tool_radius)
         arrangement = construct_centre_domain_arrangement(boundary, supports)
         identity = CentreDomainIdentity(CENTRE_DOMAIN_CONTRACT_VERSION, NATIVE_CENTRE_DOMAIN_COMPONENT, boundary.identity, supports.tool_radius)
-        return cls(supports, arrangement.components, arrangement.unreachable, arrangement.vertex_disks, identity, arrangement.native)
+        return cls(supports, arrangement.components, arrangement.vertex_disks, identity, boundary, arrangement.native)
+
+    @functools.cached_property
+    def unreachable(self) -> tuple[UnreachableAttribution, ...]:
+        """Every unreached stretch of ∂P (see :class:`UnreachableAttribution`), attributed exactly on first access.
+
+        Generation never reads it, so :meth:`build` does not pay for it; the
+        value is the one the attribution gives eagerly, cached per domain.
+        """
+        return _attribute_unreachable(self.boundary, self.supports, self.components, self.native)
 
     @functools.cached_property
     def pieces(self) -> tuple[CentreDomainPiece, ...]:
