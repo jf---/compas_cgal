@@ -11,6 +11,8 @@ primitive. Design: docs/held_exact_centre_domain.md.
 from __future__ import annotations
 
 import enum
+from collections.abc import Iterable
+from collections.abc import Iterator
 from dataclasses import dataclass
 from fractions import Fraction
 from typing import Self
@@ -93,6 +95,40 @@ class BoundaryFeature:
 
     kind: BoundaryFeatureKind
     index: int
+
+
+_KIND_ORDER: dict[BoundaryFeatureKind, int] = {kind: position for position, kind in enumerate(BoundaryFeatureKind)}
+
+
+def owner_order_key(feature: BoundaryFeature) -> tuple[int, int]:
+    """The exact canonical order of boundary features: kind in declaration order (LINE, ARC, JUNCTION), then index."""
+    return _KIND_ORDER[feature.kind], feature.index
+
+
+class OwnerSet(frozenset[BoundaryFeature]):
+    """A set of boundary features that iterates and prints in canonical order (:func:`owner_order_key`).
+
+    A plain ``frozenset`` iterates and prints in hash-table order, and the
+    enum member hashes its name with the per-process string hash seed, so
+    digests of identical Ω* paths differed across processes and any output
+    built by iterating owners could too. Set semantics (equality with any
+    set, ``in``, hashing) are the frozenset's; only order is fixed. Build it
+    with :func:`canonical_owners`; set operators return plain frozensets, so
+    a union is canonicalised again by passing it through that factory.
+    """
+
+    __slots__ = ()
+
+    def __iter__(self) -> Iterator[BoundaryFeature]:
+        return iter(sorted(super().__iter__(), key=owner_order_key))
+
+    def __repr__(self) -> str:
+        return f"OwnerSet({tuple(self)!r})"
+
+
+def canonical_owners(features: Iterable[BoundaryFeature]) -> OwnerSet:
+    """The distinct ``features`` as an :class:`OwnerSet` (canonical iteration and repr)."""
+    return OwnerSet(features)
 
 
 @dataclass(frozen=True)

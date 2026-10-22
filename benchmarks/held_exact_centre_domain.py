@@ -69,8 +69,10 @@ from benchmarks.held_centre_domain_supports import CentreDomainSupport
 from benchmarks.held_centre_domain_supports import CentreDomainSupports
 from benchmarks.held_centre_domain_supports import OffsetCircleSupport
 from benchmarks.held_centre_domain_supports import OffsetLineSupport
+from benchmarks.held_centre_domain_supports import OwnerSet
 from benchmarks.held_centre_domain_supports import PieceKind
 from benchmarks.held_centre_domain_supports import PrimitiveBox
+from benchmarks.held_centre_domain_supports import canonical_owners
 from benchmarks.held_centre_domain_supports import declared_primitive_box
 from benchmarks.held_centre_domain_supports import on_declared_arc
 from benchmarks.held_declared_boundary import DeclaredArc
@@ -145,7 +147,7 @@ class CentreDomainPiece:
     component: int
     ccb: int
     index: int
-    owners: frozenset[BoundaryFeature]
+    owners: OwnerSet
     support: CentreDomainSupport
     source: OneRootPoint2
     target: OneRootPoint2
@@ -274,7 +276,7 @@ class VertexDisk:
 
     centre: OneRootPoint2
     radius: ExactMillimetre
-    owners: frozenset[BoundaryFeature]
+    owners: OwnerSet
 
 
 class UnreachableCause(enum.Enum):
@@ -324,7 +326,7 @@ class UnreachableAttribution:
     """
 
     cause: UnreachableCause
-    owners: frozenset[BoundaryFeature]
+    owners: OwnerSet
     intervals: tuple[UnreachableInterval, ...]
 
 
@@ -417,7 +419,7 @@ def _matched_piece(
     travelling: list[CentreDomainSupport] = [candidate for candidate in candidates if _travels_along(native, candidate)]
     if not travelling:
         raise UnmatchedCentreDomainPieceError(f"∂Ω* piece {position} travels against every support on its key ({[candidate.owner for candidate in candidates]}).")
-    owners = frozenset(candidate.owner for candidate in travelling)
+    owners = canonical_owners(candidate.owner for candidate in travelling)
     return CentreDomainPiece(position[0], position[1], position[2], owners, travelling[0], native.source, native.target)
 
 
@@ -457,7 +459,7 @@ def _vertex_disks(components: tuple[CentreDomainComponent, ...], tool_radius: Ex
                 arriving, leaving = incoming.support.travel_tangent(vertex), outgoing.support.travel_tangent(vertex)
                 turn = _cross(arriving, leaving)
                 if turn > 0 or (turn == 0 and _dot(arriving, leaving) < 0):
-                    disks.append(VertexDisk(vertex, tool_radius, incoming.owners | outgoing.owners))
+                    disks.append(VertexDisk(vertex, tool_radius, canonical_owners(incoming.owners | outgoing.owners)))
     return tuple(disks)
 
 
@@ -651,7 +653,7 @@ def _attribute_unreachable(
             else:
                 track.add_arc_image(support, piece)
     # 2. Points touched by vertex disks away from the owned images (three-way ties at a vertex).
-    incident = [(piece.source, piece.owners | previous.owners) for cycle in _cycles(components) for previous, piece in zip((cycle[-1], *cycle[:-1]), cycle)]
+    incident = [(piece.source, canonical_owners(piece.owners | previous.owners)) for cycle in _cycles(components) for previous, piece in zip((cycle[-1], *cycle[:-1]), cycle)]
     _add_vertex_touches(tracks, owned, incident, radius, junction_hits)
     # 3. An arc of ρ = r is wholly reached iff its centre (a point of ∂Ω* then) is in Ω*.
     for track in tracks:
@@ -682,7 +684,7 @@ def _cycles(components: tuple[CentreDomainComponent, ...]) -> list[tuple[CentreD
 def _add_vertex_touches(
     tracks: list[_PrimitiveTrack],
     owned: dict[BoundaryFeature, CentreDomainSupport],
-    vertices: list[tuple[OneRootPoint2, frozenset[BoundaryFeature]]],
+    vertices: list[tuple[OneRootPoint2, OwnerSet]],
     radius: ExactMillimetre,
     junction_hits: list[list[_Witness]],
 ) -> None:
@@ -828,10 +830,10 @@ def _attributed(boundary: DeclaredBoundary, supports: CentreDomainSupports, stre
     local = any(first == second for first in start_witness for second in end_witness)
     intervals = tuple(gap.interval for gap in stretch)
     if local and tight:
-        return UnreachableAttribution(UnreachableCause.TIGHT_CONVEX_ARC, frozenset(tight | kinks), intervals)
+        return UnreachableAttribution(UnreachableCause.TIGHT_CONVEX_ARC, canonical_owners(tight | kinks), intervals)
     if local and kinks:
-        return UnreachableAttribution(UnreachableCause.CONVEX_KINK_CUSP, frozenset(kinks), intervals)
-    return UnreachableAttribution(UnreachableCause.NECK, frozenset(tight | kinks | {interval.primitive for interval in intervals}), intervals)
+        return UnreachableAttribution(UnreachableCause.CONVEX_KINK_CUSP, canonical_owners(kinks), intervals)
+    return UnreachableAttribution(UnreachableCause.NECK, canonical_owners(tight | kinks | {interval.primitive for interval in intervals}), intervals)
 
 
 def _feature(index: int, is_arc: bool) -> BoundaryFeature:

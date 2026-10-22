@@ -246,14 +246,22 @@ class SiteKey:
     __hash__ = None  # type: ignore[assignment]
 
 
-@dataclass(frozen=True, eq=False)
+@dataclass(frozen=True)
 class OmegaSite:
-    """An exact point of ∂Ω*: piece ``frame.index``, at its source or projected from ``probe``."""
+    """An exact point of ∂Ω*: piece ``frame.index``, at its source or projected from ``probe``.
+
+    Equality is structural over ``frame``, ``probe`` and ``key``; the lazy point
+    cache takes no part in equality or repr, so whether :meth:`point` was called
+    never changes a comparison. Sites are unhashable, as their one-root points
+    and :class:`SiteKey` (whose equality is an exact three-way decision) are.
+    """
 
     frame: PieceFrame
     probe: ExactPoint2[WorldXY] | None
     key: SiteKey
-    _point: list[OneRootPoint2] = field(default_factory=list, repr=False)
+    _point: list[OneRootPoint2] = field(default_factory=list, repr=False, compare=False)
+
+    __hash__ = None  # type: ignore[assignment]
 
     @property
     def index(self) -> int:
