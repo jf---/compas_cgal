@@ -5,7 +5,12 @@ inward offset, initial placement, engagement refinement, connectors. The
 connectors close the loop: the last runs CCW from the last circle back to the
 first unless their contacts coincide. Each generator returns its path as a
 :class:`GeneratedToolpath`, which other consumers (the gouge audit) reuse
-instead of repeating the stages. Each run records the toolpath's counts and
+instead of repeating the stages. After the connectors, a post-gate certifies
+every connector, the seam included, with the exact continuous engagement
+certificate (:mod:`benchmarks.held_connector_engagement`) and raises a named
+error on any connector it cannot certify; there is no report-and-pass mode.
+On Ω* the certificate has no sweep type for the exact ∂Ω* connectors yet, so
+every moving Ω* connector is refused by name. Each run records the toolpath's counts and
 lengths with the time, so a regression in geometry is caught as surely as a
 regression in speed. The exact coverage
 replay is validation, not generation, and is timed on its own clock only when
@@ -27,6 +32,9 @@ from typing import Any
 
 from benchmarks.errors import BenchmarkError
 from benchmarks.held_boundary_order_spacing import refine_boundary_ordered_path
+from benchmarks.held_centre_domain_supports import PieceKind
+from benchmarks.held_connector_engagement import ConnectorEngagementCertificate
+from benchmarks.held_connector_engagement import UncertifiedConnectorEngagementError
 from benchmarks.held_exact_motion_coverage import require_full_motion_coverage
 from benchmarks.held_figure5_boundary_path import Figure5BoundaryConnectors
 from benchmarks.held_figure5_boundary_path import Figure5BoundaryTransition
@@ -57,6 +65,7 @@ from benchmarks.performance_record import time_factor
 from benchmarks.tools.held_toolpath_progress import _containment_report
 from compas_cgal.motion import EngagementCap
 from compas_cgal.units import Point2
+from compas_cgal.units import ToolRadius
 from compas_cgal.units import WorldXY
 
 SCHEMA_VERSION = 1
@@ -80,6 +89,30 @@ class MissingCeilingError(ToolpathBenchmarkError):
 
 class UnknownWorkloadError(ToolpathBenchmarkError):
     """The requested workload is not one of the concrete generators."""
+
+
+class UncertifiableOmegaConnectorError(UncertifiedConnectorEngagementError):
+    """Moving Ω* connectors the engagement certificate has no sweep type for.
+
+    Tiers 1 and 1b read binary64 straight pieces joining binary64 circle
+    contacts. An Ω* connector runs along exact ∂Ω* pieces between exact sites,
+    which the binary64 circles pass near but not through. Each refused
+    connector is filed under its first blocking reason: an arc piece (no arc
+    sweep in the lemma), a line piece with a one-root endpoint (no exact
+    injection onto the certificate's dyadic grid), or rational line pieces only
+    (the circle-to-site junction is outside the certificate's motion model).
+    """
+
+    def __init__(self, connectors: tuple[int, ...], arcs: tuple[int, ...], one_root_lines: tuple[int, ...], rational_lines: tuple[int, ...]) -> None:
+        super().__init__(connectors)
+        self.arc_connectors = arcs
+        self.one_root_line_connectors = one_root_lines
+        self.rational_line_connectors = rational_lines
+        self.args = (
+            f"{len(connectors)} Ω* connector(s) without an engagement certificate (no sweep type for exact ∂Ω* connectors): "
+            f"{len(arcs)} with arc pieces, {len(one_root_lines)} line-only with one-root endpoints, {len(rational_lines)} rational line-only; "
+            f"first refused: {list(connectors[:10])}",
+        )
 
 
 @dataclass(frozen=True)
@@ -257,12 +290,50 @@ def generate_figure5_refined() -> GeneratedToolpath:
     stages.stop("initial")
     cap = EngagementCap.build(math.radians(float(case.tea_cap)))
     stages.start()
-    refined = refine_figure5_engagement(result.path.circles, components[0], case.tool_radius, cap)
+    refined = refine_figure5_engagement(result.path.circles, components[0], case.tool_radius, cap, close_seam=True)
     stages.stop("refine")
     stages.start()
     connectors = Figure5BoundaryConnectors.build(components[0], refined.circles)
     stages.stop("connectors")
+    stages.start()
+    certify_connectors(refined.circles, connectors, case.tool_radius, cap)
+    stages.stop("connector_certificate")
     return GeneratedToolpath("figure5_refined", case, components[0], refined.circles, connectors, dict(stages.seconds))
+
+
+def certify_connectors(
+    circles: tuple[Figure5CounterclockwiseCircle, ...], connectors: Figure5BoundaryConnectors, tool: ToolRadius, cap: EngagementCap
+) -> ConnectorEngagementCertificate:
+    """Post-gate: every connector of the closed path, the seam included, certified by tier 1 or 1b.
+
+    Raises:
+        UncertifiedConnectorEngagementError: A connector is left without a
+            certificate; it names every such connector.
+    """
+    return ConnectorEngagementCertificate.build(circles, connectors, tool, cap)
+
+
+def require_omega_connector_certificate(path: OmegaGeneratedToolpath) -> None:
+    """Post-gate on Ω*: only stationary (fan) connectors are certified; every moving connector is refused by name.
+
+    Raises:
+        UncertifiableOmegaConnectorError: A connector moves along ∂Ω*.
+    """
+    arcs: list[int] = []
+    one_root_lines: list[int] = []
+    rational_lines: list[int] = []
+    for k, connector in enumerate(path.connectors.connectors):
+        if not connector.pieces:
+            continue
+        if any(piece.piece.kind is not PieceKind.OFFSET_LINE for piece in connector.pieces):
+            arcs.append(k)
+        elif any(not (point.x.is_rational and point.y.is_rational) for piece in connector.pieces for point in (piece.start, piece.end)):
+            one_root_lines.append(k)
+        else:
+            rational_lines.append(k)
+    refused = tuple(sorted((*arcs, *one_root_lines, *rational_lines)))
+    if refused:
+        raise UncertifiableOmegaConnectorError(refused, tuple(arcs), tuple(one_root_lines), tuple(rational_lines))
 
 
 @paused_cyclic_gc()
@@ -281,13 +352,16 @@ def _generate_figure8(name: str, case_name: str, *, spacing: str, qualify_contac
     cap = EngagementCap.build(math.radians(float(case.tea_cap)))
     stages.start()
     if spacing == "boundary":
-        _, refined = refine_boundary_ordered_path(result, components[0], case.tool_radius, cap, corner_approaches=corner_approaches)
+        _, refined = refine_boundary_ordered_path(result, components[0], case.tool_radius, cap, corner_approaches=corner_approaches, close_seam=True)
     else:
-        refined = refine_figure5_engagement(result.path.circles, components[0], case.tool_radius, cap, corner_approaches=corner_approaches)
+        refined = refine_figure5_engagement(result.path.circles, components[0], case.tool_radius, cap, corner_approaches=corner_approaches, close_seam=True)
     stages.stop("refine")
     stages.start()
     connectors = Figure5BoundaryConnectors.build(components[0], refined.circles)
     stages.stop("connectors")
+    stages.start()
+    certify_connectors(refined.circles, connectors, case.tool_radius, cap)
+    stages.stop("connector_certificate")
     return GeneratedToolpath(name, case, components[0], refined.circles, connectors, dict(stages.seconds))
 
 
@@ -317,10 +391,12 @@ GENERATORS: dict[str, Callable[[], GeneratedToolpath]] = {
 
 
 def generate(workload: str) -> GeneratedToolpath:
-    """Run one workload's generator stage by stage.
+    """Run one workload's generator stage by stage, the connector post-gate last.
 
     Raises:
         UnknownWorkloadError: ``workload`` is not in ``GENERATORS``.
+        UncertifiedConnectorEngagementError: A connector, the seam included,
+            is left without an engagement certificate.
     """
     if workload not in GENERATORS:
         raise UnknownWorkloadError(f"unknown workload {workload!r}; known: {list(GENERATORS)}")
@@ -328,16 +404,27 @@ def generate(workload: str) -> GeneratedToolpath:
 
 
 def generate_on(workload: str, domain: PathDomain) -> GeneratedToolpath | OmegaGeneratedToolpath:
-    """The workload's path decided on ``domain``: the float polygon Ω (published) or the exact Ω*.
+    """The workload's path decided on ``domain``: the float polygon Ω (published) or the exact Ω*, connector-gated on both.
 
     Raises:
         UnknownWorkloadError: ``workload`` is not in ``GENERATORS``.
+        UncertifiedConnectorEngagementError: A polygon connector, the seam
+            included, is left without an engagement certificate.
+        UncertifiableOmegaConnectorError: An Ω* connector moves along ∂Ω*
+            (the certificate has no sweep type for it).
     """
     if domain is PathDomain.OMEGA:
-        if workload not in GENERATORS:
-            raise UnknownWorkloadError(f"unknown workload {workload!r}; known: {list(GENERATORS)}")
-        return generate_omega(workload)
+        return _omega_gated(workload)
     return generate(workload)
+
+
+def _omega_gated(workload: str) -> OmegaGeneratedToolpath:
+    """The workload's Ω* path, through the connector post-gate."""
+    if workload not in GENERATORS:
+        raise UnknownWorkloadError(f"unknown workload {workload!r}; known: {list(GENERATORS)}")
+    path = generate_omega(workload)
+    require_omega_connector_certificate(path)
+    return path
 
 
 def omega_summary_lines(paths: Mapping[str, OmegaGeneratedToolpath]) -> list[str]:
@@ -523,7 +610,7 @@ def main() -> None:
     parser.add_argument("--domain", choices=[domain.value for domain in PathDomain], default=PathDomain.POLYGON.value, help="centre domain the paths are decided on")
     args = parser.parse_args()
     if PathDomain(args.domain) is PathDomain.OMEGA:
-        paths = {name: generate_omega(name) for name in args.workloads}
+        paths = {name: _omega_gated(name) for name in args.workloads}
         record = {
             name: {"metrics": dataclasses.asdict(omega_metrics(path)), "stage_seconds": path.stage_seconds, "generation_seconds": path.generation_seconds}
             for name, path in paths.items()
