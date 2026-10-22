@@ -1,0 +1,240 @@
+{
+  "build": {
+    "commit": "ae6a668a05238e4203a436aefaf431cc94255cce",
+    "dirty": true,
+    "package_version": "0.9.1",
+    "recorded_at": "2026-10-22T18:07:35+00:00"
+  },
+  "candidates": [
+    {
+      "a_seconds": 0.4968641660234425,
+      "added": 1,
+      "b_seconds": 0.004453290981473401,
+      "candidate": 744,
+      "later_sources": 2361,
+      "rerefined": 2,
+      "slot": 334
+    },
+    {
+      "a_seconds": 0.4975559590093326,
+      "added": 1,
+      "b_seconds": 0.004138459014939144,
+      "candidate": 746,
+      "later_sources": 2361,
+      "rerefined": 2,
+      "slot": 334
+    },
+    {
+      "a_seconds": 0.4569238330004737,
+      "added": 1,
+      "b_seconds": 0.003831999987596646,
+      "candidate": 1273,
+      "later_sources": 2114,
+      "rerefined": 1,
+      "slot": 581
+    },
+    {
+      "a_seconds": 0.45491274999221787,
+      "added": 1,
+      "b_seconds": 0.004084250016603619,
+      "candidate": 1274,
+      "later_sources": 2114,
+      "rerefined": 1,
+      "slot": 581
+    },
+    {
+      "a_seconds": 0.4500382500118576,
+      "added": 1,
+      "b_seconds": 0.004078958998434246,
+      "candidate": 1275,
+      "later_sources": 2114,
+      "rerefined": 1,
+      "slot": 581
+    },
+    {
+      "a_seconds": 0.45241475000511855,
+      "added": 1,
+      "b_seconds": 0.0041118329972960055,
+      "candidate": 1276,
+      "later_sources": 2114,
+      "rerefined": 1,
+      "slot": 581
+    },
+    {
+      "a_seconds": 0.4514344589842949,
+      "added": 1,
+      "b_seconds": 0.0037402920133899897,
+      "candidate": 1277,
+      "later_sources": 2114,
+      "rerefined": 1,
+      "slot": 581
+    },
+    {
+      "a_seconds": 0.21829900000011548,
+      "added": 1,
+      "b_seconds": 0.0033380420063622296,
+      "candidate": 4035,
+      "later_sources": 1032,
+      "rerefined": 1,
+      "slot": 1663
+    },
+    {
+      "a_seconds": 0.21552854200126603,
+      "added": 1,
+      "b_seconds": 0.003322500007925555,
+      "candidate": 4036,
+      "later_sources": 1032,
+      "rerefined": 1,
+      "slot": 1663
+    },
+    {
+      "a_seconds": 0.21716591701260768,
+      "added": 1,
+      "b_seconds": 0.003567790990928188,
+      "candidate": 4037,
+      "later_sources": 1032,
+      "rerefined": 1,
+      "slot": 1663
+    },
+    {
+      "a_seconds": 0.21442841598764062,
+      "added": 1,
+      "b_seconds": 0.0032897920173127204,
+      "candidate": 4038,
+      "later_sources": 1032,
+      "rerefined": 1,
+      "slot": 1663
+    },
+    {
+      "a_seconds": 0.20555141699151136,
+      "added": 4,
+      "b_seconds": 0.003922625008272007,
+      "candidate": 4046,
+      "later_sources": 1029,
+      "rerefined": 1,
+      "slot": 1666
+    },
+    {
+      "a_seconds": 0.05381704101455398,
+      "added": 1,
+      "b_seconds": 0.003187624999554828,
+      "candidate": 6127,
+      "later_sources": 206,
+      "rerefined": 1,
+      "slot": 2489
+    },
+    {
+      "a_seconds": 0.050077541993232444,
+      "added": 1,
+      "b_seconds": 0.003143667010590434,
+      "candidate": 6128,
+      "later_sources": 206,
+      "rerefined": 1,
+      "slot": 2489
+    },
+    {
+      "a_seconds": 0.04888395901070908,
+      "added": 4,
+      "b_seconds": 0.0035233329981565475,
+      "candidate": 6159,
+      "later_sources": 195,
+      "rerefined": 1,
+      "slot": 2500
+    },
+    {
+      "a_seconds": 0.048262500000419095,
+      "added": 4,
+      "b_seconds": 0.0034869170049205422,
+      "candidate": 6161,
+      "later_sources": 194,
+      "rerefined": 1,
+      "slot": 2501
+    }
+  ],
+  "emitted": 4438,
+  "emitted_after_nothing": 4428,
+  "full_refinement_seconds": 0.5630541249993257,
+  "load_1min_before_after": [
+    40.95458984375,
+    30.84619140625
+  ],
+  "machine": {
+    "cpu_brand": "Apple M1 Max",
+    "machine": "arm64",
+    "python": "3.12.13",
+    "system": "Darwin"
+  },
+  "repair_round_emitted_after": 4440,
+  "repair_round_inserted": [
+    744,
+    1273
+  ],
+  "repair_round_seconds": 0.1294586669828277,
+  "selected": 2695,
+  "source_sha256": "21c2fcacce264f5956c988221fd4d1c75065ce870a6b45b9b81b76b44a864118",
+  "sources": [
+    "benchmarks/__init__.py",
+    "benchmarks/errors.py",
+    "benchmarks/held_boundary_arclength.py",
+    "benchmarks/held_boundary_order_spacing.py",
+    "benchmarks/held_connector_engagement.py",
+    "benchmarks/held_coverage_repair.py",
+    "benchmarks/held_coverage_repair_cover.py",
+    "benchmarks/held_coverage_repair_errors.py",
+    "benchmarks/held_coverage_repair_invariant_errors.py",
+    "benchmarks/held_coverage_repair_splice.py",
+    "benchmarks/held_coverage_repair_types.py",
+    "benchmarks/held_figure5_boundary_path.py",
+    "benchmarks/held_figure5_connector_gate.py",
+    "benchmarks/held_figure5_engagement_circles.py",
+    "benchmarks/held_figure5_engagement_errors.py",
+    "benchmarks/held_figure5_engagement_refinement.py",
+    "benchmarks/held_figure5_engagement_trace.py",
+    "benchmarks/held_figure5_path.py",
+    "benchmarks/held_figure5_raw_guide.py",
+    "benchmarks/held_nothing_circles.py",
+    "benchmarks/held_offset_contact_projection.py",
+    "benchmarks/held_reference_cases.py",
+    "benchmarks/held_reference_certification.py",
+    "benchmarks/held_reference_contacts.py",
+    "benchmarks/held_reference_figures.py",
+    "benchmarks/held_reference_geometry.py",
+    "benchmarks/held_reference_reconstruction_cache.py",
+    "benchmarks/held_reference_reconstruction_cache_errors.py",
+    "benchmarks/held_reference_reconstruction_codec.py",
+    "benchmarks/held_reference_reconstruction_identity.py",
+    "benchmarks/held_standard_placement.py",
+    "benchmarks/performance_record.py",
+    "benchmarks/spec.py",
+    "src/compas_cgal/__init__.py",
+    "src/compas_cgal/coverage_certificate/__init__.py",
+    "src/compas_cgal/coverage_certificate/certificate.py",
+    "src/compas_cgal/coverage_certificate/circle_core.py",
+    "src/compas_cgal/coverage_certificate/errors.py",
+    "src/compas_cgal/coverage_certificate/exact_connectors.py",
+    "src/compas_cgal/coverage_certificate/exact_target.py",
+    "src/compas_cgal/coverage_certificate/native_certificate.py",
+    "src/compas_cgal/coverage_certificate/sweeps.py",
+    "src/compas_cgal/coverage_certificate/target.py",
+    "src/compas_cgal/coverage_certificate/witness.py",
+    "src/compas_cgal/engagement_toolpath.py",
+    "src/compas_cgal/errors.py",
+    "src/compas_cgal/held_boundary_clearance.py",
+    "src/compas_cgal/helix.py",
+    "src/compas_cgal/helix_units.py",
+    "src/compas_cgal/incident_loop.py",
+    "src/compas_cgal/motion.py",
+    "src/compas_cgal/stock.py",
+    "src/compas_cgal/straight_skeleton_2.py",
+    "src/compas_cgal/toolpath.py",
+    "src/compas_cgal/types.py",
+    "src/compas_cgal/units.py",
+    "tools/__init__.py",
+    "tools/held_reference_extractor.py",
+    "tools/held_source_closure.py",
+    "tools/held_splice_ab_results.py"
+  ],
+  "sources_count": 6747,
+  "witnesses": 8,
+  "workload": "figure8_monstera_boundary_qualified_corners"
+}

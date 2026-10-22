@@ -1,0 +1,235 @@
+{
+  "build": {
+    "commit": "ae6a668a05238e4203a436aefaf431cc94255cce",
+    "dirty": true,
+    "package_version": "0.9.1",
+    "recorded_at": "2026-10-22T18:05:49+00:00"
+  },
+  "circle_budget": [
+    1,
+    50
+  ],
+  "machine": {
+    "cpu_brand": "Apple M1 Max",
+    "machine": "arm64",
+    "python": "3.12.13",
+    "system": "Darwin"
+  },
+  "source_sha256": "7e5341c9752d69f1489fb48d61df5c31b400d9e7347c9faac5a054f34f535089",
+  "sources": [
+    "benchmarks/__init__.py",
+    "benchmarks/errors.py",
+    "benchmarks/held_boundary_arclength.py",
+    "benchmarks/held_boundary_order_spacing.py",
+    "benchmarks/held_centre_domain_errors.py",
+    "benchmarks/held_centre_domain_native.py",
+    "benchmarks/held_centre_domain_supports.py",
+    "benchmarks/held_clearance_backend.py",
+    "benchmarks/held_connector_engagement.py",
+    "benchmarks/held_connector_engagement_arcs.py",
+    "benchmarks/held_connector_engagement_exact.py",
+    "benchmarks/held_connector_engagement_lines.py",
+    "benchmarks/held_connector_engagement_range.py",
+    "benchmarks/held_containment_report.py",
+    "benchmarks/held_declared_boundary.py",
+    "benchmarks/held_declared_boundary_emission.py",
+    "benchmarks/held_declared_clearance.py",
+    "benchmarks/held_declared_clearance_native.py",
+    "benchmarks/held_declared_clearance_wire.py",
+    "benchmarks/held_dyadic_interval.py",
+    "benchmarks/held_exact_centre_domain.py",
+    "benchmarks/held_exact_motion_coverage.py",
+    "benchmarks/held_figure5_boundary_path.py",
+    "benchmarks/held_figure5_connector_gate.py",
+    "benchmarks/held_figure5_engagement_circles.py",
+    "benchmarks/held_figure5_engagement_errors.py",
+    "benchmarks/held_figure5_engagement_refinement.py",
+    "benchmarks/held_figure5_engagement_trace.py",
+    "benchmarks/held_figure5_path.py",
+    "benchmarks/held_figure5_raw_guide.py",
+    "benchmarks/held_gc_scope.py",
+    "benchmarks/held_gouge_audit.py",
+    "benchmarks/held_gouge_boundary.py",
+    "benchmarks/held_gouge_surd.py",
+    "benchmarks/held_motion_coverage.py",
+    "benchmarks/held_nothing_circles.py",
+    "benchmarks/held_offset_contact_projection.py",
+    "benchmarks/held_omega_circles.py",
+    "benchmarks/held_omega_connector_engagement.py",
+    "benchmarks/held_omega_connector_gate.py",
+    "benchmarks/held_omega_connector_repair.py",
+    "benchmarks/held_omega_connectors.py",
+    "benchmarks/held_omega_convex_corner.py",
+    "benchmarks/held_omega_gouge_audit.py",
+    "benchmarks/held_omega_gouge_audit_native.py",
+    "benchmarks/held_omega_path.py",
+    "benchmarks/held_omega_refinement.py",
+    "benchmarks/held_omega_sites.py",
+    "benchmarks/held_omega_toolpath.py",
+    "benchmarks/held_one_root.py",
+    "benchmarks/held_reference_cases.py",
+    "benchmarks/held_reference_certification.py",
+    "benchmarks/held_reference_contacts.py",
+    "benchmarks/held_reference_figures.py",
+    "benchmarks/held_reference_geometry.py",
+    "benchmarks/held_reference_reconstruction_cache.py",
+    "benchmarks/held_reference_reconstruction_cache_errors.py",
+    "benchmarks/held_reference_reconstruction_codec.py",
+    "benchmarks/held_reference_reconstruction_identity.py",
+    "benchmarks/held_standard_placement.py",
+    "benchmarks/held_stock_replay.py",
+    "benchmarks/held_toolpath_benchmark.py",
+    "benchmarks/performance_record.py",
+    "benchmarks/spec.py",
+    "src/compas_cgal/__init__.py",
+    "src/compas_cgal/engagement.py",
+    "src/compas_cgal/engagement_toolpath.py",
+    "src/compas_cgal/errors.py",
+    "src/compas_cgal/held_boundary_clearance.py",
+    "src/compas_cgal/helix.py",
+    "src/compas_cgal/helix_units.py",
+    "src/compas_cgal/incident_loop.py",
+    "src/compas_cgal/motion.py",
+    "src/compas_cgal/pipeline/__init__.py",
+    "src/compas_cgal/pipeline/admissibility.py",
+    "src/compas_cgal/pipeline/direction.py",
+    "src/compas_cgal/pipeline/errors.py",
+    "src/compas_cgal/pipeline/ladder.py",
+    "src/compas_cgal/replay_classification.py",
+    "src/compas_cgal/stock.py",
+    "src/compas_cgal/straight_skeleton_2.py",
+    "src/compas_cgal/toolpath.py",
+    "src/compas_cgal/types.py",
+    "src/compas_cgal/units.py",
+    "tools/__init__.py",
+    "tools/held_connector_repair_budget_results.py",
+    "tools/held_reference_extractor.py",
+    "tools/held_source_closure.py"
+  ],
+  "tier2_estimate": {
+    "circles": 4428,
+    "pieces": 4369,
+    "station_seconds": 469.36169591521923,
+    "subtraction_seconds": 231.94380101616122,
+    "total_seconds": 701.3054969313805,
+    "workload": "figure8_monstera_boundary_qualified_corners"
+  },
+  "tier2_rates": {
+    "circles": 200,
+    "connectors": 200,
+    "load_1min_before_after": [
+      65.18994140625,
+      46.01904296875
+    ],
+    "mean_ms": {
+      "circle_over": 1.00238997649285,
+      "circle_under": 24.691335219395114,
+      "piece_over": 1.3387490085201201,
+      "piece_under": 25.70908478611694,
+      "station": 1.1677174557784074
+    },
+    "pieces": 205,
+    "seconds": {
+      "circle_over": 0.20047799529857002,
+      "circle_under": 4.938267043879023,
+      "piece_over": 0.27444354674662463,
+      "piece_under": 5.270362381153973,
+      "stations": 22.02315121598076
+    },
+    "stations_both_stocks": 18860,
+    "stations_per_piece": 46,
+    "workload": "figure5_refined"
+  },
+  "workloads": [
+    {
+      "added": 0,
+      "circles_gate_off": 2004,
+      "circles_published": 2004,
+      "gate_off_calls": {
+        "certifies": 2010,
+        "sharp_vertex": 2488
+      },
+      "gate_off_left_uncertified": 0,
+      "generation_seconds_gate_off": 2.6348530399845913,
+      "generation_seconds_published": 2.898417290969519,
+      "load_1min_before_after": [
+        129.9384765625,
+        121.775390625
+      ],
+      "within_budget": true,
+      "workload": "figure5_refined"
+    },
+    {
+      "added": 1,
+      "circles_gate_off": 4159,
+      "circles_published": 4160,
+      "gate_off_calls": {
+        "certifies": 4179,
+        "sharp_vertex": 5244
+      },
+      "gate_off_left_uncertified": 1,
+      "generation_seconds_gate_off": 9.246420334005961,
+      "generation_seconds_published": 7.489812874962809,
+      "load_1min_before_after": [
+        121.775390625,
+        103.61669921875
+      ],
+      "within_budget": true,
+      "workload": "figure8_upper_lane"
+    },
+    {
+      "added": 6,
+      "circles_gate_off": 1684,
+      "circles_published": 1690,
+      "gate_off_calls": {
+        "certifies": 1684,
+        "sharp_vertex": 2363
+      },
+      "gate_off_left_uncertified": 5,
+      "generation_seconds_gate_off": 4.8530337079719175,
+      "generation_seconds_published": 5.470087958005024,
+      "load_1min_before_after": [
+        103.61669921875,
+        89.60400390625
+      ],
+      "within_budget": true,
+      "workload": "figure8_upper_boundary"
+    },
+    {
+      "added": 5,
+      "circles_gate_off": 1616,
+      "circles_published": 1621,
+      "gate_off_calls": {
+        "certifies": 1616,
+        "sharp_vertex": 2083
+      },
+      "gate_off_left_uncertified": 2,
+      "generation_seconds_gate_off": 2.488865666993661,
+      "generation_seconds_published": 2.444368459022371,
+      "load_1min_before_after": [
+        89.60400390625,
+        87.39306640625
+      ],
+      "within_budget": true,
+      "workload": "figure8_crossed_skis_boundary"
+    },
+    {
+      "added": 72,
+      "circles_gate_off": 4356,
+      "circles_published": 4428,
+      "gate_off_calls": {
+        "certifies": 4366,
+        "sharp_vertex": 5707
+      },
+      "gate_off_left_uncertified": 46,
+      "generation_seconds_gate_off": 10.005511375959031,
+      "generation_seconds_published": 10.364247207035078,
+      "load_1min_before_after": [
+        87.39306640625,
+        65.18994140625
+      ],
+      "within_budget": true,
+      "workload": "figure8_monstera_boundary_qualified_corners"
+    }
+  ]
+}
