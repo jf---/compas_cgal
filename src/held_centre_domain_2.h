@@ -12,6 +12,7 @@
 // CGAL_USE_CORE and links no exact core library.
 
 #include "held_centre_domain_2_kernel.h"
+#include "held_centre_domain_placement_2.h"
 #include "held_centre_domain_query_2.h"
 
 #include <array>
@@ -126,6 +127,16 @@ public:
                                                  QueryWorkspace& workspace) const;
     [[nodiscard]] NearestValues nearest_values(const RationalPoint& point, const NearestDecision& decision) const;
 
+    /// The binary64 tangent circle at the exact site of a decided contact
+    /// (held_centre_domain_placement_2.h): `vertex` marks a contact decided
+    /// onto the source of `piece`.
+    ///
+    /// Raises:
+    ///     InvalidCentreDomainInputError: an unknown piece, or a non-finite input.
+    ///     NoRationalUnitNormalError: a line piece without a rational unit normal.
+    [[nodiscard]] PlacedCircle place_on_normal(std::size_t piece, double qx, double qy, bool vertex,
+                                               double guide_radius) const;
+
 private:
     CentreDomain2() = default;
 
@@ -134,6 +145,7 @@ private:
     std::unique_ptr<Gps> domain_;
     std::vector<Component> components_;
     std::vector<QueryPiece> query_pieces_;
+    std::vector<PlacementFrame> placement_frames_;
     std::size_t member_count_ = 0;
     double construction_seconds_ = 0.0;
     std::size_t refiled_outer_ccbs_ = 0;

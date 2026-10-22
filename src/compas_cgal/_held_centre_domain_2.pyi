@@ -2,8 +2,9 @@
 
 Mirrors src/held_centre_domain_2_bindings.cpp. Rationals cross as
 ``(numerator, denominator)`` decimal text, one-root numbers as
-``(rational, coefficient, radicand)`` triples of those. No float crosses
-except the binary64 query coordinates of ``project_binary64``, injected exactly.
+``(rational, coefficient, radicand)`` triples of those. Floats cross only as
+binary64 batch inputs (injected exactly) and as the exactly rounded centre,
+radius and reporting normal of ``place_binary64``.
 """
 
 from collections.abc import Sequence
@@ -22,9 +23,13 @@ _PieceWire: TypeAlias = tuple[bool, tuple[_RationalWire, _RationalWire, _Rationa
 _NearestWire: TypeAlias = tuple[int, int, int, _OneRootWire, _OneRootWire, _OneRootWire]
 # (status, kind, piece); status 0 projected, 1 ambiguous, 2 beyond gap.
 _DecisionWire: TypeAlias = tuple[int, int, int]
+# (status, placement, half, cx, cy, radius, limited, normal_x, normal_y); status 0 placed,
+# 1 outside the piece, 2 probe at the circle centre; placement 0 source, 1 interior.
+_PlacementWire: TypeAlias = tuple[int, int, int, float, float, float, bool, float, float]
 
 class InvalidCentreDomainInputError(ValueError): ...
 class BrokenCentreDomainChainError(RuntimeError): ...
+class NoRationalUnitNormalError(RuntimeError): ...
 class AmbiguousOuterCcbError(RuntimeError): ...
 class BoundedFaceWithoutOuterCcbError(RuntimeError): ...
 class UnboundedFaceOuterCcbError(RuntimeError): ...
@@ -48,3 +53,5 @@ class CentreDomain2:
         """``1`` interior, ``0`` boundary, ``-1`` exterior."""
     def nearest(self, x: _RationalWire, y: _RationalWire) -> _NearestWire: ...
     def project_binary64(self, xs: Sequence[float], ys: Sequence[float], gap: _RationalWire) -> list[_DecisionWire]: ...
+    def place_binary64(self, xs: Sequence[float], ys: Sequence[float], pieces: Sequence[int], vertices: Sequence[int], guide_radii: Sequence[float]) -> list[_PlacementWire]:
+        """Tangent circles at the exact sites of decided contacts: correctly rounded centre, exactly rounded-down radius."""

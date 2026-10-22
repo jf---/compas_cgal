@@ -40,6 +40,9 @@ from fractions import Fraction
 from typing import Literal
 
 from benchmarks.errors import BenchmarkError
+from benchmarks.held_centre_domain_native import OUTSIDE_PIECE
+from benchmarks.held_centre_domain_native import PROBE_AT_CIRCLE_CENTRE
+from benchmarks.held_centre_domain_native import native_place_binary64
 from benchmarks.held_centre_domain_supports import OffsetCircleSupport
 from benchmarks.held_centre_domain_supports import OffsetLineSupport
 from benchmarks.held_declared_boundary import ExactPoint2
@@ -48,13 +51,17 @@ from benchmarks.held_declared_clearance import CircleElement
 from benchmarks.held_declared_clearance import ClearanceVerdict
 from benchmarks.held_dyadic_interval import Interval
 from benchmarks.held_exact_centre_domain import CentreDomain
+from benchmarks.held_exact_centre_domain import DecidedContact
 from benchmarks.held_exact_centre_domain import PointLocation
 from benchmarks.held_figure5_raw_guide import GuideRunId
 from benchmarks.held_figure5_raw_guide import GuideRunStationOrdinal
 from benchmarks.held_figure5_raw_guide import ProjectionBoundarySite
 from benchmarks.held_gouge_audit import Clearance
 from benchmarks.held_gouge_boundary import round_down
+from benchmarks.held_omega_sites import OmegaLoop
 from benchmarks.held_omega_sites import OmegaSite
+from benchmarks.held_omega_sites import ProbeAtCircleCentreError
+from benchmarks.held_omega_sites import SiteOutsidePieceError
 from benchmarks.held_one_root import OneRootNumber
 from benchmarks.held_standard_placement import PaperCircleCandidate
 from compas_cgal.units import GuideRadius
@@ -245,6 +252,46 @@ def place_local(site: OmegaSite, guide_radius: float, provenance: tuple[GuideRun
         raise NoContainedCircleError(f"No positive circle fits the support of piece {site.index} at radius {distance}.")
     centre, radius = proposal
     return _circle(ray, centre, radius, limited, provenance)
+
+
+def place_local_batch(
+    loop: OmegaLoop,
+    contacts: Sequence[DecidedContact],
+    guide_radii: Sequence[float],
+    provenances: Sequence[tuple[GuideRunId, GuideRunStationOrdinal, ProjectionBoundarySite]],
+) -> tuple[OmegaCircle, ...]:
+    """:func:`place_local` of every contact's :meth:`OmegaSite.decided` site, decided in one native call.
+
+    The native batch (``CentreDomain2.place_binary64``) makes the same exact
+    decisions: the site's placement and range, the correctly rounded centre
+    of ``q + t·n``, and the largest binary64 radius against the support. The
+    circles are the ones :func:`place_local` builds, field for field
+    (contract-tested).
+
+    Raises:
+        SiteOutsidePieceError: If a contact projects outside its piece.
+        ProbeAtCircleCentreError: If a circle contact is the circle's centre.
+        NoContainedCircleError: If no positive radius fits a support at the rounded centre.
+    """
+    placements = native_place_binary64(
+        loop.domain.native, [contact.query for contact in contacts], [contact.piece.index for contact in contacts], [contact.is_vertex for contact in contacts], list(guide_radii)
+    )
+    circles: list[OmegaCircle] = []
+    for contact, placement, (run_id, station, source) in zip(contacts, placements, provenances, strict=True):
+        index = contact.piece.index
+        if placement.status == OUTSIDE_PIECE:
+            raise SiteOutsidePieceError(f"Contact {contact.query} projects outside piece {index}.")
+        if placement.status == PROBE_AT_CIRCLE_CENTRE:
+            raise ProbeAtCircleCentreError(f"Contact {contact.query} is the centre of piece {index}.")
+        radius = placement.radius
+        if not radius > 0:
+            raise NoContainedCircleError(f"No positive circle fits the support of piece {index}.")
+        site = OmegaSite.from_decision(loop.frames[index], contact.query, placement.at_source, placement.half)
+        cx, cy = placement.centre
+        normal_x, normal_y = placement.normal_view
+        contact_point = Point2[WorldXY].build(cx - radius * normal_x, cy - radius * normal_y)
+        circles.append(OmegaCircle(run_id, station, source, site, Point2[WorldXY].build(cx, cy), contact_point, GuideRadius.build(radius), placement.limited))
+    return tuple(circles)
 
 
 def _decided_contained(verdict: ClearanceVerdict, domain: CentreDomain, centre: ExactPoint2[WorldXY], radius: float) -> bool:

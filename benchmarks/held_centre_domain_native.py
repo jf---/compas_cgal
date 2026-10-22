@@ -37,6 +37,11 @@ INTERIOR_KIND = 1
 PROJECTED = 0
 AMBIGUOUS = 1
 BEYOND_GAP = 2
+# Batch placement statuses and site placements (held_centre_domain_placement_2.h).
+PLACED = 0
+OUTSIDE_PIECE = 1
+PROBE_AT_CIRCLE_CENTRE = 2
+SOURCE_PLACEMENT = 0
 
 
 @dataclass(frozen=True)
@@ -190,3 +195,38 @@ def native_decide_binary64(handle: Any, points: list[tuple[float, float]], gap: 
 def native_locate(handle: Any, point: ExactPoint2[WorldXY]) -> int:
     """Exact location of a rational point: ``1`` interior, ``0`` boundary, ``-1`` exterior."""
     return int(handle.locate(_wire(point.x), _wire(point.y)))
+
+
+@dataclass(frozen=True)
+class NativePlacement:
+    """One batch placement at a decided contact (``status`` :data:`PLACED`, :data:`OUTSIDE_PIECE` or :data:`PROBE_AT_CIRCLE_CENTRE`).
+
+    ``at_source`` and ``half`` are the exact site's placement (``half`` is its
+    half turn from the piece's source on a circle). ``centre`` is the correctly
+    rounded binary64 of the exact tangent-circle centre, ``radius`` the largest
+    binary64 ``<= min(t, bound)`` against the piece's own support, ``limited``
+    that ``t`` was capped at a convex arc's radius. ``normal_view`` is the
+    binary64 inward normal the contact point is reported with.
+    """
+
+    status: int
+    at_source: bool
+    half: int
+    centre: tuple[float, float]
+    radius: float
+    limited: bool
+    normal_view: tuple[float, float]
+
+
+def native_place_binary64(handle: Any, queries: list[tuple[float, float]], pieces: list[int], vertices: list[bool], guide_radii: list[float]) -> tuple[NativePlacement, ...]:
+    """Place the tangent circle at every decided contact's exact site in one native call (docs/held_exact_centre_domain.md).
+
+    Raises:
+        compas_cgal._held_centre_domain_2.InvalidCentreDomainInputError: Columns of different length, an unknown piece, a non-finite input.
+        compas_cgal._held_centre_domain_2.NoRationalUnitNormalError: A line piece without a rational unit normal.
+    """
+    rows = handle.place_binary64([query[0] for query in queries], [query[1] for query in queries], pieces, [int(vertex) for vertex in vertices], guide_radii)
+    return tuple(
+        NativePlacement(int(status), placement == SOURCE_PLACEMENT, int(half), (cx, cy), radius, bool(limited), (normal_x, normal_y))
+        for status, placement, half, cx, cy, radius, limited, normal_x, normal_y in rows
+    )

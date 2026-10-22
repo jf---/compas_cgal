@@ -1,8 +1,10 @@
 // nanobind surface of the exact Held centre domain (held_centre_domain_2.h).
 //
 // Rationals cross as (numerator, denominator) decimal text pairs, one-root
-// numbers as (rational, coefficient, radicand) triples of those pairs. No
-// double ever crosses this boundary in either direction.
+// numbers as (rational, coefficient, radicand) triples of those pairs. The
+// binary64 batches inject their doubles exactly; `place_binary64` returns the
+// correctly rounded or exactly rounded-down doubles its placement decided
+// (held_centre_domain_placement_2.h), never an approximation that decides.
 
 #include "gps_ccb_repair_2.h"
 #include "held_centre_domain_2.h"
@@ -124,6 +126,7 @@ NB_MODULE(_held_centre_domain_2, m)
     m.doc() = "Exact Held centre domain Omega* (docs/held_exact_centre_domain.md); CORE-free.";
     nb::exception<hcd::InvalidCentreDomainInputError>(m, "InvalidCentreDomainInputError", PyExc_ValueError);
     nb::exception<hcd::BrokenCentreDomainChainError>(m, "BrokenCentreDomainChainError", PyExc_RuntimeError);
+    nb::exception<hcd::NoRationalUnitNormalError>(m, "NoRationalUnitNormalError", PyExc_RuntimeError);
     // The Gps CCB repair found the domain arrangement corrupt beyond the misfile
     // it repairs (gps_ccb_repair_2.h): broken invariants, never argument faults.
     nb::exception<AmbiguousOuterCcbError<hcd::CentreDomainCcbRepairDomain>>(
@@ -203,5 +206,38 @@ NB_MODULE(_held_centre_domain_2, m)
                 }
                 return out;
             },
-            "xs"_a, "ys"_a, "gap"_a);
+            "xs"_a, "ys"_a, "gap"_a)
+        .def(
+            "place_binary64",
+            // Batch placement at decided contacts (binary64 probes injected
+            // exactly; `pieces` and `vertices` from `project_binary64`): per
+            // contact (status, placement, half, cx, cy, radius, limited,
+            // normal_x, normal_y).
+            [](const hcd::CentreDomain2& domain, const std::vector<double>& xs, const std::vector<double>& ys,
+               const std::vector<std::size_t>& pieces, const std::vector<int>& vertices,
+               const std::vector<double>& guide_radii) {
+                const std::size_t count = xs.size();
+                if (ys.size() != count || pieces.size() != count || vertices.size() != count || guide_radii.size() != count) {
+                    throw hcd::InvalidCentreDomainInputError("placement batch columns differ in length");
+                }
+                for (const int vertex : vertices) {
+                    if (vertex != 0 && vertex != 1) throw hcd::InvalidCentreDomainInputError("a vertex flag must be 0 or 1");
+                }
+                std::vector<hcd::PlacedCircle> placed;
+                placed.reserve(count);
+                {
+                    nb::gil_scoped_release release;
+                    for (std::size_t i = 0; i < count; ++i) {
+                        placed.push_back(domain.place_on_normal(pieces[i], xs[i], ys[i], vertices[i] == 1, guide_radii[i]));
+                    }
+                }
+                nb::list out;
+                for (const hcd::PlacedCircle& circle : placed) {
+                    out.append(nb::make_tuple(static_cast<int>(circle.status), static_cast<int>(circle.placement), circle.half,
+                                              circle.cx, circle.cy, circle.radius, circle.limited, circle.normal_x,
+                                              circle.normal_y));
+                }
+                return out;
+            },
+            "xs"_a, "ys"_a, "pieces"_a, "vertices"_a, "guide_radii"_a);
 }

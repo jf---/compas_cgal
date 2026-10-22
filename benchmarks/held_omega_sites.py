@@ -313,6 +313,26 @@ class OmegaSite:
             return cls.at_source(frame)
         return cls.project(frame, ExactPoint2[WorldXY].from_binary64(*contact.query))
 
+    @classmethod
+    def from_decision(cls, frame: PieceFrame, query: tuple[float, float], at_source: bool, half: int) -> Self:
+        """The site of a contact whose placement the native batch decided exactly (``OmegaSite.decided`` without re-deciding).
+
+        ``at_source`` and ``half`` are :class:`benchmarks.held_centre_domain_native.NativePlacement`'s
+        verdicts, the same exact decisions :meth:`project` makes; only the
+        order-key data is built here.
+        """
+        if at_source:
+            return cls.at_source(frame)
+        probe = ExactPoint2[WorldXY].from_binary64(*query)
+        support = frame.piece.support
+        if isinstance(support, OffsetLineSupport):
+            along = support.direction[0] * (probe.x - support.anchor.x) + support.direction[1] * (probe.y - support.anchor.y)
+            return cls(frame, probe, SiteKey(frame.index, _Placement.INTERIOR, along=along))
+        vector = probe.minus(support.centre)
+        return cls(
+            frame, probe, SiteKey(frame.index, _Placement.INTERIOR, half=half, direction=_Direction(vector, support.sense, (Interval.of(vector[0]), Interval.of(vector[1]))))
+        )
+
     @property
     def at_vertex(self) -> bool:
         """Whether the site is its piece's source vertex."""

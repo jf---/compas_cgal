@@ -445,6 +445,11 @@ std::unique_ptr<CentreDomain2> CentreDomain2::build(const std::vector<Primitive>
         }
         result->components_.push_back(std::move(component));
     }
+    std::vector<Vector> declared_normals;
+    for (const Primitive& primitive : primitives) {
+        if (primitive.kind == PrimitiveKind::Line) declared_normals.push_back(primitive.normal);
+    }
+    result->placement_frames_ = placement_frames(result->query_pieces_, declared_normals);
     result->construction_seconds_ =
         std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count();
     return result;
@@ -471,6 +476,12 @@ Location CentreDomain2::locate(const RationalPoint& point) const
     default:
         return Location::Exterior;
     }
+}
+
+PlacedCircle CentreDomain2::place_on_normal(std::size_t piece, double qx, double qy, bool vertex, double guide_radius) const
+{
+    if (piece >= query_pieces_.size()) throw InvalidCentreDomainInputError("placement piece index out of range");
+    return held_centre_domain::place_on_normal(query_pieces_[piece], placement_frames_[piece], qx, qy, vertex, guide_radius);
 }
 
 }  // namespace compas_cgal::held_centre_domain

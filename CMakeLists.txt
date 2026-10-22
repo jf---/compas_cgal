@@ -520,7 +520,7 @@ target_include_directories(_coverage_certificate_2 PRIVATE ${CMAKE_CURRENT_SOURC
 # boundary; it links no exact core library and must never define CGAL_USE_CORE.
 add_nanobind_module(
     _held_centre_domain_2
-    "src/held_centre_domain_2.cpp;src/held_centre_domain_query_2.cpp;src/held_centre_domain_2_bindings.cpp"
+    "src/held_centre_domain_2.cpp;src/held_centre_domain_query_2.cpp;src/held_centre_domain_placement_2.cpp;src/held_centre_domain_2_bindings.cpp"
 )
 target_include_directories(_held_centre_domain_2 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 # Native declared-boundary clearance oracle (Omega* gouge audit). CORE-free:
