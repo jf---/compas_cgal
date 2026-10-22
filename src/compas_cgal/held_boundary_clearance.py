@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 from fractions import Fraction
-from functools import cached_property
 
 from compas_cgal import _stock_2
 from compas_cgal.units import ExactMillimetre
@@ -37,6 +36,10 @@ def _scaled_double(numerator: int, denominator: int, exponent: int) -> float:
     return numerator / (denominator << -exponent)
 
 
+# The dataclass fields of ``BoundaryClearanceSite``, in order: its slots besides the two caches.
+_SITE_FIELDS = ("segment", "parameter", "foot_x", "foot_y", "distance", "length_squared", "exponent")
+
+
 @dataclass(frozen=True, eq=False)
 class BoundaryClearanceSite:
     """One distance-admissible boundary site, every value exact.
@@ -60,6 +63,8 @@ class BoundaryClearanceSite:
         exponent: The binary grid exponent ``e``.
     """
 
+    __slots__ = (*_SITE_FIELDS, "_footpoint", "_squared_distance")
+
     segment: int
     parameter: Fraction
     foot_x: int
@@ -68,22 +73,32 @@ class BoundaryClearanceSite:
     length_squared: int
     exponent: int
 
-    @cached_property
+    @property
     def footpoint(self) -> tuple[ExactMillimetre, ExactMillimetre]:
-        """Exact nearest point on the segment, world XY."""
-        return (
-            ExactMillimetre(_scaled(self.foot_x, self.length_squared, self.exponent)),
-            ExactMillimetre(_scaled(self.foot_y, self.length_squared, self.exponent)),
-        )
+        """Exact nearest point on the segment, world XY; built on first read, then kept in a slot."""
+        try:
+            return self._footpoint
+        except AttributeError:
+            footpoint = (
+                ExactMillimetre(_scaled(self.foot_x, self.length_squared, self.exponent)),
+                ExactMillimetre(_scaled(self.foot_y, self.length_squared, self.exponent)),
+            )
+            object.__setattr__(self, "_footpoint", footpoint)
+            return footpoint
 
-    @cached_property
+    @property
     def squared_distance(self) -> SquaredMillimetre:
-        """Exact squared station-to-segment distance."""
-        return SquaredMillimetre(_scaled(self.distance, self.length_squared, 2 * self.exponent))
+        """Exact squared station-to-segment distance; built on first read, then kept in a slot."""
+        try:
+            return self._squared_distance
+        except AttributeError:
+            squared = SquaredMillimetre(_scaled(self.distance, self.length_squared, 2 * self.exponent))
+            object.__setattr__(self, "_squared_distance", squared)
+            return squared
 
-    @cached_property
+    @property
     def footpoint_doubles(self) -> tuple[Millimetre, Millimetre]:
-        """The correctly rounded footpoint, world XY; reporting only.
+        """The correctly rounded footpoint, world XY; reporting only, recomputed on each read.
 
         Raises:
             OverflowError: a coordinate exceeds the binary64 range.
@@ -93,9 +108,9 @@ class BoundaryClearanceSite:
             Millimetre(_scaled_double(self.foot_y, self.length_squared, self.exponent)),
         )
 
-    @cached_property
+    @property
     def squared_distance_double(self) -> float:
-        """The correctly rounded squared distance in mm²; reporting only.
+        """The correctly rounded squared distance in mm²; reporting only, recomputed on each read.
 
         Raises:
             OverflowError: the value exceeds the binary64 range.
@@ -122,6 +137,14 @@ class BoundaryClearanceSite:
 
     def __hash__(self) -> int:
         return hash((self.segment, self.parameter, self.footpoint, self.squared_distance))
+
+    def __getstate__(self) -> tuple[object, ...]:
+        """The fields only: the slot caches are rebuilt on demand."""
+        return tuple(getattr(self, name) for name in _SITE_FIELDS)
+
+    def __setstate__(self, state: tuple[object, ...]) -> None:
+        for name, value in zip(_SITE_FIELDS, state):
+            object.__setattr__(self, name, value)
 
 
 def _site(record: tuple[int, str, str, str, str, str, int]) -> BoundaryClearanceSite:

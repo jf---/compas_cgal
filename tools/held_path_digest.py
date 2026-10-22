@@ -25,7 +25,6 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
-import hashlib
 import json
 import re
 import subprocess
@@ -42,6 +41,8 @@ from typing import TypeVar
 
 from benchmarks import held_toolpath_benchmark as toolpath_benchmark
 from benchmarks.performance_record import REPOSITORY
+from tools.streaming_repr_digest import ReprCarriesMemoryAddressError
+from tools.streaming_repr_digest import repr_sha256
 
 SCHEMA = "held-path-digests/1"
 DIGEST_PATH = REPOSITORY / "benchmarks" / "results" / "held_path_digests.json"
@@ -55,8 +56,6 @@ DIGEST_WORKLOADS: tuple[str, ...] = (
 # Prefix of the one stdout line a worker process reports its measurement on.
 WORKER_MARKER = "HELD_PATH_DIGEST_RESULT "
 _SHA256_HEX = re.compile(r"[0-9a-f]{64}")
-# ``object.__repr__`` and friends: "<module.Class object at 0x10a2b3c4d>".
-_MEMORY_ADDRESS = re.compile(r" at 0x[0-9a-fA-F]+>")
 # The generator entry points whose return value is the initial placement result.
 _INITIAL_PATH_BUILDERS = ("build_figure5_approximate_path", "build_held_reference_path")
 _DIGEST_FIELDS = ("initial", "circles", "connectors", "circle_count", "connector_count", "seam")
@@ -93,17 +92,15 @@ class WorkerProcessError(HeldPathDigestError):
 
 
 def canonical_digest(value: object) -> str:
-    """SHA-256 hex digest of ``repr(value)``.
+    """SHA-256 hex digest of ``repr(value)``, streamed (``tools.streaming_repr_digest``): the string is never built.
 
     Raises:
         NonCanonicalReprError: the ``repr`` carries a memory address.
     """
-    text = repr(value)
-    found = _MEMORY_ADDRESS.search(text)
-    if found is not None:
-        start = max(0, found.start() - 80)
-        raise NonCanonicalReprError(f"repr is not canonical, it carries a memory address: ...{text[start : found.end()]}")
-    return hashlib.sha256(text.encode()).hexdigest()
+    try:
+        return repr_sha256(value)
+    except ReprCarriesMemoryAddressError as error:
+        raise NonCanonicalReprError(str(error)) from error
 
 
 @dataclass(frozen=True)

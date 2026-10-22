@@ -20,11 +20,9 @@ add ``--sections audit generation [--generation-repeats N]`` for the generation 
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 import pathlib
-import re
 import statistics
 import time
 from fractions import Fraction
@@ -44,9 +42,8 @@ from benchmarks.held_omega_toolpath import OMEGA_WORKLOADS
 from benchmarks.held_omega_toolpath import OmegaGeneratedToolpath
 from benchmarks.held_omega_toolpath import generate_omega
 from benchmarks.held_toolpath_benchmark import generate
-
-# ``object.__repr__`` and friends: "<module.Class object at 0x10a2b3c4d>" (not canonical).
-_MEMORY_ADDRESS = re.compile(r" at 0x[0-9a-fA-F]+>")
+from tools.streaming_repr_digest import ReprCarriesMemoryAddressError
+from tools.streaming_repr_digest import repr_sha256
 
 
 class NonCanonicalReprError(BenchmarkError):
@@ -121,10 +118,11 @@ def differential(workload: str) -> dict[str, Any]:
 
 
 def _digest(value: object) -> str:
-    text = repr(value)
-    if _MEMORY_ADDRESS.search(text):
-        raise NonCanonicalReprError(f"repr of {type(value).__name__} carries a memory address")
-    return hashlib.sha256(text.encode()).hexdigest()
+    """SHA-256 of ``repr(value)``, streamed (``tools.streaming_repr_digest``): the string is never built."""
+    try:
+        return repr_sha256(value)
+    except ReprCarriesMemoryAddressError as error:
+        raise NonCanonicalReprError(f"repr of {type(value).__name__} carries a memory address: {error.context}") from error
 
 
 def path_digests(path: OmegaGeneratedToolpath) -> dict[str, str]:

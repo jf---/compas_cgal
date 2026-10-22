@@ -616,10 +616,42 @@ def build_distance_admissible_hypotheses(
     record search, and no Fraction (the clearance verdict is decided in
     integers).
     """
-    analysis = _native_station_boundary(guide, station)
-    admissible = analysis.distance_admissible_sites
     tool_radius = float(guide.case.tool_radius.value)
     squared_tool_radius = SquaredMillimetre(_exact_square(tool_radius))
+    return _hypotheses_from_analysis(guide, station, _native_station_boundary(guide, station), tool_radius, squared_tool_radius)
+
+
+def build_guide_distance_admissible_hypotheses(guide: Figure5RawGuide) -> tuple[ProjectionAdmissibleBoundaryHypothesis, ...]:
+    """Every station's distance-admissible hypotheses, in run and station order, from one native batch.
+
+    Equal to concatenating :func:`build_distance_admissible_hypotheses` over
+    ``guide.runs`` and their stations. The guide's memoised station analyses
+    are read when already filled; otherwise the batch runs once and is not
+    memoised, so its analyses (two objects per admissible site) are released
+    when this returns instead of living as long as the guide.
+    """
+    analyses = guide.derived.station_boundary_analyses
+    if analyses is None:
+        analyses = _native_station_boundary_analyses(guide)
+    tool_radius = float(guide.case.tool_radius.value)
+    squared_tool_radius = SquaredMillimetre(_exact_square(tool_radius))
+    return tuple(
+        hypothesis
+        for run, run_analyses in zip(guide.runs, analyses, strict=True)
+        for station, analysis in zip(run.stations, run_analyses, strict=True)
+        for hypothesis in _hypotheses_from_analysis(guide, station, analysis, tool_radius, squared_tool_radius)
+    )
+
+
+def _hypotheses_from_analysis(
+    guide: Figure5RawGuide,
+    station: Figure5RawGuideStation,
+    analysis: _NativeStationBoundaryAnalysis,
+    tool_radius: float,
+    squared_tool_radius: SquaredMillimetre,
+) -> tuple[ProjectionAdmissibleBoundaryHypothesis, ...]:
+    """One station's hypotheses from its native analysis, in admissible-site order."""
+    admissible = analysis.distance_admissible_sites
     return tuple(
         _hypothesis_from_clearance(guide, station, site, admissible, clearance_site, tool_radius, squared_tool_radius)
         for site, clearance_site in zip(admissible, analysis.clearance_sites, strict=True)
