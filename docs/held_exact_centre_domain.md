@@ -1,10 +1,15 @@
 # Held exact centre domain
 
-!!! note "Construction and queries implemented (2026-10-21); consumers not switched"
+!!! note "Ω\* paths implemented beside the polygon path (2026-10-22)"
     Ω\* is built natively and queried exactly (see
-    [Implementation](#implementation)). No consumer uses it yet:
+    [Implementation](#implementation)). The Held paths on Ω\* run beside the
+    polygon-Ω paths, behind `PathDomain`, and the polygon path stays the
+    default. Containment and the gouge audits on these paths use the native
+    declared-clearance oracle by default
+    ([Integration status](#integration-status-2026-10-22),
+    [Held native clearance](held_native_clearance.md)).
     `figure7_inward_offset` stays the Held lane's domain until the
-    [acceptance](#acceptance) holds, and removing it needs a separate decision.
+    [acceptance](#acceptance) holds. Removing it needs a separate decision.
 
 **Conclusion.** Ω\* = {x ∈ P : dist(x, ∂P) ≥ r} can be built exactly in the
 circle-segment machinery `_stock_2` already uses
@@ -441,12 +446,90 @@ only after acceptance, and only with a separate decision.
 | `figure7_inward_offset` (`benchmarks/held_reference_figures.py:493`) | float straight skeleton of `projection.points` → `InwardOffsetEvidence` polygon | `exact_centre_domain(case) -> ExactCentreDomain` in a new `benchmarks/held_exact_centre_domain.py`, backed by native `CentreDomain2` |
 | contact projection (`held_figure5_path.py:521-532`, `held_reference_contacts.py:40`, `_circle_geometry_2.project_boundary_contact`) | nearest Ω polygon edge, `(side, Fraction(parameter))` | `CentreDomain2.project_contact(p, gap) -> CentreDomainSite`, with the same native distance-gap rejection semantics |
 | canonical offset point and circle placement (`held_figure5_boundary_path.py:180-196`) | contact on the polygon edge; centre shifted in floats | exact contact; centre and guide radius stay binary64; **containment is decided exactly** (next row) |
-| containment (`benchmarks/tools/held_toolpath_progress.py::_containment_report`, the gate's "containment rejections") | circle against the Ω polygon | `circle_in_centre_domain(c, R)` ⇔ annulus max(R − r, 0) ≤ \|x − c\| ≤ R + r lies in P. This is decided against the Pythagorean primitives directly (line: rational; arc: one-root after squaring), with no Ω\* construction needed |
+| containment (`benchmarks/held_containment_report.py::containment_report`, the gate's "containment rejections") | circle against the Ω polygon | `circle_in_centre_domain(c, R)` ⇔ annulus max(R − r, 0) ≤ \|x − c\| ≤ R + r lies in P. This is decided against the Pythagorean primitives directly (line: rational; arc: one-root after squaring), with no Ω\* construction needed |
 | ownership and order (`_boundary_neighborhood_owners(..., len(component), ...)`, `_site_key`, `held_figure5_path.py:362-367`) | cyclic polygon vertex index | cyclic `(piece, position)` order per CCB |
 | connectors (`_transition`, `held_figure5_boundary_path.py:210-250`; `_connectors` in `held_toolpath_benchmark.py:173`, `held_gouge_workloads.py:54`) | contact → Ω vertices → contact polyline; progress from float side lengths | `ExactConnector`: the CCW sub-chain of ∂Ω\* pieces between two sites, made of segments and **arcs**; progress is reported as an exact-order chain with a float length |
 | refinement and spacing (`refine_figure5_engagement`, `refine_boundary_ordered_path`, `select_contour_bound_path`, `build_coverage_preserving_path`, `_corner_radius_limit`) | take the Ω polygon | take `ExactCentreDomain`; each decision they make on the polygon is ported to a piece predicate, and engagement *metrics* may read the reported float view |
 | coverage target T ([certificate](held_coverage_certificate.md)) | Ω ∪ ⋃ Cap(e_k), Ω a binary64 polygon | see [Coverage target](#coverage-target-and-the-exact-path) |
 | native AABB clearance (`src/held_boundary_clearance_2*`, not yet wired) | stations against the **projection ring** | the same prune-then-decide design against Pythagorean sites. Arc sites are a new site kind: the distance to an arc in its wedge is \|\|p − c\| − ρ\|, compared by exact squaring; the wedge is decided by orientation |
+
+## Integration status (2026-10-22)
+
+The Ω\* consumers in the table above are built as the **Ω\* path**, beside
+the polygon path:
+
+- **Selection.** `PathDomain` in `benchmarks/held_omega_toolpath.py`, and
+  `--domain omega` on the benchmark CLI. The polygon path is the default and
+  is unchanged.
+- **Modules.**
+  - `held_omega_sites.py`: exact ∂Ω\* sites and their order.
+  - `held_omega_circles.py`: binary64 circles on the inward normal, contained
+    exactly.
+  - `held_omega_connectors.py`: exact ∂Ω\* sub-chains, segments and arcs.
+  - `held_omega_path.py` and `held_omega_refinement.py`: initial path and
+    refinement.
+- **Clearance.** Every clearance decision on these paths is one exact oracle
+  against the declared primitives. This covers circle containment in Ω\*
+  during generation and both gouge audits (`held_omega_gouge_audit.py`).
+  - The oracle runs natively by default (`ClearanceBackend.NATIVE`,
+    `src/held_declared_clearance_2/`).
+  - The Python oracle `held_declared_clearance.py` stays as the differential
+    reference (`ClearanceBackend.PYTHON`).
+  - The two make identical decisions on all five workloads, on the polygon
+    path and on the Ω\* path.
+  - Details, the owner-by-construction TOUCH lemmas, the evidence and the
+    timings: [Held native clearance](held_native_clearance.md).
+- **Owners.** `CentreDomainPiece.owners`, `VertexDisk.owners` and
+  `UnreachableAttribution.owners` are `OwnerSet`s. They iterate and print in
+  canonical order (kind, then index), so Ω\* output and its digests do not
+  depend on `PYTHONHASHSEED`.
+
+### Native site and placement
+
+`CentreDomain2.place_binary64(xs, ys, pieces, vertices, guide_radii)`
+(`src/held_centre_domain_placement_2.{h,cpp}`, Python
+`benchmarks.held_omega_circles.place_local_batch`) places, in one native call,
+the tangent circle of every decided contact. It makes the decisions that
+`OmegaSite.decided` + `place_local` make in Python, and returns the same
+circle field for field (contract test
+`tests/benchmarks/test_held_omega_native_placement.py`: the batch against
+`place_local` on line, concave-arc and convex-arc pockets and on Hypothesis
+probes, plus the round-to-nearest-even and sub-ulp near-tie witnesses).
+
+- **Site.** The site's placement (source vertex or interior) and the
+  outside-the-piece verdict are exact signs: the line parameter `u·q` against
+  `u·s`, `u·t` (one-root ends), or on a circle the half turn of `w = q − C`
+  from `s − C` and the before-target cross sign. Each is filtered by a
+  certified `Interval_nt` enclosure and decided exactly when uncertain.
+- **Support data.** Every line piece of ∂Ω\* is an r-offset of a declared
+  line, so it carries that line's exact unit normal `n̂` (matched by exact
+  slope, oriented left of travel) and `level = n̂·x` — the declared form, whose
+  rationals are small. The arrangement's own `(a, b, c)` is used only to find it.
+- **Centre.** The correctly rounded (nearest, ties to even) binary64 of each
+  exact coordinate of `c* = q + t·n`: `p + (t − h)·n̂` on a line,
+  `C + (ρ' − σt)·w/√|w|²` on a circle, `(1 − k)·s + k·C` at a vertex. A
+  candidate double is accepted when the exact value lies between its rational
+  midpoints with both neighbours; `nextafter` only enumerates candidates. This
+  removes the Python arc proposal's dependence on the probe's enclosure.
+- **Radius.** The guide radius when `t ≤ bound`, else the largest binary64
+  `≤ bound`, with `bound = n̂·c − level` on a line and `√D ∓ ρ'` on a circle
+  (rational predicates `(t + ρ')² ≤ D`, `D ≤ (ρ' − t)²`); the rounding-down is
+  exact. Inside a convex arc of radius `ρ' < t`, `t` is first capped at the
+  largest double `≤ ρ'` (`limited`).
+- **Reporting.** The normal view (`n̂` rounded on a line,
+  `−σ·fl(w)/√fl(|w|²)` on a circle) is returned so the contact point is the
+  same binary64 expression as before; it decides nothing.
+- **Statuses.** `OUTSIDE_PIECE` and `PROBE_AT_CIRCLE_CENTRE` are raised by
+  the Python wrapper as `SiteOutsidePieceError` / `ProbeAtCircleCentreError`;
+  a radius ≤ 0 as `NoContainedCircleError`. A line piece with no rational unit
+  normal raises `NoRationalUnitNormalError` (native).
+
+The exact number type is `Epeck::FT::ET` (boost `cpp_rational`; GMP is
+disabled in this build), whose every operation reduces by gcd. So the circle
+branch does its per-placement arithmetic on unreduced integer numerator /
+denominator pairs (CGAL `Fraction_traits`) and compares by
+cross-multiplication; the radius bound's search is seeded without
+cancellation, `(D − ρ'²)/(√D + ρ')`.
 
 **Out of scope, but on the same defect.** The raw guide and the
 `ProjectionAdmissibleBoundaryHypothesis` stations still read the projection
@@ -666,8 +749,11 @@ tests; the design's original list, with these names):
 
 **Acceptance.** The exact gouge audit of the published paths is
 `benchmarks/acceptance/test_held_gouge_audit_figure5_slow.py` and
-`pixi run held-gouge-audit`. Acceptance items 1–2 on Ω\* paths wait for a
-consumer that builds them.
+`pixi run held-gouge-audit`. On the Ω\* paths, acceptance item 1 is measured
+by the differential audit in
+[Held native clearance](held_native_clearance.md#evidence): 0 gouging circles
+and 0 gouging connectors on all five workloads. Item 2 waits for the
+coverage certificate to model exact ∂Ω\* connectors.
 
 ## Rulings (2026-10-17)
 
@@ -703,6 +789,10 @@ worktree root.
 - **Exact gouges of the published paths.** `pixi run held-gouge-audit`
   (`benchmarks/held_gouge_audit_table.py`). This supersedes the gouge part of
   `build/omega-audit/audit.py`.
+- **Native clearance differential and Ω\* gouge counts.**
+  `pixi run held-native-clearance-results -- --measure`
+  (`tools/held_native_clearance_results.py`) →
+  `benchmarks/results/held_native_clearance.{json,md}`.
 - **Monstera generation time.** `docs/held_performance.md` /
   `benchmarks/results/held_toolpath_baseline.json`.
 - **Not reproducible from the tree.** Two design-time figures came from

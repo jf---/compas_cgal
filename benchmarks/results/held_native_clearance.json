@@ -1,0 +1,775 @@
+{
+  "audits": [
+    {
+      "omega": {
+        "comparison": {
+          "depth_bit_mismatches": 0,
+          "first_mismatches": [],
+          "identical_decisions": true,
+          "listed_native": 1887,
+          "listed_python": 1887
+        },
+        "native": {
+          "gouging_circles": 0,
+          "gouging_connectors": 0,
+          "load_1min_before_after": [
+            31.56005859375,
+            31.56005859375
+          ],
+          "seconds": 0.6217878750176169,
+          "touching_circles": 95,
+          "touching_connectors": 1792
+        },
+        "python": {
+          "gouging_circles": 0,
+          "gouging_connectors": 0,
+          "load_1min_before_after": [
+            32.09765625,
+            31.56005859375
+          ],
+          "seconds": 5.56354179099435,
+          "touching_circles": 95,
+          "touching_connectors": 1792
+        }
+      },
+      "polygon": {
+        "comparison": {
+          "depth_bit_mismatches": 0,
+          "first_mismatches": [],
+          "identical_decisions": true,
+          "listed_native": 1133,
+          "listed_python": 1133
+        },
+        "native": {
+          "gouging_circles": 542,
+          "gouging_connectors": 475,
+          "load_1min_before_after": [
+            30.14794921875,
+            29.4951171875
+          ],
+          "seconds": 1.3015191660088021,
+          "touching_circles": 78,
+          "touching_connectors": 38
+        },
+        "python": {
+          "gouging_circles": 542,
+          "gouging_connectors": 475,
+          "load_1min_before_after": [
+            30.14794921875,
+            30.14794921875
+          ],
+          "seconds": 4.429988833988318,
+          "touching_circles": 78,
+          "touching_connectors": 38
+        }
+      },
+      "workload": "figure5_refined"
+    },
+    {
+      "omega": {
+        "comparison": {
+          "depth_bit_mismatches": 0,
+          "first_mismatches": [],
+          "identical_decisions": true,
+          "listed_native": 3978,
+          "listed_python": 3978
+        },
+        "native": {
+          "gouging_circles": 0,
+          "gouging_connectors": 0,
+          "load_1min_before_after": [
+            51.7099609375,
+            51.7099609375
+          ],
+          "seconds": 0.5696995420148596,
+          "touching_circles": 0,
+          "touching_connectors": 3978
+        },
+        "python": {
+          "gouging_circles": 0,
+          "gouging_connectors": 0,
+          "load_1min_before_after": [
+            57.55517578125,
+            51.7099609375
+          ],
+          "seconds": 11.213174459000584,
+          "touching_circles": 0,
+          "touching_connectors": 3978
+        }
+      },
+      "polygon": {
+        "comparison": {
+          "depth_bit_mismatches": 0,
+          "first_mismatches": [],
+          "identical_decisions": true,
+          "listed_native": 1331,
+          "listed_python": 1331
+        },
+        "native": {
+          "gouging_circles": 731,
+          "gouging_connectors": 600,
+          "load_1min_before_after": [
+            66.27490234375,
+            66.27490234375
+          ],
+          "seconds": 0.9455553750158288,
+          "touching_circles": 0,
+          "touching_connectors": 0
+        },
+        "python": {
+          "gouging_circles": 731,
+          "gouging_connectors": 600,
+          "load_1min_before_after": [
+            88.7744140625,
+            66.27490234375
+          ],
+          "seconds": 20.77544225001475,
+          "touching_circles": 0,
+          "touching_connectors": 0
+        }
+      },
+      "workload": "figure8_upper_lane"
+    },
+    {
+      "omega": {
+        "comparison": {
+          "depth_bit_mismatches": 0,
+          "first_mismatches": [],
+          "identical_decisions": true,
+          "listed_native": 1270,
+          "listed_python": 1270
+        },
+        "native": {
+          "gouging_circles": 0,
+          "gouging_connectors": 0,
+          "load_1min_before_after": [
+            38.84765625,
+            38.84765625
+          ],
+          "seconds": 0.4636131250008475,
+          "touching_circles": 0,
+          "touching_connectors": 1270
+        },
+        "python": {
+          "gouging_circles": 0,
+          "gouging_connectors": 0,
+          "load_1min_before_after": [
+            43.98681640625,
+            38.84765625
+          ],
+          "seconds": 8.73178224998992,
+          "touching_circles": 0,
+          "touching_connectors": 1270
+        }
+      },
+      "polygon": {
+        "comparison": {
+          "depth_bit_mismatches": 0,
+          "first_mismatches": [],
+          "identical_decisions": true,
+          "listed_native": 491,
+          "listed_python": 491
+        },
+        "native": {
+          "gouging_circles": 254,
+          "gouging_connectors": 237,
+          "load_1min_before_after": [
+            46.51025390625,
+            46.51025390625
+          ],
+          "seconds": 0.4341299169755075,
+          "touching_circles": 0,
+          "touching_connectors": 0
+        },
+        "python": {
+          "gouging_circles": 254,
+          "gouging_connectors": 237,
+          "load_1min_before_after": [
+            48.60986328125,
+            46.51025390625
+          ],
+          "seconds": 8.158944625000004,
+          "touching_circles": 0,
+          "touching_connectors": 0
+        }
+      },
+      "workload": "figure8_upper_boundary"
+    },
+    {
+      "omega": {
+        "comparison": {
+          "depth_bit_mismatches": 0,
+          "first_mismatches": [],
+          "identical_decisions": true,
+          "listed_native": 1442,
+          "listed_python": 1442
+        },
+        "native": {
+          "gouging_circles": 0,
+          "gouging_connectors": 0,
+          "load_1min_before_after": [
+            28.47802734375,
+            28.47802734375
+          ],
+          "seconds": 0.3873907500237692,
+          "touching_circles": 0,
+          "touching_connectors": 1442
+        },
+        "python": {
+          "gouging_circles": 0,
+          "gouging_connectors": 0,
+          "load_1min_before_after": [
+            30.2607421875,
+            28.47802734375
+          ],
+          "seconds": 5.641436000005342,
+          "touching_circles": 0,
+          "touching_connectors": 1442
+        }
+      },
+      "polygon": {
+        "comparison": {
+          "depth_bit_mismatches": 0,
+          "first_mismatches": [],
+          "identical_decisions": true,
+          "listed_native": 1635,
+          "listed_python": 1635
+        },
+        "native": {
+          "gouging_circles": 814,
+          "gouging_connectors": 821,
+          "load_1min_before_after": [
+            31.171875,
+            31.171875
+          ],
+          "seconds": 0.9668557500117458,
+          "touching_circles": 0,
+          "touching_connectors": 0
+        },
+        "python": {
+          "gouging_circles": 814,
+          "gouging_connectors": 821,
+          "load_1min_before_after": [
+            29.79150390625,
+            31.171875
+          ],
+          "seconds": 10.783783457998652,
+          "touching_circles": 0,
+          "touching_connectors": 0
+        }
+      },
+      "workload": "figure8_crossed_skis_boundary"
+    },
+    {
+      "omega": {
+        "comparison": {
+          "depth_bit_mismatches": 0,
+          "first_mismatches": [],
+          "identical_decisions": true,
+          "listed_native": 4013,
+          "listed_python": 4013
+        },
+        "native": {
+          "gouging_circles": 0,
+          "gouging_connectors": 0,
+          "load_1min_before_after": [
+            26.68408203125,
+            25.427734375
+          ],
+          "seconds": 1.6896183750068303,
+          "touching_circles": 31,
+          "touching_connectors": 3982
+        },
+        "python": {
+          "gouging_circles": 0,
+          "gouging_connectors": 0,
+          "load_1min_before_after": [
+            30.537109375,
+            26.68408203125
+          ],
+          "seconds": 11.562546250002924,
+          "touching_circles": 31,
+          "touching_connectors": 3982
+        }
+      },
+      "polygon": {
+        "comparison": {
+          "depth_bit_mismatches": 0,
+          "first_mismatches": [],
+          "identical_decisions": true,
+          "listed_native": 2941,
+          "listed_python": 2941
+        },
+        "native": {
+          "gouging_circles": 1536,
+          "gouging_connectors": 1364,
+          "load_1min_before_after": [
+            36.642578125,
+            36.642578125
+          ],
+          "seconds": 1.2820118750096299,
+          "touching_circles": 20,
+          "touching_connectors": 21
+        },
+        "python": {
+          "gouging_circles": 1536,
+          "gouging_connectors": 1364,
+          "load_1min_before_after": [
+            41.39599609375,
+            36.642578125
+          ],
+          "seconds": 11.185182290995726,
+          "touching_circles": 20,
+          "touching_connectors": 21
+        }
+      },
+      "workload": "figure8_monstera_boundary_qualified_corners"
+    }
+  ],
+  "build": {
+    "commit": "42dcd289b2f410cc4c7c21f05d08aade32796864",
+    "dirty": true,
+    "package_version": "0.9.1",
+    "recorded_at": "2026-10-22T17:13:07+00:00"
+  },
+  "generation": [
+    {
+      "byte_identical": true,
+      "median_seconds": {
+        "native": 11.212133374996483,
+        "python": 4.7035869999963325
+      },
+      "python_over_native": 0.41950865572875934,
+      "repeats": 3,
+      "runs": [
+        {
+          "backend": "python",
+          "circles": 1804,
+          "digests": {
+            "circles": "af91e5dc790a1af493e33f668ae0947994ca640b88fe3f287cf1ad992405e892",
+            "connectors": "d750d8855e98a8ed03f65fd79f95de45ed0a0e49037ae62ebc03fe2f48781f8b",
+            "initial": "43cd6a05bbbaecaa2c36dc54d236fa9db7d68234351c57042337f266181b8ac0"
+          },
+          "load_1min_before_after": [
+            25.427734375,
+            23.95166015625
+          ],
+          "seconds": 4.362274292012444,
+          "stage_seconds": {
+            "connector_repair": 1.0446134590019938,
+            "guide": 0.051556749996962026,
+            "initial": 1.7514235420094337,
+            "nothing": 0.3682811250037048,
+            "omega": 0.10489783299271949,
+            "refine": 0.7857984580041375
+          }
+        },
+        {
+          "backend": "native",
+          "circles": 1804,
+          "digests": {
+            "circles": "af91e5dc790a1af493e33f668ae0947994ca640b88fe3f287cf1ad992405e892",
+            "connectors": "d750d8855e98a8ed03f65fd79f95de45ed0a0e49037ae62ebc03fe2f48781f8b",
+            "initial": "43cd6a05bbbaecaa2c36dc54d236fa9db7d68234351c57042337f266181b8ac0"
+          },
+          "load_1min_before_after": [
+            25.396484375,
+            283.9931640625
+          ],
+          "seconds": 104.23388141699252,
+          "stage_seconds": {
+            "connector_repair": 54.875092250003945,
+            "guide": 0.07099383301101625,
+            "initial": 15.467910791980103,
+            "nothing": 19.15437808301067,
+            "omega": 0.36107570902095176,
+            "refine": 11.75913349998882
+          }
+        },
+        {
+          "backend": "native",
+          "circles": 1804,
+          "digests": {
+            "circles": "af91e5dc790a1af493e33f668ae0947994ca640b88fe3f287cf1ad992405e892",
+            "connectors": "d750d8855e98a8ed03f65fd79f95de45ed0a0e49037ae62ebc03fe2f48781f8b",
+            "initial": "43cd6a05bbbaecaa2c36dc54d236fa9db7d68234351c57042337f266181b8ac0"
+          },
+          "load_1min_before_after": [
+            273.3603515625,
+            268.44775390625
+          ],
+          "seconds": 11.212133374996483,
+          "stage_seconds": {
+            "connector_repair": 1.4129955419921316,
+            "guide": 0.258336208993569,
+            "initial": 6.810726583993528,
+            "nothing": 0.6938718750025146,
+            "omega": 0.6360815830121282,
+            "refine": 0.7741260420007166
+          }
+        },
+        {
+          "backend": "python",
+          "circles": 1804,
+          "digests": {
+            "circles": "af91e5dc790a1af493e33f668ae0947994ca640b88fe3f287cf1ad992405e892",
+            "connectors": "d750d8855e98a8ed03f65fd79f95de45ed0a0e49037ae62ebc03fe2f48781f8b",
+            "initial": "43cd6a05bbbaecaa2c36dc54d236fa9db7d68234351c57042337f266181b8ac0"
+          },
+          "load_1min_before_after": [
+            249.03271484375,
+            231.17236328125
+          ],
+          "seconds": 4.7035869999963325,
+          "stage_seconds": {
+            "connector_repair": 1.047483000002103,
+            "guide": 0.05704916699323803,
+            "initial": 1.891033541993238,
+            "nothing": 0.37497737497324124,
+            "omega": 0.12081266700988635,
+            "refine": 0.8331659579998814
+          }
+        },
+        {
+          "backend": "python",
+          "circles": 1804,
+          "digests": {
+            "circles": "af91e5dc790a1af493e33f668ae0947994ca640b88fe3f287cf1ad992405e892",
+            "connectors": "d750d8855e98a8ed03f65fd79f95de45ed0a0e49037ae62ebc03fe2f48781f8b",
+            "initial": "43cd6a05bbbaecaa2c36dc54d236fa9db7d68234351c57042337f266181b8ac0"
+          },
+          "load_1min_before_after": [
+            213.78125,
+            204.98974609375
+          ],
+          "seconds": 7.425750458001858,
+          "stage_seconds": {
+            "connector_repair": 1.0912331659928896,
+            "guide": 0.05205633398145437,
+            "initial": 4.441879374993732,
+            "nothing": 0.36307616700651124,
+            "omega": 0.10419245800585486,
+            "refine": 0.9760736659809481
+          }
+        },
+        {
+          "backend": "native",
+          "circles": 1804,
+          "digests": {
+            "circles": "af91e5dc790a1af493e33f668ae0947994ca640b88fe3f287cf1ad992405e892",
+            "connectors": "d750d8855e98a8ed03f65fd79f95de45ed0a0e49037ae62ebc03fe2f48781f8b",
+            "initial": "43cd6a05bbbaecaa2c36dc54d236fa9db7d68234351c57042337f266181b8ac0"
+          },
+          "load_1min_before_after": [
+            189.85546875,
+            175.69287109375
+          ],
+          "seconds": 4.617843749991152,
+          "stage_seconds": {
+            "connector_repair": 1.4263604170118924,
+            "guide": 0.0568736249988433,
+            "initial": 1.927045791002456,
+            "nothing": 0.38643824998871423,
+            "omega": 0.11940641602268443,
+            "refine": 0.26266300000133924
+          }
+        }
+      ],
+      "workload": "figure5_refined"
+    },
+    {
+      "byte_identical": true,
+      "median_seconds": {
+        "native": 6.8648179580050055,
+        "python": 6.5475124579970725
+      },
+      "python_over_native": 0.9537780168463279,
+      "repeats": 3,
+      "runs": [
+        {
+          "backend": "python",
+          "circles": 1442,
+          "digests": {
+            "circles": "2896bf0d8737affa8beb36fb69adae30898c4c26369bde260f468d13c63731d9",
+            "connectors": "f92112b1c32762ccfa0dc4c3e5151b94efce2ec96fdeef5070817212c6caf95e",
+            "initial": "9f39000ee7d3bbb81ba773c9297950ca167f2ae343fd8650bd01f19dfbba6bb2"
+          },
+          "load_1min_before_after": [
+            162.74462890625,
+            150.8330078125
+          ],
+          "seconds": 6.5475124579970725,
+          "stage_seconds": {
+            "connector_repair": 1.7475416249944828,
+            "guide": 0.08583987501333468,
+            "initial": 2.7805019580118824,
+            "nothing": 0.06726545799756423,
+            "omega": 0.20474745897809044,
+            "refine": 1.3598688750062138
+          }
+        },
+        {
+          "backend": "native",
+          "circles": 1442,
+          "digests": {
+            "circles": "2896bf0d8737affa8beb36fb69adae30898c4c26369bde260f468d13c63731d9",
+            "connectors": "f92112b1c32762ccfa0dc4c3e5151b94efce2ec96fdeef5070817212c6caf95e",
+            "initial": "9f39000ee7d3bbb81ba773c9297950ca167f2ae343fd8650bd01f19dfbba6bb2"
+          },
+          "load_1min_before_after": [
+            139.71533203125,
+            132.21044921875
+          ],
+          "seconds": 6.8648179580050055,
+          "stage_seconds": {
+            "connector_repair": 1.8282364589977078,
+            "guide": 0.07559745799517259,
+            "initial": 3.957334875012748,
+            "nothing": 0.06845349998911843,
+            "omega": 0.1997211659909226,
+            "refine": 0.3523492499953136
+          }
+        },
+        {
+          "backend": "native",
+          "circles": 1442,
+          "digests": {
+            "circles": "2896bf0d8737affa8beb36fb69adae30898c4c26369bde260f468d13c63731d9",
+            "connectors": "f92112b1c32762ccfa0dc4c3e5151b94efce2ec96fdeef5070817212c6caf95e",
+            "initial": "9f39000ee7d3bbb81ba773c9297950ca167f2ae343fd8650bd01f19dfbba6bb2"
+          },
+          "load_1min_before_after": [
+            122.583984375,
+            107.4111328125
+          ],
+          "seconds": 9.622117916005664,
+          "stage_seconds": {
+            "connector_repair": 2.9303012909949757,
+            "guide": 0.07331524998880923,
+            "initial": 4.411590167001123,
+            "nothing": 0.1199702080048155,
+            "omega": 0.21522887499304488,
+            "refine": 1.0872915409854613
+          }
+        },
+        {
+          "backend": "python",
+          "circles": 1442,
+          "digests": {
+            "circles": "2896bf0d8737affa8beb36fb69adae30898c4c26369bde260f468d13c63731d9",
+            "connectors": "f92112b1c32762ccfa0dc4c3e5151b94efce2ec96fdeef5070817212c6caf95e",
+            "initial": "9f39000ee7d3bbb81ba773c9297950ca167f2ae343fd8650bd01f19dfbba6bb2"
+          },
+          "load_1min_before_after": [
+            103.2939453125,
+            98.86572265625
+          ],
+          "seconds": 6.743800333002582,
+          "stage_seconds": {
+            "connector_repair": 1.5884799580089748,
+            "guide": 0.07381074997829273,
+            "initial": 3.065110083000036,
+            "nothing": 0.06263141700765118,
+            "omega": 0.1922517500061076,
+            "refine": 1.3603226660052314
+          }
+        },
+        {
+          "backend": "python",
+          "circles": 1442,
+          "digests": {
+            "circles": "2896bf0d8737affa8beb36fb69adae30898c4c26369bde260f468d13c63731d9",
+            "connectors": "f92112b1c32762ccfa0dc4c3e5151b94efce2ec96fdeef5070817212c6caf95e",
+            "initial": "9f39000ee7d3bbb81ba773c9297950ca167f2ae343fd8650bd01f19dfbba6bb2"
+          },
+          "load_1min_before_after": [
+            91.90966796875,
+            85.10986328125
+          ],
+          "seconds": 6.4041837910190225,
+          "stage_seconds": {
+            "connector_repair": 1.6101860830094665,
+            "guide": 0.07232424998073839,
+            "initial": 2.7298647909774445,
+            "nothing": 0.06594420899637043,
+            "omega": 0.19247766601620242,
+            "refine": 1.3297740000125486
+          }
+        },
+        {
+          "backend": "native",
+          "circles": 1442,
+          "digests": {
+            "circles": "2896bf0d8737affa8beb36fb69adae30898c4c26369bde260f468d13c63731d9",
+            "connectors": "f92112b1c32762ccfa0dc4c3e5151b94efce2ec96fdeef5070817212c6caf95e",
+            "initial": "9f39000ee7d3bbb81ba773c9297950ca167f2ae343fd8650bd01f19dfbba6bb2"
+          },
+          "load_1min_before_after": [
+            78.9345703125,
+            73.57421875
+          ],
+          "seconds": 5.908055875013815,
+          "stage_seconds": {
+            "connector_repair": 1.618613208993338,
+            "guide": 0.07144304100074805,
+            "initial": 3.107527250016574,
+            "nothing": 0.07424283298314549,
+            "omega": 0.19575658300891519,
+            "refine": 0.3465237909986172
+          }
+        }
+      ],
+      "workload": "figure8_crossed_skis_boundary"
+    },
+    {
+      "byte_identical": true,
+      "median_seconds": {
+        "native": 15.29457095899852,
+        "python": 17.203795040986734
+      },
+      "python_over_native": 1.1248301823638227,
+      "repeats": 3,
+      "runs": [
+        {
+          "backend": "python",
+          "circles": 3983,
+          "digests": {
+            "circles": "5c3043fff99583b4c4d981cce461f6737fc7fe8b729bb6a1549b8c71333800d7",
+            "connectors": "b4c671cca85a01fca46021b8d379f0daca8cc64ce2ee88216d989ac4a9feaf0b",
+            "initial": "ca2054a0e96516da6e60bd889cca785b265a98cb5f4fcceeba3daefb0cd17c6f"
+          },
+          "load_1min_before_after": [
+            68.32275390625,
+            56.10693359375
+          ],
+          "seconds": 20.76964112499263,
+          "stage_seconds": {
+            "connector_repair": 3.7300480420235544,
+            "guide": 0.7858792920014821,
+            "initial": 10.712896374985576,
+            "nothing": 0.3715503750136122,
+            "omega": 1.1276233329845127,
+            "refine": 3.500134625006467
+          }
+        },
+        {
+          "backend": "native",
+          "circles": 3983,
+          "digests": {
+            "circles": "5c3043fff99583b4c4d981cce461f6737fc7fe8b729bb6a1549b8c71333800d7",
+            "connectors": "b4c671cca85a01fca46021b8d379f0daca8cc64ce2ee88216d989ac4a9feaf0b",
+            "initial": "ca2054a0e96516da6e60bd889cca785b265a98cb5f4fcceeba3daefb0cd17c6f"
+          },
+          "load_1min_before_after": [
+            45.7333984375,
+            37.51025390625
+          ],
+          "seconds": 15.29457095899852,
+          "stage_seconds": {
+            "connector_repair": 3.425088624993805,
+            "guide": 0.794323959009489,
+            "initial": 7.437958833994344,
+            "nothing": 0.36152329199831,
+            "omega": 1.075626874982845,
+            "refine": 1.2749408329837024
+          }
+        },
+        {
+          "backend": "native",
+          "circles": 3983,
+          "digests": {
+            "circles": "5c3043fff99583b4c4d981cce461f6737fc7fe8b729bb6a1549b8c71333800d7",
+            "connectors": "b4c671cca85a01fca46021b8d379f0daca8cc64ce2ee88216d989ac4a9feaf0b",
+            "initial": "ca2054a0e96516da6e60bd889cca785b265a98cb5f4fcceeba3daefb0cd17c6f"
+          },
+          "load_1min_before_after": [
+            31.31201171875,
+            26.57763671875
+          ],
+          "seconds": 15.168333750014426,
+          "stage_seconds": {
+            "connector_repair": 3.433820125006605,
+            "guide": 0.8082477920106612,
+            "initial": 7.280081208999036,
+            "nothing": 0.3647648750047665,
+            "omega": 1.071073333005188,
+            "refine": 1.2550947080017067
+          }
+        },
+        {
+          "backend": "python",
+          "circles": 3983,
+          "digests": {
+            "circles": "5c3043fff99583b4c4d981cce461f6737fc7fe8b729bb6a1549b8c71333800d7",
+            "connectors": "b4c671cca85a01fca46021b8d379f0daca8cc64ce2ee88216d989ac4a9feaf0b",
+            "initial": "ca2054a0e96516da6e60bd889cca785b265a98cb5f4fcceeba3daefb0cd17c6f"
+          },
+          "load_1min_before_after": [
+            23.56103515625,
+            21.15380859375
+          ],
+          "seconds": 17.04801408300409,
+          "stage_seconds": {
+            "connector_repair": 3.391921290982282,
+            "guide": 0.8071137920196634,
+            "initial": 7.3421314590086695,
+            "nothing": 0.3661482080060523,
+            "omega": 1.0647281669953372,
+            "refine": 3.1202930829895195
+          }
+        },
+        {
+          "backend": "python",
+          "circles": 3983,
+          "digests": {
+            "circles": "5c3043fff99583b4c4d981cce461f6737fc7fe8b729bb6a1549b8c71333800d7",
+            "connectors": "b4c671cca85a01fca46021b8d379f0daca8cc64ce2ee88216d989ac4a9feaf0b",
+            "initial": "ca2054a0e96516da6e60bd889cca785b265a98cb5f4fcceeba3daefb0cd17c6f"
+          },
+          "load_1min_before_after": [
+            18.541015625,
+            16.80908203125
+          ],
+          "seconds": 17.203795040986734,
+          "stage_seconds": {
+            "connector_repair": 3.399829415982822,
+            "guide": 0.7964398750045802,
+            "initial": 7.430831042001955,
+            "nothing": 0.3558365410135593,
+            "omega": 1.0871987499995157,
+            "refine": 3.122373249992961
+          }
+        },
+        {
+          "backend": "native",
+          "circles": 3983,
+          "digests": {
+            "circles": "5c3043fff99583b4c4d981cce461f6737fc7fe8b729bb6a1549b8c71333800d7",
+            "connectors": "b4c671cca85a01fca46021b8d379f0daca8cc64ce2ee88216d989ac4a9feaf0b",
+            "initial": "ca2054a0e96516da6e60bd889cca785b265a98cb5f4fcceeba3daefb0cd17c6f"
+          },
+          "load_1min_before_after": [
+            15.73486328125,
+            13.947265625
+          ],
+          "seconds": 15.598239874991123,
+          "stage_seconds": {
+            "connector_repair": 3.4574795000080485,
+            "guide": 0.8168617500050459,
+            "initial": 7.521452917018905,
+            "nothing": 0.3870525000093039,
+            "omega": 1.0804855830210727,
+            "refine": 1.2491501249896828
+          }
+        }
+      ],
+      "workload": "figure8_monstera_boundary_qualified_corners"
+    }
+  ],
+  "machine": {
+    "cpu_brand": "Apple M1 Max",
+    "machine": "arm64",
+    "python": "3.12.13",
+    "system": "Darwin"
+  }
+}

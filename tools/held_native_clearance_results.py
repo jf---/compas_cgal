@@ -1,0 +1,131 @@
+"""Results of the native declared-clearance oracle for docs/held_native_clearance.md.
+
+Two modes:
+
+- ``--measure`` (minutes): runs
+  :mod:`benchmarks.tools.held_declared_clearance_differential` on every Held
+  workload, covering the polygon-Ω and Ω* paths, each audited by the Python
+  and the native oracle. It also runs the same-process generation A/B (Ω*
+  containment with each oracle, byte-identity digests) on
+  ``GENERATION_WORKLOADS``. The raw record goes to
+  ``benchmarks/results/held_native_clearance.json``, then the tables are
+  rendered.
+- default: renders ``benchmarks/results/held_native_clearance.md`` from that
+  JSON without measuring.
+
+Both files are written by this tool; do not edit them. Times are wall seconds
+on a shared machine. The 1-minute load average is recorded beside every one,
+and only same-process ratios are meaningful.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import pathlib
+import statistics
+from collections.abc import Sequence
+from dataclasses import asdict
+from typing import Any
+
+from benchmarks.held_omega_toolpath import OMEGA_WORKLOADS
+from benchmarks.performance_record import REPOSITORY
+from benchmarks.performance_record import build_identity
+from benchmarks.performance_record import machine_identity
+from benchmarks.tools.held_declared_clearance_differential import differential
+from benchmarks.tools.held_declared_clearance_differential import generation_ab
+
+RESULTS = REPOSITORY / "benchmarks" / "results"
+JSON_PATH = RESULTS / "held_native_clearance.json"
+MARKDOWN_PATH = RESULTS / "held_native_clearance.md"
+# The generation A/B workloads: the smallest, a mid-size and the largest Ω*
+# path (the A/B costs about 2 x repeats generations per workload).
+GENERATION_WORKLOADS = ("figure5_refined", "figure8_crossed_skis_boundary", "figure8_monstera_boundary_qualified_corners")
+# Repeats per oracle in the generation A/B (alternating order); 3 gives a median.
+GENERATION_REPEATS = 3
+PATHS = (("polygon", "polygon Ω"), ("omega", "Ω*"))
+
+
+def measure(workloads: Sequence[str], generation_workloads: Sequence[str], repeats: int) -> dict[str, Any]:
+    """Run the differential audits and the generation A/B; return the record."""
+    build, machine = build_identity(), machine_identity()
+    audits = []
+    for workload in workloads:
+        audits.append(differential(workload))
+        print(f"audit {workload} done", flush=True)
+    generation = []
+    for workload in generation_workloads:
+        generation.append({"workload": workload, **generation_ab(workload, repeats)})
+        print(f"generation {workload} done", flush=True)
+    return {"build": asdict(build), "machine": asdict(machine), "audits": audits, "generation": generation}
+
+
+def _load(pair: Sequence[float]) -> str:
+    return f"{pair[0]:.0f}–{pair[1]:.0f}"
+
+
+def render(record: dict[str, Any]) -> str:
+    """The Markdown tables of one record."""
+    build = record["build"]
+    lines = [
+        f"Recorded {build['recorded_at']} at commit `{build['commit'][:10]}`{' (dirty tree)' if build['dirty'] else ''} on {record['machine']['cpu_brand']}.",
+        "",
+        "**Differential audit.** Python oracle vs native oracle on the same path. A decision is",
+        "(element, index, verdict, reported primitive, primitive kind, segment); *listed* counts the elements that are not CLEAR.",
+        "Depths are compared bit for bit.",
+        "",
+        "| workload | path | identical decisions | listed | depth bit mismatches | gouge circ / conn | touch circ / conn | Python s | native s | load (Python; native) |",
+        "|---|---|---|---:|---:|---|---|---:|---:|---|",
+    ]
+    for audit in record["audits"]:
+        for key, label in PATHS:
+            part = audit[key]
+            python, native, comparison = part["python"], part["native"], part["comparison"]
+            gouge = f"{native['gouging_circles']} / {native['gouging_connectors']}"
+            touch = f"{native['touching_circles']} / {native['touching_connectors']}"
+            lines.append(
+                f"| `{audit['workload']}` | {label} | {comparison['identical_decisions']} | {comparison['listed_native']} | {comparison['depth_bit_mismatches']} "
+                f"| {gouge} | {touch} | {python['seconds']:.2f} | {native['seconds']:.2f} "
+                f"| {_load(python['load_1min_before_after'])}; {_load(native['load_1min_before_after'])} |"
+            )
+    lines += [
+        "",
+        "The gouge and touch counts are the native oracle's; the identical-decisions column says the Python oracle's are the same.",
+        "",
+        f"**Generation A/B.** Ω* containment by each oracle in one process, {record['generation'][0]['repeats'] if record['generation'] else 0} runs each, alternating order.",
+        "Byte-identical means one SHA-256 triple (initial path, refined circles, connectors) over every run.",
+        "",
+        "| workload | byte-identical | circles | median generation s (Python / native) | Python / native | median refine s (Python / native) | load range |",
+        "|---|---|---:|---|---:|---|---|",
+    ]
+    for item in record["generation"]:
+        runs = item["runs"]
+        refine_median = {backend: statistics.median(run["stage_seconds"]["refine"] for run in runs if run["backend"] == backend) for backend in ("python", "native")}
+        loads = [value for run in runs for value in run["load_1min_before_after"]]
+        medians = item["median_seconds"]
+        lines.append(
+            f"| `{item['workload']}` | {item['byte_identical']} | {runs[0]['circles']} | {medians['python']:.2f} / {medians['native']:.2f} | {item['python_over_native']:.2f} "
+            f"| {refine_median['python']:.2f} / {refine_median['native']:.2f} | {min(loads):.0f}–{max(loads):.0f} |"
+        )
+    return "\n".join(lines) + "\n"
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--measure", action="store_true", help="re-measure (minutes) before rendering")
+    parser.add_argument("--json", type=pathlib.Path, default=JSON_PATH)
+    parser.add_argument("--markdown", type=pathlib.Path, default=MARKDOWN_PATH)
+    parser.add_argument("--workloads", nargs="+", default=list(OMEGA_WORKLOADS), choices=list(OMEGA_WORKLOADS))
+    parser.add_argument("--generation-workloads", nargs="*", default=list(GENERATION_WORKLOADS), choices=list(OMEGA_WORKLOADS))
+    parser.add_argument("--generation-repeats", type=int, default=GENERATION_REPEATS)
+    args = parser.parse_args()
+    if args.measure:
+        record = measure(args.workloads, args.generation_workloads, args.generation_repeats)
+        args.json.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    record = json.loads(args.json.read_text(encoding="utf-8"))
+    args.markdown.write_text(render(record), encoding="utf-8")
+    print(f"WROTE {args.json} {args.markdown}")
+
+
+if __name__ == "__main__":
+    main()
