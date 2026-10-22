@@ -12,6 +12,7 @@ from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.collections import LineCollection
 from matplotlib.figure import Figure
 
+from benchmarks.held_containment_report import containment_report
 from benchmarks.held_exact_motion_coverage import require_full_motion_coverage
 from benchmarks.held_figure5_boundary_path import Figure5BoundaryConnectors
 from benchmarks.held_figure5_boundary_path import Figure5BoundaryTransition
@@ -28,11 +29,7 @@ from benchmarks.held_standard_placement import StandardPlacementFragmentationErr
 from benchmarks.held_standard_placement import maximum_predecessor_engagement
 from benchmarks.tools.held_contour_contact_plot import render_contour_contacts
 from benchmarks.tools.held_stock_plot import render_circle_stock_prefix
-from compas_cgal import _coverage_2
 from compas_cgal.motion import EngagementCap
-from compas_cgal.units import Millimetre
-from compas_cgal.units import Point2
-from compas_cgal.units import WorldXY
 
 TURN_DISPLAY_SAMPLES = 96  # Display resolution only; no geometric decisions.
 PATH_COLOR = "#087e8b"
@@ -149,25 +146,6 @@ def _draw_motion(
     axis.set_facecolor("#faf9f5")
 
 
-def _containment_report(circles: tuple[Figure5CounterclockwiseCircle, ...], boundary: tuple[Point2[WorldXY], ...]) -> tuple[int, Millimetre]:
-    polygon = np.array([(float(point.x), float(point.y), 0.0) for point in boundary])
-    starts = polygon[:, :2]
-    edges = np.roll(starts, -1, axis=0) - starts
-    rejected = 0
-    maximum_excess = 0.0
-    for circle in circles:
-        radius = float(circle.radius.value)
-        center = np.array((float(circle.center.x), float(circle.center.y)))
-        if _coverage_2.CutterCentreDomain2.build(polygon, [], radius).contains(float(center[0]), float(center[1])):
-            continue
-        rejected += 1
-        # Reporting only: the exact native predicate above owns the rejection.
-        parameters = np.clip(np.sum((center - starts) * edges, axis=1) / np.sum(edges * edges, axis=1), 0.0, 1.0)
-        clearance = float(np.linalg.norm(center - starts - parameters[:, None] * edges, axis=1).min())
-        maximum_excess = max(maximum_excess, radius - clearance)
-    return rejected, Millimetre(maximum_excess)
-
-
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--refine", action="store_true", help="Repair corner circles and subdivide over-cap gaps; report remaining containment failures.")
@@ -191,7 +169,7 @@ def main() -> None:
         refined = refine_figure5_engagement(circles, components[0], case.tool_radius, EngagementCap.build(math.radians(float(case.tea_cap))))
         circles = refined.circles
         transitions = Figure5BoundaryConnectors.build(components[0], circles).transitions
-        rejected, excess = _containment_report(circles, components[0])
+        rejected, excess = containment_report(circles, components[0])
         output = Path("docs/assets/images/held_figure5_engagement_refined.png")
         title = "Figure 5 · corner-aware engagement refinement"
         scope = f"Publisher-start polygon proposal · {rejected:,} exact containment rejections · max reported protrusion {float(excess):.2g} mm · not machining-qualified."

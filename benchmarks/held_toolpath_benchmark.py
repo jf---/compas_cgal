@@ -35,6 +35,7 @@ from benchmarks.held_boundary_order_spacing import refine_boundary_ordered_path
 from benchmarks.held_centre_domain_supports import PieceKind
 from benchmarks.held_connector_engagement import ConnectorEngagementCertificate
 from benchmarks.held_connector_engagement import UncertifiedConnectorEngagementError
+from benchmarks.held_containment_report import containment_report as _containment_report
 from benchmarks.held_exact_motion_coverage import require_full_motion_coverage
 from benchmarks.held_figure5_boundary_path import Figure5BoundaryConnectors
 from benchmarks.held_figure5_boundary_path import Figure5BoundaryTransition
@@ -62,7 +63,6 @@ from benchmarks.performance_record import MachineIdentity
 from benchmarks.performance_record import build_identity
 from benchmarks.performance_record import machine_identity
 from benchmarks.performance_record import time_factor
-from benchmarks.tools.held_toolpath_progress import _containment_report
 from compas_cgal.motion import EngagementCap
 from compas_cgal.units import Point2
 from compas_cgal.units import ToolRadius

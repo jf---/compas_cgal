@@ -33,6 +33,9 @@ GCD_MODULE = "~"
 CLEARANCE_MODULE = "held_boundary_clearance.py"
 CLEARANCE_QUERY = "distance_admissible_sites"
 CLEARANCE_DECODE = "_site"
+# The generation path since fix 3: one guide-wide hypotheses call over one native batch.
+CALLPATH_HYPOTHESES = "build_guide_distance_admissible_hypotheses"
+CALLPATH_BATCH = "_native_station_boundary_analyses"
 
 
 @dataclass(frozen=True)
@@ -78,12 +81,10 @@ def callpath_rows(stats: ProfileStats) -> list[CallPathRow]:
     def row(label: str, name: str) -> CallPathRow:
         return CallPathRow(label, _s(cumulative_s(stats, name)), _calls(call_count(stats, name)))
 
-    lookup, batch = "_native_station_boundary", "_native_station_boundary_analyses"
     return [
         row("`build_figure5_approximate_path` (initial placement)", "build_figure5_approximate_path"),
-        row("→ `build_distance_admissible_hypotheses`", "build_distance_admissible_hypotheses"),
-        row(f"→ `{lookup}` (station lookup; the first builds the batch)", lookup),
-        row(f"→ `{batch}` (one native AABB batch per guide)", batch),
+        row(f"→ `{CALLPATH_HYPOTHESES}` (every station, one call per guide)", CALLPATH_HYPOTHESES),
+        row(f"→ `{CALLPATH_BATCH}` (one native AABB batch per guide)", CALLPATH_BATCH),
         CallPathRow(
             f"→ `{CLEARANCE_QUERY}` (native kernel) → `{CLEARANCE_DECODE}` (hex → integers; exact `Fraction`s on demand)",
             f"{_s(cumulative_s(stats, CLEARANCE_QUERY, CLEARANCE_MODULE))} / {_s(cumulative_s(stats, CLEARANCE_DECODE, CLEARANCE_MODULE))}",

@@ -4,9 +4,10 @@ Reads the profiles `tools.performance_profile` writes and splits each workload's
 profiled time into disjoint buckets that sum to 100 %:
 
 - Held lanes: cumulative-time subtrees (``load_held_reference_case``,
-  ``_native_station_boundary`` (the wired clearance: per-station lookup of the
-  guide's one native AABB batch, which the first lookup builds),
-  ``build_distance_admissible_hypotheses`` minus clearance,
+  ``_native_station_boundary_analyses`` (the wired clearance: the guide's one
+  native AABB batch),
+  ``build_guide_distance_admissible_hypotheses`` (every station's hypotheses
+  from that batch) minus clearance,
   ``build_held_reference_path`` minus hypotheses, remainder).
 - Stock lanes (pipeline, rho): self time per module of the native-call
   wrappers (``admissibility.py`` / ``_station_is_admissible`` = exact engagement
@@ -91,8 +92,8 @@ STOCK_BUCKETS = (Bucket.PREDICATES, Bucket.DEPLETION, Bucket.ORCHESTRATION)
 
 # Held lane: the functions whose cumulative subtrees form the buckets.
 HELD_CASE_LOAD = "load_held_reference_case"
-HELD_CLEARANCE = "_native_station_boundary"
-HELD_HYPOTHESES = "build_distance_admissible_hypotheses"
+HELD_CLEARANCE = "_native_station_boundary_analyses"
+HELD_HYPOTHESES = "build_guide_distance_admissible_hypotheses"
 HELD_PLACEMENT = "build_held_reference_path"
 # Stock lane: the native-call wrappers whose self time forms the buckets.
 PREDICATE_MODULE = "admissibility.py"

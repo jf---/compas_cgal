@@ -7,7 +7,7 @@
       "label": "AABB boundary clearance",
       "status": "wired",
       "functions": [
-        {"module": "benchmarks/held_figure5_raw_guide.py", "function": "_native_station_boundary", "time": "cumulative", "workloads": ["held_figure5", "held_crossed_skis"]}
+        {"module": "benchmarks/held_figure5_raw_guide.py", "function": "_native_station_boundary_analyses", "time": "cumulative", "workloads": ["held_figure5", "held_crossed_skis"]}
       ],
       "estimated": {}
     },
@@ -26,7 +26,7 @@
       "status": "wired",
       "functions": [
         {"module": "benchmarks/held_figure5_raw_guide.py", "function": "_boundary_arclength", "time": "cumulative", "workloads": ["held_figure5", "held_crossed_skis"]},
-        {"module": "benchmarks/held_figure5_path.py", "function": "_boundary_neighborhood_owners", "time": "cumulative", "workloads": ["held_figure5", "held_crossed_skis"]}
+        {"module": "benchmarks/held_figure5_path.py", "function": "_boundary_neighborhood_owner_indices", "time": "cumulative", "workloads": ["held_figure5", "held_crossed_skis"]}
       ],
       "estimated": {}
     },
@@ -35,7 +35,7 @@
       "label": "Reuse AABB: contact, containment, centre domain",
       "status": "proposed",
       "functions": [
-        {"module": "benchmarks/tools/held_toolpath_progress.py", "function": "_containment_report", "time": "cumulative", "workloads": ["held_figure5", "held_crossed_skis"]},
+        {"module": "benchmarks/held_containment_report.py", "function": "containment_report", "time": "cumulative", "workloads": ["held_figure5", "held_crossed_skis"]},
         {"module": "benchmarks/held_figure5_path.py", "function": "build_held_reference_path", "time": "self", "workloads": ["held_figure5", "held_crossed_skis"]}
       ],
       "estimated": {
