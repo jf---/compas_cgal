@@ -102,7 +102,10 @@ public:
     /// The end line d.x = d.(a + tau d) of edge e at parameter tau.
     std::uint32_t end_line(std::uint32_t edge, const FT& tau);
     /// A rational line n.x = n.through (a target cut support, e.g. a declared
-    /// boundary line); not deduplicated.
+    /// boundary line, or an exact connector flank). Deduplicated by exact value
+    /// among rational lines: the same (n, n.through) returns the same id, so a
+    /// connector flank on a declared line is one support (same orientation, so
+    /// every side sign is unchanged) and puts no duplicate events on a circle.
     std::uint32_t add_rational_line(const FT& nx, const FT& ny, const Point_2& through);
 
     LineTable(const CentreDomain& domain, const FT& tool_radius);
@@ -122,6 +125,7 @@ private:
     FT tool_radius_;
     std::map<std::pair<std::uint32_t, int>, std::uint32_t> flanks_;
     std::map<std::pair<std::uint32_t, FT>, std::uint32_t> ends_by_tau_;
+    std::map<std::tuple<FT, FT, FT>, std::uint32_t> rational_lines_;  ///< (nx, ny, n.through) -> id
 };
 
 /// A closed rectangle region: four half-planes {side(line_i) == inward_i or 0}.

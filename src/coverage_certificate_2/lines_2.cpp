@@ -166,8 +166,12 @@ std::uint32_t LineTable::end_line(const std::uint32_t edge, const FT& tau)
 
 std::uint32_t LineTable::add_rational_line(const FT& nx, const FT& ny, const Point_2& through)
 {
+    const auto key = std::make_tuple(nx, ny, FT(nx * through.x() + ny * through.y()));
+    const auto found = rational_lines_.find(key);
+    if (found != rational_lines_.end()) return found->second;
     const auto id = static_cast<std::uint32_t>(lines_.size());
     lines_.push_back(LineSupport::build(nx, ny, through, FT(0), FT(0)));
+    rational_lines_.emplace(key, id);
     return id;
 }
 

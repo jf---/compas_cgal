@@ -96,6 +96,11 @@ public:
     void verify_enclosures(const bool on) { verify_enclosures_ = on; }
 
 private:
+    /// Whether two events on one circle are the same crossing because their
+    /// other circles coincide exactly (`coincident`): decided combinatorially from
+    /// the branch labels, without arithmetic.
+    [[nodiscard]] bool same_crossing_of_coincident_circles(const CrossingEvent& a, const CrossingEvent& b) const;
+
     struct Pair {
         std::uint32_t a, b;
         bool lazy;  ///< certified transversal by the filter, exact points not yet built

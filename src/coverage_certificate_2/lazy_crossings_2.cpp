@@ -165,6 +165,34 @@ CrossingTable CrossingTable::build(const CircleRegionSet& set, const FilterMode 
             }
         }
         ++counters.pairs_exact;
+        if (mode == FilterMode::Lazy) {
+            // The interval discriminant straddles 0: decide its sign exactly over
+            // the rationals. Negative: no crossing. Positive: two transversal
+            // crossings, kept lazy like a filtered pair, with enclosures built
+            // from the exact rational parts (q, D, disc), certified and tight.
+            // Zero (a tangency) takes the Circular_kernel_2 path below.
+            const Point_2& ca = A.circle.center();
+            const Point_2& cb = B.circle.center();
+            const FT ex = cb.x() - ca.x(), ey = cb.y() - ca.y();
+            const FT d2 = ex * ex + ey * ey;
+            const FT ra2 = A.circle.squared_radius();
+            const FT q = d2 + ra2 - B.circle.squared_radius();
+            const FT disc = FT(4) * d2 * ra2 - q * q;
+            const CGAL::Sign sd = CGAL::sign(disc);
+            if (sd == CGAL::NEGATIVE) continue;
+            if (sd == CGAL::POSITIVE) {
+                const Interval two_d2 = Interval(2) * interval_of(d2);
+                const Interval l = interval_of(q) / two_d2;
+                const Interval s = CGAL::sqrt(interval_of(disc)) / two_d2;
+                const Interval ex_i = interval_of(ex), ey_i = interval_of(ey);
+                const Interval mx = A.centre_x + l * ex_i;
+                const Interval my = A.centre_y + l * ey_i;
+                const auto pid = static_cast<std::uint32_t>(table.pairs_.size());
+                table.pairs_.push_back({a, b, true, {mx - s * ey_i, mx + s * ey_i}, {my + s * ex_i, my - s * ex_i}, std::nullopt});
+                push_events(pid, a, b, 2, 1);
+                continue;
+            }
+        }
         const ExactCrossings crossings = exact_crossings(A, B);
         if (crossings.count == 0) continue;
         if (crossings.multiplicity == 2) ++counters.tangencies;
@@ -278,10 +306,34 @@ int CrossingTable::half(const CrossingEvent& event, const BoundaryCircle& circle
     return sign_difference(exact_x(event, counters), Tower::rational(c.x())) == CGAL::NEGATIVE ? 0 : 1;
 }
 
+bool CrossingTable::same_crossing_of_coincident_circles(const CrossingEvent& a, const CrossingEvent& b) const
+{
+    if (a.source != 0 || b.source != 0 || a.other == b.other || a.multiplicity != b.multiplicity) return false;
+    const std::vector<std::uint32_t>& same = coincident[a.other];
+    if (std::find(same.begin(), same.end(), b.other) == same.end()) return false;
+    // Both events lie on one circle k and come from circles a.other, b.other with
+    // exactly equal centre and radius (P5, decided exactly at build), so k meets
+    // them in the same point set. A tangency is one point. Of two transversal
+    // crossings, the + branch of pair (A, B) lies on the perp(c_B - c_A) side of
+    // the centre line (header), so measured from k it is the + branch when k is
+    // A and the - branch when k is B.
+    if (a.multiplicity == 2) return true;
+    const auto branch_from_k = [&](const CrossingEvent& e) {
+        const Pair& pair = pairs_[e.pair];
+        const bool k_is_a = pair.b == e.other;
+        return k_is_a ? e.branch : static_cast<std::uint8_t>(1 - e.branch);
+    };
+    return branch_from_k(a) == branch_from_k(b);
+}
+
 CGAL::Comparison_result CrossingTable::compare_x(const CrossingEvent& a, const CrossingEvent& b,
                                                  DecisionCounters& counters)
 {
     if (a.pair == b.pair && a.branch == b.branch) return CGAL::EQUAL;
+    if (same_crossing_of_coincident_circles(a, b)) {
+        ++counters.coincident_crossings;
+        return CGAL::EQUAL;
+    }
     if (mode_ == FilterMode::Lazy) {
         if (a.x.sup() < b.x.inf()) return CGAL::SMALLER;
         if (a.x.inf() > b.x.sup()) return CGAL::LARGER;
