@@ -324,14 +324,27 @@ class RadialToolpathResult(ToolpathResult):
 
 
 @dataclass(frozen=True)
+class _PassSpan:
+    """Where a non-empty pass meets the chain: the point it plunged at and the point it retracted from.
+
+    Attributes:
+        entry: Tool-centre point the pass plunged at.
+        exit: Tool-centre point the pass retracted from.
+    """
+
+    entry: Tuple[float, float]
+    exit: Tuple[float, float]
+
+
+@dataclass(frozen=True)
 class _SweepOutcome:
     """What one pass over a skeleton chain emitted and how hard it had to work.
 
     Attributes:
         operations: The pass's operation stream -- plunge, machining circles and
             bridges, retract -- or empty when the pass found nothing left to cut.
-        entry: Tool-centre point the pass plunged at, or ``None`` when empty.
-        exit: Tool-centre point the pass retracted from, or ``None`` when empty.
+        span: The pass's entry and exit, or ``None`` exactly when `operations`
+            is empty.
         forced_radii: Machining circles emitted over the cap because NO candidate
             radius was admissible at their station.
         forced_loops: WHERE those circles are -- indices into `operations`. The
@@ -346,8 +359,7 @@ class _SweepOutcome:
     """
 
     operations: List[ToolpathOperation]
-    entry: Optional[Tuple[float, float]]
-    exit: Optional[Tuple[float, float]]
+    span: Optional[_PassSpan]
     forced_radii: int
     forced_loops: Tuple[int, ...]
     forced_advances: int
@@ -797,8 +809,7 @@ def _radial_sweep(
     """
     last = len(stations) - 1
     operations: List[ToolpathOperation] = []
-    entry: Optional[Tuple[float, float]] = None
-    previous_entry: Optional[Tuple[float, float]] = None
+    span: Optional[_PassSpan] = None
     previous_index: Optional[int] = None
     forced_radii = 0
     forced_loops: List[int] = []
@@ -820,13 +831,15 @@ def _radial_sweep(
         if choice is not None:
             loop_station = replace(station, radius=choice.radius)
             loop_entry = loop_station.entry
-            if previous_entry is None:
-                entry = loop_entry
+            if span is None:
+                span = _PassSpan(entry=loop_entry, exit=loop_entry)
                 operations.append(_line_operation(loop_entry, loop_entry, regulation.clearance_z, cut_z, OperationType.PLUNGE, path_index))
                 first_loop_forced = choice.forced
             else:
+                previous_entry = span.exit
                 operations.append(_line_operation(previous_entry, loop_entry, cut_z, cut_z, OperationType.CUT, path_index))
                 stock.subtract_capsule_quad(previous_entry[0], previous_entry[1], loop_entry[0], loop_entry[1], regulation.tool_radius)
+                span = _PassSpan(entry=span.entry, exit=loop_entry)
             if choice.forced:
                 forced_loops.append(len(operations))
             operations.append(_loop_operation(loop_station, cut_z, path_index))
@@ -843,7 +856,6 @@ def _radial_sweep(
             emitted_radii[index] = choice.radius
             finished[index] = choice.finishes
             forced_radii += int(choice.forced)
-            previous_entry = loop_entry
             previous_index = index
 
         if index == last:
@@ -865,13 +877,12 @@ def _radial_sweep(
         else:
             index += 1
 
-    if previous_entry is not None:
-        operations.append(_line_operation(previous_entry, previous_entry, cut_z, regulation.clearance_z, OperationType.RETRACT, path_index))
+    if span is not None:
+        operations.append(_line_operation(span.exit, span.exit, cut_z, regulation.clearance_z, OperationType.RETRACT, path_index))
 
     return _SweepOutcome(
         operations=operations,
-        entry=entry,
-        exit=previous_entry,
+        span=span,
         forced_radii=forced_radii,
         forced_loops=tuple(forced_loops),
         forced_advances=forced_advances,
@@ -955,7 +966,7 @@ def _machine_chain_radially(
     for _ in range(MAX_RADIAL_SWEEPS_PER_CHAIN):
         outcome = _radial_sweep(stock, stations, emitted_radii, finished, path_index, regulation, cut_z)
         forced_advances += outcome.forced_advances
-        if not outcome.operations:
+        if outcome.span is None:
             break
         if sweeps == 0:
             entry_forced = outcome.first_loop_forced
@@ -963,13 +974,13 @@ def _machine_chain_radially(
         else:
             forced_radii += outcome.forced_radii
         if last_exit is not None:
-            operations.append(_line_operation(last_exit, outcome.entry, regulation.clearance_z, regulation.clearance_z, OperationType.LINK, path_index))
+            operations.append(_line_operation(last_exit, outcome.span.entry, regulation.clearance_z, regulation.clearance_z, OperationType.LINK, path_index))
         # Rebase the pass's own indices onto the path stream, AFTER the link is in
         # place: the pass numbered its operations from its own plunge.
         base = len(operations)
         forced_loops.extend(base + local for local in outcome.forced_loops)
         operations.extend(outcome.operations)
-        last_exit = outcome.exit
+        last_exit = outcome.span.exit
         sweeps += 1
     else:
         raise RadialSweepBudgetExceededError(

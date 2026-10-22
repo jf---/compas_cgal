@@ -1,3 +1,4 @@
+from typing import Sequence
 from typing import Tuple
 from typing import Union
 
@@ -7,8 +8,8 @@ from compas.geometry import Polygon
 from compas.geometry import normal_polygon
 from compas.tolerance import TOL
 
+import compas_cgal._types_std  # noqa: F401
 from compas_cgal import _straight_skeleton_2  # type: ignore
-from compas_cgal import _types_std  # noqa: F401  # type: ignore
 
 from .types import IntNx1
 from .types import IntNx2
@@ -49,7 +50,7 @@ def graph_from_skeleton_data(points: VerticesNumpy, indices: IntNx1, edges: IntN
     return graph
 
 
-def interior_straight_skeleton(points, as_graph=True) -> Union[Graph, Tuple[VerticesNumpy, IntNx1, IntNx2, IntNx1]]:
+def interior_straight_skeleton(points: Sequence[Sequence[float]], as_graph: bool = True) -> Union[Graph, Tuple[VerticesNumpy, IntNx1, IntNx2, IntNx1]]:
     """Compute the skeleton of a 2D polygon.
 
     Parameters
@@ -74,13 +75,15 @@ def interior_straight_skeleton(points, as_graph=True) -> Union[Graph, Tuple[Vert
     if not TOL.is_allclose(normal, [0, 0, 1]):
         raise ValueError("The normal of the polygon should be [0, 0, 1]. The normal of the provided polygon is {}".format(normal))
     V = np.asarray(points, dtype=np.float64, order="C")
-    points, indices, edges, edge_types = _straight_skeleton_2.create_interior_straight_skeleton(V)
+    vertices, indices, edges, edge_types = _straight_skeleton_2.create_interior_straight_skeleton(V)
     if as_graph:
-        return graph_from_skeleton_data(points, indices, edges, edge_types)
-    return points, indices, edges, edge_types
+        return graph_from_skeleton_data(vertices, indices, edges, edge_types)
+    return vertices, indices, edges, edge_types
 
 
-def interior_straight_skeleton_with_holes(points, holes, as_graph=True) -> Union[Graph, Tuple[VerticesNumpy, IntNx1, IntNx2, IntNx1]]:
+def interior_straight_skeleton_with_holes(
+    points: Sequence[Sequence[float]], holes: Sequence[Sequence[Sequence[float]]], as_graph: bool = True
+) -> Union[Graph, Tuple[VerticesNumpy, IntNx1, IntNx2, IntNx1]]:
     """Compute the skeleton of a 2D polygon with holes.
 
     Parameters
@@ -111,19 +114,18 @@ def interior_straight_skeleton_with_holes(points, holes, as_graph=True) -> Union
 
     H = []
     for i, hole in enumerate(holes):
-        points = list(hole)
-        normal_hole = normal_polygon(points, True)
+        hole_points = list(hole)
+        normal_hole = normal_polygon(hole_points, True)
         if not TOL.is_allclose(normal_hole, [0, 0, -1]):
             raise ValueError("The normal of the hole should be [0, 0, -1]. The normal of the provided {}-th hole is {}".format(i, normal_hole))
-        hole = np.asarray(points, dtype=np.float64)
-        H.append(hole)
-    points, indices, edges, edge_types = _straight_skeleton_2.create_interior_straight_skeleton_with_holes(V, H)
+        H.append(np.asarray(hole_points, dtype=np.float64))
+    vertices, indices, edges, edge_types = _straight_skeleton_2.create_interior_straight_skeleton_with_holes(V, H)
     if as_graph:
-        return graph_from_skeleton_data(points, indices, edges, edge_types)
-    return points, indices, edges, edge_types
+        return graph_from_skeleton_data(vertices, indices, edges, edge_types)
+    return vertices, indices, edges, edge_types
 
 
-def offset_polygon(points, offset) -> list[Polygon]:
+def offset_polygon(points: Sequence[Sequence[float]], offset: float) -> list[Polygon]:
     """Compute the offset from a 2D polygon.
 
     Parameters
@@ -156,7 +158,7 @@ def offset_polygon(points, offset) -> list[Polygon]:
     return [Polygon(points.tolist()) for points in offset_polygons]
 
 
-def offset_polygon_with_holes(points, holes, offset) -> list[Tuple[Polygon, list[Polygon]]]:
+def offset_polygon_with_holes(points: Sequence[Sequence[float]], holes: Sequence[Polygon], offset: float) -> list[Tuple[Polygon, list[Polygon]]]:
     """Compute the offset from a 2D polygon with holes.
 
     Parameters
@@ -192,18 +194,16 @@ def offset_polygon_with_holes(points, holes, offset) -> list[Tuple[Polygon, list
 
     H = []
     for i, hole in enumerate(holes):
-        points = hole
-        normal_hole = normal_polygon(points, True)
+        normal_hole = normal_polygon(hole, True)
 
         if TOL.is_allclose(normal_hole, [0, 0, 1]):
-            points.points.reverse()
+            hole.points.reverse()
             normal_hole *= -1
 
         if not TOL.is_allclose(normal_hole, [0, 0, -1]):
             raise ValueError("The normal of the hole should be [0, 0, -1]. The normal of the provided {}-th hole is {}".format(i, normal_hole))
 
-        hole = np.asarray(points, dtype=np.float64, order="C")
-        H.append(hole)
+        H.append(np.asarray(hole, dtype=np.float64, order="C"))
 
     if offset < 0:  # outside
         offset_polygons = _straight_skeleton_2.create_offset_polygons_2_outer_with_holes(V, H, abs(offset))
@@ -213,14 +213,12 @@ def offset_polygon_with_holes(points, holes, offset) -> list[Tuple[Polygon, list
     result = []
     for points_list in offset_polygons:
         polygon = Polygon(points_list[0].tolist())
-        holes = []
-        for hole in points_list[1:]:
-            holes.append(Polygon(hole.tolist()))
-        result.append((polygon, holes))
+        polygon_holes = [Polygon(hole_points.tolist()) for hole_points in points_list[1:]]
+        result.append((polygon, polygon_holes))
     return result
 
 
-def weighted_offset_polygon(points, offset, weights) -> list[Polygon]:
+def weighted_offset_polygon(points: Sequence[Sequence[float]], offset: float, weights: Sequence[float]) -> list[Polygon]:
     """Compute the offset from a 2D polygon with weights.
 
     Parameters

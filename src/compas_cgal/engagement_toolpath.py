@@ -67,9 +67,10 @@ import numpy as np
 from compas.geometry import Circle
 from compas.geometry import Frame
 from compas.geometry import Line
+from compas.geometry import Point
 from compas.geometry import Polygon
 
-from compas_cgal import _stock_2  # type: ignore
+from compas_cgal import _stock_2
 from compas_cgal.stock import Stock
 from compas_cgal.toolpath import RADIAL_CLEARANCE_FRACTION
 from compas_cgal.toolpath import OperationType
@@ -203,6 +204,10 @@ class EmptyGuideError(RuntimeError):
 
 class DegenerateMachiningCircleError(ValueError):
     """A guide station's machining-circle radius vanished, so the circle has no reconstructable start point."""
+
+
+class UntessellatedGeometryError(TypeError):
+    """An operation's geometry is neither a machining circle nor a line, the only kinds this generator emits and samples."""
 
 
 class UnavoidableEngagementWarning(UserWarning):
@@ -717,12 +722,16 @@ def _tessellate(operations: list[ToolpathOperation], samples_per_radian: float) 
 
     Returns:
         An ``(N, 3)`` ``float64`` array of points, consecutive duplicates dropped.
+
+    Raises:
+        UntessellatedGeometryError: An operation carries geometry other than a
+            ``Circle`` or a ``Line``.
     """
     points: list[tuple[float, float, float]] = []
     # Every circular motion here is a full turn, so one sample count serves them all.
     samples = max(2, int(math.ceil(2.0 * math.pi * samples_per_radian)))
 
-    def push(point) -> None:
+    def push(point: Point) -> None:
         candidate = (float(point[0]), float(point[1]), float(point[2]))
         if not points or points[-1] != candidate:
             points.append(candidate)
@@ -732,9 +741,11 @@ def _tessellate(operations: list[ToolpathOperation], samples_per_radian: float) 
         if isinstance(geometry, Circle):
             for i in range(samples + 1):
                 push(geometry.point_at(i / samples))
-        else:
+        elif isinstance(geometry, Line):
             push(geometry.start)
             push(geometry.end)
+        else:
+            raise UntessellatedGeometryError(f"Cannot tessellate {type(geometry).__name__} geometry (operation {op.operation.name}).")
 
     if not points:
         return np.empty((0, 3), dtype=np.float64)

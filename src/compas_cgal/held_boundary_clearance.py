@@ -36,12 +36,26 @@ def _scaled_double(numerator: int, denominator: int, exponent: int) -> float:
     return numerator / (denominator << -exponent)
 
 
-# The dataclass fields of ``BoundaryClearanceSite``, in order: its slots besides the two caches.
+# The dataclass fields of ``BoundaryClearanceSite``, in order: its own slots (the caches live on ``_SiteCaches``).
 _SITE_FIELDS = ("segment", "parameter", "foot_x", "foot_y", "distance", "length_squared", "exponent")
 
 
+class _SiteCaches:
+    """The two slot caches of ``BoundaryClearanceSite``, declared outside the dataclass.
+
+    A dataclass turns every annotation in its own body into a field, so the
+    caches are typed here, on a plain base that owns their slots; unset until
+    first read.
+    """
+
+    __slots__ = ("_footpoint", "_squared_distance")
+
+    _footpoint: tuple[ExactMillimetre, ExactMillimetre]
+    _squared_distance: SquaredMillimetre
+
+
 @dataclass(frozen=True, eq=False)
-class BoundaryClearanceSite:
+class BoundaryClearanceSite(_SiteCaches):
     """One distance-admissible boundary site, every value exact.
 
     The native batch reports the values on one integer grid, unreduced: with
@@ -63,7 +77,7 @@ class BoundaryClearanceSite:
         exponent: The binary grid exponent ``e``.
     """
 
-    __slots__ = (*_SITE_FIELDS, "_footpoint", "_squared_distance")
+    __slots__ = _SITE_FIELDS
 
     segment: int
     parameter: Fraction

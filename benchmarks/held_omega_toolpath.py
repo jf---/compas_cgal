@@ -37,6 +37,7 @@ from dataclasses import dataclass
 from fractions import Fraction
 
 from benchmarks.errors import BenchmarkError
+from benchmarks.held_clearance_backend import ClearanceBackend
 from benchmarks.held_declared_boundary import DeclaredBoundary
 from benchmarks.held_declared_boundary_emission import declared_boundary_from_reference
 from benchmarks.held_declared_clearance import CircleClearanceOracle
@@ -55,7 +56,6 @@ from benchmarks.held_omega_circles import OmegaCircle
 from benchmarks.held_omega_connector_repair import OmegaConnectorRepair
 from benchmarks.held_omega_connector_repair import repair_omega_connectors
 from benchmarks.held_omega_connectors import OmegaConnectors
-from benchmarks.held_omega_gouge_audit import ClearanceBackend
 from benchmarks.held_omega_gouge_audit import audit_omega_path
 from benchmarks.held_omega_path import OmegaHypothesisPath
 from benchmarks.held_omega_path import omega_reference_path

@@ -156,7 +156,7 @@ def _overlapping_earlier(geometry: np.ndarray, index: int, tool: float) -> np.nd
     inner = np.maximum(rho - tool, 0.0)
     earlier_inner = np.maximum(earlier[:, 2] - tool, 0.0)
     reach = (distance <= earlier[:, 2] + rho + 2.0 * tool) & (distance >= earlier_inner - rho - tool) & (distance >= inner - earlier[:, 2] - tool)
-    return np.nonzero(reach)[0]
+    return np.flatnonzero(reach)
 
 
 @dataclass(frozen=True)
@@ -392,9 +392,9 @@ def _witness(geometry: np.ndarray, image: _DyadicImage, index: int, selected: np
         point = Fraction(px), Fraction(py)
         if image.is_rational_witness(index, selected, *point):
             return point
-    for px, py in _deep_rim_points(gaps):
-        if image.is_rational_witness(index, selected, px, py):
-            return px, py
+    for wx, wy in _deep_rim_points(gaps):
+        if image.is_rational_witness(index, selected, wx, wy):
+            return wx, wy
     return None
 
 

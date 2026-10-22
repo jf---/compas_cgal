@@ -29,7 +29,6 @@ the re-entry marker. Generated paths are acyclic frozen values.
 from __future__ import annotations
 
 import dataclasses
-import functools
 import hashlib
 import re
 
@@ -106,8 +105,23 @@ class _ChunkedSha256:
         return self._hash.hexdigest()
 
 
-@functools.lru_cache(maxsize=None)
+# Per-type memos keyed by the type object. Plain dicts, not ``functools.lru_cache``:
+# typeshed types the cache wrapper's arguments as ``Hashable``, and a ``type[X]``
+# argument fails that protocol check under mypy although every class is hashable.
+_REPR_FIELDS: dict[type, tuple[str, ...] | None] = {}
+_LEAF_TYPES: dict[type, bool] = {}
+
+
 def _generated_repr_fields(cls: type) -> tuple[str, ...] | None:
+    """Memoised `_scan_generated_repr_fields`."""
+    try:
+        return _REPR_FIELDS[cls]
+    except KeyError:
+        fields = _REPR_FIELDS[cls] = _scan_generated_repr_fields(cls)
+        return fields
+
+
+def _scan_generated_repr_fields(cls: type) -> tuple[str, ...] | None:
     """The fields a ``dataclasses``-generated ``__repr__`` of ``cls`` prints, or ``None`` if it has none.
 
     The ``__repr__`` ``cls`` resolves to must be defined by a dataclass that
@@ -128,10 +142,13 @@ def _generated_repr_fields(cls: type) -> tuple[str, ...] | None:
     return tuple(item.name for item in dataclasses.fields(owner) if item.repr)
 
 
-@functools.lru_cache(maxsize=None)
 def _is_leaf_type(kind: type) -> bool:
-    """Whether values of ``kind`` are printed by their own ``repr`` rather than streamed."""
-    return kind is not tuple and kind is not list and _generated_repr_fields(kind) is None
+    """Whether values of ``kind`` are printed by their own ``repr`` rather than streamed; memoised."""
+    try:
+        return _LEAF_TYPES[kind]
+    except KeyError:
+        leaf = _LEAF_TYPES[kind] = kind is not tuple and kind is not list and _generated_repr_fields(kind) is None
+        return leaf
 
 
 def _emit(value: object, sink: _ChunkedSha256, active: set[int]) -> None:

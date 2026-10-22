@@ -444,7 +444,7 @@ def _declined_regions(stations: List[_RhoStation], path_index: int, tool_radius:
     floor = DEGENERATE_LOOP_TOOL_RADII * tool_radius
     regions: List[DeclinedRegion] = []
     run: List[_RhoStation] = []
-    for station in list(stations) + [None]:  # type: ignore[list-item]
+    for station in list(stations) + [None]:
         if station is not None and station.radius <= floor:
             run.append(station)
             continue
