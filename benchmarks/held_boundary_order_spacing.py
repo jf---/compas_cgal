@@ -11,7 +11,7 @@ from collections import Counter
 from benchmarks.errors import BenchmarkError
 from benchmarks.held_figure5_boundary_path import Figure5CounterclockwiseCircle
 from benchmarks.held_figure5_engagement_refinement import Figure5EngagementRefinement
-from benchmarks.held_figure5_engagement_refinement import _circle_on_side
+from benchmarks.held_figure5_engagement_refinement import circle_on_side
 from benchmarks.held_figure5_engagement_refinement import refine_figure5_engagement
 from benchmarks.held_figure5_path import HypothesisFigure5Path
 from benchmarks.held_figure5_path import _paper_candidate
@@ -81,7 +81,7 @@ def refine_boundary_ordered_path(
     Returns original source indices and refined motion. The refinement's
     original_indices refer to the selected subsequence, not the full input.
     """
-    circles = tuple(_circle_on_side(circle, circle.boundary_site, circle.contact_point, circle.radius, boundary) for circle in source.path.circles)
+    circles = tuple(circle_on_side(circle, circle.boundary_site, circle.contact_point, circle.radius, boundary) for circle in source.path.circles)
     selected = select_boundary_ordered_sources(circles, source.circle_sources, tool_radius, cap)
     represented = frozenset(run for index in selected for run in source.circle_sources[index])
     if represented != source.reached_run_ids:

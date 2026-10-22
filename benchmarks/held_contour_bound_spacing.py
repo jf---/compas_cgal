@@ -15,9 +15,9 @@ from benchmarks.held_figure5_boundary_path import Figure5CounterclockwiseCircle
 from benchmarks.held_figure5_boundary_path import _validate_boundary
 from benchmarks.held_figure5_engagement_refinement import MAX_REFINED_CIRCLES
 from benchmarks.held_figure5_engagement_refinement import Figure5EngagementRefinement
-from benchmarks.held_figure5_engagement_refinement import _circle_on_side
 from benchmarks.held_figure5_engagement_refinement import _concave_corner_bridges
 from benchmarks.held_figure5_engagement_refinement import _midpoint
+from benchmarks.held_figure5_engagement_refinement import circle_on_side
 from benchmarks.held_figure5_raw_guide import GuideRunId
 from compas_cgal import _stock_2
 from compas_cgal.motion import EngagementCap
@@ -64,7 +64,7 @@ def select_contour_bound_path(
     if any(index < 0 or index >= len(circles) for index in required_sources):
         raise InvalidContourSpacingInputError("Required source indices must belong to the supplied circle sequence.")
     _validate_boundary(boundary)
-    targets = tuple(_circle_on_side(circle, circle.boundary_site, circle.contact_point, circle.radius, boundary) for circle in circles)
+    targets = tuple(circle_on_side(circle, circle.boundary_site, circle.contact_point, circle.radius, boundary) for circle in circles)
     emitted = [targets[0]]
     selected = [0]
     original_indices = [0]

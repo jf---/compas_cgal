@@ -242,7 +242,7 @@ def _corner_radius_limit(boundary: tuple[Point2[WorldXY], ...], side: int, conta
     return GuideRadius.build(radius)
 
 
-def _circle_on_side(
+def circle_on_side(
     source: Figure5CounterclockwiseCircle,
     site: ProjectionBoundarySite,
     contact: Point2[WorldXY],
@@ -336,7 +336,7 @@ def _midpoint(
     position = (target - entered).per_root(squared_lengths[side]) + _BoundaryArclength.root(Fraction(1), begin)
     site = ProjectionBoundarySite.build(ProjectionBoundarySegmentId(side), _side_parameter(position, begin, end), len(boundary))
     contact = _canonical_offset_point(boundary, site)
-    return _circle_on_side(previous, site, contact, GuideRadius.build((float(previous.radius.value) + float(successor.radius.value)) / 2), boundary)
+    return circle_on_side(previous, site, contact, GuideRadius.build((float(previous.radius.value) + float(successor.radius.value)) / 2), boundary)
 
 
 def _concave_corner_bridges(
@@ -382,7 +382,7 @@ def refine_figure5_engagement(
     if not circles or len(boundary) < 3 or max_depth < 0 or max_circles < len(circles):
         raise Figure5EngagementResolutionError("Refinement requires circles, a polygon, and sufficient non-negative budgets.")
     _validate_boundary(boundary)
-    targets = tuple(_circle_on_side(circle, circle.boundary_site, circle.contact_point, circle.radius, boundary) for circle in circles)
+    targets = tuple(circle_on_side(circle, circle.boundary_site, circle.contact_point, circle.radius, boundary) for circle in circles)
     emitted = [targets[0]]
     original_indices = [0]
     for source_interval, successor in enumerate(targets[1:]):
