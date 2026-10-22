@@ -6,6 +6,10 @@ initial placement, engagement refinement, connectors) with the same contact
 qualification, run preservation and spacing, and replaces the float offset
 polygon by Ω*. The polygon's ``corner_approaches`` has no Ω* counterpart (∂Ω*
 has no reflex vertex). Select it with ``PathDomain.OMEGA``.
+
+Circle containment in Ω* is decided by the native declared-clearance oracle
+by default (``ClearanceBackend.NATIVE``); ``ClearanceBackend.PYTHON`` runs the
+Python reference oracle and produces the same path.
 """
 
 from __future__ import annotations
@@ -21,7 +25,9 @@ from fractions import Fraction
 from benchmarks.errors import BenchmarkError
 from benchmarks.held_declared_boundary import DeclaredBoundary
 from benchmarks.held_declared_boundary_emission import declared_boundary_from_reference
+from benchmarks.held_declared_clearance import CircleClearanceOracle
 from benchmarks.held_declared_clearance import DeclaredClearance
+from benchmarks.held_declared_clearance_native import NativeDeclaredClearance
 from benchmarks.held_exact_centre_domain import CentreDomain
 from benchmarks.held_figure5_raw_guide import Figure5RawGuide
 from benchmarks.held_figure5_raw_guide import build_distance_admissible_hypotheses
@@ -30,6 +36,7 @@ from benchmarks.held_figure5_raw_guide import build_held_reference_raw_guide
 from benchmarks.held_gouge_audit import HeldGougeAuditReport
 from benchmarks.held_omega_circles import OmegaCircle
 from benchmarks.held_omega_connectors import OmegaConnectors
+from benchmarks.held_omega_gouge_audit import ClearanceBackend
 from benchmarks.held_omega_gouge_audit import audit_omega_path
 from benchmarks.held_omega_path import OmegaHypothesisPath
 from benchmarks.held_omega_path import omega_reference_path
@@ -75,7 +82,7 @@ class OmegaWorkload:
 
 
 OMEGA_WORKLOADS: dict[str, OmegaWorkload] = {
-    "figure5_refined": OmegaWorkload("figure5", Spacing.LANE, qualify_contacts=False, preserve_source_runs=False),
+    "figure5_refined": OmegaWorkload("figure5", Spacing.LANE, qualify_contacts=False, preserve_source_runs=True),
     "figure8_upper_lane": OmegaWorkload("figure8_upper", Spacing.LANE, qualify_contacts=False, preserve_source_runs=True),
     "figure8_upper_boundary": OmegaWorkload("figure8_upper", Spacing.BOUNDARY, qualify_contacts=False, preserve_source_runs=True),
     "figure8_crossed_skis_boundary": OmegaWorkload("figure8_crossed_skis", Spacing.BOUNDARY, qualify_contacts=False, preserve_source_runs=True),
@@ -85,7 +92,11 @@ OMEGA_WORKLOADS: dict[str, OmegaWorkload] = {
 
 @dataclass(frozen=True)
 class OmegaGeneratedToolpath:
-    """One workload's Ω* path: binary64 circles and exact ∂Ω* connectors, with its domain and oracle."""
+    """One workload's Ω* path: binary64 circles and exact ∂Ω* connectors, with its domain and oracle.
+
+    ``clearance`` is the Python reference oracle (the audit's input);
+    ``generation_backend`` records which oracle decided containment.
+    """
 
     workload: str
     case: HeldReferenceCase
@@ -96,6 +107,7 @@ class OmegaGeneratedToolpath:
     refinement: OmegaRefinement
     connectors: OmegaConnectors
     stage_seconds: dict[str, float]
+    generation_backend: ClearanceBackend
 
     @property
     def circles(self) -> tuple[OmegaCircle, ...]:
@@ -132,8 +144,12 @@ def _guide(case: HeldReferenceCase) -> Figure5RawGuide:
     return build_figure5_raw_guide(case) if case.name == "figure5" else build_held_reference_raw_guide(case)
 
 
-def generate_omega(workload: str) -> OmegaGeneratedToolpath:
-    """Run one workload's generator on Ω* stage by stage.
+def _containment_oracle(declared: DeclaredBoundary, tool_radius: Fraction, reference: DeclaredClearance, backend: ClearanceBackend) -> CircleClearanceOracle:
+    return NativeDeclaredClearance.build(declared, tool_radius) if backend is ClearanceBackend.NATIVE else reference
+
+
+def generate_omega(workload: str, backend: ClearanceBackend = ClearanceBackend.NATIVE) -> OmegaGeneratedToolpath:
+    """Run one workload's generator on Ω* stage by stage; ``backend`` decides circle containment (native by default).
 
     Raises:
         UnknownOmegaWorkloadError: ``workload`` is not in ``OMEGA_WORKLOADS``.
@@ -152,6 +168,7 @@ def generate_omega(workload: str) -> OmegaGeneratedToolpath:
     domain = CentreDomain.build(declared, tool_radius)
     loop = OmegaLoop.build(domain)
     clearance = DeclaredClearance.build(declared, tool_radius)
+    oracle = _containment_oracle(declared, tool_radius, clearance, backend)
     seconds["omega"] = time.perf_counter() - started
     start, start_radius = case.start_marker, case.start_marker_radius
     if start is None or start_radius is None:
@@ -175,14 +192,14 @@ def generate_omega(workload: str) -> OmegaGeneratedToolpath:
     seconds["initial"] = time.perf_counter() - started
     started = time.perf_counter()
     if spec.spacing is Spacing.BOUNDARY:
-        _, refinement = refine_omega_boundary_ordered(initial.circles, initial.circle_sources, initial.reached_run_ids, loop, clearance, case.tool_radius, cap)
+        _, refinement = refine_omega_boundary_ordered(initial.circles, initial.circle_sources, initial.reached_run_ids, loop, oracle, case.tool_radius, cap)
     else:
-        refinement = refine_omega_engagement(initial.circles, loop, clearance, case.tool_radius, cap)
+        refinement = refine_omega_engagement(initial.circles, loop, oracle, case.tool_radius, cap)
     seconds["refine"] = time.perf_counter() - started
     started = time.perf_counter()
     connectors = OmegaConnectors.build(loop.pieces, refinement.circles)
     seconds["connectors"] = time.perf_counter() - started
-    return OmegaGeneratedToolpath(workload, case, declared, loop, clearance, initial, refinement, connectors, seconds)
+    return OmegaGeneratedToolpath(workload, case, declared, loop, clearance, initial, refinement, connectors, seconds, backend)
 
 
 def _engagement_deg(path: OmegaGeneratedToolpath, first: OmegaCircle, second: OmegaCircle) -> float | None:

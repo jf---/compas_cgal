@@ -34,7 +34,7 @@ from benchmarks.held_exact_centre_domain import CentreDomainPiece
 from benchmarks.held_gouge_audit import Clearance
 from benchmarks.held_gouge_audit import HeldGougeAuditReport
 from benchmarks.held_omega_connectors import OmegaConnectors
-from benchmarks.held_omega_gouge_audit import ClearanceBackend
+from benchmarks.held_clearance_backend import ClearanceBackend
 from benchmarks.held_omega_gouge_audit import audit_omega_path
 from benchmarks.held_omega_gouge_audit import audit_polygon_path
 from benchmarks.held_omega_gouge_audit_native import audit_omega_path_native
@@ -220,9 +220,9 @@ def test_native_audits_report_like_the_python_audits_on_the_concave_fixture() ->
     domain = CentreDomain.build(boundary, R)
     circles = _omega_circles(domain, python, _arc_contacts())
     connectors = OmegaConnectors.build(single_loop_pieces(domain), circles).connectors
-    assert _decisions(audit_omega_path_native(native, circles, connectors)) == _decisions(audit_omega_path(python, circles, connectors))
+    assert _decisions(audit_omega_path_native(native, circles, connectors)) == _decisions(audit_omega_path(python, circles, connectors, ClearanceBackend.PYTHON))
     polygon_circles, polylines = _polygon_path(boundary, _arc_contacts())
-    expected = audit_polygon_path(python, polygon_circles, polylines)
+    expected = audit_polygon_path(python, polygon_circles, polylines, ClearanceBackend.PYTHON)
     found = audit_polygon_path_native(native, polygon_circles, polylines)
     assert _decisions(found) == _decisions(expected)
     assert found.gouging_circles
@@ -234,9 +234,11 @@ def test_the_audit_switch_runs_the_native_oracle_with_identical_decisions() -> N
     circles = _omega_circles(domain, python, _arc_contacts())
     connectors = OmegaConnectors.build(single_loop_pieces(domain), circles).connectors
     native = audit_omega_path(python, circles, connectors, ClearanceBackend.NATIVE)
-    assert _decisions(native) == _decisions(audit_omega_path(python, circles, connectors))
+    assert _decisions(native) == _decisions(audit_omega_path(python, circles, connectors, ClearanceBackend.PYTHON))
     polygon_circles, polylines = _polygon_path(boundary, _arc_contacts())
-    assert _decisions(audit_polygon_path(python, polygon_circles, polylines, ClearanceBackend.NATIVE)) == _decisions(audit_polygon_path(python, polygon_circles, polylines))
+    assert _decisions(audit_polygon_path(python, polygon_circles, polylines, ClearanceBackend.NATIVE)) == _decisions(
+        audit_polygon_path(python, polygon_circles, polylines, ClearanceBackend.PYTHON)
+    )
 
 
 # ---------------------------------------------------------------------------

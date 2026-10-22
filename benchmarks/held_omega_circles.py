@@ -12,14 +12,17 @@ two exact steps, never by a tolerance:
    ``√|c - C|² ∓ ρ'`` on a circle). This is directed rounding of an exact
    quantity: the circle is on the interior side of its own support exactly,
    and touches it to within the centre's rounding.
-2. **Global.** ``dist(circle, ∂P) >= r`` is decided by
-   :class:`benchmarks.held_declared_clearance.DeclaredClearance` and one circle
-   point is located in Ω* (``CentreDomain.locate``); together they decide
+2. **Global.** ``dist(circle, ∂P) >= r`` is decided by a
+   :class:`benchmarks.held_declared_clearance.CircleClearanceOracle` (the
+   native oracle in generation, the Python oracle as its reference) and one
+   circle point is located in Ω* (``CentreDomain.locate``); together they decide
    ``circle ⊂ Ω*`` exactly. When it fails (a convex vertex of Ω* or a neck
    nearby), the circle is shrunk along the same normal: the exact tangent
    circles ``q + t·n`` are nested in ``t``, so containment is monotone in ``t``
    and a bisection over the binary64 ``t`` finds a passing one. Every accepted
    circle is verified exactly; the bisection only searches.
+   :func:`contain_all` decides a whole set of circles in one oracle batch and
+   searches only the ones that fail.
 
 The circle touches ∂Ω* within the centre's rounding of the exact site, not at
 it: the circle-to-connector junction carries that sub-ulp gap, reported, never
@@ -31,6 +34,7 @@ from __future__ import annotations
 import math
 import struct
 from collections.abc import Callable
+from collections.abc import Sequence
 from dataclasses import dataclass
 from fractions import Fraction
 from typing import Literal
@@ -39,8 +43,9 @@ from benchmarks.errors import BenchmarkError
 from benchmarks.held_centre_domain_supports import OffsetCircleSupport
 from benchmarks.held_centre_domain_supports import OffsetLineSupport
 from benchmarks.held_declared_boundary import ExactPoint2
+from benchmarks.held_declared_clearance import CircleClearanceOracle
 from benchmarks.held_declared_clearance import CircleElement
-from benchmarks.held_declared_clearance import DeclaredClearance
+from benchmarks.held_declared_clearance import ClearanceVerdict
 from benchmarks.held_dyadic_interval import Interval
 from benchmarks.held_exact_centre_domain import CentreDomain
 from benchmarks.held_exact_centre_domain import PointLocation
@@ -242,12 +247,20 @@ def place_local(site: OmegaSite, guide_radius: float, provenance: tuple[GuideRun
     return _circle(ray, centre, radius, limited, provenance)
 
 
-def _contained(clearance: DeclaredClearance, domain: CentreDomain, centre: ExactPoint2[WorldXY], radius: float) -> bool:
-    verdict = clearance.circle(CircleElement(centre, Fraction(radius)))
+def _decided_contained(verdict: ClearanceVerdict, domain: CentreDomain, centre: ExactPoint2[WorldXY], radius: float) -> bool:
     if verdict.clearance is Clearance.GOUGE:
         return False
     # dist >= r everywhere, so the circle is wholly inside Ω* or wholly outside P: one point decides.
     return domain.locate(ExactPoint2[WorldXY].build(centre.x + Fraction(radius), centre.y)) is not PointLocation.EXTERIOR
+
+
+def _contained(clearance: CircleClearanceOracle, domain: CentreDomain, centre: ExactPoint2[WorldXY], radius: float) -> bool:
+    (verdict,) = clearance.circles([CircleElement(centre, Fraction(radius))])
+    return _decided_contained(verdict, domain, centre, radius)
+
+
+def _exact_centre(circle: OmegaCircle) -> ExactPoint2[WorldXY]:
+    return ExactPoint2[WorldXY].from_binary64(float(circle.center.x), float(circle.center.y))
 
 
 def _bits(value: float) -> int:
@@ -258,15 +271,38 @@ def _from_bits(bits: int) -> float:
     return float(struct.unpack("<d", struct.pack("<q", bits))[0])
 
 
-def contain(circle: OmegaCircle, clearance: DeclaredClearance, domain: CentreDomain) -> OmegaCircle:
+def contain(circle: OmegaCircle, clearance: CircleClearanceOracle, domain: CentreDomain) -> OmegaCircle:
     """The circle itself when it lies in Ω* exactly, else the largest found contained circle on its normal.
 
     Raises:
         NoContainedCircleError: If no binary64 circle on the normal is contained.
     """
-    centre = ExactPoint2[WorldXY].from_binary64(float(circle.center.x), float(circle.center.y))
-    if _contained(clearance, domain, centre, float(circle.radius.value)):
+    if _contained(clearance, domain, _exact_centre(circle), float(circle.radius.value)):
         return circle
+    return _shrunk(circle, clearance, domain)
+
+
+def contain_all(circles: Sequence[OmegaCircle], clearance: CircleClearanceOracle, domain: CentreDomain) -> tuple[OmegaCircle, ...]:
+    """:func:`contain` of every circle, in order, with the first containment decision of all of them in one oracle batch.
+
+    Raises:
+        NoContainedCircleError: If a circle admits no contained circle on its normal.
+    """
+    centres = [_exact_centre(circle) for circle in circles]
+    radii = [float(circle.radius.value) for circle in circles]
+    verdicts = clearance.circles([CircleElement(centre, Fraction(radius)) for centre, radius in zip(centres, radii, strict=True)])
+    return tuple(
+        circle if _decided_contained(verdict, domain, centre, radius) else _shrunk(circle, clearance, domain)
+        for circle, verdict, centre, radius in zip(circles, verdicts, centres, radii, strict=True)
+    )
+
+
+def _shrunk(circle: OmegaCircle, clearance: CircleClearanceOracle, domain: CentreDomain) -> OmegaCircle:
+    """The largest found contained circle on the normal of a circle that is not contained.
+
+    Raises:
+        NoContainedCircleError: If no binary64 circle on the normal is contained.
+    """
     site = circle.site
     ray = _Ray.build(site)
     provenance = (circle.run_id, circle.station_ordinal, circle.source_boundary_site)

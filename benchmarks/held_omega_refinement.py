@@ -26,10 +26,11 @@ from fractions import Fraction
 from benchmarks.errors import BenchmarkError
 from benchmarks.held_centre_domain_supports import OffsetLineSupport
 from benchmarks.held_declared_boundary import ExactPoint2
-from benchmarks.held_declared_clearance import DeclaredClearance
+from benchmarks.held_declared_clearance import CircleClearanceOracle
 from benchmarks.held_figure5_raw_guide import GuideRunId
 from benchmarks.held_omega_circles import OmegaCircle
 from benchmarks.held_omega_circles import contain
+from benchmarks.held_omega_circles import contain_all
 from benchmarks.held_omega_circles import place_local
 from benchmarks.held_omega_connectors import OmegaConnectorPiece
 from benchmarks.held_omega_connectors import _chain
@@ -202,7 +203,7 @@ class OmegaRefinement:
 def refine_omega_engagement(
     circles: tuple[OmegaCircle, ...],
     loop: OmegaLoop,
-    clearance: DeclaredClearance,
+    clearance: CircleClearanceOracle,
     tool_radius: ToolRadius,
     cap: EngagementCap,
     *,
@@ -210,6 +211,10 @@ def refine_omega_engagement(
     max_circles: int = MAX_OMEGA_REFINED_CIRCLES,
 ) -> OmegaRefinement:
     """Contain every circle in Ω* exactly, then subdivide every over-cap transition along ∂Ω*.
+
+    The input circles are decided in one ``clearance`` batch; each midpoint is
+    decided when it is placed (it depends on the engagement of the circles
+    emitted before it).
 
     Raises:
         OmegaEngagementResolutionError: Empty input, depth or circle budget exhausted.
@@ -221,7 +226,7 @@ def refine_omega_engagement(
     if not circles or max_depth < 0 or max_circles < len(circles):
         raise OmegaEngagementResolutionError("Refinement requires circles and sufficient non-negative budgets.")
     domain = loop.domain
-    targets = tuple(contain(circle, clearance, domain) for circle in circles)
+    targets = contain_all(circles, clearance, domain)
     emitted = [targets[0]]
     original = [0]
     for interval, successor in enumerate(targets[1:]):
@@ -252,7 +257,7 @@ def refine_omega_boundary_ordered(
     circle_sources: tuple[tuple[GuideRunId, ...], ...],
     reached_run_ids: frozenset[GuideRunId],
     loop: OmegaLoop,
-    clearance: DeclaredClearance,
+    clearance: CircleClearanceOracle,
     tool_radius: ToolRadius,
     cap: EngagementCap,
 ) -> tuple[tuple[int, ...], OmegaRefinement]:

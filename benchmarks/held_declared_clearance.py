@@ -33,6 +33,7 @@ from collections.abc import Callable
 from collections.abc import Sequence
 from dataclasses import dataclass
 from fractions import Fraction
+from typing import Protocol
 from typing import Self
 from typing import TypeAlias
 
@@ -687,6 +688,19 @@ class ClearanceVerdict:
 _CLEAR = ClearanceVerdict(Clearance.CLEAR, None, 0.0)
 
 
+class CircleClearanceOracle(Protocol):
+    """Exact clearance of binary64 machining circles, asked one batch at a time.
+
+    Implemented by :class:`DeclaredClearance` (the Python reference) and by
+    :class:`benchmarks.held_declared_clearance_native.NativeDeclaredClearance`
+    (one native call per batch); both decide the same ``clearance`` per circle.
+    """
+
+    def circles(self, elements: Sequence[CircleElement]) -> list[ClearanceVerdict]:
+        """Verdicts of the circles, in order."""
+        ...
+
+
 @dataclass(frozen=True)
 class DeclaredClearance:
     """Exact clearance oracle over one declared boundary and one tool radius."""
@@ -769,6 +783,14 @@ class DeclaredClearance:
                 continue
             decided.append((sign, max(low - float(element.radius), float(element.radius) - high, 0.0), primitive.index))
         return self._verdict(decided)
+
+    def circles(self, elements: Sequence[CircleElement]) -> list[ClearanceVerdict]:
+        """:meth:`circle` of each element, in order (the :class:`CircleClearanceOracle` batch).
+
+        Raises:
+            NonPositiveClearanceRadiusError: If a circle radius is not positive.
+        """
+        return [self.circle(element) for element in elements]
 
     def element(self, element: Element) -> ClearanceVerdict:
         """Exact ``sign(dist(element, ∂P) - r)`` of a segment or arc element (precondition: in the closed pocket)."""

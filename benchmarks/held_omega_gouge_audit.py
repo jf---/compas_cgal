@@ -13,22 +13,23 @@ Fan connectors (zero progress at one exact site) have no motion to audit. The
 report type is the stored-boundary audit's
 (:class:`benchmarks.held_gouge_audit.HeldGougeAuditReport`).
 
-``backend`` selects where the decisions run: :attr:`ClearanceBackend.PYTHON`
-(this module, the reference oracle) or :attr:`ClearanceBackend.NATIVE`
-(:mod:`benchmarks.held_omega_gouge_audit_native`, the C++ oracle built from the
-same declared boundary; its build time is part of the reported seconds). Both
-produce the same report decisions.
+``backend`` selects where the decisions run: :attr:`ClearanceBackend.NATIVE`
+(the default: :mod:`benchmarks.held_omega_gouge_audit_native`, the C++ oracle
+built from the same declared boundary; its build time is part of the reported
+seconds) or :attr:`ClearanceBackend.PYTHON` (this module, the reference oracle
+the native one is differentially tested against). Both produce the same report
+decisions.
 """
 
 from __future__ import annotations
 
 import dataclasses
-import enum
 import time
 from collections.abc import Sequence
 from fractions import Fraction
 
 from benchmarks.held_centre_domain_supports import OffsetLineSupport
+from benchmarks.held_clearance_backend import ClearanceBackend
 from benchmarks.held_declared_boundary import ExactPoint2
 from benchmarks.held_declared_clearance import ArcElement
 from benchmarks.held_declared_clearance import CircleElement
@@ -48,13 +49,6 @@ from benchmarks.held_omega_gouge_audit_native import audit_omega_path_native
 from benchmarks.held_omega_gouge_audit_native import audit_polygon_path_native
 from compas_cgal.units import Point2
 from compas_cgal.units import WorldXY
-
-
-class ClearanceBackend(enum.Enum):
-    """Where the exact clearance decisions run."""
-
-    PYTHON = "python"
-    NATIVE = "native"
 
 
 def _native(clearance: DeclaredClearance) -> NativeDeclaredClearance:
@@ -104,7 +98,7 @@ def _connector_verdict(clearance: DeclaredClearance, index: int, connector: Omeg
 
 
 def audit_omega_path(
-    clearance: DeclaredClearance, circles: Sequence[OmegaCircle], connectors: Sequence[OmegaConnector], backend: ClearanceBackend = ClearanceBackend.PYTHON
+    clearance: DeclaredClearance, circles: Sequence[OmegaCircle], connectors: Sequence[OmegaConnector], backend: ClearanceBackend = ClearanceBackend.NATIVE
 ) -> HeldGougeAuditReport:
     """Decide every circle and every connector of an Ω* path exactly.
 
@@ -136,7 +130,7 @@ def audit_polygon_path(
     clearance: DeclaredClearance,
     circles: Sequence[tuple[Point2[WorldXY], float]],
     polylines: Sequence[Sequence[Point2[WorldXY]]],
-    backend: ClearanceBackend = ClearanceBackend.PYTHON,
+    backend: ClearanceBackend = ClearanceBackend.NATIVE,
 ) -> HeldGougeAuditReport:
     """Decide every binary64 circle ``(centre, radius)`` and connector polyline exactly against the declared boundary."""
     started = time.perf_counter()
