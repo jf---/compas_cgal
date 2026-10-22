@@ -138,6 +138,49 @@ Readings:
 - **Under-loading is a geometry problem, not a spacing problem.** Option (c) has to move the centre and radius along the guide: larger steps where the actual stock is thin, then a coverage proof on the moved circle. That is stage S6. Its circle-count and length change cannot be estimated by thinning, and this probe gives no number for it.
 - **The bound must not be the only fast path near the cap.** 42 % of last-16 refusals were false (52 of 123; 14 of 107 in the cap-only run). The labelled engine reads the exact view in the same walk, so placement decides on the exact view and records the last-16 view as the certificate.
 
+## 7. Exact last-16 certificate (stage C1)
+
+Code:
+
+- `benchmarks/held_actual_stock_last16.py` (`Last16Oracle`);
+- `benchmarks/held_actual_stock_last16_window.py`: the exact clip and omission proofs;
+- `benchmarks/held_actual_stock_last16_batch.py`: every circle over processes, differenced against `benchmarks/held_actual_stock_last16_reference.py`, the full sequential exact replay.
+
+It is a batch certificate on the emitted path and not yet part of generation (ruling 2026-10-21).
+
+**What it certifies.** Circle i is `CERTIFIED_LAST16` when no loop station exceeds the cap on Ω minus circles i − 16 … i − 1 and the connectors they own. That stock contains the actual stock (Ω minus every prior sweep). The 45-station decision is monotone under stock inclusion, by the clip-monotonicity lemma of `src/swept_prefix_engagement_2.h`. So a last-16 pass is a pass on the actual stock. As in section 3.4, the claim covers the 45 stations and nothing between them.
+
+**Escalation (user ruling U1, 2026-10-22).** A last-16 refusal is re-decided on the full window, which holds every prior sweep that is not proven to miss the window:
+
+- **The full view keeps every sweep the last-16 view keeps.** Both views run the same deterministic exact omission proof, and the last-16 candidates are a subset of the full ones. So the full-window stock lies inside the last-16 stock, and a last-16 pass implies the full-window verdict.
+- **The full window equals the actual stock where the decision reads.** Every omitted sweep is proven not to meet the open window disk, and every read point has an open neighbourhood inside that disk. So a full-window pass is `CERTIFIED_FULL_WINDOW`, and a full-window refusal is a true violation at the stations (`REFUSED`).
+- `Last16Oracle.check_bound` checks both the inclusion (`is_subset_of`) and the verdict ordering. `audit_stock` checks each window stock `exactly_equals` its local-surgery reference.
+
+**The exact clip proof.** Each window stock is also clipped: Ω minus the closed annulus R ≤ |x − c| ≤ outer about the guide centre c. R is chosen in binary64 as max(ρ, |e − c|) + 1.5 r. That choice only sets the window's size. It is admitted only when `prove_clip_contains_stations` proves, over the rationals the doubles are, that every station's closed tool disk lies in the open disk |x − c| < R:
+
+- **Chart stations:** ρ + r < R. These stations lie exactly on the guide circle, because `circle_prefix_motion` places them at c + ρ·u with u an exact rational unit vector.
+- **The entry e:** R > r and |e − c|² < (R − r)².
+
+Tangency is refused. The stock receives the same double R, and `subtract_annulus` injects it exactly, so the disk in the proof is the disk the arrangement removes.
+
+**Why omission cannot forge a certificate.** Leaving a sweep out only enlarges the stock, which is the conservative direction. The certificate's soundness rests on two things: the clip proof, and never removing a sweep that is not prior. Exact omission protects only the claim that a refusal is a true violation. It works against the closed annulus [max(ρⱼ − r, 0), ρⱼ + r] for a circle and the closed true capsule for a connector. The binary64 prefilter only decides which candidates get an exact omission proof.
+
+**Boundary of the claim (pre-existing, `ReplayWorkload.from_path`).** The replay certifies the workload it is given:
+
+- circle centres rounded to doubles (`float()` of the generator's centres);
+- connectors as their sampled chords (`transition.samples`), each removed as `Stock_UNDER`.
+
+The certificate is exact about that workload. It is not a statement about the generator's exact path between those samples or before that rounding.
+
+**Evidence and numbers.**
+
+- The windowed rows and the last-16-vs-exact line of section 2 are built by `Last16Oracle` itself: the same clip, selection and global overlay that is gated. They come from `pixi run actual-stock-profile`.
+- The per-workload certificate counts, the CPU split between last-16 and escalation, and the replay differential come from `pixi run actual-stock-last16`, the batch runner. Its markdown carries the workload digest and the load average.
+- The fast tier is `tests/benchmarks/test_held_actual_stock_last16.py`. It covers the exact predicates at tangency, escalation, the plunge refusal, stock equality with a connector segment, injected dropped sweeps and shrunk clips, and batch determinism.
+- The slow tier is `benchmarks/acceptance/test_held_actual_stock_last16_slow.py`:
+  - Figure 5 and Monstera, every circle, at any load: verdicts must equal the full exact replay per circle, with an `exactly_equals` audit every 50th circle;
+  - the C1 budgets (per-circle CPU on both workloads, wall time on Monstera), which refuse with `MachineNotQuietError` on a loaded machine (ruling D2: budget verdicts count only from quiet-machine runs). Each budget is asserted on one run: a single run's CPU and wall are each ≥ their minimum over N runs, so a pass settles the min-of-5 verdict; a fail is inconclusive (single run; a min-of-5 quiet re-run decides).
+
 ## Related pages
 
 - [Held Connector Engagement](held_connector_engagement.md): the analytic tiers that certify connectors without a replay.

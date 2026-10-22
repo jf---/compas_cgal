@@ -12,10 +12,12 @@ a generated Held path, with the existing native API only:
   connector subtraction, the first query after a mutation (COLD: builds the
   point locator), the same query again (WARM), and the prefixes (WARM).
   cold - warm is the locator rebuild; warm / stations is the station cost.
-- **windows**: every ``--window-stride``-th circle, three local stocks inside
-  the window disk(c_i, rho_i + r + r/2): EXACT (every prior sweep whose
-  conservative box meets the window, equal to the sequential replay inside
-  it), LAST-16 and LAST-1 (only sweeps owned by circles i-m .. i-1). An
+- **windows**: every ``--window-stride``-th circle, three window stocks built
+  by the last-16 certificate itself (``Last16Oracle``: its clip disk, admitted
+  by the exact station-containment proof, its exact sweep omission, its global
+  overlay): EXACT (every prior sweep not proven exactly to miss the window,
+  equal to the sequential replay on what the decision reads), LAST-16 and
+  LAST-1 (only sweeps owned by circles i-m .. i-1). An
   exceeded EXACT must be exceeded on every last-m (Omega minus a subset of
   the sweeps is a superset); a break raises ``BoundBreakError``.
 - **budget**: the full replay plus one decision query per circle, in a fresh
@@ -77,12 +79,6 @@ WINDOW_STRIDE = 20
 # The ruled certificate's window depth, and the shallowest bound.
 LAST_M = 16
 LAST_ONE = 1
-# Window margin beyond the circle's swept disk, in tool radii (any positive
-# margin keeps every station's tool disk strictly inside the open window).
-WINDOW_MARGIN_TOOL_RADII = 0.5
-# The clip annulus' outer radius exceeds twice the polygon's bbox diagonal by
-# this many tool radii, so the annulus covers Omega minus the window.
-CLIP_OUTER_TOOL_RADII = 10.0
 # The decision runs with no gap closure, as the generator's gate does.
 NO_GAP_CLOSURE = 0.0
 # Arrangement-size bands of the sequential table, halfedges [lo, hi).
@@ -453,63 +449,30 @@ def run_sequential(workload: ReplayWorkload, limit: int) -> tuple[SequentialRow,
     return tuple(rows)
 
 
-class _WindowIndex:
-    """Conservative window selection over the workload's sweeps (NumPy boxes; selection decides only cost)."""
-
-    def __init__(self, workload: ReplayWorkload) -> None:
-        self.workload = workload
-        self.centres = np.array([(c.cx, c.cy) for c in workload.circles], dtype=np.float64)
-        self.outer = np.array([c.guide_radius for c in workload.circles], dtype=np.float64) + workload.tool_radius
-        self.owner = np.array([s.owner for s in workload.segments], dtype=np.int64)
-        ends = np.array([(s.x0, s.y0, s.x1, s.y1) for s in workload.segments], dtype=np.float64).reshape(-1, 4)
-        r = workload.tool_radius
-        self.lo = np.minimum(ends[:, :2], ends[:, 2:]) - r
-        self.hi = np.maximum(ends[:, :2], ends[:, 2:]) + r
-        xy = workload.polygon[:, :2]
-        self.clip_outer = 2.0 * float(np.hypot(*(xy.max(axis=0) - xy.min(axis=0)))) + CLIP_OUTER_TOOL_RADII * r
-
-    def window_radius(self, index: int) -> float:
-        return float(self.outer[index]) + WINDOW_MARGIN_TOOL_RADII * self.workload.tool_radius
-
-    def hits(self, index: int, last: int | None) -> list[tuple[int, int, int]]:
-        """Emission-ordered (owner, kind, item) of the prior sweeps meeting circle ``index``'s window; kind 0 circle, 1 segment."""
-        centre = self.centres[index]
-        radius = self.window_radius(index)
-        circles = np.nonzero(np.hypot(*(self.centres[:index] - centre).T) <= radius + self.outer[:index])[0]
-        prior = np.nonzero(self.owner < index)[0]
-        nearest = np.clip(centre, self.lo[prior], self.hi[prior])
-        segments = prior[np.hypot(*(nearest - centre).T) <= radius]
-        if last is not None:
-            circles = circles[circles >= index - last]
-            segments = segments[self.owner[segments] >= index - last]
-        return sorted([(int(j), 0, int(j)) for j in circles] + [(int(self.owner[k]), 1, int(k)) for k in segments])
-
-    def stock(self, index: int, last: int | None) -> WindowStock:
-        w = self.workload
-        start = time.process_time()
-        events = self.hits(index, last)
-        stock = w.fresh_stock()
-        centre = w.circles[index]
-        stock.subtract_annulus(centre.cx, centre.cy, self.window_radius(index), self.clip_outer)
-        for _owner, kind, item in events:
-            if kind == 0:
-                w.subtract_circle(stock, w.circles[item])
-            else:
-                w.subtract_segment(stock, w.segments[item])
-        build_ms = _cpu_ms(start)
-        return WindowStock(len(events), int(stock.arrangement_stats()[1]), build_ms, query_circle(w, stock, index))
-
-
 def run_windows(workload: ReplayWorkload, stride: int) -> tuple[WindowRow, ...]:
     """Exact, last-16 and last-1 window stocks of every ``stride``-th circle.
 
     Raises:
         BoundBreakError: the exact window exceeds where a last-m window does not.
     """
-    index_ = _WindowIndex(workload)
+    # Function-scope import: the certificate module imports ``ReplayWorkload``
+    # from this module, so a module-level import would be circular.
+    from benchmarks.held_actual_stock_last16 import Last16Oracle
+
+    oracle = Last16Oracle(workload)
+
+    def window_stock(index: int, last: int | None) -> WindowStock:
+        # The gated certificate's own window, exact selection and global overlay: one implementation.
+        start = time.process_time()
+        window = oracle.window(index)
+        events, _omitted = oracle.select(index, window, last)
+        stock = oracle.build_stock(index, window, events)
+        build_ms = _cpu_ms(start)
+        return WindowStock(len(events), int(stock.arrangement_stats()[1]), build_ms, query_circle(workload, stock, index))
+
     rows: list[WindowRow] = []
     for index in range(1, len(workload.circles), stride):
-        row = WindowRow(index, index_.stock(index, None), index_.stock(index, LAST_M), index_.stock(index, LAST_ONE))
+        row = WindowRow(index, window_stock(index, None), window_stock(index, LAST_M), window_stock(index, LAST_ONE))
         if row.exact.query.exceeded and not (row.last16.query.exceeded and row.last1.query.exceeded):
             raise BoundBreakError(f"{workload.name} circle {index}: exact exceeded, last-16 {row.last16.query.exceeded}, last-1 {row.last1.query.exceeded}")
         rows.append(row)
@@ -652,7 +615,7 @@ def render_markdown(record: ProfileRecord) -> str:
     views = (("exact (every prior sweep meeting the window)", "exact"), (f"last-{LAST_M} bound", "last16"), (f"last-{LAST_ONE} bound", "last1"))
     out += [
         "",
-        f"**Windowed local stocks** ({len(windows)} sampled circles, every {WINDOW_STRIDE}th, window disk(c, ρ + {1 + WINDOW_MARGIN_TOOL_RADII:g} r)). Medians:",
+        f"**Windowed local stocks** ({len(windows)} sampled circles, every {WINDOW_STRIDE}th, the last-16 certificate's windows, exact selection and global overlay). Medians:",
         "",
         "| local stock | sweeps | halfedges | build (clip + sweeps) | per sweep | query warm | per station | decision exceeded |",
         "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
