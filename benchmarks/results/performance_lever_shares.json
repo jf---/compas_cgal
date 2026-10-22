@@ -4,14 +4,14 @@
   "mapping": "benchmarks/results/performance_levers.json",
   "profiles": {
     "held_figure5": {
-      "commit": "e05674d3e4e6b76eb5e090ed6c563ce60698faf1",
+      "commit": "fa28023fd488672c7c51276a7ee940e7b0476467",
       "dirty": true,
-      "date": "2026-10-21"
+      "date": "2026-10-22"
     },
     "held_crossed_skis": {
-      "commit": "e05674d3e4e6b76eb5e090ed6c563ce60698faf1",
+      "commit": "fa28023fd488672c7c51276a7ee940e7b0476467",
       "dirty": true,
-      "date": "2026-10-21"
+      "date": "2026-10-22"
     },
     "pipeline_cap120_rect_20x12": {
       "commit": "e05674d3e4e6b76eb5e090ed6c563ce60698faf1",
@@ -35,12 +35,12 @@
       "status": "wired",
       "cells": {
         "held_figure5": {
-          "share_percent": 7.43,
+          "share_percent": 5.86,
           "estimated": false,
           "reason": null
         },
         "held_crossed_skis": {
-          "share_percent": 6.02,
+          "share_percent": 4.67,
           "estimated": false,
           "reason": null
         },
@@ -66,12 +66,12 @@
       "status": "wired",
       "cells": {
         "held_figure5": {
-          "share_percent": 0.95,
+          "share_percent": 2.3,
           "estimated": false,
           "reason": null
         },
         "held_crossed_skis": {
-          "share_percent": 0.93,
+          "share_percent": 2.27,
           "estimated": false,
           "reason": null
         },
@@ -97,12 +97,12 @@
       "status": "wired",
       "cells": {
         "held_figure5": {
-          "share_percent": 15.08,
+          "share_percent": 6.04,
           "estimated": false,
           "reason": null
         },
         "held_crossed_skis": {
-          "share_percent": 9.76,
+          "share_percent": 4.98,
           "estimated": false,
           "reason": null
         },
@@ -128,12 +128,12 @@
       "status": "proposed",
       "cells": {
         "held_figure5": {
-          "share_percent": 20.08,
+          "share_percent": 33.34,
           "estimated": true,
           "reason": "native project_boundary_contact is invisible to cProfile; it is counted as build_held_reference_path self time, which also holds that function's own Python"
         },
         "held_crossed_skis": {
-          "share_percent": 41.94,
+          "share_percent": 42.39,
           "estimated": true,
           "reason": "native project_boundary_contact is invisible to cProfile; it is counted as build_held_reference_path self time, which also holds that function's own Python"
         },
