@@ -178,7 +178,7 @@ class ExactConnectorVerdict:
         return self.tier is not ConnectorTier.REFUSED
 
 
-class _CandidateIndex:
+class CandidateIndex:
     """Prefilter of the circles that could certify a sub-sweep, libm-free.
 
     A circle certifies a sweep only if the outer test passes, which needs
@@ -189,6 +189,8 @@ class _CandidateIndex:
     (:func:`benchmarks.held_connector_engagement.reach_bracket`, IEEE
     ``+ - ×`` only). The filter chooses which exact questions to ask: it never
     drops a circle that could certify, so it loses no certificate and creates none.
+    Each circle's test reads only that circle, so an index over circles
+    ``0..i`` answers ``near(sweep, last <= i)`` exactly as an index over more circles.
     """
 
     def __init__(self, circles: tuple[PriorCircle, ...], tool_radius: Fraction) -> None:
@@ -211,7 +213,7 @@ class _CandidateIndex:
 
 
 def _bisect(
-    lemma: RangeEngagementLemma, circles: tuple[PriorCircle, ...], index: _CandidateIndex, last: int, position: int, sweep: ExactSweep
+    lemma: RangeEngagementLemma, circles: tuple[PriorCircle, ...], index: CandidateIndex, last: int, position: int, sweep: ExactSweep
 ) -> tuple[tuple[ExactSubSweepCertificate, ...], RefusalReason | None]:
     """Tier 1b on one sweep: any circle ``k <= last`` per sub-sweep, exact splits, depth-first."""
     certified: list[ExactSubSweepCertificate] = []
@@ -232,6 +234,54 @@ def _bisect(
     return tuple(certified), None
 
 
+def decide_connector(
+    lemma: RangeEngagementLemma,
+    circles: tuple[PriorCircle, ...],
+    connector: ExactConnector,
+    position: int,
+    *,
+    last: int,
+    seam: bool,
+    index: CandidateIndex | None = None,
+) -> ExactConnectorVerdict:
+    """Decide one connector: tier 1 with ``circles[last]`` (the circle just cut), else tier 1b per sweep over ``circles[0..last]``.
+
+    ``last`` is the most recent prior: ``i`` for connector ``i``, the last
+    circle for the seam. Circles after ``last`` are never read, so passing
+    only the priors gives the same verdict. ``index`` must index ``circles``
+    (at least ``0..last``); without one, it is built over ``circles[0..last]``
+    only when tier 1 fails. ``position`` labels the verdict and its refusals.
+
+    Raises:
+        InvalidConnectorEngagementInputError: ``last`` names no circle.
+    """
+    if not 0 <= last < len(circles):
+        raise InvalidConnectorEngagementInputError(f"prior {last} is not among {len(circles)} circles")
+    sweeps = connector.sweeps
+    if not sweeps:
+        return ExactConnectorVerdict(position, seam, ConnectorTier.STATIONARY, 0, (), ())
+    own = circles[last]
+    first_try = [lemma.certifies(sweep, own) for sweep in sweeps]
+    if all(first_try):
+        subs = tuple(ExactSubSweepCertificate(p, sweep.start, sweep.end, last) for p, sweep in enumerate(sweeps))
+        return ExactConnectorVerdict(position, seam, ConnectorTier.TIER_1, len(sweeps), subs, ())
+    if index is None:
+        index = CandidateIndex(circles[: last + 1], lemma.tool_radius)
+    sub_sweeps: list[ExactSubSweepCertificate] = []
+    refusals: list[ExactRefusal] = []
+    for p, (sweep, by_own) in enumerate(zip(sweeps, first_try)):
+        if by_own:
+            sub_sweeps.append(ExactSubSweepCertificate(p, sweep.start, sweep.end, last))
+            continue
+        found, reason = _bisect(lemma, circles, index, last, p, sweep)
+        if reason is not None:
+            refusals.append(ExactRefusal(position, p, sweep.kind, reason))
+        sub_sweeps.extend(found)
+    if refusals:
+        return ExactConnectorVerdict(position, seam, ConnectorTier.REFUSED, len(sweeps), (), tuple(refusals))
+    return ExactConnectorVerdict(position, seam, ConnectorTier.TIER_1B, len(sweeps), tuple(sub_sweeps), ())
+
+
 @dataclass(frozen=True)
 class ExactConnectorAssessment:
     """Tier 1 and 1b verdicts for every exact connector, refusals included; never raises on a refusal."""
@@ -248,37 +298,13 @@ class ExactConnectorAssessment:
         """
         started = time.perf_counter()
         lemma = RangeEngagementLemma.build(tool_radius, chord_ratio)
-        index = _CandidateIndex(path.circles, lemma.tool_radius)
+        index = CandidateIndex(path.circles, lemma.tool_radius)
         seam_index = len(path.circles) - 1 if path.closed else None
-        verdicts = []
-        for k, connector in enumerate(path.connectors):
-            seam = k == seam_index
-            sweeps = connector.sweeps
-            if not sweeps:
-                verdicts.append(ExactConnectorVerdict(k, seam, ConnectorTier.STATIONARY, 0, (), ()))
-                continue
-            own = path.circles[k]
-            first_try = [lemma.certifies(sweep, own) for sweep in sweeps]
-            if all(first_try):
-                subs = tuple(ExactSubSweepCertificate(p, sweep.start, sweep.end, k) for p, sweep in enumerate(sweeps))
-                verdicts.append(ExactConnectorVerdict(k, seam, ConnectorTier.TIER_1, len(sweeps), subs, ()))
-                continue
-            last = prior_circle_indices(k, len(path.circles))[0]
-            sub_sweeps: list[ExactSubSweepCertificate] = []
-            refusals: list[ExactRefusal] = []
-            for p, (sweep, by_own) in enumerate(zip(sweeps, first_try)):
-                if by_own:
-                    sub_sweeps.append(ExactSubSweepCertificate(p, sweep.start, sweep.end, k))
-                    continue
-                found, reason = _bisect(lemma, path.circles, index, last, p, sweep)
-                if reason is not None:
-                    refusals.append(ExactRefusal(k, p, sweep.kind, reason))
-                sub_sweeps.extend(found)
-            if refusals:
-                verdicts.append(ExactConnectorVerdict(k, seam, ConnectorTier.REFUSED, len(sweeps), (), tuple(refusals)))
-            else:
-                verdicts.append(ExactConnectorVerdict(k, seam, ConnectorTier.TIER_1B, len(sweeps), tuple(sub_sweeps), ()))
-        return cls(tuple(verdicts), time.perf_counter() - started)
+        verdicts = tuple(
+            decide_connector(lemma, path.circles, connector, k, last=prior_circle_indices(k, len(path.circles))[0], seam=k == seam_index, index=index)
+            for k, connector in enumerate(path.connectors)
+        )
+        return cls(verdicts, time.perf_counter() - started)
 
     @property
     def refused(self) -> tuple[int, ...]:
