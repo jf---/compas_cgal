@@ -33,6 +33,7 @@ from benchmarks.held_figure5_raw_guide import Figure5RawGuide
 from benchmarks.held_figure5_raw_guide import build_distance_admissible_hypotheses
 from benchmarks.held_figure5_raw_guide import build_figure5_raw_guide
 from benchmarks.held_figure5_raw_guide import build_held_reference_raw_guide
+from benchmarks.held_gc_scope import paused_cyclic_gc
 from benchmarks.held_gouge_audit import HeldGougeAuditReport
 from benchmarks.held_omega_circles import OmegaCircle
 from benchmarks.held_omega_connectors import OmegaConnectors
@@ -151,9 +152,18 @@ def _containment_oracle(declared: DeclaredBoundary, tool_radius: Fraction, refer
 def generate_omega(workload: str, backend: ClearanceBackend = ClearanceBackend.NATIVE) -> OmegaGeneratedToolpath:
     """Run one workload's generator on Ω* stage by stage; ``backend`` decides circle containment (native by default).
 
+    The cyclic garbage collector is paused for the run (:func:`paused_cyclic_gc`);
+    the one collection on exit falls outside ``stage_seconds``.
+
     Raises:
         UnknownOmegaWorkloadError: ``workload`` is not in ``OMEGA_WORKLOADS``.
     """
+    with paused_cyclic_gc():
+        return _generate_omega(workload, backend)
+
+
+def _generate_omega(workload: str, backend: ClearanceBackend) -> OmegaGeneratedToolpath:
+    """The unscoped generator body of :func:`generate_omega` (the collector's state is the caller's)."""
     if workload not in OMEGA_WORKLOADS:
         raise UnknownOmegaWorkloadError(f"unknown workload {workload!r}; known: {list(OMEGA_WORKLOADS)}")
     spec = OMEGA_WORKLOADS[workload]

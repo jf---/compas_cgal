@@ -38,6 +38,7 @@ from benchmarks.held_figure5_path import build_figure5_approximate_path
 from benchmarks.held_figure5_path import build_held_reference_path
 from benchmarks.held_figure5_raw_guide import build_figure5_raw_guide
 from benchmarks.held_figure5_raw_guide import build_held_reference_raw_guide
+from benchmarks.held_gc_scope import paused_cyclic_gc
 from benchmarks.held_omega_toolpath import OmegaGeneratedToolpath
 from benchmarks.held_omega_toolpath import PathDomain
 from benchmarks.held_omega_toolpath import generate_omega
@@ -240,6 +241,7 @@ def _finish(path: GeneratedToolpath, validate: bool) -> WorkloadRun:
     return WorkloadRun(workload=path.workload, metrics=metrics, stage_seconds=dict(path.stage_seconds), generation_seconds=path.generation_seconds, validation_seconds=validation)
 
 
+@paused_cyclic_gc()
 def generate_figure5_refined() -> GeneratedToolpath:
     """Figure 5 standard-model draft: publisher-start polygon proposal, corner-aware engagement refinement."""
     case = load_held_reference_case("figure5")
@@ -263,6 +265,7 @@ def generate_figure5_refined() -> GeneratedToolpath:
     return GeneratedToolpath("figure5_refined", case, components[0], refined.circles, connectors, dict(stages.seconds))
 
 
+@paused_cyclic_gc()
 def _generate_figure8(name: str, case_name: str, *, spacing: str, qualify_contacts: bool, corner_approaches: bool) -> GeneratedToolpath:
     case = load_held_reference_case(case_name)
     stages = _Stages()
