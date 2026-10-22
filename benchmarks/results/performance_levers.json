@@ -1,0 +1,89 @@
+{
+  "schema": "performance-levers/1",
+  "note": "Committed input of tools.performance_lever_heatmap. Each lever names the profiled code it replaces; a function counts only in the workloads it lists. 'cumulative' = the Python subtree, 'self' = self time (native calls are invisible to cProfile and charge their time to the calling wrapper's self time). Within a lever no listed function may lie inside another's counted time; the tool checks that against the call graph. A wired lever's cell is the time its replacement still costs on the generation path.",
+  "levers": [
+    {
+      "key": "aabb_boundary_clearance",
+      "label": "AABB boundary clearance",
+      "status": "wired",
+      "functions": [
+        {"module": "benchmarks/held_figure5_raw_guide.py", "function": "_native_station_boundary", "time": "cumulative", "workloads": ["held_figure5", "held_crossed_skis"]}
+      ],
+      "estimated": {}
+    },
+    {
+      "key": "case_load_cache",
+      "label": "Case-load biarc cache / native",
+      "status": "wired",
+      "functions": [
+        {"module": "benchmarks/held_reference_cases.py", "function": "load_held_reference_case", "time": "cumulative", "workloads": ["held_figure5", "held_crossed_skis"]}
+      ],
+      "estimated": {}
+    },
+    {
+      "key": "held_bookkeeping",
+      "label": "Held Python bookkeeping",
+      "status": "wired",
+      "functions": [
+        {"module": "benchmarks/held_figure5_raw_guide.py", "function": "_boundary_arclength", "time": "cumulative", "workloads": ["held_figure5", "held_crossed_skis"]},
+        {"module": "benchmarks/held_figure5_path.py", "function": "_boundary_neighborhood_owners", "time": "cumulative", "workloads": ["held_figure5", "held_crossed_skis"]}
+      ],
+      "estimated": {}
+    },
+    {
+      "key": "aabb_reuse_contact_containment",
+      "label": "Reuse AABB: contact, containment, centre domain",
+      "status": "proposed",
+      "functions": [
+        {"module": "benchmarks/tools/held_toolpath_progress.py", "function": "_containment_report", "time": "cumulative", "workloads": ["held_figure5", "held_crossed_skis"]},
+        {"module": "benchmarks/held_figure5_path.py", "function": "build_held_reference_path", "time": "self", "workloads": ["held_figure5", "held_crossed_skis"]}
+      ],
+      "estimated": {
+        "held_figure5": "native project_boundary_contact is invisible to cProfile; it is counted as build_held_reference_path self time, which also holds that function's own Python",
+        "held_crossed_skis": "native project_boundary_contact is invisible to cProfile; it is counted as build_held_reference_path self time, which also holds that function's own Python"
+      }
+    },
+    {
+      "key": "persistent_ric_locator",
+      "label": "Persistent stock RIC locator",
+      "status": "proposed",
+      "functions": [
+        {"module": "src/compas_cgal/stock.py", "function": "subtract_line_sweep_local", "time": "self", "workloads": ["pipeline_cap120_rect_20x12", "pipeline_cap40_rect_12x8"]},
+        {"module": "src/compas_cgal/stock.py", "function": "subtract_circle_sweep_local", "time": "self", "workloads": ["pipeline_cap120_rect_20x12", "pipeline_cap40_rect_12x8"]},
+        {"module": "src/compas_cgal/stock.py", "function": "subtract_arc_sweep_local", "time": "self", "workloads": ["rho_cap40_rect_12x8"]}
+      ],
+      "estimated": {
+        "pipeline_cap120_rect_20x12": "the locator rebuild runs inside native subtract_region_local; the cell is all native subtract time and omits the lazy rebuild on the next cold query; attributing it needs a symbolised build",
+        "pipeline_cap40_rect_12x8": "the locator rebuild runs inside native subtract_region_local; the cell is all native subtract time and omits the lazy rebuild on the next cold query; attributing it needs a symbolised build",
+        "rho_cap40_rect_12x8": "the locator rebuild runs inside native subtract_arc_sweep_local, whose partial arcs fall back to a global difference; the cell is all of it; attributing it needs a symbolised build"
+      }
+    },
+    {
+      "key": "local_removal_verdicts",
+      "label": "Local removal verdicts",
+      "status": "proposed",
+      "functions": [
+        {"module": "src/compas_cgal/stock.py", "function": "circle_sweep_removal", "time": "self", "workloads": ["pipeline_cap120_rect_20x12", "pipeline_cap40_rect_12x8"]},
+        {"module": "src/compas_cgal/stock.py", "function": "line_sweep_removal", "time": "self", "workloads": ["pipeline_cap120_rect_20x12", "pipeline_cap40_rect_12x8"]}
+      ],
+      "estimated": {}
+    },
+    {
+      "key": "point_set_disk_contour",
+      "label": "Point_set_2 disk-union contour",
+      "status": "proposed",
+      "functions": [
+        {"module": "benchmarks/held_contour_bound_spacing.py", "function": "select_contour_bound_path", "time": "cumulative", "workloads": []},
+        {"module": "benchmarks/held_coverage_thinning.py", "function": "thin_covered_contour_path", "time": "cumulative", "workloads": []}
+      ],
+      "estimated": {}
+    },
+    {
+      "key": "certificate_box_intersection",
+      "label": "Certificate neighbours (box_intersection_d)",
+      "status": "built",
+      "functions": [],
+      "estimated": {}
+    }
+  ]
+}

@@ -1,0 +1,282 @@
+{
+  "schema": "performance-lever-shares/1",
+  "generated_by": "tools.performance_lever_heatmap",
+  "mapping": "benchmarks/results/performance_levers.json",
+  "profiles": {
+    "held_figure5": {
+      "commit": "e05674d3e4e6b76eb5e090ed6c563ce60698faf1",
+      "dirty": true,
+      "date": "2026-10-21"
+    },
+    "held_crossed_skis": {
+      "commit": "e05674d3e4e6b76eb5e090ed6c563ce60698faf1",
+      "dirty": true,
+      "date": "2026-10-21"
+    },
+    "pipeline_cap120_rect_20x12": {
+      "commit": "e05674d3e4e6b76eb5e090ed6c563ce60698faf1",
+      "dirty": true,
+      "date": "2026-10-21"
+    },
+    "pipeline_cap40_rect_12x8": {
+      "commit": "e05674d3e4e6b76eb5e090ed6c563ce60698faf1",
+      "dirty": true,
+      "date": "2026-10-21"
+    },
+    "rho_cap40_rect_12x8": {
+      "commit": "e05674d3e4e6b76eb5e090ed6c563ce60698faf1",
+      "dirty": true,
+      "date": "2026-10-21"
+    }
+  },
+  "levers": {
+    "aabb_boundary_clearance": {
+      "label": "AABB boundary clearance",
+      "status": "wired",
+      "cells": {
+        "held_figure5": {
+          "share_percent": 7.43,
+          "estimated": false,
+          "reason": null
+        },
+        "held_crossed_skis": {
+          "share_percent": 6.02,
+          "estimated": false,
+          "reason": null
+        },
+        "pipeline_cap120_rect_20x12": {
+          "share_percent": null,
+          "estimated": false,
+          "reason": null
+        },
+        "pipeline_cap40_rect_12x8": {
+          "share_percent": null,
+          "estimated": false,
+          "reason": null
+        },
+        "rho_cap40_rect_12x8": {
+          "share_percent": null,
+          "estimated": false,
+          "reason": null
+        }
+      }
+    },
+    "case_load_cache": {
+      "label": "Case-load biarc cache / native",
+      "status": "wired",
+      "cells": {
+        "held_figure5": {
+          "share_percent": 0.95,
+          "estimated": false,
+          "reason": null
+        },
+        "held_crossed_skis": {
+          "share_percent": 0.93,
+          "estimated": false,
+          "reason": null
+        },
+        "pipeline_cap120_rect_20x12": {
+          "share_percent": null,
+          "estimated": false,
+          "reason": null
+        },
+        "pipeline_cap40_rect_12x8": {
+          "share_percent": null,
+          "estimated": false,
+          "reason": null
+        },
+        "rho_cap40_rect_12x8": {
+          "share_percent": null,
+          "estimated": false,
+          "reason": null
+        }
+      }
+    },
+    "held_bookkeeping": {
+      "label": "Held Python bookkeeping",
+      "status": "wired",
+      "cells": {
+        "held_figure5": {
+          "share_percent": 15.08,
+          "estimated": false,
+          "reason": null
+        },
+        "held_crossed_skis": {
+          "share_percent": 9.76,
+          "estimated": false,
+          "reason": null
+        },
+        "pipeline_cap120_rect_20x12": {
+          "share_percent": null,
+          "estimated": false,
+          "reason": null
+        },
+        "pipeline_cap40_rect_12x8": {
+          "share_percent": null,
+          "estimated": false,
+          "reason": null
+        },
+        "rho_cap40_rect_12x8": {
+          "share_percent": null,
+          "estimated": false,
+          "reason": null
+        }
+      }
+    },
+    "aabb_reuse_contact_containment": {
+      "label": "Reuse AABB: contact, containment, centre domain",
+      "status": "proposed",
+      "cells": {
+        "held_figure5": {
+          "share_percent": 20.08,
+          "estimated": true,
+          "reason": "native project_boundary_contact is invisible to cProfile; it is counted as build_held_reference_path self time, which also holds that function's own Python"
+        },
+        "held_crossed_skis": {
+          "share_percent": 41.94,
+          "estimated": true,
+          "reason": "native project_boundary_contact is invisible to cProfile; it is counted as build_held_reference_path self time, which also holds that function's own Python"
+        },
+        "pipeline_cap120_rect_20x12": {
+          "share_percent": null,
+          "estimated": false,
+          "reason": null
+        },
+        "pipeline_cap40_rect_12x8": {
+          "share_percent": null,
+          "estimated": false,
+          "reason": null
+        },
+        "rho_cap40_rect_12x8": {
+          "share_percent": null,
+          "estimated": false,
+          "reason": null
+        }
+      }
+    },
+    "persistent_ric_locator": {
+      "label": "Persistent stock RIC locator",
+      "status": "proposed",
+      "cells": {
+        "held_figure5": {
+          "share_percent": null,
+          "estimated": false,
+          "reason": null
+        },
+        "held_crossed_skis": {
+          "share_percent": null,
+          "estimated": false,
+          "reason": null
+        },
+        "pipeline_cap120_rect_20x12": {
+          "share_percent": 9.83,
+          "estimated": true,
+          "reason": "the locator rebuild runs inside native subtract_region_local; the cell is all native subtract time and omits the lazy rebuild on the next cold query; attributing it needs a symbolised build"
+        },
+        "pipeline_cap40_rect_12x8": {
+          "share_percent": 19.24,
+          "estimated": true,
+          "reason": "the locator rebuild runs inside native subtract_region_local; the cell is all native subtract time and omits the lazy rebuild on the next cold query; attributing it needs a symbolised build"
+        },
+        "rho_cap40_rect_12x8": {
+          "share_percent": 25.78,
+          "estimated": true,
+          "reason": "the locator rebuild runs inside native subtract_arc_sweep_local, whose partial arcs fall back to a global difference; the cell is all of it; attributing it needs a symbolised build"
+        }
+      }
+    },
+    "local_removal_verdicts": {
+      "label": "Local removal verdicts",
+      "status": "proposed",
+      "cells": {
+        "held_figure5": {
+          "share_percent": null,
+          "estimated": false,
+          "reason": null
+        },
+        "held_crossed_skis": {
+          "share_percent": null,
+          "estimated": false,
+          "reason": null
+        },
+        "pipeline_cap120_rect_20x12": {
+          "share_percent": 4.16,
+          "estimated": false,
+          "reason": null
+        },
+        "pipeline_cap40_rect_12x8": {
+          "share_percent": 6.55,
+          "estimated": false,
+          "reason": null
+        },
+        "rho_cap40_rect_12x8": {
+          "share_percent": null,
+          "estimated": false,
+          "reason": null
+        }
+      }
+    },
+    "point_set_disk_contour": {
+      "label": "Point_set_2 disk-union contour",
+      "status": "proposed",
+      "cells": {
+        "held_figure5": {
+          "share_percent": null,
+          "estimated": false,
+          "reason": null
+        },
+        "held_crossed_skis": {
+          "share_percent": null,
+          "estimated": false,
+          "reason": null
+        },
+        "pipeline_cap120_rect_20x12": {
+          "share_percent": null,
+          "estimated": false,
+          "reason": null
+        },
+        "pipeline_cap40_rect_12x8": {
+          "share_percent": null,
+          "estimated": false,
+          "reason": null
+        },
+        "rho_cap40_rect_12x8": {
+          "share_percent": null,
+          "estimated": false,
+          "reason": null
+        }
+      }
+    },
+    "certificate_box_intersection": {
+      "label": "Certificate neighbours (box_intersection_d)",
+      "status": "built",
+      "cells": {
+        "held_figure5": {
+          "share_percent": null,
+          "estimated": false,
+          "reason": null
+        },
+        "held_crossed_skis": {
+          "share_percent": null,
+          "estimated": false,
+          "reason": null
+        },
+        "pipeline_cap120_rect_20x12": {
+          "share_percent": null,
+          "estimated": false,
+          "reason": null
+        },
+        "pipeline_cap40_rect_12x8": {
+          "share_percent": null,
+          "estimated": false,
+          "reason": null
+        },
+        "rho_cap40_rect_12x8": {
+          "share_percent": null,
+          "estimated": false,
+          "reason": null
+        }
+      }
+    }
+  }
+}
