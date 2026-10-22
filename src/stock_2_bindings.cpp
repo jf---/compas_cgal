@@ -113,6 +113,13 @@ NB_MODULE(_stock_2, m)
     // caught alongside -- a malformed-input rejection.
     nb::exception<LocalDepletionEscapedError>(m, "LocalDepletionEscapedError");
     nb::exception<LocalDepletionTopologyError>(m, "LocalDepletionTopologyError", PyExc_RuntimeError);
+    // The Gps CCB repair found an arrangement corrupt beyond the misfile it
+    // repairs (gps_ccb_repair_2.h): broken invariants, never argument faults.
+    nb::exception<AmbiguousOuterCcbError<StockCcbRepairDomain>>(m, "AmbiguousOuterCcbError", PyExc_RuntimeError);
+    nb::exception<BoundedFaceWithoutOuterCcbError<StockCcbRepairDomain>>(
+        m, "BoundedFaceWithoutOuterCcbError", PyExc_RuntimeError);
+    nb::exception<UnboundedFaceOuterCcbError<StockCcbRepairDomain>>(
+        m, "UnboundedFaceOuterCcbError", PyExc_RuntimeError);
 
     nb::class_<DepletionTrace>(m, "DepletionTrace")
         .def_prop_ro("center_count", [](const DepletionTrace& trace) {
@@ -325,7 +332,7 @@ NB_MODULE(_stock_2, m)
         .def("representation_is_valid", &Stock2::representation_is_valid)
         // Diagnostic: re-file the outer CCBs CGAL's Gps boolean misfiled (gps_ccb_repair_2.h)
         // and return how many; 0 on a planar arrangement. Same point set before and after.
-        .def("refile_misfiled_outer_ccbs", [](Stock2& stock) { return refile_misfiled_outer_ccbs(stock.set()); })
+        .def("refile_misfiled_outer_ccbs", [](Stock2& stock) { return refile_misfiled_outer_ccbs<StockCcbRepairDomain>(stock.set()); })
         .def(
             "arrangement_stats",
             [](const Stock2& stock) {

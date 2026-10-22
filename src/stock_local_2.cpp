@@ -346,7 +346,7 @@ void subtract_region_local(Gps& set, const LocalRemovalRegion& region)
     // all rely on the planar one-outer-CCB invariant, which a preceding
     // Gps::difference/join can break (gps_ccb_repair_2.h). Restore it exactly
     // before touching the arrangement.
-    refile_misfiled_outer_ccbs(set);
+    refile_misfiled_outer_ccbs<StockCcbRepairDomain>(set);
     Arr& arrangement = set.arrangement();
 
     std::vector<Arr::Face_handle> inside;

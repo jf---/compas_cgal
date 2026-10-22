@@ -4,6 +4,7 @@
 // numbers as (rational, coefficient, radicand) triples of those pairs. No
 // double ever crosses this boundary in either direction.
 
+#include "gps_ccb_repair_2.h"
 #include "held_centre_domain_2.h"
 
 #include <cmath>
@@ -123,6 +124,14 @@ NB_MODULE(_held_centre_domain_2, m)
     m.doc() = "Exact Held centre domain Omega* (docs/held_exact_centre_domain.md); CORE-free.";
     nb::exception<hcd::InvalidCentreDomainInputError>(m, "InvalidCentreDomainInputError", PyExc_ValueError);
     nb::exception<hcd::BrokenCentreDomainChainError>(m, "BrokenCentreDomainChainError", PyExc_RuntimeError);
+    // The Gps CCB repair found the domain arrangement corrupt beyond the misfile
+    // it repairs (gps_ccb_repair_2.h): broken invariants, never argument faults.
+    nb::exception<AmbiguousOuterCcbError<hcd::CentreDomainCcbRepairDomain>>(
+        m, "AmbiguousOuterCcbError", PyExc_RuntimeError);
+    nb::exception<BoundedFaceWithoutOuterCcbError<hcd::CentreDomainCcbRepairDomain>>(
+        m, "BoundedFaceWithoutOuterCcbError", PyExc_RuntimeError);
+    nb::exception<UnboundedFaceOuterCcbError<hcd::CentreDomainCcbRepairDomain>>(
+        m, "UnboundedFaceOuterCcbError", PyExc_RuntimeError);
 
     m.def("last_exact_fallbacks", [] { return last_exact_fallbacks; });
     nb::class_<hcd::CentreDomain2>(m, "CentreDomain2")

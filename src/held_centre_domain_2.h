@@ -30,6 +30,10 @@ public:
     using std::invalid_argument::invalid_argument;
 };
 
+/// Module tag of `_held_centre_domain_2` for the templated Gps CCB repair
+/// errors (gps_ccb_repair_2.h).
+struct CentreDomainCcbRepairDomain {};
+
 /// The arrangement returned a boundary cycle that does not chain exactly
 /// (target of one halfedge != source of the next). A contract breach of the
 /// extraction, never expected.

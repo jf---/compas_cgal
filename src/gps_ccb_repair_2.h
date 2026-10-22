@@ -43,9 +43,17 @@
 // Cost: one pass over the faces reading a container size, plus an exact
 // comparison per vertex of a misfiled face only.
 
+// The three error types below are templated on a module tag (`Domain`). Each
+// nanobind module that runs the repair registers its own instantiation as its
+// own named Python exception. One shared C++ type registered in two modules
+// would let whichever module registered last translate the other's throws:
+// translators live in nanobind's shared internals, and hidden-visibility type
+// identity across shared objects falls back to name comparison on this target.
+
 // Two distinct CCBs of one face share their xy-smallest vertex. Distinct CCBs are
 // distinct connected components of the edge graph and can never share a vertex,
 // so this is a corrupted arrangement, reported rather than guessed around.
+template <typename Domain>
 class AmbiguousOuterCcbError : public std::runtime_error {
 public:
     using std::runtime_error::runtime_error;
@@ -53,6 +61,7 @@ public:
 
 // A bounded face with no outer CCB: impossible in a bounded planar arrangement
 // (and never produced by the misfile above), so the arrangement is corrupt.
+template <typename Domain>
 class BoundedFaceWithoutOuterCcbError : public std::runtime_error {
 public:
     using std::runtime_error::runtime_error;
@@ -62,6 +71,7 @@ public:
 // and the misfile above cannot produce one (CGAL forces face_outer_ccb_set for
 // the unbounded set, and the twin of an inner-CCB halfedge faces a bounded
 // face), so this is an unmodelled corruption, reported rather than repaired.
+template <typename Domain>
 class UnboundedFaceOuterCcbError : public std::runtime_error {
 public:
     using std::runtime_error::runtime_error;
@@ -114,10 +124,14 @@ void refile_as_inner(Arr& arrangement, typename Arr::Face_handle face, typename 
 // Re-file every misfiled outer CCB of `set`'s arrangement as an inner CCB.
 // Returns the number of CCBs re-filed (0 on an already planar arrangement).
 //
+// `Domain` is the calling module's tag; it selects which instantiation of the
+// three errors is thrown (see above).
+//
 // Raises:
-//     AmbiguousOuterCcbError, BoundedFaceWithoutOuterCcbError,
-//     UnboundedFaceOuterCcbError: the arrangement is corrupt beyond the misfile.
-template <typename GpsSet>
+//     AmbiguousOuterCcbError<Domain>, BoundedFaceWithoutOuterCcbError<Domain>,
+//     UnboundedFaceOuterCcbError<Domain>: the arrangement is corrupt beyond the
+//     misfile.
+template <typename Domain, typename GpsSet>
 std::size_t refile_misfiled_outer_ccbs(GpsSet& set)
 {
     using Arr = typename GpsSet::Arrangement_2;
@@ -130,12 +144,12 @@ std::size_t refile_misfiled_outer_ccbs(GpsSet& set)
         const std::size_t outer_count = face->number_of_outer_ccbs();
         if (face->is_unbounded()) {
             if (outer_count != 0) {
-                throw UnboundedFaceOuterCcbError("the unbounded face of a Gps arrangement carries an outer CCB.");
+                throw UnboundedFaceOuterCcbError<Domain>("the unbounded face of a Gps arrangement carries an outer CCB.");
             }
             continue;
         }
         if (outer_count == 0) {
-            throw BoundedFaceWithoutOuterCcbError("a bounded face of a Gps arrangement has no outer CCB.");
+            throw BoundedFaceWithoutOuterCcbError<Domain>("a bounded face of a Gps arrangement has no outer CCB.");
         }
         if (outer_count == 1) continue;
 
@@ -149,7 +163,7 @@ std::size_t refile_misfiled_outer_ccbs(GpsSet& set)
                 gps_ccb_repair_detail::lowest_vertex<Arr>(candidate->ccb(), compare_xy);
             const CGAL::Comparison_result order = compare_xy(lowest->point(), keep_lowest->point());
             if (order == CGAL::EQUAL) {
-                throw AmbiguousOuterCcbError(
+                throw AmbiguousOuterCcbError<Domain>(
                     "two outer CCBs of one face share their lowest vertex; the arrangement is corrupt.");
             }
             if (order == CGAL::SMALLER) {

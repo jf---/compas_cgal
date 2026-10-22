@@ -22,6 +22,10 @@ public:
     using std::runtime_error::runtime_error;
 };
 
+// Module tag of `_stock_2` for the templated Gps CCB repair errors
+// (gps_ccb_repair_2.h).
+struct StockCcbRepairDomain {};
+
 // A bounded removal region described the way a LOCAL subtraction needs it,
 // rather than as the point set a global difference consumes.
 //
