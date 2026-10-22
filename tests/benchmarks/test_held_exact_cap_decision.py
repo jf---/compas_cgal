@@ -11,6 +11,7 @@ from collections.abc import Callable
 from fractions import Fraction
 from typing import TypeVar
 
+import pytest
 from hypothesis import event
 from hypothesis import given
 from hypothesis import settings
@@ -18,6 +19,8 @@ from hypothesis import strategies as st
 
 from benchmarks.held_boundary_order_spacing import select_boundary_ordered_sources
 from benchmarks.held_figure5_boundary_path import Figure5CounterclockwiseCircle
+from benchmarks.held_figure5_engagement_refinement import ConnectorEngagementResolutionError
+from benchmarks.held_figure5_engagement_refinement import midpoint
 from benchmarks.held_figure5_engagement_refinement import refine_figure5_engagement
 from benchmarks.held_figure5_path import _paper_candidate
 from benchmarks.held_figure5_raw_guide import GuideRunId
@@ -95,9 +98,24 @@ def test_refinement_subdivides_when_the_exact_engagement_exceeds() -> None:
 
 
 def test_refinement_accepts_the_transition_when_the_exact_engagement_is_within() -> None:
+    """The circle pair is accepted on the exact verdict; only its connector asks for a circle.
+
+    Acceptance needs the pair within the cap AND the connector certified. At
+    this 32.9 degree cap the connector (4, 0) -> (4.379, 0) leaving the
+    rho = 2 circle has tier-1 bound O(d) = 2 pi - 2 acos((d^2 + r^2 - R^2) / (2 d r))
+    = 37.3 degrees at its far end (d^2 = 4 + 0.379^2, R = 3), so the gate
+    refuses it. With no depth the refusal is therefore the connector's
+    (``ConnectorEngagementResolutionError``); a pair refused on the float
+    verdict would raise the pair's own depth error instead. The one midpoint
+    (x = 4.189, rho = 1.625) halves both connectors to 18.8 and 21.6 degrees.
+    """
     (successor, cap) = FLOAT_EXCEEDS_EXACT_WITHIN
-    result = refine_figure5_engagement((_circle(0, *PREDECESSOR), _circle(1, *successor)), BOUNDARY, TOOL, cap)
-    assert len(result.circles) == 2
+    pair = (_circle(0, *PREDECESSOR), _circle(1, *successor))
+    with pytest.raises(ConnectorEngagementResolutionError):
+        refine_figure5_engagement(pair, BOUNDARY, TOOL, cap, max_depth=0)
+    result = refine_figure5_engagement(pair, BOUNDARY, TOOL, cap)
+    assert len(result.circles) == 3 and result.original_indices == (0, 2)
+    assert result.circles[1] == midpoint(*pair, BOUNDARY)
 
 
 def _candidate(x: float, y: float, rho: float) -> PaperCircleCandidate:

@@ -75,16 +75,20 @@ def refine_boundary_ordered_path(
     cap: EngagementCap,
     *,
     corner_approaches: bool = False,
+    close_seam: bool = False,
 ) -> tuple[tuple[int, ...], Figure5EngagementRefinement]:
     """Repair source geometry, select in emitted order, then cap every gap.
 
     Returns original source indices and refined motion. The refinement's
     original_indices refer to the selected subsequence, not the full input.
+    Every emitted connector is certified (tiers 1 + 1b) by
+    ``refine_figure5_engagement``; ``close_seam`` certifies the seam connector
+    too, appending circles after the last selected source.
     """
     circles = tuple(circle_on_side(circle, circle.boundary_site, circle.contact_point, circle.radius, boundary) for circle in source.path.circles)
     selected = select_boundary_ordered_sources(circles, source.circle_sources, tool_radius, cap)
     represented = frozenset(run for index in selected for run in source.circle_sources[index])
     if represented != source.reached_run_ids:
         raise InvalidBoundarySpacingInputError("Boundary spacing source attribution differs from the reached-run ledger.")
-    refined = refine_figure5_engagement(tuple(circles[index] for index in selected), boundary, tool_radius, cap, corner_approaches=corner_approaches)
+    refined = refine_figure5_engagement(tuple(circles[index] for index in selected), boundary, tool_radius, cap, corner_approaches=corner_approaches, close_seam=close_seam)
     return selected, refined

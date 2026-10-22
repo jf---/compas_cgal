@@ -8,135 +8,135 @@
     "python": "3.12.13"
   },
   "build": {
-    "commit": "7f1c52eacf5e7f1fb6b728e750d143aa732c2fb1",
+    "commit": "8aae3c690be966268d61d2471c73c1cd94ad2f11",
     "dirty": true,
     "package_version": "0.9.1",
-    "recorded_at": "2026-10-21T19:56:59+00:00"
+    "recorded_at": "2026-10-22T12:14:07+00:00"
   },
   "timing_runs": 3,
   "cluster_link_mm": 1.0,
   "workloads": [
     {
       "workload": "figure5_refined",
-      "generation_s": 6.200544834020548,
+      "generation_s": 1.5274429579731077,
       "cuts": 2010,
       "connectors": 1993,
       "domain_vertices": 65,
       "region_count": 2140,
       "connector_regions": 65,
       "piece_count": 3351,
-      "edge_count": 1709997,
+      "edge_count": 1710015,
       "covered": true,
       "witnesses": 0,
       "undecided": 0,
       "clusters": [],
       "runs": [
         {
-          "seconds": 4.890754124993691,
-          "load_1min": 162.09375
+          "seconds": 1.4826574159960728,
+          "load_1min": 143.83740234375
         },
         {
-          "seconds": 4.809222250012681,
-          "load_1min": 169.052734375
+          "seconds": 1.5965739579987712,
+          "load_1min": 143.83740234375
         },
         {
-          "seconds": 6.972414041985758,
-          "load_1min": 169.92919921875
+          "seconds": 1.4713997079816181,
+          "load_1min": 143.83740234375
         }
       ],
-      "median_s": 4.890754124993691,
+      "median_s": 1.4826574159960728,
       "native_phase_s": [
-        2.158197709,
-        2.844440721999994,
-        0.7044850500000004,
-        0.5409832199999998
+        0.585527375,
+        0.4196745900000001,
+        0.2485037920000001,
+        0.06990541600000003
       ],
       "repair": null
     },
     {
       "workload": "figure8_crossed_skis_boundary",
-      "generation_s": 29.80876166600501,
-      "cuts": 1616,
-      "connectors": 1614,
+      "generation_s": 2.2994150840386283,
+      "cuts": 1621,
+      "connectors": 1619,
       "domain_vertices": 103,
-      "region_count": 1822,
+      "region_count": 1827,
       "connector_regions": 103,
-      "piece_count": 2815,
-      "edge_count": 384575,
+      "piece_count": 2820,
+      "edge_count": 387993,
       "covered": true,
       "witnesses": 0,
       "undecided": 0,
       "clusters": [],
       "runs": [
         {
-          "seconds": 2.8867264580039773,
-          "load_1min": 156.61767578125
+          "seconds": 0.6165297500265297,
+          "load_1min": 133.19970703125
         },
         {
-          "seconds": 2.404014041996561,
-          "load_1min": 156.61767578125
+          "seconds": 0.5813736249983776,
+          "load_1min": 123.974609375
         },
         {
-          "seconds": 2.55817995898542,
-          "load_1min": 153.84521484375
+          "seconds": 0.5898112499853596,
+          "load_1min": 123.974609375
         }
       ],
-      "median_s": 2.55817995898542,
+      "median_s": 0.5898112499853596,
       "native_phase_s": [
-        0.541256625,
-        0.9375036149999997,
-        0.4613142869999998,
-        0.2716182869999986
+        0.205607666,
+        0.11837671499999991,
+        0.20855184000000007,
+        0.06155749599999918
       ],
       "repair": null
     },
     {
       "workload": "figure8_upper_boundary",
-      "generation_s": 31.003664417017717,
-      "cuts": 1684,
-      "connectors": 1682,
+      "generation_s": 3.8524237499805167,
+      "cuts": 1690,
+      "connectors": 1688,
       "domain_vertices": 142,
-      "region_count": 1968,
+      "region_count": 1974,
       "connector_regions": 142,
-      "piece_count": 3434,
-      "edge_count": 857358,
+      "piece_count": 3443,
+      "edge_count": 862318,
       "covered": true,
       "witnesses": 0,
       "undecided": 0,
       "clusters": [],
       "runs": [
         {
-          "seconds": 1.2945435839938,
-          "load_1min": 150.1064453125
+          "seconds": 0.9486562499951106,
+          "load_1min": 114.767578125
         },
         {
-          "seconds": 1.3233817080035806,
-          "load_1min": 150.1064453125
+          "seconds": 0.9396060419967398,
+          "load_1min": 114.767578125
         },
         {
-          "seconds": 1.3501525000028778,
-          "load_1min": 150.1064453125
+          "seconds": 0.9654798750125337,
+          "load_1min": 114.767578125
         }
       ],
-      "median_s": 1.3233817080035806,
+      "median_s": 0.9486562499951106,
       "native_phase_s": [
-        0.372084416,
-        0.6190933870000005,
-        0.1973640540000001,
-        0.11992683600000079
+        0.365581167,
+        0.2199591050000001,
+        0.278272789,
+        0.0615127519999995
       ],
       "repair": null
     },
     {
       "workload": "figure8_monstera_boundary_qualified_corners",
-      "generation_s": 110.84776704199612,
-      "cuts": 4366,
-      "connectors": 4086,
+      "generation_s": 8.772309791005682,
+      "cuts": 4438,
+      "connectors": 4158,
       "domain_vertices": 386,
-      "region_count": 5138,
+      "region_count": 5210,
       "connector_regions": 386,
-      "piece_count": 9181,
-      "edge_count": 1457063,
+      "piece_count": 9270,
+      "edge_count": 1488885,
       "covered": false,
       "witnesses": 8,
       "undecided": 0,
@@ -164,73 +164,73 @@
       ],
       "runs": [
         {
-          "seconds": 2.785332333005499,
-          "load_1min": 326.828125
+          "seconds": 2.5297405000019353,
+          "load_1min": 98.66015625
         },
         {
-          "seconds": 2.590544790989952,
-          "load_1min": 323.23828125
+          "seconds": 2.5261388750222977,
+          "load_1min": 91.72021484375
         },
         {
-          "seconds": 2.664956874999916,
-          "load_1min": 323.23828125
+          "seconds": 2.5293987920158543,
+          "load_1min": 91.72021484375
         }
       ],
-      "median_s": 2.664956874999916,
+      "median_s": 2.5293987920158543,
       "native_phase_s": [
-        0.640251625,
-        1.3500031700000035,
-        0.5279131209999995,
-        0.26926124499999454
+        0.821598125,
+        0.5993090319999982,
+        0.7640881260000013,
+        0.1428303430000034
       ],
       "repair": null
     },
     {
       "workload": "figure8_monstera_boundary_qualified_corners_repaired",
-      "generation_s": 111.44849241699558,
-      "cuts": 4368,
-      "connectors": 4088,
+      "generation_s": 24.609346915996866,
+      "cuts": 4440,
+      "connectors": 4160,
       "domain_vertices": 386,
-      "region_count": 5140,
+      "region_count": 5212,
       "connector_regions": 386,
-      "piece_count": 9185,
-      "edge_count": 1460771,
+      "piece_count": 9274,
+      "edge_count": 1492597,
       "covered": true,
       "witnesses": 0,
       "undecided": 0,
       "clusters": [],
       "runs": [
         {
-          "seconds": 3.610545875009848,
-          "load_1min": 131.70703125
+          "seconds": 3.172649999993155,
+          "load_1min": 88.19775390625
         },
         {
-          "seconds": 3.210731166996993,
-          "load_1min": 131.70703125
+          "seconds": 4.034147166996263,
+          "load_1min": 89.142578125
         },
         {
-          "seconds": 3.1507076249981765,
-          "load_1min": 121.9609375
+          "seconds": 3.416369542013854,
+          "load_1min": 87.529296875
         }
       ],
-      "median_s": 3.210731166996993,
+      "median_s": 3.416369542013854,
       "native_phase_s": [
-        0.672849125,
-        1.291230121999994,
-        0.48814488999999955,
-        0.24208395000000285
+        0.910903083,
+        0.6990203509999974,
+        0.8481938239999999,
+        0.15147720100000264
       ],
       "repair": {
-        "emitted_before": 4366,
-        "emitted_after": 4368,
+        "emitted_before": 4438,
+        "emitted_after": 4440,
         "inserted_sources": [
           744,
           1273
         ],
         "rounds": 1,
         "certificate_runs": 2,
-        "repair_s": 0.14256158302305266,
-        "certificate_s": 6.716756292007631
+        "repair_s": 0.41868870801408775,
+        "certificate_s": 9.589737749978667
       }
     }
   ]

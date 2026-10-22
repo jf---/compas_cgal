@@ -12,26 +12,26 @@
     },
     "figure8_crossed_skis_boundary": {
       "initial": "7906fdbcb0e4b968c7f0e54e2760a77511fc8f98ea36c4583f78ca5a6087dee7",
-      "circles": "1fd6c74a1fb2c4db2430b46625d0df319e868c9bc452f38bc53c30826d134ed3",
-      "connectors": "b302d43cd7c0472451c13e04bda978e249932a488dd7476c8643dea8e1497a07",
-      "circle_count": 1616,
-      "connector_count": 1616,
+      "circles": "711eb026b8369b298c9214e5c4fc9bfab068f727bb0305b8f4ecaa523afe52b4",
+      "connectors": "fc8bf3b7f1a6d370c8ad1ac3f7d912448dfd8ec6fba412856e59ac146e07a293",
+      "circle_count": 1621,
+      "connector_count": 1621,
       "seam": "connector"
     },
     "figure8_monstera_boundary_qualified_corners": {
       "initial": "fe2b2d816ad4730f1ab50d0a62ba94eacddd084842aa87d34283126138d30719",
-      "circles": "4e36fcc0ba9ca02dd49b0c029b256079e7dc70ec8626043e9ba3ae88295172e9",
-      "connectors": "d7bccf30bd0a4305c8c5ac68e77652fed8c99470d4ea89363c7de5610222807e",
-      "circle_count": 4366,
-      "connector_count": 4366,
+      "circles": "044033966b5990d4f331b55a682234b6f5b4c6d8d336d0784d1144306f4a6e98",
+      "connectors": "230c29cc326d2905a4099b7281f028d76980b41ee83a74b5108304517eaed3a7",
+      "circle_count": 4438,
+      "connector_count": 4438,
       "seam": "connector"
     },
     "figure8_upper_boundary": {
       "initial": "a6a7933391dbc945e62c7de0c4f67cd1145405e050f0d065df9a4bf34eef209d",
-      "circles": "1860af513a2d5799772bd90b78f7f5a581758d909d4a181c570dbd19e3c4cfe6",
-      "connectors": "95ba1918f41cd1c8f4fcac158d20e10423e9bf09b91c72d2ce849b91fb70f00b",
-      "circle_count": 1684,
-      "connector_count": 1684,
+      "circles": "8c38fac5a272b3dea5e4fbba6176e7d594d7ecca5d16154182a8374db9347001",
+      "connectors": "63e0b23aa0f1a03299f99de1585210f2dbd7c72cf6726458a01d9af00e7ea152",
+      "circle_count": 1690,
+      "connector_count": 1690,
       "seam": "connector"
     }
   }

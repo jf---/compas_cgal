@@ -5,13 +5,17 @@ from fractions import Fraction
 import numpy as np
 import pytest
 
+from benchmarks.held_boundary_arclength import BoundaryArclength as _BoundaryArclength
 from benchmarks.held_figure5_boundary_path import Figure5BoundaryConnectors
 from benchmarks.held_figure5_boundary_path import Figure5CounterclockwiseCircle
 from benchmarks.held_figure5_boundary_path import Figure5SeamClosure
 from benchmarks.held_figure5_boundary_path import _canonical_offset_point
+from benchmarks import held_figure5_engagement_refinement as engagement_refinement
+from benchmarks.held_connector_engagement import ConnectorEngagementLemma
+from benchmarks.held_figure5_engagement_refinement import ConvexCornerEngagementError
 from benchmarks.held_figure5_engagement_refinement import Figure5EngagementResolutionError
-from benchmarks.held_figure5_engagement_refinement import _BoundaryArclength
-from benchmarks.held_figure5_engagement_refinement import _midpoint
+from benchmarks.held_figure5_engagement_refinement import exterior_angle_exceeds_cap
+from benchmarks.held_figure5_engagement_refinement import midpoint
 from benchmarks.held_figure5_engagement_refinement import refine_figure5_engagement
 from benchmarks.held_figure5_path import _paper_candidate
 from benchmarks.held_figure5_path import build_figure5_approximate_path
@@ -99,25 +103,80 @@ def test_midpoint_of_an_exact_vertex_half_takes_the_exact_third_point(width: Fra
     boundary = _rectangle(width, height)
     previous = _station(boundary, 0, 1 - u / width, 0, Fraction(1))
     successor = _station(boundary, 1, u / height, 1, Fraction(1))
-    midpoint = _midpoint(previous, successor, boundary)
+    halfway = midpoint(previous, successor, boundary)
     third = 1 - u / width + (2 * u / 3) / width
-    assert int(midpoint.boundary_site.segment_id) == 0
-    assert midpoint.boundary_site.parameter == Fraction(float(third))
-    assert midpoint.contact_point == _canonical_offset_point(boundary, midpoint.boundary_site)
+    assert int(halfway.boundary_site.segment_id) == 0
+    assert halfway.boundary_site.parameter == Fraction(float(third))
+    assert halfway.contact_point == _canonical_offset_point(boundary, halfway.boundary_site)
     # The corner limit is the distance u/3 to side 1 (right angle, n·m = 0).
-    assert float(midpoint.radius.value) == pytest.approx(float(u / 3))
+    assert float(halfway.radius.value) == pytest.approx(float(u / 3))
 
 
 def test_exact_vertex_half_refines_across_the_convex_corner() -> None:
+    """User ruling 2026-10-22: a right-angle convex corner under an 80-degree cap is refused by name.
+
+    Lemma (docs/held_connector_engagement.md, "Convex corners"): the first
+    arrival at a convex vertex of interior angle alpha engages at least
+    pi - alpha = 90 > 80 degrees whatever was cut before, so no refinement
+    across it can be certified.
+    """
     boundary = _rectangle(Fraction(10), Fraction(10))
     first = _station(boundary, 0, Fraction(4, 5), 0, Fraction(1))
     second = _station(boundary, 1, Fraction(1, 5), 1, Fraction(1))
     for corner_approaches in (False, True):
-        result = refine_figure5_engagement((first, second), boundary, TOOL, CAP, corner_approaches=corner_approaches)
-        assert result.circles[0] == first and result.circles[-1] == second
-        assert len(result.circles) > 2
-        for previous, current in zip(result.circles, result.circles[1:]):
-            assert reference_engagement(_paper_candidate(previous), _paper_candidate(current), TOOL).within(CAP)
+        with pytest.raises(ConvexCornerEngagementError) as caught:
+            refine_figure5_engagement((first, second), boundary, TOOL, CAP, corner_approaches=corner_approaches)
+        assert (caught.value.vertex, caught.value.connector, caught.value.seam) == (1, 0, False)
+
+
+def test_convex_corner_over_the_cap_is_refused_before_any_midpoint(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The refusal is decided from the vertex and the cuts so far, not by halving circles toward zero radius."""
+
+    def no_midpoint(*args: object, **kwargs: object) -> Figure5CounterclockwiseCircle:
+        raise AssertionError("midpoint called before the convex-corner refusal")
+
+    monkeypatch.setattr(engagement_refinement, "midpoint", no_midpoint)
+    boundary = _rectangle(Fraction(10), Fraction(10))
+    first = _station(boundary, 0, Fraction(4, 5), 0, Fraction(1))
+    second = _station(boundary, 1, Fraction(1, 5), 1, Fraction(1))
+    with pytest.raises(ConvexCornerEngagementError) as caught:
+        refine_figure5_engagement((first, second), boundary, TOOL, CAP)
+    assert caught.value.vertex == 1
+
+
+def test_connector_over_two_sharp_corners_is_refused_by_name_at_the_first() -> None:
+    """Side 0 to side 2: midpoints split the connector until one sub-connector is the first arrival at (10, 0)."""
+    boundary = _rectangle(Fraction(10), Fraction(10))
+    first = _station(boundary, 0, Fraction(4, 5), 0, Fraction(1))
+    second = _station(boundary, 2, Fraction(1, 5), 1, Fraction(1))
+    with pytest.raises(ConvexCornerEngagementError) as caught:
+        refine_figure5_engagement((first, second), boundary, TOOL, CAP)
+    assert caught.value.vertex == 1 and not caught.value.seam
+
+
+def test_seam_over_a_sharp_convex_corner_is_refused_by_name() -> None:
+    boundary = _rectangle(Fraction(10), Fraction(10))
+    first, second = _station(boundary, 0, Fraction(1, 5), 0, Fraction(1)), _station(boundary, 0, Fraction(4, 5), 1, Fraction(1))
+    with pytest.raises(ConvexCornerEngagementError) as caught:
+        refine_figure5_engagement((first, second), boundary, TOOL, CAP, close_seam=True)
+    assert caught.value.seam and caught.value.vertex == 1
+
+
+@pytest.mark.parametrize(("degrees", "sharp"), ((80, True), (89, True), (91, False), (100, False)))
+def test_convex_corner_decision_compares_the_exterior_angle_with_the_cap_exactly(degrees: int, sharp: bool) -> None:
+    boundary = _rectangle(Fraction(10), Fraction(10))
+    cap = EngagementCap.build(math.radians(degrees))
+    lemma = ConnectorEngagementLemma.build(TOOL, cap)
+    assert all(exterior_angle_exceeds_cap(boundary, vertex, lemma.cos_sq_half_cap) is sharp for vertex in range(4))
+
+
+def test_reflex_and_obtuse_vertices_are_never_sharp() -> None:
+    # L-shape: one reflex vertex (3, 3) and right angles; a 135-degree octagon corner has exterior 45 < 80.
+    l_shape = tuple(Point2[WorldXY].build(x, y) for x, y in ((0, 0), (6, 0), (6, 3), (3, 3), (3, 6), (0, 6)))
+    octagon = tuple(Point2[WorldXY].build(x, y) for x, y in ((0, 0), (8, 0), (12, 4), (12, 12), (8, 16), (0, 16), (-4, 12), (-4, 4)))
+    c = ConnectorEngagementLemma.build(TOOL, CAP).cos_sq_half_cap
+    assert not exterior_angle_exceeds_cap(l_shape, 3, c)
+    assert not any(exterior_angle_exceeds_cap(octagon, vertex, c) for vertex in range(len(octagon)))
 
 
 def test_midpoint_exactly_at_a_convex_apex_refuses() -> None:
@@ -128,7 +187,7 @@ def test_midpoint_exactly_at_a_convex_apex_refuses() -> None:
     previous = _station(boundary, 0, Fraction(1, 2), 0, Fraction(1, 4))
     successor = _station(boundary, 2, Fraction(3, 4), 1, Fraction(1, 4))
     with pytest.raises(Figure5EngagementResolutionError, match="convex corner apex"):
-        _midpoint(previous, successor, boundary)
+        midpoint(previous, successor, boundary)
 
 
 def test_genuinely_sub_ulp_corner_circle_is_refused_as_unrepresentable() -> None:
@@ -140,7 +199,7 @@ def test_genuinely_sub_ulp_corner_circle_is_refused_as_unrepresentable() -> None
     previous = _station(boundary, 0, Fraction(4, 5), 0, Fraction(1))
     successor = _station(boundary, 1, Fraction(1, 5) + Fraction(1, 10**18), 1, Fraction(1))
     with pytest.raises(Figure5EngagementResolutionError, match="representable"):
-        _midpoint(previous, successor, boundary)
+        midpoint(previous, successor, boundary)
 
 
 def test_exact_junction_with_irrational_sides_in_rational_ratio() -> None:
@@ -152,9 +211,9 @@ def test_exact_junction_with_irrational_sides_in_rational_ratio() -> None:
     p0, p1 = Fraction(1, 5), Fraction(4, 15)
     previous = _station(boundary, 0, p0, 0, Fraction(1, 10))
     successor = _station(boundary, 1, p1, 1, Fraction(1, 10))
-    midpoint = _midpoint(previous, successor, boundary)
-    assert int(midpoint.boundary_site.segment_id) == 0
-    assert midpoint.boundary_site.parameter == Fraction(float(p0 + (2 * (1 - p0) / 3)))
+    halfway = midpoint(previous, successor, boundary)
+    assert int(halfway.boundary_site.segment_id) == 0
+    assert halfway.boundary_site.parameter == Fraction(float(p0 + (2 * (1 - p0) / 3)))
 
 
 @pytest.mark.parametrize(

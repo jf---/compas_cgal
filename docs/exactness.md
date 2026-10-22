@@ -417,6 +417,46 @@ computed. Two equal rationals built along different DAGs can round to
 different doubles — and two collinear cuts then get rectangles of
 different widths, so their certified bands no longer nest.
 
+### Case: sums of side lengths are decided exactly (`BoundaryArclength`)
+
+The Held engagement refinement places a circle at the arclength half (or
+third) of a boundary interval on the polygonal Ω. "Is the half exactly a
+vertex?" and "which side holds the target?" are decisions on a sum of
+irrational side lengths, so `fsum` of `hypot` values is not allowed there: a
+binary64 sum that lands on, or one ulp past, a convex vertex produced
+sub-ulp circles and wrong-side contacts.
+
+`BoundaryArclength` (`benchmarks/held_boundary_arclength.py`, used by
+`benchmarks/held_figure5_engagement_circles.py`, the circle constructions of the
+engagement refinement) keeps the arclength as an exact `Σ cᵢ·√rᵢ` over the rationals of the
+boundary doubles:
+
+- **Folding.** Terms are merged by square class: two radicands whose product
+  is a rational square share one term, and rational terms carry radicand 1.
+  Sides of length √2 and 3√2 fold into one term.
+- **Zero is structural.** Square roots of positive rationals in distinct
+  square classes are linearly independent over ℚ (Besicovitch), so a folded
+  sum is zero iff it has no terms. No zero test on a number is ever made.
+- **Nonzero sign.** A nonzero sum's sign comes from certified `math.isqrt`
+  enclosures of each √rᵢ, doubled from `FIRST_ENCLOSURE_BITS` until the
+  enclosure excludes 0. The loop terminates because the value is nonzero.
+- **Reporting at the seam.** The stored contact parameter is the correctly
+  rounded binary64 of the exact position (`nearest_binary64`), or the exact
+  rational when the rounding would leave the exactly decided range.
+
+The convex-apex refusal in the refinement is an exact orientation (`_turn`,
+`benchmarks/held_figure5_engagement_circles.py`), and
+`_constructed_radius` stays only as a representability guard: an exact
+midpoint can lie within an ulp of a convex vertex, where the positive circle
+exists but its binary64 centre equals its contact. Tests:
+`tests/benchmarks/test_held_boundary_arclength.py` (Hypothesis properties
+against an independent exact sign oracle, including near-cancellation sums)
+and `tests/benchmarks/test_held_figure5_engagement_refinement.py`
+(`test_boundary_arclength_sign_is_exact`,
+`test_exact_junction_with_irrational_sides_in_rational_ratio`). Reports:
+`.superpowers/sdd/2026-10-13-product-pipeline/exact-midpoint-report.md` and
+`boundary-arclength-move-report.md` (not published).
+
 ### Deciding on a model that is only a bound: bracket it
 
 An exact predicate on an *inexact model* is not an exact verdict about the

@@ -15,9 +15,9 @@ from benchmarks.held_figure5_boundary_path import Figure5CounterclockwiseCircle
 from benchmarks.held_figure5_boundary_path import _validate_boundary
 from benchmarks.held_figure5_engagement_refinement import MAX_REFINED_CIRCLES
 from benchmarks.held_figure5_engagement_refinement import Figure5EngagementRefinement
-from benchmarks.held_figure5_engagement_refinement import _concave_corner_bridges
-from benchmarks.held_figure5_engagement_refinement import _midpoint
 from benchmarks.held_figure5_engagement_refinement import circle_on_side
+from benchmarks.held_figure5_engagement_refinement import concave_corner_bridges
+from benchmarks.held_figure5_engagement_refinement import midpoint
 from benchmarks.held_figure5_raw_guide import GuideRunId
 from compas_cgal import _stock_2
 from compas_cgal.motion import EngagementCap
@@ -84,7 +84,7 @@ def select_contour_bound_path(
             continue
 
         successor = targets[index]
-        bridges = _concave_corner_bridges(emitted[-1], successor, boundary) if corner_approaches else ()
+        bridges = concave_corner_bridges(emitted[-1], successor, boundary) if corner_approaches else ()
         pending = [(target, 0) for target in reversed((*bridges, successor))]
         while pending:
             target, depth = pending.pop()
@@ -98,9 +98,9 @@ def select_contour_bound_path(
                 continue
             if depth >= max_depth:
                 raise ContourSpacingResolutionError(f"Depth exhausted at source {index}: bound {math.degrees(angle):.6f} degrees.")
-            midpoint = _midpoint(emitted[-1], target, boundary, corner_approaches=corner_approaches)
+            halfway = midpoint(emitted[-1], target, boundary, corner_approaches=corner_approaches)
             pending.append((target, depth + 1))
-            pending.append((midpoint, depth + 1))
+            pending.append((halfway, depth + 1))
         selected.append(index)
         original_indices.append(len(emitted) - 1)
         represented.update(circle_sources[index])

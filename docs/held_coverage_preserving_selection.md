@@ -13,15 +13,19 @@
 unchanged. The always-on coverage certificate then runs on the emitted path,
 closing seam included. If it raises `UncoveredPocketError`, the repair stage
 re-inserts dropped source circles that contain the exact witness points. Each
-re-inserted circle goes back into its own boundary-order slot, and only the
-two source intervals it splits are re-refined under the engagement cap. Then a
+re-inserted circle goes back into its own boundary-order slot, and the
+refinement continues from that slot under the engagement cap until an exact
+early stop proves the rest of the old emission unchanged (the splice equals a
+full re-refinement). Then a
 **fresh full certificate** runs on the whole repaired path (user ruling: the
 post-repair gate is a full certificate, never a windowed re-certification).
 The loop stops when the certificate holds. It raises a named error when no
 dropped circle covers a witness, or when every candidate for a witness is
 refused. On Monstera, one round re-inserts **two** sources (#744 for island B,
-#1273 for island A), adds 2 circles (4366 → 4368) and takes 0.12 s of repair
-work, inside the ≤ 0.5 s budget on top of the certificate's own gate. The
+#1273 for island A), adds 2 circles (4438 → 4440) and takes 0.14 s of repair
+work, inside the ≤ 0.5 s budget on top of the certificate's own gate
+(`pixi run coverage-certificate-acceptance`, 2026-10-22; the gate analysis is
+in [coverage-repair-budget-gate-analysis](superpowers/state/coverage-repair-budget-gate-analysis.md)). The
 alternative, where every drop is guarded by its own certificate query, is
 estimated at 170–850 s. It is rejected.
 
@@ -62,7 +66,8 @@ three cases:
   (`StandardPlacementFragmentationError`).
 
 The refinement that follows (`refine_figure5_engagement`,
-`benchmarks/held_figure5_engagement_refinement.py:237-254`) only *adds*
+`benchmarks/held_figure5_engagement_refinement.py`, circles from
+`benchmarks/held_figure5_engagement_circles.py`) only *adds*
 midpoint circles, and only where a transition is over the cap:
 
 ```python
@@ -107,10 +112,11 @@ flowchart LR
   sel["select_boundary_ordered_sources<br/>(unchanged)"] --> ref["refine_figure5_engagement<br/>(unchanged)"]
   ref --> sw["path_sweeps: cuts + connectors,<br/>closing seam included"]
   sw --> cert["CoverageOracle<br/>(CoverageCertificate.build)"]
-  cert -- holds --> out["CertifiedBoundaryOrderedPath"]
+  cert -- holds --> gate
   cert -- UncoveredPocketError --> rep["repair round:<br/>candidates, greedy cover"]
-  rep --> splice["splice_source:<br/>re-refine (s⁻, q), (q, s⁺)"]
+  rep --> splice["splice_source:<br/>keep emission up to s⁻,<br/>continue from q,<br/>exact early stop"]
   splice --> sw
+  gate["connector post-gate<br/>(ConnectorEngagementCertificate,<br/>seam included)"] --> out["CertifiedBoundaryOrderedPath"]
 ```
 
 Every stage is typed and fails loudly. The certificate is an injected
@@ -121,7 +127,7 @@ repair is split by responsibility:
 |---|---|
 | `held_coverage_repair.py` | the driver: `path_sweeps`, `repair_coverage` (certify, repair, re-certify in full), and the entry points `certify_boundary_ordered_selection` and `refine_boundary_ordered_path_certified` |
 | `held_coverage_repair_cover.py` | one round: exact witness membership (`contains_exactly`), the outward-rounded box filter, the greedy set cover and its refusals |
-| `held_coverage_repair_splice.py` | exact cyclic slot check (`cyclically_between`) and the two-interval splice (`splice_source`) |
+| `held_coverage_repair_splice.py` | exact cyclic slot check (`cyclically_between`), the continue-from-slot splice (`splice_source`) and its exact early stop (`continue_with_early_stop`) |
 | `held_coverage_repair_types.py` | value types: settings, emission, splice, refusal, insertion, ledger, certified path, the oracle protocol |
 | `held_coverage_repair_errors.py` | one named exception per failure mode |
 | `held_coverage_repair_invariant_errors.py` | the base `CoverageRepairError`, `CoverageRepairInvariantError` and one named error per value-type invariant; below `types.py` so `types.py` can raise them without an import cycle |
@@ -179,13 +185,57 @@ certificate's witnesses `w_1 … w_m` (exact `Fraction` points in T \ U).
    its initial index, between the kept circles s⁻ < q < s⁺. Its boundary site
    must satisfy site(s⁻) ≤ site(q) ≤ site(s⁺) in cyclic CCW order. This is
    compared exactly on `(segment id, Fraction parameter)`. A violation raises
-   `RepairOrderViolationError`. The source intervals (s⁻, q) and (q, s⁺) are
-   re-refined with the unchanged refinement loop, including corner bridges.
-   Every other interval is untouched. This splice is exactly a full
-   re-refinement of the augmented selection, because the loop's state across
-   an interval boundary is only `emitted[-1]`, which is the interval's target
-   source. A contract test checks that equality. The run ledger is unaffected,
-   because q's runs are already reached.
+   `RepairOrderViolationError`. The emission up to s⁻ is kept verbatim, and
+   the refinement continues from it (`continue_figure5_engagement`) with q and
+   every later source, corner bridges and seam repair included. This splice
+   equals a full re-refinement of the augmented selection by construction:
+   the refinement is sequential, its whole state at a source boundary is the
+   emitted circle list, and the circles up to s⁻ are decided by the sources
+   before the slot alone. A contract test (Hypothesis) checks that equality.
+   The run ledger is unaffected, because q's runs are already reached.
+
+   An earlier version re-refined only (s⁻, q) and (q, s⁺) as a fresh
+   three-source run, on the claim that the state across an interval boundary
+   is only `emitted[-1]`. That stopped being true when the connector gate was
+   wired: tier 1b certifies a connector from *any* prior circle. The local run
+   did not see the circles before s⁻, so it refused connectors the full run
+   certifies. Found by Hypothesis on 2026-10-22: contacts on side 0 at x = 2,
+   2.01 (R 2), 2.02 (R 1.5), 2.71, 2.84. The connector 2.02 → 2.71 is
+   certified by the R = 2 circle in the full run, and the local run inserted a
+   midpoint at 2.365. The connectors after s⁺ have the mirror problem: they
+   gain q's circles as priors and may need fewer midpoints. Pinned by
+   `test_splice_sees_the_circles_emitted_before_its_interval`.
+
+   **Exact early stop** (`continue_with_early_stop`). Continuing to the end
+   costs O(suffix) per candidate: 8.4 s of `repair_s` on Monstera. Every
+   refinement therefore records a footprint for each decision that reads
+   circles other than its own pair (`EngagementTrace`,
+   `benchmarks/held_figure5_engagement_trace.py`, which also holds the
+   tier-1b filter and the single reach helper both the gate and the trace
+   use):
+   - a tier-1b connector decision records its outward piece bounds, the
+     exact binary64 inputs of the gate's superset filter;
+   - a convex-corner floor hypothesis records its vertex.
+
+   After each later source whose interval re-emits exactly the old circles,
+   let X be the circles emitted since the slot and Y the old circles they
+   replace, with the common tail removed from both. The continuation adopts
+   the old emission's remaining circles iff:
+   1. no later old decision could read a circle of X ∪ Y. The tier-1b filter
+      (`_kept`, the same operations on the same doubles) keeps none of them for
+      any piece, and none lies within ρ + 2r of a floor vertex (exact
+      `Fraction` test);
+   2. the circle budget holds with the shifted count.
+
+   Why that is exact: both runs then feed every later decision identical
+   inputs. Predecessor and target are equal, the filtered circle sequence is
+   equal, and the floor test skips X ∪ Y. The other decisions (cap, tier 1,
+   midpoint) read only their pair. The proof is in the docstring and the gate
+   analysis. The stitched result carries a trace equal to the full
+   refinement's, so a second greedy step can stop early too. A reference
+   refined under another `close_seam` has another tail and is never adopted.
+   A reference without a trace is a contract breach
+   (`Figure5EngagementTraceError`, deliberately not a refusal).
 4. **Refusal.** The splice either emits transitions that pass the
    refinement's cap test, or it raises `Figure5EngagementResolutionError`:
    the depth or the circle budget is exhausted, or (user ruling 2026-10-21)
@@ -195,9 +245,10 @@ certificate's witnesses `w_1 … w_m` (exact `Fraction` points in T \ U).
    both subclasses, so they are refusals of that candidate and never escape
    the repair. A refusal is recorded once per (candidate, kept interval) and
    round, with the error class and message, and the next candidate in step
-   2's order is tried. Within a round a refused (candidate, interval) is not
-   re-spliced: insertions only add circles, so the same local refinement
-   under a smaller remaining budget is refused again. If every candidate of
+   2's order is tried. A refusal is reused only while the emission it was
+   decided on is unchanged. Any other insertion changes the refused splice's
+   prior circles (tier 1b) or its tail, so the candidate is spliced again (it
+   is still recorded once). If every candidate of
    an open witness is refused, the repair raises
    `CoverageRepairRefusedError(witness, refusals)`, chained from a refusal of
    a candidate of that witness. Nothing is skipped silently, and a refused
@@ -208,8 +259,26 @@ certificate's witnesses `w_1 … w_m` (exact `Fraction` points in T \ U).
    `CoverageOracle` call. There is no windowed or local re-certification
    (user ruling). A splice can drop an interval's old midpoints and replace
    its connectors, so U can lose regions there as well as gain them; a full
-   run decides that without a window argument. On Monstera the second run
-   costs about 2.5 s. A failure returns new witnesses for the next round.
+   run decides that without a window argument. On Monstera each run costs
+   about 3 s (6.01 s for both, load 13–19). A failure returns new witnesses
+   for the next round.
+6. **Connector post-gate.** Once coverage holds, every cut connector of the
+   final path must carry an engagement certificate (tier 1 or 1b,
+   [connector engagement](held_connector_engagement.md)):
+   - on a closed path, `ConnectorEngagementCertificate.build` checks every
+     connector, the seam included;
+   - on an open path, the same decisions are made with the uncut seam's
+     verdict ignored.
+
+   A refusal raises `UncertifiedConnectorEngagementError`.
+   `EngagementRefinementSettings.close_seam` (default True) is the one knob:
+   - the initial refinement and every splice repair the seam;
+   - `path_sweeps` sweeps it;
+   - the post-gate checks it.
+
+   Before this, the flow never passed `close_seam` and never called the
+   post-gate, so the seam connector it cut was gated by nothing. On the square
+   fixture that seam was refused.
 
 **Termination.** Every round inserts at least one dropped source or raises
 (orphan witnesses, every candidate refused). There are finitely many dropped
@@ -321,9 +390,36 @@ Both ends are exact decisions on the engagement cosine; `acos` only reports.
 |---|---|---|---|
 | full certificate on the selected path (always-on gate; not a repair cost) | 1 | ≤ 5 s (user-approved gate, [performance](performance.md)) | ≤ 5 s |
 | witness → candidates (numpy box filter + exact membership) | 8 witnesses (measured: 4 at A, 4 at B) | µs | < 1 ms |
-| splice trials (re-refine 2 intervals per candidate) | candidates containing a witness | ms | measured repair total 0.12 s |
-| fresh full certificate after repair | 1 per round (1 round on Monstera) | ≈ 2.5 s (measured) | ≈ 2.5 s |
-| **repair work (`repair_s`, budget ≤ 0.5 s)** | | | **0.12 s measured** |
+| splice trials (continue from the slot, exact early stop, per candidate) | 28 (16 + 12 over two greedy steps) | 3–5 ms (measured below) | ≈ 0.1 s |
+| fresh full certificate after repair | 1 per round (1 round on Monstera) | ≈ 3.0 s (measured) | ≈ 3.0 s |
+| **repair work (`repair_s`, budget ≤ 0.5 s)** | | | **0.143 s measured** |
+
+**Splice cost after the continue-from-slot fix.** This is a same-process
+A/B at load average 540–580 (`build/rs/splice_timing.py`). It times 12
+dropped candidates per workload, spread evenly, on the boundary-ordered
+emission:
+
+| workload | A: old two-interval splice (median / max) | B: continue from slot (median / max) | B / A | full refinement |
+|---|---|---|---|---|
+| Figure 5, boundary-ordered (1532 sources, 549 kept, 805 emitted) | 2.8 / 7.4 ms | 61.6 / 193.8 ms | 22× | 0.144 s |
+| crossed skis (2167 sources, 1149 kept, 1621 emitted) | 5.4 / 9.5 ms | 117.6 / 185.7 ms | 22× | 0.183 s |
+
+So B costs about half a full refinement. On Monstera that broke the budget:
+28 splices of 0.055–0.47 s each gave `repair_s` 8.39 s.
+
+**Splice cost with the exact early stop.** This is a same-process A/B on
+Monstera at load average 12–18 (`build/es/ab_probe.py`; the gate analysis
+has the table). It runs the 16 candidates of the first greedy step, and each
+early-stop result is asserted equal to the full continuation:
+
+| | A: continue from slot to the end | B: exact early stop |
+|---|---|---|
+| later sources re-refined | 194–2361 | 1–2 |
+| per candidate | 0.047–0.52 s | 2.9–4.8 ms |
+| sum over 16 candidates | 4.46 s | 0.060 s (74×) |
+
+End to end, `repair_s` went from 8.39 s to 0.147 s (load ~12) with an
+identical outcome. Recording the trace costs a full refinement ×0.99–1.03.
 
 Neighbour counts come from the certificate's design table
 (`build/coverage_certificate_design/neighbour_stats.py`): 8673 regions, median
@@ -429,13 +525,17 @@ acceptance test, not here.
 
 ### Monstera: measured
 
-Measured 2026-10-21 (`test_held_coverage_repair_monstera_slow.py`): the
-certificate on the selected path finds 8 witnesses, all `ANNULUS_OUTER`, 4 at
-A and 4 at B. One round re-inserts #744 (B) then #1273 (A), with no refusal
-and no midpoint (m = 0): 4366 → 4368 emitted circles, 4088 connectors. Two
-certificate runs (the failing one and the fresh full one, ≈ 2.5 s each);
-`repair_s` 0.12 s. Every emitted transition, the closing seam included, is
-within the cap.
+Regenerated 2026-10-22 (`pixi run coverage-certificate-acceptance`, after
+the connector repair and the exact early stop): the certificate on the
+selected path finds 8 witnesses, all `ANNULUS_OUTER`, 4 at A and 4 at B. One
+round re-inserts #744 (B) then #1273 (A), with no refusal and no midpoint
+(m = 0): 4438 → 4440 emitted circles, 4160 connectors. There are two
+certificate runs (the failing one and the fresh full one), 6.01 s in total;
+`repair_s` is 0.143 s. Every emitted transition, the closing seam included,
+is within the cap (`build/rv3/monstera_repair_probe.py`: 0 over-cap).
+
+The counts moved from 4366 → 4368 and 4088 because of the connector repair
+(+72 circles), not because of this stage.
 
 ## Tests
 
@@ -452,7 +552,9 @@ named a fake-oracle unit test of the greedy cover.
   covers disk((3,3), 4). Without R = 2, (4.5, 3) and (1.5, 3) are uncovered.
   R = 3 is the only member of run 1. Under a 180° cap selection drops R = 2.
 - **Side fixture.** The 10 × 10 square of `test_held_boundary_order_spacing.py`,
-  cap 80°, side circles on side 0. Kept selections are given by hand and
+  cap 80°, side circles on side 0, open path (`close_seam=False`: the
+  square's seam turns right-angle convex corners, which no refinement
+  certifies at 80°). Kept selections are given by hand and
   `repair_coverage` runs directly with a scripted oracle; witness membership
   and each candidate's `added` are asserted as preconditions.
 
@@ -460,12 +562,19 @@ named a fake-oracle unit test of the greedy cover.
 |---|---|
 | `test_boundary_selection_drops_the_closing_fan_circle_and_repair_reinserts_it` | selection returns (0, 2, 3) (the defect); the repair inserts 1 at slot 1, 1 round, 2 certificate runs |
 | `test_repair_witness_lies_in_the_reinserted_circle_exactly` | the witness is in T \ U(0, 2, 3) and in circle 1's annulus, re-checked in `Fraction`s |
-| `test_repair_raises_when_the_circle_budget_refuses_the_only_closing_circle` | budget = the selected path's 3 circles: `CoverageRepairRefusedError` naming candidate 1 (the cap variant is incoherent here: every fan engagement is 180°) |
+| `test_repair_raises_when_the_circle_budget_refuses_the_only_closing_circle` | budget = the selected path's emission, 9 circles (3 sources, 3 connector-repair, 3 seam-repair): `CoverageRepairRefusedError` naming candidate 1 (the cap variant is incoherent here: every fan engagement is 180°) |
 | `test_repair_raises_when_no_dropped_circle_covers_the_witness` | without circle 1: `CoverageNotRepairableBySelectionError` with a witness near (4.5, 3) or (1.5, 3) |
 | `test_repair_rejects_a_candidate_outside_its_boundary_slot` | `RepairOrderViolationError` |
-| `test_open_seam_is_not_repairable_by_selection` | `close_seam=False`: `CoverageNotRepairableBySelectionError` with a `TARGET_BOUNDARY` witness |
-| `test_post_repair_gate_is_a_fresh_full_certificate` | the last oracle call sees every emitted circle and connector; `certificate_runs == rounds + 1` |
+| `test_open_seam_is_not_repairable_by_selection` | settings with `close_seam=False`: `CoverageNotRepairableBySelectionError` with a `TARGET_BOUNDARY` witness |
+| `test_repair_flow_closes_and_gates_the_seam_connector` | seam-repair circles are appended after the last source; the full `ConnectorEngagementCertificate` certifies the seam |
+| `test_post_gate_refuses_an_emission_whose_seam_was_never_refined` | coverage passes, but an emission refined open raises `UncertifiedConnectorEngagementError` naming the seam |
+| `test_post_repair_gate_is_a_fresh_full_certificate` | the last oracle call sees every emitted circle and connector, (10, 8); `certificate_runs == rounds + 1` |
 | `test_splice_equals_full_rerefinement` (Hypothesis) | the splice equals `refine_figure5_engagement` on the augmented selection, or both refuse |
+| `test_splice_sees_the_circles_emitted_before_its_interval` | regression: tier 1b from a circle before s⁻ (the Hypothesis find above) |
+| `test_splice_stops_early_when_no_changed_circle_reaches_a_later_decision` | inserting x = 2.05 re-refines 1 of 9 later sources; a later tier-1b decision exists but is out of reach; the result and its trace equal the full refinement |
+| `test_splice_does_not_stop_early_when_a_changed_circle_certifies_a_later_connector` | the inserted R = 2 circle certifies a later connector by tier 1b that the reference refused; adopting after the identically re-emitted interval would be wrong (asserted), so it runs to the end |
+| `test_splice_without_a_reference_trace_is_a_contract_breach` | a trace-less reference raises `Figure5EngagementTraceError` (not a refusal); mismatched sources raise `InvalidCoverageRepairInputError` |
+| `test_chained_splices_equal_the_full_refinement_and_its_trace` (Hypothesis) | a second splice adopting from the first splice's stitched trace equals the full refinement |
 | `test_unit_fake_oracle_set_cover_prefers_most_witnesses_over_lowest_index` | fake oracle: count beats index |
 | `test_more_witnesses_beat_fewer_added_circles` | count beats `added` (kills key order `(added, -count, index)`) |
 | `test_tie_on_count_inserts_the_candidate_with_fewest_added_circles_over_a_lower_index` | `added` beats index (kills dropping `added`) |
@@ -487,12 +596,14 @@ engagement in the refinement module only: no natural pair was found in
 filter defect named above was injected and fails at least one test.
 
 Slow tier, `benchmarks/acceptance/test_held_coverage_repair_monstera_slow.py`
-(not collected by pytest; about 30–75 s, path generation dominates):
+(not collected by pytest; about 30–75 s, path generation dominates). Its
+counts were re-pinned after the connector repair (user go 2026-10-22; the
+derivation is in the gate analysis):
 
 | test | expectation |
 |---|---|
-| `test_monstera_repaired_path_passes_an_independent_fresh_certificate` | a certificate run in the test on the final emission's sweeps: 4368 cuts, 4088 connectors, 0 exposed edges; `certificate_runs == rounds + 1 == 2` |
-| `test_monstera_repair_reinserts_the_pinned_island_candidates` | `inserted_sources == (744, 1273)` (B, A), 1 round, 0 refusals, 4366 → 4368 |
+| `test_monstera_repaired_path_passes_an_independent_fresh_certificate` | a certificate run in the test on the final emission's sweeps: 4440 cuts, 4160 connectors, 0 exposed edges; `certificate_runs == rounds + 1 == 2` |
+| `test_monstera_repair_reinserts_the_pinned_island_candidates` | `inserted_sources == (744, 1273)` (B, A), 1 round, 0 refusals, 4438 → 4440 |
 | `test_monstera_repair_respects_the_engagement_cap_including_the_seam` | every consecutive transition and the seam (last → first) is within the cap |
 | `test_monstera_repair_reports_circle_count_and_time` | writes `build/coverage-repair/monstera_repair.json`; `repair_s ≤ 0.5` |
 

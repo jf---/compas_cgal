@@ -276,8 +276,8 @@ Budget, set before code, per [the performance policy](performance.md#policy):
 
 | part | budget | measured | where it runs |
 | --- | ---: | --- | --- |
-| tiers 1 + 1b over all connectors of one workload (Monstera: 4,366 connectors, 4,307 moving pieces) | ≤ 0.5 s (`TIERS_BUDGET_S`) | "tiers 1 + 1b s" in the [Measurement](#measurement) table | refinement acceptance and post-gate |
-| circles added by connector refinement | ≤ 2 % of circles | not wired; about one insertion per refused connector expected | refinement |
+| tiers 1 + 1b over all connectors of one workload (Monstera: 4,438 connectors, 4,379 moving pieces) | ≤ 0.5 s (`TIERS_BUDGET_S`) | "tiers 1 + 1b s" in the [Measurement](#measurement) table | refinement acceptance and post-gate |
+| circles added by connector refinement | ≤ 2 % of circles | Figure 5 +0, crossed skis +5, upper boundary +6, Monstera +72 (+1.65 %): `tools/held_path_digest.py --check`, current counts against the pre-wiring record | refinement |
 | tier 2, one station | none (oracle) | 2.12 ms full stock, 1.5 ms windowed (design stage, Figure 5 prefix, load 11) | tests and opt-in tool |
 | tier 2, one subtraction on the global arrangement | none (oracle) | 27.7 ms circle, 29.5 ms piece (same run) | tests and opt-in tool |
 
@@ -295,25 +295,30 @@ Cost model. With n connectors, m pieces and c refinement candidates:
   `box_intersection_d` / Kd-tree index replaces the scan when it lands
   natively;
 - a tier-2 full replay costs (n + m)·~30 ms + 46·m·~2 ms. On Monstera that is
-  about (4,366 + 4,307)·0.03 + 46·4,307·0.002 ≈ 260 + 400 s. That is two
+  about (4,438 + 4,379)·0.03 + 46·4,379·0.002 ≈ 260 + 400 s. That is two
   orders over the whole generation budget, so it is excluded from generation
   for the same reason the [exact coverage replay](held_motion_coverage.md) was
   set aside.
 
 ## Where it plugs in, and what happens on violation
 
-1. **Refinement acceptance.** `refine_figure5_engagement` accepts `target`
-   after `predecessor` today iff the standard-model pair engagement is within
-   the cap. The new rule adds one condition: the connector
+1. **Refinement acceptance (wired).** `refine_figure5_engagement` accepts
+   `target` after `predecessor` iff the standard-model pair engagement is
+   within the cap and the connector
    `_transition(boundary, lengths, predecessor, target)` is tier-1 or tier-1b
-   certified. A refusal goes down the existing path: push target, push
-   `_midpoint(predecessor, target)`, depth + 1. Figure 8 enters through
+   certified (`_ConnectorGate` in `benchmarks/held_figure5_connector_gate.py`,
+   deciding exactly as the post-gate does). A refusal goes down the existing
+   path: push target, push `midpoint(predecessor, target)`, depth + 1. Figure 8 enters through
    `refine_boundary_ordered_path`, which calls the same function, so there is
    one integration point. Convergence: as the connector shortens, dₘₐₓ →
    ρᵢ and O → 0, because qᵢ is on circle i. The depth limit stays
    `max_depth`, and exhaustion raises
-   `ConnectorEngagementResolutionError(connector index, bound)` (to be
-   defined with the wiring; not in the module yet, since nothing raises it).
+   `ConnectorEngagementResolutionError(connector, seam, detail)`, a subclass
+   of the refinement's refusal; so does a repair midpoint that is itself
+   refused. The first arrival at a convex vertex whose exterior angle
+   exceeds the cap is refused by name before any midpoint
+   (`ConvexCornerEngagementError`, see
+   [Convex corners](#convex-corners-an-engagement-floor-no-refinement-removes)).
 2. **Post-gate.** After `Figure5BoundaryConnectors.build`, the new stage
    `ConnectorEngagementCertificate.build(circles, connectors, tool, cap)`
    (implemented) re-proves all N connectors (N − 1 when the seam is
@@ -326,8 +331,9 @@ Cost model. With n connectors, m pieces and c refinement candidates:
    circle pair (circles[-1], circles[0]) stays report-only. The seam
    *connector* is gated. If it is refused, the repair is to insert midpoint
    circles between circles[-1] and circles[0] along the seam, as new last
-   circles. Today no workload needs it: Figure 5's seam is certified by
-   tier 1b. Whether this repair is allowed is open (below).
+   circles. This is implemented (`close_seam=True`; user ruling 2026-10-21)
+   and the coverage-repair flow runs with it. On Monstera no seam circle is
+   appended: its seam is certified as emitted.
 4. **Reporting.** `ToolpathMetrics` gains `connector_tier1`,
    `connector_tier1b` and `connector_refinements`, as counts. No angle is
    gated, because the certificate is the gate.
@@ -376,18 +382,37 @@ connector that first reaches V engages at least π − α of rim on the actual
 stock, whatever circles were cut before. For α = 90° that is 90°, so no
 refinement can bring a right-angle convex corner under a cap below 90°. When
 tiers 1 / 1b refuse there, they are right. A refusal at such a corner is a
-true violation, not lemma looseness, and the refinement must refuse it by name
-(`ConnectorEngagementResolutionError`).
+true violation, not lemma looseness, and the refinement refuses it by name
+(`ConvexCornerEngagementError`, a `ConnectorEngagementResolutionError`),
+decided exactly and before any midpoint (see
+[Implemented refusal](#implemented-refusal-exact-before-any-midpoint)).
 
-**Lemma.** Let N be the normal cone of P at V: the unit vectors e with
-e·(y − V) ≤ 0 for every y ∈ P. Its angular width is π − α. Cut guide
-circles (inside P, ρ > 0) and straight offset connectors in emission order,
-and let connector i be the first motion that reaches V. Then the supremum of
-the per-run engagement over connector i is at least π − α.
+**Lemma.** Let T be P's tangent wedge at V, the intersection of the two
+closed half-planes of V's incoming and outgoing sides. Let N be its normal
+cone: the unit vectors e with e·(y − V) ≤ 0 for every y ∈ T. Its angular
+width is π − α. Cut guide circles (ρ > 0) and straight offset connectors in
+emission order, every tool-centre point within 2r of V lying in T, and let
+connector i be the first motion that reaches V. Then the supremum of the
+per-run engagement over connector i is at least π − α.
+
+*Wedge correction (2026-10-22).* The first version of this lemma stated
+step 1 for every y ∈ P and defined N over P. That holds for convex P only.
+For a non-convex P, the boundary can return within 2r of V outside T, and
+then the inequality fails. The statement above needs only the cuts near V to
+lie in T. It is implied by "every guide circle inside P" plus an exact
+polygon condition: every non-adjacent edge within 2r of V lies in T. Under
+that condition P ∩ B(V, 2r) ⊂ T, because:
+
+- B(V, 2r) \ T is connected;
+- no boundary edge crosses it;
+- P is locally T at the convex vertex V.
+
+Only tool-centre points within 2r of V can reach a rim point V + re, so
+nothing farther away matters.
 
 **Proof.**
 
-1. *Only V reaches the cone rim.* For every e ∈ N and every y ∈ P with
+1. *Only V reaches the cone rim.* For every e ∈ N and every y ∈ T with
    y ≠ V, |V + re − y|² = r² + |y − V|² − 2r·e·(y − V) ≥ r² + |y − V|² > r².
 2. *Everything cut before stays away from V.* A circle inside a convex wedge
    of angle α keeps at least ρ(1/sin(α/2) − 1) > 0 from the apex. A
@@ -414,8 +439,8 @@ agrees with the lemma at the inscribed circle (radius ρ, centre
 V + ρ(−1, 1) at a right angle): its bound at V is
 2π − 2 arccos((ρ − 2r)/(2√2 r)), which falls to 90° as ρ → 0 and never goes
 below it. Midpoint repair at a right angle shrinks the corner-limited circles
-towards V until a midpoint is not representable, and the refusal is raised
-then, by name. At an obtuse corner, π − α can be under the cap and repair
+towards V until a midpoint is not representable. The implemented refusal
+below stops this before the first midpoint. At an obtuse corner, π − α can be under the cap and repair
 succeeds: the 135° octagon fixture in
 `tests/benchmarks/test_held_connector_repair.py` is repaired with one
 midpoint.
@@ -434,19 +459,84 @@ and 89.5°, and stations from 7.8·10⁻³ mm down to the chord sagitta exceed
 80°. `test_right_angle_corner_refusal_is_a_true_engagement_above_the_cap`
 pins the k ≤ 4 case.
 
-**Open (needs a ruling).** A right-angle convex corner under an 80° cap is
-infeasible for any path of guide circles inside P with straight offset
-connectors. Three options:
+**The hypothesis is needed: the tooth fixture.**
+`test_held_connector_repair.py::test_dstar_refusal_forces_a_midpoint`
+certifies a connector across the tooth's vertex 2, (0.5, 0.0625). Its
+exterior angle is about 92.8°, above the 80° cap. The certificate is
+legitimate. The source circle on side 0 (ρ = 1.8, tangent at (0, 0)) crosses
+side 2, so its guide points near V lie outside T and pre-cut the corner rim.
+A refusal decided from the vertex alone would refuse a certified connector.
+The refusal therefore checks the hypothesis on what has actually been cut.
 
-- refuse it by name (today's behaviour, now with its proof);
-- set a corner-local cap of at least π − α;
-- change the corner motion itself, for example a filleted connector that
-  leaves an exactly bounded corner residual. This trades coverage for
-  engagement, and the coverage certificate would have to accept it.
+### Implemented refusal: exact, before any midpoint
 
-`test_exact_vertex_half_refines_across_the_convex_corner` (10 × 10 square,
-cap 80°) asserts a successful refinement across exactly such a corner, so it
-cannot pass under a sound connector gate.
+User ruling 2026-10-22: refuse by name instead of halving circles toward zero
+radius. `_ConnectorGate.sharp_vertex` in
+`benchmarks/held_figure5_connector_gate.py` decides it, and the refinement
+(`_Emission.require_no_sharp_corner`) raises
+`ConvexCornerEngagementError(connector, seam, vertex)` before the gate or any
+midpoint is tried. It fires iff all of the following hold:
+
+1. the connector `emitted[-1] → successor` crosses exactly one boundary
+   vertex V;
+2. V is convex with exterior angle β > cap (`exterior_angle_exceeds_cap`);
+3. the two contacts lie on V's incoming and outgoing sides;
+4. every emitted guide disk within ρ + 2r of V lies in T, and every
+   non-adjacent polygon edge within 2r of V lies in T.
+
+Every test is on exactly injected doubles, in rationals:
+
+- **Convexity:** cross(e₀, e₁) > 0.
+- **β > cap:** with D = e₀·e₁, L = |e₀|²|e₁|² and m = 2C − 1 = cos(cap), where
+  C = 1 − s/4 is the certificate's exact cap surrogate, β > cap ⟺ D < m√L.
+  This is decided by signs and by D² against m²L, with no square root and no
+  transcendental.
+- **Disk in T:** for each unnormalised outward normal n, (c − V)·n ≤ 0 and
+  ((c − V)·n)² ≥ ρ²|n|².
+- **Edge distance:** `foot_squared_distance`.
+
+**Why circles not yet cut cannot matter.** Circles a continued refinement
+could still insert on this connector lie on V's two sides, between the
+contacts:
+- on the outgoing side they are cut after the arrival, so they cannot pre-cut
+  it;
+- on the incoming side, a guide circle inside the centre domain P has every
+  point within 2r of V in P ∩ B(V, 2r) ⊂ T, so step 1 applies.
+
+So a continuation that the refusal forgoes would need a guide circle that
+crosses the centre-domain boundary within 2r of V: a gouge. No future circle
+enters the decision, and no float is read in it.
+
+The emitted circles are checked as they are, exactly. A circle that is
+float-tangent to a slanted side can lie an ulp outside T. Condition 4 then
+fails, the refusal does not fire, and the gate decides as before (exhaustion
+by `ConnectorEngagementResolutionError`). That is conservative and exact.
+
+A connector across several corners is split by the normal refinement until a
+sub-connector is the first arrival at one sharp vertex, which is then refused.
+The seam is checked the same way (`seam=True`). On the reference workloads the
+refusal moves nothing: the path digests are unchanged.
+
+Tests:
+
+- `test_exact_vertex_half_refines_across_the_convex_corner` expects the named
+  refusal (user GO for the edit);
+- `test_convex_corner_over_the_cap_is_refused_before_any_midpoint`
+  (`midpoint` is patched to fail);
+- `test_connector_over_two_sharp_corners_is_refused_by_name_at_the_first`;
+- `test_seam_over_a_sharp_convex_corner_is_refused_by_name`;
+- `test_convex_corner_decision_compares_the_exterior_angle_with_the_cap_exactly`
+  (80° and 89° sharp; 91° and 100° not);
+- `test_reflex_and_obtuse_vertices_are_never_sharp`;
+- the tooth test above stays certified.
+
+Other options for a right-angle corner under an 80° cap remain open for a
+later ruling:
+
+- a corner-local cap of at least π − α;
+- a different corner motion, for example a filleted connector with an exactly
+  bounded corner residual. This trades coverage for engagement and needs a
+  coverage-certificate ruling.
 
 ## Rejected alternatives
 
@@ -469,17 +559,13 @@ cannot pass under a sound connector gate.
 
 ## Open questions
 
-1. When the seam connector is refused, may circles be inserted on the seam
-   as new last circles? circles[0] is still not re-cut. No workload needs it
-   today.
-2. The connectors left without a certificate (the "left" column above) are
-   clear at their stations ([Tier 2](#tier-2-on-the-actual-stock)), but they
-   are not proved. The design repairs them by refinement, at about one
-   inserted circle each (about 1 % of Monstera's circles), and
-   that changes the generated paths and the baseline counts. Is that change
-   approved? The alternative is to accept "station-clear" as the verdict for
-   these connectors, which is the pipeline's own sampled standard
-   (`GATE_SAMPLES_PER_MOTION`).
+1. *Ruled 2026-10-21:* a refused seam connector is repaired by midpoint
+   circles appended as new last circles; circles[0] is never re-cut
+   (implemented, `close_seam`).
+2. *Ruled 2026-10-21:* connectors left without a certificate are repaired by
+   refinement, not accepted as "station-clear". Measured cost: +72 circles
+   on Monstera (+1.65 %), inside the 2 % budget; the generated paths and
+   baseline counts change accordingly.
 3. The certified quantity is per-run engagement. Should the post-gate also
    bound total contact? The lemma bounds it by outer + hole arc at no extra
    cost.

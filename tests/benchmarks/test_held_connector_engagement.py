@@ -514,14 +514,14 @@ def test_11_figure5_certificate_builds_within_budget() -> None:
     assert seconds <= TIERS_BUDGET_S
 
 
-def test_11_crossed_skis_names_its_uncertified_connectors_within_budget() -> None:
+def test_11_crossed_skis_connectors_are_all_certified_within_budget() -> None:
+    """Flipped by the refinement wiring: its 2 connectors without a certificate are repaired by midpoint circles."""
     from benchmarks.held_toolpath_benchmark import generate
 
     path = generate("figure8_crossed_skis_boundary")
     cap = EngagementCap.build(math.radians(float(path.case.tea_cap)))
     assessment = ConnectorEngagementAssessment.build(path.circles, path.connectors, path.case.tool_radius, cap)
     assert assessment.seconds <= TIERS_BUDGET_S
-    with pytest.raises(UncertifiedConnectorEngagementError) as caught:
-        ConnectorEngagementCertificate.build(path.circles, path.connectors, path.case.tool_radius, cap)
-    assert caught.value.connectors == assessment.refused
-    assert assessment.refused, "until connector refinement is wired, crossed skis keeps refusals (design: 2)"
+    assert not assessment.refused
+    certificate = ConnectorEngagementCertificate.build(path.circles, path.connectors, path.case.tool_radius, cap)
+    assert len(certificate.verdicts) == len(path.transitions)
