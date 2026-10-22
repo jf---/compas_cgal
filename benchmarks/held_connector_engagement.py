@@ -190,7 +190,7 @@ class ConnectorEngagementLemma:
         r = float(self.tool_radius)
         rho = float(circle.guide_radius)
         d_max_sq = max(_squared_distance(a, circle.centre), _squared_distance(b, circle.centre))
-        bound = _outer_deg(math.sqrt(float(d_max_sq)), r, rho + r)
+        bound = outer_arc_deg(math.sqrt(float(d_max_sq)), r, rho + r)
         if rho > r:
             d_min_sq = foot_squared_distance(a, b, circle.centre)
             if d_min_sq < circle.guide_radius * circle.guide_radius:
@@ -198,18 +198,20 @@ class ConnectorEngagementLemma:
                 distances = [math.sqrt(float(d_min_sq)), math.sqrt(float(d_max_sq))]
                 if r > h and float(d_min_sq) < r * r - h * h < float(d_max_sq):
                     distances.append(math.sqrt(r * r - h * h))
-                bound = max(bound, *(_hole_deg(d, r, h) for d in distances))
+                bound = max(bound, *(hole_arc_deg(d, r, h) for d in distances))
         return bound
 
 
-def _outer_deg(d: float, r: float, outer: float) -> float:
+def outer_arc_deg(d: float, r: float, outer: float) -> float:
+    """REPORTING ONLY: outer-arc angle, degrees, at distance ``d`` from a centre with outer radius ``outer``."""
     if d == 0.0:
         return 0.0
     kappa = (d * d + r * r - outer * outer) / (2 * d * r)
     return 0.0 if kappa <= -1 else 360.0 if kappa >= 1 else math.degrees(2 * math.pi - 2 * math.acos(kappa))
 
 
-def _hole_deg(d: float, r: float, inner: float) -> float:
+def hole_arc_deg(d: float, r: float, inner: float) -> float:
+    """REPORTING ONLY: hole-arc angle, degrees, at distance ``d`` from a centre with hole radius ``inner``."""
     if d == 0.0:
         return 360.0 if r < inner else 0.0
     kappa = (d * d + r * r - inner * inner) / (2 * d * r)
@@ -290,28 +292,98 @@ class _DyadicGrid:
         return self.length(float(point.x)), self.length(float(point.y))
 
 
-class _CandidateIndex:
-    """Binary64 prefilter of the circles that could certify a sub-piece.
+BoolArray = npt.NDArray[np.bool_]
 
-    A circle certifies only if the rim does not lie wholly outside its outer
-    disk, so both piece ends, hence its midpoint, are within ``rho + 2 r`` of
-    its centre. The filter adds the half-length and only chooses which exact
-    questions to ask: dropping a circle can lose a certificate, never create one.
+
+def _down(value: FloatArray) -> FloatArray:
+    return np.nextafter(value, -np.inf)
+
+
+def _up(value: FloatArray) -> FloatArray:
+    return np.nextafter(value, np.inf)
+
+
+def _below(value: float) -> float:
+    return math.nextafter(value, -math.inf)
+
+
+def _above(value: float) -> float:
+    return math.nextafter(value, math.inf)
+
+
+def _magnitude_bounds(low: FloatArray, high: FloatArray) -> tuple[FloatArray, FloatArray]:
+    """Bounds of ``|v|`` for ``v`` in ``[low, high]``."""
+    return np.where(low > 0, low, np.where(high < 0, -high, 0.0)), np.maximum(np.abs(low), np.abs(high))
+
+
+def reach_bracket(centres: FloatArray, reach_low: FloatArray, reach_high: FloatArray, x: tuple[float, float], y: tuple[float, float]) -> tuple[BoolArray, BoolArray]:
+    """``(provably beyond, provably within)``: ``|p - c|`` against an exact reach in ``[reach_low, reach_high]``, ``p`` in the box ``x × y``.
+
+    Only correctly rounded IEEE ``+ - ×`` and ``nextafter`` are used: each
+    round-to-nearest result is off by at most half an ulp, so nudging it one
+    ulp outward brackets the exact value. No ``hypot``, ``sqrt`` or other libm
+    call, so the brackets hold on every IEEE platform. A circle in neither
+    mask is undecided and goes to an exact stage.
+    """
+    dx_low, dx_high = _down(centres[:, 0] - x[1]), _up(centres[:, 0] - x[0])
+    dy_low, dy_high = _down(centres[:, 1] - y[1]), _up(centres[:, 1] - y[0])
+    small_x, large_x = _magnitude_bounds(dx_low, dx_high)
+    small_y, large_y = _magnitude_bounds(dy_low, dy_high)
+    distance_low = _down(_down(small_x * small_x) + _down(small_y * small_y))
+    distance_high = _up(_up(large_x * large_x) + _up(large_y * large_y))
+    return distance_low > _up(reach_high * reach_high), distance_high <= _down(reach_low * reach_low)
+
+
+class _CandidateIndex:
+    """Exact filter of the circles that could certify a sub-piece: ``|c - m| <= rho + 2 r + h``.
+
+    ``m`` is the sub-piece's midpoint and ``h`` its half-length. A circle
+    certifies only if the rim does not lie wholly outside its outer disk, so
+    both ends, hence the midpoint, are within ``rho + 2 r`` of its centre, and
+    the half-length keeps the test a superset. The filter only chooses which
+    exact questions to ask: dropping a circle can lose a certificate, never
+    create one. The test is decided exactly and without any libm function:
+    an outward-rounded binary64 bracket (:func:`reach_bracket`, with
+    ``h <= (|dx| + |dy|) / 2`` for "beyond" and ``h >= 0`` for "within")
+    decides the clear cases; the rest is decided on the gate's integer grid
+    by squaring, ``d <= R + h`` iff ``d² - R² - h² <= 0`` or
+    ``(d² - R² - h²)² <= 4 R² h²`` (all quantities doubled to stay integral).
     """
 
     def __init__(self, circles: tuple[Figure5CounterclockwiseCircle, ...], tool: ToolRadius, grid: _DyadicGrid) -> None:
         self._centres: FloatArray = np.array([(float(c.center.x), float(c.center.y)) for c in circles], dtype=np.float64).reshape(-1, 2)
-        self._reach: FloatArray = np.array([float(c.radius.value) + 2 * float(tool.value) for c in circles], dtype=np.float64)
+        reach = np.array([float(c.radius.value) + 2 * float(tool.value) for c in circles], dtype=np.float64)
+        self._reach_low, self._reach_high = _down(reach), _up(reach)
+        self._exact_centres = [grid.point(c.center) for c in circles]
+        tool_length = grid.length(float(tool.value))
+        self._exact_reach = [grid.length(float(c.radius.value)) + 2 * tool_length for c in circles]
         self._scale = grid.scale
 
+    def _float(self, value: int) -> tuple[float, float]:
+        rounded = value / self._scale  # int / int: correctly rounded
+        return _below(rounded), _above(rounded)
+
+    def _within_exactly(self, k: int, a: tuple[int, int], b: tuple[int, int]) -> bool:
+        cx, cy = self._exact_centres[k]
+        distance_sq = (2 * cx - a[0] - b[0]) ** 2 + (2 * cy - a[1] - b[1]) ** 2
+        reach_sq = (2 * self._exact_reach[k]) ** 2
+        half_sq = (b[0] - a[0]) ** 2 + (b[1] - a[1]) ** 2
+        excess = distance_sq - reach_sq - half_sq
+        return excess <= 0 or excess * excess <= 4 * reach_sq * half_sq
+
     def near(self, a: tuple[int, int], b: tuple[int, int], prior: range) -> list[int]:
-        ax, ay, bx, by = (value / self._scale for value in (*a, *b))
-        mx, my = (ax + bx) / 2, (ay + by) / 2
-        half = math.hypot(bx - ax, by - ay) / 2
         stop = max(prior[0], prior[-1]) + 1
-        distance = np.hypot(self._centres[:stop, 0] - mx, self._centres[:stop, 1] - my)
-        hits = np.nonzero(distance <= self._reach[:stop] + half)[0]
-        return [int(k) for k in hits[::-1] if int(k) in prior]
+        centres = self._centres[:stop]
+        ax, ay, bx, by = (self._float(value) for value in (*a, *b))
+        mx = (_below(ax[0] + bx[0]) / 2, _above(ax[1] + bx[1]) / 2)
+        my = (_below(ay[0] + by[0]) / 2, _above(ay[1] + by[1]) / 2)
+        width = _above(max(abs(bx[1] - ax[0]), abs(bx[0] - ax[1])))
+        height = _above(max(abs(by[1] - ay[0]), abs(by[0] - ay[1])))
+        half_high = _above(width + height) / 2
+        beyond, _ = reach_bracket(centres, self._reach_low[:stop], _up(self._reach_high[:stop] + half_high), mx, my)
+        _, within = reach_bracket(centres, self._reach_low[:stop], self._reach_high[:stop], mx, my)
+        kept = np.nonzero(~beyond)[0][::-1]
+        return [int(k) for k in kept if int(k) in prior and (within[k] or self._within_exactly(int(k), a, b))]
 
 
 # Bisection parameters are integers k / 2**MAX_BISECTION_DEPTH.
