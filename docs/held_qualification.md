@@ -7,11 +7,16 @@
     and generation time quoted for them as a draft measurement, not a result
     for a qualified path.
 
-**Conclusion.** No Held path is machining-qualified: all five gouge. Coverage
-is now certified both ways. Figure 5, crossed skis and upper boundary are
-certified covered; Monstera is proven uncovered at two islands until its
-certified repair, which is certified covered. The paths stay unqualified until
-the exact centre domain Ω\* removes the gouges.
+**Conclusion.** No published Held path is machining-qualified: the five
+published paths are generated in the polygonal centre domain and all five
+gouge. The Ω\* paths, generated in the exact centre domain, meet all three exit
+gates: zero gouges, coverage of T(Ω\*) certified, and zero connector-gate
+refusals after the Ω\* connector repair, on all five workloads (see
+[Exit gates on the Ω\* paths](#exit-gates-on-the-omega-paths), generated
+tables). They replace the published paths once the gallery is re-rendered
+from them.
+
+The published (polygonal-Ω) paths:
 
 - **They gouge.** On all five published workloads, the tool disk leaves the
   analytic pocket. The deep gouges sit at concave arcs. This is decided
@@ -21,6 +26,49 @@ the exact centre domain Ω\* removes the gouges.
   interior slivers of material uncut. The coverage certificate proves them with
   exact witnesses in two clusters. Select-certify-repair re-inserts the dropped
   source circles, and the repaired path is certified covered.
+
+## Exit gates on the Ω\* paths {#exit-gates-on-the-omega-paths}
+
+A path is machining-qualified when its exact gouge audit has no gouging
+element, `CoverageCertificate.build` certifies coverage of the exact target
+T(Ω\*) = Ω\* ⊕ D_r, and the exact connector gate certifies every connector.
+Status on the Ω\* paths of all five workloads (`figure5_refined`,
+`figure8_upper_lane`, `figure8_upper_boundary`,
+`figure8_crossed_skis_boundary`, `figure8_monstera_boundary_qualified_corners`):
+
+| exit gate | status | generated evidence |
+| --- | --- | --- |
+| Exact gouge audit against the declared boundary (`benchmarks/held_omega_gouge_audit.py`) | **met on all five**: no gouging circle, no gouging connector, before and after the connector repair | "gouge before / after" column of the [connector repair table](#omega-connector-repair-table) |
+| Coverage of T(Ω\*), connectors as exact ∂Ω\* pieces | **met on all five**: COVERED, no witness | [coverage table](#omega-coverage-table) |
+| Ω\* connector gate (tiers 1 / 1b, seam and junction lines included) | **met on all five after the Ω\* connector repair**: no refusal | [connector repair table](#omega-connector-repair-table) ("refused before → after") and the [gate table](#omega-connector-gate-table) of the emitted path |
+
+Each table's header line records the commit and tree state it was measured
+on; its pixi task regenerates it. A gouge-audit table of its own for the Ω\*
+paths, like the polygonal one [below](#exact-gouge-audit), has no generator
+yet.
+
+### Coverage of T(Ω\*) { #omega-coverage-table }
+
+Generator: `tools/held_omega_coverage_results.py`. Regenerate with
+`pixi run held-omega-coverage`. Region accounting:
+[Held coverage certificate](held_coverage_certificate.md).
+
+--8<-- "benchmarks/results/held_omega_coverage.md"
+
+### Ω\* connector repair { #omega-connector-repair-table }
+
+Generator: `tools/held_omega_connector_repair_results.py`. Regenerate with
+`pixi run held-omega-connector-repair`. Method:
+[Ω\* connector repair](held_connector_engagement.md#omega-connector-repair).
+
+--8<-- "benchmarks/results/held_omega_connector_repair.md"
+
+### Ω\* connector gate on the emitted path { #omega-connector-gate-table }
+
+Generator: `tools/held_omega_connector_gate_results.py`. Regenerate with
+`pixi run held-omega-connector-gate`.
+
+--8<-- "benchmarks/results/held_omega_connector_gate.md"
 
 ## Qualification overlays
 
@@ -99,7 +147,8 @@ must fail and be replaced by `require_gouge_free` passing.
 | The listed elements gouge or touch | certified, exact predicate | gouge audit above |
 | The Monstera path leaves uncut material | certified, exact witnesses | [coverage certificate](#coverage-certificate) above; slow test `benchmarks/acceptance/test_coverage_certificate_monstera_path_slow.py` |
 | Figure 5, crossed skis, upper boundary and repaired Monstera cover T = Ω ⊕ D_r (polygonal Ω) | certified, `CoverageCertificate.build` returns a certificate | [coverage certificate](#coverage-certificate) above; repaired Monstera pinned by the same slow test |
-| Coverage of the exact-Ω\* target | **not certified**; with `VERTEX_DISK` members the certificate raises `UnmodelledCertificatePieceError` instead of passing | [Held coverage certificate](held_coverage_certificate.md) |
+| The Ω\* paths cover T(Ω\*) | certified, connectors as exact ∂Ω\* pieces | [Exit gates on the Ω\* paths](#exit-gates-on-the-omega-paths), [Held coverage certificate](held_coverage_certificate.md) |
+| The Ω\* paths do not gouge, and every Ω\* connector is certified | certified, exact predicates | [Exit gates on the Ω\* paths](#exit-gates-on-the-omega-paths) |
 | Gouge depths in mm | diagnostic, doubles | gouge audit above |
 | Island areas and centroids | diagnostic, raster | [The Monstera evidence](held_coverage_certificate.md#the-monstera-evidence) |
 | Engagement strips in the gallery | diagnostic, predecessor-circle model only | [gallery](held_toolpath_gallery.md) |
@@ -109,17 +158,19 @@ must fail and be replaced by `require_gouge_free` passing.
 
 Three designs close the gap. Each has a failing test to write before any code:
 
-1. **Exact centre domain Ω\*.** It replaces the polygonal-projection offset with
-   the exact erosion of the analytic pocket. This removes the concave-arc gouges.
-   See [Held exact centre domain](held_exact_centre_domain.md).
+1. **Exact centre domain Ω\* (built, not yet published).** It replaces the
+   polygonal-projection offset with the exact erosion of the analytic pocket.
+   The Ω\* paths have no gouging element on all five workloads
+   ([exit gates](#exit-gates-on-the-omega-paths)). See
+   [Held exact centre domain](held_exact_centre_domain.md).
 2. **Coverage-preserving selection.** Boundary-order selection may drop a circle
    only if the certificate still holds. This restores the circles that covered
    the Monstera islands. See
    [Held coverage-preserving selection](held_coverage_preserving_selection.md).
-3. **Coverage certificate, phase 2 (done).** Connector capsules and target
-   pieces are in; coverage is certified, not only refuted, on the polygonal Ω.
-   Still open: `VERTEX_DISK` pieces for the exact Ω\* and the two fail-loud
-   fixes (C1, I1) in
+3. **Coverage certificate, phase 2 (done) and T(Ω\*).** Connector capsules
+   and target pieces are in; coverage is certified, not only refuted, on the
+   polygonal Ω, and against T(Ω\*) with the connectors as exact ∂Ω\* pieces
+   ([exit gates](#exit-gates-on-the-omega-paths)). Open findings:
    [Held coverage certificate](held_coverage_certificate.md).
 
 The time budgets for these steps are on the [performance](performance.md) page.

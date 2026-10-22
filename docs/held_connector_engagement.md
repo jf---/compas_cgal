@@ -18,11 +18,11 @@ earlier circle per sub-piece), and the post-gate
 `ConnectorEngagementCertificate.build` raises
 `UncertifiedConnectorEngagementError`, naming every connector left without a
 certificate. On the five Held workloads tier 1 alone certifies almost every
-moving connector, tier 1b certifies the whole of Figure 5, seam included, and
-leaves a few dozen connectors on the Figure 8 workloads
-([Measurement](#measurement)). On the actual replayed stock none of those
-exceeds the cap at any exact station ([Tier 2](#tier-2-on-the-actual-stock)),
-but they are not proved between stations.
+moving connector, and with the refinement repair wired, tiers 1 + 1b leave
+none, seam included ([Measurement](#measurement)). Before the wiring the
+tiers left a few connectors on the Figure 8 workloads; on the actual replayed
+stock none of those exceeded the cap at any exact station
+([Tier 2](#tier-2-on-the-actual-stock)).
 
 Design, in one line: tier 1 / 1b go into the refinement acceptance predicate
 (`refine_figure5_engagement`). A refused connector is repaired the way a
@@ -32,13 +32,26 @@ well under the 0.5 s budget on every workload, Monstera included. The exact
 replay of the actual stock (tier 2) is the test oracle and the refutation tool,
 never part of generation.
 
-!!! warning "Status (2026-10-21): certificate implemented, not wired."
-    The module, its tests (`tests/benchmarks/test_held_connector_engagement.py`)
-    and the generated tables below exist. Nothing calls the certificate from
-    generation yet: wiring it into `refine_figure5_engagement` and the
-    post-gate stage waits on the open questions below. Timings were recorded
-    on a heavily loaded machine (load average 150–200), so they are upper
-    bounds.
+!!! note "Status (2026-10-22): polygon path and Ω\* gate and repair wired."
+    **Polygon Ω.** Tiers 1 / 1b sit in the refinement acceptance
+    (connector repair by midpoint circles,
+    [Where it plugs in](#where-it-plugs-in-and-what-happens-on-violation)).
+    The seam connector is gated and repaired by appended circles. The
+    post-gate stage `connector_certificate` of
+    `benchmarks/held_toolpath_benchmark.py` re-proves every connector, seam
+    included, and the [Measurement](#measurement) table shows none left.
+    **Ω\*.** The exact gate covers line, arc and
+    circle-junction sweeps ([Exact connectors on Ω\*](#exact-omega-connectors)),
+    built from the emitted path by `omega_connector_path`. The
+    `connector_repair` stage (`repair_omega_connectors`, with the Ω\*
+    convex-corner refusal) runs last in the Ω\* generator
+    ([Ω\* connector repair](#omega-connector-repair)), and the
+    [Ω\* gate measurement](#omega-gate-measurement) on the emitted path
+    refuses nothing. The certificate is about the modelled path: the junction
+    lines are the model's closure, not emitted motion ([what the certificate
+    is about](#what-the-certificate-is-about)). The benchmark's Ω\* post-gate
+    (`require_omega_connector_certificate`) still refuses every moving
+    connector by name until it is switched to that gate.
 
 ## What engagement means for a connector
 
@@ -175,6 +188,356 @@ never a decision: near an internal tangency of the rim a reported angle has
 square-root-of-ulp error (a Hypothesis draw found 2.6e-6° reported against an
 exact bound of 0). The exact check is the exceeded flag.
 
+## Exact connectors on Ω\*: lines, arcs and junctions {#exact-omega-connectors}
+
+An Ω\* connector is not a binary64 polyline. It runs along exact ∂Ω\*
+sub-pieces (offset lines, offset arcs, junction arcs) between exact sites with
+rational or one-root coordinates, and its binary64 circles pass their sites
+within the centre's rounding, not through them
+([Held exact centre domain](held_exact_centre_domain.md)). Three pieces make
+the certificate decide such connectors exactly. All of them are in
+`benchmarks/held_connector_engagement_{range,lines,arcs,exact}.py` and
+`benchmarks/held_omega_connector_engagement.py`.
+
+### The lemma reads only the realised range of d
+
+The [single-sweep bound](#lemma-single-sweep-bound) depends on the tool centre
+p only through D = |p − cₖ|². The outer arc is non-decreasing in D. The
+hole arc is largest where κₕ is smallest, and κₕ is convex in d with its
+minimum at d\*. Any sweep is a connected motion, so D takes exactly the values
+of an interval [Dₘᵢₙ, Dₘₐₓ]. The bound over the whole sweep is therefore
+within the cap iff:
+
+- the outer test holds at Dₘₐₓ;
+- the hole test holds at Dₘᵢₙ and Dₘₐₓ;
+- the d\* test holds when Dₘᵢₙ < r² − h² < Dₘₐₓ.
+
+A sweep type only has to name a finite set of **realised** values of D that
+contains Dₘᵢₙ and Dₘₐₓ. The decision then tests every candidate:
+
+- the outer test at every candidate (it is monotone, so this is the test at
+  Dₘₐₓ);
+- the hole test at every candidate (they are realised, so no candidate refuses
+  what the true range would certify);
+- the d\* test when some candidate lies below r² − h² and some above.
+
+No candidate is ever compared with another, so candidates of one sweep may
+live in different quadratic extensions (`RangeEngagementLemma`). For a
+straight sweep the candidates are the two ends and, when it falls strictly
+inside, the foot of cₖ. That is the original lemma.
+
+### Lemma for arc motion
+
+**Lemma.** Let the tool centre move on the circle (q, R) from S to E in
+sense σ (S = E is a full turn). Let c be a prior circle's centre and L = |c − q|.
+
+- If L = 0, then D = R² on the whole arc.
+- If L > 0, then the minimum and maximum of D over the arc are among D(S),
+  D(E), and the values at whichever of these two points lies on the arc:
+  - NEAR = q + R(c − q)/L, with D = (L − R)²;
+  - FAR = q − R(c − q)/L, with D = (L + R)².
+
+**Proof.** Write p = q + R(cos φ, sin φ), and let φ꜀ be the direction of
+c − q. Then
+
+D(φ) = |p − q|² + |q − c|² − 2(p − q)·(c − q) = R² + L² − 2RL·cos(φ − φ꜀).
+
+For L > 0 its derivative 2RL·sin(φ − φ꜀) vanishes only at φ꜀ (NEAR, the global
+minimum) and at φ꜀ + π (FAR, the global maximum). A continuous function on a
+closed arc takes its extremes at the ends or at interior critical points. ∎
+
+Unlike a line, d is not convex along an arc. The lemma does not need
+convexity, only the range of D, which the candidates bound. With the
+range-lemma above, this gives the exact arc decision. Every candidate is a
+realised value, so the arc test is exactly as sharp as the straight one.
+
+### Exact decision, one-root numbers, and the filter
+
+- **Ends.** D(S) = |S − c|² lies in S's extension, D(E) in E's. They are
+  tested one at a time, never combined. S and E may lie in different
+  extensions.
+- **NEAR / FAR.** (L ∓ R)² = β + R² ∓ 2R√β, with β = |c − q|² rational, is
+  one `OneRootNumber` in ℚ(√β). It is its own candidate.
+- **Is NEAR / FAR on the arc?** This is an order question on the circle about
+  the rational directions ±(c − q). `ArcSweep.order` applies the
+  `compare_on_arc` rule (half-turn by orientation, then dot, then
+  orientation). The rule reads only signs of cross and dot products about q,
+  so the rational points c and 2q − c stand in for NEAR and FAR. Each
+  cross-root sign is the exact mixed-radical decomposition of
+  `held_one_root.orientation` (sign(u), sign(w), then compare(u², βw²)). A
+  dot product is the orientation against the point turned a quarter-turn
+  about q. A Hypothesis test pins `ArcSweep.order` to `compare_on_arc`.
+- **Tests.** Each test is a sign of a same-extension one-root number
+  X + K·Y, or of (X + K·Y)²·C_den − 4C_num·r²·X·Y, with D = X / Y and Y > 0.
+- **Filter.** Every sign is asked first of the repo's rigorous dyadic interval
+  enclosure (`held_dyadic_interval.Interval`, integer ends rounded outward).
+  The exact one-root sign decides only when the enclosure contains 0. The
+  filter cut the Figure 5 gate from 40 s to 4.7 s under profiling, at the
+  same load of about 400, and it never decides wrongly.
+
+**Exact rational input.** `LineSweep` takes rational or one-root endpoints. A
+point such as (7/5, 1/5) is never rounded to binary64, and a test pins that
+equality at such a point certifies. When the two ends lie in different
+extensions, the sweep must declare its rational supporting line (anchor,
+direction), as every ∂Ω\* offset line has. The foot parameter and the
+distance to the line are then rational, and each end's parameter is compared
+with the foot in its own extension. A cross-extension line without a support
+is refused at build (`MixedRootLineSweepError`), because cross-root
+arithmetic is never written. Binary64 paths enter through
+`ExactConnectorPath.from_figure5`, injected exactly. On Figure 5 it decides
+every connector at the same tier as the integer-grid assessment (test).
+
+**Refinement points (tier 1b).**
+
+- Lines split at the exact midpoint when both ends share an extension.
+  Across extensions they split at a rational support point strictly between
+  the ends.
+- Arcs split at a **rational point of the circle**, q + R·u, where u is an
+  exactly unit Pythagorean direction (half-angle tangent on the 2⁻⁵⁶ grid,
+  `choose_direction`, the same grid as the declared boundary).
+- Binary64 only proposes the split point. Whether it lies strictly inside is
+  decided exactly (`ArcSweep.order`, parameter signs). A failed proposal is
+  the named refusal `SPLIT_UNRESOLVED`, never a rounded point.
+- After one split both halves carry rational interior ends, so deeper
+  bisection never adds a radical.
+
+### Junctions: binary64 circle → exact site
+
+Circle k is binary64 (centre cₖ, radius ρₖ), and its exact site qₖ is off the
+circle by the reported junction gap. The motion model makes the transfer
+explicit:
+
+- **Junction point.** Jₖ = cₖ + ρₖ·uₖ, with uₖ an exactly unit rational
+  direction proposed from the binary64 direction of qₖ − cₖ. Jₖ is rational
+  and lies **exactly** on circle k by construction. Any point of the circle is
+  a valid model; this choice keeps the junction as short as the grid allows.
+- **Connector i** is the line Jᵢ → qᵢ, then the ∂Ω\* sub-pieces qᵢ → qᵢ₊₁,
+  then the line qᵢ₊₁ → Jᵢ₊₁. A junction line joins a rational point to a
+  one-root site, so it lives in the site's extension. A fan (two circles on
+  one site) is its two junction lines, so it is no longer treated as a
+  stationary connector.
+- **Priors.** Circle i + 1 is not cut before its entry junction, so the
+  priors stay k ≤ i. The seam ends at J₀, and circle 0 is not re-cut.
+
+The junctions are not covered by the adjacent pieces, so they are certified
+as sweeps of kind `circle_junction`. On all five workloads every junction line
+is sub-picometre, **limited circles included**: the max |J − q| column of the
+junction-model table in [Ω\* gate measurement](#omega-gate-measurement)
+reports them per workload, free and limited circles apart. A shrunk circle
+keeps its centre on the site's inward normal with radius equal to the normal
+distance (`held_omega_circles._shrunk`), so it still passes the site within
+rounding. The lemma passes the lines with the circle just cut (d ≈ ρ gives an
+outer arc of about 0). Whether the junction line lies in Ω\* (a clearance
+question) is outside this certificate. The declared-clearance
+`SegmentElement` needs a rational support line, and J → q has a one-root end.
+
+#### What the certificate is about {#what-the-certificate-is-about}
+
+The emitted Ω\* path (`OmegaGeneratedToolpath`) carries binary64 circles, each
+with a binary64 `contact_point` P, and exact ∂Ω\* connectors from site qᵢ to
+site qᵢ₊₁. It carries **no junction element**. The motion from circle k onto
+qₖ is implicit, and no Ω\* motion post exists that would emit it. The
+certificate's sweeps match the emitted ∂Ω\* pieces exactly: the same one-root
+endpoints and the same supports (the "structure mismatches" column of the
+junction-model table). The two junction lines Jₖ → qₖ and qₖ → Jₖ are the
+model's own closure of that gap. Jₖ is not an emitted point: the table reports
+max |J − P| and how few emitted P lie exactly on their circle. So the
+certificate speaks about the modelled path. It speaks about the emitted motion
+once the emitter carries Jₖ as each circle's lap start and end and emits the
+two junction lines. Until then the claim is scoped to the model.
+
+### Refusals
+
+A refused connector names every sweep left without a certificate
+(`ExactRefusal`: connector, sweep index, kind, reason). The kinds are
+`circle_junction`, `offset_line`, `offset_arc` and `junction_arc`. The reasons
+are `NOT_PROVED_AT_DEPTH` (bisection exhausted) and `SPLIT_UNRESOLVED`.
+`ExactConnectorCertificate.build` raises `UncertifiedExactConnectorError`, a
+subclass of `UncertifiedConnectorEngagementError`, with all of them.
+
+### Evidence
+
+`tests/benchmarks/test_held_connector_engagement_exact.py` checks every
+refusal at the cap against exact native station verdicts on a square minus
+one annulus. These are stations at prefix parameter 0: the full rim against
+the stock, with no own prefix.
+
+| check | test |
+| --- | --- |
+| rational (non-binary64) line end: equality certifies, the next binary64 refuses | `test_rational_line_endpoints_are_not_binary64_and_equality_certifies` |
+| cross-root line (ends in ℚ(√2), ℚ(√3), rational support): the interior foot decides (31.0° refused, 31.2° certified), the station at the foot exceeds 31.0° and clears 31.2° | `test_cross_root_line_is_decided_by_its_interior_foot_and_the_refusal_is_true` |
+| arc: interior FAR point equality certifies, the next binary64 refuses; the sub-arc short of FAR certifies there | `test_arc_interior_far_point_equality_certifies_and_next_binary64_refuses` |
+| arc refused at the cap: the FAR station exceeds | `test_arc_refused_at_the_cap_is_a_true_exceedance` |
+| cross-root arc (ends in ℚ(√19), ℚ(√3), FAR in ℚ(√2)): refused, the FAR station exceeds; certified under a looser cap | `test_cross_root_arc_refuses_at_its_far_point_and_the_station_exceeds` |
+| arc NEAR point brings d\* into range (hole branch): equality certifies at s = 1, the next binary64 refuses, the d\* station exceeds 56° | `test_arc_near_point_brings_the_interior_hole_minimum_into_range` |
+| Hypothesis: certified one-root arcs (ends in two extensions, both senses, caps 20–180°) have no exceeded station among 97 | `test_certified_one_root_arc_has_no_exceeded_station` |
+| split points are rational, exactly on the circle, strictly inside; full turns cover both extremes | `test_arc_split_point_is_rational_on_the_circle_and_strictly_inside`, `test_full_circle_arc_covers_both_extremes` |
+| filtered arc order = `compare_on_arc` (Hypothesis) | `test_filtered_arc_order_equals_compare_on_arc` |
+| junction point is rational and exactly on the binary64 circle; short junctions certify (rational and cross-root); a long junction is refused by name, and its station exceeds | `test_circle_junction_point_is_rational_and_exactly_on_the_binary64_circle`, `test_short_junction_connector_is_certified`, `test_cross_root_junction_connector_is_certified`, `test_long_junction_is_refused_by_name_and_is_a_true_exceedance` |
+| contract: discontinuous sweeps, count / seam mismatch, a connector off its junctions, a future circle | `test_discontinuous_connector_is_named`, `test_connector_count_must_match_the_seam`, `test_connector_must_start_and_end_at_its_circles_junctions`, `test_a_future_circle_never_certifies` |
+| binary64 injection decides as the integer grid on Figure 5 | `test_binary64_injection_agrees_with_the_integer_grid_on_figure5` |
+
+Defect injection (mutants in `build/oc/mutants/`):
+
+- Dropping NEAR and FAR (ends only) is caught by 4 tests.
+- Inverting the on-arc test is caught by 3.
+- Dropping FAR alone is caught by the property test and the cross-root
+  fixture.
+- Dropping NEAR alone is caught only by the constructed hole-branch fixture.
+  Random draws miss it, like the straight d\* branch, which is why that
+  fixture exists.
+
+### Ω\* gate measurement {#omega-gate-measurement}
+
+Generated by `tools/held_omega_connector_gate_results.py`
+(`pixi run held-omega-connector-gate`). It generates every workload in one
+process, in sequence, and assesses it through `omega_connector_path` and
+`ExactConnectorAssessment`. The record is in
+`benchmarks/results/held_omega_connector_gate.{json,md}`. The emitted path is
+the one after the `connector_repair` stage, so its gate refuses nothing. The
+"Before repair" table is the same gate on the NOTHING-stage circles, the
+repair stage's input. The tool fails loudly unless its refused connectors are
+exactly the ones the stage repaired and the stage's verdicts equal a fresh
+gate of the emitted path. Gate time includes building the exact path. The
+ratio is gate time over generation time in the same process; generation now
+includes the repair stage's own gate. The tool also renders the tier-1 bound
+range (reporting) and the junction-model check against the emitted path.
+
+--8<-- "benchmarks/results/held_omega_connector_gate.md"
+
+What the refusals are:
+
+- Every refusal (the "Before repair" table) is `NOT_PROVED_AT_DEPTH` (the
+  "refusal reasons" column). No split was unresolved.
+- Every refused connector also has a refused entry junction. It sits at the
+  end of the refused piece, at the same place.
+- The tier-1 bound at the refusals (the "refused sweeps °" column of the
+  "Before repair" table) lies a little over the cap. That is the lemma-tight
+  class the polygon path also had (its "left" connectors), and there it is
+  repaired by midpoint-circle refinement; on Ω\* the same repair is
+  [Ω\* connector repair](#omega-connector-repair).
+- No tier-2 replay exists for arc sweeps. So these refusals are "not proved",
+  not shown to be violations.
+
+Budget: not met. The gate costs the "gate / gen" fraction of the Ω\*
+generation time, in Python one-root arithmetic behind the interval filter. The
+lever is native: the same decisions on CGAL `Sqrt_extension`, which is the C++
+slot's work.
+
+### Ω\* connector repair {#omega-connector-repair}
+
+Ruling (polygon path, applied to Ω\*): a connector without a tier-1 or tier-1b
+certificate is repaired by refinement. `repair_omega_connectors`
+(`benchmarks/held_omega_connector_repair.py`) runs on the emitted circles,
+after the NOTHING pass, because removing a circle can leave a connector
+unproved:
+
+1. It gates every connector once (`assess_omega_connectors` logic).
+2. For each refused connector i (circles i → i+1), it inserts the
+   refinement's midpoint circle (`omega_midpoint_circle`). The circle sits on
+   an exact ∂Ω\* site strictly between the two sites, has the mean guide
+   radius and is contained in Ω\* exactly. Then it subdivides depth-first
+   until every sub-connector is accepted. A sub-connector is accepted when:
+    - its circle pair is within the cap by the exact standard-model decision,
+      re-decided for every inserted circle;
+    - its exact connector (junction lines and ∂Ω\* sweeps) is certified by
+      tier 1 or 1b (`OmegaConnectorGate.decide`, the post-gate's own lemma,
+      candidate index and bisection).
+3. The seam is repaired by appending circles. Circle 0 is never re-cut, and
+   the closing pair is report-only.
+
+**Gouge-free by construction.** Every inserted circle is contained in Ω\*
+exactly, and every connector is an exact ∂Ω\* chain. The audit re-decides
+both.
+
+**One pass suffices.** An insertion between i and i+1 leaves every other
+connector's two circles adjacent. It only adds priors to the connectors after
+it. Tier 1 reads only the circle just cut. Tier 1b gains candidates, so every
+sub-sweep keeps a certifying circle and the bisection tree is unchanged. The
+input verdicts are therefore carried over with renumbered circle indices, and
+the result's `verdicts` certify the emitted path. The repair is designed to
+replace the post-gate.
+
+**Failure modes** (each one named):
+
+- `OmegaConnectorRepairDepthError(connector, seam, refusals)`: the depth ran
+  out on one connector.
+- `OmegaConnectorRepairBudgetError`: the global circle budget ran out.
+- `OmegaConvexCornerEngagementError(connector, seam, piece)`: see below.
+
+#### Convex corners on Ω\*
+
+The [convex-corner lemma](#convex-corners-an-engagement-floor-no-refinement-removes)
+holds on Ω\* verbatim at a vertex V joining two offset **line** pieces. The
+proof carries over because:
+
+- Ω\* is locally the wedge T at V;
+- the approach to V is straight;
+- stock is Ω\* ⊕ D_r ⊆ the pocket.
+
+Its hypothesis is "every tool-centre point cut before, within 2r of V, lies
+in T". `sharp_vertex` (`benchmarks/held_omega_convex_corner.py`) checks it
+exactly on what has been cut:
+
+- **Emitted circles.** Each circle either lies with its junction line in T
+  (disk: n̂ₖ·c − levelₖ ≥ ρ for both lines; site q in T), or the disk of radius
+  max(ρ, |q − c|) about c is provably farther than 2r from V. That second test
+  uses a rational upper bound from the site's interval box and is decided
+  without a square root (the exact hull test below).
+- **Every other ∂Ω\* piece.** It lies in T (a line: both ends; an arc: its
+  whole circle) or is provably farther than 2r from V. That gives
+  Ω\* ∩ B(V, 2r) ⊂ T, because B ∖ T is connected and ∂Ω\* does not meet it,
+  so earlier ∂Ω\* connectors are in T near V.
+- **No earlier cut reaches V.** A disk in a wedge of angle < π misses the
+  apex, and a site at V is excluded.
+
+**Precondition: first arrival.** The lemma bounds the engagement of the motion
+that *first* reaches V. Earlier circles keep a positive distance from V (a disk
+in a wedge of angle < π misses the apex) and so do junction lines (q ≠ V), but
+an earlier ∂Ω\* connector inside T may pass through V itself. The Ω\* generator
+emits circles in exact site-key order, one counter-clockwise lap from circle 0,
+and repair midpoints lie strictly between their neighbours, so every vertex is
+reached once. `sharp_vertex` checks this exactly before claiming a violation:
+the emitted site keys are non-decreasing along the lap that starts at circle
+0's site, and V's key (`OmegaSite.at_source` of the outgoing piece) is strictly
+after the predecessor's. A breach is the caller's contract violation and raises
+`OmegaCornerFirstArrivalError`.
+
+**Exact hull test.** "Far" for a circle uses the hull radius max(ρ, √F), where F
+is the rational upper bound on |q − c|² from the site's interval box. It is
+decided without a square root: D² > (2r + ρ)² when ρ² ≥ F; otherwise
+X = D² − 4r² − F > 0 and X² > 16r²F.
+
+When a refused sub-connector crosses exactly one such vertex (sites on its two
+pieces, neither at V), and the vertex is convex with u₀·u₁ < 2C − 1 (unit
+directions, C the cap surrogate, so β > cap exactly), the repair raises before
+any midpoint. Circles a continued refinement could insert cannot change the
+verdict. On the outgoing side they are cut after the arrival. On the incoming
+side they are contained in Ω\*, so they lie in T near V.
+
+Scope: vertices adjacent to an arc piece are not covered. There the repair's
+depth budget names the failure, which is the conservative direction.
+
+#### Measurement {#omega-repair-measurement}
+
+Generated by `tools/held_omega_connector_repair_results.py`
+(`pixi run held-omega-connector-repair`): every workload generated live in one
+process, in sequence. "Refused before" is the repair stage's own gate on the
+NOTHING-stage circles. "Refused after" is a fresh exact assessment of the
+emitted path; the tool fails loudly unless it refuses nothing and its tiers
+equal the stage's verdicts. The gouge audit is exact, before (NOTHING-stage
+circles and their connectors) and after repair. Stage seconds split into the
+gate and the insertion pass; "stage / rest" is the same-process ratio to the
+other generation stages.
+
+--8<-- "benchmarks/results/held_omega_connector_repair.md"
+
+- Every refused connector is repaired with one midpoint circle (the
+  "per repaired connector" column), and no workload reaches the convex-corner
+  refusal or the depth / circle budgets.
+- The stage is almost all exact gate; the insertion pass is the "pass s"
+  column. The gate's cost is the native `Sqrt_extension` work.
+
 ## Measurement
 
 Generated by `tools/held_connector_engagement_survey.py`
@@ -203,6 +566,11 @@ violation. Generated by `tools/held_connector_engagement_tier2.py`
 workload, minutes):
 
 --8<-- "benchmarks/results/held_connector_engagement_tier2.md"
+
+This record predates the refinement wiring (its header names the commit):
+it replays the connectors the tiers left before connector repair. With the
+repair wired the tiers leave none ([Measurement](#measurement)), so a rerun
+has nothing to replay.
 
 The measured/bound ratio shows how tight the lemma is on the refusals: there
 the outer arc lies mostly ahead of the tool, so a forward-half refinement of
@@ -582,6 +950,12 @@ pixi run held-connector-engagement        # tiers 1 + 1b on all five workloads -
 pixi run held-connector-engagement-tier2  # opt-in, minutes: tier 2 on the uncertified connectors -> benchmarks/results/held_connector_engagement_tier2.{json,md}
 pixi run held-connector-engagement-tier2 --full figure5_refined   # one-off, about 20 min: the full sequential replay
 pixi run pytest tests/benchmarks/test_held_connector_engagement.py -n auto
+pixi run held-omega-connector-gate         # minutes: Ω* gate on all five workloads + junction-model check -> benchmarks/results/held_omega_connector_gate.{json,md}
+pixi run held-omega-connector-gate-render  # re-render the .md from the JSON
+pixi run pytest tests/benchmarks/test_held_omega_connector_engagement.py tests/benchmarks/test_held_omega_connector_repair.py -n auto
+pixi run held-omega-connector-repair       # Ω* connector repair stage on all five workloads -> benchmarks/results/held_omega_connector_repair.{json,md}
+pixi run held-omega-coverage               # emitted Ω* paths against T(Ω*) -> benchmarks/results/held_omega_coverage.{json,md}
+pixi run pytest tests/benchmarks/test_held_omega_connector_gate_results.py tests/benchmarks/test_held_omega_connector_repair_results.py tests/benchmarks/test_held_omega_coverage_results.py -n auto
 ```
 
 Seam background: `.superpowers/sdd/2026-10-13-product-pipeline/seam-connector-report.md`
