@@ -595,15 +595,50 @@ engagement in the refinement module only: no natural pair was found in
 800,000 random quarter-unit circle pairs. Each greedy, refusal, guard and
 filter defect named above was injected and fails at least one test.
 
+### The NOTHING pass inside select-certify-repair
+
+The exact NOTHING pass (`benchmarks.held_nothing_circles`, closed over the seam
+when `settings.close_seam`) runs before every certificate run: once on the
+initial emission and again after every repair round
+(`remove_emission_nothing_circles`). The certificate, the repair's witnesses
+and the connector post-gate all decide the pass's kept circles, and those are
+the emitted path. The loop leaves only through a certificate that passed on
+that same set.
+
+The pass cannot undo a repair. A witness lies outside every kept annulus, and
+each removed annulus lies in the union of the kept annuli before it, so the
+witness lies in no refined annulus. After the splice, the first circle whose
+closed annulus contains the witness has no earlier circle containing it, so
+the pass keeps it. A selected source the pass removed can therefore never be
+the only candidate for a witness.
+
+The emission is not pruned. Its `original_indices` (one emitted index per
+selected source) and the decision trace the splice reads index every refined
+circle. `CertifiedBoundaryOrderedPath` keeps both: `emission` is the repair's
+working state, and `circles` (the pass result, field `nothing`) is the
+certified path. `build` checks that `circles` is the emission minus
+`nothing.removed` (`CertifiedNothingMismatchError`), and the ledger's
+`emitted_before` / `emitted_after` count emitted circles. The emitted path can
+omit a selected source's circle: on the unit fixture the pass removes the
+source (3, 5). Map circles to sources through `emission`; read the path from
+`circles`.
+
+The pass re-runs from scratch after every round, about 1 s per certificate run
+on Monstera. That is fine at one round. If rounds grow, the lever is an
+incremental re-run from the first spliced index.
+
 Slow tier, `benchmarks/acceptance/test_held_coverage_repair_monstera_slow.py`
-(not collected by pytest; about 30–75 s, path generation dominates). Its
-counts were re-pinned after the connector repair (user go 2026-10-22; the
-derivation is in the gate analysis):
+(not collected by pytest; about 20–75 s, path generation dominates). Its
+counts were re-pinned after the connector repair, then again for the NOTHING
+pass (user go 2026-10-22, both times). The pass proves the generator's 10
+Monstera circles NOTHING before the repair and again after it, with indices
+shifted by the insertions: 4438 − 10 = 4428 before, 4440 − 10 = 4430 after.
+The connectors are 4430 transitions − 280 fans = 4150.
 
 | test | expectation |
 |---|---|
-| `test_monstera_repaired_path_passes_an_independent_fresh_certificate` | a certificate run in the test on the final emission's sweeps: 4440 cuts, 4160 connectors, 0 exposed edges; `certificate_runs == rounds + 1 == 2` |
-| `test_monstera_repair_reinserts_the_pinned_island_candidates` | `inserted_sources == (744, 1273)` (B, A), 1 round, 0 refusals, 4438 → 4440 |
+| `test_monstera_repaired_path_passes_an_independent_fresh_certificate` | a certificate run in the test on the emitted path's sweeps (`circles`): 4430 cuts, 4150 connectors, 0 exposed edges; `certificate_runs == rounds + 1 == 2` |
+| `test_monstera_repair_reinserts_the_pinned_island_candidates` | `inserted_sources == (744, 1273)` (B, A), 1 round, 0 refusals, 4428 → 4430 |
 | `test_monstera_repair_respects_the_engagement_cap_including_the_seam` | every consecutive transition and the seam (last → first) is within the cap |
 | `test_monstera_repair_reports_circle_count_and_time` | writes `build/coverage-repair/monstera_repair.json`; `repair_s ≤ 0.5` |
 

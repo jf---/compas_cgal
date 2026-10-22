@@ -4,10 +4,10 @@
   "workloads": {
     "figure5_refined": {
       "initial": "ad272d4913aa0731ed8adfbafea6ac5b006fc9f141da2dc5ec92c3ca0ee60cbe",
-      "circles": "eaffef8afbb56e59ef67a4bae9d3090dd2d2c85846436ec23d0bf7e1137da0fa",
-      "connectors": "e22994c810f83d2c9b037555f1fa254a658ed8e421001fd78cc5913b4a9b7205",
-      "circle_count": 2010,
-      "connector_count": 2010,
+      "circles": "8d9f1d7d1ca866e4e3d3be02f4f6eee75bbb6e414e18168fb65ee2967aef0b8c",
+      "connectors": "2fcedb0515a965307014fa534dbee88465596a297102e97b5284584440b39756",
+      "circle_count": 2004,
+      "connector_count": 2004,
       "seam": "connector"
     },
     "figure8_crossed_skis_boundary": {
@@ -20,10 +20,10 @@
     },
     "figure8_monstera_boundary_qualified_corners": {
       "initial": "fe2b2d816ad4730f1ab50d0a62ba94eacddd084842aa87d34283126138d30719",
-      "circles": "044033966b5990d4f331b55a682234b6f5b4c6d8d336d0784d1144306f4a6e98",
-      "connectors": "230c29cc326d2905a4099b7281f028d76980b41ee83a74b5108304517eaed3a7",
-      "circle_count": 4438,
-      "connector_count": 4438,
+      "circles": "2a57a9a9fcddb118900c1443c1ed279289f28b0bee4851d3b018f9d77f7f1bff",
+      "connectors": "561a862e267bab5b577b121c4f379081cee97dc434db1661172184db4388a50f",
+      "circle_count": 4428,
+      "connector_count": 4428,
       "seam": "connector"
     },
     "figure8_upper_boundary": {

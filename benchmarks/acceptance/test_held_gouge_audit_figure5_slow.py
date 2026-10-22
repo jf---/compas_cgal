@@ -24,6 +24,12 @@ connector (last circle back to the first): 2010 circles and 2010 connectors;
 592 / 211 gouging circles and 531 / 136 gouging connectors (exact / > 1e-9 mm),
 78 and 38 touching. The seam connector itself is clear. The counts above are
 the 2026-10-17 path (2013 circles, open, 2012 connectors).
+
+Re-pinned 2026-10-22 (user go) after the exact NOTHING pass joined generation:
+it removes circles 980, 987, 995, 1017, 1036 and 1045, each a gouging circle
+deeper than the 1e-9 mm split, so 2004 circles and 2004 connectors; 586 / 205
+gouging circles (592 - 6, 211 - 6), 78 touching; the connectors' gouges are
+unchanged (531 / 136, 38 touching).
 """
 
 from __future__ import annotations
@@ -38,11 +44,11 @@ from benchmarks.held_gouge_workloads import generate
 
 def test_published_figure5_path_gouges_concave_arcs_by_the_chord_sagitta() -> None:
     report = audit_generated(generate("figure5_refined"))
-    assert (report.circles, report.connectors) == (2010, 2010)
-    assert (len(report.gouging_circles), report.above_split("circle"), len(report.touching_circles)) == (592, 211, 78)
+    assert (report.circles, report.connectors) == (2004, 2004)
+    assert (len(report.gouging_circles), report.above_split("circle"), len(report.touching_circles)) == (586, 205, 78)
     assert (len(report.gouging_connectors), report.above_split("connector"), len(report.touching_connectors)) == (531, 136, 38)
     geometric = [item for item in report.gouges if item.depth_mm > 1e-9]
     assert {item.primitive_kind for item in geometric} == {"concave-arc"}
     assert {item.primitive_kind for item in report.gouges if item not in geometric} == {"line"}
-    with pytest.raises(HeldPathGougesBoundaryError, match="592 circles and 531 connectors gouge"):
+    with pytest.raises(HeldPathGougesBoundaryError, match="586 circles and 531 connectors gouge"):
         require_gouge_free(report)

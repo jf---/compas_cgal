@@ -8,54 +8,54 @@
     "python": "3.12.13"
   },
   "build": {
-    "commit": "8aae3c690be966268d61d2471c73c1cd94ad2f11",
+    "commit": "793b490dd81cf094d6101f22d26ea7ff6e1e016c",
     "dirty": true,
     "package_version": "0.9.1",
-    "recorded_at": "2026-10-22T12:14:07+00:00"
+    "recorded_at": "2026-10-22T17:03:03+00:00"
   },
   "timing_runs": 3,
   "cluster_link_mm": 1.0,
   "workloads": [
     {
       "workload": "figure5_refined",
-      "generation_s": 1.5274429579731077,
-      "cuts": 2010,
+      "generation_s": 1.8588309570332058,
+      "cuts": 2004,
       "connectors": 1993,
       "domain_vertices": 65,
-      "region_count": 2140,
+      "region_count": 2134,
       "connector_regions": 65,
-      "piece_count": 3351,
-      "edge_count": 1710015,
+      "piece_count": 3339,
+      "edge_count": 1697517,
       "covered": true,
       "witnesses": 0,
       "undecided": 0,
       "clusters": [],
       "runs": [
         {
-          "seconds": 1.4826574159960728,
-          "load_1min": 143.83740234375
+          "seconds": 1.3889503749960568,
+          "load_1min": 40.68212890625
         },
         {
-          "seconds": 1.5965739579987712,
-          "load_1min": 143.83740234375
+          "seconds": 1.321743874985259,
+          "load_1min": 40.68212890625
         },
         {
-          "seconds": 1.4713997079816181,
-          "load_1min": 143.83740234375
+          "seconds": 1.334025832999032,
+          "load_1min": 40.68212890625
         }
       ],
-      "median_s": 1.4826574159960728,
+      "median_s": 1.334025832999032,
       "native_phase_s": [
-        0.585527375,
-        0.4196745900000001,
-        0.2485037920000001,
-        0.06990541600000003
+        0.576800541,
+        0.42605151699999944,
+        0.246537166,
+        0.07159211400000003
       ],
       "repair": null
     },
     {
       "workload": "figure8_crossed_skis_boundary",
-      "generation_s": 2.2994150840386283,
+      "generation_s": 2.3508632089942694,
       "cuts": 1621,
       "connectors": 1619,
       "domain_vertices": 103,
@@ -69,30 +69,30 @@
       "clusters": [],
       "runs": [
         {
-          "seconds": 0.6165297500265297,
-          "load_1min": 133.19970703125
+          "seconds": 0.5815224580001086,
+          "load_1min": 39.02587890625
         },
         {
-          "seconds": 0.5813736249983776,
-          "load_1min": 123.974609375
+          "seconds": 0.5807489999860991,
+          "load_1min": 37.341796875
         },
         {
-          "seconds": 0.5898112499853596,
-          "load_1min": 123.974609375
+          "seconds": 0.5900394589989446,
+          "load_1min": 37.341796875
         }
       ],
-      "median_s": 0.5898112499853596,
+      "median_s": 0.5815224580001086,
       "native_phase_s": [
-        0.205607666,
-        0.11837671499999991,
-        0.20855184000000007,
-        0.06155749599999918
+        0.197334,
+        0.11334466400000008,
+        0.19428166100000005,
+        0.0603532569999992
       ],
       "repair": null
     },
     {
       "workload": "figure8_upper_boundary",
-      "generation_s": 3.8524237499805167,
+      "generation_s": 4.19557820900809,
       "cuts": 1690,
       "connectors": 1688,
       "domain_vertices": 142,
@@ -106,37 +106,37 @@
       "clusters": [],
       "runs": [
         {
-          "seconds": 0.9486562499951106,
-          "load_1min": 114.767578125
+          "seconds": 0.9351865829958115,
+          "load_1min": 35.79248046875
         },
         {
-          "seconds": 0.9396060419967398,
-          "load_1min": 114.767578125
+          "seconds": 0.9363329999905545,
+          "load_1min": 35.79248046875
         },
         {
-          "seconds": 0.9654798750125337,
-          "load_1min": 114.767578125
+          "seconds": 0.9218318330240436,
+          "load_1min": 35.79248046875
         }
       ],
-      "median_s": 0.9486562499951106,
+      "median_s": 0.9351865829958115,
       "native_phase_s": [
-        0.365581167,
-        0.2199591050000001,
-        0.278272789,
-        0.0615127519999995
+        0.366288958,
+        0.2165880250000001,
+        0.2684278749999998,
+        0.058070695999999505
       ],
       "repair": null
     },
     {
       "workload": "figure8_monstera_boundary_qualified_corners",
-      "generation_s": 8.772309791005682,
-      "cuts": 4438,
-      "connectors": 4158,
+      "generation_s": 10.087082876008935,
+      "cuts": 4428,
+      "connectors": 4148,
       "domain_vertices": 386,
-      "region_count": 5210,
+      "region_count": 5200,
       "connector_regions": 386,
-      "piece_count": 9270,
-      "edge_count": 1488885,
+      "piece_count": 9251,
+      "edge_count": 1479699,
       "covered": false,
       "witnesses": 8,
       "undecided": 0,
@@ -164,73 +164,73 @@
       ],
       "runs": [
         {
-          "seconds": 2.5297405000019353,
-          "load_1min": 98.66015625
+          "seconds": 2.4045087919803336,
+          "load_1min": 34.4423828125
         },
         {
-          "seconds": 2.5261388750222977,
-          "load_1min": 91.72021484375
+          "seconds": 2.3352406669873744,
+          "load_1min": 34.4423828125
         },
         {
-          "seconds": 2.5293987920158543,
-          "load_1min": 91.72021484375
+          "seconds": 2.326469667023048,
+          "load_1min": 33.52587890625
         }
       ],
-      "median_s": 2.5293987920158543,
+      "median_s": 2.3352406669873744,
       "native_phase_s": [
-        0.821598125,
-        0.5993090319999982,
-        0.7640881260000013,
-        0.1428303430000034
+        0.786311542,
+        0.5982121979999993,
+        0.79037328,
+        0.14108540200000294
       ],
       "repair": null
     },
     {
       "workload": "figure8_monstera_boundary_qualified_corners_repaired",
-      "generation_s": 24.609346915996866,
-      "cuts": 4440,
-      "connectors": 4160,
+      "generation_s": 18.706294333009282,
+      "cuts": 4430,
+      "connectors": 4150,
       "domain_vertices": 386,
-      "region_count": 5212,
+      "region_count": 5202,
       "connector_regions": 386,
-      "piece_count": 9274,
-      "edge_count": 1492597,
+      "piece_count": 9255,
+      "edge_count": 1483355,
       "covered": true,
       "witnesses": 0,
       "undecided": 0,
       "clusters": [],
       "runs": [
         {
-          "seconds": 3.172649999993155,
-          "load_1min": 88.19775390625
+          "seconds": 3.2435326670238283,
+          "load_1min": 29.65283203125
         },
         {
-          "seconds": 4.034147166996263,
-          "load_1min": 89.142578125
+          "seconds": 2.4690474170201924,
+          "load_1min": 30.96142578125
         },
         {
-          "seconds": 3.416369542013854,
-          "load_1min": 87.529296875
+          "seconds": 2.5334725829889067,
+          "load_1min": 30.96142578125
         }
       ],
-      "median_s": 3.416369542013854,
+      "median_s": 2.5334725829889067,
       "native_phase_s": [
-        0.910903083,
-        0.6990203509999974,
-        0.8481938239999999,
-        0.15147720100000264
+        0.803449958,
+        0.5919719259999983,
+        0.763993300000001,
+        0.14240082300000265
       ],
       "repair": {
-        "emitted_before": 4438,
-        "emitted_after": 4440,
+        "emitted_before": 4428,
+        "emitted_after": 4430,
         "inserted_sources": [
           744,
           1273
         ],
         "rounds": 1,
         "certificate_runs": 2,
-        "repair_s": 0.41868870801408775,
-        "certificate_s": 9.589737749978667
+        "repair_s": 0.15986495799734257,
+        "certificate_s": 4.719612041983055
       }
     }
   ]

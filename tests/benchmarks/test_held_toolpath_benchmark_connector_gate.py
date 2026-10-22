@@ -38,10 +38,12 @@ def test_a_real_polygon_workload_passes_the_gate_as_its_own_stage() -> None:
 
 def test_a_deliberately_uncertified_connector_makes_generation_raise(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[dict[str, Any]] = []
+    thinned_circles: list[Any] = []
 
     def thinned(*args: Any, **kwargs: Any) -> Figure5EngagementRefinement:
         calls.append(kwargs)
         result = refine_figure5_engagement(*args, **kwargs)
+        thinned_circles.append(result.circles[::THINNING_STRIDE])
         return Figure5EngagementRefinement(result.circles[::THINNING_STRIDE], result.original_indices)
 
     monkeypatch.setattr(tb, "refine_figure5_engagement", thinned)
@@ -49,12 +51,13 @@ def test_a_deliberately_uncertified_connector_makes_generation_raise(monkeypatch
         tb.generate("figure5_refined")
     assert calls and calls[0].get("close_seam") is True
     assert raised.value.connectors
-    # The refused set is exactly the independent assessment's on the same thinned path.
+    # The refused set is exactly the independent assessment's on the same thinned
+    # path, after the NOTHING stage generation runs between refine and connectors.
     monkeypatch.undo()
     reference = tb.generate("figure5_refined")
-    circles = reference.circles[::THINNING_STRIDE]
-    connectors = Figure5BoundaryConnectors.build(reference.boundary, circles)
     cap = EngagementCap.build(math.radians(float(reference.case.tea_cap)))
+    circles = tb.remove_polygon_nothing_circles(thinned_circles[0], reference.case.tool_radius, cap).circles
+    connectors = Figure5BoundaryConnectors.build(reference.boundary, circles)
     assessment = ConnectorEngagementAssessment.build(circles, connectors, reference.case.tool_radius, cap)
     assert raised.value.connectors == assessment.refused
 

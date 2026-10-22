@@ -97,5 +97,13 @@ class CertifiedLedgerMismatchError(CoverageRepairInvariantError):
     """
 
 
+class CertifiedNothingMismatchError(CoverageRepairInvariantError):
+    """A certified path's NOTHING-pass result is not its emission minus the removed circles.
+
+    The removed indices are out of range or unordered, or the kept circles are
+    not exactly the emission's circles at the other indices, in order.
+    """
+
+
 class UncertifiedPathError(CoverageRepairInvariantError):
     """A certified path carries a certificate with exposed edges."""

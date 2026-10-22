@@ -37,6 +37,7 @@ from benchmarks.held_boundary_order_spacing import select_boundary_ordered_sourc
 from benchmarks.held_coverage_repair import certify_boundary_ordered_selection
 from benchmarks.held_coverage_repair import path_sweeps
 from benchmarks.held_coverage_repair import refine_boundary_ordered_path_certified
+from benchmarks.held_coverage_repair import remove_emission_nothing_circles
 from benchmarks.held_coverage_repair import repair_coverage
 from benchmarks.held_coverage_repair_cover import candidates_for
 from benchmarks.held_coverage_repair_cover import contains_exactly
@@ -143,6 +144,16 @@ SELECTED_PATH_REPAIR_CONTACTS = ((5.0, 0.0), (6.0, 3.0), (6.0, 5.0))
 SEAM_REPAIR_CONTACTS = ((0.9999999999999998, 6.0), (0.0, 3.0), (0.0, 0.9999999999999998))
 
 
+# Emitted counts with the exact NOTHING pass (re-pinned 2026-10-22, user go). Before repair the
+# selection (0, 2, 3) refines to 9 circles (3 sources + 3 connector-repair + 3 seam-repair) and the
+# pass proves 1 NOTHING, the seam repair (1, 3) R = 1 (index 7): 9 - 1 = 8. After re-inserting R = 2
+# the refinement emits 10 (4 sources + 3 connector-repair + 3 seam-repair) and the pass proves 3
+# NOTHING: (4, 3) R = 2 (contact (6, 3)), the source (3, 5) R = 1 and the seam repair (1, 3) R = 1,
+# whose swept annuli lie in the union of the cuts before them: 10 - 3 = 7 (measured with
+# build/rv14/probe_before.py).
+EMITTED_BEFORE_REPAIR, EMITTED_AFTER_REPAIR = 8, 7
+
+
 def _circle(
     ordinal: int, segment: int, parameter: Fraction, contact: tuple[float, float], centre: tuple[float, float], radius: float, run: int = 0
 ) -> Figure5CounterclockwiseCircle:
@@ -196,7 +207,7 @@ def test_boundary_selection_drops_the_closing_fan_circle_and_repair_reinserts_it
     assert certified.ledger.inserted_sources == (1,)
     assert certified.emission.selected == (0, 1, 2, 3), "R = 2 goes back into order slot 1"
     assert certified.ledger.rounds == 1 and certified.ledger.certificate_runs == 2
-    assert certified.ledger.emitted_after == certified.ledger.emitted_before + 1
+    assert (certified.ledger.emitted_before, certified.ledger.emitted_after) == (EMITTED_BEFORE_REPAIR, EMITTED_AFTER_REPAIR)
 
 
 def test_repair_witness_lies_in_the_reinserted_circle_exactly() -> None:
@@ -271,7 +282,11 @@ def test_post_gate_refuses_an_emission_whose_seam_was_never_refined() -> None:
     """The coverage verdict passes, but the seam of an emission refined open is not certified: the flow raises by name."""
     sources = _sources(FIXTURE)
     emission = BoundaryOrderedEmission.build((0, 1, 2, 3), refine_figure5_engagement(sources, SQUARE, TOOL, FAN_CAP))
-    seam = len(emission.refinement.circles) - 1
+    # The post-gate decides the emitted (pruned) path, so the refused connector is its seam, the last
+    # transition. Re-pinned 2026-10-22 (user go): the open refinement emits 7 circles (seam index 6);
+    # the NOTHING pass removes (4, 3) R = 2 and the source (3, 5) R = 1, leaving 5, seam index 4.
+    seam = len(remove_emission_nothing_circles(emission, SETTINGS).circles) - 1
+    assert (len(emission.refinement.circles) - 1, seam) == (6, 4)
     with pytest.raises(UncertifiedConnectorEngagementError) as caught:
         repair_coverage(sources, SQUARE, SETTINGS, emission, _scripted_oracle([_passing()], []))
     assert caught.value.connectors == (seam,)
@@ -294,10 +309,12 @@ def test_post_repair_gate_is_a_fresh_full_certificate() -> None:
     repairs = tuple((float(c.contact_point.x), float(c.contact_point.y)) for k, c in enumerate(circles) if k not in certified.emission.refinement.original_indices)
     assert repairs == SELECTED_PATH_REPAIR_CONTACTS + SEAM_REPAIR_CONTACTS
     domain = CentreDomain.build(list(SQUARE))
-    cuts, connectors = path_sweeps(domain, SQUARE, circles)
-    # 4 sources + 3 connector-repair + 3 seam-repair circles; the 2 moving connectors (fan -> (3, 6),
-    # seam) are each split once per repair circle on them: 2 + 6 = 8.
-    assert calls[-1] == (len(cuts), len(connectors)) == (len(FIXTURE) + len(repairs), 2 + len(repairs)) == (10, 8)
+    assert len(circles) == len(FIXTURE) + len(repairs) == 10, "4 sources + 3 connector-repair + 3 seam-repair circles"
+    # The certificate decides the emitted path: the NOTHING pass removes 3 of the 10 (re-pinned
+    # 2026-10-22, user go; see EMITTED_AFTER_REPAIR), leaving 7 cuts. Their 7 transitions (seam
+    # included) less the 2 fan transitions (3, 1) -> (3, 2) -> (3, 3) at one site are 5 moving connectors.
+    cuts, connectors = path_sweeps(domain, SQUARE, certified.circles)
+    assert calls[-1] == (len(cuts), len(connectors)) == (EMITTED_AFTER_REPAIR, EMITTED_AFTER_REPAIR - 2) == (7, 5)
     assert len(calls) == certified.ledger.certificate_runs == certified.ledger.rounds + 1
     assert CoverageCertificate.build(domain, TOOL, cuts, connectors).exposed_edge_count == 0
 
@@ -897,7 +914,7 @@ def _rebuild_ledger(ledger: CoverageRepairLedger) -> CoverageRepairLedger:
 
 
 def _rebuild_path(path: CertifiedBoundaryOrderedPath) -> CertifiedBoundaryOrderedPath:
-    return CertifiedBoundaryOrderedPath.build(path.sources, path.emission, path.certificate, path.ledger)
+    return CertifiedBoundaryOrderedPath.build(path.sources, path.emission, path.nothing, path.certificate, path.ledger)
 
 
 def _raises_invariant(error: type[CoverageRepairInvariantError], build: Callable[[], object]) -> None:
@@ -985,7 +1002,7 @@ def _ledger_variants() -> list[tuple[type[CoverageRepairInvariantError], Callabl
 @pytest.mark.parametrize(("error", "variant"), _ledger_variants())
 def test_ledger_build_rejects_each_broken_invariant(error: type[CoverageRepairInvariantError], variant: Callable[[CoverageRepairLedger], CoverageRepairLedger]) -> None:
     ledger = _certified().ledger
-    assert ledger.rounds == 1 and ledger.emitted_after == ledger.emitted_before + 1
+    assert ledger.rounds == 1 and (ledger.emitted_before, ledger.emitted_after) == (EMITTED_BEFORE_REPAIR, EMITTED_AFTER_REPAIR)
     _raises_invariant(error, lambda: _rebuild_ledger(variant(ledger)))
 
 

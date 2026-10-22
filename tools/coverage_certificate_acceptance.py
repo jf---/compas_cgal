@@ -235,7 +235,7 @@ def certify_monstera_repaired() -> WorkloadCertificate:
         certificate_s=ledger.certificate_s,
     )
     generation_s = time.perf_counter() - started
-    return certify(MONSTERA_REPAIRED, generation_s, components[0], certified.emission.refinement.circles, case.tool_radius, repair)
+    return certify(MONSTERA_REPAIRED, generation_s, components[0], certified.circles, case.tool_radius, repair)
 
 
 def measure(workloads: Sequence[str] = WORKLOADS) -> AcceptanceRecord:

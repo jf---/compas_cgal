@@ -65,7 +65,7 @@ def repaired() -> CertificateInput:
     cap = EngagementCap.build(math.radians(float(case.tea_cap)))
     certified = refine_boundary_ordered_path_certified(source, components[0], case.tool_radius, cap, corner_approaches=True)
     domain = CentreDomain.build(list(components[0]))
-    cuts, connectors = path_sweeps(domain, components[0], certified.emission.refinement.circles)
+    cuts, connectors = path_sweeps(domain, components[0], certified.circles)
     return domain, case.tool_radius, cuts, connectors
 
 

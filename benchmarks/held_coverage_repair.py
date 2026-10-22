@@ -1,7 +1,11 @@
 """Select, certify, repair: coverage-preserving boundary-order selection.
 
 Boundary-order selection (``select_boundary_ordered_sources``) and engagement
-refinement (``refine_figure5_engagement``) run unchanged. A full coverage
+refinement (``refine_figure5_engagement``) run unchanged. Before every
+certificate run the exact NOTHING pass (``benchmarks.held_nothing_circles``,
+closed over the seam when ``settings.close_seam``) prunes the refined circles,
+so the certificate, the repair's witnesses and the connector post-gate all
+decide the circle set that is emitted. A full coverage
 certificate then runs on the emitted path, closing seam included (when
 ``settings.close_seam``). When it
 raises ``UncoveredPocketError``, this stage re-inserts dropped source circles
@@ -49,7 +53,10 @@ from benchmarks.held_figure5_boundary_path import Figure5CounterclockwiseCircle
 from benchmarks.held_figure5_boundary_path import Figure5SeamClosure
 from benchmarks.held_figure5_engagement_refinement import refine_figure5_engagement
 from benchmarks.held_figure5_path import HypothesisFigure5Path
+from benchmarks.held_figure5_path import _paper_candidate
 from benchmarks.held_figure5_raw_guide import GuideRunId
+from benchmarks.held_nothing_circles import NothingCirclePass
+from benchmarks.held_nothing_circles import remove_nothing_circles
 from compas_cgal.coverage_certificate.certificate import CoverageCertificate
 from compas_cgal.coverage_certificate.errors import UncoveredPocketError
 from compas_cgal.coverage_certificate.sweeps import BoundaryConnectorSweep
@@ -108,6 +115,13 @@ def repair_coverage(
 ) -> CertifiedBoundaryOrderedPath:
     """Certify the emission; on ``UncoveredPocketError`` re-insert covering sources and re-certify in full.
 
+    Every certificate run, and so every repair round's witnesses, decides the
+    emission's circles after the exact NOTHING pass
+    (``remove_emission_nothing_circles``); the emitted path is that pass's
+    result (``CertifiedBoundaryOrderedPath.circles``). A removed circle's
+    annulus lies in the union of the kept circles before it, so no witness
+    can lie in it.
+
     Once coverage holds, the connector-engagement post-gate runs on the final
     path (``ConnectorEngagementAssessment``, the decisions of
     ``ConnectorEngagementCertificate``): every cut connector must be certified
@@ -132,14 +146,15 @@ def repair_coverage(
             these settings).
     """
     domain = CentreDomain.build(list(boundary))
-    emitted_before = len(emission.refinement.circles)
     forms: dict[int, Figure5CounterclockwiseCircle] = {}
     refusals: list[RepairRefusal] = []
     insertions: list[RepairInsertion] = []
     repair_s = certificate_s = 0.0
     rounds = runs = 0
+    nothing = remove_emission_nothing_circles(emission, settings)
+    emitted_before = len(nothing.circles)
     while True:
-        cuts, connectors = path_sweeps(domain, boundary, emission.refinement.circles, close_seam=settings.close_seam)
+        cuts, connectors = path_sweeps(domain, boundary, nothing.circles, close_seam=settings.close_seam)
         started = time.perf_counter()
         runs += 1
         try:
@@ -157,18 +172,28 @@ def repair_coverage(
         emission, inserted = repair_round(sources, boundary, settings, emission, witnesses, forms, rounds, refusals)
         repair_s += time.perf_counter() - started
         insertions.extend(inserted)
-    _require_connector_certificate(boundary, settings, emission.refinement.circles)
+        nothing = remove_emission_nothing_circles(emission, settings)
+    _require_connector_certificate(boundary, settings, nothing.circles)
     ledger = CoverageRepairLedger.build(
         insertions,
         refusals,
         rounds=rounds,
         emitted_before=emitted_before,
-        emitted_after=len(emission.refinement.circles),
+        emitted_after=len(nothing.circles),
         repair_s=repair_s,
         certificate_s=certificate_s,
         certificate_runs=runs,
     )
-    return CertifiedBoundaryOrderedPath.build(sources, emission, certificate, ledger)
+    return CertifiedBoundaryOrderedPath.build(sources, emission, nothing, certificate, ledger)
+
+
+def remove_emission_nothing_circles(emission: BoundaryOrderedEmission, settings: EngagementRefinementSettings) -> NothingCirclePass[Figure5CounterclockwiseCircle]:
+    """The exact NOTHING pass on an emission's refined circles; the seam is re-decided when ``settings.close_seam``.
+
+    The emission itself is not pruned: its ``original_indices`` and decision
+    trace index the refined circles, and the repair splices into them.
+    """
+    return remove_nothing_circles(emission.refinement.circles, _paper_candidate, settings.tool_radius, settings.cap, closed=settings.close_seam)
 
 
 def _require_connector_certificate(boundary: tuple[Point2[WorldXY], ...], settings: EngagementRefinementSettings, circles: tuple[Figure5CounterclockwiseCircle, ...]) -> None:

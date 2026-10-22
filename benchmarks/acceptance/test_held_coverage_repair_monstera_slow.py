@@ -9,7 +9,10 @@ Pinned (2026-10-21, monstera-acceptance-report.md; counts re-pinned 2026-10-22,
 user go): the greedy set cover decides on integers only, so the outcome is
 deterministic: one round re-inserts sources 744 (island B) then 1273 (island A),
 no refusal, two certificate runs (the failing one and the fresh full post-repair
-one), 4438 -> 4440 emitted circles and 4160 connectors.
+one), 4438 -> 4440 emitted circles and 4160 connectors. Re-pinned 2026-10-22
+(user go) after the exact NOTHING pass joined the pipeline before every
+certificate run: 4428 -> 4430 emitted circles and 4150 connectors, the same
+sources re-inserted.
 """
 
 from __future__ import annotations
@@ -44,7 +47,12 @@ INSERTED_SOURCES = (744, 1273)  # measured 2026-10-21; integer-deterministic tie
 # Re-pinned 2026-10-22 after the connector repair (+72 circles): 4438 = 2695 selected + 1743 refinement
 # circles; 4440 = 4438 + 2 inserted sources (one circle each); 4160 = 4440 transitions (4439 consecutive
 # + seam) - 280 fans. Derivation: docs/superpowers/state/coverage-repair-budget-gate-analysis.md.
-EMITTED_BEFORE, EMITTED_AFTER, CONNECTORS_AFTER = 4438, 4440, 4160
+# Re-pinned 2026-10-22 (user go) for the NOTHING pass: it proves 10 of the 4438 refined circles NOTHING
+# (indices 465, 565, 579, 1355, 3685, 3692, 4093, 4108, 4109, 4362; the generator's set), so 4428 =
+# 4438 - 10 before repair; the two re-inserted sources add one circle each and the pass removes the same
+# 10 circles (indices shifted by the insertions), so 4430 = 4440 - 10; 4150 = 4430 transitions - 280
+# fans (the removed circles' transitions were all moving connectors: 4160 - 10).
+EMITTED_BEFORE, EMITTED_AFTER, CONNECTORS_AFTER = 4428, 4430, 4150
 REPAIR_BUDGET_S = 0.5  # proposed repair budget on Monstera, s (design doc, Cost)
 REPORT = Path(__file__).resolve().parents[2] / "build" / "coverage-repair" / "monstera_repair.json"
 
@@ -65,7 +73,7 @@ def certified() -> Certified:
 def test_monstera_repaired_path_passes_an_independent_fresh_certificate(certified: Certified) -> None:
     """A certificate run here, outside the repair, on the final emission's own sweeps (seam closed)."""
     path, _, boundary, tool_radius = certified
-    cuts, connectors = path_sweeps(CentreDomain.build(list(boundary)), boundary, path.emission.refinement.circles)
+    cuts, connectors = path_sweeps(CentreDomain.build(list(boundary)), boundary, path.circles)
     assert (len(cuts), len(connectors)) == (EMITTED_AFTER, CONNECTORS_AFTER)
     fresh = CoverageCertificate.build(CentreDomain.build(list(boundary)), tool_radius, cuts, connectors)
     assert fresh.exposed_edge_count == 0
@@ -83,7 +91,7 @@ def test_monstera_repair_reinserts_the_pinned_island_candidates(certified: Certi
 def test_monstera_repair_respects_the_engagement_cap_including_the_seam(certified: Certified) -> None:
     """Every emitted transition, the closing seam (last -> first) included."""
     path, cap, _, tool_radius = certified
-    circles = path.emission.refinement.circles
+    circles = path.circles
     transitions = (*zip(circles, circles[1:]), (circles[-1], circles[0]))
     over = [k for k, (a, b) in enumerate(transitions) if not exact_predecessor_engagement(_paper_candidate(a), _paper_candidate(b), tool_radius).within(cap)]
     assert not over, f"{len(over)} over-cap transitions of {len(transitions)}, first at {over[:5]}"

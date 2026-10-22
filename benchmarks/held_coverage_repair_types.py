@@ -16,6 +16,7 @@ from typing import Protocol
 
 from benchmarks.held_coverage_repair_invariant_errors import CertificateRunCountError
 from benchmarks.held_coverage_repair_invariant_errors import CertifiedLedgerMismatchError
+from benchmarks.held_coverage_repair_invariant_errors import CertifiedNothingMismatchError
 from benchmarks.held_coverage_repair_invariant_errors import CertifiedSelectionRangeError
 from benchmarks.held_coverage_repair_invariant_errors import DuplicateInsertionError
 from benchmarks.held_coverage_repair_invariant_errors import EmissionIndexCountError
@@ -34,6 +35,7 @@ from benchmarks.held_coverage_repair_invariant_errors import UntracedRefinementE
 from benchmarks.held_figure5_boundary_path import Figure5CounterclockwiseCircle
 from benchmarks.held_figure5_engagement_refinement import MAX_REFINED_CIRCLES
 from benchmarks.held_figure5_engagement_refinement import TracedEngagementRefinement
+from benchmarks.held_nothing_circles import NothingCirclePass
 from compas_cgal.coverage_certificate.certificate import CoverageCertificate
 from compas_cgal.coverage_certificate.sweeps import BoundaryConnectorSweep
 from compas_cgal.coverage_certificate.sweeps import FullCircleSweep
@@ -298,10 +300,17 @@ class CoverageRepairLedger:
 
 @dataclass(frozen=True)
 class CertifiedBoundaryOrderedPath:
-    """A boundary-ordered path whose final full certificate holds."""
+    """A boundary-ordered path whose final full certificate holds.
+
+    ``emission`` is the repair's working state: the selection and every circle
+    its refinement emitted. ``nothing`` is the exact NOTHING pass on those
+    circles; its kept circles (``circles``) are the emitted path, the one the
+    certificate and the connector post-gate decided.
+    """
 
     sources: tuple[Figure5CounterclockwiseCircle, ...]
     emission: BoundaryOrderedEmission
+    nothing: NothingCirclePass[Figure5CounterclockwiseCircle]
     certificate: CoverageCertificate
     ledger: CoverageRepairLedger
 
@@ -310,6 +319,7 @@ class CertifiedBoundaryOrderedPath:
         cls,
         sources: Sequence[Figure5CounterclockwiseCircle],
         emission: BoundaryOrderedEmission,
+        nothing: NothingCirclePass[Figure5CounterclockwiseCircle],
         certificate: CoverageCertificate,
         ledger: CoverageRepairLedger,
     ) -> CertifiedBoundaryOrderedPath:
@@ -317,15 +327,34 @@ class CertifiedBoundaryOrderedPath:
 
         Raises:
             CertifiedSelectionRangeError: a selected index is not a source.
+            CertifiedNothingMismatchError: ``nothing.removed`` is not strictly
+                increasing within ``1..n-1`` (circle 0 is never removed),
+                ``nothing.kept_for_successor_cap`` names a circle that is not
+                kept, or ``nothing.circles`` is not the emission's circles minus
+                ``nothing.removed``.
             CertifiedLedgerMismatchError: ``ledger.emitted_after`` is not the
                 emitted count, or an inserted source is not selected.
             UncertifiedPathError: the certificate has exposed edges.
         """
         if emission.selected and max(emission.selected) >= len(sources):
             raise CertifiedSelectionRangeError(f"selected source #{max(emission.selected)} is not one of {len(sources)} sources")
-        emitted = len(emission.refinement.circles)
+        refined = emission.refinement.circles
+        removed = nothing.removed
+        if not _strictly_increasing(removed) or (removed and (removed[0] < 1 or removed[-1] >= len(refined))):
+            raise CertifiedNothingMismatchError(f"removed indices {removed[:8]} (first 8) are not strictly increasing within 1..{len(refined) - 1} (circle 0 is never removed)")
+        dropped = frozenset(removed)
+        if not set(nothing.kept_for_successor_cap) <= set(range(len(refined))) - dropped:
+            raise CertifiedNothingMismatchError(f"kept-for-cap indices {nothing.kept_for_successor_cap[:8]} (first 8) are not kept refined circles")
+        if nothing.circles != tuple(circle for k, circle in enumerate(refined) if k not in dropped):
+            raise CertifiedNothingMismatchError(f"{len(nothing.circles)} kept circles are not the {len(refined)} refined circles minus {len(removed)} removed")
+        emitted = len(nothing.circles)
         if ledger.emitted_after != emitted or not set(ledger.inserted_sources) <= set(emission.selected):
             raise CertifiedLedgerMismatchError(f"ledger emitted_after {ledger.emitted_after} vs {emitted} emitted; inserted {ledger.inserted_sources[:8]} (first 8)")
         if certificate.exposed_edge_count != 0:
             raise UncertifiedPathError(f"certificate has {certificate.exposed_edge_count} exposed edge(s)")
-        return cls(tuple(sources), emission, certificate, ledger)
+        return cls(tuple(sources), emission, nothing, certificate, ledger)
+
+    @property
+    def circles(self) -> tuple[Figure5CounterclockwiseCircle, ...]:
+        """The emitted path: the refined circles the NOTHING pass kept."""
+        return self.nothing.circles

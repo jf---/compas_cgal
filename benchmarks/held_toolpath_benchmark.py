@@ -1,7 +1,9 @@
 """Time the Held toolpath generators and gate their results against a recorded baseline.
 
 Five concrete workloads call the existing pipelines stage by stage: guide,
-inward offset, initial placement, engagement refinement, connectors. The
+inward offset, initial placement, engagement refinement, exact NOTHING-circle
+removal (:mod:`benchmarks.held_nothing_circles`, closed over the seam),
+connectors. The
 connectors close the loop: the last runs CCW from the last circle back to the
 first unless their contacts coincide. Each generator returns its path as a
 :class:`GeneratedToolpath`, which other consumers (the gouge audit) reuse
@@ -48,6 +50,8 @@ from benchmarks.held_figure5_path import build_held_reference_path
 from benchmarks.held_figure5_raw_guide import build_figure5_raw_guide
 from benchmarks.held_figure5_raw_guide import build_held_reference_raw_guide
 from benchmarks.held_gc_scope import paused_cyclic_gc
+from benchmarks.held_nothing_circles import NothingCirclePass
+from benchmarks.held_nothing_circles import remove_nothing_circles
 from benchmarks.held_omega_toolpath import OmegaGeneratedToolpath
 from benchmarks.held_omega_toolpath import PathDomain
 from benchmarks.held_omega_toolpath import generate_omega
@@ -274,6 +278,15 @@ def _finish(path: GeneratedToolpath, validate: bool) -> WorkloadRun:
     return WorkloadRun(workload=path.workload, metrics=metrics, stage_seconds=dict(path.stage_seconds), generation_seconds=path.generation_seconds, validation_seconds=validation)
 
 
+def remove_polygon_nothing_circles(circles: tuple[Figure5CounterclockwiseCircle, ...], tool: ToolRadius, cap: EngagementCap) -> NothingCirclePass[Figure5CounterclockwiseCircle]:
+    """The exact NOTHING-circle pass on a closed polygon path: the seam (last kept circle to circle 0) is re-decided too.
+
+    Every generated polygon path closes with a ``CONNECTOR`` seam, so the pass
+    runs with ``closed=True``.
+    """
+    return remove_nothing_circles(circles, _paper_candidate, tool, cap, closed=True)
+
+
 @paused_cyclic_gc()
 def generate_figure5_refined() -> GeneratedToolpath:
     """Figure 5 standard-model draft: publisher-start polygon proposal, corner-aware engagement refinement."""
@@ -292,13 +305,33 @@ def generate_figure5_refined() -> GeneratedToolpath:
     stages.start()
     refined = refine_figure5_engagement(result.path.circles, components[0], case.tool_radius, cap, close_seam=True)
     stages.stop("refine")
+    return _emit_closed_polygon_path("figure5_refined", case, components[0], refined.circles, cap, stages)
+
+
+def _emit_closed_polygon_path(
+    name: str,
+    case: HeldReferenceCase,
+    boundary: tuple[Point2[WorldXY], ...],
+    refined: tuple[Figure5CounterclockwiseCircle, ...],
+    cap: EngagementCap,
+    stages: _Stages,
+) -> GeneratedToolpath:
+    """The stages after refinement: NOTHING-circle removal, connectors, connector post-gate.
+
+    Raises:
+        UncertifiedConnectorEngagementError: A connector of the pruned path,
+            the seam included, is left without a certificate.
+    """
     stages.start()
-    connectors = Figure5BoundaryConnectors.build(components[0], refined.circles)
+    circles = remove_polygon_nothing_circles(refined, case.tool_radius, cap).circles
+    stages.stop("nothing")
+    stages.start()
+    connectors = Figure5BoundaryConnectors.build(boundary, circles)
     stages.stop("connectors")
     stages.start()
-    certify_connectors(refined.circles, connectors, case.tool_radius, cap)
+    certify_connectors(circles, connectors, case.tool_radius, cap)
     stages.stop("connector_certificate")
-    return GeneratedToolpath("figure5_refined", case, components[0], refined.circles, connectors, dict(stages.seconds))
+    return GeneratedToolpath(name, case, boundary, circles, connectors, dict(stages.seconds))
 
 
 def certify_connectors(
@@ -356,13 +389,7 @@ def _generate_figure8(name: str, case_name: str, *, spacing: str, qualify_contac
     else:
         refined = refine_figure5_engagement(result.path.circles, components[0], case.tool_radius, cap, corner_approaches=corner_approaches, close_seam=True)
     stages.stop("refine")
-    stages.start()
-    connectors = Figure5BoundaryConnectors.build(components[0], refined.circles)
-    stages.stop("connectors")
-    stages.start()
-    certify_connectors(refined.circles, connectors, case.tool_radius, cap)
-    stages.stop("connector_certificate")
-    return GeneratedToolpath(name, case, components[0], refined.circles, connectors, dict(stages.seconds))
+    return _emit_closed_polygon_path(name, case, components[0], refined.circles, cap, stages)
 
 
 def generate_figure8_upper_lane() -> GeneratedToolpath:
