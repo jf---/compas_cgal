@@ -1,0 +1,375 @@
+"""Results of the exact Ω* connector-engagement gate for docs/held_connector_engagement.md.
+
+Two modes:
+
+- ``--measure`` (minutes): generates every Ω* workload
+  (:func:`benchmarks.held_omega_toolpath.generate_omega`), builds its exact
+  connector path (:func:`benchmarks.held_omega_connector_engagement.omega_connector_path`,
+  junction lines included) and assesses it (tiers 1 / 1b). The emitted path is
+  the one after the ``connector_repair`` stage, so it refuses nothing; the same
+  gate on the NOTHING-stage circles (the repair stage's input) is recorded
+  beside it as ``pre_repair``, and its refused connectors must be exactly the
+  ones the stage repaired. It records, per
+  workload, the certified / total connectors, the tiers, the refusals by kind
+  and reason, the tier-1 bound range (REPORTING), the gate and generation
+  seconds with the load, and the junction-model check: that the exact path's
+  ∂Ω* sweeps are the emitted connector pieces exactly, and how far the
+  modelled junctions ``J_k`` sit from the emitted geometry. The raw record goes
+  to ``benchmarks/results/held_omega_connector_gate.json``, then the tables
+  are rendered.
+- default: renders ``benchmarks/results/held_omega_connector_gate.md`` from
+  that JSON without measuring.
+
+Both files are written by this tool; do not edit them. Times are wall seconds
+on a shared machine; the 1-minute load average is recorded beside each, and
+only the same-process ratio gate / generation is meaningful. Every distance and
+angle here is a reported binary64; the structural checks are exact equalities.
+"""
+
+from __future__ import annotations
+
+import argparse
+import collections
+import gc
+import json
+import math
+import os
+import pathlib
+import time
+from collections.abc import Sequence
+from dataclasses import asdict
+from fractions import Fraction
+from typing import Any
+
+from benchmarks.errors import BenchmarkError
+from benchmarks.held_centre_domain_supports import OffsetCircleSupport
+from benchmarks.held_connector_engagement import ConnectorTier
+from benchmarks.held_connector_engagement_arcs import ArcSweep
+from benchmarks.held_connector_engagement_exact import ExactConnector
+from benchmarks.held_connector_engagement_exact import ExactConnectorAssessment
+from benchmarks.held_connector_engagement_exact import ExactConnectorPath
+from benchmarks.held_connector_engagement_lines import LineSweep
+from benchmarks.held_connector_engagement_range import RangeEngagementLemma
+from benchmarks.held_connector_engagement_range import SweepKind
+from benchmarks.held_omega_circles import OmegaCircle
+from benchmarks.held_omega_connector_engagement import lemma_inputs
+from benchmarks.held_omega_connector_engagement import omega_connector_path
+from benchmarks.held_omega_connectors import OmegaConnector
+from benchmarks.held_omega_connectors import OmegaConnectorPiece
+from benchmarks.held_omega_connectors import OmegaConnectors
+from benchmarks.held_omega_toolpath import OMEGA_WORKLOADS
+from benchmarks.held_omega_toolpath import OmegaGeneratedToolpath
+from benchmarks.held_omega_toolpath import generate_omega
+from benchmarks.held_one_root import OneRootPoint2
+from benchmarks.performance_record import REPOSITORY
+from benchmarks.performance_record import build_identity
+from benchmarks.performance_record import machine_identity
+
+RESULTS = REPOSITORY / "benchmarks" / "results"
+JSON_PATH = RESULTS / "held_omega_connector_gate.json"
+MARKDOWN_PATH = RESULTS / "held_omega_connector_gate.md"
+
+
+class GateRecordContractError(BenchmarkError):
+    """The emitted path has a refusal, the pre-repair refusals are not the repaired connectors, or the stage's verdicts disagree with a fresh gate."""
+
+
+def check_gate_contract(workload: str, *, emitted_refused: int, pre_refused: list[int], repaired: list[int], fresh_equal: bool) -> None:
+    """Fail loudly unless the emitted path refuses nothing, the pre-repair gate refuses exactly the repaired connectors and the stage's tiers equal a fresh gate's.
+
+    Raises:
+        GateRecordContractError: Any of the three is breached.
+    """
+    if emitted_refused:
+        raise GateRecordContractError(f"{workload}: the emitted path refuses {emitted_refused} connectors")
+    if pre_refused != repaired:
+        raise GateRecordContractError(f"{workload}: pre-repair refusals {pre_refused} are not the repaired connectors {repaired}")
+    if not fresh_equal:
+        raise GateRecordContractError(f"{workload}: the repair stage's verdicts disagree with a fresh gate of the emitted path")
+
+
+def _load() -> float:
+    return os.getloadavg()[0]
+
+
+def _reported_distance(first: tuple[float, float], second: tuple[float, float]) -> float:
+    return math.hypot(first[0] - second[0], first[1] - second[1])
+
+
+def _exactly_on_circle(circle: OmegaCircle, point: tuple[Fraction, Fraction]) -> bool:
+    cx, cy, radius = Fraction(float(circle.center.x)), Fraction(float(circle.center.y)), Fraction(float(circle.radius.value))
+    return (point[0] - cx) ** 2 + (point[1] - cy) ** 2 == radius * radius
+
+
+def _junction_on_circle(circle: OmegaCircle, junction: OneRootPoint2) -> bool:
+    return junction.x.is_rational and junction.y.is_rational and _exactly_on_circle(circle, (junction.x.rational, junction.y.rational))
+
+
+def _junction_kind(sweep: LineSweep | ArcSweep) -> bool:
+    return sweep.kind is SweepKind.CIRCLE_JUNCTION
+
+
+def _contact(circle: OmegaCircle) -> tuple[float, float]:
+    return float(circle.contact_point.x), float(circle.contact_point.y)
+
+
+def _exact_contact(circle: OmegaCircle) -> tuple[Fraction, Fraction]:
+    x, y = _contact(circle)
+    return Fraction(x), Fraction(y)
+
+
+def _piece_matches(sweep: LineSweep | ArcSweep, piece: OmegaConnectorPiece) -> bool:
+    """The sweep is the emitted piece exactly: same endpoints, same support (a line on a line, the same circle and sense)."""
+    support = piece.piece.support
+    if _junction_kind(sweep) or sweep.start != piece.start or sweep.end != piece.end:
+        return False
+    if isinstance(support, OffsetCircleSupport):
+        return isinstance(sweep, ArcSweep) and (sweep.centre, sweep.radius, sweep.sense) == (support.centre, support.radius, support.sense)
+    return isinstance(sweep, LineSweep)
+
+
+def _connector_matches(modelled: ExactConnector, connector: OmegaConnector, leaving: OneRootPoint2, entering: OneRootPoint2) -> bool:
+    """``leaving -> q_i`` (absent iff equal), the emitted pieces exactly, ``q_{i+1} -> entering`` (absent iff equal)."""
+    sweeps = list(modelled.sweeps)
+    if leaving != connector.start:
+        head = sweeps.pop(0) if sweeps else None
+        if head is None or not (_junction_kind(head) and head.start == leaving and head.end == connector.start):
+            return False
+    if entering != connector.end:
+        tail = sweeps.pop() if sweeps else None
+        if tail is None or not (_junction_kind(tail) and tail.start == connector.end and tail.end == entering):
+            return False
+    return len(sweeps) == len(connector.pieces) and all(_piece_matches(sweep, piece) for sweep, piece in zip(sweeps, connector.pieces))
+
+
+def junction_model_check(path: OmegaGeneratedToolpath, exact: ExactConnectorPath) -> dict[str, Any]:
+    """How the certificate's modelled motion relates to the emitted Ω* path (exact structure, reported gaps).
+
+    Structure (exact): connector ``i``'s sweeps are ``J_i -> q_i`` (absent iff
+    ``J_i == q_i``), then one sweep per emitted ∂Ω* piece with the same exact
+    endpoints and support, then ``q_{i+1} -> J_{i+1}`` (absent iff equal).
+    Gaps (reported): ``|J_k - q_k|``, ``|P_k - q_k|`` and ``|J_k - P_k|``
+    where ``q_k`` is the emitted site and ``P_k`` the emitted binary64
+    ``contact_point``, split by limited / free circles.
+    """
+    circles, emitted, junctions = path.circles, path.connectors.connectors, exact.junctions
+    mismatches = [
+        i for i, (connector, modelled) in enumerate(zip(emitted, exact.connectors)) if not _connector_matches(modelled, connector, junctions[i], junctions[(i + 1) % len(circles)])
+    ]
+    gaps: dict[str, dict[str, float | int]] = {}
+    for label, limited in (("free", False), ("limited", True)):
+        rows = [(circle.site.point().as_floats(), junction.as_floats(), _contact(circle)) for circle, junction in zip(circles, junctions) if circle.limited is limited]
+        gaps[label] = {
+            "circles": len(rows),
+            "max_junction_to_site_mm": max((_reported_distance(j, q) for q, j, _ in rows), default=0.0),
+            "max_contact_to_site_mm": max((_reported_distance(c, q) for q, _, c in rows), default=0.0),
+            "max_junction_to_contact_mm": max((_reported_distance(j, c) for _, j, c in rows), default=0.0),
+        }
+    return {
+        "structure_mismatches": mismatches,
+        "junctions_exactly_on_circle": sum(1 for circle, junction in zip(circles, junctions) if _junction_on_circle(circle, junction)),
+        "junction_equals_site": sum(1 for circle, junction in zip(circles, junctions) if junction == circle.site.point()),
+        "contact_point_exactly_on_circle": sum(1 for circle in circles if _exactly_on_circle(circle, _exact_contact(circle))),
+        "junction_lines": sum(1 for connector in exact.connectors for sweep in connector.sweeps if _junction_kind(sweep)),
+        "fan_connectors": sum(1 for connector in emitted if connector.within_fan),
+        "gaps": gaps,
+    }
+
+
+def _bound_range(lemma: RangeEngagementLemma, exact: ExactConnectorPath, assessment: ExactConnectorAssessment) -> dict[str, list[float] | None]:
+    """REPORTING: the tier-1 bound (degrees, own circle) over each refused sweep, and the worst sweep of every tier-1 connector."""
+    refused = [lemma.bound_deg(exact.connectors[r.connector].sweeps[r.sweep], exact.circles[r.connector]) for r in assessment.refusals]
+    tier_1 = [
+        max(lemma.bound_deg(sweep, exact.circles[verdict.connector]) for sweep in exact.connectors[verdict.connector].sweeps)
+        for verdict in assessment.verdicts
+        if verdict.tier is ConnectorTier.TIER_1
+    ]
+    return {
+        "refused_sweeps_deg": [min(refused), max(refused)] if refused else None,
+        "tier_1_connectors_worst_sweep_deg": [min(tier_1), max(tier_1)] if tier_1 else None,
+    }
+
+
+def _gate(circles: tuple[OmegaCircle, ...], connectors: OmegaConnectors, tool: Fraction, ratio: float) -> tuple[ExactConnectorPath, ExactConnectorAssessment, float]:
+    """The exact path of ``circles`` and its assessment, with the path build seconds."""
+    started = time.perf_counter()
+    exact = omega_connector_path(circles, connectors)
+    build_seconds = time.perf_counter() - started
+    return exact, ExactConnectorAssessment.build(exact, tool, ratio), build_seconds
+
+
+def _pre_repair(path: OmegaGeneratedToolpath, tool: Fraction, ratio: float) -> dict[str, Any]:
+    """The gate on the NOTHING-stage circles, the repair stage's input."""
+    circles = path.nothing.circles
+    exact, assessment, build_seconds = _gate(circles, OmegaConnectors.build(path.loop.pieces, circles), tool, ratio)
+    refusals = assessment.refusals
+    return {
+        "circles": len(circles),
+        "connectors": len(exact.connectors),
+        "certified": len(assessment.verdicts) - len(assessment.refused),
+        "tiers": {tier.value: assessment.count(tier) for tier in ConnectorTier},
+        "refused_connectors": list(assessment.refused),
+        "refusals_by_kind": dict(collections.Counter(refusal.kind.value for refusal in refusals)),
+        "refusals_by_reason": dict(collections.Counter(refusal.reason.value for refusal in refusals)),
+        "refused_sweeps_deg": _bound_range(RangeEngagementLemma.build(tool, ratio), exact, assessment)["refused_sweeps_deg"],
+        "gate_seconds": build_seconds + assessment.seconds,
+    }
+
+
+def measure_workload(workload: str) -> dict[str, Any]:
+    """Generate one workload, time the gate (exact path build + assessment) on the emitted path, gate the pre-repair circles, check the junction model.
+
+    Raises:
+        GateRecordContractError: See :func:`check_gate_contract`.
+    """
+    gc.collect()
+    load_before = _load()
+    path = generate_omega(workload)
+    tool, ratio = lemma_inputs(path)
+    exact, assessment, build_seconds = _gate(path.circles, path.connectors, tool, ratio)
+    gate_seconds = build_seconds + assessment.seconds
+    pre_repair = _pre_repair(path, tool, ratio)
+    load_after = _load()
+    refusals = assessment.refusals
+    repaired = [action.connector for action in path.repair.actions]
+    fresh_equal = [v.tier for v in assessment.verdicts] == [v.tier for v in path.repair.verdicts]
+    check_gate_contract(workload, emitted_refused=len(assessment.refused), pre_refused=pre_repair["refused_connectors"], repaired=repaired, fresh_equal=fresh_equal)
+    return {
+        "workload": workload,
+        "cap_deg": float(path.case.tea_cap),
+        "circles": len(path.circles),
+        "connectors": len(exact.connectors),
+        "closed": exact.closed,
+        "certified": len(assessment.verdicts) - len(assessment.refused),
+        "tiers": {tier.value: assessment.count(tier) for tier in ConnectorTier},
+        "seam_tier": assessment.verdicts[-1].tier.value if exact.closed else None,
+        "refused_connectors": list(assessment.refused),
+        "refusals_by_kind": dict(collections.Counter(refusal.kind.value for refusal in refusals)),
+        "refusals_by_reason": dict(collections.Counter(refusal.reason.value for refusal in refusals)),
+        "first_refusal_kind_per_connector": dict(collections.Counter(v.refusals[0].kind.value for v in assessment.verdicts if v.refusals)),
+        "sweeps_by_kind": dict(collections.Counter(sweep.kind.value for connector in exact.connectors for sweep in connector.sweeps)),
+        "tier_1_bound": _bound_range(RangeEngagementLemma.build(tool, ratio), exact, assessment),
+        "path_build_seconds": build_seconds,
+        "assessment_seconds": assessment.seconds,
+        "gate_seconds": gate_seconds,
+        "generation_seconds": path.generation_seconds,
+        "gate_over_generation": gate_seconds / path.generation_seconds,
+        "repair_stage_gate_seconds": path.repair.gate_seconds,
+        "repair_inserted": path.repair.inserted,
+        "repaired_connectors": repaired,
+        "pre_repair": pre_repair,
+        "load_1min_before_after": [load_before, load_after],
+        "junction_model": junction_model_check(path, exact),
+    }
+
+
+def measure(workloads: Sequence[str]) -> dict[str, Any]:
+    """Every workload in one process, sequentially; return the record."""
+    build, machine = build_identity(), machine_identity()
+    rows = []
+    for workload in workloads:
+        rows.append(measure_workload(workload))
+        print(f"gate {workload} done", flush=True)
+    return {"build": asdict(build), "machine": asdict(machine), "workloads": rows}
+
+
+def _counts(counts: dict[str, int]) -> str:
+    return ", ".join(f"{kind} {count}" for kind, count in sorted(counts.items(), key=lambda item: (-item[1], item[0]))) or "none"
+
+
+def _range(pair: list[float] | None) -> str:
+    return "—" if pair is None else f"{pair[0]:.2f}–{pair[1]:.2f}"
+
+
+def render(record: dict[str, Any]) -> str:
+    """The Markdown tables of one record."""
+    build = record["build"]
+    lines = [
+        f"Recorded {build['recorded_at']} at commit `{build['commit'][:10]}`{' (dirty tree)' if build['dirty'] else ''} on {record['machine']['cpu_brand']}.",
+        "",
+        "**Ω\\* connector gate.** Tiers 1 / 1b of the exact connector certificate over every connector of the emitted path (after",
+        "the `connector_repair` stage), seam and junction lines included.",
+        'A refusal means "not proved", never "violated". Gate s is the exact path build plus the assessment; gen s is Ω\\* generation in the same process',
+        "(it includes the repair stage's own gate).",
+        "",
+        "| workload | certified / total | tier 1 / 1b / refused | seam | refused sweeps by kind | refusal reasons | gate s | gen s | gate / gen | load |",
+        "|---|---:|---|---|---|---|---:|---:|---:|---|",
+    ]
+    for row in record["workloads"]:
+        tiers = row["tiers"]
+        load = row["load_1min_before_after"]
+        lines.append(
+            f"| `{row['workload']}` | {row['certified']} / {row['connectors']} | {tiers['tier 1']} / {tiers['tier 1b']} / {tiers['refused']} | {row['seam_tier'] or 'open'} "
+            f"| {_counts(row['refusals_by_kind'])} | {_counts(row['refusals_by_reason'])} | {row['gate_seconds']:.2f} | {row['generation_seconds']:.2f} "
+            f"| {row['gate_over_generation']:.2f} | {load[0]:.0f}–{load[1]:.0f} |"
+        )
+    if all("pre_repair" in row for row in record["workloads"]):
+        lines += [
+            "",
+            "**Before repair.** The same gate on the NOTHING-stage circles, the input of the `connector_repair` stage; every refused",
+            "connector here is one the stage repaired. Refused sweeps ° is the tier-1 bound over the refused sweeps (reporting only).",
+            "",
+            "| workload | certified / total | tier 1 / 1b / refused | refused connectors | refused sweeps by kind | refusal reasons | refused sweeps ° | gate s |",
+            "|---|---:|---|---|---|---|---|---:|",
+        ]
+        for row in record["workloads"]:
+            pre = row["pre_repair"]
+            tiers = pre["tiers"]
+            refused = ", ".join(str(i) for i in pre["refused_connectors"]) or "none"
+            lines.append(
+                f"| `{row['workload']}` before repair | {pre['certified']} / {pre['connectors']} | {tiers['tier 1']} / {tiers['tier 1b']} / {tiers['refused']} | {refused} "
+                f"| {_counts(pre['refusals_by_kind'])} | {_counts(pre['refusals_by_reason'])} | {_range(pre['refused_sweeps_deg'])} | {pre['gate_seconds']:.2f} |"
+            )
+    lines += [
+        "",
+        "**Tier-1 bound (reporting only).** The lemma's bound against the circle just cut, in degrees:",
+        "over each refused sweep, and over the worst sweep of each tier-1 connector.",
+        "",
+        "| workload | cap ° | refused sweeps ° | tier-1 connectors, worst sweep ° |",
+        "|---|---:|---|---|",
+    ]
+    for row in record["workloads"]:
+        bound = row["tier_1_bound"]
+        lines.append(f"| `{row['workload']}` | {row['cap_deg']:g} | {_range(bound['refused_sweeps_deg'])} | {_range(bound['tier_1_connectors_worst_sweep_deg'])} |")
+    lines += [
+        "",
+        "**Junction model against the emitted path.** Structure mismatches: connectors whose exact sweeps are not",
+        "`J_i → q_i`, the emitted ∂Ω\\* pieces (same exact endpoints and supports), `q_{i+1} → J_{i+1}`. Gaps are reported binary64 mm:",
+        "`J` the modelled junction, `q` the emitted site, `P` the emitted `contact_point`.",
+        "",
+        "| workload | structure mismatches | J on circle | J = q | P on circle | junction lines | fans "
+        "| max \\|J−q\\| free / limited | max \\|P−q\\| free / limited | max \\|J−P\\| free / limited |",
+        "|---|---:|---|---:|---|---:|---:|---|---|---|",
+    ]
+    for row in record["workloads"]:
+        model = row["junction_model"]
+        free, limited = model["gaps"]["free"], model["gaps"]["limited"]
+
+        def pair(key: str, free: dict[str, Any] = free, limited: dict[str, Any] = limited) -> str:
+            return f"{free[key]:.2g} / {limited[key]:.2g}" if limited["circles"] else f"{free[key]:.2g} / —"
+
+        lines.append(
+            f"| `{row['workload']}` | {len(model['structure_mismatches'])} | {model['junctions_exactly_on_circle']} / {row['circles']} | {model['junction_equals_site']} "
+            f"| {model['contact_point_exactly_on_circle']} / {row['circles']} | {model['junction_lines']} | {model['fan_connectors']} "
+            f"| {pair('max_junction_to_site_mm')} | {pair('max_contact_to_site_mm')} | {pair('max_junction_to_contact_mm')} |"
+        )
+    return "\n".join(lines) + "\n"
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--measure", action="store_true", help="re-measure (minutes) before rendering")
+    parser.add_argument("--json", type=pathlib.Path, default=JSON_PATH)
+    parser.add_argument("--markdown", type=pathlib.Path, default=MARKDOWN_PATH)
+    parser.add_argument("--workloads", nargs="+", default=list(OMEGA_WORKLOADS), choices=list(OMEGA_WORKLOADS))
+    args = parser.parse_args()
+    if args.measure:
+        record = measure(args.workloads)
+        args.json.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    record = json.loads(args.json.read_text(encoding="utf-8"))
+    args.markdown.write_text(render(record), encoding="utf-8")
+    print(f"WROTE {args.json} {args.markdown}")
+
+
+if __name__ == "__main__":
+    main()

@@ -2,10 +2,24 @@
 
 Each generator mirrors its polygon-Ω counterpart in
 :mod:`benchmarks.held_toolpath_benchmark` stage by stage (guide, domain,
-initial placement, engagement refinement, connectors) with the same contact
+initial placement, engagement refinement, NOTHING-circle removal, connector
+repair) with the same contact
 qualification, run preservation and spacing, and replaces the float offset
 polygon by Ω*. The polygon's ``corner_approaches`` has no Ω* counterpart (∂Ω*
 has no reflex vertex). Select it with ``PathDomain.OMEGA``.
+
+The ``nothing`` stage removes every refined circle proven exactly to remove no
+material (its swept annulus lies in the union of the earlier circles' swept
+annuli; :mod:`benchmarks.held_nothing_circles`) whose successor stays within
+the cap after its new predecessor. It runs before the connectors, so the
+connectors are formed from the surviving circles.
+
+The ``connector_repair`` stage runs last
+(:func:`benchmarks.held_omega_connector_repair.repair_omega_connectors`): it
+forms the connectors, gates each one exactly (tier 1 / 1b) and repairs every
+refused one by ∂Ω* midpoint circles. It must follow every pass that removes
+circles, because a removal can leave a connector unproved. The emitted circles
+are the repaired ones, and every emitted connector carries a verdict.
 
 Circle containment in Ω* is decided by the native declared-clearance oracle
 by default (``ClearanceBackend.NATIVE``); ``ClearanceBackend.PYTHON`` runs the
@@ -35,7 +49,11 @@ from benchmarks.held_figure5_raw_guide import build_figure5_raw_guide
 from benchmarks.held_figure5_raw_guide import build_held_reference_raw_guide
 from benchmarks.held_gc_scope import paused_cyclic_gc
 from benchmarks.held_gouge_audit import HeldGougeAuditReport
+from benchmarks.held_nothing_circles import NothingCirclePass
+from benchmarks.held_nothing_circles import remove_nothing_circles
 from benchmarks.held_omega_circles import OmegaCircle
+from benchmarks.held_omega_connector_repair import OmegaConnectorRepair
+from benchmarks.held_omega_connector_repair import repair_omega_connectors
 from benchmarks.held_omega_connectors import OmegaConnectors
 from benchmarks.held_omega_gouge_audit import ClearanceBackend
 from benchmarks.held_omega_gouge_audit import audit_omega_path
@@ -52,6 +70,7 @@ from benchmarks.held_standard_placement import maximum_predecessor_engagement
 from compas_cgal.motion import EngagementCap
 from compas_cgal.units import ExactMillimetre
 from compas_cgal.units import Millimetre
+from compas_cgal.units import ToolRadius
 
 
 class PathDomain(enum.Enum):
@@ -97,6 +116,10 @@ class OmegaGeneratedToolpath:
 
     ``clearance`` is the Python reference oracle (the audit's input);
     ``generation_backend`` records which oracle decided containment.
+    ``refinement`` holds the refined circles before the NOTHING pass (its
+    ``original_indices`` index those); ``nothing`` holds the circles it keeps;
+    ``repair`` holds the emitted ones, every connector certified by the exact
+    gate (refused connectors repaired by ∂Ω* midpoint circles), and the verdicts.
     """
 
     workload: str
@@ -106,13 +129,19 @@ class OmegaGeneratedToolpath:
     clearance: DeclaredClearance
     initial: OmegaHypothesisPath
     refinement: OmegaRefinement
-    connectors: OmegaConnectors
+    nothing: NothingCirclePass[OmegaCircle]
+    repair: OmegaConnectorRepair
     stage_seconds: dict[str, float]
     generation_backend: ClearanceBackend
 
     @property
     def circles(self) -> tuple[OmegaCircle, ...]:
-        return self.refinement.circles
+        return self.repair.circles
+
+    @property
+    def connectors(self) -> OmegaConnectors:
+        """The emitted connectors: the repair's, one per emitted circle pair (seam included)."""
+        return self.repair.connectors
 
     @property
     def generation_seconds(self) -> float:
@@ -125,7 +154,12 @@ class OmegaGeneratedToolpath:
 
 @dataclass(frozen=True)
 class OmegaPathMetrics:
-    """Counts and reported doubles of one Ω* path (the polygon benchmark's metrics, where they apply)."""
+    """Counts and reported doubles of one Ω* path (the polygon benchmark's metrics, where they apply).
+
+    Every count is over the EMITTED path: ``circles`` and ``limited_circles``
+    include the connector repair's inserted midpoint circles and exclude the
+    circles the NOTHING pass removed.
+    """
 
     circles: int
     connectors: int
@@ -147,6 +181,11 @@ def _guide(case: HeldReferenceCase) -> Figure5RawGuide:
 
 def _containment_oracle(declared: DeclaredBoundary, tool_radius: Fraction, reference: DeclaredClearance, backend: ClearanceBackend) -> CircleClearanceOracle:
     return NativeDeclaredClearance.build(declared, tool_radius) if backend is ClearanceBackend.NATIVE else reference
+
+
+def remove_omega_nothing_circles(circles: tuple[OmegaCircle, ...], tool_radius: ToolRadius, cap: EngagementCap) -> NothingCirclePass[OmegaCircle]:
+    """The exact NOTHING-circle pass on Ω* circles, deciding on each circle's paper candidate."""
+    return remove_nothing_circles(circles, OmegaCircle.paper_candidate, tool_radius, cap, closed=True)
 
 
 def generate_omega(workload: str, backend: ClearanceBackend = ClearanceBackend.NATIVE) -> OmegaGeneratedToolpath:
@@ -207,9 +246,12 @@ def _generate_omega(workload: str, backend: ClearanceBackend) -> OmegaGeneratedT
         refinement = refine_omega_engagement(initial.circles, loop, oracle, case.tool_radius, cap)
     seconds["refine"] = time.perf_counter() - started
     started = time.perf_counter()
-    connectors = OmegaConnectors.build(loop.pieces, refinement.circles)
-    seconds["connectors"] = time.perf_counter() - started
-    return OmegaGeneratedToolpath(workload, case, declared, loop, clearance, initial, refinement, connectors, seconds, backend)
+    nothing = remove_omega_nothing_circles(refinement.circles, case.tool_radius, cap)
+    seconds["nothing"] = time.perf_counter() - started
+    started = time.perf_counter()
+    repair = repair_omega_connectors(nothing.circles, loop, oracle, case.tool_radius, cap)
+    seconds["connector_repair"] = time.perf_counter() - started
+    return OmegaGeneratedToolpath(workload, case, declared, loop, clearance, initial, refinement, nothing, repair, seconds, backend)
 
 
 def _engagement_deg(path: OmegaGeneratedToolpath, first: OmegaCircle, second: OmegaCircle) -> float | None:
@@ -233,7 +275,7 @@ def omega_metrics(path: OmegaGeneratedToolpath) -> OmegaPathMetrics:
         max_engagement_deg=max(resolved, default=0.0),
         unresolved_engagements=len(angles) - len(resolved),
         seam=path.connectors.seam.value,
-        limited_circles=path.refinement.limited,
+        limited_circles=sum(1 for circle in circles if circle.limited),
         arc_connector_pieces=sum(1 for kind in kinds if kind != "offset_line"),
         line_connector_pieces=sum(1 for kind in kinds if kind == "offset_line"),
         beyond_gap_contacts=len(path.initial.contacts.beyond_gap),

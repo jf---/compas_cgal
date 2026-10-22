@@ -76,7 +76,13 @@ class DegenerateOmegaMidpointError(OmegaRefinementError):
     """No representable site lies strictly between two distinct sites (their chain is below binary64 resolution)."""
 
 
-def _engagement(predecessor: OmegaCircle, target: OmegaCircle, tool_radius: ToolRadius, interval: int) -> PredecessorEngagementCosine:
+def transition_engagement(predecessor: OmegaCircle, target: OmegaCircle, tool_radius: ToolRadius, interval: int) -> PredecessorEngagementCosine:
+    """The exact standard-model engagement of ``target`` cut after ``predecessor`` (``interval`` names the transition in errors).
+
+    Raises:
+        OmegaEngagementFragmentationError: See the engagement model.
+        OmegaEngagementCosineRangeError: See the engagement model.
+    """
     try:
         return exact_predecessor_engagement(predecessor.paper_candidate(), target.paper_candidate(), tool_radius)
     except StandardPlacementFragmentationError as error:
@@ -191,6 +197,19 @@ def omega_midpoint_site(loop: OmegaLoop, start: OmegaSite, end: OmegaSite) -> Om
     raise DegenerateOmegaMidpointError(f"No representable site strictly between pieces {start.index} and {end.index}.")
 
 
+def omega_midpoint_circle(loop: OmegaLoop, predecessor: OmegaCircle, target: OmegaCircle, clearance: CircleClearanceOracle) -> OmegaCircle:
+    """The refinement's inserted circle: on the ∂Ω* midpoint site, mean guide radius, contained in Ω* exactly.
+
+    Raises:
+        DegenerateOmegaMidpointError: See :func:`omega_midpoint_site`.
+        NoContainedCircleError: The midpoint site admits no contained circle.
+    """
+    site = omega_midpoint_site(loop, predecessor.site, target.site)
+    radius = (float(predecessor.radius.value) + float(target.radius.value)) / 2
+    provenance = (predecessor.run_id, predecessor.station_ordinal, predecessor.source_boundary_site)
+    return contain(place_local(site, radius, provenance), clearance, loop.domain)
+
+
 @dataclass(frozen=True)
 class OmegaRefinement:
     """Refined Ω* motion; ``original_indices`` locate the input circles among the emitted ones."""
@@ -234,7 +253,7 @@ def refine_omega_engagement(
         while pending:
             target, depth = pending.pop()
             predecessor = emitted[-1]
-            engagement = _engagement(predecessor, target, tool_radius, interval)
+            engagement = transition_engagement(predecessor, target, tool_radius, interval)
             if engagement.within(cap):
                 if len(emitted) >= max_circles:
                     raise OmegaEngagementResolutionError(f"Circle budget exhausted at source interval {interval}.")
@@ -242,10 +261,7 @@ def refine_omega_engagement(
                 continue
             if depth >= max_depth:
                 raise OmegaEngagementResolutionError(f"Depth exhausted at source interval {interval}: {math.degrees(float(engagement.reported_angle())):.6f} degrees.")
-            site = omega_midpoint_site(loop, predecessor.site, target.site)
-            radius = (float(predecessor.radius.value) + float(target.radius.value)) / 2
-            provenance = (predecessor.run_id, predecessor.station_ordinal, predecessor.source_boundary_site)
-            midpoint = contain(place_local(site, radius, provenance), clearance, domain)
+            midpoint = omega_midpoint_circle(loop, predecessor, target, clearance)
             pending.append((target, depth + 1))
             pending.append((midpoint, depth + 1))
         original.append(len(emitted) - 1)

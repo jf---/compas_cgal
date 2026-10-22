@@ -213,6 +213,7 @@ def _probe_generation(monkeypatch: pytest.MonkeyPatch) -> _GenerationProbe:
     monkeypatch.setattr(held_omega_toolpath, "refine_omega_engagement", engagement)
     monkeypatch.setattr(held_omega_toolpath, "refine_omega_boundary_ordered", boundary_ordered)
     monkeypatch.setattr(held_omega_toolpath.OmegaConnectors, "build", lambda *args: SimpleNamespace(connectors=()))
+    monkeypatch.setattr(held_omega_toolpath, "repair_omega_connectors", lambda *args: SimpleNamespace(circles=(), connectors=SimpleNamespace(connectors=())))
     return probe
 
 
