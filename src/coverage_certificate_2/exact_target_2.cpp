@@ -1,6 +1,7 @@
 #include "coverage_certificate_2/exact_target_2.h"
 
 #include "coverage_certificate_2/errors_2.h"
+#include "coverage_certificate_2/exact_geometry_2.h"
 #include "coverage_certificate_2/line_sweep_2.h"
 
 #include <algorithm>
@@ -22,70 +23,6 @@ CGAL::Sign filtered(const Interval& enclosure, const FilterMode mode, DecisionCo
     }
     ++counters.exact_target_membership;
     return exact();
-}
-
-/// sign(a - b) for one-roots over possibly different radicands.
-CGAL::Sign sign_difference_one_roots(const OneRoot& a, const OneRoot& b)
-{
-    const FT ba = base_of(a);
-    const FT bb = base_of(b);
-    if (CGAL::sign(ba) == CGAL::ZERO || CGAL::sign(bb) == CGAL::ZERO || ba == bb) return sign_one_root(a - b);
-    return sign_rational_two(a.a0() - b.a0(), a.a1(), ba, -b.a1(), bb);
-}
-
-/// (w - c) x (p - c) for w over one radicand and p over another, as a tower over
-/// p's field (tower_2.h, cross_product).
-Tower cross_about(const Point_2& c, const OneRoot& wx, const OneRoot& wy, const ExactPoint& p)
-{
-    return tower_sub(cross_product(wx - c.x(), p.y - c.y()), cross_product(wy - c.y(), p.x - c.x()));
-}
-
-Interval cross_about_i(const Interval& cx, const Interval& cy, const Interval& wx, const Interval& wy, const Interval& px,
-                       const Interval& py)
-{
-    return (wx - cx) * (py - cy) - (wy - cy) * (px - cx);
-}
-
-/// |p - w|^2 - r2 for a one-root centre w, as a tower over p's field.
-Tower squared_distance_minus(const ExactPoint& p, const OneRoot& wx, const OneRoot& wy, const FT& r2)
-{
-    const FT delta = wx.is_extended() ? wx.root() : (wy.is_extended() ? wy.root() : FT(0));
-    const FT x1 = wx.is_extended() ? wx.a1() : FT(0);
-    const FT y1 = wy.is_extended() ? wy.a1() : FT(0);
-    const OneRoot ex = p.x - wx.a0();
-    const OneRoot ey = p.y - wy.a0();
-    // (ex - x1 s)^2 + (ey - y1 s)^2 - r2 with s = sqrt(delta).
-    const OneRoot m = ex * ex + ey * ey + OneRoot((x1 * x1 + y1 * y1) * delta - r2);
-    const OneRoot n = FT(-2) * (ex * x1 + ey * y1);
-    return {m, n, OneRoot(delta)};
-}
-
-/// Wedge membership of p for an arc about c from w0 to w1 in `sense` with span
-/// `span` (closed; the apex c is inside). o0, o1 are the signs of
-/// sense (w0 - c) x (p - c) and sense (p - c) x (w1 - c).
-bool in_wedge(const ArcSpan span, const CGAL::Sign o0, const CGAL::Sign o1)
-{
-    switch (span) {
-        case ArcSpan::Minor: return o0 != CGAL::NEGATIVE && o1 != CGAL::NEGATIVE;
-        case ArcSpan::Half: return o0 != CGAL::NEGATIVE;
-        case ArcSpan::Major: return o0 != CGAL::NEGATIVE || o1 != CGAL::NEGATIVE;
-    }
-    throw CoverageCertificateNativeError("unknown arc span");
-}
-
-CGAL::Sign times(const int sense, const CGAL::Sign s) { return sense > 0 ? s : CGAL::opposite(s); }
-
-ArcSpan span_of(const Point_2& c, const OneRoot& ax, const OneRoot& ay, const OneRoot& bx, const OneRoot& by,
-                const int sense)
-{
-    const ExactPoint b{bx, by};
-    const CGAL::Sign s = times(sense, sign_tower(cross_about(c, ax, ay, b)));
-    if (s == CGAL::POSITIVE) return ArcSpan::Minor;
-    if (s == CGAL::NEGATIVE) return ArcSpan::Major;
-    if (sign_difference_one_roots(ax, bx) == CGAL::ZERO && sign_difference_one_roots(ay, by) == CGAL::ZERO) {
-        throw InvalidCertificateInputError("an arc of the exact target starts and ends at one point");
-    }
-    return ArcSpan::Half;
 }
 
 CGAL::Bbox_2 box_of(const Interval& x0, const Interval& x1, const Interval& y0, const Interval& y1)
@@ -216,6 +153,8 @@ ExactTarget ExactTarget::build(const double tool_radius, const std::vector<Decla
     }
     const Interval r_i = interval_of(target.tool_radius);
     for (const auto& piece : pieces) {
+        target.piece_sources.push_back(piece.source);
+        target.piece_targets.push_back(piece.target);
         if (piece.is_line) {
             LineBand band{piece.nx, piece.ny, piece.level, piece.ux, piece.uy, {}, {}, {}};
             if (piece.nx * piece.nx + piece.ny * piece.ny != FT(1) || piece.ux != piece.ny || piece.uy != -piece.nx) {
@@ -240,6 +179,7 @@ ExactTarget ExactTarget::build(const double tool_radius, const std::vector<Decla
                 }
             }
             band.bbox = box_of(xs[0], xs[1], ys[0], ys[1]) + box_of(xs[2], xs[3], ys[2], ys[3]);
+            target.piece_bands.emplace_back(true, static_cast<std::uint32_t>(target.line_bands.size()));
             target.line_bands.push_back(std::move(band));
             continue;
         }
@@ -251,6 +191,7 @@ ExactTarget ExactTarget::build(const double tool_radius, const std::vector<Decla
         }
         CircleBand band;
         band.c = piece.centre;
+        band.radius = big_r;
         const bool r_outer = CGAL::compare(big_r, rho) == CGAL::LARGER;
         band.inner_sq = r_outer ? rho * rho : big_r * big_r;
         band.outer_sq = r_outer ? big_r * big_r : rho * rho;
@@ -266,6 +207,7 @@ ExactTarget ExactTarget::build(const double tool_radius, const std::vector<Decla
         band.inner_sq_i = interval_of(band.inner_sq);
         band.outer_sq_i = interval_of(band.outer_sq);
         band.bbox = disk_box(band.cx_i, band.cy_i, CGAL::sqrt(band.outer_sq_i));
+        target.piece_bands.emplace_back(false, static_cast<std::uint32_t>(target.circle_bands.size()));
         target.circle_bands.push_back(std::move(band));
     }
     target.vertex_disks = std::move(vertex_disks);

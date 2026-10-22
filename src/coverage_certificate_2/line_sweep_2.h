@@ -48,6 +48,7 @@ struct LinePiece {
     std::uint32_t report_index;  ///< connector index, or target member index
     CGAL::Sign check_side;  ///< side of the line's normal whose cover is checked
     CGAL::Bbox_2 box;       ///< certified box of the segment, widened by LINE_PIECE_BOX_MARGIN
+    bool owner_is_rect = true;  ///< false for an exact connector flank (owner indexes the connector regions)
 };
 
 /// Superset filter margin of a flank piece's candidate box, mm (2^-10). A flank

@@ -14,6 +14,7 @@ struct DecisionCounters {
     std::size_t pairs_exact = 0;              ///< discriminant enclosure straddles 0 (or EXACT_ONLY)
     std::size_t tangencies = 0;               ///< exact double roots
     std::size_t coincident_pairs = 0;         ///< identical support circles (P5)
+    std::size_t coincident_crossings = 0;     ///< equal crossings on one circle decided by coincident other circles
     std::size_t materialised_pairs = 0;       ///< lazy pairs whose exact points were built on demand
     std::size_t pair_towers = 0;              ///< circle-circle pairs whose exact tower coordinates were built (P2)
     std::size_t exact_branch_matches = 0;     ///< materialised lazy pairs whose two branch boxes overlap:
@@ -49,15 +50,24 @@ struct DecisionCounters {
     std::size_t vertex_line_pairs = 0;           ///< candidate (line, vertex circle) pairs
     std::size_t vertex_line_exact = 0;           ///< their discriminant enclosure straddles 0 (or EXACT_ONLY)
     std::size_t vertex_circle_tangencies = 0;    ///< exact double roots with a vertex circle
+    std::size_t vertex_tangent_pairs = 0;        ///< line events: two tangent vertex roots ordered (fast path 3)
     std::size_t materialised_vertex_events = 0;  ///< vertex-circle events built exactly on demand
     std::size_t exact_target_events = 0;         ///< event comparisons involving a vertex circle, decided exactly
+    // Exact dOmega* connectors (exact_connectors_2.h) and coincident supports (side_probe_2.h).
+    std::size_t exact_connector_membership = 0;  ///< exact memberships in a connector region
+    std::size_t connector_pieces = 0;            ///< checked connector flank segments and support circles
+    std::size_t connector_edges_out_of_range = 0;  ///< support edges outside every sub-piece range (not boundary)
+    std::size_t connector_edges_covered = 0;     ///< edges whose outer side a connector region covers (exact, at the witness)
+    std::size_t side_probes = 0;                 ///< exact probe points beside a witness on a coincident support
+    std::size_t exact_probe_roots = 0;           ///< probe crossing parameters whose sign or bound needed the exact rule
+    std::size_t coincident_target_decisions = 0; ///< target sides decided by a probe (witness on a target cut support)
 
     [[nodiscard]] std::size_t exact_fallbacks() const
     {
         return pairs_exact + materialised_pairs + pair_towers + exact_half + exact_compare_x + exact_membership +
                exact_target_membership + circle_line_exact + line_line_exact + materialised_line_events +
                exact_tower_compares + exact_line_side + vertex_circle_exact + vertex_line_exact + materialised_vertex_events +
-               exact_target_events;
+               exact_target_events + exact_connector_membership;
     }
 };
 

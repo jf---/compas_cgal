@@ -19,6 +19,7 @@ class ExposedPieceKind(Enum):
     CAPSULE_FLANK = "capsule_flank"
     TARGET_BOUNDARY = "target_boundary"
     TARGET_INTERIOR = "target_interior"
+    CONNECTOR_ARC = "connector_arc"
 
 
 @dataclass(frozen=True)
@@ -27,8 +28,9 @@ class UncoveredWitness:
 
     Attributes:
         piece_kind: Kind of the exposed piece.
-        region_index: Index into ``full_circles``, then ``connectors``, then the
-            target members, of the region the exposed piece bounds.
+        region_index: Index into ``full_circles``, then ``connectors``, then
+            ``exact_connectors``, then the target members, of the region the
+            exposed piece bounds.
         uncovered_point: Exact world-XY point, decided in T and outside every
             swept region by exact predicates (P7).
     """

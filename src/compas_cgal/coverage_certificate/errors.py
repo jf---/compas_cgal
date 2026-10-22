@@ -42,7 +42,15 @@ class SeparationBoundExceededError(CoverageCertificateNativeError):
 
 
 class CoincidentTargetSupportError(CoverageCertificateNativeError):
-    """A swept piece lies exactly on a cut support of the exact target (declared boundary or vertex circle): not modelled."""
+    """An irrational (polygon connector) flank lies exactly on an exact connector support, where no rational side probe exists."""
+
+
+class ConnectorBoundaryCoverageError(CoverageCertificateNativeError):
+    """The exact connectors leave part of dOmega* unswept, so their one-root end-disk circles would need checking: not modelled."""
+
+
+class BoundaryChainError(CoverageCertificateNativeError):
+    """The declared dOmega* pieces do not form closed chains with non-reflex junctions, which the end-disk theorem needs."""
 
 
 def native_contract_error(error: Exception) -> CoverageCertificateNativeError:
@@ -52,6 +60,8 @@ def native_contract_error(error: Exception) -> CoverageCertificateNativeError:
         (native.SignRuleContractError, SignRuleContractError),
         (native.SeparationBoundExceededError, SeparationBoundExceededError),
         (native.CoincidentTargetSupportError, CoincidentTargetSupportError),
+        (native.ConnectorBoundaryCoverageError, ConnectorBoundaryCoverageError),
+        (native.BoundaryChainError, BoundaryChainError),
     ):
         if isinstance(error, native_type):
             return python_type(str(error))

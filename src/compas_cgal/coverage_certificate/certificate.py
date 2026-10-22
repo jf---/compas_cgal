@@ -11,7 +11,9 @@ The exact target T = Omega* (+) D_r of the exact centre domain
 cut in completely: its declared boundary supports and its one-root vertex
 circles cut every swept piece, so the certificate decides both ways and never
 raises ``UnmodelledCertificatePieceError``. The polygon ``domain`` then only
-carries the connectors' sites.
+carries the polygon connectors' sites; exact connectors along dOmega*
+(``exact_connectors``) are swept exactly, arcs included
+(docs/held_coverage_certificate.md "Exact connectors along dOmega*").
 
 Loose VERTEX_DISK members on the polygonal target (``vertex_disks``) enter T's
 membership but are not cut into the arrangement: with them, a proven uncovered
@@ -26,6 +28,7 @@ from dataclasses import dataclass
 
 from compas_cgal.coverage_certificate.errors import UncoveredPocketError
 from compas_cgal.coverage_certificate.errors import UnmodelledCertificatePieceError
+from compas_cgal.coverage_certificate.exact_connectors import ExactConnectorSweep
 from compas_cgal.coverage_certificate.exact_target import ExactCentreDomainTarget
 from compas_cgal.coverage_certificate.native_certificate import run_certificate
 from compas_cgal.coverage_certificate.sweeps import BoundaryConnectorSweep
@@ -58,6 +61,7 @@ class CoverageCertificate:
         *,
         vertex_disks: Sequence[VertexDisk] = (),
         exact_target: ExactCentreDomainTarget | None = None,
+        exact_connectors: Sequence[ExactConnectorSweep] = (),
     ) -> CoverageCertificate:
         """Decide T subset-of U exactly; never returns partial success.
 
@@ -70,17 +74,24 @@ class CoverageCertificate:
                 (not cut into the arrangement; see the module docstring).
             exact_target: The exact target T = Omega* (+) D_r; ``domain`` then
                 only carries the connectors' sites.
+            exact_connectors: Exact dOmega* connectors along the exact target
+                (region indices after ``connectors``); their sub-pieces must
+                cover dOmega*.
 
         Raises:
             UncoveredPocketError: an exact point of T lies outside every sweep.
             UnmodelledCertificatePieceError: loose vertex disks were given and
                 no uncovered point was found (never with ``exact_target``).
             InvalidExactTargetError: vertex disks given beside an exact target.
-            CoincidentTargetSupportError: a swept piece lies on a cut support
-                of the exact target.
+            ConnectorBoundaryCoverageError: the exact connectors leave part of
+                dOmega* unswept.
+            BoundaryChainError: the exact target's dOmega* pieces do not form
+                closed chains with non-reflex junctions (exact connectors only).
+            CoincidentTargetSupportError: an irrational connector flank lies on
+                an exact connector support.
             CoverageCertificateNativeError: an internal contract breach.
         """
-        report = run_certificate(domain, tool_radius, full_circles, connectors, vertex_disks=vertex_disks, exact_target=exact_target)
+        report = run_certificate(domain, tool_radius, full_circles, connectors, vertex_disks=vertex_disks, exact_target=exact_target, exact_connectors=exact_connectors)
         if report.exposed:
             witnesses = [UncoveredWitness(edge.piece_kind, edge.region_index, edge.uncovered) for edge in report.exposed]
             raise UncoveredPocketError(witnesses, report.undecided)

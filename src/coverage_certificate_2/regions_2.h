@@ -48,6 +48,10 @@ struct CircleRegion {
     Interval centre_x, centre_y, outer_squared_i, inner_squared_i;
     std::uint32_t report_index;  ///< full-circle index, or n_full + connector index for a capsule cap
     PieceKind kind;              ///< kind of the region's outer boundary circle
+    /// False for a SUPPORT-ONLY region (exact connectors, exact_connectors_2.h):
+    /// its circles cut every piece they meet and may be checked as pieces, but it
+    /// never covers anything. Its membership is never consulted for coverage.
+    bool covers = true;
 };
 
 /// One boundary circle (piece) of a swept region.
@@ -95,6 +99,13 @@ struct CircleRegionSet {
     /// Append one target circle |x - c| = radius (a cut support, no region);
     /// returns its circle id.
     std::uint32_t add_target_circle(const Point_2& centre, const FT& radius, std::uint32_t member);
+
+    /// Append a support-only region (covers == false) with the circles
+    /// |x - c| = outer and, when inner > 0, |x - c| = inner; returns its index.
+    ///
+    /// Raises:
+    ///     InvalidCertificateInputError: outer <= inner or inner < 0.
+    std::uint32_t add_support_region(const Point_2& centre, const FT& outer, const FT& inner, std::uint32_t report_index);
 
     /// Number of circle regions (cuts + capsule caps); target circles own none.
     [[nodiscard]] std::size_t region_count() const { return regions.size(); }

@@ -37,7 +37,6 @@ from benchmarks.held_declared_boundary import PythagoreanDirection
 from benchmarks.held_exact_centre_domain import CentreDomain as ExactCentreDomain
 from compas_cgal.coverage_certificate.certificate import CoverageCertificate
 from compas_cgal.coverage_certificate.circle_core import FilterMode
-from compas_cgal.coverage_certificate.errors import CoincidentTargetSupportError
 from compas_cgal.coverage_certificate.errors import UncoveredPocketError
 from compas_cgal.coverage_certificate.exact_target import ExactCentreDomainTarget
 from compas_cgal.coverage_certificate.native_certificate import CertificateReport
@@ -332,9 +331,29 @@ def test_connector_flanks_cross_one_root_vertex_circles_exactly() -> None:
     assert ExposedPieceKind.CAPSULE_FLANK in {piece.piece_kind for piece in report.exposed}
 
 
-def test_connector_on_the_exact_boundary_of_omega_star_is_a_named_unmodelled_coincidence() -> None:
-    _, _, target = square()
+def test_connector_on_the_exact_boundary_of_omega_star_is_decided_exactly() -> None:
+    # The connector runs along the bottom and right edges of Omega* = [1, 19]^2:
+    # its outer flanks lie on the declared walls and its corner disk on the
+    # vertex circle at (19, 1), coincident target supports decided by side
+    # probes (side_probe_2.h). With no cuts the verdict is exact: uncovered just
+    # beyond the two end disks, just inside the two inner flanks, and at the
+    # interior anchor; nothing beyond the walls.
+    _, domain, target = square()
     path = _path_domain([(1.0, 1.0), (19.0, 1.0), (19.0, 19.0), (1.0, 19.0)])
     connectors = [BoundaryConnectorSweep.build(path, CentreBoundarySite.build(0, 0, F(0)), CentreBoundarySite.build(0, 2, F(0)))]
-    with pytest.raises(CoincidentTargetSupportError):
+    report = _both_modes(target, [], path, connectors)
+    assert report.counters["coincident_target_decisions"] > 0
+    corners: list[XY] = [(F(1), F(1)), (F(19), F(1)), (F(19), F(19))]
+    _check_witnesses(domain, report, [], [(corners[0], corners[1]), (corners[1], corners[2])])
+    kinds = sorted(piece.piece_kind.name for piece in report.exposed)
+    assert kinds == ["CAPSULE_CAP", "CAPSULE_CAP", "CAPSULE_FLANK", "CAPSULE_FLANK", "TARGET_INTERIOR"]
+    points = [(F(piece.uncovered[0]), F(piece.uncovered[1])) for piece in report.exposed]
+    near = F(1, 100)
+    # P7 offsets a cap witness radially by h = 2^-k of its radius, from h = 1/2.
+    for end in (corners[0], corners[2]):
+        assert any(1 < (x - end[0]) ** 2 + (y - end[1]) ** 2 <= F(3, 2) ** 2 for x, y in points), f"no witness beside the end disk at {end}"
+    assert any(2 < y < 2 + near and 1 < x < 19 for x, y in points), "no witness inside the bottom inner flank"
+    assert any(18 - near < x < 18 and 1 < y < 19 for x, y in points), "no witness inside the right inner flank"
+    assert all(0 < x < 20 and 0 < y < 20 for x, y in points), "a witness lies beyond the walls"
+    with pytest.raises(UncoveredPocketError):
         CoverageCertificate.build(path, TOOL, [], connectors, exact_target=target)

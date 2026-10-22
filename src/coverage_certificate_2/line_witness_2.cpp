@@ -163,7 +163,7 @@ Point_2 uncovered_beside_line(LineSweep& sweep, const FT& t, LineWitnessContext&
         for (std::size_t s = 0; clear && s < sweep.excluded_rects.size(); ++s) {
             clear = outside_rect(context.rects[sweep.excluded_rects[s]], context.lines, u, ux, uy, context.mode, counters);
         }
-        if (clear && !piece.target) {
+        if (clear && !piece.target && piece.owner_is_rect) {
             clear = outside_rect(context.rects[piece.owner], context.lines, u, ux, uy, context.mode, counters);
         }
         if (clear && accept(u)) return u;

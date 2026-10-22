@@ -65,7 +65,9 @@ CircleSweep sweep_circle(const std::uint32_t k, const CircleRegionSet& set, cons
     // coincidence with a swept circle is the target decision's business.
     for (const std::uint32_t other : table.coincident[k]) {
         const BoundaryCircle& O = set.circles[other];
-        if (O.is_target()) continue;
+        // Target circles and support-only circles (exact connectors) never
+        // cover: their sides are decided at the witness (side_probe_2.h).
+        if (O.is_target() || !set.regions[O.owner].covers) continue;
         if (O.region_inside() == C.check_inside()) {
             sweep.covered_by_coincident_support = true;
         } else {
@@ -74,7 +76,12 @@ CircleSweep sweep_circle(const std::uint32_t k, const CircleRegionSet& set, cons
     }
     std::sort(sweep.excluded.begin(), sweep.excluded.end());
     sweep.excluded.erase(std::unique(sweep.excluded.begin(), sweep.excluded.end()), sweep.excluded.end());
+    std::vector<std::uint32_t> support_only;
     for (const std::uint32_t j : table.candidates[k]) {
+        if (!set.regions[j].covers) {
+            support_only.push_back(j);
+            continue;
+        }
         if (!std::binary_search(sweep.excluded.begin(), sweep.excluded.end(), j)) sweep.counted.push_back(j);
     }
     if (sweep.covered_by_coincident_support) {
@@ -139,6 +146,15 @@ CircleSweep sweep_circle(const std::uint32_t k, const CircleRegionSet& set, cons
     }
     const auto on_support = [&](const Point_2& w) {
         const Interval wx = interval_of(w.x()), wy = interval_of(w.y());
+        // w on the circle S: certified interval filter (LAZY), then exact.
+        const auto on_circle = [&](const BoundaryCircle& S) {
+            if (mode == FilterMode::Lazy) {
+                const Interval ddx = wx - S.centre_x, ddy = wy - S.centre_y, d2 = ddx * ddx + ddy * ddy;
+                if (d2.sup() < S.radius_squared_i.inf() || d2.inf() > S.radius_squared_i.sup()) return false;
+            }
+            ++counters.exact_membership;
+            return CGAL::compare(CGAL::squared_distance(w, S.circle.center()), S.circle.squared_radius()) == CGAL::EQUAL;
+        };
         for (std::size_t t = 0; t < sweep.counted.size(); ++t) {
             const CircleRegion& Y = set.regions[sweep.counted[t]];
             const Interval ddx = wx - Y.centre_x, ddy = wy - Y.centre_y, d2 = ddx * ddx + ddy * ddy;
@@ -156,15 +172,18 @@ CircleSweep sweep_circle(const std::uint32_t k, const CircleRegionSet& set, cons
             in_outer[t] = co == CGAL::SMALLER;
             in_inner[t] = Y.annulus && ci == CGAL::SMALLER;
         }
+        for (const std::uint32_t j : support_only) {
+            for (std::uint32_t sc = set.first_circle[j]; sc < set.first_circle[j + 1]; ++sc) {
+                if (std::find(same.begin(), same.end(), sc) != same.end()) continue;
+                if (on_circle(set.circles[sc])) return true;
+            }
+        }
         for (const std::uint32_t tc : table.target_circles[k]) {
             // A target circle identical to C (a capsule cap at a domain vertex)
             // contains every witness; it has no events on C and is the target
             // decision's coincident support, not a cut.
             if (std::find(same.begin(), same.end(), tc) != same.end()) continue;
-            const BoundaryCircle& T = set.circles[tc];
-            if (CGAL::compare(CGAL::squared_distance(w, T.circle.center()), T.circle.squared_radius()) == CGAL::EQUAL) {
-                return true;
-            }
+            if (on_circle(set.circles[tc])) return true;
         }
         for (std::size_t t = 0; t < sweep.lines.size(); ++t) {
             line_state[t] = line_side(lines[sweep.lines[t]], w, wx, wy, mode, counters);
@@ -179,6 +198,7 @@ CircleSweep sweep_circle(const std::uint32_t k, const CircleRegionSet& set, cons
         }
         return false;
     };
+    for (const std::uint32_t j : support_only) cut_circles += set.first_circle[j + 1] - set.first_circle[j];
     const StartWitness start = find_start_witness(
         C, start_witness_attempt_bound(sweep.counted.size(), cut_circles + sweep.vertices.size(), sweep.lines.size()),
         on_support, counters);
@@ -197,7 +217,7 @@ CircleSweep sweep_circle(const std::uint32_t k, const CircleRegionSet& set, cons
                 continue;
             }
             const BoundaryCircle& O = set.circles[evs[i].other];
-            if (O.is_target()) continue;
+            if (O.is_target() || !set.regions[O.owner].covers) continue;
             const std::size_t t = slot_of(sweep.counted, O.owner);
             if (O.is_inner()) {
                 in_inner[t] ^= 1U;
@@ -238,7 +258,7 @@ CircleSweep sweep_circle(const std::uint32_t k, const CircleRegionSet& set, cons
                 continue;
             }
             const BoundaryCircle& O = set.circles[evs[i].other];
-            if (O.is_target()) continue;
+            if (O.is_target() || !set.regions[O.owner].covers) continue;
             const std::size_t t = slot_of(sweep.counted, O.owner);
             const int before = region_covers(t) ? 1 : 0;
             if (O.is_inner()) {

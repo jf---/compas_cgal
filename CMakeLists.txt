@@ -503,9 +503,12 @@ set(COVERAGE_CERTIFICATE_2_SOURCES
     src/coverage_certificate_2/line_sweep_2.cpp
     src/coverage_certificate_2/line_witness_2.cpp
     src/coverage_certificate_2/target_decision_2.cpp
+    src/coverage_certificate_2/exact_geometry_2.cpp
     src/coverage_certificate_2/exact_target_2.cpp
     src/coverage_certificate_2/vertex_events_2.cpp
     src/coverage_certificate_2/driver_support_2.cpp
+    src/coverage_certificate_2/exact_connectors_2.cpp
+    src/coverage_certificate_2/side_probe_2.cpp
     src/coverage_certificate_2/exact_certificate_2.cpp
     src/coverage_certificate_2/certificate_2.cpp
     src/coverage_certificate_2/bindings_2.cpp

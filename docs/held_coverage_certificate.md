@@ -14,13 +14,16 @@
     - **Exact target T = Ω\* ⊕ D_r** (`exact_target=`). Its declared boundary
       and its one-root vertex circles cut every swept piece, so
       `UnmodelledCertificatePieceError` is never raised for it. The current
-      Monstera path is proven uncovered against T(Ω\*) at 119 clusters. Besides A
-      and B these are convex-arc chord slivers and sub-ulp hairlines along the
-      walls, which no binary64 path can avoid. The run takes 8.4 s at load 25, over
-      the 5 s budget ([The exact target Ω\*](#the-exact-target)).
-    - **Still open.** Exact connectors along ∂Ω\* (arc connectors). A connector
-      lying exactly on a declared boundary support or a vertex circle raises the
-      named `CoincidentTargetSupportError`; it is not modelled yet.
+      polygonal-Ω Monstera path is proven uncovered against T(Ω\*) at 119
+      clusters: A and B, 48 convex-arc chord slivers and 69 sub-ulp hairlines
+      along the walls, which no binary64 polygon path can avoid
+      ([The exact target Ω\*](#the-exact-target)).
+    - **Exact connectors along ∂Ω\*** (`exact_connectors=`, line and arc
+      sub-pieces). A sub-piece sweeps its strip or annular sector plus end
+      disks. Coincident supports (connector flanks on declared lines, support
+      circles on declared circles, end disks on vertex circles) are decided
+      exactly by side probes instead of raising. The Figure 5 and Monstera Ω\* paths
+      are certified covered ([Exact connectors along ∂Ω\*](#exact-connectors)). Monstera now takes 5.1 s CPU, down from 13.3 s, with the same verdicts and witnesses ([Certificate performance](#certificate-performance)).
 
 !!! note "Review findings C1 and I1 are fixed (2026-10-21): every exact search loop fails loud"
     - **C1.** The start-witness search is bounded by its theorem bound,
@@ -355,6 +358,9 @@ cut = FullCircleSweep.build(centre: Point2[WorldXY], path_radius: GuideRadius)
 site = CentreBoundarySite.build(loop: int, segment: int, parameter: Fraction)
 connector = BoundaryConnectorSweep.build(domain, start: CentreBoundarySite, end: CentreBoundarySite)  # CCW along the loop
 certificate = CoverageCertificate.build(domain, tool_radius: ToolRadius, full_circles, connectors)
+# exact path: T = Omega* (+) D_r and connectors along dOmega* (sub-pieces of T's pieces)
+piece = ExactConnectorPiece.build(exact_target, piece_index, start: OneRootPoint, end: OneRootPoint)
+certificate = CoverageCertificate.build(domain, tool_radius, full_circles, exact_target=exact_target, exact_connectors=[ExactConnectorSweep.build([piece, ...])])
 ```
 
 - `CentreDomain.build` checks the polygon invariants (simple loops, outer CCW,
@@ -639,7 +645,9 @@ only within 0.5 mm of A or B, and the repaired path covered.
 
 `CoverageCertificate.build(path_domain, r, cuts, connectors, exact_target=T)`
 certifies T = Ω\* ⊕ D_r of [Held exact centre domain](held_exact_centre_domain.md).
-The polygon `path_domain` then only carries the connectors' sites. The adapter
+The polygon `path_domain` then only carries the polygon connectors' sites.
+Exact connectors along ∂Ω\* are passed as `exact_connectors`
+([Exact connectors along ∂Ω\*](#exact-connectors)). The adapter
 `benchmarks.held_coverage_target.exact_coverage_target(boundary, omega)`
 reads T off Ω\* without rounding.
 
@@ -696,11 +704,12 @@ conjugate form (a² − b²r)/(a − b√r) where the two terms cancel. Near-tan
 roots otherwise keep wide double enclosures and force exact comparisons on
 2000-bit vertex numbers.
 
-**Not modelled.** A swept piece lying exactly on a target cut support raises
-`CoincidentTargetSupportError`. Exact connectors along ∂Ω\* hit this case by
-design (their flanks are the declared lines, their caps are the vertex circles).
-They need arc connectors and coincident-support rules against the bands, which
-are the next stage.
+**Coincident supports.** A swept piece lying exactly on a target cut support
+(an exact connector's flank on a declared line, a cut circle on a declared
+circle) is decided exactly: its target side is membership at the side probe
+beside the edge witness ([Exact connectors along ∂Ω\*](#exact-connectors)).
+`CoincidentTargetSupportError` remains only for an irrational polygon-connector
+flank on an exact-connector support.
 
 **Contract tests** (`tests/benchmarks/test_coverage_certificate_exact_target.py`):
 
@@ -714,7 +723,12 @@ are the next stage.
 - A hole that meets T only inside a one-root vertex disk is found. This is a
   raster-search find that a certificate dropping vertex disks misses.
 - Connector flanks cross one-root vertex circles.
-- The interior anchor and the coincident-support error are both pinned.
+- The interior anchor is pinned. A polygon connector lying on ∂Ω\* yields the
+  exact verdict: 5 witnesses beside its end disks, inside its inner flanks
+  and at the anchor, none beyond the walls
+  (`test_connector_on_the_exact_boundary_of_omega_star_is_decided_exactly`;
+  it asserted `CoincidentTargetSupportError` before, retargeted with the
+  user's go on 2026-10-22).
 - Every fixture runs LAZY ≡ EXACT_ONLY, with the audit on.
 
 Defect injection results:
@@ -731,9 +745,11 @@ Defect injection results:
 The last injection changes the exposed-edge counts but flipped no verdict in
 520 random cusp configurations. A raster search found no false pass either.
 
-**Monstera.** The current generator's path is certified against T(Ω\*) by
-`tools/coverage_certificate_omega_star.py`. Every cluster's first witness is
-re-checked by the same two independent oracles. Regenerate with:
+**Monstera.** The current generator's polygonal-Ω path is certified against
+T(Ω\*) by `tools/coverage_certificate_omega_star.py`. Every cluster's first
+witness is re-checked by the same two independent oracles. Every witness is
+attributed to the declared piece that realises its exact minimum distance
+(one-root comparisons, ties to the lowest primitive index). Regenerate with:
 
 ```bash
 pixi run coverage-certificate-omega-star
@@ -744,19 +760,324 @@ pixi run coverage-certificate-omega-star
 Reading it:
 
 - **A and B** are the known interior slivers.
-- **Convex-arc clusters** are the chord slivers of the polygonal Ω, 2·10⁻⁴ to
-  5·10⁻² mm deep.
-- **Line and kink clusters** are hairlines at most 3.4·10⁻¹³ mm from the
-  declared walls. They are binary64 rounding of the projected contacts. The
-  certificate decides them correctly as uncovered: only the exact path, with
-  connectors on ∂Ω\*, can close them
+- **48 chord slivers** (3404 witnesses): the chord slivers of the polygonal Ω,
+  7.3·10⁻⁴ to 4.8·10⁻² mm deep.
+- **69 hairlines** (666 witnesses): every member within 10⁻¹² mm of the
+  declared boundary (decided exactly; the deepest 7.6·10⁻¹³ mm), including the
+  13 clusters an earlier first-witness attribution called concave. They are
+  binary64 rounding of the projected contacts. The certificate decides them
+  correctly as uncovered: only the exact path, with connectors on ∂Ω\*, can
+  close them
   ([Coverage target and the exact path](held_exact_centre_domain.md#coverage-target-and-the-exact-path)).
+- **0 unexplained.**
 - **Cost.** About 2× the polygonal target on the same path. Two things drive it:
   - The witness phase scales with the 4078 witnesses.
   - Exact decisions on 2000-bit vertex numbers occur where connector caps sit
     within ulps of vertex circles: the polygon vertices are projected contacts
     on ∂Ω\*.
   - On the exact path both causes vanish.
+
+### Exact connectors along ∂Ω\* { #exact-connectors }
+
+`CoverageCertificate.build(path_domain, r, cuts, exact_target=T, exact_connectors=K)`
+certifies an Ω\* path: binary64 cut circles plus exact connectors that run along
+∂Ω\* itself (`compas_cgal.coverage_certificate.exact_connectors`,
+`coverage_certificate_2/exact_connectors_2.h`). A connector is its CCW
+sub-chain of ∂Ω\*: sub-pieces of T's own pieces, each `ExactConnectorPiece(piece,
+start, end)` on an offset line or an offset circle, with one-root ends. Region
+indices run full circles, then polygon connectors, then exact connectors.
+
+**The swept region of a sub-piece** is exactly the sub-piece ⊕ D_r. The
+sub-pieces of all connectors must cover ∂Ω\*, so their union is exactly
+∂Ω\* ⊕ D_r, the union of the same regions over the *whole* pieces, whatever
+the split: each sub-piece ⊕ D_r lies in its piece's, and the pieces' are
+covered by the sub-pieces'. The certificate therefore sweeps one composite
+region per ∂Ω\* piece, whose end disks sit at the ∂Ω\* vertices only. The many
+sites inside a piece add no support. The sub-pieces are kept for validation,
+for the cover check and for reporting: a witness names the lowest connector
+whose own sub-piece contains it.
+
+| piece | swept region | boundary supports | checked pieces |
+|---|---|---|---|
+| line, n·x = level, u·w0 ≤ u·x ≤ u·w1 | strip \|n·x − level\| ≤ r between the end lines, ∪ D_r(w0) ∪ D_r(w1) | the flank lines n·x = level ± r (rational: n is a rational unit normal) and the two cap circles | the two flank segments inside the range (`CAPSULE_FLANK`) |
+| arc about c, radius R, from w0 to w1 | annular sector (R − r)₊ ≤ \|x − c\| ≤ R + r inside the arc's wedge, ∪ D_r(w0) ∪ D_r(w1) | the circles \|x − c\| = R ± r (rational) and the two cap circles | the two support-circle arcs inside the wedge (`CONNECTOR_ARC`) |
+
+- **Why the union is exact.** A point whose nearest sub-piece point is interior
+  lies on that point's normal, so it is in the strip or the annular sector. A
+  point whose nearest point is an end lies in that end's disk. The pie of a
+  junction r-circle (R = r, inner radius 0) is the same rule.
+- **End and radial lines are never boundary.** Inside the strip or the annulus
+  they are diameters of a cap. So the region's membership along any piece is
+  constant between consecutive crossings with its boundary supports. Every
+  support is cut into every piece it meets: flank lines as lines, support
+  circles as *support-only* circle regions (`CircleRegion::covers == false`,
+  they flip nothing), and caps as vertex circles. The membership itself is
+  decided exactly at each edge witness (`connector_membership`: interval
+  filter, then exact one-root and tower signs).
+- **Range.** A support circle is cut at the tangency of each end disk on its
+  radial line. So an edge lies wholly inside a piece's open wedge, or wholly
+  outside its closed wedge, and only edges inside are boundary. Out-of-range
+  edges are skipped, by an interval certificate on one endpoint where it
+  decides and by the exact witness test otherwise.
+
+**The end-disk circles are not checked, by a theorem.** Its precondition is
+K = ∂Ω\*, where K is the union of all sub-pieces. The build verifies it exactly,
+relative to the declared pieces:
+
+- the declared pieces form closed chains: every piece ends exactly where exactly
+  one piece starts, and every start is reached once;
+- no junction is reflex: Ω\* lies left of travel, and the turn from the incoming
+  to the outgoing tangent (u on a line, sense·(w − c)^⊥ on an arc) is an exact
+  orientation sign that must be positive, or zero with a positive dot product
+  (G1). A failure raises `BoundaryChainError`;
+- the sub-pieces cover every declared piece, by an exact interval sweep.
+  Otherwise the build raises `ConnectorBoundaryCoverageError`.
+
+That the declared pieces *are* ∂Ω\* is the exact target's own contract: they
+come from the construction of Ω\* and are not re-derived here.
+
+The proof. U contains K ⊕ D_r, so every uncovered point y′ of T has
+dist(y′, K) > r, and so lies in int Ω\*: a point of T outside Ω\* is within r of
+∂Ω\*. Let e be an edge of a cap circle |x − w| = r on ∂U whose outer side is
+uncovered along a set of positive length. Limits of uncovered points give points
+y on e with dist(y, K) ≥ r = |y − w| and y ∈ Ω\*. So the open disk D(y, r) lies in
+int Ω\* and touches ∂Ω\* at w.
+
+- At a convex vertex w (interior angle < π), the tangent cone of Ω\* holds no
+  such disk.
+- At a smooth or G1 point w, the centre is y = w + r·n_in, a single point of e.
+- Only a reflex vertex would admit an arc of such points y. Ω\* has none: it is
+  an erosion, its complement is P^c ⊕ D_r, so every boundary point has an
+  exterior r-disk. The junction check verifies this on the pieces.
+
+So no cap edge has an uncovered side in T.
+
+**Coincident supports, decided exactly** (`side_probe_2.h`). A connector's outer
+flank lies on a declared line. Its support circle lies on a declared circle (the
+outer one for a convex arc, the inner one for a concave arc). Its caps are T's
+vertex circles. Two connectors on one ∂Ω\* piece share supports. An edge is cut
+at all of these, so on each side of it, close to it, T-membership (or a
+connector region's membership) is constant. When the edge witness w lies on
+such a support, the side is decided at a probe point q = w + h·dir:
+
+- dir points to the checked side, scaled by a power of two as a construction
+  parameter.
+- h is the largest power of two below every positive exact crossing parameter
+  of the support set with the ray. These are rational, one-root, or towers
+  m ± n√d over the support's radicand, and h is bounded by their separation
+  bound.
+- (w, q] meets no support, so membership at q is never on a boundary and is the
+  side's membership.
+
+This replaces `CoincidentTargetSupportError`. That error is now raised only for
+an irrational polygon-connector flank on an exact-connector support, where no
+rational witness exists.
+
+**Contract tests** (`tests/benchmarks/test_coverage_certificate_exact_connectors.py`,
+33 tests). Every run is LAZY ≡ EXACT_ONLY with the audit on. Every witness is
+re-checked by three oracles: in T by the native Ω\* distance; farther than r
+from ∂Ω\* by the native exact nearest-boundary query (the connectors sweep
+exactly ∂Ω\* ⊕ D_r); and outside every cut in `Fraction`s.
+
+- Four pockets with connectors on the whole of ∂Ω\* and an interior grid: the
+  square, the convex arc (one-root kinks on an offset arc), the concave arc,
+  and the L-shape (a junction pie). Coincident target decisions are > 0 on
+  each. The square is certified covered.
+- Without connectors, the wall strip is proven uncovered.
+- Removing the cuts near the convex arc exposes the arc connector's inner
+  support circle as `CONNECTOR_ARC`, with verified witnesses.
+- One connector for the whole loop decides exactly as one per piece.
+- Doubled sub-pieces on an arc report each edge once (they sweep the same piece).
+- Connectors that leave ∂Ω\* partly unswept raise `ConnectorBoundaryCoverageError`.
+- The cover check (fix round 1). Every piece split at a rational interior site,
+  the halves as separate connectors in reverse order, decides exactly as the
+  whole pieces; so do overlapping, unsorted splits. A gap strictly inside a line
+  piece and inside an arc piece is a `ConnectorBoundaryCoverageError`. On a
+  disk pocket, whose ∂Ω\* is one closed circle piece, a `full` turn and a split
+  that wraps through the source pass the check, while a zero-length sub-piece
+  and a gap across the source are errors.
+- Every sub-piece validation error: an end off its line or circle, a line or
+  arc sub-piece that runs backwards, a line or arc sub-piece that leaves its
+  piece, a full turn on a line or on an open arc.
+- The chain check: an open chain and a reflex junction (the L-shape's junction
+  arc replaced by two lines meeting at the corner) raise `BoundaryChainError`.
+- An exposed exact line flank: the square's bottom strip uncut exposes the
+  bottom connector's inner flank as `CAPSULE_FLANK` with an exact-connector
+  region index. A corner gap at the convex vertex (1, 1), the configuration the
+  end-disk theorem governs, is proven through the flank and cut edges.
+- Pinned exposure digests (kind and exact witness, in report order) for four
+  uncovered configurations, including a lens pocket whose line pieces run
+  between two one-root kinks, and two tangency fixtures
+  (`tests/benchmarks/test_coverage_certificate_tangency_fixtures.py`): a
+  polygon capsule flank between two one-root kinks, and an arc–arc G1
+  junction at a rational kink. LAZY ≡ EXACT_ONLY cannot see a wrong rule that
+  both modes share, such as a fast path; a digest can.
+
+Defect injection, each reverted:
+
+| injected defect | caught by |
+|---|---|
+| coincident target supports decided by closed membership at w (no probe) | 9 tests |
+| a coincident connector support counted as covering without the probe | 5 tests |
+| end disks dropped from the connector region | 6 tests |
+| the ∂Ω\* cover check skipped | 1 test |
+| arc range filter disabled (out-of-range support edges checked; per-sub-piece design) | none: checking extra edges only finds genuine uncovered points, so this is cost, not soundness |
+| fast path: tangent vertex root against a rational-base tower, sign flipped | 7 tests |
+| fast path: transversal vertex root against a rational-base tower, sign flipped | 1 test |
+| fast path: two tangent events on a circle, sign flipped | 21 tests |
+| exact line-connector flanks skipped | 4 tests |
+| `connector_in_range` false for every line region | 4 tests |
+| the chain check skipped | 2 tests |
+| coincident-crossing shortcut ignoring the branch | 16 tests |
+| fast path: two tangent vertex roots on a line, sign flipped | 1 test: a polygon capsule flank collinear with an offset line between two one-root kinks (concave-arc pocket, EXACT_ONLY; counter `vertex_tangent_pairs`). Exact connectors alone never reach it: a cap circle touches its own piece's flank only at the range end, and collinear ∂Ω\* pieces have disjoint ranges. The sort compares two events only when they end up adjacent, so the declared circles must cross the flank outside the kinks |
+| tangency cuts involving a support-only circle dropped | 1 test: an arc–arc G1 junction at a rational kink (arcs about (10, 7.5), ρ = 12.5, and (10, 9.5), ρ = 14.5, tangent at (10, −5); Ω\* kink (10, −4); inner supports touching at (10, −3)), cuts below y = 1 removed, exposure digest pinned |
+| vertex-circle tangency cuts dropped | none: an **equivalent mutant** (proof below). It is reached (an injected throw fails 9 tests) |
+| side-probe pre-pass with `lower < 1` (h = 1 kept when a support is crossed at exactly τ = 1) | 1 test (`contract_probe_probe_step`): the probe would land on that support |
+| side-probe pre-pass treating a straddling τ enclosure as cleared | 1 test: a support crossed at τ = 2⁻⁶⁰ |
+| cover check: the gap test dropped | 3 tests |
+| cover check: the wrap split of a closed piece removed | 2 tests |
+| cover check: the closed-piece branch inverted | 13 tests |
+| rational line dedupe keyed on (n_x, n_y) only (level dropped) | 3 tests |
+| straddling-discriminant pair: branch boxes swapped | 1 test |
+| chain check (LAZY): the box-overlap candidates dropped | 24 tests |
+| cap dedupe (LAZY): search window started at w's own lower end instead of `w − widest` | none: two value-equal vertex circles with different representations and the second's lower end below the first's would be needed; no fixture builds one. The window's bound is argued in the code (an enclosure that meets w's has its lower end ≥ inf(w) − widest, rounded down) |
+
+**Why dropping the vertex-circle tangency cuts changes nothing** (RV10). Let w
+be a one-root kink of ∂Ω\*, n its normal, and p = w + r·n the point where the
+vertex circle touches a support. Case by case:
+
+- *G1 junction with a line on the far side.* That line's flank is tangent to
+  the support circle at p: a line event, which stays.
+- *G1 arc–arc junction.* The support–support tangency at p stays: it is a
+  circle pair, not a vertex event.
+- *Convex corner (not G1).* The tangent-cone argument gives dist(p, K) < r, so
+  p ∈ int(K ⊕ D_r). Coverage changes only at cuts, so the edge [c_last, p] next
+  to p is covered entirely, and merging it with the out-of-range edge beyond p
+  hides nothing.
+- *Far-side corner p′ = w − r·n.* The checked side near p′ is farther than r
+  from both pieces (its projection onto the line falls before w), so it lies
+  outside T.
+
+The cuts are kept: they keep each region's arrangement self-contained.
+
+**The generated Ω\* paths** (scratch driver `build/cp1/omega_cert.py`, which maps
+`OmegaConnectors` sub-pieces to T's piece indices; not yet a pixi task):
+
+| workload | circles | connectors (sub-pieces) | Ω\* pieces (arcs / lines), vertex disks | verdict | CPU s (3 runs) | wall s @ load | phases s (crossings, circles, flanks, witnesses), fastest run |
+|---|---:|---:|---|---|---|---|---|
+| figure5_refined | 1804 | 1804 (1838) | 46 (41 / 5), 15 | **COVERED** | 5.59, 5.42, 5.45 | 11.1, 9.0, 7.3 @ 35–39 | 4.06, 2.21, 0.04, 0.71 |
+| figure8_monstera_boundary_qualified_corners | 3979 | 3979 (4465) | 487 (385 / 102), 138 | **COVERED** | 13.75, 14.35, 13.30 | 18.4, 22.1, 14.6 @ 27–28 | 4.68, 5.67, 0.38, 3.27 |
+
+These are the times before the performance stage
+([Certificate performance](#certificate-performance)). The paths are regenerated per run by
+`benchmarks.held_omega_toolpath.generate_omega`, so the circle counts drift with
+concurrent generator work: 1803–1808 on Figure 5 and 3934–3979 on Monstera in
+this session. Two cross-checks support the verdicts:
+
+- **Falsification probe** (`build/cp1/raster_check.py`, reporting only). 20,000
+  random points of T per workload were tested. Each must be in a cut annulus
+  (binary64, with a 10⁻⁹ mm margin) or within r of ∂Ω\* (the exact native
+  nearest-boundary query). It found 0 uncovered samples on both workloads.
+- **Negative control.** With circles 600–899 of Figure 5 dropped, the
+  certificate proves UNCOVERED with 79 witnesses: 50 `ANNULUS_OUTER` and 29
+  `CONNECTOR_ARC`. All 79 pass the three oracles, and the probe finds 2754
+  uncovered samples of 20,000. Dropping circles 600–639 still certifies
+  covered, and the probe agrees with 0 samples: neighbouring circles overlap.
+
+- **Cost.** The first, per-sub-piece version took 551 s on Figure 5 (load
+  122). It gave every site its own end disk, and those near-coincident one-root
+  circles forced cross-base bisections on 2000-bit numbers. One region per
+  piece, box and interval filters on connector memberships, and three exact
+  fast paths brought it down. The fast paths are:
+  - two tangent vertex roots on a line, compared as one-roots;
+  - a vertex root on a rational line against a rational-base tower, as one
+    tower-plus sign;
+  - two tangent events on a circle, compared as one-roots.
+
+  The support circle of every offset arc is a full circle, swept against
+  everything it meets. Its out-of-wedge edges dominate the edge count, and an
+  interval certificate skips most of them.
+
+#### Certificate performance { #certificate-performance }
+
+The stage target was Monstera T(Ω\*) within 5 s CPU, with unchanged verdicts
+and witnesses. Each workload was measured as a same-process A/B against the
+unit-(b) build, interleaved base, new, base, new, new, on pickled inputs
+(scratch driver `build/cp2/cert_ab.py`):
+
+| workload | base CPU s | new CPU s | ratio | load | verdict, witnesses (both builds) |
+|---|---|---|---:|---|---|
+| figure8_monstera_boundary_qualified_corners | 13.32, 13.35 | 5.07, 5.07, 5.10 | 2.6 | 93–148 | COVERED, 0 |
+| figure5_refined | 5.33, 5.09 | 1.77, 1.76, 1.77 | 2.9 | 67–80 | COVERED, 0 |
+| figure8_upper_lane | 17.53, 17.28 | 5.09, 5.04, 5.03 | 3.4 | 50–70 | COVERED, 0 |
+| figure8_upper_boundary | 7.80, 7.76 | 1.84, 1.83, 1.83 | 4.2 | 43–47 | COVERED, 0 |
+| figure8_crossed_skis_boundary | 6.16, 6.20 | 1.56, 1.58, 1.57 | 3.9 | 41–53 | COVERED, 0 |
+| figure5_refined, circles 600–899 dropped | 4.39 | 1.47 | 3.0 | 55–78 | UNCOVERED, the same 79 witnesses |
+| polygonal target, generated Monstera path as measured, before the NOTHING stage (4438 cuts, 4158 polygon connectors; the current generator emits 4428 / 4148, `benchmarks/results/coverage_certificate_acceptance.md`) | 3.19, 3.17 | 2.42, 2.37, 2.39 | 1.3 | 38–43 | UNCOVERED, the same 8 witnesses |
+
+The witness lists are identical, compared as a sha256 digest over (kind, region,
+exact witness). The levers, found by sampling an unstripped build, are:
+
+- **The ∂Ω\* cover check** sorted its stretches with exact tower orientations
+  on every comparison. It now uses certified interval filters (LAZY), an
+  identical-representation shortcut, and filtered spans and point equality.
+  About 1.8 s on Monstera.
+- **Coincident circles.** Every connector support circle coincides with a
+  declared circle, so each cut that crosses one crosses both at the same two
+  points. Those event pairs went to exact tower comparison in the circle sort.
+  Two events from coincident circles (the exact P5 decision already made at
+  build time) are now ordered combinatorially: equal when they are the same
+  branch seen from the swept circle (`coincident_crossings`).
+- **Coincident lines.** A connector flank on a declared line was a second line
+  with its own events on every circle that crosses the wall. Rational lines are
+  now deduplicated by exact value, with the same orientation, so every side sign
+  is unchanged.
+- **Side probes.** These are now filtered (LAZY): a support whose crossing
+  parameters have certified enclosures away from 0 sets h below the enclosure's
+  lower end, with no exact work. The coincident support itself, with w on it,
+  has the rational root −b/a.
+- **Start witness and target-support tests** now run behind certified interval
+  filters.
+- **Straddling discriminants.** A circle pair whose interval discriminant
+  straddles 0 is decided by the exact rational sign. A positive pair stays lazy,
+  with tight enclosures. Only tangencies take the Circular_kernel_2 path.
+
+Measured and not kept:
+
+- Restricting each support circle's box to its arcs' sector boxes saved 7 %.
+  It merged out-of-range edges on the cut circles, which changes which edge
+  points are reported: the negative control gave 67 witnesses of the same
+  pockets instead of 79. It was dropped to keep the witnesses identical. The
+  arc regions' own boxes are sector boxes now, which only narrows candidate
+  filters.
+- A box-seeded range pre-check on connector support edges gave no measurable
+  gain.
+- A second filter stage on the exact towers' own enclosures in the circle sort
+  also gave no measurable gain. Its exact comparisons are between genuinely
+  near-coincident points.
+
+What remains on Monstera, by phase: crossings 1.4 s, circle sweeps 1.5 s,
+flanks 0.35 s, witnesses 1.55 s. The largest single item is still the exact
+comparisons in the circle sort.
+
+#### Emitted Ω\* paths against T(Ω\*) { #omega-paths-coverage }
+
+Generated by `tools/held_omega_coverage_results.py`
+(`pixi run held-omega-coverage`): every workload generated live (connector
+repair included), then certified against T(Ω\*) = Ω\* ⊕ D_r with every circle
+as a full-circle cut and every emitted connector as an exact ∂Ω\* connector.
+
+**Regions, one definition.** `region_count` is one region per full-circle cut
+plus one composite region per ∂Ω\* piece: the connectors' swept set is
+exactly ∂Ω\* ⊕ D_r, represented piece by piece (above). The tool fails loudly
+unless regions = circles + ∂Ω\* pieces. The connectors' own sub-pieces are
+validated and reported, but are not regions. Before the per-piece merge the
+certificate counted one region per sub-piece, circles + sub-pieces; that is
+the larger count of earlier runs (2616 = 1256 + 1360 on
+`figure8_upper_boundary`, where the same path now gives 1360 = 1256 + 104).
+The verdicts agree.
+
+--8<-- "benchmarks/results/held_omega_coverage.md"
 
 ### Contract bounds { #contract-bounds }
 

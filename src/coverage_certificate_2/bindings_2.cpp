@@ -9,6 +9,7 @@
 #include "coverage_certificate_2/errors_2.h"
 #include "coverage_certificate_2/exact_certificate_2.h"
 #include "coverage_certificate_2/line_sweep_2.h"
+#include "coverage_certificate_2/side_probe_2.h"
 #include "coverage_certificate_2/tower_2.h"
 #include "exact/errors.h"
 
@@ -44,6 +45,9 @@ using PrimitiveRow = std::tuple<bool, int, std::vector<RationalPair>>;
 using PieceRow = std::tuple<bool, int, std::vector<RationalPair>, std::vector<RationalPair>, std::vector<RationalPair>>;
 /// (loop, segment0, tau0, segment1, tau1): a connector forward along one loop.
 using ConnectorRow = std::tuple<std::uint32_t, std::uint32_t, RationalPair, std::uint32_t, RationalPair>;
+/// (piece, full, start, end): one exact dOmega* connector sub-piece; start/end are
+/// one-root points (x0, x1, y0, y1, radicand).
+using ExactPieceRow = std::tuple<std::uint32_t, bool, std::vector<RationalPair>, std::vector<RationalPair>>;
 
 RationalPair text(const cc::FT& value)
 {
@@ -155,8 +159,17 @@ nb::dict counters_dict(const cc::DecisionCounters& c)
     d["vertex_line_pairs"] = c.vertex_line_pairs;
     d["vertex_line_exact"] = c.vertex_line_exact;
     d["vertex_circle_tangencies"] = c.vertex_circle_tangencies;
+    d["vertex_tangent_pairs"] = c.vertex_tangent_pairs;
     d["materialised_vertex_events"] = c.materialised_vertex_events;
     d["exact_target_events"] = c.exact_target_events;
+    d["exact_connector_membership"] = c.exact_connector_membership;
+    d["connector_pieces"] = c.connector_pieces;
+    d["connector_edges_out_of_range"] = c.connector_edges_out_of_range;
+    d["connector_edges_covered"] = c.connector_edges_covered;
+    d["side_probes"] = c.side_probes;
+    d["exact_probe_roots"] = c.exact_probe_roots;
+    d["coincident_crossings"] = c.coincident_crossings;
+    d["coincident_target_decisions"] = c.coincident_target_decisions;
     d["exact_fallbacks"] = c.exact_fallbacks();
     return d;
 }
@@ -172,6 +185,8 @@ NB_MODULE(_coverage_certificate_2, m)
     nb::exception<cc::SignRuleContractError>(m, "SignRuleContractError", native_error);
     nb::exception<cc::SeparationBoundExceededError>(m, "SeparationBoundExceededError", native_error);
     nb::exception<cc::CoincidentTargetSupportError>(m, "CoincidentTargetSupportError", native_error);
+    nb::exception<cc::ConnectorBoundaryCoverageError>(m, "ConnectorBoundaryCoverageError", native_error);
+    nb::exception<cc::BoundaryChainError>(m, "BoundaryChainError", native_error);
     nb::exception<compas_cgal::exact::NonFiniteBinary64Error>(m, "NonFiniteBinary64Error", PyExc_ValueError);
 
     // Contract probes: the fail-loud bounds of the exact search loops, exercised
@@ -231,6 +246,18 @@ NB_MODULE(_coverage_certificate_2, m)
         },
         "x0"_a, "x1"_a, "y0"_a, "y1"_a, "delta"_a);
 
+    m.def(
+        "contract_probe_probe_step",
+        // probe_step at w along d against rational support circles (centre x, y, squared radius).
+        [](const PointText& w, const PointText& d, const std::vector<std::array<RationalPair, 3>>& circles, const bool exact_only) {
+            cc::ProbeSupports supports;
+            for (const auto& [x, y, r2] : circles) supports.circles.emplace_back(cc::Point_2(from_text(x), from_text(y)), from_text(r2));
+            cc::DecisionCounters counters;
+            const cc::FT h = cc::probe_step(cc::Point_2(from_text(w.first), from_text(w.second)), from_text(d.first), from_text(d.second), supports,
+                                            exact_only ? cc::FilterMode::ExactOnly : cc::FilterMode::Lazy, counters);
+            return text(h);
+        },
+        "w"_a, "d"_a, "circles"_a, "exact_only"_a);
     m.def(
         "contract_probe_exact_target_contains",
         [](const double tool_radius, const std::vector<PrimitiveRow>& boundary, const std::vector<PieceRow>& pieces,
@@ -331,7 +358,7 @@ NB_MODULE(_coverage_certificate_2, m)
            const std::vector<XY>& outer, const std::vector<std::vector<XY>>& holes,
            const std::vector<ConnectorRow>& connectors, const std::vector<PrimitiveRow>& boundary,
            const std::vector<PieceRow>& pieces, const std::vector<std::vector<RationalPair>>& disks, const bool exact_only,
-           const bool audit) {
+           const bool audit, const std::vector<std::vector<ExactPieceRow>>& exact_connectors) {
             cc::CertificateResult result;
             std::vector<WitnessRecord> records;
             {
@@ -342,7 +369,13 @@ NB_MODULE(_coverage_certificate_2, m)
                 std::vector<cc::ConnectorSpec> specs;
                 specs.reserve(connectors.size());
                 for (const auto& [loop, s0, t0, s1, t1] : connectors) specs.push_back({loop, s0, from_text(t0), s1, from_text(t1)});
-                result = cc::run_exact_target_certificate(std::move(set), path_domain, specs, target,
+                std::vector<cc::ExactConnectorSpec> exact_specs(exact_connectors.size());
+                for (std::size_t i = 0; i < exact_connectors.size(); ++i) {
+                    for (const auto& [piece, full, a, b] : exact_connectors[i]) {
+                        exact_specs[i].pieces.push_back({piece, full, one_root_point(a), one_root_point(b)});
+                    }
+                }
+                result = cc::run_exact_target_certificate(std::move(set), path_domain, specs, exact_specs, target,
                                                           exact_only ? cc::FilterMode::ExactOnly : cc::FilterMode::Lazy, audit);
                 records.reserve(result.exposed.size());
                 for (const auto& e : result.exposed) {
@@ -363,5 +396,6 @@ NB_MODULE(_coverage_certificate_2, m)
             return out;
         },
         "centres"_a, "path_radii"_a, "tool_radius"_a, "outer"_a, "holes"_a, "connectors"_a, "boundary"_a, "pieces"_a,
-        "vertex_disks"_a, "exact_only"_a, "audit"_a);
+        "vertex_disks"_a, "exact_only"_a, "audit"_a,
+        "exact_connectors"_a = std::vector<std::vector<ExactPieceRow>>{});
 }

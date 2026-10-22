@@ -106,6 +106,34 @@ std::uint32_t CircleRegionSet::add_target_circle(const Point_2& centre, const FT
     return id;
 }
 
+std::uint32_t CircleRegionSet::add_support_region(const Point_2& centre, const FT& outer, const FT& inner,
+                                                const std::uint32_t report_index)
+{
+    if (CGAL::sign(inner) == CGAL::NEGATIVE || CGAL::compare(outer, inner) != CGAL::LARGER) {
+        throw InvalidCertificateInputError("a support region needs 0 <= inner < outer");
+    }
+    const bool annulus = CGAL::sign(inner) == CGAL::POSITIVE;
+    const FT outer_sq = outer * outer;
+    const FT inner_sq = annulus ? inner * inner : FT(0);
+    const auto region = static_cast<std::uint32_t>(regions.size());
+    CircleRegion added{centre, outer_sq, inner_sq, annulus, interval_of(centre.x()), interval_of(centre.y()),
+                       interval_of(outer_sq), interval_of(inner_sq), report_index,
+                       annulus ? PieceKind::AnnulusOuter : PieceKind::Disk};
+    added.covers = false;
+    regions.push_back(std::move(added));
+    first_circle.pop_back();
+    first_circle.push_back(static_cast<std::uint32_t>(circles.size()));
+    const auto add = [&](const PieceKind kind, const FT& radius, const FT& radius_sq) {
+        const Circle_2 circle(centre, radius_sq);
+        circles.push_back({region, kind, circle, radius, interval_of(centre.x()), interval_of(centre.y()),
+                           interval_of(radius_sq), circle.bbox()});
+    };
+    add(annulus ? PieceKind::AnnulusOuter : PieceKind::Disk, outer, outer_sq);
+    if (annulus) add(PieceKind::AnnulusInner, inner, inner_sq);
+    first_circle.push_back(static_cast<std::uint32_t>(circles.size()));
+    return region;
+}
+
 Side membership(const CircleRegion& region, const Point_2& q, const Interval& qx, const Interval& qy,
                 const FilterMode mode, DecisionCounters& counters)
 {

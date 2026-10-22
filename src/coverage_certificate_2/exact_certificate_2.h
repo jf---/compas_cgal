@@ -18,11 +18,18 @@
 //
 // The target side of an exposed edge is decided at its exact witness w by closed
 // membership w in T: w lies on no cut support (the edge is cut at all of them),
-// so w is not on dT, and w in T means the whole neighbourhood is. A swept
-// piece that lies ON a target cut support is not modelled and raises
-// CoincidentTargetSupportError.
+// so w is not on dT, and w in T means the whole neighbourhood is. A swept piece
+// may lie ON a target cut support (a coincident support: exact connectors along
+// dOmega* do by design); then its target side is decided at the exact side probe
+// beside w (side_probe_2.h).
+//
+// Exact dOmega* connectors (exact_connectors_2.h) enter as composite regions:
+// their supports cut every piece, their membership is decided exactly at the
+// edge witness, and their flank segments and support-circle arcs are checked
+// pieces.
 
 #include "coverage_certificate_2/certificate_2.h"
+#include "coverage_certificate_2/exact_connectors_2.h"
 #include "coverage_certificate_2/exact_target_2.h"
 #include "coverage_certificate_2/lines_2.h"
 #include "coverage_certificate_2/regions_2.h"
@@ -39,14 +46,18 @@ namespace compas_cgal::coverage_certificate {
 ///     path_domain: the polygonal centre domain the connectors follow (their
 ///         sites); it does not define the target.
 ///     connectors: connectors along path_domain.
+///     exact_connectors: exact dOmega* connectors (sub-pieces of the target's pieces).
 ///     target: the exact target T = Omega* (+) D_r.
 ///     audit: also confirm every edge the counters call covered (slow).
 ///
 /// Raises:
-///     CoincidentTargetSupportError: a swept piece lies on a target cut support.
+///     ConnectorBoundaryCoverageError: the exact connectors do not cover dOmega*.
+///     CoincidentTargetSupportError: an irrational (polygon connector) flank lies
+///         on an exact connector support, where no rational side probe exists.
 ///     CoverageCertificateNativeError: an internal contract breach.
 [[nodiscard]] CertificateResult run_exact_target_certificate(CircleRegionSet cuts, const CentreDomain& path_domain,
                                                              const std::vector<ConnectorSpec>& connectors,
+                                                             const std::vector<ExactConnectorSpec>& exact_connectors,
                                                              const ExactTarget& target, FilterMode mode, bool audit);
 
 }  // namespace compas_cgal::coverage_certificate

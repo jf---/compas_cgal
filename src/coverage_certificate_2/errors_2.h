@@ -55,12 +55,32 @@ public:
     using CoverageCertificateNativeError::CoverageCertificateNativeError;
 };
 
-/// A swept piece lies exactly on a target cut support of the exact target
-/// (a declared boundary line or circle, or a vertex circle): its target side
-/// changes along the support where no support cuts it, which the exact-target
-/// certificate does not model. Exact connectors along dOmega* produce this
-/// coincidence by design and need their own target pieces.
+/// A swept piece lies exactly on a support where no exact side probe exists: an
+/// irrational (polygon connector) flank on a support of an exact connector, whose
+/// one-root witness cannot seed the rational probe of side_probe_2.h. Rational
+/// coincident supports (exact connectors on dOmega*, cuts on target circles) are
+/// decided by the probe and never raise this.
 class CoincidentTargetSupportError : public CoverageCertificateNativeError {
+public:
+    using CoverageCertificateNativeError::CoverageCertificateNativeError;
+};
+
+/// The exact connectors do not cover dOmega*: some point of dOmega* lies on no
+/// sub-piece, so the cap-circle theorem (exact_connectors_2.h) does not apply and
+/// the one-root cap circles would have to be checked as pieces, which is not
+/// modelled. Raised instead of certifying with an unproven omission. A member of
+/// the native family, so a caller catching CoverageCertificateNativeError sees it.
+class ConnectorBoundaryCoverageError : public CoverageCertificateNativeError {
+public:
+    using CoverageCertificateNativeError::CoverageCertificateNativeError;
+};
+
+/// The declared dOmega* pieces do not form closed chains with non-reflex
+/// junctions: a piece's end is the start of no piece or of more than one, a
+/// piece start is reached twice, or the travel turns right (or reverses) at a
+/// junction. The cap-circle theorem (exact_connectors_2.h) needs both, so the
+/// exact connectors are refused instead of certified on an unproven boundary.
+class BoundaryChainError : public CoverageCertificateNativeError {
 public:
     using CoverageCertificateNativeError::CoverageCertificateNativeError;
 };

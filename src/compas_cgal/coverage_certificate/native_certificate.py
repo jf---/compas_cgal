@@ -18,6 +18,7 @@ from fractions import Fraction
 from compas_cgal import _coverage_certificate_2
 from compas_cgal.coverage_certificate.circle_core import FilterMode
 from compas_cgal.coverage_certificate.errors import native_contract_error
+from compas_cgal.coverage_certificate.exact_connectors import ExactConnectorSweep
 from compas_cgal.coverage_certificate.exact_target import ExactCentreDomainTarget
 from compas_cgal.coverage_certificate.exact_target import InvalidExactTargetError
 from compas_cgal.coverage_certificate.sweeps import BoundaryConnectorSweep
@@ -40,6 +41,7 @@ _PIECE_KINDS = {
     4: ExposedPieceKind.CAPSULE_FLANK,
     5: ExposedPieceKind.TARGET_BOUNDARY,
     6: ExposedPieceKind.TARGET_INTERIOR,
+    7: ExposedPieceKind.CONNECTOR_ARC,
 }
 
 
@@ -102,6 +104,7 @@ def run_certificate(
     *,
     vertex_disks: Sequence[VertexDisk] = (),
     exact_target: ExactCentreDomainTarget | None = None,
+    exact_connectors: Sequence[ExactConnectorSweep] = (),
     filter_mode: FilterMode = FilterMode.LAZY,
     audit: bool = False,
 ) -> CertificateReport:
@@ -118,19 +121,29 @@ def run_certificate(
         exact_target: The exact target T = Omega* (+) D_r. When given, ``domain``
             only carries the connectors' sites and T is the exact target,
             decided exactly both ways (exact_certificate_2.h).
+        exact_connectors: Exact dOmega* connectors (``exact_target`` only); region
+            ``len(full_circles) + len(connectors) + k``. Their sub-pieces must
+            cover dOmega*.
         filter_mode: LAZY (production) or EXACT_ONLY (contract tests).
         audit: Also confirm every edge the counters call covered by pure exact
             membership at its own witness (slow).
 
     Raises:
         InvalidExactTargetError: vertex disks given beside an exact target.
-        CoincidentTargetSupportError: a swept piece lies on a target cut support
-            of the exact target.
+        InvalidExactTargetError: vertex disks given beside an exact target, or
+            exact connectors without one.
+        ConnectorBoundaryCoverageError: the exact connectors do not cover dOmega*.
+        BoundaryChainError: the exact target's dOmega* pieces do not form closed
+            chains with non-reflex junctions (exact connectors only).
+        CoincidentTargetSupportError: an irrational connector flank lies on an
+            exact connector support.
         CoverageCertificateNativeError: an internal contract breach.
     """
     rows = [(c.start.loop, c.start.segment, _wire(c.start.parameter), c.end.segment, _wire(c.end.parameter)) for c in connectors]
     if exact_target is not None and vertex_disks:
         raise InvalidExactTargetError("vertex disks belong to the exact target; pass them in ExactCentreDomainTarget")
+    if exact_target is None and exact_connectors:
+        raise InvalidExactTargetError("exact connectors run along dOmega* and need the exact target")
     try:
         if exact_target is not None:
             boundary_rows, piece_rows, disk_rows = exact_target.wire()
@@ -146,6 +159,7 @@ def run_certificate(
                 disk_rows,
                 filter_mode is FilterMode.EXACT_ONLY,
                 audit,
+                [connector.wire() for connector in exact_connectors],
             )
         else:
             out = _coverage_certificate_2.run_certificate(

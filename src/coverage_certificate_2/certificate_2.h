@@ -78,6 +78,7 @@ enum class CertificatePieceKind : std::uint8_t {
     CapsuleFlank = 4,
     TargetBoundary = 5,
     TargetInterior = 6,  ///< the exact target's interior anchor point is uncovered (exact_certificate_2.h)
+    ConnectorArc = 7,    ///< a support-circle arc of an exact dOmega* arc connector (exact_connectors_2.h)
 };
 
 /// One exposed edge of the full certificate: an exact proof that T is not covered.

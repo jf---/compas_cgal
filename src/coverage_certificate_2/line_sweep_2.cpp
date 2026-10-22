@@ -1,6 +1,7 @@
 #include "coverage_certificate_2/line_sweep_2.h"
 
 #include "coverage_certificate_2/errors_2.h"
+#include "coverage_certificate_2/exact_geometry_2.h"
 #include "coverage_certificate_2/separation_2.h"
 
 #include <algorithm>
@@ -112,9 +113,43 @@ CGAL::Comparison_result LineSweep::compare_events(const LineEvent& a, const Line
         const bool a_vertex = a.source == 2;
         const LineEvent& v = a_vertex ? a : b;
         const LineEvent& o = a_vertex ? b : a;
-        const CGAL::Sign s = exact_vertex(v, counters).sign_minus(v.branch, exact_t(o, counters));
+        const LineVertexExact& vx = exact_vertex(v, counters);
+        const Tower t = exact_t(o, counters);
+        if (vx.count == 1 && CGAL::sign(base_of(t)) == CGAL::ZERO) {
+            // A tangent root mu / ld against a rational-base tower m + n sqrt(d):
+            // sign(mu - ld m - ld n sqrt(d)), one mixed-radical sign over rationals.
+            const FT mu0 = vx.mu.a0();
+            const FT mu1 = vx.mu.is_extended() ? vx.mu.a1() : FT(0);
+            const FT root = vx.mu.is_extended() ? vx.mu.root() : FT(0);
+            const FT m = t.m.a0(), n = t.n.a0(), d = t.d.a0();
+            const CGAL::Sign s = sign_rational_two(mu0 - vx.ld * m, mu1, root, -vx.ld * n, d);
+            return static_cast<CGAL::Comparison_result>(a_vertex ? s : CGAL::opposite(s));
+        }
+        if (vx.count == 2 && !vx.disc_a.is_extended() && !vx.disc_b.is_extended() && CGAL::sign(base_of(t)) == CGAL::ZERO) {
+            // On a rational line the root (mu +/- sqrt(disc)) / ld is a tower over
+            // the vertex radicand (mu and disc in Q(sqrt(delta))); against a
+            // rational-base tower m + n sqrt(d) the order is one tower-plus sign.
+            const OneRoot disc = make_one_root(vx.disc_a.a0(), vx.disc_b.a0(), vx.delta);
+            const FT inv = FT(1) / vx.ld;
+            const Tower root{divide(vx.mu, vx.ld) - t.m.a0(), OneRoot(v.branch == 0 ? inv : FT(-inv)), disc};
+            const CGAL::Sign s = sign_tower_plus(root, OneRoot(-t.n.a0()), OneRoot(t.d.a0()));
+            return static_cast<CGAL::Comparison_result>(a_vertex ? s : CGAL::opposite(s));
+        }
+        const CGAL::Sign s = vx.sign_minus(v.branch, t);
         const auto c = static_cast<CGAL::Comparison_result>(a_vertex ? s : CGAL::opposite(s));
         return c;
+    }
+    // Two tangent roots: each is t = mu / ld with mu over its own radicand (the
+    // discriminant vanishes), so their order is one mixed-radical sign. This
+    // compares mu_a with mu_b directly, so it relies on both events sharing ld:
+    // they lie on this sweep's one line, and ld = line.nn for every vertex root.
+    {
+        const LineVertexExact& va = exact_vertex(a, counters);
+        const LineVertexExact& vb = exact_vertex(b, counters);
+        if (va.count == 1 && vb.count == 1) {
+            ++counters.vertex_tangent_pairs;
+            return static_cast<CGAL::Comparison_result>(sign_difference_one_roots(va.mu, vb.mu));
+        }
     }
     // Two different vertex circles (two radicands): separate by exact rational
     // bisection inside the enclosures (a common point of a flank and two vertex
@@ -406,7 +441,7 @@ LineSweep sweep_line(const LinePiece& piece, const CircleRegionSet& set, const L
                 continue;
             }
             const BoundaryCircle& O = set.circles[e.other];
-            if (O.is_target()) continue;
+            if (O.is_target() || !set.regions[O.owner].covers) continue;
             const std::size_t t = slot_of(sweep.regions, O.owner);
             const int before = region_covers(t) ? 1 : 0;
             if (O.is_inner()) {

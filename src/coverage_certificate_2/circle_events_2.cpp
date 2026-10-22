@@ -1,5 +1,7 @@
 #include "coverage_certificate_2/circle_events_2.h"
 
+#include "coverage_certificate_2/exact_geometry_2.h"
+
 #include "coverage_certificate_2/errors_2.h"
 #include "coverage_certificate_2/separation_2.h"
 
@@ -93,6 +95,13 @@ CGAL::Comparison_result CircleEvents::compare_x(const CrossingEvent& a, const Cr
     ++counters.exact_tower_compares;
     const Tower ta = exact_x(a, counters);
     const Tower tb = exact_x(b, counters);
+    // Tangent events (a cap circle touching a support circle) have one-root
+    // coordinates: a zero radicand or coefficient leaves m alone, and two
+    // one-roots over different radicands compare with one mixed-radical sign.
+    const auto one_root = [](const Tower& t) {
+        return sign_one_root(t.n) == CGAL::ZERO || sign_one_root(t.d) == CGAL::ZERO;
+    };
+    if (one_root(ta) && one_root(tb)) return static_cast<CGAL::Comparison_result>(sign_difference_one_roots(ta.m, tb.m));
     if (!compatible_bases(ta, tb)) return separate_cross_base(a, b, counters);
     return static_cast<CGAL::Comparison_result>(sign_difference(ta, tb));
 }

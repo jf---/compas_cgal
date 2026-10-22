@@ -39,6 +39,7 @@
 
 #include <array>
 #include <cstdint>
+#include <utility>
 #include <vector>
 
 namespace compas_cgal::coverage_certificate {
@@ -99,6 +100,7 @@ struct LineBand {
 /// The band of a circle piece of dOmega* (offset arc or junction arc).
 struct CircleBand {
     Point_2 c;
+    FT radius;              ///< the piece's own support radius R (the tool-centre circle)
     FT inner_sq, outer_sq;  ///< squared radii min(R, rho)^2, max(R, rho)^2
     int sense;              ///< travel sense from w0 to w1
     OneRootPoint w0, w1;
@@ -137,6 +139,10 @@ struct ExactTarget {
     std::vector<DeclaredCircleArc> arcs;
     std::vector<LineBand> line_bands;
     std::vector<CircleBand> circle_bands;
+    /// Per dOmega* piece in input order: (is_line, index into line_bands or circle_bands).
+    std::vector<std::pair<bool, std::uint32_t>> piece_bands;
+    /// Per dOmega* piece in input order: its source and target vertices.
+    std::vector<OneRootPoint> piece_sources, piece_targets;
     std::vector<VertexDisk> vertex_disks;
     std::vector<CGAL::Bbox_2> vertex_boxes;
 
