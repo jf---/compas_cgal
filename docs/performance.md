@@ -70,6 +70,63 @@ generation budgets are about one hundredth of the recorded times. They stay
 [Held Performance](held_performance.md) protect the defect and are to be
 replaced by these budgets. Changing a gate needs the user's go.
 
+### Ruled: the generation budget gates CPU time
+
+Ruled by the user on 2026-10-22: the generation budget test gates process CPU
+time; wall time is printed beside it and is not gated.
+`benchmarks/acceptance/test_held_generation_budget_slow.py`
+(`pixi run held-generation-budget`) gates the **minimum** `time.process_time`
+of five serial fresh-process generations per workload, measured by
+`tools/held_generation_clock.py`. A second ruling the same day chose the
+minimum because interference from other sessions only adds time, so the
+fastest run is the closest to the code's own cost. The median, maximum and
+spread of the CPU times, and the wall time with the load average, are printed
+beside it and not gated. The budgets are unchanged (Figure 5 1.7 s, crossed
+skis 2.2 s, Monstera 9 s).
+
+Why: this machine is shared with other sessions. On the same tree and path
+digest, Monstera's wall time grew with the load average while its CPU time
+stayed nearly flat, so a wall-clock gate failed under load whatever the code
+did.
+
+What the CPU figure counts: the same stage intervals as
+`GeneratedToolpath.stage_seconds`, plus the one `gc.collect()` that
+`paused_cyclic_gc` runs when the generator exits. The exit collection is
+counted because the budgets were set (2026-10-21) before the collector was
+paused, when its passes ran inside the stages. The pause moves that work
+outside the stage clocks; it does not remove it. Case load is excluded, as
+before. The Ω* gate (`test_held_omega_generation_budget_slow.py`, same
+budgets) counts its connector gate and repair as the in-generator stage
+`connector_repair` in place of the polygon path's `connector_certificate`
+post-gate, which on Ω* refuses every moving connector by name and so is not
+Ω*'s gate.
+
+CPU time still grows with load, through shared caches and the cores the
+scheduler assigns. Taking the minimum removes outliers, but not a load that
+lasts through all five runs: at a load average of about 70–220, Monstera's
+minimum was about 6 % above its minimum at a load of about 20.
+
+**Only quiet-machine runs give a verdict** (user ruling D2, 2026-10-22).
+Before each run the test reads the 1-minute load average. If it is above 2
+(`QUIET_LOAD_AVERAGE_MAX` in `tools/held_generation_clock.py`), the test
+raises `MachineNotQuietError` instead of measuring. That is not a skip, and it
+is not a budget verdict. If the machine is loaded at the start, pytest reports
+an ERROR in fixture setup. If the load rises between runs, the same named
+error stops the test body. On a loaded machine, measure indicatively:
+
+```bash
+pixi run --no-install build/pyrun.sh -m tools.held_generation_clock --indicative \
+    figure5_refined figure8_crossed_skis_boundary figure8_monstera_boundary_qualified_corners
+```
+
+This runs the same five serial fresh-process runs and prints min, median and
+max CPU, the stages, wall time and the load before each run, all marked
+INDICATIVE. It never compares them with a budget. Report such numbers as
+indicative, with their load.
+
+The NOTHING-circle stage counts inside the existing generation budget, and
+the budget is unchanged (user ruling D1, 2026-10-22).
+
 ## Where the time goes
 
 In the committed baseline (pre-wiring), the initial placement was 98–99 % of
@@ -118,9 +175,9 @@ with an old-against-new measurement.
 
 | # | lever | decides the same thing? | status | evidence |
 | --- | --- | --- | --- | --- |
-| 1 | Native, spatially indexed, exact nearest-boundary query (`AABB_tree`) in place of `_station_records` / `_project_exact` | yes: generation digests identical before and after on Figure 5, crossed skis and upper; equivalence test on every Figure 5 station plus a Hypothesis property on random rings | **wired** (native code `7ef897b7`; wiring uncommitted). The Fraction path stays beside it as the equivalence oracle until the user approves its removal | Figure 5 generation 20.9 → 3.23 s (budget table); residual cost is `boundary_clearance` in `performance_time_buckets.json` |
-| 2 | Case load: exact biarc reconstruction cached under a content-addressed `ReconstructionBuildIdentity` (case bytes, deciding-source digest, interpreter, platform, cache format) | yes: a hit equals a fresh reconstruction bit for bit, signed zeros included | **built and wired** into `load_held_reference_case` (uncommitted) | warm Figure 5 load in the budget table; `case_load` in `performance_time_buckets.json` |
-| 3 | Held Python bookkeeping: hoisted boundary segments and arclength offsets, tuple-based owners, per-span placement validation | yes: path digests identical on all three workloads; Hypothesis properties against verbatim copies of the old code | **done** (uncommitted) | residual cell `held_bookkeeping` in `performance_lever_shares.json` |
+| 1 | Native, spatially indexed, exact nearest-boundary query (`AABB_tree`) in place of `_station_records` / `_project_exact` | yes: generation digests identical before and after on Figure 5, crossed skis and upper; equivalence test on every Figure 5 station plus a Hypothesis property on random rings | **wired** (native `src/held_boundary_clearance_2.{h,cpp}`, called from `benchmarks/held_figure5_raw_guide.py` and `benchmarks/held_offset_contact_projection.py`). The Fraction path stays beside it as the equivalence oracle until the user approves its removal | Figure 5 generation 20.9 → 3.23 s (budget table); residual cost is `boundary_clearance` in `performance_time_buckets.json` |
+| 2 | Case load: exact biarc reconstruction cached under a content-addressed `ReconstructionBuildIdentity` (case bytes, deciding-source digest, interpreter, platform, cache format) | yes: a hit equals a fresh reconstruction bit for bit, signed zeros included | **built and wired** into `load_held_reference_case` | warm Figure 5 load in the budget table; `case_load` in `performance_time_buckets.json` |
+| 3 | Held Python bookkeeping: hoisted boundary segments and arclength offsets, tuple-based owners, per-span placement validation | yes: path digests identical on all three workloads; Hypothesis properties against verbatim copies of the old code | **done** | residual cell `held_bookkeeping` in `performance_lever_shares.json` |
 | 4 | Exact coverage certificate, local per boundary arc, CORE-free, interval-filtered | replaces the dropped replay, deciding exact coverage of Ω ⊕ tool disk | **phase 1 done** (circle core, `_coverage_certificate_2`); **phase 2 in progress** (capsules, target pieces) and over budget | budget table |
 | 5 | Coverage-preserving selection: boundary-order selection may drop a circle only if the certificate still holds | fixes the Monstera islands, whose covering circles were all dropped | blocked on lever 4 phase 2 | — |
 
@@ -213,14 +270,14 @@ The rule follows from the query:
 ### CGAL search structures: what is used
 
 Of the eight packages in CGAL's spatial searching and sorting part, two are
-used in the working tree (inventory of `src/`, 2026-10-21): `AABB_tree` since
-`7ef897b7`, and `box_intersection_d` in the uncommitted certificate extension
+used (inventory of `src/`, 2026-10-21): `AABB_tree` in the Held boundary
+clearance, and `box_intersection_d` in the coverage certificate extension
 `src/coverage_certificate_2/`.
 
 | package | used | where it fits |
 | --- | --- | --- |
 | 2D and 3D Fast Intersection and Distance (`AABB_tree`) | Held boundary clearance, wired into generation | containment, contact projection, `CutterCentreDomain2`, clearance of an exact Ω |
-| Intersecting Sequences of dD Iso-oriented Boxes (`box_intersection_d`) | coverage certificate candidate pairs (uncommitted) | also the selection neighbours and the engagement candidate pairs |
+| Intersecting Sequences of dD Iso-oriented Boxes (`box_intersection_d`) | coverage certificate candidate pairs | also the selection neighbours and the engagement candidate pairs |
 | Interval Skip List | no | stabbing queries along a curve: per-arc cover counting in the certificate, boundary-order ownership along Ω, connector intervals on ∂Ω |
 | dD Range and Segment Trees | no | static window and stabbing queries over initial centres or contact windows |
 | dD Spatial Searching (`Kd_tree`) | no | nearest guide station, incremental nearest-first search over circle centres |
