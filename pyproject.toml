@@ -222,6 +222,9 @@ _held-toolpath-upper-boundary = { cmd = "python -m benchmarks.tools.held_referen
 _held-toolpath-crossed-skis = { cmd = "python -m benchmarks.tools.held_reference_toolpaths --case figure8_crossed_skis --spacing boundary" }
 _held-toolpath-monstera = { cmd = "python -m benchmarks.tools.held_reference_toolpaths --case figure8_monstera --spacing boundary --qualify-contacts --corner-approaches" }
 _held-toolpath-figure6 = { cmd = "python -m benchmarks.tools.held_figure6_same_axes" }
+_held-toolpath-figure5-current = { cmd = "python -m benchmarks.tools.held_toolpath_progress", depends-on = ["_editable-rebuild"] }
+_held-toolpath-figure5-coverage-preserving = { cmd = "python -m benchmarks.tools.held_contour_bound_toolpaths --case figure5 --coverage-preserving", depends-on = ["_editable-rebuild"] }
+_held-toolpath-upper-coverage-preserving = { cmd = "python -m benchmarks.tools.held_contour_bound_toolpaths --case figure8_upper --coverage-preserving", depends-on = ["_editable-rebuild"] }
 held-toolpath-figures = { depends-on = ["_held-toolpath-figure5", "_held-toolpath-upper-lane", "_held-toolpath-upper-boundary", "_held-toolpath-crossed-skis", "_held-toolpath-monstera", "_held-toolpath-figure6"], description = "Rebuild every Held toolpath figure (Figure 5, the three Figure 8 pockets, Figure 6) through the generators, exact coverage checked" }
 held-toolpath-gate = { cmd = "pytest benchmarks/acceptance/test_held_toolpath_performance_slow.py -q", depends-on = ["_editable-rebuild"], description = "Slow-tier toolpath generator gate (upper, Monstera), about ten minutes; not collected by pytest" }
 _editable-rebuild = '''python -c "from compas_cgal import _containment_2, _coverage_2, _medial_axis_2, _stock_2, _toolpath"'''
