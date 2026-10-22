@@ -11,7 +11,9 @@ Z level).
 !!! warning "Status: built and tested; not yet run on a machine"
     Every machine parameter is a placeholder until the user answers the ten
     setup questions below; the machine envelope has no default at all. The
-    helix mapping waits for the Task 1.2 generator to be committed with it.
+    helix mapping uses the Task 1.2 generator's `OperationType.HELIX`
+    ([Commit coupling](#commit-coupling)); its G-code replay is under
+    verification for the helix entry ([Evidence](#evidence)).
 
 ## Stages
 

@@ -451,7 +451,7 @@ only after acceptance, and only with a separate decision.
 | connectors (`_transition`, `held_figure5_boundary_path.py:210-250`; `_connectors` in `held_toolpath_benchmark.py:173`, `held_gouge_workloads.py:54`) | contact → Ω vertices → contact polyline; progress from float side lengths | `ExactConnector`: the CCW sub-chain of ∂Ω\* pieces between two sites, made of segments and **arcs**; progress is reported as an exact-order chain with a float length |
 | refinement and spacing (`refine_figure5_engagement`, `refine_boundary_ordered_path`, `select_contour_bound_path`, `build_coverage_preserving_path`, `_corner_radius_limit`) | take the Ω polygon | take `ExactCentreDomain`; each decision they make on the polygon is ported to a piece predicate, and engagement *metrics* may read the reported float view |
 | coverage target T ([certificate](held_coverage_certificate.md)) | Ω ∪ ⋃ Cap(e_k), Ω a binary64 polygon | see [Coverage target](#coverage-target-and-the-exact-path) |
-| native AABB clearance (`src/held_boundary_clearance_2*`, not yet wired) | stations against the **projection ring** | the same prune-then-decide design against Pythagorean sites. Arc sites are a new site kind: the distance to an arc in its wedge is \|\|p − c\| − ρ\|, compared by exact squaring; the wedge is decided by orientation |
+| native AABB clearance (`src/held_boundary_clearance_2*`, wired on the polygon path) | stations against the **projection ring** | built as the native declared-clearance oracle `src/held_declared_clearance_2/` ([Held native clearance](held_native_clearance.md)): the same prune-then-decide design against Pythagorean sites. Arc sites are a new site kind: the distance to an arc in its wedge is \|\|p − c\| − ρ\|, compared by exact squaring; the wedge is decided by orientation |
 
 ## Integration status (2026-10-22)
 
@@ -752,8 +752,12 @@ tests; the design's original list, with these names):
 `pixi run held-gouge-audit`. On the Ω\* paths, acceptance item 1 is measured
 by the differential audit in
 [Held native clearance](held_native_clearance.md#evidence): 0 gouging circles
-and 0 gouging connectors on all five workloads. Item 2 waits for the
-coverage certificate to model exact ∂Ω\* connectors.
+and 0 gouging connectors on all five workloads. Item 2 is measured by the
+exact coverage certificate against T(Ω\*) = Ω\* ⊕ D_r, with the connectors as
+exact ∂Ω\* pieces
+([Exact connectors along ∂Ω\*](held_coverage_certificate.md#exact-connectors);
+`pixi run held-omega-coverage`): all five emitted Ω\* paths are COVERED, with
+no witness ([coverage table](held_qualification.md#omega-coverage-table)).
 
 ## Rulings (2026-10-17)
 

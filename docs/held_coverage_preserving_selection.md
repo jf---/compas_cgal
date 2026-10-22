@@ -430,11 +430,12 @@ hole.
 
 ## What selection needs from Ω*
 
-Ω is being redesigned as the exact disk erosion Ω* of the true boundary, with
-the target T = Ω* ⊕ D_r. The repair runs unchanged against today's float Ω,
-where T = Ω ⊕ D_r. The Monstera islands lie 15.27 mm and 6.90 mm from the
-outline, so their acceptance does not wait for Ω*. Once T moves to Ω*,
-selection needs the following:
+Ω\* is the exact disk erosion of the true boundary, with the target
+T = Ω\* ⊕ D_r ([Held exact centre domain](held_exact_centre_domain.md)). The
+repair runs against the polygon-path float Ω, where T = Ω ⊕ D_r. The Monstera
+islands lie 15.27 mm and 6.90 mm from the outline, so their acceptance does
+not depend on Ω\*. The design listed what selection needs once T is
+T(Ω\*):
 
 1. **Placement and connectors on ∂Ω\*.** Today's chord-based Ω loses up to
    0.048 mm of reach at convex arcs. That is 1.68 mm² of analytic sliver on
@@ -456,6 +457,16 @@ selection needs the following:
    extends its charts to one-root radii. This is an open question.
 4. **The precondition on the initial set.** The precondition has to be
    re-established on Ω* before selection can rely on it.
+
+**Built.** Items 1 and 2 exist on the Ω\* path: circles are placed at exact
+∂Ω\* sites and the connectors are exact ∂Ω\* sub-chains, segments and arcs
+([Integration status](held_exact_centre_domain.md#integration-status-2026-10-22)).
+The certificate decides those connectors against T(Ω\*)
+([Exact connectors along ∂Ω\*](held_coverage_certificate.md#exact-connectors)),
+and its T(Ω\*) members are one tower sign over Q(√L) each, so item 3 needs no
+rational radius ([The exact target Ω\*](held_coverage_certificate.md#the-exact-target)).
+All five emitted Ω\* paths are certified COVERED with no witness
+([coverage table](held_qualification.md#omega-coverage-table)).
 
 ## Prerequisite found by this design: the open seam
 

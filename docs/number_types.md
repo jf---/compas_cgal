@@ -664,15 +664,18 @@ mode instead of matching on a message.
 | `NonFiniteBinary64Error` | `from_binary64` is handed NaN or an infinity — the only inputs that denote no rational | `exact/errors.h` |
 | `UnreducedCanonicalRationalError` | a value reaches `to_canonical` whose decomposed denominator is **not positive**, which would make the encoding ambiguous. The name also covers unreducedness; that half is not re-checked per value, because a bignum gcd on every attested value costs more than it can ever catch (`exact_canonical_gate` pins the backend's normalisation instead) | `exact/errors.h` |
 | `CrossRootExtensionError` | `same_root_add` or `same_root_multiply` is called on two extended operands whose roots differ. An extended operand whose root is zero is *not* exempt; only a non-extended one is | `exact/errors.h` |
-| `AttestationByteDriftError` | a projection produces bytes differing from the frozen contract | designed, not yet landed — it belongs to the projection site, which arrives with the inversion |
+| `AttestationByteDriftError` | a projection produces bytes differing from the frozen contract | `exact/errors.h`; raised by the native gates `exact_station_attestation_gate` and `exact_segment_attestation_gate` (`tests/native/`, `pixi run exact-gates`); nothing in `src/` raises it |
 
-`AttestationByteDriftError` is **declared and nothing raises it** — its
-declaration is its only occurrence in the tree. It is written now so the module's
-error model is complete when the projection site arrives, and that site is
-stage 2. The design intent it records is that it must not become a release-build
-check on every projection, where the comparison would cost more than the
-guarantee is worth. Until then the frozen byte literal in `exact_canonical_gate`
-is what actually catches attestation-byte drift.
+`AttestationByteDriftError` is raised by the native attestation gates, not by
+production code. `exact_station_attestation_gate` and
+`exact_segment_attestation_gate` (`tests/native/`) compare the bytes and digests
+that the station and segment lanes project against frozen literals, and raise it
+on any difference, so a digest-invalidating change is distinguishable from an
+ordinary gate failure by exception type. Nothing in `src/` raises it: by design
+it is not a release-build check on every projection, where the comparison would
+cost more than the guarantee is worth. These gates, with the frozen byte literal
+in `exact_canonical_gate`, are what catch attestation-byte drift
+(`pixi run exact-gates`).
 
 !!! note "Status after stage 2: one predicate adopted, one carrier converted"
 
