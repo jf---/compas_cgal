@@ -59,6 +59,10 @@ CANONICAL_CASE_NAMES = (
     "figure8_monstera",
 )
 DATA_DIRECTORY = Path(__file__).with_name("data") / "held_pfeiffer_2025"
+# The PocketSpec tool of every Held case: 2 mm diameter (the paper's radius-one tool).
+HELD_TOOL_DIAMETER = 2.0
+# The PocketSpec engagement cap of every Held case, in degrees (the canonical 80 degree cap the case loader requires).
+HELD_TEA_CAP_DEG = 80.0
 # Content-addressed reconstruction cache, under the gitignored build tree, never in the repo.
 DEFAULT_RECONSTRUCTION_CACHE = ReconstructionCache.build(Path(__file__).resolve().parents[1] / "build" / "held-case-cache")
 SourcePathReconstructor: TypeAlias = Callable[[Sequence[SourcePrimitive], SourceToWorld, Millimetre], ReferenceReconstruction]
@@ -470,17 +474,23 @@ class HeldReferenceCase:
         return sum(float(start.x) * float(end.y) - float(start.y) * float(end.x) for start, end in zip(points, (*points[1:], points[0]))) / 2.0
 
     def pocket_spec(self) -> PocketSpec:
+        return PocketSpec.build(*self._pocket_spec_arguments())
+
+    def guide_pocket_spec(self) -> PocketSpec:
+        """The spec of :meth:`pocket_spec` for the native guide request, which decides ring simplicity exactly.
+
+        Its rings reach only ``trochoidal_mat_toolpath_circular``, whose
+        ``data_to_polygon`` raises unless CGAL's exact ``Polygon_2::is_simple``
+        holds on the same doubles, so the float-tolerance crossing test of
+        :meth:`PocketSpec.build` is not run a second time.
+        """
+        return PocketSpec.build_natively_simple(*self._pocket_spec_arguments())
+
+    def _pocket_spec_arguments(self) -> tuple[str, str, Polygon, float, float]:
         if self.analytic_signed_area <= 0.0 or self.polygon_signed_area <= 0.0:
             raise MalformedHeldReferenceCaseError(f"{self.name}: PocketSpec requires independently verified CCW rings.")
         polygon = Polygon([Point(float(point.x), float(point.y), 0.0) for point in self.projection.points])
-        return PocketSpec.build(
-            self.name,
-            "held_pfeiffer_2025",
-            polygon,
-            2.0,
-            80.0,
-            holes=(),
-        )
+        return self.name, "held_pfeiffer_2025", polygon, HELD_TOOL_DIAMETER, HELD_TEA_CAP_DEG
 
 
 def _arc_radius_squared(arc: ReferenceArc) -> float:

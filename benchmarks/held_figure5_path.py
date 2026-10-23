@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable
-from collections.abc import Iterable
 from dataclasses import dataclass
 from dataclasses import replace
 from fractions import Fraction
@@ -15,10 +14,11 @@ from typing import Protocol
 from typing import TypeVar
 
 from benchmarks.errors import BenchmarkError
+from benchmarks.held_common_scale import common_scale_squared_distances as _common_scale_squared_distances
 from benchmarks.held_figure5_boundary_path import Figure5BoundaryPath
 from benchmarks.held_figure5_boundary_path import Figure5CounterclockwiseCircle
 from benchmarks.held_figure5_boundary_path import MissingFigure5GuideRunError
-from benchmarks.held_figure5_boundary_path import build_figure5_boundary_path
+from benchmarks.held_figure5_boundary_path import build_indexed_figure5_boundary_path
 from benchmarks.held_figure5_raw_guide import Figure5RawGuide
 from benchmarks.held_figure5_raw_guide import GuideRunId
 from benchmarks.held_figure5_raw_guide import GuideRunStationOrdinal
@@ -198,45 +198,6 @@ def _dyadic_minimum(distances: tuple[_DyadicSquaredDistance, ...]) -> _DyadicSqu
         if _dyadic_compare(distance, minimum) < 0:
             minimum = distance
     return minimum
-
-
-class _CommonScaleSquaredDistances(NamedTuple):
-    """Exact squared distances ``numerators[i] / 4**exponent`` in mm², one exponent for all.
-
-    With one shared denominator, the exact order and equality of the squared
-    distances are the order and equality of the integer numerators, so an
-    argmin is the builtin ``min`` and a tie is ``==``.
-    """
-
-    numerators: tuple[int, ...]
-    exponent: int
-
-
-def _common_scale_squared_distances(
-    pairs: Iterable[tuple[Point2[WorldXY], Point2[WorldXY]]],
-) -> _CommonScaleSquaredDistances:
-    """Exact squared distance of every double point pair over one power-of-two denominator.
-
-    Every finite double is ``n / 2**k``; the largest ``k`` over all coordinates
-    is a common denominator of every coordinate, so every difference is an
-    integer over ``2**k`` and every squared distance an integer over ``4**k``.
-    """
-    ratios = [
-        (
-            float(first.x).as_integer_ratio(),
-            float(first.y).as_integer_ratio(),
-            float(second.x).as_integer_ratio(),
-            float(second.y).as_integer_ratio(),
-        )
-        for first, second in pairs
-    ]
-    scale = max((denominator for row in ratios for _, denominator in row), default=1)
-    numerators = []
-    for (first_x, first_x_scale), (first_y, first_y_scale), (second_x, second_x_scale), (second_y, second_y_scale) in ratios:
-        delta_x = second_x * (scale // second_x_scale) - first_x * (scale // first_x_scale)
-        delta_y = second_y * (scale // second_y_scale) - first_y * (scale // first_y_scale)
-        numerators.append(delta_x * delta_x + delta_y * delta_y)
-    return _CommonScaleSquaredDistances(tuple(numerators), scale.bit_length() - 1)
 
 
 def _cyclic_boundary_neighborhoods(
@@ -550,20 +511,15 @@ def build_hypothesis_figure5_path(
     owned_hypotheses = tuple(hypotheses[index] for index in owner_indices)
     canonical_indices = _canonical_indices(owned_hypotheses)
     canonical = tuple(_CanonicalHypothesis(owned_hypotheses[index], runs) for index, runs in canonical_indices)
-    # Sites ride along by index; only the hypotheses handed to the boundary
-    # path are ever hashed into its lookup.
+    # Sites ride along by index and the boundary path reports each circle's
+    # candidate index, so no hypothesis or origin is hashed. Canonical
+    # hypotheses have pairwise distinct origins (run, station, source site):
+    # within one station the geometry is a function of the site, and
+    # canonical items have distinct geometry.
     canonical_sites = None if offset_sites is None else tuple(offset_sites[owner_indices[index]] for index, _ in canonical_indices)
-    by_origin = {
-        _origin_key(
-            item.hypothesis.run_id,
-            item.hypothesis.station_ordinal,
-            item.hypothesis.projected_boundary_site,
-        ): position
-        for position, item in enumerate(canonical)
-    }
     representatives = tuple(item.hypothesis for item in canonical)
     representative_runs = frozenset(item.hypothesis.run_id for item in canonical)
-    ordered_path = build_figure5_boundary_path(
+    ordered = build_indexed_figure5_boundary_path(
         inward_components=inward_components,
         side_candidates=representatives,
         reached_run_ids=representative_runs,
@@ -572,23 +528,17 @@ def build_hypothesis_figure5_path(
         tool_radius=tool_radius,
         boundary_evidence_bound=boundary_evidence_bound,
         start_evidence_bound=start_evidence_bound,
-        offset_sites=None if canonical_sites is None else dict(zip(representatives, canonical_sites, strict=True)),
+        offset_sites=canonical_sites,
     )
+    ordered_path = ordered.path
+    # Lanes regroup these very circle objects; identity carries the position.
+    position_of = {id(circle): position for circle, position in zip(ordered_path.circles, ordered.source_indices, strict=True)}
     selected_positions: list[int] = []
     placements = []
     placement_lanes = _continuous_placement_lanes(ordered_path.circles, tool_radius)
     for lane in placement_lanes:
         lane_circles = lane.circles
-        lane_positions = tuple(
-            by_origin[
-                _origin_key(
-                    circle.run_id,
-                    circle.station_ordinal,
-                    circle.source_boundary_site,
-                )
-            ]
-            for circle in lane_circles
-        )
+        lane_positions = tuple(position_of[id(circle)] for circle in lane_circles)
         lane_items = tuple(canonical[position] for position in lane_positions)
         paper_candidates = tuple(_paper_candidate(circle) for circle in lane_circles)
         selected_positions.append(lane_positions[0])
@@ -627,7 +577,7 @@ def build_hypothesis_figure5_path(
         raise MissingFigure5GuideRunError("Engagement placement did not preserve every reached Figure 5 guide run.")
     selected_hypotheses = tuple(item.hypothesis for item in selected_items)
     selected_representatives = frozenset(item.hypothesis.run_id for item in selected_items)
-    path = build_figure5_boundary_path(
+    selected = build_indexed_figure5_boundary_path(
         inward_components=inward_components,
         side_candidates=selected_hypotheses,
         reached_run_ids=selected_representatives,
@@ -636,29 +586,12 @@ def build_hypothesis_figure5_path(
         tool_radius=tool_radius,
         boundary_evidence_bound=boundary_evidence_bound,
         start_evidence_bound=start_evidence_bound,
-        offset_sites=None if canonical_sites is None else dict(zip(selected_hypotheses, (canonical_sites[position] for position in selected_positions), strict=True)),
+        offset_sites=None if canonical_sites is None else tuple(canonical_sites[position] for position in selected_positions),
     )
-    sources_by_origin = {
-        _origin_key(
-            item.hypothesis.run_id,
-            item.hypothesis.station_ordinal,
-            item.hypothesis.projected_boundary_site,
-        ): item.source_run_ids
-        for item in selected_items
-    }
     return HypothesisFigure5Path(
-        path,
+        selected.path,
         tuple(placements),
-        tuple(
-            sources_by_origin[
-                _origin_key(
-                    circle.run_id,
-                    circle.station_ordinal,
-                    circle.source_boundary_site,
-                )
-            ]
-            for circle in path.circles
-        ),
+        tuple(selected_items[index].source_run_ids for index in selected.source_indices),
         reached_run_ids,
         len(hypotheses),
         len(canonical),

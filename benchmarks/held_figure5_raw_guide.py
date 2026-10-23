@@ -13,6 +13,7 @@ import numpy as np
 
 from benchmarks.held_reference_cases import CANONICAL_CASE_NAMES
 from benchmarks.held_reference_cases import HeldReferenceCase
+from benchmarks.spec import PocketSpec
 from compas_cgal import _toolpath  # type: ignore[attr-defined]
 from compas_cgal.engagement_toolpath import GUIDE_SAMPLES_PER_RADIAN
 from compas_cgal.engagement_toolpath import GUIDE_STEP_TOOL_DIAMETERS
@@ -691,7 +692,38 @@ def _guide_station_centres(case: HeldReferenceCase) -> list[list[tuple[float, fl
         UnknownNativeGuidePrimitiveError: A row's primitive type is not a line, arc or circle.
         EmptyGuideError: The guide emitted no machining circle.
     """
-    spec = case.pocket_spec()
+    spec = case.guide_pocket_spec()
+    meta, centres = _native_guide_rows(spec)
+    runs: list[list[tuple[float, float]]] = []
+    current_index: int | None = None
+    meta_rows: list[list[float]] = np.asarray(meta, dtype=np.float64).tolist()
+    centre_rows: list[list[float]] = np.asarray(centres, dtype=np.float64).tolist()
+    for meta_row, centre in zip(meta_rows, centre_rows, strict=True):
+        primitive = int(meta_row[1])
+        if primitive != _NATIVE_CIRCLE_PRIMITIVE:
+            if primitive not in _NATIVE_BRIDGE_PRIMITIVES:
+                raise UnknownNativeGuidePrimitiveError(f"native guide row has primitive type {primitive}; expected 0 (line), 1 (arc) or 2 (circle).")
+            continue
+        path_index = int(meta_row[0])
+        if path_index != current_index:
+            runs.append([])
+            current_index = path_index
+        runs[-1].append((centre[0], centre[1]))
+    if not runs:
+        raise EmptyGuideError(
+            f"The straight-skeleton guide produced no machining circles for tool_diameter={spec.tool_diameter!r}; the pocket admits no gouge-free trochoid at this tool size."
+        )
+    return runs
+
+
+def _native_guide_rows(spec: PocketSpec) -> tuple[np.ndarray, np.ndarray]:
+    """The native guide request of ``_guide_station_centres``: its meta and centre rows.
+
+    ``trochoidal_mat_toolpath_circular`` decides ring simplicity exactly
+    (``data_to_polygon``: CGAL ``Polygon_2::is_simple`` on the injected doubles)
+    and raises ``ValueError`` otherwise; this is the simplicity check of the
+    guide path.
+    """
     guide_step = GUIDE_STEP_TOOL_DIAMETERS * spec.tool_diameter
     meta, _starts, _ends, centres, _radii, _polyline, _start_tangents, _end_tangents, skipped = _toolpath.trochoidal_mat_toolpath_circular(
         _polygon_to_ccw_vertices(spec.polygon),
@@ -717,23 +749,4 @@ def _guide_station_centres(case: HeldReferenceCase) -> list[list[tuple[float, fl
         float(GUIDE_SAMPLES_PER_RADIAN),
     )
     _warn_if_truncated(int(skipped), FIGURE5_MAX_GUIDE_RUNS)
-    runs: list[list[tuple[float, float]]] = []
-    current_index: int | None = None
-    meta_rows: list[list[float]] = np.asarray(meta, dtype=np.float64).tolist()
-    centre_rows: list[list[float]] = np.asarray(centres, dtype=np.float64).tolist()
-    for meta_row, centre in zip(meta_rows, centre_rows, strict=True):
-        primitive = int(meta_row[1])
-        if primitive != _NATIVE_CIRCLE_PRIMITIVE:
-            if primitive not in _NATIVE_BRIDGE_PRIMITIVES:
-                raise UnknownNativeGuidePrimitiveError(f"native guide row has primitive type {primitive}; expected 0 (line), 1 (arc) or 2 (circle).")
-            continue
-        path_index = int(meta_row[0])
-        if path_index != current_index:
-            runs.append([])
-            current_index = path_index
-        runs[-1].append((centre[0], centre[1]))
-    if not runs:
-        raise EmptyGuideError(
-            f"The straight-skeleton guide produced no machining circles for tool_diameter={spec.tool_diameter!r}; the pocket admits no gouge-free trochoid at this tool size."
-        )
-    return runs
+    return meta, centres

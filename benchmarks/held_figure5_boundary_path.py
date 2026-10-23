@@ -8,8 +8,10 @@ from dataclasses import field
 from enum import Enum
 from fractions import Fraction
 from typing import Literal
+from typing import NamedTuple
 
 from benchmarks.errors import BenchmarkError
+from benchmarks.held_common_scale import common_scale_squared_distances
 from benchmarks.held_figure5_raw_guide import GuideRunId
 from benchmarks.held_figure5_raw_guide import GuideRunStationOrdinal
 from benchmarks.held_figure5_raw_guide import ProjectionAdmissibleBoundaryHypothesis
@@ -36,6 +38,10 @@ class AmbiguousFigure5BoundaryPathError(Figure5BoundaryPathError):
 
 class MissingFigure5GuideRunError(Figure5BoundaryPathError):
     """Selected circles do not preserve every reached approximate guide run."""
+
+
+class MisalignedFigure5OffsetSitesError(Figure5BoundaryPathError):
+    """Parallel offset sites do not pair one-to-one with the side candidates."""
 
 
 RationalPoint = tuple[Fraction, Fraction]
@@ -328,6 +334,13 @@ def _transition(
     return Figure5BoundaryTransition(tuple(samples), Millimetre(progress), False)
 
 
+class IndexedFigure5BoundaryPath(NamedTuple):
+    """A boundary path and, per emitted circle, the index of the side candidate it came from."""
+
+    path: Figure5BoundaryPath
+    source_indices: tuple[int, ...]
+
+
 def build_figure5_boundary_path(
     *,
     inward_components: tuple[tuple[Point2[WorldXY], ...], ...],
@@ -340,11 +353,69 @@ def build_figure5_boundary_path(
     start_evidence_bound: Millimetre,
     offset_sites: dict[ProjectionAdmissibleBoundaryHypothesis, ProjectionBoundarySite] | None = None,
 ) -> Figure5BoundaryPath:
-    """Emit one bounded, continuous CCW traversal over selected hypotheses."""
+    """Emit one bounded, continuous CCW traversal over selected hypotheses.
+
+    The hypothesis-keyed form of :func:`build_indexed_figure5_boundary_path`:
+    ``offset_sites[candidate]`` is looked up per candidate.
+    """
+    return build_indexed_figure5_boundary_path(
+        inward_components=inward_components,
+        side_candidates=side_candidates,
+        reached_run_ids=reached_run_ids,
+        published_start_center=published_start_center,
+        published_start_radius=published_start_radius,
+        tool_radius=tool_radius,
+        boundary_evidence_bound=boundary_evidence_bound,
+        start_evidence_bound=start_evidence_bound,
+        offset_sites=None if offset_sites is None else tuple(offset_sites[candidate] for candidate in side_candidates),
+    ).path
+
+
+def build_indexed_figure5_boundary_path(
+    *,
+    inward_components: tuple[tuple[Point2[WorldXY], ...], ...],
+    side_candidates: tuple[ProjectionAdmissibleBoundaryHypothesis, ...],
+    reached_run_ids: frozenset[GuideRunId],
+    published_start_center: Point2[WorldXY],
+    published_start_radius: Millimetre,
+    tool_radius: ToolRadius,
+    boundary_evidence_bound: Millimetre,
+    start_evidence_bound: Millimetre,
+    offset_sites: tuple[ProjectionBoundarySite, ...] | None = None,
+) -> IndexedFigure5BoundaryPath:
+    """Emit one bounded, continuous CCW traversal and name each circle's source candidate.
+
+    Args:
+        inward_components: The radius-one inward-offset cycles; exactly one.
+        side_candidates: The hypotheses to place, in any order.
+        reached_run_ids: Exactly the guide runs the candidates must cover.
+        published_start_center: The published start circle's centre.
+        published_start_radius: The published start circle's radius.
+        tool_radius: The tool radius the start radius is checked against.
+        boundary_evidence_bound: Bound on a vertex contact's local resolution.
+        start_evidence_bound: Bound on the nearest contact's start distance.
+        offset_sites: Parallel to ``side_candidates`` when given: entry ``i`` is
+            the resolved offset contact of candidate ``i``. No candidate is hashed.
+
+    Returns:
+        The path, and ``source_indices[i]``, the index in ``side_candidates`` of
+        ``path.circles[i]``.
+
+    Raises:
+        MisalignedFigure5OffsetSitesError: ``offset_sites`` is not parallel to
+            ``side_candidates``.
+        DisconnectedFigure5BoundaryPathError: Not one cycle, or no candidates.
+        AmbiguousFigure5BoundaryPathError: Start evidence, ownership or the
+            start seed is not unique or not within its bound.
+        MissingFigure5GuideRunError: The candidates do not cover exactly
+            ``reached_run_ids``.
+    """
     if len(inward_components) != 1:
         raise DisconnectedFigure5BoundaryPathError("Figure 5 requires one connected radius-one inward-offset cycle.")
     if not side_candidates:
         raise DisconnectedFigure5BoundaryPathError("Figure 5 requires selected candidates on the inward-offset cycle.")
+    if offset_sites is not None and len(offset_sites) != len(side_candidates):
+        raise MisalignedFigure5OffsetSitesError("Figure 5 offset sites must be parallel to the side candidates.")
     if float(published_start_radius) <= 0.0 or float(boundary_evidence_bound) <= 0.0 or float(start_evidence_bound) <= 0.0 or type(tool_radius) is not ToolRadius:
         raise AmbiguousFigure5BoundaryPathError("Published start-circle evidence requires positive radius and bound.")
     radius_gap = abs(Fraction.from_float(float(published_start_radius)) - Fraction.from_float(float(tool_radius.value)))
@@ -352,27 +423,32 @@ def build_figure5_boundary_path(
         raise AmbiguousFigure5BoundaryPathError("Figure 5 published start radius does not match the radius-one tool evidence.")
     component = inward_components[0]
     _validate_boundary(component)
-    circles = tuple(_circle(component, candidate, boundary_evidence_bound, None if offset_sites is None else offset_sites[candidate]) for candidate in side_candidates)
+    if offset_sites is None:
+        circles = tuple(_circle(component, candidate, boundary_evidence_bound) for candidate in side_candidates)
+    else:
+        circles = tuple(_circle(component, candidate, boundary_evidence_bound, site) for candidate, site in zip(side_candidates, offset_sites, strict=True))
     selected_runs = frozenset(circle.run_id for circle in circles)
     if selected_runs != reached_run_ids:
         raise MissingFigure5GuideRunError("Selected circles must cover exactly the reached guide runs.")
-    ordered = tuple(
-        sorted(
-            circles,
-            key=lambda circle: (
-                *_site_key(circle.boundary_site),
-                int(circle.run_id),
-                int(circle.station_ordinal),
-                float(circle.radius.value),
-            ),
-        )
+    # Sorting the indices with the circle key is the stable sort of the circles:
+    # equal keys keep candidate order either way.
+    order = sorted(
+        range(len(circles)),
+        key=lambda index: (
+            *_site_key(circles[index].boundary_site),
+            int(circles[index].run_id),
+            int(circles[index].station_ordinal),
+            float(circles[index].radius.value),
+        ),
     )
-    distances = tuple(_squared_distance(circle.contact_point, published_start_center) for circle in ordered)
-    minimum_distance = min(distances)
-    start_bound = Fraction.from_float(float(start_evidence_bound))
-    if minimum_distance > start_bound * start_bound:
+    ordered = tuple(circles[index] for index in order)
+    # Exact start distances on one power-of-two scale: the argmin is an integer
+    # ``min``, a tie is ``==``, the bound verdict an integer comparison.
+    distances = common_scale_squared_distances((published_start_center, circle.contact_point) for circle in ordered)
+    minimum_distance = min(distances.numerators)
+    if distances.exceeds_squared(minimum_distance, float(start_evidence_bound)):
         raise AmbiguousFigure5BoundaryPathError("Nearest Figure 5 start q exceeds the published-start evidence bound.")
-    nearest = tuple(index for index, distance in enumerate(distances) if distance == minimum_distance)
+    nearest = tuple(index for index, distance in enumerate(distances.numerators) if distance == minimum_distance)
     seed_sites = {_site_key(ordered[index].boundary_site) for index in nearest}
     if len(seed_sites) != 1:
         raise AmbiguousFigure5BoundaryPathError("Figure 5 published start has no unique nearest boundary site.")
@@ -380,4 +456,7 @@ def build_figure5_boundary_path(
     seed = next(index for index, circle in enumerate(ordered) if _site_key(circle.boundary_site) == seed_site)
     phased = ordered[seed:] + ordered[:seed]
     connectors = Figure5BoundaryConnectors.build(component, phased)
-    return Figure5BoundaryPath(phased, connectors.transitions, reached_run_ids)
+    return IndexedFigure5BoundaryPath(
+        Figure5BoundaryPath(phased, connectors.transitions, reached_run_ids),
+        tuple(order[seed:] + order[:seed]),
+    )

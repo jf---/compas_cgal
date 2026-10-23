@@ -87,6 +87,61 @@ class PocketSpec:
             DegeneratePocketError: The pocket has fewer than three vertices or
                 too little area to admit the tool.
         """
+        return cls._validated(name, family, polygon, tool_diameter, tea_cap_deg, holes, params, check_simplicity=True)
+
+    @classmethod
+    def build_natively_simple(
+        cls,
+        name: str,
+        family: str,
+        polygon: Polygon,
+        tool_diameter: float,
+        tea_cap_deg: float,
+        holes: tuple[Polygon, ...] = (),
+        params: Mapping[str, float] | None = None,
+    ) -> "PocketSpec":
+        """Every invariant of :meth:`build` except ring simplicity, which the consumer decides exactly.
+
+        For a spec whose rings reach only native code that decides simplicity
+        itself, exactly, on the same doubles and raises otherwise (CGAL
+        ``Polygon_2::is_simple`` in ``toolpath.cpp::data_to_polygon``). The
+        float-tolerance crossing test of :meth:`build` would be a second,
+        inexact verdict on the same question; this factory leaves it to the
+        exact one.
+
+        Args:
+            name: Unique instance name.
+            family: Sweep family name.
+            polygon: Outer boundary.
+            tool_diameter: Cutter diameter; must be finite and positive.
+            tea_cap_deg: Engagement cap; must lie in (0, 180].
+            holes: Island boundaries.
+            params: Sweep coordinates recorded for plotting.
+
+        Returns:
+            The validated spec.
+
+        Raises:
+            NonPositiveToolError: The diameter is NaN, zero, or negative.
+            InvalidCapError: The cap is NaN or outside (0, 180].
+            DegeneratePocketError: The pocket has fewer than three vertices or
+                too little area to admit the tool.
+        """
+        return cls._validated(name, family, polygon, tool_diameter, tea_cap_deg, holes, params, check_simplicity=False)
+
+    @classmethod
+    def _validated(
+        cls,
+        name: str,
+        family: str,
+        polygon: Polygon,
+        tool_diameter: float,
+        tea_cap_deg: float,
+        holes: tuple[Polygon, ...],
+        params: Mapping[str, float] | None,
+        *,
+        check_simplicity: bool,
+    ) -> "PocketSpec":
         if not math.isfinite(tool_diameter) or tool_diameter <= 0.0:
             raise NonPositiveToolError(f"tool_diameter must be finite and positive, got {tool_diameter!r}.")
         if not math.isfinite(tea_cap_deg) or not (0.0 < tea_cap_deg <= MAX_CAP_DEG):
@@ -94,7 +149,7 @@ class PocketSpec:
         for ring in (polygon,) + tuple(holes):
             if len(ring.points) < 3:
                 raise DegeneratePocketError(f"{name}: a ring has {len(ring.points)} vertices; at least three are required.")
-            if not ring.is_convex and _self_intersects(ring):
+            if check_simplicity and not ring.is_convex and _self_intersects(ring):
                 raise PocketNotSimpleError(f"{name}: a ring self-intersects and is not a valid general polygon.")
         radius = 0.5 * tool_diameter
         if abs(polygon.area) < MIN_AREA_TOOL_RADII_SQ * radius * radius:
