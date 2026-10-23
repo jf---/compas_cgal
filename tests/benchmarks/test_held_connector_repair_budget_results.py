@@ -18,6 +18,10 @@ from tools.held_connector_repair_budget_results import measure_tier2_rates
 from tools.held_connector_repair_budget_results import render
 from tools.held_connector_repair_budget_results import tier2_estimate
 from tools.held_connector_repair_budget_results import within_budget
+from tools.held_native_identity import EditableBuild
+from tools.held_native_identity import capture_native
+from tools.held_native_identity import native_closure
+from tools.held_native_identity import native_fields
 from tools.held_source_closure import capture
 from tools.held_source_closure import digest_contents
 from tools.held_source_closure import source_closure
@@ -86,9 +90,11 @@ def test_estimate_scales_the_prefix_rates(rates: dict[str, Any]) -> None:
 
 
 def test_render_writes_one_row_per_workload_and_the_identity(figure5_row: dict[str, Any], rates: dict[str, Any]) -> None:
+    build = EditableBuild.locate()
     record = {
         "build": {"recorded_at": "t", "commit": "0123456789ab", "dirty": True},
         "source_sha256": digest_contents(capture(source_closure())),
+        **native_fields(capture_native(build, native_closure(build))),
         "machine": {"cpu_brand": "cpu"},
         "circle_budget": [2, 100],
         "workloads": [figure5_row],
@@ -99,4 +105,5 @@ def test_render_writes_one_row_per_workload_and_the_identity(figure5_row: dict[s
     assert text.count("| `figure5_refined` |") == 1
     assert "(dirty tree)" in text and "`0123456789`" in text
     assert record["source_sha256"][:12] in text
+    assert record["native_sha256"][:12] in text
     assert "do not edit" in text.splitlines()[0]

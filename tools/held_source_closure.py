@@ -4,8 +4,8 @@ A record's ``source_sha256`` must change whenever any code that decides its
 numbers changes. A hand-picked file list cannot promise that (a transitively
 imported module goes unlisted), so the identity is taken from ``sys.modules``:
 every loaded Python module whose file lies under ``CLOSURE_ROOTS`` of the
-repository, repo-relative and sorted. Native extensions are not hashed here;
-their identity is the build identity's.
+repository, repo-relative and sorted. Native extensions are hashed by
+``tools.held_native_identity`` (``native_sha256``).
 """
 
 from __future__ import annotations

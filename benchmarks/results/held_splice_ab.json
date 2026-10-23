@@ -1,150 +1,150 @@
 {
   "build": {
-    "commit": "ae6a668a05238e4203a436aefaf431cc94255cce",
+    "commit": "4cb572459c076b00cdf8c639e81a1a7b14b62c29",
     "dirty": true,
     "package_version": "0.9.1",
-    "recorded_at": "2026-10-22T18:07:35+00:00"
+    "recorded_at": "2026-10-23T08:23:12+00:00"
   },
   "candidates": [
     {
-      "a_seconds": 0.4968641660234425,
+      "a_seconds": 0.7526384580414742,
       "added": 1,
-      "b_seconds": 0.004453290981473401,
+      "b_seconds": 0.003969832963775843,
       "candidate": 744,
       "later_sources": 2361,
       "rerefined": 2,
       "slot": 334
     },
     {
-      "a_seconds": 0.4975559590093326,
+      "a_seconds": 0.6648161669727415,
       "added": 1,
-      "b_seconds": 0.004138459014939144,
+      "b_seconds": 0.003949875012040138,
       "candidate": 746,
       "later_sources": 2361,
       "rerefined": 2,
       "slot": 334
     },
     {
-      "a_seconds": 0.4569238330004737,
+      "a_seconds": 0.6467005829908885,
       "added": 1,
-      "b_seconds": 0.003831999987596646,
+      "b_seconds": 0.0035472919698804617,
       "candidate": 1273,
       "later_sources": 2114,
       "rerefined": 1,
       "slot": 581
     },
     {
-      "a_seconds": 0.45491274999221787,
+      "a_seconds": 0.6459213750204071,
       "added": 1,
-      "b_seconds": 0.004084250016603619,
+      "b_seconds": 0.00354925001738593,
       "candidate": 1274,
       "later_sources": 2114,
       "rerefined": 1,
       "slot": 581
     },
     {
-      "a_seconds": 0.4500382500118576,
+      "a_seconds": 0.6223729579942301,
       "added": 1,
-      "b_seconds": 0.004078958998434246,
+      "b_seconds": 0.003466749971266836,
       "candidate": 1275,
       "later_sources": 2114,
       "rerefined": 1,
       "slot": 581
     },
     {
-      "a_seconds": 0.45241475000511855,
+      "a_seconds": 0.6053812080062926,
       "added": 1,
-      "b_seconds": 0.0041118329972960055,
+      "b_seconds": 0.0034997499897144735,
       "candidate": 1276,
       "later_sources": 2114,
       "rerefined": 1,
       "slot": 581
     },
     {
-      "a_seconds": 0.4514344589842949,
+      "a_seconds": 0.6880987919867039,
       "added": 1,
-      "b_seconds": 0.0037402920133899897,
+      "b_seconds": 0.0035572080523706973,
       "candidate": 1277,
       "later_sources": 2114,
       "rerefined": 1,
       "slot": 581
     },
     {
-      "a_seconds": 0.21829900000011548,
+      "a_seconds": 0.2905924590304494,
       "added": 1,
-      "b_seconds": 0.0033380420063622296,
+      "b_seconds": 0.0032412500004284084,
       "candidate": 4035,
       "later_sources": 1032,
       "rerefined": 1,
       "slot": 1663
     },
     {
-      "a_seconds": 0.21552854200126603,
+      "a_seconds": 0.2476070420234464,
       "added": 1,
-      "b_seconds": 0.003322500007925555,
+      "b_seconds": 0.0032201249850913882,
       "candidate": 4036,
       "later_sources": 1032,
       "rerefined": 1,
       "slot": 1663
     },
     {
-      "a_seconds": 0.21716591701260768,
+      "a_seconds": 0.28357174998382106,
       "added": 1,
-      "b_seconds": 0.003567790990928188,
+      "b_seconds": 0.003214749973267317,
       "candidate": 4037,
       "later_sources": 1032,
       "rerefined": 1,
       "slot": 1663
     },
     {
-      "a_seconds": 0.21442841598764062,
+      "a_seconds": 0.2922347499988973,
       "added": 1,
-      "b_seconds": 0.0032897920173127204,
+      "b_seconds": 0.0031335409730672836,
       "candidate": 4038,
       "later_sources": 1032,
       "rerefined": 1,
       "slot": 1663
     },
     {
-      "a_seconds": 0.20555141699151136,
+      "a_seconds": 0.31003862497163936,
       "added": 4,
-      "b_seconds": 0.003922625008272007,
+      "b_seconds": 0.0037129579577594995,
       "candidate": 4046,
       "later_sources": 1029,
       "rerefined": 1,
       "slot": 1666
     },
     {
-      "a_seconds": 0.05381704101455398,
+      "a_seconds": 0.07453241699840873,
       "added": 1,
-      "b_seconds": 0.003187624999554828,
+      "b_seconds": 0.0030204589711502194,
       "candidate": 6127,
       "later_sources": 206,
       "rerefined": 1,
       "slot": 2489
     },
     {
-      "a_seconds": 0.050077541993232444,
+      "a_seconds": 0.047430125006940216,
       "added": 1,
-      "b_seconds": 0.003143667010590434,
+      "b_seconds": 0.0029573749634437263,
       "candidate": 6128,
       "later_sources": 206,
       "rerefined": 1,
       "slot": 2489
     },
     {
-      "a_seconds": 0.04888395901070908,
+      "a_seconds": 0.08058483398053795,
       "added": 4,
-      "b_seconds": 0.0035233329981565475,
+      "b_seconds": 0.00424812501296401,
       "candidate": 6159,
       "later_sources": 195,
       "rerefined": 1,
       "slot": 2500
     },
     {
-      "a_seconds": 0.048262500000419095,
+      "a_seconds": 0.0476248330087401,
       "added": 4,
-      "b_seconds": 0.0034869170049205422,
+      "b_seconds": 0.003431249991990626,
       "candidate": 6161,
       "later_sources": 194,
       "rerefined": 1,
@@ -153,10 +153,10 @@
   ],
   "emitted": 4438,
   "emitted_after_nothing": 4428,
-  "full_refinement_seconds": 0.5630541249993257,
+  "full_refinement_seconds": 0.9968396250042133,
   "load_1min_before_after": [
-    40.95458984375,
-    30.84619140625
+    598.71484375,
+    638.69482421875
   ],
   "machine": {
     "cpu_brand": "Apple M1 Max",
@@ -164,14 +164,23 @@
     "python": "3.12.13",
     "system": "Darwin"
   },
+  "native_sha256": "b79ed88be14e0f1880e3148598718f45360286004791d862ad1fd023c130d472",
+  "natives": {
+    "build/cp312-abi3-macosx_11_0_arm64/install/platlib/compas_cgal/_circle_geometry_2.abi3.so": "66d389666b3da6d2fcad7472c6720c5c9280aef2e9f55c40aacecbeca6c402df",
+    "build/cp312-abi3-macosx_11_0_arm64/install/platlib/compas_cgal/_coverage_certificate_2.abi3.so": "b974a76a51f9cf0ce78ac25b24edac326d5b17129a92989d445a9c80ca66cdcd",
+    "build/cp312-abi3-macosx_11_0_arm64/install/platlib/compas_cgal/_stock_2.abi3.so": "ea82863263606c43b3836b7a5d21ddd73a8c735e6ce74402d018e22b6bfcc0cf",
+    "build/cp312-abi3-macosx_11_0_arm64/install/platlib/compas_cgal/_straight_skeleton_2.abi3.so": "6e9bd36f825e5bcd1fc947970fb74181f25a6466aba19639cc85e45a3371edeb",
+    "build/cp312-abi3-macosx_11_0_arm64/install/platlib/compas_cgal/_toolpath.abi3.so": "7c91ae45110631e9e236d1037ca817eb2d34a2c0d4b10525060f4f805e18a0f4",
+    "build/cp312-abi3-macosx_11_0_arm64/install/platlib/compas_cgal/_types_std.abi3.so": "d3fc55938ad02e8a7bd6121bb95f4c7ba81c620b2a5ac28c46d7c0d924ae6fcf"
+  },
   "repair_round_emitted_after": 4440,
   "repair_round_inserted": [
     744,
     1273
   ],
-  "repair_round_seconds": 0.1294586669828277,
+  "repair_round_seconds": 0.17118133296025917,
   "selected": 2695,
-  "source_sha256": "21c2fcacce264f5956c988221fd4d1c75065ce870a6b45b9b81b76b44a864118",
+  "source_sha256": "b6f923af86677a1ee30581a49fd58032a7b7dd06cb753af078307652eff27621",
   "sources": [
     "benchmarks/__init__.py",
     "benchmarks/errors.py",
@@ -230,6 +239,7 @@
     "src/compas_cgal/types.py",
     "src/compas_cgal/units.py",
     "tools/__init__.py",
+    "tools/held_native_identity.py",
     "tools/held_reference_extractor.py",
     "tools/held_source_closure.py",
     "tools/held_splice_ab_results.py"

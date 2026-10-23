@@ -1,9 +1,9 @@
 {
   "build": {
-    "commit": "ae6a668a05238e4203a436aefaf431cc94255cce",
+    "commit": "4cb572459c076b00cdf8c639e81a1a7b14b62c29",
     "dirty": true,
     "package_version": "0.9.1",
-    "recorded_at": "2026-10-22T18:05:49+00:00"
+    "recorded_at": "2026-10-23T08:24:24+00:00"
   },
   "circle_budget": [
     1,
@@ -15,7 +15,18 @@
     "python": "3.12.13",
     "system": "Darwin"
   },
-  "source_sha256": "7e5341c9752d69f1489fb48d61df5c31b400d9e7347c9faac5a054f34f535089",
+  "native_sha256": "40c8993957006b2f9b72fd85d55d2934960ce6fa32a0ed289050477b0a49ffbf",
+  "natives": {
+    "build/cp312-abi3-macosx_11_0_arm64/install/platlib/compas_cgal/_circle_geometry_2.abi3.so": "66d389666b3da6d2fcad7472c6720c5c9280aef2e9f55c40aacecbeca6c402df",
+    "build/cp312-abi3-macosx_11_0_arm64/install/platlib/compas_cgal/_coverage_2.abi3.so": "11c26eacdcf487c139da67ae32704b1f9ecaf017755dbc890cf5a508ea217e2e",
+    "build/cp312-abi3-macosx_11_0_arm64/install/platlib/compas_cgal/_held_centre_domain_2.abi3.so": "6da2dc7da55c4179f752f47a50beabd1bfe53188b89036fd1a40324596ba3234",
+    "build/cp312-abi3-macosx_11_0_arm64/install/platlib/compas_cgal/_held_declared_clearance_2.abi3.so": "00b498cf30bc3c2178c17d7e791e937fbee9f81e54cfc35ed947f97b10cd0869",
+    "build/cp312-abi3-macosx_11_0_arm64/install/platlib/compas_cgal/_stock_2.abi3.so": "ea82863263606c43b3836b7a5d21ddd73a8c735e6ce74402d018e22b6bfcc0cf",
+    "build/cp312-abi3-macosx_11_0_arm64/install/platlib/compas_cgal/_straight_skeleton_2.abi3.so": "6e9bd36f825e5bcd1fc947970fb74181f25a6466aba19639cc85e45a3371edeb",
+    "build/cp312-abi3-macosx_11_0_arm64/install/platlib/compas_cgal/_toolpath.abi3.so": "7c91ae45110631e9e236d1037ca817eb2d34a2c0d4b10525060f4f805e18a0f4",
+    "build/cp312-abi3-macosx_11_0_arm64/install/platlib/compas_cgal/_types_std.abi3.so": "d3fc55938ad02e8a7bd6121bb95f4c7ba81c620b2a5ac28c46d7c0d924ae6fcf"
+  },
+  "source_sha256": "034575366e68b868a26f761bf104c73050d977e9bb170f3a932123213c037e0c",
   "sources": [
     "benchmarks/__init__.py",
     "benchmarks/errors.py",
@@ -103,38 +114,39 @@
     "src/compas_cgal/units.py",
     "tools/__init__.py",
     "tools/held_connector_repair_budget_results.py",
+    "tools/held_native_identity.py",
     "tools/held_reference_extractor.py",
     "tools/held_source_closure.py"
   ],
   "tier2_estimate": {
     "circles": 4428,
     "pieces": 4369,
-    "station_seconds": 469.36169591521923,
-    "subtraction_seconds": 231.94380101616122,
-    "total_seconds": 701.3054969313805,
+    "station_seconds": 770.830640607938,
+    "subtraction_seconds": 387.022866531772,
+    "total_seconds": 1157.85350713971,
     "workload": "figure8_monstera_boundary_qualified_corners"
   },
   "tier2_rates": {
     "circles": 200,
     "connectors": 200,
     "load_1min_before_after": [
-      65.18994140625,
-      46.01904296875
+      519.03759765625,
+      541.60205078125
     ],
     "mean_ms": {
-      "circle_over": 1.00238997649285,
-      "circle_under": 24.691335219395114,
-      "piece_over": 1.3387490085201201,
-      "piece_under": 25.70908478611694,
-      "station": 1.1677174557784074
+      "circle_over": 1.576960219827015,
+      "circle_under": 40.384073317982256,
+      "piece_over": 2.1647050823425737,
+      "piece_under": 43.891465672144165,
+      "station": 1.917737221252346
     },
     "pieces": 205,
     "seconds": {
-      "circle_over": 0.20047799529857002,
-      "circle_under": 4.938267043879023,
-      "piece_over": 0.27444354674662463,
-      "piece_under": 5.270362381153973,
-      "stations": 22.02315121598076
+      "circle_over": 0.315392043965403,
+      "circle_under": 8.076814663596451,
+      "piece_over": 0.4437645418802276,
+      "piece_under": 8.997750462789554,
+      "stations": 36.168523992819246
     },
     "stations_both_stocks": 18860,
     "stations_per_piece": 46,
@@ -150,11 +162,11 @@
         "sharp_vertex": 2488
       },
       "gate_off_left_uncertified": 0,
-      "generation_seconds_gate_off": 2.6348530399845913,
-      "generation_seconds_published": 2.898417290969519,
+      "generation_seconds_gate_off": 2.871144666976761,
+      "generation_seconds_published": 2.5211391240009107,
       "load_1min_before_after": [
-        129.9384765625,
-        121.775390625
+        640.64111328125,
+        632.8076171875
       ],
       "within_budget": true,
       "workload": "figure5_refined"
@@ -168,11 +180,11 @@
         "sharp_vertex": 5244
       },
       "gate_off_left_uncertified": 1,
-      "generation_seconds_gate_off": 9.246420334005961,
-      "generation_seconds_published": 7.489812874962809,
+      "generation_seconds_gate_off": 7.558847334119491,
+      "generation_seconds_published": 8.629354082979262,
       "load_1min_before_after": [
-        121.775390625,
-        103.61669921875
+        632.8076171875,
+        600.5400390625
       ],
       "within_budget": true,
       "workload": "figure8_upper_lane"
@@ -186,11 +198,11 @@
         "sharp_vertex": 2363
       },
       "gate_off_left_uncertified": 5,
-      "generation_seconds_gate_off": 4.8530337079719175,
-      "generation_seconds_published": 5.470087958005024,
+      "generation_seconds_gate_off": 6.1172131229541264,
+      "generation_seconds_published": 6.12756883300608,
       "load_1min_before_after": [
-        103.61669921875,
-        89.60400390625
+        600.5400390625,
+        580.7587890625
       ],
       "within_budget": true,
       "workload": "figure8_upper_boundary"
@@ -204,11 +216,11 @@
         "sharp_vertex": 2083
       },
       "gate_off_left_uncertified": 2,
-      "generation_seconds_gate_off": 2.488865666993661,
-      "generation_seconds_published": 2.444368459022371,
+      "generation_seconds_gate_off": 5.46403650008142,
+      "generation_seconds_published": 6.5625519990571775,
       "load_1min_before_after": [
-        89.60400390625,
-        87.39306640625
+        580.7587890625,
+        558.40234375
       ],
       "within_budget": true,
       "workload": "figure8_crossed_skis_boundary"
@@ -222,11 +234,11 @@
         "sharp_vertex": 5707
       },
       "gate_off_left_uncertified": 46,
-      "generation_seconds_gate_off": 10.005511375959031,
-      "generation_seconds_published": 10.364247207035078,
+      "generation_seconds_gate_off": 17.85828683298314,
+      "generation_seconds_published": 22.171852041967213,
       "load_1min_before_after": [
-        87.39306640625,
-        65.18994140625
+        558.40234375,
+        516.86474609375
       ],
       "within_budget": true,
       "workload": "figure8_monstera_boundary_qualified_corners"

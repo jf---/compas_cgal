@@ -1,9 +1,12 @@
-"""Contract of tools/held_splice_ab_results.py: the rendering (the content identity: tests/tools/test_held_source_closure.py)."""
+"""Contract of tools/held_splice_ab_results.py: the rendering (the content identities: tests/tools/test_held_source_closure.py, test_held_native_identity.py)."""
 
 from __future__ import annotations
 
 from typing import Any
 
+import pytest
+
+from tools.held_native_identity import NativeIdentityMissingError
 from tools.held_splice_ab_results import render
 
 
@@ -15,6 +18,8 @@ def _record() -> dict[str, Any]:
     return {
         "build": {"recorded_at": "t", "commit": "0123456789ab", "dirty": False},
         "source_sha256": "f" * 64,
+        "native_sha256": "e" * 64,
+        "natives": {"build/x/_stock_2.abi3.so": "d" * 64},
         "machine": {"cpu_brand": "cpu"},
         "workload": "w",
         "sources_count": 10,
@@ -38,3 +43,11 @@ def test_render_reports_ranges_and_the_ratio() -> None:
     assert "| later sources re-refined | 199–200 | 1–2 |" in text
     assert "| sum over 2 candidates | 0.80 s | 0.006 s (133×) |" in text
     assert "inserted sources [7]" in text
+    assert "native extensions sha256 `eeeeeeeeeeee` (1 modules)" in text
+
+
+def test_a_record_without_the_native_identity_does_not_render() -> None:
+    record = _record()
+    del record["native_sha256"]
+    with pytest.raises(NativeIdentityMissingError):
+        render(record)
