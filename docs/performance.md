@@ -321,6 +321,46 @@ measured by `pixi run pipeline-timing`. See
 `docs/refactor/stage1.md`. Its measurements follow policy 6: Task 1.2's
 GT verdict waits on a timing run on a verified quiet machine.
 
+## Performance history and baseline
+
+Every timing record under `benchmarks/results` is ingested into one
+append-only, committed history, `benchmarks/results/perf_history.jsonl`: one
+line per measured (workload, stage), with its CPU and wall minimum and run
+count, the 1-minute load before and after, the commit, dirty flag, source and
+native digests and machine the record states, and the record's path and
+SHA-256. Lines are deduplicated and never rewritten (`tools/perf_history*.py`).
+A wrong historic entry is superseded, not edited: the family's adapter version
+is bumped, `backfill` appends the corrected entries beside the old ones, and
+readers use only the newest adapter version per record version. The first case
+was `actual_stock_profile`, whose `generation_s` is process CPU but was filed
+as wall by adapter version 1.
+
+- `pixi run perf-history-ingest <record.json>`: append a fresh record. A record
+  that keeps no load is ingested as indicative, and says so.
+- `pixi run perf-history-backfill`: append every committed version of every
+  timing record (`git show <rev>:<path>`).
+- `pixi run perf-history-check <record.json>`: compare with the baseline, the
+  **best** (fastest) **quiet** entry (load ≤ 2, policy D2) per (workload,
+  stage, machine), leaving the checked record's own entries out. A quiet entry
+  whose gated minimum (CPU when recorded, else wall) exceeds
+  `REGRESSION_RATIO_MAX` (1.10, derived from the recorded CPU run-to-run
+  spread) times its baseline fails with a non-zero exit. Indicative entries are
+  compared and reported, and never set a baseline. Since the baseline is the
+  best run, not the latest, a slowdown cannot creep in through steps that each
+  stay under the threshold.
+- `pixi run perf-history-rebaseline --entry <entry_sha256> --reason "<why>"`:
+  accept a slower quiet entry as the baseline. This appends a `rebaseline`
+  line; from then on the baseline is the best quiet entry measured at or after
+  the accepted one (times compared as instants, not strings).
+- `pixi run perf-history-render`: regenerate the table below.
+
+Stage names carry the measuring tool (`held_toolpath_baseline/generation`),
+since two tools that both time a "generation" count different work. The
+backfill found no quiet run in any committed record, so no key has a baseline
+yet: the first quiet measurement of each key sets one.
+
+--8<-- "benchmarks/results/perf_history.md"
+
 ## Related pages
 
 - [Held Qualification](held_qualification.md): why no Held path is fit to
