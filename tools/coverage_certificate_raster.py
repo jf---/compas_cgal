@@ -25,11 +25,13 @@ import json
 import pathlib
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 from matplotlib.path import Path as MplPath
 from scipy import ndimage  # type: ignore[import-untyped]
 
+from benchmarks.errors import BenchmarkError
 from benchmarks.performance_record import REPOSITORY
 from benchmarks.performance_record import BuildIdentity
 from benchmarks.performance_record import MachineIdentity
@@ -55,6 +57,10 @@ ROW_BATCH = 256
 SLIVER_MM2 = 0.01
 LISTED_COMPONENTS = 10
 BORDERING_CUTS = 3
+
+
+class StaleRasterRecordError(BenchmarkError):
+    """The stored record has another schema; it must be re-measured, not rendered."""
 
 
 @dataclass(frozen=True)
@@ -92,6 +98,38 @@ class RasterRecord:
 
     def to_json(self) -> str:
         return json.dumps(dataclasses.asdict(self), indent=2) + "\n"
+
+
+def _component(raw: dict[str, Any]) -> UncutComponent:
+    return UncutComponent(
+        area_mm2=raw["area_mm2"],
+        centroid_mm=(raw["centroid_mm"][0], raw["centroid_mm"][1]),
+        touches_outline=raw["touches_outline"],
+        bordering_cuts=tuple((index, gap) for index, gap in raw["bordering_cuts"]),
+    )
+
+
+def _result(raw: dict[str, Any]) -> RasterResult:
+    return RasterResult(**{**raw, "grid": (raw["grid"][0], raw["grid"][1]), "largest": tuple(_component(c) for c in raw["largest"])})
+
+
+def load_record(path: pathlib.Path) -> RasterRecord:
+    """Read a record written by :meth:`RasterRecord.to_json`.
+
+    Raises:
+        StaleRasterRecordError: the record's schema is not ``SCHEMA``.
+    """
+    raw: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
+    if raw.get("schema") != SCHEMA:
+        raise StaleRasterRecordError(f"{path}: schema {raw.get('schema')!r}, expected {SCHEMA!r}; re-measure (`pixi run coverage-certificate-raster`), never render it")
+    return RasterRecord(
+        **{
+            **raw,
+            "identity": MachineIdentity(**raw["identity"]),
+            "build": BuildIdentity(**raw["build"]),
+            "results": tuple(_result(r) for r in raw["results"]),
+        }
+    )
 
 
 def _bordering_cuts(path: MonsteraPathArrays, point: np.ndarray) -> tuple[tuple[int, float], ...]:

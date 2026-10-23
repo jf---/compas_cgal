@@ -30,6 +30,7 @@ import statistics
 import time
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 
@@ -80,6 +81,10 @@ class FallbackCountersError(BenchmarkError):
     """``exact_fallbacks`` is not the sum of ``FALLBACK_COUNTERS``: the native definition changed."""
 
 
+class StaleCircleCoreRecordError(BenchmarkError):
+    """The stored record has another schema; it must be re-measured, not rendered."""
+
+
 @dataclass(frozen=True)
 class TimedCoreRun:
     """One core run: wall seconds, native phase seconds and the 1-minute load average read just before it."""
@@ -107,6 +112,32 @@ class CircleCoreRecord:
 
     def to_json(self) -> str:
         return json.dumps(dataclasses.asdict(self), indent=2) + "\n"
+
+
+def _core_run(raw: dict[str, Any]) -> TimedCoreRun:
+    phases = raw["phase_s"]
+    return TimedCoreRun(seconds=raw["seconds"], phase_s=(phases[0], phases[1], phases[2], phases[3]), load_1min=raw["load_1min"])
+
+
+def load_record(path: pathlib.Path) -> CircleCoreRecord:
+    """Read a record written by :meth:`CircleCoreRecord.to_json`.
+
+    Raises:
+        StaleCircleCoreRecordError: the record's schema is not ``SCHEMA``.
+    """
+    raw: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
+    if raw.get("schema") != SCHEMA:
+        raise StaleCircleCoreRecordError(f"{path}: schema {raw.get('schema')!r}, expected {SCHEMA!r}; re-measure (`pixi run coverage-certificate-circle-core`), never render it")
+    return CircleCoreRecord(
+        **{
+            **raw,
+            "identity": MachineIdentity(**raw["identity"]),
+            "build": BuildIdentity(**raw["build"]),
+            "beyond_connector_reach": tuple((x, y) for x, y in raw["beyond_connector_reach"]),
+            "runs": tuple(_core_run(run) for run in raw["runs"]),
+            "audit": _core_run(raw["audit"]),
+        }
+    )
 
 
 def _hex_lines(name: str) -> list[str]:

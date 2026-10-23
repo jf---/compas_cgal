@@ -29,6 +29,7 @@ import statistics
 import time
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Any
 
 from benchmarks.errors import BenchmarkError
 from benchmarks.held_coverage_repair import path_sweeps
@@ -77,6 +78,10 @@ class CertificateRunsDisagreeError(CoverageCertificateAcceptanceError):
 
 class RegionAccountingError(CoverageCertificateAcceptanceError):
     """The native region count does not decompose into cuts, target vertex disks and connector regions."""
+
+
+class StaleAcceptanceRecordError(CoverageCertificateAcceptanceError):
+    """The stored record has another schema; it must be re-measured, not rendered."""
 
 
 @dataclass(frozen=True)
@@ -141,6 +146,39 @@ class AcceptanceRecord:
 
     def to_json(self) -> str:
         return json.dumps(dataclasses.asdict(self), indent=2) + "\n"
+
+
+def _workload(raw: dict[str, Any]) -> WorkloadCertificate:
+    phases = raw["native_phase_s"]
+    repair = raw["repair"]
+    return WorkloadCertificate(
+        **{
+            **raw,
+            "clusters": tuple(WitnessCluster(centroid_mm=(c["centroid_mm"][0], c["centroid_mm"][1]), count=c["count"], kinds=tuple(c["kinds"])) for c in raw["clusters"]),
+            "runs": tuple(TimedRun(**run) for run in raw["runs"]),
+            "native_phase_s": (phases[0], phases[1], phases[2], phases[3]),
+            "repair": None if repair is None else RepairLedger(**{**repair, "inserted_sources": tuple(repair["inserted_sources"])}),
+        }
+    )
+
+
+def load_record(path: pathlib.Path) -> AcceptanceRecord:
+    """Read a record written by :meth:`AcceptanceRecord.to_json`.
+
+    Raises:
+        StaleAcceptanceRecordError: the record's schema is not ``SCHEMA``.
+    """
+    raw: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
+    if raw.get("schema") != SCHEMA:
+        raise StaleAcceptanceRecordError(f"{path}: schema {raw.get('schema')!r}, expected {SCHEMA!r}; re-measure (`pixi run coverage-certificate-acceptance`), never render it")
+    return AcceptanceRecord(
+        **{
+            **raw,
+            "identity": MachineIdentity(**raw["identity"]),
+            "build": BuildIdentity(**raw["build"]),
+            "workloads": tuple(_workload(w) for w in raw["workloads"]),
+        }
+    )
 
 
 def _witness_key(witnesses: Sequence[UncoveredWitness]) -> tuple[tuple[str, int, str, str], ...]:
