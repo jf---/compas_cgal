@@ -121,8 +121,7 @@ an ERROR in fixture setup. If the load rises between runs, the same named
 error stops the test body. On a loaded machine, measure indicatively:
 
 ```bash
-pixi run --no-install build/pyrun.sh -m tools.held_generation_clock --indicative \
-    figure5_refined figure8_crossed_skis_boundary figure8_monstera_boundary_qualified_corners
+pixi run held-generation-clock-indicative
 ```
 
 This runs the same five serial fresh-process runs and prints min, median and
