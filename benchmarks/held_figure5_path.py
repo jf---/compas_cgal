@@ -7,6 +7,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from dataclasses import replace
 from fractions import Fraction
+from functools import partial
 from typing import Any
 from typing import Generic
 from typing import NamedTuple
@@ -490,12 +491,18 @@ def build_hypothesis_figure5_path(
     tool_radius: ToolRadius,
     cap: EngagementCap,
     offset_sites: tuple[ProjectionBoundarySite, ...] | None = None,
+    offset_projection: Callable[[tuple[Point2[WorldXY], ...]], tuple[ProjectionBoundarySite, ...]] | None = None,
     preserve_source_runs: bool = False,
 ) -> HypothesisFigure5Path:
     """Place distinct admissible hypotheses and emit one CCW boundary path.
 
     ``offset_sites``, when given, is parallel to ``hypotheses``: entry ``i`` is
-    the resolved offset contact of hypothesis ``i``.
+    the resolved offset contact of hypothesis ``i``. ``offset_projection``,
+    when given instead, resolves offset contacts after canonicalisation: it is
+    called once with the canonical representatives' contact points, in
+    canonical order, and must return their sites in that order. Only those
+    sites are ever read, so contacts of non-canonical hypotheses are never
+    projected and cannot raise.
     """
     if not hypotheses or not reached_run_ids:
         raise Figure5PathIntegrationError("Figure 5 integration requires hypotheses and a reached-run ledger.")
@@ -503,6 +510,8 @@ def build_hypothesis_figure5_path(
         raise Figure5PathIntegrationError("Figure 5 neighborhood ownership requires one non-empty boundary cycle.")
     if offset_sites is not None and len(offset_sites) != len(hypotheses):
         raise Figure5PathIntegrationError("Offset sites must be parallel to the hypotheses.")
+    if offset_sites is not None and offset_projection is not None:
+        raise Figure5PathIntegrationError("Give offset sites or an offset projection, not both.")
     owner_indices = _boundary_neighborhood_owner_indices(
         hypotheses,
         len(inward_components[0]),
@@ -517,6 +526,10 @@ def build_hypothesis_figure5_path(
     # within one station the geometry is a function of the site, and
     # canonical items have distinct geometry.
     canonical_sites = None if offset_sites is None else tuple(offset_sites[owner_indices[index]] for index, _ in canonical_indices)
+    if offset_projection is not None:
+        canonical_sites = offset_projection(tuple(item.hypothesis.contact_point for item in canonical))
+        if len(canonical_sites) != len(canonical):
+            raise Figure5PathIntegrationError("Offset projection must return one site per canonical hypothesis.")
     representatives = tuple(item.hypothesis for item in canonical)
     representative_runs = frozenset(item.hypothesis.run_id for item in canonical)
     ordered = build_indexed_figure5_boundary_path(
@@ -630,6 +643,7 @@ def build_held_reference_path(
         raise Figure5PathIntegrationError("Canonical Figure 5 requires its published start-circle evidence.")
     hypotheses = build_guide_distance_admissible_hypotheses(guide)
     offset_sites: tuple[ProjectionBoundarySite, ...] | None = None
+    offset_projection: Callable[[tuple[Point2[WorldXY], ...]], tuple[ProjectionBoundarySite, ...]] | None = None
     rejected_contacts: tuple[ProjectionAdmissibleBoundaryHypothesis, ...] = ()
     if project_contacts:
         if len(inward_components) != 1:
@@ -642,10 +656,14 @@ def build_held_reference_path(
             # the hypothesis-keyed form would have merged.
             hypotheses, offset_sites, rejected_contacts = qualified.hypotheses, qualified.sites, qualified.rejected
         else:
-            offset_sites = project_bounded_offset_contacts(
-                tuple(hypothesis.contact_point for hypothesis in hypotheses),
-                component,
-                guide.site_budget.admissible_distance_gap,
+            # Only canonical hypotheses' sites are read, so the projection runs
+            # after canonicalisation on those contacts alone (user ruling
+            # 2026-10-22): unread contacts are never projected, and a bound or
+            # tie failure can only come from a contact the path consumes.
+            offset_projection = partial(
+                project_bounded_offset_contacts,
+                boundary=component,
+                evidence_bound=guide.site_budget.admissible_distance_gap,
             )
     reached = frozenset(run.run_id for run in guide.runs)
     start_evidence_bound = Millimetre(float(guide.site_budget.reconstruction_bound) + float(guide.site_budget.projection_bound))
@@ -660,6 +678,7 @@ def build_held_reference_path(
         tool_radius=guide.case.tool_radius,
         cap=EngagementCap.build(math.radians(float(guide.case.tea_cap))),
         offset_sites=offset_sites,
+        offset_projection=offset_projection,
         preserve_source_runs=project_contacts,
     )
     return replace(result, rejected_contact_hypotheses=rejected_contacts)
