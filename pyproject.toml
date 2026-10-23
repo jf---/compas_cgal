@@ -356,6 +356,7 @@ held-coverage-repair-gate = { cmd = '''editable_build_dir="$(python -c 'import s
 strict = true
 files = ["benchmarks", "tests/benchmarks/typecheck/gate_contract.py"]
 warn_unused_configs = true
+no_silence_site_packages = true
 # The editable install is an import hook that mypy does not read, so the
 # package sources are put on mypy's search path explicitly.
 mypy_path = "src"
@@ -375,3 +376,14 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 module = ["compas_cgal.*"]
 ignore_missing_imports = true
+
+# `no_silence_site_packages` above: the editable install's .pth file puts this
+# checkout's `src` on sys.path, and mypy silences every module found through
+# sys.path, so without it first-party modules that are only followed (not named
+# on the command line) were silenced in a checkout but checked in an export.
+# Third-party code is silenced by name instead; each entry is a package the
+# strict gates follow whose own sources or stubs do not check clean (`types` is
+# typeshed's stdlib stub). First-party packages must never appear here.
+[[tool.mypy.overrides]]
+module = ["PIL.*", "_pytest.*", "attr.*", "cycler.*", "jsonschema.*", "matplotlib.*", "numpy.*", "packaging.*", "pluggy.*", "pyparsing.*", "pytest.*", "referencing.*", "rpds.*", "types"]
+ignore_errors = true
