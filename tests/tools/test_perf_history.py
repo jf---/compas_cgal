@@ -9,8 +9,15 @@ from pathlib import PurePosixPath
 from typing import Optional
 
 import pytest
-
 import tools.perf_history_ingest as perf_history_ingest
+from tests.tools.test_coverage_certificate_omega_star_budget import LOADED as BUDGET_LOAD_LOADED
+from tests.tools.test_coverage_certificate_omega_star_budget import _quiet_budget as quiet_omega_star_budget
+from tests.tools.test_coverage_certificate_omega_star_budget import _record as omega_star_record
+from tests.tools.test_coverage_certificate_omega_star_budget import _run as omega_star_budget_run
+from tools.coverage_certificate_budget_gate import BUDGET_RUNS
+from tools.coverage_certificate_budget_gate import PRODUCTION_WORKLOAD
+from tools.coverage_certificate_budget_gate import ProductionBudget
+from tools.coverage_certificate_omega_star import load_record as load_omega_star_record
 from tools.held_generation_clock import QUIET_LOAD_AVERAGE_MAX
 from tools.perf_history import REGRESSION_EXIT_STATUS
 from tools.perf_history import main
@@ -43,6 +50,7 @@ from tools.perf_history_ingest import backfill_entries
 from tools.perf_history_ingest import file_entries
 from tools.perf_history_ingest import record_entries
 from tools.perf_history_ingest import record_versions
+from tools.perf_history_json import MalformedTimingRecordError
 from tools.perf_history_rebaseline import Rebaseline
 from tools.perf_history_rebaseline import RebaselineKeyMismatchError
 from tools.perf_history_rebaseline import RebaselineReasonError
@@ -127,6 +135,46 @@ def test_an_unknown_schema_of_a_known_family_raises() -> None:
     record["schema"] = "coverage-certificate-omega-star/99"
     with pytest.raises(UnknownRecordSchemaError):
         adapt("benchmarks/results/coverage_certificate_omega_star.json", json.dumps(record).encode(), _no_sibling)
+
+
+OMEGA_STAR = f"{RESULTS}/coverage_certificate_omega_star.json"
+
+
+def _omega_star_3(tmp_path: Path, budget: ProductionBudget) -> bytes:
+    """A /3 record as the tool writes it, read back through the tool's own loader (``load_record``)."""
+    path = tmp_path / "coverage_certificate_omega_star.json"
+    path.write_text(omega_star_record(budget).to_json(), encoding="utf-8")
+    return load_omega_star_record(path).to_json().encode()
+
+
+def test_omega_star_3_yields_the_production_budget_beside_the_diagnostic(tmp_path: Path) -> None:
+    budget = quiet_omega_star_budget()
+    entries = {(entry.measurement.workload, entry.measurement.stage): entry for entry in record_entries(OMEGA_STAR, _omega_star_3(tmp_path, budget), _no_sibling)}
+    family = "coverage_certificate_omega_star"
+    assert set(entries) == {
+        ("figure8_monstera", f"{family}/certificate"),
+        ("figure8_monstera", f"{family}/target_build"),
+        ("figure8_monstera", f"{family}/attribution"),
+        (PRODUCTION_WORKLOAD, f"{family}/budget"),
+    }
+    gated = entries[(PRODUCTION_WORKLOAD, f"{family}/budget")]
+    cpu = [run.cpu_s for run in budget.runs]
+    assert gated.measurement.cpu == ClockSummary.over_runs(cpu) and gated.measurement.cpu.minimum == min(cpu) == budget.cpu.gated
+    assert gated.measurement.wall == ClockSummary.over_runs([run.wall_s for run in budget.runs])
+    assert gated.quiet and gated.measurement.load_before == LoadAverage1m(budget.runs[0].load_1min)
+
+
+def test_an_indicative_omega_star_3_budget_yields_indicative_entries(tmp_path: Path) -> None:
+    budget = ProductionBudget.build(tuple(omega_star_budget_run(4.0, load=BUDGET_LOAD_LOADED) for _ in range(BUDGET_RUNS)), indicative=True)
+    gated = next(entry for entry in record_entries(OMEGA_STAR, _omega_star_3(tmp_path, budget), _no_sibling) if entry.measurement.stage.endswith("/budget"))
+    assert not gated.quiet and gated.measurement.record_indicative is not None
+
+
+def test_an_omega_star_3_budget_the_gate_refuses_is_refused(tmp_path: Path) -> None:
+    raw = json.loads(_omega_star_3(tmp_path, quiet_omega_star_budget()))
+    raw["budget"]["runs"] = raw["budget"]["runs"][:-1]
+    with pytest.raises(MalformedTimingRecordError, match="budget"):
+        adapt(OMEGA_STAR, json.dumps(raw).encode(), _no_sibling)
 
 
 # --- adapters round-trip every committed record ------------------------------------------------------

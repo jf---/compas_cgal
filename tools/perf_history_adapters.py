@@ -35,6 +35,9 @@ from pathlib import PurePosixPath
 from typing import Any
 from typing import Optional
 
+from benchmarks.errors import BenchmarkError
+from tools.coverage_certificate_budget_gate import ProductionBudget
+from tools.held_generation_clock import MachineNotQuietError
 from tools.perf_history_adapter_types import AdaptedRecord
 from tools.perf_history_adapter_types import Adapter
 from tools.perf_history_adapter_types import SiblingReader as SiblingReader
@@ -253,16 +256,41 @@ def coverage_certificate_cost_model(raw: Any, _sibling: SiblingReader) -> Adapte
 
 # ``tools.coverage_certificate_omega_star.CASE``: the polygonal Monstera path the diagnostic certifies.
 OMEGA_STAR_WORKLOAD = "figure8_monstera"
+# The schema whose ``budget`` is the production workload's gate (``tools.coverage_certificate_budget_gate``).
+OMEGA_STAR_BUDGET_SCHEMA = "coverage-certificate-omega-star/3"
+
+
+def _omega_star_budget(record: Mapping[str, Any], family: str) -> Measurement:
+    """The /3 production budget, read through ``ProductionBudget.from_raw`` (the gate's own validating loader).
+
+    CPU and wall over the fresh-process runs; load before is the parent's reading
+    before the first run, load after the worker's reading after the last certificate.
+    """
+    try:
+        budget = ProductionBudget.from_raw(dict(obj(field(record, "budget", "record"), "budget")))
+    except (BenchmarkError, MachineNotQuietError) as error:
+        raise MalformedTimingRecordError(f"{family}: budget: {error}") from error
+    load = (LoadAverage1m(budget.runs[0].load_1min), LoadAverage1m(budget.runs[-1].certificate_load_1min[1]))
+    downgrade = "the record marks the budget runs indicative (measured without the quiet-machine check)" if budget.indicative else None
+    return Measurement(
+        budget.workload,
+        f"{family}/budget",
+        ClockSummary.over_runs([run.cpu_s for run in budget.runs]),
+        ClockSummary.over_runs([run.wall_s for run in budget.runs]),
+        load[0],
+        load[1],
+        downgrade,
+    )
 
 
 def coverage_certificate_omega_star(raw: Any, _sibling: SiblingReader) -> AdaptedRecord:
-    """Schemas /1 and /2: the diagnostic certificate runs (CPU and wall, load per run) and its one-off phases.
+    """The diagnostic certificate runs (CPU and wall, load per run) and its one-off phases; from /3 also the production budget.
 
-    Schema /3 moves the budget verdict to a production workload; it is not read
-    until a /3 record exists to pin its adapter against.
+    /3 keeps the /2 diagnostic fields and adds ``budget``: the production
+    workload's fresh-process runs (``_omega_star_budget``).
     """
     record = obj(raw, "record")
-    schema = _require_schema(record, ("coverage-certificate-omega-star/1", "coverage-certificate-omega-star/2"), "coverage_certificate_omega_star")
+    schema = _require_schema(record, ("coverage-certificate-omega-star/1", "coverage-certificate-omega-star/2", OMEGA_STAR_BUDGET_SCHEMA), "coverage_certificate_omega_star")
     family = "coverage_certificate_omega_star"
     cpu = numbers(field(record, "runs_cpu_s", "record"), "runs_cpu_s")
     wall = numbers(field(record, "runs_wall_s", "record"), "runs_wall_s")
@@ -274,8 +302,10 @@ def coverage_certificate_omega_star(raw: Any, _sibling: SiblingReader) -> Adapte
         Measurement(OMEGA_STAR_WORKLOAD, f"{family}/certificate", ClockSummary.over_runs(cpu), ClockSummary.over_runs(wall), load[0], load[1]),
         _wall(OMEGA_STAR_WORKLOAD, f"{family}/target_build", ClockSummary.single(number(field(record, "target_build_s", "record"), "target_build_s"))),
     ]
-    if schema == "coverage-certificate-omega-star/2":
+    if schema in ("coverage-certificate-omega-star/2", OMEGA_STAR_BUDGET_SCHEMA):
         measurements.append(_wall(OMEGA_STAR_WORKLOAD, f"{family}/attribution", ClockSummary.single(number(field(record, "attribution_s", "record"), "attribution_s"))))
+    if schema == OMEGA_STAR_BUDGET_SCHEMA:
+        measurements.append(_omega_star_budget(record, family))
     return AdaptedRecord(_build_provenance(record, "identity"), tuple(measurements))
 
 

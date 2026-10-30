@@ -458,7 +458,9 @@ flank-touching gap for (c) and none for the connector case.
   in ℚ(√δ)². It is in the data model from the start (`VertexDisk` in
   `target.py`, `VertexDisk` in `target_2.h`), and its membership is decided
   exactly (sign of A + B√δ, with δ = 0 and B = 0 folded away first).
-- The budget is ≤ 5 s on one core for Monstera.
+- The budget is ≤ 5 s of certificate process CPU (all threads) on the Monstera
+  production path, as the minimum of 5 fresh-process runs on a quiet machine
+  (the budget gate under [The exact target Ω\*](#the-exact-target)).
 - There is no `AmbiguousBranchError`. The spike aborted when the two certified
   branch boxes of a near-tangent pair overlapped. Here the branch labels are
   always decided by an exact rational matcher: p₊ − p₋ = 2s·(−d_y, d_x) with
@@ -745,11 +747,32 @@ Defect injection results:
 The last injection changes the exposed-edge counts but flipped no verdict in
 520 random cusp configurations. A raster search found no false pass either.
 
-**Monstera.** The current generator's polygonal-Ω path is certified against
-T(Ω\*) by `tools/coverage_certificate_omega_star.py`. Every cluster's first
-witness is re-checked by the same two independent oracles. Every witness is
-attributed to the declared piece that realises its exact minimum distance
-(one-root comparisons, ties to the lowest primitive index). Regenerate with:
+**Monstera.** The record below holds two workloads, kept apart.
+
+- **Budget gate** (`tools/coverage_certificate_budget_gate.py`). The production
+  workload `figure8_monstera_boundary_qualified_corners` is the Ω\*-built path
+  with exact ∂Ω\* connectors. It is certified against T(Ω\*) in 5 fresh
+  processes.
+  - The verdict compares the **minimum process CPU** of the certificate with
+    the 5 s budget. Wall time is reported but not gated.
+  - A verdict counts only from a quiet machine. Before every run, a 1-minute
+    load above 2 raises `MachineNotQuietError`.
+  - `--indicative` measures at any load and records each run's load. Its
+    numbers are marked INDICATIVE and carry no verdict.
+- **Diagnostic, not the budget gate.** The current generator's polygonal-Ω
+  path is certified against T(Ω\*) by `tools/coverage_certificate_omega_star.py`
+  to prove and attribute its non-coverage.
+  - Every cluster's first witness is re-checked by the same two independent
+    oracles.
+  - Every witness is attributed to the declared piece that realises its exact
+    minimum distance (one-root comparisons, ties to the lowest primitive
+    index).
+  - Its time includes producing every witness and is never compared with the
+    budget.
+
+Regenerate both on a quiet machine. Re-render from the stored JSON without
+measuring with `--render`, which refuses a record of an older schema: such a
+record must be re-measured, never rendered.
 
 ```bash
 pixi run coverage-certificate-omega-star
@@ -770,7 +793,8 @@ Reading it:
   close them
   ([Coverage target and the exact path](held_exact_centre_domain.md#coverage-target-and-the-exact-path)).
 - **0 unexplained.**
-- **Cost.** About 2× the polygonal target on the same path. Two things drive it:
+- **Diagnostic cost** (not the budget). About 2× the polygonal target on the
+  same path. Two things drive it:
   - The witness phase scales with the 4078 witnesses.
   - Exact decisions on 2000-bit vertex numbers occur where connector caps sit
     within ulps of vertex circles: the polygon vertices are projected contacts
