@@ -530,25 +530,6 @@ def render_time_gate_table(gate: PipelineTimeGate) -> str:
     return "\n".join(lines) + "\n"
 
 
-# The native sources whose change makes a different `_stock_2` (git pathspecs; `*` matches across directories).
-NATIVE_SOURCE_PATHSPECS = ("src/*.cpp", "src/*.h", "src/*.hpp", "CMakeLists.txt")
-# `git diff --quiet` exit status when the trees differ.
-GIT_DIFF_DIFFERS = 1
-
-
-def native_sources_differ(rev_a: str, rev_b: str) -> bool:
-    """Whether the native sources (`NATIVE_SOURCE_PATHSPECS`) differ between the commits *rev_a* and *rev_b*.
-
-    Raises:
-        subprocess.CalledProcessError: git failed (a revision names no commit).
-    """
-    # ``:(top)``: the pathspecs name repository paths wherever ROOT sits (an export under ``build/`` is a subdirectory).
-    completed = subprocess.run(["git", "diff", "--quiet", rev_a, rev_b, "--", *(f":(top){spec}" for spec in NATIVE_SOURCE_PATHSPECS)], cwd=ROOT, capture_output=True, check=False)
-    if completed.returncode not in (0, GIT_DIFF_DIFFERS):
-        raise subprocess.CalledProcessError(completed.returncode, completed.args, completed.stdout, completed.stderr)
-    return completed.returncode == GIT_DIFF_DIFFERS
-
-
 def resolve_commit(rev: str) -> str:
     """The full commit id of *rev*.
 

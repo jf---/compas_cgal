@@ -15,7 +15,7 @@ HELIX operations come from the real emitter (`tests.benchmarks.helix_fixtures`).
 from __future__ import annotations
 
 import dataclasses
-import json
+from pathlib import Path
 
 import pytest
 
@@ -60,8 +60,10 @@ from tests.benchmarks.helix_fixtures import make_helix
 from tests.benchmarks.helix_fixtures import result
 from tools.gate_measure import CRITERIA
 from tools.gate_measure import MeasuredCriterion
-from tools.gate_vectors import RebaselineRecord
+from tools.gate_vectors import GATE_VECTORS_PATH
+from tools.gate_vectors import load_gate_vectors
 
+ROOT = Path(__file__).resolve().parents[2]
 SAMPLES = 8
 # 12 mm / 120 = 0.1 mm cells: the coarsest grid that still resolves residue at r = 1 (CoarseCoverageGridError).
 COARSE_GRID = 120
@@ -72,7 +74,7 @@ COARSE_GRID = 120
 STEEPER_THAN_CAP_DEG = 1.9
 
 # The re-baseline record of the "1.2" rules bump (Ruling 1.2-D2), as the
-# orchestrator writes it at the gate run (`build/task12/g2-rebaseline-draft.json`).
+# committed `benchmarks/results/gate_vectors.json` must carry it.
 REBASELINE_1_2 = {
     "from": "0.3",
     "approval": "Ruling 1.2-D2: USER-APPROVED 2026-10-16",
@@ -324,9 +326,10 @@ def test_the_1_2_stage_rows_are_in_force() -> None:
 
 def test_the_1_2_rebaseline_record_validates() -> None:
     gated = tuple(criterion.spec.name for criterion in CRITERIA if criterion.spec.direction == "lower")
-    record = RebaselineRecord.build(json.loads(json.dumps(REBASELINE_1_2)), gated)
+    record = load_gate_vectors(ROOT / GATE_VECTORS_PATH).rebaseline
     assert record is not None
-    assert record.criteria == tuple(REBASELINE_1_2["criteria"])
+    assert record.to_json() == REBASELINE_1_2
+    assert set(record.criteria) <= set(gated)
     assert record.retired == ("max_loop_radius_step",)
 
 

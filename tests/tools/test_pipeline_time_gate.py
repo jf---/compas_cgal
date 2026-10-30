@@ -46,7 +46,6 @@ from tools.pipeline_time_gate import TimeGateMode
 from tools.pipeline_time_gate import UnrecordedLoadError
 from tools.pipeline_time_gate import committed_time_gate_base
 from tools.pipeline_time_gate import main
-from tools.pipeline_time_gate import native_sources_differ
 from tools.pipeline_time_gate import render_time_gate_table
 from tools.pipeline_time_gate import session_time_gate_base
 from tools.pipeline_timing_results import PIPELINE_TIMING_PATH
@@ -616,8 +615,3 @@ def test_records_from_another_environment_yield_no_verdict(field: str) -> None:
 def test_a_base_from_another_harness_yields_no_verdict() -> None:
     with pytest.raises(BaseToolMismatchError):
         _build(_base(), _costs(), tool="8" * 64)
-
-
-def test_the_native_sources_of_the_1_1_and_head_trees_differ() -> None:
-    assert native_sources_differ(BASE_REV, "HEAD") is True
-    assert native_sources_differ("HEAD", "HEAD") is False

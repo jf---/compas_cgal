@@ -14,18 +14,33 @@ and no frozen generator.
 
 !!! warning "Task 1.2 status: under verification"
     The helical entry, the pencil ramp-out and the gate's helix branches are
-    built and reviewed, but not yet measured by a gate run. The `Measured`
-    and `Figures` sections below still show the Task 1.1 pins until
-    `pixi run gate-vectors` and `pixi run gate-figures` are re-run. The probe
-    numbers quoted in [The helical entry](#the-helical-entry) are leads from
-    scratch probes, not gate cells.
+    built, reviewed and measured by the 1.2 gate run (rules "1.2") and the
+    serial timing run; `Measured` and `Generation time` below are those runs.
 
+    - **`cap_exceedances` is 0 on all six cases** (1 at Task 1.1), strictly
+      below `rho_regulated` (1 / 5 / 1 at 120°, 5 / 5 / 6 at 40°).
+    - **No `pipeline` cell is above `rho_regulated`** on any lower-is-better
+      criterion. `material_plunges` = 1 and `ramp_angle_violations` = 0 on
+      every case; `max_loop_radius_step` is at most 1.024, within its `≤ 2r`
+      row.
+    - **The frozen columns are unchanged**: every quality cell equals the
+      rules 0.3 base; the new `ramp_angle_violations` reads 0.
     - **Generation time: verdict pending `C_pencil`.** The amended rule (D6)
       holds each 1.2 serial median to the slowest 1.1 run plus the pencil's
       own decision cost. The verdict, its base (the 1.1 tree's committed
       timing record) and the measured load are generated on the
       generation-time gate page in
       [Stage 1 gate results](refactor/stage1.md#gate-results).
+    - **Known gap, parked: clockwise `LINK` arcs are stored as their CCW
+      complement** (`emit.arc_operation`). Reported lengths, `recut_fraction`,
+      the length-weighted engagement statistics and the drawn arcs are wrong;
+      the gated cells are right, since every cutting decision reads the
+      endpoints and the `clockwise` flag. The fix changes every pipeline
+      digest and reported cell, so it is its own commit
+      ([Stage 1 record](refactor/stage1.md#known-open-defect-cw-arcs-stored-as-their-complement)).
+
+    The probe numbers quoted in [The helical entry](#the-helical-entry) are
+    leads from scratch probes, not gate cells.
 
 The gate measures it as the `pipeline` column, beside the frozen columns and
 the `rho_regulated` reference column. Admission ruling `0.3-C2-amend` admits
@@ -177,9 +192,11 @@ decision Q5); the true medial-axis vertex is Task 2.5's. Re-entries stay
 plunges: on every gate pocket they land in cleared stock (probe P8 found no
 re-entry into material at either cap), so a helix there would bore air.
 
-!!! note "Design: confirmed by review; gate cells: under verification"
-    Every rule below is in the tree and pinned by tests. Whether it moves the
-    gated cells as the probes predict is pending the 1.2 gate run.
+!!! note "Design: confirmed by review; gate cells: measured"
+    Every rule below is in the tree and pinned by tests. The 1.2 gate run
+    moves the gated cells as the probes predicted: `cap_exceedances` 1 → 0
+    on all six cases, `max_engagement_step_deg` and `uncut_fraction` equal to
+    Task 1.1's ([Stage 1 gate results](refactor/stage1.md#gate-results)).
 
 ### Footprint and the ρ_h floor rule
 

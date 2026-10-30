@@ -24,8 +24,10 @@ pipeline case. How the stages work is on
 Task 1.2 replaces the first plunge with a helical entry and a tangent-pencil
 ramp-out, aimed at the one exceedance left on every case, the full-immersion
 root loop after the plunge. Its record is in
-[Task 1.2: the helical entry](#task-12-the-helical-entry); its gate results
-are pending.
+[Task 1.2: the helical entry](#task-12-the-helical-entry). Its
+[gate results](#gate-results): `cap_exceedances` is 0 on all six cases and no
+`pipeline` cell is above rho; the generation-time verdict waits for
+`C_pencil`.
 
 ## Measured
 
@@ -248,8 +250,9 @@ full-immersion root loop after the plunge, op 1, on every case (probe P8).
 The mechanism is on [The helical entry](../pipeline.md#the-helical-entry).
 
 !!! warning "Status: under verification"
-    Every part below is built and reviewed; the gate run, the serial timing
-    run and the figures are pending. Time box: two working days from
+    Every part below is built and reviewed, and the gate run and the serial
+    timing run are in ([Gate results](#gate-results)). The generation-time
+    verdict waits for `C_pencil`. Time box: two working days from
     2026-10-16, one dispatch plus at most one fix round (user decision Q2).
 
 ### What changed
@@ -327,10 +330,9 @@ The mechanism is on [The helical entry](../pipeline.md#the-helical-entry).
 
 ### Gate results
 
-Pending the 1.2 gate run: the quality cells are filled from
-`benchmarks/results/gate_vectors.md` after it. "1.1" is the Task 1.1
-commit's cell; "rho" is `rho_regulated` at the same cap and pocket.
-`generation_s` is not in this table: its
+From `benchmarks/results/gate_vectors.md` (rules 1.2), against the rules 0.3
+vectors. "1.1" is the Task 1.1 cell; "rho" is `rho_regulated` at the same cap
+and pocket, from the 1.2 run. `generation_s` is not in this table: its
 verdict (D6) is generated, in the generation-time gate below the table, by
 `python -m tools.pipeline_time_gate` from three records. Its 1.1
 base is the slowest of the three serial runs in the `pipeline_timing.json`
@@ -366,34 +368,66 @@ measured on the code it excuses: a slowdown inside the pencil's decisions,
 including the cap machinery they share, is credited automatically, so the
 gate bounds only the time outside them.
 
-| case | criterion | pipeline 1.2 | pipeline 1.1 | rho |
-| --- | --- | --- | --- | --- |
-| 120 rect_12x8 | cap_exceedances | pending | pending | pending |
-| 120 rect_12x8 | max_engagement_step_deg | pending | pending | pending |
-| 120 rect_12x8 | max_loop_radius_step | pending | pending | pending |
-| 120 rect_12x8 | uncut_fraction | pending | pending | pending |
-| 120 rect_20x12 | cap_exceedances | pending | pending | pending |
-| 120 rect_20x12 | max_engagement_step_deg | pending | pending | pending |
-| 120 rect_20x12 | max_loop_radius_step | pending | pending | pending |
-| 120 rect_20x12 | uncut_fraction | pending | pending | pending |
-| 120 L_shape | cap_exceedances | pending | pending | pending |
-| 120 L_shape | max_engagement_step_deg | pending | pending | pending |
-| 120 L_shape | max_loop_radius_step | pending | pending | pending |
-| 120 L_shape | uncut_fraction | pending | pending | pending |
-| 40 rect_12x8 | cap_exceedances | pending | pending | pending |
-| 40 rect_12x8 | max_engagement_step_deg | pending | pending | pending |
-| 40 rect_12x8 | max_loop_radius_step | pending | pending | pending |
-| 40 rect_12x8 | uncut_fraction | pending | pending | pending |
-| 40 rect_20x12 | cap_exceedances | pending | pending | pending |
-| 40 rect_20x12 | max_engagement_step_deg | pending | pending | pending |
-| 40 rect_20x12 | max_loop_radius_step | pending | pending | pending |
-| 40 rect_20x12 | uncut_fraction | pending | pending | pending |
-| 40 L_shape | cap_exceedances | pending | pending | pending |
-| 40 L_shape | max_engagement_step_deg | pending | pending | pending |
-| 40 L_shape | max_loop_radius_step | pending | pending | pending |
-| 40 L_shape | uncut_fraction | pending | pending | pending |
+- **`cap_exceedances` is 0 on all six cases**, 1 → 0 against 1.1, strictly
+  below rho everywhere (Q1).
+- **No `pipeline` cell is above rho** on any lower-is-better criterion, at
+  either cap, in any pocket. The ties stay ties: the L's
+  `max_engagement_step_deg` at both caps and the 40° rect_20x12
+  `uncut_fraction`.
+- **Every other 1.1 cell holds**: `max_engagement_step_deg` and
+  `uncut_fraction` equal 1.1's on all six cases. `max_loop_radius_step` rises
+  only on the 120° L (0.106 → 0.340), within its `≤ 2r` row (D4).
+- **The frozen columns are unchanged**: every quality cell of
+  `engagement_controlled`, `radius_regulated` and `rho_regulated` equals the
+  base on all 18 of their cases. The only addition is the new
+  `ramp_angle_violations` = 0. Their ops digests and operation counts equal
+  the 1.1 timing run's.
+
+| case | criterion | pipeline 1.2 | pipeline 1.1 | rho | verdict |
+| --- | --- | --- | --- | --- | --- |
+| 120 rect_12x8 | cap_exceedances | 0 | 1 | 1 | < rho |
+| 120 rect_12x8 | max_engagement_step_deg | 11.23 | 11.23 | 11.44 | < rho |
+| 120 rect_12x8 | max_loop_radius_step | 0.877 | 0.877 | 1.368 | ≤ 2r |
+| 120 rect_12x8 | uncut_fraction | 0.028182 | 0.028182 | 0.029510 | < rho |
+| 120 rect_12x8 | material_plunges | 1 | 1 | 5 | = required (1) |
+| 120 rect_12x8 | ramp_angle_violations | 0 | — | 0 | = required (0) |
+| 120 rect_20x12 | cap_exceedances | 0 | 1 | 5 | < rho |
+| 120 rect_20x12 | max_engagement_step_deg | 15.26 | 15.26 | 20.77 | < rho |
+| 120 rect_20x12 | max_loop_radius_step | 1.024 | 1.024 | 1.376 | ≤ 2r |
+| 120 rect_20x12 | uncut_fraction | 0.010871 | 0.010871 | 0.011708 | < rho |
+| 120 rect_20x12 | material_plunges | 1 | 1 | 5 | = required (1) |
+| 120 rect_20x12 | ramp_angle_violations | 0 | — | 0 | = required (0) |
+| 120 L_shape | cap_exceedances | 0 | 1 | 1 | < rho |
+| 120 L_shape | max_engagement_step_deg | 10.00 | 10.00 | 10.00 | = rho |
+| 120 L_shape | max_loop_radius_step | 0.340 | 0.106 | 0.988 | ≤ 2r |
+| 120 L_shape | uncut_fraction | 0.034611 | 0.034611 | 0.035217 | < rho |
+| 120 L_shape | material_plunges | 1 | 1 | 6 | = required (1) |
+| 120 L_shape | ramp_angle_violations | 0 | — | 0 | = required (0) |
+| 40 rect_12x8 | cap_exceedances | 0 | 1 | 5 | < rho |
+| 40 rect_12x8 | max_engagement_step_deg | 7.12 | 7.12 | 12.87 | < rho |
+| 40 rect_12x8 | max_loop_radius_step | 0.105 | 0.105 | 1.368 | ≤ 2r |
+| 40 rect_12x8 | uncut_fraction | 0.028069 | 0.028069 | 0.029510 | < rho |
+| 40 rect_12x8 | material_plunges | 1 | 1 | 5 | = required (1) |
+| 40 rect_12x8 | ramp_angle_violations | 0 | — | 0 | = required (0) |
+| 40 rect_20x12 | cap_exceedances | 0 | 1 | 5 | < rho |
+| 40 rect_20x12 | max_engagement_step_deg | 7.54 | 7.54 | 18.35 | < rho |
+| 40 rect_20x12 | max_loop_radius_step | 0.106 | 0.106 | 1.094 | ≤ 2r |
+| 40 rect_20x12 | uncut_fraction | 0.010871 | 0.010871 | 0.010871 | = rho |
+| 40 rect_20x12 | material_plunges | 1 | 1 | 5 | = required (1) |
+| 40 rect_20x12 | ramp_angle_violations | 0 | — | 0 | = required (0) |
+| 40 L_shape | cap_exceedances | 0 | 1 | 6 | < rho |
+| 40 L_shape | max_engagement_step_deg | 6.13 | 6.13 | 6.13 | = rho |
+| 40 L_shape | max_loop_radius_step | 0.071 | 0.071 | 0.988 | ≤ 2r |
+| 40 L_shape | uncut_fraction | 0.034535 | 0.034535 | 0.035217 | < rho |
+| 40 L_shape | material_plunges | 1 | 1 | 6 | = required (1) |
+| 40 L_shape | ramp_angle_violations | 0 | — | 0 | = required (0) |
 
 --8<-- "benchmarks/results/pipeline_time_gate.md"
+
+Rebaseline record (`gate_vectors.json`, `rebaseline`): from rules "0.3",
+approval "Ruling 1.2-D2: USER-APPROVED 2026-10-16", criteria
+`material_plunges`, `ramp_angle_violations`, `max_engagement_step_deg`,
+`cap_exceedances` and `misplaced_plunges`; retired `max_loop_radius_step`.
 
 ### Known open defect: CW arcs stored as their complement
 
