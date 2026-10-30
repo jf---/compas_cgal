@@ -10,6 +10,9 @@ from pathlib import Path
 import pytest
 
 import tools.pipeline_timing as pipeline_timing
+from tools.held_native_identity import NativeBuildChangedError
+from tools.run_native_identity import NativeFinisher
+from tools.run_native_identity import NativeIdentity
 from tools.gate_measure import case_key
 from tools.gate_measure import gate_cases
 from tools.pipeline_timing import RESULT_LINE_PREFIX
@@ -22,11 +25,16 @@ from tools.pipeline_timing import measure_pipeline_timings
 from tools.pipeline_timing_results import PIPELINE_TIMING_PATH
 from tools.pipeline_timing_results import PIPELINE_TIMING_TABLE_PATH
 from tools.pipeline_timing_results import RUNS_PER_CASE
+from tools.pipeline_timing_results import SCHEMA
+from tools.pipeline_timing_results import SCHEMA_WITHOUT_LOAD
 from tools.pipeline_timing_results import CaseTiming
 from tools.pipeline_timing_results import MalformedPipelineTimingsError
 from tools.pipeline_timing_results import PipelineTimings
 from tools.pipeline_timing_results import load_pipeline_timings
 from tools.pipeline_timing_table import render_pipeline_timing_table
+from tools.run_provenance import RunProvenance
+from tools.run_provenance import TreeChangedDuringRunError
+from tools.run_provenance import TreeIdentity
 
 ROOT = Path(__file__).resolve().parents[2]
 DOCS_PAGE = ROOT / "docs" / "pipeline.md"
@@ -37,6 +45,51 @@ OTHER_DIGEST = "fedcba9876543210"
 UNSORTED_RUNS = (0.3, 0.1, 0.2)
 MEDIAN_OF_UNSORTED_RUNS = 0.2
 OPERATIONS = 7
+LOAD_START = (0.5, 0.75, 1.25)
+LOAD_END = (1.0, 1.5, 2.0)
+SHA = "a" * 64
+STARTED = "2026-10-22T18:00:00+00:00"
+ENDED = "2026-10-22T18:10:00+00:00"
+
+
+TREE = ("b" * 40, True, "c" * 64)
+
+
+def _tree() -> TreeIdentity:
+    return TREE
+
+
+NATIVE = NativeIdentity("1" * 64, "2" * 64)
+
+
+def _track_native() -> NativeFinisher:
+    return lambda: NATIVE
+
+
+def _native_build_changed() -> NativeFinisher:
+    def finish() -> NativeIdentity:
+        raise NativeBuildChangedError("a native extension changed on disk during the run")
+
+    return finish
+
+
+def _describe(tree: TreeIdentity, native: NativeIdentity, started_utc: str, ended_utc: str) -> RunProvenance:
+    return RunProvenance(
+        rev=tree[0],
+        dirty=True,
+        patch_sha256=SHA,
+        timing_tool_sha256=SHA,
+        pixi_lock_sha256=SHA,
+        environment="default",
+        python_version="3.12.13",
+        stock_2_sha256=SHA,
+        native_sha256=native.native_sha256,
+        native_sources_sha256=native.native_sources_sha256,
+        host="host.local",
+        cpu_model="Apple M1 Max",
+        started_utc=started_utc,
+        ended_utc=ended_utc,
+    )
 
 
 def _synthetic() -> PipelineTimings:
@@ -83,7 +136,14 @@ def test_a_document_with_two_runs_is_refused() -> None:
 
 def test_the_median_of_three_runs_is_reported() -> None:
     runs = iter(UNSORTED_RUNS)
-    timings = measure_pipeline_timings(KEYS[:1], excluded=(), launch=lambda _key: CaseRun(generation_s=next(runs), operations=OPERATIONS, digest=DIGEST))
+    timings = measure_pipeline_timings(
+        KEYS[:1],
+        describe=_describe,
+        track_native=_track_native,
+        read_tree=_tree,
+        excluded=(),
+        launch=lambda _key: CaseRun(generation_s=next(runs), operations=OPERATIONS, digest=DIGEST),
+    )
     (case,) = timings.cases.values()
     assert case.runs_s == UNSORTED_RUNS
     assert case.median_s == MEDIAN_OF_UNSORTED_RUNS
@@ -96,7 +156,7 @@ def test_every_case_is_launched_once_per_run_serially_case_by_case() -> None:
         launched.append(key)
         return CaseRun(generation_s=0.0, operations=OPERATIONS, digest=DIGEST)
 
-    timings = measure_pipeline_timings(KEYS[:-1], excluded=KEYS[-1:], launch=launch)
+    timings = measure_pipeline_timings(KEYS[:-1], describe=_describe, track_native=_track_native, read_tree=_tree, excluded=KEYS[-1:], launch=launch)
     assert launched == [key for key in KEYS[:-1] for _run in range(RUNS_PER_CASE)]
     assert tuple(timings.cases) == KEYS[:-1]
     assert timings.excluded == KEYS[-1:]
@@ -111,7 +171,7 @@ def test_the_default_launcher_starts_a_fresh_interpreter_per_run(monkeypatch: py
         return subprocess.CompletedProcess(command, 0, stdout=f"noise\n{RESULT_LINE_PREFIX}{payload}\n", stderr="")
 
     monkeypatch.setattr(pipeline_timing.subprocess, "run", run)
-    measure_pipeline_timings(KEYS[:2], excluded=(), launch=launch_fresh_process)
+    measure_pipeline_timings(KEYS[:2], describe=_describe, track_native=_track_native, read_tree=_tree, excluded=(), launch=launch_fresh_process)
     expected = [[sys.executable, "-m", "tools.pipeline_timing", "--case", key] for key in KEYS[:2] for _run in range(RUNS_PER_CASE)]
     assert commands == expected
 
@@ -131,13 +191,27 @@ def test_a_failing_child_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_runs_that_disagree_on_the_digest_are_refused() -> None:
     digests = iter((DIGEST, DIGEST, OTHER_DIGEST))
     with pytest.raises(NondeterministicCaseError):
-        measure_pipeline_timings(KEYS[:1], excluded=(), launch=lambda _key: CaseRun(generation_s=0.0, operations=OPERATIONS, digest=next(digests)))
+        measure_pipeline_timings(
+            KEYS[:1],
+            describe=_describe,
+            track_native=_track_native,
+            read_tree=_tree,
+            excluded=(),
+            launch=lambda _key: CaseRun(generation_s=0.0, operations=OPERATIONS, digest=next(digests)),
+        )
 
 
 def test_runs_that_disagree_on_the_operation_count_are_refused() -> None:
     counts = iter((OPERATIONS, OPERATIONS + 1, OPERATIONS))
     with pytest.raises(NondeterministicCaseError):
-        measure_pipeline_timings(KEYS[:1], excluded=(), launch=lambda _key: CaseRun(generation_s=0.0, operations=next(counts), digest=DIGEST))
+        measure_pipeline_timings(
+            KEYS[:1],
+            describe=_describe,
+            track_native=_track_native,
+            read_tree=_tree,
+            excluded=(),
+            launch=lambda _key: CaseRun(generation_s=0.0, operations=next(counts), digest=DIGEST),
+        )
 
 
 def test_the_pipeline_page_includes_the_generated_timing_table() -> None:
@@ -146,3 +220,123 @@ def test_the_pipeline_page_includes_the_generated_timing_table() -> None:
 
 def test_the_committed_timing_table_is_rendered_from_the_committed_timings() -> None:
     assert (ROOT / PIPELINE_TIMING_TABLE_PATH).read_text() == render_pipeline_timing_table(load_pipeline_timings(ROOT / PIPELINE_TIMING_PATH))
+
+
+def _with_load() -> PipelineTimings:
+    timings = _synthetic()
+    return PipelineTimings(cases=timings.cases, excluded=timings.excluded, load_start=LOAD_START, load_end=LOAD_END, provenance=_describe(TREE, NATIVE, STARTED, ENDED))
+
+
+def test_the_load_before_the_first_case_and_after_the_last_is_recorded() -> None:
+    loads = iter((LOAD_START, LOAD_END))
+    timings = measure_pipeline_timings(
+        KEYS[:1],
+        describe=_describe,
+        track_native=_track_native,
+        read_tree=_tree,
+        excluded=(),
+        launch=lambda _key: CaseRun(generation_s=0.0, operations=OPERATIONS, digest=DIGEST),
+        load_reader=lambda: next(loads),
+    )
+    assert (timings.load_start, timings.load_end) == (LOAD_START, LOAD_END)
+    assert timings.to_json()["schema"] == SCHEMA
+    assert timings.provenance is not None
+    assert timings.provenance.started <= timings.provenance.ended
+
+
+def test_a_document_with_load_round_trips(tmp_path: Path) -> None:
+    timings = _with_load()
+    path = tmp_path / "timing.json"
+    path.write_text(timings.dumps())
+    assert load_pipeline_timings(path) == timings
+    assert timings.quiet is True
+
+
+def test_a_record_written_before_load_was_recorded_loads_unchanged_with_its_load_unrecorded() -> None:
+    raw = _synthetic().to_json()
+    assert raw["schema"] == SCHEMA_WITHOUT_LOAD
+    timings = PipelineTimings.build(raw)
+    assert (timings.load_start, timings.load_end) == (None, None)
+    assert timings.quiet is False
+    assert timings.to_json() == raw
+
+
+def test_a_document_of_the_load_schema_without_its_load_is_refused() -> None:
+    raw = _with_load().to_json()
+    del raw["load_end"]
+    with pytest.raises(MalformedPipelineTimingsError):
+        PipelineTimings.build(raw)
+
+
+def test_a_loaded_run_is_not_quiet() -> None:
+    timings = _synthetic()
+    loaded = PipelineTimings(cases=timings.cases, excluded=timings.excluded, load_start=LOAD_START, load_end=(500.0, 400.0, 300.0))
+    assert loaded.quiet is False
+
+
+def test_the_rendering_states_the_recorded_load_never_an_unconditional_quiet_claim() -> None:
+    with_load = render_pipeline_timing_table(_with_load())
+    assert "0.50 / 0.75 / 1.25 at the start, 1.00 / 1.50 / 2.00 at the end" in with_load
+    without = render_pipeline_timing_table(_synthetic())
+    assert "unrecorded" in without and SCHEMA_WITHOUT_LOAD in without
+    assert "nothing else running" not in with_load + without
+
+
+def test_a_run_quiet_at_its_ends_but_loaded_over_the_last_15_minutes_is_not_quiet() -> None:
+    timings = _synthetic()
+    loaded_mid_run = PipelineTimings(cases=timings.cases, excluded=timings.excluded, load_start=LOAD_START, load_end=(1.0, 1.5, 2.5))
+    assert loaded_mid_run.max_one_minute_load == 1.0
+    assert loaded_mid_run.quiet is False
+
+
+def test_a_document_of_the_load_schema_without_its_provenance_is_refused() -> None:
+    raw = _with_load().to_json()
+    del raw["provenance"]
+    with pytest.raises(MalformedPipelineTimingsError):
+        PipelineTimings.build(raw)
+
+
+def test_a_record_with_load_but_no_provenance_cannot_be_serialised() -> None:
+    timings = _synthetic()
+    partial = PipelineTimings(cases=timings.cases, excluded=timings.excluded, load_start=LOAD_START, load_end=LOAD_END)
+    with pytest.raises(MalformedPipelineTimingsError):
+        partial.to_json()
+
+
+def test_the_rendering_states_the_provenance() -> None:
+    text = render_pipeline_timing_table(_with_load())
+    for phrase in ("b" * 40, "dirty", "host.local", "Apple M1 Max", STARTED, ENDED):
+        assert phrase in text
+
+
+def test_a_tree_that_changes_during_the_run_is_refused() -> None:
+    trees = iter((TREE, ("b" * 40, True, "d" * 64)))
+    with pytest.raises(TreeChangedDuringRunError):
+        measure_pipeline_timings(
+            KEYS[:1],
+            describe=_describe,
+            track_native=_track_native,
+            read_tree=lambda: next(trees),
+            excluded=(),
+            launch=lambda _key: CaseRun(generation_s=0.0, operations=OPERATIONS, digest=DIGEST),
+        )
+
+
+def test_a_measured_record_carries_the_native_identity_of_the_run() -> None:
+    timings = measure_pipeline_timings(
+        KEYS[:1], describe=_describe, track_native=_track_native, read_tree=_tree, excluded=(), launch=lambda _key: CaseRun(generation_s=0.0, operations=OPERATIONS, digest=DIGEST)
+    )
+    assert timings.provenance is not None
+    assert (timings.provenance.native_sha256, timings.provenance.native_sources_sha256) == NATIVE
+
+
+def test_a_native_build_that_changes_during_the_run_is_refused() -> None:
+    with pytest.raises(NativeBuildChangedError):
+        measure_pipeline_timings(
+            KEYS[:1],
+            describe=_describe,
+            track_native=_native_build_changed,
+            read_tree=_tree,
+            excluded=(),
+            launch=lambda _key: CaseRun(generation_s=0.0, operations=OPERATIONS, digest=DIGEST),
+        )

@@ -202,8 +202,8 @@ loop) and replaces per-straight point sampling with one native segment query.
 
 `pixi run pipeline-timing` (`tools.pipeline_timing`) is the time gate: every
 gate generator, `pipeline` and `rho_regulated` included, one case at a time,
-a fresh process per run, median of 3, on a machine with nothing else running.
-Runs that disagree on the operation digest or count fail the task. Seconds are
+a fresh process per run, median of 3. It records the machine's load average
+at the start and the end of the run; the table states it. Runs that disagree on the operation digest or count fail the task. Seconds are
 machine-specific, so compare within one run. The table is regenerated from the
 tree, so it always describes the code it ships with.
 
@@ -325,12 +325,46 @@ The mechanism is on [The helical entry](../pipeline.md#the-helical-entry).
 | M8 type gates | `helix.py`, `helix_units.py`, `pencil.py`, `helix_observation.py`, `survey_station.py` under `mypy --strict` | New package code meets the engineering bar. The two `benchmarks/` modules join `types-benchmarks`, which CI runs; that change is held for a separate go. |
 | L6 | keep the ring warm start | Order-free verdicts, 15–25% fewer ring probes. |
 
-### Gate results — pending gate run
+### Gate results
 
-To be filled from `benchmarks/results/gate_vectors.md` and
-`benchmarks/results/pipeline_timing.md` after the 1.2 gate run. "1.1" is the
-Task 1.1 commit's cell; "rho" is `rho_regulated` at the same cap and pocket.
-`generation_s` is the serial median from `pixi run pipeline-timing`.
+Pending the 1.2 gate run: the quality cells are filled from
+`benchmarks/results/gate_vectors.md` after it. "1.1" is the Task 1.1
+commit's cell; "rho" is `rho_regulated` at the same cap and pocket.
+`generation_s` is not in this table: its
+verdict (D6) is generated, in the generation-time gate below the table, by
+`python -m tools.pipeline_time_gate` from three records. Its 1.1
+base is the slowest of the three serial runs in the `pipeline_timing.json`
+committed with the Task 1.1 tree (7b001d47, the default; another base only by
+an explicit flag), read through `git show`, or a same-session re-timing of
+that tree passed in explicitly. It is not the uncommitted pre-generator
+scratch run. Its 1.2 medians come from
+`benchmarks/results/pipeline_timing.json`. Its `C_pencil` comes from
+`benchmarks/results/pipeline_pencil_cost.json`. The gate refuses a verdict
+unless the 1.1 base is a same-session re-timing, and it checks this from the
+records, not from a flag. `tools.pipeline_timing_1_1_base` times the
+unmodified 7b001d47 worktree through the 1.1 tool's own per-case child mode,
+with the 1.1 tree's own editable build pinned, after first bringing that build
+up to date with the 1.1 tree's own `_editable-rebuild` task (a failing rebuild
+refuses the run with `BaseRebuildFailedError`), and refuses an interpreter
+whose `compas_cgal` or `_stock_2` lies outside that worktree. It records the
+load and the provenance. Every record carries its provenance:
+commit, modification digest (every tracked and untracked change except the
+gate's own output records under `benchmarks/results/`, `GATE_OUTPUT_RECORDS`
+in `tools/run_provenance.py`, so writing them does not change the tree's
+identity), tool digest, `pixi.lock`, environment, Python,
+`_stock_2` digest, host, CPU and UTC interval. The gate verifies six things:
+the base's commit is 7b001d47, the base is unmodified and written by the
+wrapper; the base did not time the 1.2 library (its `_stock_2` digest must
+differ when the native sources do); the 1.2 timing and pencil records each
+describe one unchanged tree, the same one; all three ran on one machine in
+one environment with one lock; they ran in the order base, 1.2 timing, pencil, each starting within
+15 minutes of the previous end; and every load is within the quiet limit
+(1-minute and 15-minute load 2). A loaded base inflates its slowest run and
+loosens the bound. The committed 7b001d47 record has no load or provenance,
+so with it the page is pending or indicative, never a verdict. `C_pencil` is
+measured on the code it excuses: a slowdown inside the pencil's decisions,
+including the cap machinery they share, is credited automatically, so the
+gate bounds only the time outside them.
 
 | case | criterion | pipeline 1.2 | pipeline 1.1 | rho |
 | --- | --- | --- | --- | --- |
@@ -338,32 +372,28 @@ Task 1.1 commit's cell; "rho" is `rho_regulated` at the same cap and pocket.
 | 120 rect_12x8 | max_engagement_step_deg | pending | pending | pending |
 | 120 rect_12x8 | max_loop_radius_step | pending | pending | pending |
 | 120 rect_12x8 | uncut_fraction | pending | pending | pending |
-| 120 rect_12x8 | generation_s | pending | pending | pending |
 | 120 rect_20x12 | cap_exceedances | pending | pending | pending |
 | 120 rect_20x12 | max_engagement_step_deg | pending | pending | pending |
 | 120 rect_20x12 | max_loop_radius_step | pending | pending | pending |
 | 120 rect_20x12 | uncut_fraction | pending | pending | pending |
-| 120 rect_20x12 | generation_s | pending | pending | pending |
 | 120 L_shape | cap_exceedances | pending | pending | pending |
 | 120 L_shape | max_engagement_step_deg | pending | pending | pending |
 | 120 L_shape | max_loop_radius_step | pending | pending | pending |
 | 120 L_shape | uncut_fraction | pending | pending | pending |
-| 120 L_shape | generation_s | pending | pending | pending |
 | 40 rect_12x8 | cap_exceedances | pending | pending | pending |
 | 40 rect_12x8 | max_engagement_step_deg | pending | pending | pending |
 | 40 rect_12x8 | max_loop_radius_step | pending | pending | pending |
 | 40 rect_12x8 | uncut_fraction | pending | pending | pending |
-| 40 rect_12x8 | generation_s | pending | pending | pending |
 | 40 rect_20x12 | cap_exceedances | pending | pending | pending |
 | 40 rect_20x12 | max_engagement_step_deg | pending | pending | pending |
 | 40 rect_20x12 | max_loop_radius_step | pending | pending | pending |
 | 40 rect_20x12 | uncut_fraction | pending | pending | pending |
-| 40 rect_20x12 | generation_s | pending | pending | pending |
 | 40 L_shape | cap_exceedances | pending | pending | pending |
 | 40 L_shape | max_engagement_step_deg | pending | pending | pending |
 | 40 L_shape | max_loop_radius_step | pending | pending | pending |
 | 40 L_shape | uncut_fraction | pending | pending | pending |
-| 40 L_shape | generation_s | pending | pending | pending |
+
+--8<-- "benchmarks/results/pipeline_time_gate.md"
 
 ### Known open defect: CW arcs stored as their complement
 

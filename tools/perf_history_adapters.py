@@ -15,13 +15,15 @@ entries (``tools.perf_history_entry.indicative_reason`` says "no load
 recorded"). Where a record keeps one load reading per run, the first run's is
 the load before and the last run's the load after.
 
-``pipeline_timing`` /1 is read through its tool's validating loader, so a
-record the tool would refuse is refused here too. ``pipeline_timing`` /2 and
-``pipeline_pencil_cost`` depend on modules of the PENCIL unit; their adapters
-live in ``tools.perf_history_adapters_pipeline`` and are registered here when
-that unit lands (``PENDING_FAMILIES``). Until then /2 raises
-``UnknownRecordSchemaError`` and a pencil-cost record
-``PendingRecordFamilyError``: never a silent skip. A record schema an adapter does not know raises
+``pipeline_timing`` (/1 and /2) and ``pipeline_pencil_cost`` are read by the
+adapters of ``tools.perf_history_adapters_pipeline``, registered here
+(``PIPELINE_FAMILIES`` merged into ``FAMILIES``) through their tools'
+validating loaders, so a record the tool would refuse is refused here too.
+The core's own /1 reader (``pipeline_timing`` below) wrote the history before
+that registration and stays as the reference the registered adapter must
+match on /1 records. A family whose adapter exists but is not registered is
+listed in ``PENDING_FAMILIES`` and raises ``PendingRecordFamilyError``: never
+a silent skip. A record schema an adapter does not know raises
 ``UnknownRecordSchemaError``: a new schema needs its adapter extended, it is
 never guessed at.
 """
@@ -41,6 +43,7 @@ from tools.held_generation_clock import MachineNotQuietError
 from tools.perf_history_adapter_types import AdaptedRecord
 from tools.perf_history_adapter_types import Adapter
 from tools.perf_history_adapter_types import SiblingReader as SiblingReader
+from tools.perf_history_adapters_pipeline import PIPELINE_FAMILIES
 from tools.perf_history_entry import UNRECORDED_MACHINE
 from tools.perf_history_entry import ClockStatistic
 from tools.perf_history_entry import ClockSummary
@@ -479,24 +482,29 @@ def held_toolpath_baseline(raw: Any, _sibling: SiblingReader) -> AdaptedRecord:
     return AdaptedRecord(_build_provenance(record, "identity"), tuple(measurements))
 
 
-# The one ``pipeline_timing`` schema the core reads; /2 (load + provenance) is read by
-# ``tools.perf_history_adapters_pipeline``, which lands with the PENCIL unit.
+# The one ``pipeline_timing`` schema the core's reference reader reads; the registered
+# adapter (``tools.perf_history_adapters_pipeline``) reads /1 and /2 (load + provenance).
 PIPELINE_TIMING_CORE_SCHEMA = "pipeline-timing/1"
-# Where the adapters of the pending pipeline families live until they are registered.
+# Where the registered pipeline adapters live.
 PIPELINE_ADAPTERS_MODULE = "tools.perf_history_adapters_pipeline"
 
 
 def pipeline_timing(raw: Any, _sibling: SiblingReader) -> AdaptedRecord:
     """Schema /1 only: per gate case, the fresh-process generation runs (no load, no provenance), read through ``PipelineTimings.build``.
 
+    Not registered: ``FAMILIES`` reads ``pipeline_timing.json`` with ``PIPELINE_ADAPTERS_MODULE``'s
+    adapter. This reader wrote the history's /1 entries before that registration and is the
+    reference the registered adapter must reproduce on /1 records
+    (``tests/tools/test_perf_history_pipeline.py``).
+
     Raises:
-        UnknownRecordSchemaError: any other schema; /2 is read by ``PIPELINE_ADAPTERS_MODULE`` once it is registered.
+        UnknownRecordSchemaError: any other schema; /2 is read by ``PIPELINE_ADAPTERS_MODULE``.
     """
     record = obj(raw, "record")
     if record.get("schema") != PIPELINE_TIMING_CORE_SCHEMA:
         raise UnknownRecordSchemaError(
             f"pipeline_timing: schema {record.get('schema')!r}; the core reads only {PIPELINE_TIMING_CORE_SCHEMA!r}. "
-            f"/2 is read by {PIPELINE_ADAPTERS_MODULE}, registered in tools.perf_history_adapters when the PENCIL unit lands."
+            f"/2 is read by {PIPELINE_ADAPTERS_MODULE}, registered in tools.perf_history_adapters.FAMILIES."
         )
     try:
         timings = PipelineTimings.build(raw)
@@ -525,7 +533,7 @@ def benchmark_report(raw: Any, sibling: SiblingReader) -> AdaptedRecord:
     return AdaptedRecord(provenance, tuple(measurements))
 
 
-# Record file name -> its adapter.
+# Record file name -> its adapter; the pipeline families come from ``PIPELINE_FAMILIES``.
 FAMILIES: Mapping[str, Adapter] = {
     "actual_stock_profile.json": actual_stock_profile,
     "benchmark_report.json": benchmark_report,
@@ -544,18 +552,13 @@ FAMILIES: Mapping[str, Adapter] = {
     "held_omega_coverage.json": _held_workload_rows("held_omega_coverage", OMEGA_COVERAGE_STAGES),
     "held_splice_ab.json": held_splice_ab,
     "held_toolpath_baseline.json": held_toolpath_baseline,
-    "pipeline_timing.json": pipeline_timing,
-}
+} | dict(PIPELINE_FAMILIES)
 
 # Families whose adapter exists but is not registered yet: record file name -> where it is.
-# Registration is explicit, in this module and nowhere else: when the PENCIL unit lands,
-# import ``PIPELINE_FAMILIES`` from ``tools.perf_history_adapters_pipeline``, merge it into
-# ``FAMILIES`` (its ``pipeline_timing`` adapter replaces the core's /1 one; on /1 records the
-# two give identical entries, pinned by ``tests/tools/test_perf_history_pipeline.py``), and
-# empty this mapping. Until then a pending record raises ``PendingRecordFamilyError``.
-PENDING_FAMILIES: Mapping[str, str] = {
-    "pipeline_pencil_cost.json": f"its adapter is in {PIPELINE_ADAPTERS_MODULE}, registered when the PENCIL unit lands",
-}
+# Registration is explicit, in this module and nowhere else: import the adapter module's
+# families, merge them into ``FAMILIES`` and remove them here. A pending record raises
+# ``PendingRecordFamilyError``. Empty since the pipeline families were registered.
+PENDING_FAMILIES: Mapping[str, str] = {}
 
 # Family -> the version of its adapter. Bump a family's version whenever its adapter
 # changes what it reads from an unchanged record (a clock relabelled, a stage

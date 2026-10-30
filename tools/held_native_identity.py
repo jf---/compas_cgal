@@ -74,6 +74,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from datetime import timezone
 from typing import Any
+from typing import cast
 
 from benchmarks.errors import BenchmarkError
 from tools.held_source_closure import digest_contents
@@ -213,7 +214,8 @@ class EditableBuild:
         source_directory = pathlib.Path(cache[CMAKE_HOME_DIRECTORY_KEY]).resolve()
         if not directory.is_relative_to(source_directory):
             raise EditableBuildOutsideSourceTreeError(f"the editable build {directory} is not inside its source tree {source_directory}")
-        wheel_files = {name: pathlib.Path(wheel_file).resolve() for name, wheel_file in finder.known_wheel_files.items()}
+        known: Mapping[str, str] = cast("Mapping[str, str]", getattr(finder, "known_wheel_files", {}))
+        wheel_files = {name: pathlib.Path(wheel_file).resolve() for name, wheel_file in known.items()}
         return cls(directory=directory, source_directory=source_directory, wheel_files=wheel_files, make_program=make_program)
 
 

@@ -9,6 +9,7 @@ from pathlib import PurePosixPath
 from typing import Optional
 
 import pytest
+import tools.perf_history_adapters as perf_history_adapters
 import tools.perf_history_ingest as perf_history_ingest
 from tests.tools.test_coverage_certificate_omega_star_budget import LOADED as BUDGET_LOAD_LOADED
 from tests.tools.test_coverage_certificate_omega_star_budget import _quiet_budget as quiet_omega_star_budget
@@ -72,6 +73,8 @@ MACHINE = "Apple M1 Max"
 QUIET = LoadAverage1m(QUIET_LOAD_AVERAGE_MAX)
 LOADED = LoadAverage1m(QUIET_LOAD_AVERAGE_MAX + 0.5)
 BASE_SECONDS = 10.0
+# A commit whose pipeline_timing.json is schema /1 (the last one before the PENCIL unit wrote /2).
+PIPELINE_TIMING_SCHEMA_1_REVISION = "1fcda9c4"
 
 
 def _no_sibling(name: str) -> bytes:
@@ -106,18 +109,21 @@ def test_every_family_has_a_committed_record() -> None:
     assert set(FAMILIES) <= committed
 
 
-def test_a_pending_family_raises_its_own_error_until_its_adapter_is_registered() -> None:
-    assert "pipeline_pencil_cost.json" in PENDING_FAMILIES and not set(PENDING_FAMILIES) & set(FAMILIES)
-    with pytest.raises(PendingRecordFamilyError, match="perf_history_adapters_pipeline"):
-        adapt("benchmarks/results/pipeline_pencil_cost.json", b"{}", _no_sibling)
+def test_the_pipeline_families_are_registered_and_a_pending_family_raises_its_own_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    assert {"pipeline_pencil_cost.json", "pipeline_timing.json"} <= set(FAMILIES) and not PENDING_FAMILIES
+    monkeypatch.setattr(perf_history_adapters, "PENDING_FAMILIES", {"future_timing.json": "its adapter is not registered yet"})
+    with pytest.raises(PendingRecordFamilyError, match="not registered yet"):
+        adapt(f"{RESULTS}/future_timing.json", b"{}", _no_sibling)
 
 
-def test_the_core_reads_pipeline_timing_1_and_refuses_2_by_name() -> None:
-    committed = subprocess.run(["git", "show", f"HEAD:{RESULTS}/pipeline_timing.json"], cwd=ROOT, capture_output=True, check=True).stdout
-    assert json.loads(committed)["schema"] == "pipeline-timing/1"
-    assert record_entries(f"{RESULTS}/pipeline_timing.json", committed, _no_sibling)
-    with pytest.raises(UnknownRecordSchemaError, match="perf_history_adapters_pipeline"):
-        adapt(f"{RESULTS}/pipeline_timing.json", json.dumps({"schema": "pipeline-timing/2"}).encode(), _no_sibling)
+def test_pipeline_timing_reads_schema_1_and_2_and_refuses_another_schema() -> None:
+    schema_1 = subprocess.run(["git", "show", f"{PIPELINE_TIMING_SCHEMA_1_REVISION}:{RESULTS}/pipeline_timing.json"], cwd=ROOT, capture_output=True, check=True).stdout
+    current = (ROOT / RESULTS / "pipeline_timing.json").read_bytes()
+    assert [json.loads(schema_1)["schema"], json.loads(current)["schema"]] == ["pipeline-timing/1", "pipeline-timing/2"]
+    assert record_entries(f"{RESULTS}/pipeline_timing.json", schema_1, _no_sibling)
+    assert record_entries(f"{RESULTS}/pipeline_timing.json", current, _no_sibling)
+    with pytest.raises(MalformedTimingRecordError, match="pipeline_timing"):
+        adapt(f"{RESULTS}/pipeline_timing.json", json.dumps({"schema": "pipeline-timing/3"}).encode(), _no_sibling)
 
 
 def test_an_unknown_record_family_raises() -> None:

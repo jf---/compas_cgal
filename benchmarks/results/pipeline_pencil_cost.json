@@ -1,0 +1,253 @@
+{
+  "schema": "pipeline-pencil-cost/2",
+  "runs_per_case": 3,
+  "timing_sha256": "f480ef3917f7c27bf1bd11e85584353b485cc40a4d0ebaa4a728e0cf145988e3",
+  "indicative": true,
+  "cases": {
+    "cap-120-default/pipeline/rect_12x8": {
+      "runs": [
+        {
+          "generation_s": 3.4815,
+          "decide_s": 0.5403,
+          "first_cut_s": 0.5801
+        },
+        {
+          "generation_s": 2.7324,
+          "decide_s": 0.6675,
+          "first_cut_s": 0.6719
+        },
+        {
+          "generation_s": 2.6008,
+          "decide_s": 0.5865,
+          "first_cut_s": 0.5912
+        }
+      ],
+      "calls": {
+        "TangentPencil.build": 1,
+        "RampOut.build": 1,
+        "RampOut.next_member": 6,
+        "generate.enter_first_cut": 1
+      },
+      "ramp_out_members": 5,
+      "operations": 58,
+      "digest": "e041a91942b4a990",
+      "load_before": [
+        187.25,
+        198.24,
+        209.41
+      ],
+      "load_after": [
+        169.46,
+        193.53,
+        207.46
+      ]
+    },
+    "cap-120-default/pipeline/rect_20x12": {
+      "runs": [
+        {
+          "generation_s": 5.314,
+          "decide_s": 1.257,
+          "first_cut_s": 1.2683
+        },
+        {
+          "generation_s": 4.6676,
+          "decide_s": 1.0366,
+          "first_cut_s": 1.0437
+        },
+        {
+          "generation_s": 4.5104,
+          "decide_s": 0.9542,
+          "first_cut_s": 0.9999
+        }
+      ],
+      "calls": {
+        "TangentPencil.build": 1,
+        "RampOut.build": 1,
+        "RampOut.next_member": 10,
+        "generate.enter_first_cut": 1
+      },
+      "ramp_out_members": 9,
+      "operations": 98,
+      "digest": "58ce345ba90e1fc8",
+      "load_before": [
+        169.46,
+        193.53,
+        207.46
+      ],
+      "load_after": [
+        153.99,
+        187.9,
+        205.02
+      ]
+    },
+    "cap-120-default/pipeline/L_shape": {
+      "runs": [
+        {
+          "generation_s": 4.226,
+          "decide_s": 0.3342,
+          "first_cut_s": 0.3433
+        },
+        {
+          "generation_s": 4.151,
+          "decide_s": 0.1188,
+          "first_cut_s": 0.1219
+        },
+        {
+          "generation_s": 4.131,
+          "decide_s": 0.1716,
+          "first_cut_s": 0.1748
+        }
+      ],
+      "calls": {
+        "TangentPencil.build": 1,
+        "RampOut.build": 1,
+        "RampOut.next_member": 4,
+        "generate.enter_first_cut": 1
+      },
+      "ramp_out_members": 3,
+      "operations": 101,
+      "digest": "c43b842b252e0744",
+      "load_before": [
+        153.99,
+        187.9,
+        205.02
+      ],
+      "load_after": [
+        155.94,
+        186.18,
+        204.01
+      ]
+    },
+    "cap-40-attribution/pipeline/rect_12x8": {
+      "runs": [
+        {
+          "generation_s": 35.991,
+          "decide_s": 4.7161,
+          "first_cut_s": 4.7802
+        },
+        {
+          "generation_s": 37.4175,
+          "decide_s": 5.3354,
+          "first_cut_s": 5.3944
+        },
+        {
+          "generation_s": 36.0132,
+          "decide_s": 4.7289,
+          "first_cut_s": 4.7786
+        }
+      ],
+      "calls": {
+        "TangentPencil.build": 1,
+        "RampOut.build": 1,
+        "RampOut.next_member": 36,
+        "generate.enter_first_cut": 1
+      },
+      "ramp_out_members": 35,
+      "operations": 412,
+      "digest": "aef4dac2e449fc65",
+      "load_before": [
+        155.94,
+        186.18,
+        204.01
+      ],
+      "load_after": [
+        125.01,
+        165.57,
+        193.57
+      ]
+    },
+    "cap-40-attribution/pipeline/rect_20x12": {
+      "runs": [
+        {
+          "generation_s": 92.6313,
+          "decide_s": 8.7404,
+          "first_cut_s": 8.8853
+        },
+        {
+          "generation_s": 78.4971,
+          "decide_s": 8.0465,
+          "first_cut_s": 8.1473
+        },
+        {
+          "generation_s": 82.6041,
+          "decide_s": 8.2878,
+          "first_cut_s": 8.3786
+        }
+      ],
+      "calls": {
+        "TangentPencil.build": 1,
+        "RampOut.build": 1,
+        "RampOut.next_member": 62,
+        "generate.enter_first_cut": 1
+      },
+      "ramp_out_members": 61,
+      "operations": 750,
+      "digest": "25210c38f0c8116b",
+      "load_before": [
+        125.01,
+        165.57,
+        193.57
+      ],
+      "load_after": [
+        110.69,
+        141.9,
+        175.57
+      ]
+    },
+    "cap-40-attribution/pipeline/L_shape": {
+      "runs": [
+        {
+          "generation_s": 27.8324,
+          "decide_s": 2.3327,
+          "first_cut_s": 2.3581
+        },
+        {
+          "generation_s": 28.4863,
+          "decide_s": 2.1337,
+          "first_cut_s": 2.1795
+        },
+        {
+          "generation_s": 30.1132,
+          "decide_s": 2.2984,
+          "first_cut_s": 2.3488
+        }
+      ],
+      "calls": {
+        "TangentPencil.build": 1,
+        "RampOut.build": 1,
+        "RampOut.next_member": 21,
+        "generate.enter_first_cut": 1
+      },
+      "ramp_out_members": 20,
+      "operations": 578,
+      "digest": "606abbab3bec6b02",
+      "load_before": [
+        110.69,
+        141.9,
+        175.57
+      ],
+      "load_after": [
+        61.22,
+        119.41,
+        163.5
+      ]
+    }
+  },
+  "excluded": [],
+  "provenance": {
+    "rev": "86efae96b2f97258cff5743cfc5efaa4ed516b60",
+    "dirty": true,
+    "patch_sha256": "4cc89c3c9ca34711391dc71f5032bf647a0834d5124fde969d2b5f60b6ffc23f",
+    "timing_tool_sha256": "2666af82fdb31b8f130b10052fa07e8405223902ddda378782cce74e9246b51c",
+    "pixi_lock_sha256": "62df58e812a97d6bbc10accf1da4b7064ee86d9ed1826fa30e4612bf37232869",
+    "environment": "default",
+    "python_version": "3.12.13",
+    "stock_2_sha256": "ea82863263606c43b3836b7a5d21ddd73a8c735e6ce74402d018e22b6bfcc0cf",
+    "native_sha256": "d41c7734d172841d05ad744870df30f3be441d3104486169c15e6cac3a324aea",
+    "native_sources_sha256": "09aacb3635db331c898fc0d400665bb9c26c146918b4dbc0b37053cdbef10e16",
+    "host": "jdf.local",
+    "cpu_model": "Apple M1 Max",
+    "started_utc": "2026-10-30T12:35:10+00:00",
+    "ended_utc": "2026-10-30T12:44:09+00:00"
+  }
+}

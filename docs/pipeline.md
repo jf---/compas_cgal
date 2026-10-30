@@ -14,12 +14,18 @@ and no frozen generator.
 
 !!! warning "Task 1.2 status: under verification"
     The helical entry, the pencil ramp-out and the gate's helix branches are
-    built and reviewed, but not yet measured by a gate run. The `Measured`,
-    `Generation time` and `Figures` sections below still show the Task 1.1
-    pins until `pixi run gate-vectors`, `pixi run pipeline-timing` and
-    `pixi run gate-figures` are re-run. The probe numbers quoted in
-    [The helical entry](#the-helical-entry) are leads from scratch probes, not
-    gate cells.
+    built and reviewed, but not yet measured by a gate run. The `Measured`
+    and `Figures` sections below still show the Task 1.1 pins until
+    `pixi run gate-vectors` and `pixi run gate-figures` are re-run. The probe
+    numbers quoted in [The helical entry](#the-helical-entry) are leads from
+    scratch probes, not gate cells.
+
+    - **Generation time: verdict pending `C_pencil`.** The amended rule (D6)
+      holds each 1.2 serial median to the slowest 1.1 run plus the pencil's
+      own decision cost. The verdict, its base (the 1.1 tree's committed
+      timing record) and the measured load are generated on the
+      generation-time gate page in
+      [Stage 1 gate results](refactor/stage1.md#gate-results).
 
 The gate measures it as the `pipeline` column, beside the frozen columns and
 the `rho_regulated` reference column. Admission ruling `0.3-C2-amend` admits
@@ -259,8 +265,8 @@ is a grid value, hence an exact double, and incidence is certified over the
 rationals (`IncidentLoop.certifies_incidence`).
 
 `RampOut.next_member` is one `ladder.furthest_first` scan per member: rungs
-from the root down by `PENCIL_RUNG_MM` (0.01 mm of radius), strictly above
-the previous member. The furthest admissible rung wins. **No bisection**:
+from the root down by `PENCIL_RUNG_TOOL_RADII` (r/100 of radius, 0.01 mm at
+r = 1 mm), strictly above the previous member. The furthest admissible rung wins. **No bisection**:
 engagement is not monotone in the member radius. Conditions per candidate,
 in this order (N1):
 

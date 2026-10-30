@@ -9,6 +9,12 @@ the same cap x generator x pocket construction) one case at a time, each of
 Runs of one case that disagree on the digest or the count fail loud: the
 generators are deterministic, so disagreement is a defect, never noise.
 
+It records the 1/5/15-minute load average before the first case and after the
+last, and the run's `tools.run_provenance.RunProvenance` (schema
+``pipeline-timing/2``). It does not refuse a loaded machine; the
+consumers that need quiet seconds (the generation-time gate,
+`tools.pipeline_time_gate`) read the recorded load and refuse a verdict.
+
 Run as ``pixi run pipeline-timing``; it writes
 `benchmarks/results/pipeline_timing.json` and its rendering
 `benchmarks/results/pipeline_timing.md`.
@@ -19,6 +25,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import subprocess
 import sys
 import time
@@ -29,6 +36,7 @@ from typing import Callable
 from typing import Sequence
 
 from benchmarks.gate import GATE_GENERATORS
+from benchmarks.gate import GateCapDegrees
 from benchmarks.gate import gate_pocket
 from compas_cgal.helix import Helix
 from compas_cgal.toolpath import ToolpathOperation
@@ -39,6 +47,7 @@ from tools.gate_measure import partition_cases
 from tools.gate_vectors import GATE_VECTORS_PATH
 from tools.gate_vectors import load_gate_vectors
 from tools.gate_vectors import replay_admissions
+from tools.held_generation_clock import LoadAverage
 from tools.pipeline_timing_results import DIGEST_HEX_CHARS
 from tools.pipeline_timing_results import PIPELINE_TIMING_PATH
 from tools.pipeline_timing_results import PIPELINE_TIMING_TABLE_PATH
@@ -46,6 +55,20 @@ from tools.pipeline_timing_results import RUNS_PER_CASE
 from tools.pipeline_timing_results import STORED_SECONDS_DECIMALS
 from tools.pipeline_timing_results import CaseTiming
 from tools.pipeline_timing_results import PipelineTimings
+from tools.pipeline_timing_results import stored_load
+from tools.run_native_identity import NativeIdentity
+from tools.run_native_identity import NativeTracker
+from tools.run_native_identity import track_native_here
+from tools.run_provenance import RunProvenance
+from tools.run_provenance import TreeIdentity
+from tools.run_provenance import TreeReader
+from tools.run_provenance import file_set_sha256
+from tools.run_provenance import interpreter_identity_here
+from tools.run_provenance import machine_identity
+from tools.run_provenance import require_unchanged_tree
+from tools.run_provenance import sha256_file
+from tools.run_provenance import tree_identity
+from tools.run_provenance import utc_now
 
 ROOT = Path(__file__).resolve().parents[1]
 # The child prints its result on one stdout line after this prefix, so library
@@ -85,6 +108,17 @@ class CaseRun:
 
 
 Launcher = Callable[[str], CaseRun]
+LoadReader = Callable[[], LoadAverage]
+# Builds a run's provenance from its UTC start and end.
+Describer = Callable[[TreeIdentity, NativeIdentity, str, str], RunProvenance]
+# The sources of this timing tool, digested into the provenance.
+TIMING_TOOL_SOURCES = (
+    Path("tools") / "pipeline_timing.py",
+    Path("tools") / "pipeline_timing_results.py",
+    Path("tools") / "run_provenance.py",
+    Path("tools") / "run_native_identity.py",
+)
+PIXI_LOCK = Path("pixi.lock")
 
 
 def _helix_data(helix: Helix) -> dict[str, Any]:
@@ -155,7 +189,7 @@ def run_case_here(key: str) -> CaseRun:
     if key not in cases:
         raise UnknownTimingCaseError(f"{key!r} is not a gate case.")
     cap, generator, pocket = cases[key]
-    spec = gate_pocket(pocket, tea_cap_deg=cap)  # type: ignore[arg-type]
+    spec = gate_pocket(pocket, tea_cap_deg=GateCapDegrees(cap))
     started = time.perf_counter()
     result = GATE_GENERATORS[generator](spec)
     elapsed = time.perf_counter() - started
@@ -211,18 +245,72 @@ def time_case(key: str, launch: Launcher) -> CaseTiming:
     return CaseTiming(runs_s=tuple(round(run.generation_s, STORED_SECONDS_DECIMALS) for run in runs), operations=first.operations, digest=first.digest)
 
 
-def measure_pipeline_timings(keys: Sequence[str], *, excluded: Sequence[str], launch: Launcher = launch_fresh_process) -> PipelineTimings:
-    """Time *keys* serially, one case at a time, in order.
+def read_this_tree() -> TreeIdentity:
+    """This tree's identity (`ROOT`)."""
+    return tree_identity(ROOT)
+
+
+def describe_this_run(tree: TreeIdentity, native: NativeIdentity, started_utc: str, ended_utc: str) -> RunProvenance:
+    """The provenance of a timing run of this tree (`ROOT`) in this interpreter, between *started_utc* and *ended_utc*."""
+    rev, dirty, patch = tree
+    environment, python_version, stock_2 = interpreter_identity_here()
+    host, cpu_model = machine_identity()
+    return RunProvenance(
+        rev=rev,
+        dirty=dirty,
+        patch_sha256=patch,
+        timing_tool_sha256=file_set_sha256(ROOT, TIMING_TOOL_SOURCES),
+        pixi_lock_sha256=sha256_file(ROOT / PIXI_LOCK),
+        environment=environment,
+        python_version=python_version,
+        stock_2_sha256=stock_2,
+        native_sha256=native.native_sha256,
+        native_sources_sha256=native.native_sources_sha256,
+        host=host,
+        cpu_model=cpu_model,
+        started_utc=started_utc,
+        ended_utc=ended_utc,
+    )
+
+
+def measure_pipeline_timings(
+    keys: Sequence[str],
+    *,
+    excluded: Sequence[str],
+    launch: Launcher = launch_fresh_process,
+    load_reader: LoadReader = os.getloadavg,
+    describe: Describer = describe_this_run,
+    read_tree: TreeReader = read_this_tree,
+    track_native: NativeTracker = track_native_here(ROOT),
+) -> PipelineTimings:
+    """Time *keys* serially, one case at a time, in order, reading the load before the first case and after the last.
 
     Args:
         keys: The case keys to time.
         excluded: The case keys the admissions exclude, recorded untimed.
         launch: Runs one case once.
+        load_reader: Reads the 1/5/15-minute load average.
+        describe: Builds the run's provenance from its tree identity and UTC start and end.
+        read_tree: Reads the measured tree's identity; read at the start and the end, which must agree.
+        track_native: Starts the native bracket after the start read; its end, after the end read, yields the run's native identity.
 
     Returns:
         The timings (unvalidated; `PipelineTimings.build` checks coverage).
+
+    Raises:
+        TreeChangedDuringRunError: The tree's identity changed during the run.
+        NativeIdentityError: The native build changed during the run, is stale, or was not compiled from this tree
+            (``tools.held_native_identity``; ``NativeSourcesMismatchError`` from ``tools.run_native_identity``).
     """
-    return PipelineTimings(cases={key: time_case(key, launch) for key in keys}, excluded=tuple(excluded))
+    tree_at_start, started_utc, load_start = read_tree(), utc_now(), load_reader()
+    finish_native = track_native()
+    cases = {key: time_case(key, launch) for key in keys}
+    load_end, ended_utc, tree_at_end = load_reader(), utc_now(), read_tree()
+    require_unchanged_tree(tree_at_start, tree_at_end, "the 1.2 timing tree")
+    native = finish_native()
+    return PipelineTimings(
+        cases=cases, excluded=tuple(excluded), load_start=stored_load(load_start), load_end=stored_load(load_end), provenance=describe(tree_at_end, native, started_utc, ended_utc)
+    )
 
 
 def gate_timing_keys() -> tuple[tuple[str, ...], tuple[str, ...]]:

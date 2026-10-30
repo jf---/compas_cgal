@@ -1,223 +1,249 @@
 {
-  "schema": "pipeline-timing/1",
+  "schema": "pipeline-timing/2",
   "runs_per_case": 3,
   "cases": {
     "cap-120-default/engagement_controlled/rect_12x8": {
       "runs_s": [
-        0.4595,
-        0.5031,
-        0.4278
+        0.537,
+        0.6071,
+        0.591
       ],
       "operations": 63,
       "digest": "10b975b787e10dcd"
     },
     "cap-120-default/engagement_controlled/rect_20x12": {
       "runs_s": [
-        0.7412,
-        0.7573,
-        0.7493
+        1.0213,
+        0.9661,
+        0.8777
       ],
       "operations": 91,
       "digest": "d9e3c78985098609"
     },
     "cap-120-default/engagement_controlled/L_shape": {
       "runs_s": [
-        0.7723,
-        0.7642,
-        0.7781
+        0.979,
+        1.0712,
+        1.0008
       ],
       "operations": 113,
       "digest": "b2003f6e78c2b241"
     },
     "cap-120-default/radius_regulated/rect_12x8": {
       "runs_s": [
-        0.5642,
-        0.5456,
-        0.5517
+        0.6982,
+        0.7349,
+        0.6439
       ],
       "operations": 63,
       "digest": "10b975b787e10dcd"
     },
     "cap-120-default/radius_regulated/rect_20x12": {
       "runs_s": [
-        0.9032,
-        0.9106,
-        0.9079
+        1.1753,
+        1.1296,
+        1.2037
       ],
       "operations": 91,
       "digest": "d9e3c78985098609"
     },
     "cap-120-default/radius_regulated/L_shape": {
       "runs_s": [
-        0.9985,
-        0.9839,
-        0.9748
+        1.3679,
+        1.318,
+        1.2833
       ],
       "operations": 113,
       "digest": "b2003f6e78c2b241"
     },
     "cap-120-default/rho_regulated/rect_12x8": {
       "runs_s": [
-        0.255,
-        0.2556,
-        0.2471
+        0.3369,
+        0.2857,
+        0.2889
       ],
       "operations": 55,
       "digest": "78ef129c7ade8f0d"
     },
     "cap-120-default/rho_regulated/rect_20x12": {
       "runs_s": [
-        0.4895,
-        0.5012,
-        0.4893
+        0.6849,
+        0.6793,
+        0.6048
       ],
       "operations": 83,
       "digest": "7a7079cb1fb2ed58"
     },
     "cap-120-default/rho_regulated/L_shape": {
       "runs_s": [
-        0.5393,
-        0.5687,
-        0.5278
+        0.6946,
+        0.6361,
+        0.6561
       ],
       "operations": 103,
       "digest": "e65fb26cfff74364"
     },
     "cap-120-default/pipeline/rect_12x8": {
       "runs_s": [
-        0.6331,
-        0.5907,
-        0.615
+        0.867,
+        0.835,
+        0.7708
       ],
-      "operations": 53,
-      "digest": "60f097cd3b524144"
+      "operations": 58,
+      "digest": "e041a91942b4a990"
     },
     "cap-120-default/pipeline/rect_20x12": {
       "runs_s": [
-        1.2475,
-        1.2124,
-        1.2134
+        1.4071,
+        1.4452,
+        1.4937
       ],
-      "operations": 89,
-      "digest": "21c352deec4b2ead"
+      "operations": 98,
+      "digest": "58ce345ba90e1fc8"
     },
     "cap-120-default/pipeline/L_shape": {
       "runs_s": [
-        1.163,
-        1.1691,
-        1.238
+        1.3517,
+        1.3745,
+        1.3388
       ],
-      "operations": 98,
-      "digest": "6334d5f5c9894008"
+      "operations": 101,
+      "digest": "c43b842b252e0744"
     },
     "cap-40-attribution/engagement_controlled/rect_12x8": {
       "runs_s": [
-        4.7522,
-        4.7666,
-        4.8361
+        6.2907,
+        9.5609,
+        11.8024
       ],
       "operations": 363,
       "digest": "4027edaaad9c2559"
     },
     "cap-40-attribution/engagement_controlled/rect_20x12": {
       "runs_s": [
-        17.2766,
-        17.0131,
-        16.8614
+        51.1757,
+        54.0619,
+        62.0751
       ],
       "operations": 739,
       "digest": "f2f02c02836c45b4"
     },
     "cap-40-attribution/engagement_controlled/L_shape": {
       "runs_s": [
-        6.9394,
-        6.9905,
-        7.0131
+        22.2622,
+        21.6641,
+        24.3171
       ],
       "operations": 523,
       "digest": "34a8b23c771eda58"
     },
     "cap-40-attribution/radius_regulated/rect_12x8": {
       "runs_s": [
-        29.4258,
-        29.9147,
-        31.6963
+        91.1877,
+        116.6036,
+        127.831
       ],
       "operations": 999,
       "digest": "eb6b31665b032921"
     },
     "cap-40-attribution/radius_regulated/rect_20x12": {
       "runs_s": [
-        45.4238,
-        44.5549,
-        44.4385
+        186.5114,
+        192.452,
+        143.0831
       ],
       "operations": 1755,
       "digest": "9fd792b8f6fe4aa9"
     },
     "cap-40-attribution/radius_regulated/L_shape": {
       "runs_s": [
-        123.056,
-        122.5648,
-        121.824
+        481.4391,
+        535.8197,
+        495.5312
       ],
       "operations": 1643,
       "digest": "55c1efcfca5c1eee"
     },
     "cap-40-attribution/rho_regulated/rect_12x8": {
       "runs_s": [
-        1.8565,
-        1.8483,
-        1.8553
+        7.6563,
+        10.1358,
+        9.5173
       ],
       "operations": 203,
       "digest": "688310b5e1a3dc32"
     },
     "cap-40-attribution/rho_regulated/rect_20x12": {
       "runs_s": [
-        11.5041,
-        12.8408,
-        11.6309
+        47.9267,
+        55.2342,
+        66.3725
       ],
       "operations": 515,
       "digest": "7349eaae90f73b8f"
     },
     "cap-40-attribution/rho_regulated/L_shape": {
       "runs_s": [
-        7.1285,
-        7.1578,
-        7.0161
+        41.3357,
+        29.6986,
+        22.7532
       ],
       "operations": 443,
       "digest": "a3216f859701f516"
     },
     "cap-40-attribution/pipeline/rect_12x8": {
       "runs_s": [
-        8.907,
-        9.0165,
-        8.8798
+        29.6709,
+        27.4162,
+        25.6279
       ],
-      "operations": 377,
-      "digest": "cf9eb5b401b75e67"
+      "operations": 412,
+      "digest": "aef4dac2e449fc65"
     },
     "cap-40-attribution/pipeline/rect_20x12": {
       "runs_s": [
-        24.5825,
-        24.1812,
-        23.7796
+        71.5814,
+        77.837,
+        112.4542
       ],
-      "operations": 689,
-      "digest": "a3fbf82827283ad0"
+      "operations": 750,
+      "digest": "25210c38f0c8116b"
     },
     "cap-40-attribution/pipeline/L_shape": {
       "runs_s": [
-        7.9031,
-        7.7974,
-        7.9697
+        41.6569,
+        41.1589,
+        35.9874
       ],
-      "operations": 558,
-      "digest": "f8dad88b0e0fe103"
+      "operations": 578,
+      "digest": "606abbab3bec6b02"
     }
   },
-  "excluded": []
+  "excluded": [],
+  "load_start": [
+    65.43,
+    105.05,
+    102.92
+  ],
+  "load_end": [
+    187.89,
+    198.55,
+    209.58
+  ],
+  "provenance": {
+    "rev": "86efae96b2f97258cff5743cfc5efaa4ed516b60",
+    "dirty": true,
+    "patch_sha256": "4cc89c3c9ca34711391dc71f5032bf647a0834d5124fde969d2b5f60b6ffc23f",
+    "timing_tool_sha256": "eb188db98c55ff1fb82cc287af2439f5700e7252841dd18d3178634614be7505",
+    "pixi_lock_sha256": "62df58e812a97d6bbc10accf1da4b7064ee86d9ed1826fa30e4612bf37232869",
+    "environment": "default",
+    "python_version": "3.12.13",
+    "stock_2_sha256": "ea82863263606c43b3836b7a5d21ddd73a8c735e6ce74402d018e22b6bfcc0cf",
+    "native_sha256": "d41c7734d172841d05ad744870df30f3be441d3104486169c15e6cac3a324aea",
+    "native_sources_sha256": "09aacb3635db331c898fc0d400665bb9c26c146918b4dbc0b37053cdbef10e16",
+    "host": "jdf.local",
+    "cpu_model": "Apple M1 Max",
+    "started_utc": "2026-10-30T11:35:40+00:00",
+    "ended_utc": "2026-10-30T12:35:04+00:00"
+  }
 }
