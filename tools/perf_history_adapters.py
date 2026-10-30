@@ -29,14 +29,15 @@ never guessed at.
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
 from collections.abc import Mapping
 from collections.abc import Sequence
-from dataclasses import dataclass
 from pathlib import PurePosixPath
 from typing import Any
 from typing import Optional
 
+from tools.perf_history_adapter_types import AdaptedRecord
+from tools.perf_history_adapter_types import Adapter
+from tools.perf_history_adapter_types import SiblingReader as SiblingReader
 from tools.perf_history_entry import UNRECORDED_MACHINE
 from tools.perf_history_entry import ClockStatistic
 from tools.perf_history_entry import ClockSummary
@@ -55,6 +56,10 @@ from tools.perf_history_json import optional_text
 from tools.perf_history_json import text
 from tools.pipeline_timing_results import MalformedPipelineTimingsError
 from tools.pipeline_timing_results import PipelineTimings
+
+# ``AdaptedRecord``, ``Adapter`` and ``SiblingReader`` live in ``tools.perf_history_adapter_types`` so adapter
+# modules registered here never import this registry; ``SiblingReader`` is re-exported (the ``as`` import)
+# because ``tools.perf_history_ingest`` reads it from here.
 
 # The provenance envelope written beside a ``benchmarks.cli corpus`` report.
 CORPUS_STAMP = "stamp.json"
@@ -78,21 +83,6 @@ class UnknownRecordSchemaError(Exception):
 
 class MissingSiblingRecordError(Exception):
     """A record's adapter needs a file beside it that is not there."""
-
-
-# Reads a file in the record's own directory (and revision) by name.
-SiblingReader = Callable[[str], bytes]
-
-
-@dataclass(frozen=True)
-class AdaptedRecord:
-    """A record's provenance and every stage it measured."""
-
-    provenance: RecordProvenance
-    measurements: tuple[Measurement, ...]
-
-
-Adapter = Callable[[Any, SiblingReader], AdaptedRecord]
 
 
 def _machine(identity: object, where: str) -> str:
