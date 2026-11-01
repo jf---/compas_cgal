@@ -395,6 +395,87 @@ largest A/A deviation `|ρ − 1|`. The margins run from 0.007
 
 --8<-- "benchmarks/results/perf_ratio_history.md"
 
+### The ratio regression gate
+
+The registry `benchmarks/results/perf_ratio_gate.json` holds the reference
+commit, the harness digest, and per CPU model the margins together with the
+`record_sha256` of every A/A session they came from. It holds no times.
+`load_registry` re-hashes every cited record, re-validates it as an honest A/A
+session, and re-derives the margins; a registry whose records do not reproduce
+its margins exactly is refused.
+
+| Command | What it does |
+|---|---|
+| `pixi run perf-ratio-check RECORD [--audit]` | One verdict per workload; exits non-zero on any regression |
+| `pixi run perf-ratio-calibrate --records PATH...` or `--sessions K` | Builds the margins for one CPU model from K ≥ 5 A/A sessions at the reference |
+| `pixi run perf-ratio-calibrate ... --rebase-harness` | After a harness edit: takes the records' harness and workload set, drops every other calibration |
+| `pixi run perf-ratio-promote RECORD` | Moves the reference to a faster HEAD |
+
+A gate session is one harness run against the registry's reference:
+
+```bash
+pixi run perf-ratio --ref-rev <registry ref_commit> --head-rev <HEAD> --write <record>
+pixi run perf-ratio-check <record>
+```
+
+Always pass `--ref-rev`. After a promotion the reference is the registry's
+`ref_commit`, not the harness default `PINNED_REF_COMMIT`; a session against
+the stale default is refused as another reference.
+
+Verdicts, per workload: `REGRESSION` when `ρ_w > 1 + m_w`, `IMPROVED` when
+`ρ_w < 1 − m_w`, `PASS` otherwise (both bounds pass). Absolute seconds are
+never gated. A workload that changed its output is still decided and is
+reported as `changed output` beside its verdict.
+
+A busy machine means more pairs, never a wider margin. A red workload is
+re-measured in batches of `EXTENSION_PAIRS = 5` pairs, merged by minimum
+over all pairs, up to `MAX_PAIRS = 20`; only a ratio still above the margin at
+the cap is a regression. An extension that measured another build than the
+base session (arms, harness, host, CPU or injection differ) is refused.
+
+| Situation | Effect on `ρ_w` | Why |
+|---|---|---|
+| Busy runner | No bias, more noise | Both arms run at the same moment, AB/BA interleaved, min of N |
+| Faster runner | Unchanged | The speed factor cancels in the ratio |
+| Another CPU model | Unchanged in expectation | Refused until that model is calibrated |
+
+The reference is a ratchet. `perf-ratio-promote` accepts only a gate session
+on a clean HEAD with no regression and at least one improvement; it moves
+`ratio-ref` to that HEAD and writes a registry with the new reference and no
+calibrations, so every check is refused until `perf-ratio-calibrate --sessions
+5` has run at the new reference. A session whose HEAD is the reference itself
+is never promoted. Within one reference, regressions cannot accumulate: every
+HEAD is measured against the same fixed reference. Across promotions they
+can. A promotion needs one `IMPROVED` workload, while the others need only
+`PASS` (`ρ_w ≤ 1 + m_w`), so each promotion can let a non-improved workload's
+reference get up to `m_w` slower. Bounding that drift is an open design
+question.
+
+Every margin is void under an edited harness: each session then carries a new
+`harness_sha256` and is refused, and so are A/A records under the new harness
+fed to a plain `perf-ratio-calibrate`. The recovery is to re-run the K A/A
+sessions at the registry's reference under the new harness and calibrate with
+`--rebase-harness`. The registry keeps its `ref_commit` (records at any other
+commit are refused), takes the records' harness and workload set, and drops
+every other machine's calibration; each machine then recalibrates. If this
+machine's calibration directory at the reference already exists, `--sessions`
+refuses to write into it. In that case write the K records to a new directory
+under the repository with `pixi run perf-ratio --ref-rev <ref> --head-rev <ref>
+--write <path>` and pass them with `--records`.
+
+Refused outright: an injected session outside `--audit`, a session against
+another reference or harness, an uncalibrated CPU model, an unregistered
+workload, and a partial session (a `--workload` subset) outside `--audit`.
+
+The gate's audit, on Apple M1 Max at load 33–105:
+
+- an A/A session at `15fbed70` passed all 10 workloads at 5 pairs (largest
+  ratio 1.011 on `rect_20x12` against its 0.048 margin; 863 s wall);
+- 0.126 CPU s (`2·m_w` times the largest A/A reference minimum) injected into
+  HEAD on `rect_20x12` gave `REGRESSION` at ρ 1.098 after extension to 20
+  pairs, against an expected 1.096;
+- the same injection into the reference gave `IMPROVED` at ρ 0.896.
+
 ## Related pages
 
 - [Held Qualification](held_qualification.md): why no Held path is fit to

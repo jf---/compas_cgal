@@ -1,0 +1,58 @@
+{
+  "calibrations": [
+    {
+      "cpu_model": "Apple M1 Max",
+      "margins": {
+        "certificate/figure8_monstera_boundary_qualified_corners": 0.015785903223865416,
+        "gt/cap-120-default/pipeline/L_shape": 0.028545804139255893,
+        "gt/cap-120-default/pipeline/rect_12x8": 0.04344363713901522,
+        "gt/cap-120-default/pipeline/rect_20x12": 0.048144705392811016,
+        "omega/figure5_refined": 0.014902620973606506,
+        "omega/figure8_crossed_skis_boundary": 0.0071513921333430375,
+        "omega/figure8_monstera_boundary_qualified_corners": 0.025407733982993452,
+        "polygon/figure5_refined": 0.03934328439148094,
+        "polygon/figure8_crossed_skis_boundary": 0.013253788734152838,
+        "polygon/figure8_monstera_boundary_qualified_corners": 0.02127567582136547
+      },
+      "sessions": [
+        {
+          "path": "benchmarks/results/perf_ratio_calibration/15fbed70/apple-m1-max/aa-2/perf_ratio_session.json",
+          "record_sha256": "7da4b0c9291784a368eb3b3783f66db18e8d58ced5c1de0c0eb20b43cb12eec0"
+        },
+        {
+          "path": "benchmarks/results/perf_ratio_calibration/15fbed70/apple-m1-max/aa-3/perf_ratio_session.json",
+          "record_sha256": "edc60e2562e6899424a49ef165bde145c7d9f0881b7d1f25762320e9e7164305"
+        },
+        {
+          "path": "benchmarks/results/perf_ratio_calibration/15fbed70/apple-m1-max/aa-4/perf_ratio_session.json",
+          "record_sha256": "13a1356358bb5c3e38aa578ea13f8124bace10d96304484980882924e85b20b3"
+        },
+        {
+          "path": "benchmarks/results/perf_ratio_calibration/15fbed70/apple-m1-max/aa-5/perf_ratio_session.json",
+          "record_sha256": "24a2feb817c65b52fd9fd75c7b7a8e8f75aeb65de48bc502649a529c85dea856"
+        },
+        {
+          "path": "benchmarks/results/perf_ratio_calibration/15fbed70/apple-m1-max/aa-6/perf_ratio_session.json",
+          "record_sha256": "3fcabbf47d45de9ad00c0d187909d79439890bfe804ed92b76cc0c9226257b72"
+        }
+      ]
+    }
+  ],
+  "harness_sha256": "3a76eb83b69fa1cd4d69c4f22800cc4bdb3436506a82ff990e6b73a9ee1cd977",
+  "ref_commit": "15fbed70ebb016bdd8ef49453e04606d03e0b1fe",
+  "registry_sha256": "6b84fd463f1a387e888e744d39acc4bc1d2d59b25cb21a74552137a3d792e403",
+  "safety": 2.0,
+  "schema": "perf-ratio-gate/1",
+  "workloads": [
+    "certificate/figure8_monstera_boundary_qualified_corners",
+    "gt/cap-120-default/pipeline/L_shape",
+    "gt/cap-120-default/pipeline/rect_12x8",
+    "gt/cap-120-default/pipeline/rect_20x12",
+    "omega/figure5_refined",
+    "omega/figure8_crossed_skis_boundary",
+    "omega/figure8_monstera_boundary_qualified_corners",
+    "polygon/figure5_refined",
+    "polygon/figure8_crossed_skis_boundary",
+    "polygon/figure8_monstera_boundary_qualified_corners"
+  ]
+}
