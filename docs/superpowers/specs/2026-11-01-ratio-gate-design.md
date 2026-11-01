@@ -43,8 +43,28 @@ Margins come from an A/A calibration: K sessions with both arms at the reference
   - at least one workload with `ρ_w < 1 − m_w` (a real improvement).
 
   It then re-pins ratio-ref, re-settles it, and writes the new registry.
-- The reference never moves to a slower commit. Small regressions cannot creep: each one is measured against the same fixed reference, so the sum of all of them must stay within `m_w`.
 - After each promotion, margins are re-calibrated: an A/A at the new reference.
+
+### Amendment 2026-11-01: the anchor chain (I1, user ruling (a))
+
+The bullet "the reference never moves to a slower commit; small regressions cannot creep" was false. Promotion needs only one improved workload, so every non-improved workload may sit anywhere up to `1 + m_w` against the old reference, and after promotion it is measured against that slower commit. Without a fix the drift is up to `m_w` per promotion, unbounded over many.
+
+**Rule.** For each workload, the registry carries an anchor ratio `A_w`: the current reference's CPU time divided by the time of that workload's anchor commit. The gate checks
+
+`A_w · ρ_w ≤ 1 + m_w` for every workload.
+
+A fresh registry has `A_w = 1` for every workload. On promotion, with `ρ_w` taken from the promoted session after extension:
+
+- `A'_w = A_w · ρ_w` when `A_w · ρ_w ≥ 1 − m_w`. The workload did not certifiably beat its anchor, so the anchor stays put and the drift is carried.
+- `A'_w = 1` otherwise. The new reference is a certified improvement on the anchor, so it becomes the anchor. This locks the improvement in, and later commits cannot spend it back.
+
+A workload that is new to the registry starts at `A_w = 1` at the current reference. A workload that leaves the registry drops its anchor. A harness rebase keeps the chain: `ρ_w` is a same-harness ratio, so links measured under different harnesses still compose.
+
+**IMPROVED and promotion.** A workload is `IMPROVED` when `A_w · ρ_w < 1 − m_w`. Promotion still needs a passing gate session (every workload at or under `1 + m_w` against its anchor) and at least one `IMPROVED` workload.
+
+**Content addressing.** The chain is re-derivable, like the margins. Each promotion appends a link `{from_ref, to_ref, record path, record_sha256}`, and the promoted session record is committed under `benchmarks/results/perf_ratio_promotions/<from8>-<to8>/perf_ratio_session.json`. On load, `A_w` is recomputed from the links with the rule above. A registry whose stored `A_w` disagree with that recomputation, or whose link records are missing or have a mismatched digest, is refused (`AnchorChainMismatchError`). Records are read as exact doubles, and the products are computed in `fractions.Fraction` so that recomputation is deterministic. The stored values are reporting copies.
+
+**What the guarantee costs (accepted with (a)).** Each link is one measured ratio, so it carries one session's noise, at most `m_w / SAFETY` under the calibrated noise model. After `n` carried links, the gate holds the true slowdown against the anchor to `m_w + n · m_w / SAFETY` in the worst case. That bound is linear in the number of promotions; the creep it replaces was unbounded. More pairs in a gate session cannot shrink this error, because it lives in past sessions. A certified improvement resets the anchor, which drops that workload's accumulated error. Deferred, with no ruling yet: extending every workload of a promotion session to `MAX_PAIRS`, which would shrink each link's noise.
 
 ## Verdict and failure model
 
