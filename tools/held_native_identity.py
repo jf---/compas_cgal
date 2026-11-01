@@ -48,20 +48,26 @@ Two parts:
   held bytes those of the pre-start file, the loaded image. At the end of
   the run the closure (now with the lazily loaded extensions) is read once,
   compared with the start-of-run bytes, checked against the same start, and
-  the record is built from exactly those bytes. The process start is read
-  from ``ps`` in whole seconds, rounded down, and a tie is refused, so a
-  file written in the start second is refused on a whole-second file system
-  too. Conservative refusals (re-run): a write in the second before the
-  start, and a ctime-only change (chmod, an xattr, a hard link). False
-  accept: on Linux ``ps`` derives the start as wall-clock now minus the
-  monotonic elapsed time, so a forward clock step between the start and the
-  check reads the start late. ``strptime``'s ``%a``/``%b`` follow this
-  process's ``LC_TIME``, which matches ``ps``'s ``LC_ALL=C`` output unless
-  something has called ``setlocale``; a mismatch raises, it never misreads.
+  the record is built from exactly those bytes. A tie is refused. On macOS
+  the start is the kernel's own (``sysctl`` ``KERN_PROC_PID``, the
+  ``p_starttime`` timeval), kept in microseconds and truncated to one, so a
+  file written in the microsecond before the start is refused (the
+  conservative direction) and one written earlier in the start second is
+  accepted. Elsewhere the start is read from ``ps`` in whole seconds,
+  rounded down, so a file written in the start second is refused, on a
+  whole-second file system too. Conservative refusals (re-run): a write in
+  the second (``ps``) or microsecond (kernel) before the start, and a
+  ctime-only change (chmod, an xattr, a hard link). False accept: on Linux
+  ``ps`` derives the start as wall-clock now minus the monotonic elapsed
+  time, so a forward clock step between the start and the check reads the
+  start late. ``strptime``'s ``%a``/``%b`` follow this process's
+  ``LC_TIME``, which matches ``ps``'s ``LC_ALL=C`` output unless something
+  has called ``setlocale``; a mismatch raises, it never misreads.
 """
 
 from __future__ import annotations
 
+import ctypes
 import hashlib
 import importlib.machinery
 import os
@@ -98,6 +104,11 @@ PS_START_COMMAND = ("ps", "-o", "lstart=", "-p")
 PS_ENVIRONMENT = {"TZ": "UTC0", "LC_ALL": "C"}
 PS_START_FORMAT = "%a %b %d %H:%M:%S %Y"
 NS_PER_S = 1_000_000_000
+NS_PER_US = 1_000
+# macOS <sys/sysctl.h>: the MIB {CTL_KERN, KERN_PROC, KERN_PROC_PID, pid} returns that process's struct kinfo_proc.
+CTL_KERN = 1
+KERN_PROC = 14
+KERN_PROC_PID = 1
 
 
 class NativeIdentityError(BenchmarkError):
@@ -153,7 +164,7 @@ class NativeBuildToolError(NativeIdentityError):
 
 
 class ProcessStartUnavailableError(NativeIdentityError):
-    """ps did not report this process's start time."""
+    """The kernel (sysctl, on macOS) or ps (elsewhere) did not report this process's start time."""
 
 
 class NativeExtensionReplacedAfterStartError(NativeIdentityError):
@@ -305,8 +316,56 @@ def require_current(build: EditableBuild, paths: Sequence[str]) -> None:
         raise NativeBuildStaleError("the native build is stale; run the pixi task (it rebuilds) instead of build/pyrun.sh: " + " | ".join(reasons))
 
 
+class _Timeval(ctypes.Structure):
+    """macOS 64-bit ``struct timeval``: ``time_t tv_sec`` (8 bytes), ``__darwin_suseconds_t tv_usec`` (int32, then 4 padding)."""
+
+    _fields_ = (("tv_sec", ctypes.c_int64), ("tv_usec", ctypes.c_int32))
+
+
+# struct kinfo_proc opens with struct extern_proc kp_proc, which opens with the union p_un whose member
+# __p_starttime is a struct timeval: the start sits at byte 0 (arm64 and x86_64 alike; <sys/sysctl.h>, <sys/proc.h>).
+KINFO_PROC_STARTTIME_OFFSET = 0
+
+
+def kernel_process_start_ns() -> int:
+    """This process's start time (ns since the epoch) from the macOS kernel, at its microsecond precision.
+
+    Raises:
+        ProcessStartUnavailableError: sysctl failed (with its errno) or returned no record for this pid.
+    """
+    libc = ctypes.CDLL(None, use_errno=True)
+    sysctl = libc.sysctl
+    sysctl.argtypes = (ctypes.POINTER(ctypes.c_int), ctypes.c_uint, ctypes.c_void_p, ctypes.POINTER(ctypes.c_size_t), ctypes.c_void_p, ctypes.c_size_t)
+    sysctl.restype = ctypes.c_int
+    mib = (ctypes.c_int * 4)(CTL_KERN, KERN_PROC, KERN_PROC_PID, os.getpid())
+    size = ctypes.c_size_t(0)
+    # First call sizes the record (the kernel's sizeof(struct kinfo_proc)), so no struct size is hard-coded here.
+    if sysctl(mib, len(mib), None, ctypes.byref(size), None, 0) != 0:
+        number = ctypes.get_errno()
+        raise ProcessStartUnavailableError(f"sysctl KERN_PROC_PID sizing failed: errno {number} ({os.strerror(number)})")
+    record = ctypes.create_string_buffer(size.value)
+    if sysctl(mib, len(mib), record, ctypes.byref(size), None, 0) != 0:
+        number = ctypes.get_errno()
+        raise ProcessStartUnavailableError(f"sysctl KERN_PROC_PID failed: errno {number} ({os.strerror(number)})")
+    if size.value < KINFO_PROC_STARTTIME_OFFSET + ctypes.sizeof(_Timeval):
+        raise ProcessStartUnavailableError(f"sysctl KERN_PROC_PID returned {size.value} bytes, no kinfo_proc for pid {os.getpid()}")
+    started = _Timeval.from_buffer_copy(record, KINFO_PROC_STARTTIME_OFFSET)
+    return int(started.tv_sec) * NS_PER_S + int(started.tv_usec) * NS_PER_US
+
+
 def process_start_ns() -> int:
-    """This process's start time (ns since the epoch), rounded down to the whole second ``ps`` reports."""
+    """This process's start time (ns since the epoch): the kernel's microseconds on macOS, ``ps``'s whole second elsewhere."""
+    if sys.platform == "darwin":
+        return kernel_process_start_ns()
+    return ps_process_start_ns()
+
+
+def ps_process_start_ns() -> int:
+    """This process's start time (ns since the epoch), rounded down to the whole second ``ps`` reports.
+
+    Raises:
+        ProcessStartUnavailableError: ps failed, printed nothing, or printed a start that does not parse.
+    """
     command = [*PS_START_COMMAND, str(os.getpid())]
     result = subprocess.run(command, capture_output=True, text=True, check=False, env={**os.environ, **PS_ENVIRONMENT})
     if result.returncode != 0 or not result.stdout.strip():

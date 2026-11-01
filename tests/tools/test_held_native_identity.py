@@ -237,6 +237,87 @@ def test_the_process_start_precedes_now() -> None:
     assert 0 < process_start_ns() <= time.time_ns()
 
 
+# A child that reads its own process start, then (after a stdin line) checks one file against it with the module's refusal.
+_START_PROBE = "import tools.held_native_identity as m; print(m.process_start_ns())"
+_REFUSAL_PROBE = """
+import pathlib, sys, types
+import tools.held_native_identity as m
+started = m.process_start_ns()
+print(started, flush=True)
+sys.stdin.readline()
+m.refuse_replaced_after_start(types.SimpleNamespace(source_directory=pathlib.Path(sys.argv[1])), (sys.argv[2],), started)
+"""
+# Spawns per range check: a whole-second start passes only when a spawn lands on a second boundary, so all five must hold.
+START_SPAWNS = 5
+# The second fraction (ns) before which a chmod+spawn starts, so both land in one wall-clock second (a spawn takes ms).
+SAME_SECOND_BEFORE_NS = 500_000_000
+
+
+def _child_start_ns() -> tuple[int, int, int]:
+    before = time.time_ns()
+    printed = subprocess.run([sys.executable, "-c", _START_PROBE], cwd=REPOSITORY, capture_output=True, text=True, check=True).stdout
+    after = time.time_ns()
+    return before, int(printed), after
+
+
+def test_a_child_process_start_lies_between_the_clock_readings_around_its_spawn() -> None:
+    for _ in range(START_SPAWNS):
+        before, started, after = _child_start_ns()
+        if sys.platform == "darwin":
+            # The kernel keeps the start in microseconds: truncated to one, it cannot precede the microsecond of `before`.
+            assert before // native_identity.NS_PER_US * native_identity.NS_PER_US <= started <= after
+        else:
+            # The ps path: the start floored to the whole second.
+            assert started % native_identity.NS_PER_S == 0
+            assert started <= after
+
+
+def _refusal_child(extension: pathlib.Path) -> subprocess.Popen[str]:
+    return subprocess.Popen(
+        [sys.executable, "-c", _REFUSAL_PROBE, str(extension.parent), extension.name],
+        cwd=REPOSITORY,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+
+
+def _extension_file(scratch: pathlib.Path) -> pathlib.Path:
+    scratch.mkdir(parents=True)
+    extension = scratch / EXTENSION
+    extension.write_bytes(b"loaded image")
+    return extension
+
+
+def test_an_extension_written_before_a_process_started_in_the_same_second_is_accepted_where_the_start_is_sub_second(scratch: pathlib.Path) -> None:
+    # Session aa-2: the no-op editable rebuild bumped the .so's ctime in the second the probe started, strictly before it.
+    extension = _extension_file(scratch)
+    while time.time_ns() % native_identity.NS_PER_S >= SAME_SECOND_BEFORE_NS:
+        pass
+    os.chmod(extension, 0o600)
+    child = _refusal_child(extension)
+    out, err = child.communicate("\n")
+    assert extension.stat().st_ctime_ns // native_identity.NS_PER_S == int(out.split()[0]) // native_identity.NS_PER_S, "not one second"
+    if sys.platform == "darwin":
+        assert child.returncode == 0, err
+    else:
+        # The ps path floors the start: a same-second write is refused by contract (the conservative direction).
+        assert "NativeExtensionReplacedAfterStartError" in err
+
+
+def test_an_extension_written_after_a_process_started_is_refused_by_that_process(scratch: pathlib.Path) -> None:
+    # Defect injection for the sub-second start: the same child must refuse a write made after it read its start.
+    extension = _extension_file(scratch)
+    child = _refusal_child(extension)
+    assert child.stdout is not None
+    child.stdout.readline()
+    os.chmod(extension, 0o600)
+    _, err = child.communicate("\n")
+    assert child.returncode != 0
+    assert "NativeExtensionReplacedAfterStartError" in err
+
+
 def test_an_extension_written_after_the_process_started_is_refused(scratch: pathlib.Path) -> None:
     # The loaded image may then differ from the bytes on disk: they must not be recorded as what ran.
     build, path = _synthetic_build(scratch, newer=None)
@@ -373,10 +454,10 @@ def test_a_graph_target_that_was_never_built_is_stale(scratch: pathlib.Path) -> 
     assert any("never built" in reason for reason in stale_reasons(build, (path,)))
 
 
-def test_an_unparseable_process_start_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_an_unparseable_ps_process_start_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(native_identity.subprocess, "run", lambda *_, **__: subprocess.CompletedProcess([], 0, stdout="not a date\n", stderr=""))
     with pytest.raises(ProcessStartUnavailableError, match="not a date"):
-        process_start_ns()
+        native_identity.ps_process_start_ns()
 
 
 def _order_probe(monkeypatch: pytest.MonkeyPatch, calls: list[str]) -> None:
@@ -425,3 +506,12 @@ def test_an_extension_loaded_during_the_run_is_checked_against_the_process_start
     run = NativeRun(build=EditableBuild.locate(), started_ns=0, loaded={})
     with pytest.raises(NativeExtensionReplacedAfterStartError):
         native_record_fields(run)
+
+
+def test_the_ps_process_start_is_the_whole_second_at_or_before_the_kernel_start() -> None:
+    # Both paths read one process: on macOS the kernel start floored to the second is what ps prints.
+    started = native_identity.ps_process_start_ns()
+    assert started % native_identity.NS_PER_S == 0
+    assert started <= time.time_ns()
+    if sys.platform == "darwin":
+        assert started == native_identity.kernel_process_start_ns() // native_identity.NS_PER_S * native_identity.NS_PER_S
