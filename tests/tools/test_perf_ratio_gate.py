@@ -404,7 +404,7 @@ def test_calibrate_sessions_rebase_harness_measures_at_the_reference_and_rebases
     write_registry(build_registry(ref_commit=REF, harness_sha256=NEW_HARNESS, calibrations=(), workloads=WORKLOADS), path, root=tmp_path)
     measure = FakeMeasure(*AA_HEAD_CPU)
     argv = ["calibrate", "--sessions", str(CALIBRATION_SESSIONS), "--rebase-harness", "--registry", str(path)]
-    assert main(argv, root=tmp_path, measure=measure, checkout=no_checkout, cpu_model=lambda: CPU_MODEL) == 0
+    assert main(argv, root=tmp_path, measure=measure, checkout=no_checkout, cpu_model=lambda: CPU_MODEL, tree_harness=lambda: HARNESS) == 0
     assert {(request.ref_commit, request.head_rev) for request in measure.requests} == {(REF, REF)}
     registry = load_registry(path, root=tmp_path)
     assert registry.harness_sha256 == HARNESS and registry.ref_commit == REF
@@ -437,7 +437,17 @@ def test_calibrate_sessions_runs_k_aa_sessions_and_calibrates(tmp_path: Path) ->
     path = uncalibrated_registry(tmp_path)
     measure = FakeMeasure(*AA_HEAD_CPU, 1.015)
     sessions = CALIBRATION_SESSIONS + 1
-    assert main(["calibrate", "--sessions", str(sessions), "--registry", str(path)], root=tmp_path, measure=measure, checkout=no_checkout, cpu_model=lambda: CPU_MODEL) == 0
+    assert (
+        main(
+            ["calibrate", "--sessions", str(sessions), "--registry", str(path)],
+            root=tmp_path,
+            measure=measure,
+            checkout=no_checkout,
+            cpu_model=lambda: CPU_MODEL,
+            tree_harness=lambda: HARNESS,
+        )
+        == 0
+    )
     assert measure.requests == [ExtensionRequest(ref_commit=REF, head_rev=REF, workloads=tuple(sorted(WORKLOADS)), pairs=DEFAULT_PAIRS, injected=None)] * sessions
     target = sessions_target(tmp_path)
     records = [target / f"aa-{k}" / "perf_ratio_session.json" for k in range(1, sessions + 1)]
@@ -453,7 +463,14 @@ def test_calibrate_sessions_refuses_an_existing_target_before_any_run(tmp_path: 
     sessions_target(tmp_path).mkdir(parents=True)
     before = path.read_bytes()
     with pytest.raises(CalibrationExistsError):
-        main(["calibrate", "--sessions", str(CALIBRATION_SESSIONS), "--registry", str(path)], root=tmp_path, measure=no_measure, checkout=no_checkout, cpu_model=lambda: CPU_MODEL)
+        main(
+            ["calibrate", "--sessions", str(CALIBRATION_SESSIONS), "--registry", str(path)],
+            root=tmp_path,
+            measure=no_measure,
+            checkout=no_checkout,
+            cpu_model=lambda: CPU_MODEL,
+            tree_harness=lambda: HARNESS,
+        )
     assert path.read_bytes() == before
 
 
@@ -466,6 +483,7 @@ def test_calibrate_sessions_refuses_fewer_than_k_sessions(tmp_path: Path) -> Non
             measure=no_measure,
             checkout=no_checkout,
             cpu_model=lambda: CPU_MODEL,
+            tree_harness=lambda: HARNESS,
         )
     assert not sessions_target(tmp_path).exists()
 
@@ -478,6 +496,7 @@ def test_calibrate_sessions_needs_a_registry(tmp_path: Path) -> None:
             measure=no_measure,
             checkout=no_checkout,
             cpu_model=no_cpu_model,
+            tree_harness=lambda: HARNESS,
         )
 
 
@@ -486,8 +505,39 @@ def test_calibrate_sessions_refuses_a_session_from_another_machine(tmp_path: Pat
     before = path.read_bytes()
     measure = FakeMeasure(1.0, cpu_model=OTHER_CPU)
     with pytest.raises(CalibrationMachineMismatchError):
-        main(["calibrate", "--sessions", str(CALIBRATION_SESSIONS), "--registry", str(path)], root=tmp_path, measure=measure, checkout=no_checkout, cpu_model=lambda: CPU_MODEL)
+        main(
+            ["calibrate", "--sessions", str(CALIBRATION_SESSIONS), "--registry", str(path)],
+            root=tmp_path,
+            measure=measure,
+            checkout=no_checkout,
+            cpu_model=lambda: CPU_MODEL,
+            tree_harness=lambda: HARNESS,
+        )
     assert len(measure.requests) == 1
+    assert not sessions_target(tmp_path).exists()
+    assert path.read_bytes() == before
+
+
+def test_calibrate_sessions_refuses_an_edited_tree_harness_before_any_run(tmp_path: Path) -> None:
+    path = uncalibrated_registry(tmp_path)
+    before = path.read_bytes()
+    measure = FakeMeasure(*AA_HEAD_CPU)
+    argv = ["calibrate", "--sessions", str(CALIBRATION_SESSIONS), "--registry", str(path)]
+    with pytest.raises(CalibrationHarnessMismatchError, match="--rebase-harness"):
+        main(argv, root=tmp_path, measure=measure, checkout=no_checkout, cpu_model=lambda: CPU_MODEL, tree_harness=lambda: NEW_HARNESS)
+    assert measure.requests == []
+    assert not sessions_target(tmp_path).exists()
+    assert path.read_bytes() == before
+
+
+def test_calibrate_sessions_refuses_rebase_under_an_unchanged_tree_harness_before_any_run(tmp_path: Path) -> None:
+    path = uncalibrated_registry(tmp_path)
+    before = path.read_bytes()
+    measure = FakeMeasure(*AA_HEAD_CPU)
+    argv = ["calibrate", "--sessions", str(CALIBRATION_SESSIONS), "--rebase-harness", "--registry", str(path)]
+    with pytest.raises(RebaseWithoutHarnessChangeError, match="without it"):
+        main(argv, root=tmp_path, measure=measure, checkout=no_checkout, cpu_model=lambda: CPU_MODEL, tree_harness=lambda: HARNESS)
+    assert measure.requests == []
     assert not sessions_target(tmp_path).exists()
     assert path.read_bytes() == before
 
@@ -512,13 +562,13 @@ def test_a_failed_sessions_run_leaves_no_calibration_directory_and_reruns(tmp_pa
     argv = ["calibrate", "--sessions", str(CALIBRATION_SESSIONS), "--registry", str(path)]
     failing = FailingMeasure(2, *AA_HEAD_CPU)
     with pytest.raises(subprocess.CalledProcessError):
-        main(argv, root=tmp_path, measure=failing, checkout=no_checkout, cpu_model=lambda: CPU_MODEL)
+        main(argv, root=tmp_path, measure=failing, checkout=no_checkout, cpu_model=lambda: CPU_MODEL, tree_harness=lambda: HARNESS)
     assert len(failing.requests) == 2
     assert not sessions_target(tmp_path).exists()
     assert not (tmp_path / calibration_dir(REF, CPU_MODEL).relative_to(REPOSITORY).parents[1]).exists()
     assert path.read_bytes() == before
     rerun = FakeMeasure(*AA_HEAD_CPU)
-    assert main(argv, root=tmp_path, measure=rerun, checkout=no_checkout, cpu_model=lambda: CPU_MODEL) == 0
+    assert main(argv, root=tmp_path, measure=rerun, checkout=no_checkout, cpu_model=lambda: CPU_MODEL, tree_harness=lambda: HARNESS) == 0
     assert len(rerun.requests) == CALIBRATION_SESSIONS
     assert sorted(child.name for child in sessions_target(tmp_path).iterdir()) == [f"aa-{k}" for k in range(1, CALIBRATION_SESSIONS + 1)]
     (calibration,) = load_registry(path, root=tmp_path).calibrations

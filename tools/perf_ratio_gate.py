@@ -31,6 +31,7 @@ from typing import Optional
 
 from tools.perf_history_store import REPOSITORY
 from tools.perf_ratio import DEFAULT_PAIRS
+from tools.perf_ratio import harness_sha256
 from tools.perf_ratio_arms import DEFAULT_REF_WORKTREE
 from tools.perf_ratio_arms import checkout_head
 from tools.perf_ratio_gate_registry import CALIBRATION_SESSIONS
@@ -67,6 +68,8 @@ CALIBRATE_TASK = "pixi run perf-ratio-calibrate"
 
 # Reads this machine's CPU model, as the harness records it in ``cpu_model``.
 CpuModelReader = Callable[[], str]
+# Reads the SHA-256 of the harness this tree runs, as the harness records it in ``harness_sha256``.
+HarnessReader = Callable[[], str]
 # Moves the clean worktree at the path to the commit the rev names; returns its full id.
 Checkout = Callable[[Path, str], str]
 
@@ -294,13 +297,15 @@ def calibrate_sessions(
     root: Path,
     measure: Measure,
     cpu_model: CpuModelReader,
+    tree_harness: HarnessReader,
     rebase_harness: bool = False,
 ) -> GateRegistry:
     """Measure *sessions* A/A sessions at the registry's reference, then calibrate from them.
 
     Session k is written to ``calibration_dir(ref, cpu)/aa-<k>/perf_ratio_session.json`` (under
     *root*), k = 1..*sessions*. Every refusal but a session from another machine fires before
-    anything is measured. All K sessions are measured before any record is written; the records
+    anything is measured, the two harness refusals included: *measure* runs this tree's harness,
+    so its digest (*tree_harness*) is what the measured records will carry. All K sessions are measured before any record is written; the records
     are staged under `GATE_SCRATCH` and moved into place with one rename, so a failed run leaves
     no calibration directory and a rerun starts afresh. The scratch and the results tree are
     both inside the repository, so the rename stays on one filesystem; if they ever were not,
@@ -312,6 +317,7 @@ def calibrate_sessions(
         root: The directory the calibration directory and cited records live under.
         measure: Measures each A/A session.
         cpu_model: Reads this machine's CPU model.
+        tree_harness: Reads the digest of the harness *measure* runs (this tree's).
         rebase_harness: Calibrate the measured records as `calibrate_records` with *rebase_harness*.
 
     Returns:
@@ -320,15 +326,27 @@ def calibrate_sessions(
     Raises:
         TooFewCalibrationSessionsError: *sessions* is below `CALIBRATION_SESSIONS`.
         MissingRegistryError: No registry at *registry_path*.
+        CalibrationHarnessMismatchError: Before measuring: the tree's harness is not the registry's,
+            without *rebase_harness*. After measuring: as `calibrate_records`.
+        RebaseWithoutHarnessChangeError: Before measuring: *rebase_harness*, but the tree's harness
+            is the registry's. After measuring: as `calibrate_records`.
         CalibrationExistsError: The calibration directory already exists.
         CalibrationMachineMismatchError: A measured session ran on another CPU model.
         subprocess.CalledProcessError: A harness run failed (from the production `Measure`).
-        CalibrationHarnessMismatchError: As `calibrate_records`.
-        RebaseWithoutHarnessChangeError: As `calibrate_records`.
     """
     if sessions < CALIBRATION_SESSIONS:
         raise TooFewCalibrationSessionsError(f"--sessions {sessions}: a calibration needs at least {CALIBRATION_SESSIONS} A/A sessions.")
     registry = _load(registry_path, root)
+    tree = tree_harness()
+    if rebase_harness and tree == registry.harness_sha256:
+        raise RebaseWithoutHarnessChangeError(
+            f"--rebase-harness: this tree runs the registry's own harness {tree}; calibrate without it, which keeps the other machines' calibrations."
+        )
+    if not rebase_harness and tree != registry.harness_sha256:
+        raise CalibrationHarnessMismatchError(
+            f"this tree runs harness {tree}, not the registry's {registry.harness_sha256}. After a harness edit, calibrate with "
+            f"--rebase-harness: the A/A sessions run at the reference {registry.ref_commit} and every other calibration is voided."
+        )
     cpu = cpu_model()
     target = root / calibration_dir(registry.ref_commit, cpu).relative_to(REPOSITORY)
     if target.exists():
@@ -434,6 +452,7 @@ def main(
     checkout: Optional[Checkout] = None,
     root: Path = REPOSITORY,
     cpu_model: Optional[CpuModelReader] = None,
+    tree_harness: Optional[HarnessReader] = None,
 ) -> int:
     """Command-line entry.
 
@@ -445,6 +464,8 @@ def main(
         root: The directory cited records and calibration directories live under (`REPOSITORY`).
         cpu_model: Reads this machine's CPU model for ``calibrate --sessions``; None reads it as the
             harness does (`machine_identity`).
+        tree_harness: Reads the digest of the harness ``calibrate --sessions`` runs; None is
+            `harness_sha256` over this tree, the harness the subprocess `Measure` runs.
 
     Returns:
         The process exit status: 0. Every refusal, and a regression, is raised.
@@ -464,6 +485,7 @@ def main(
                 root=root,
                 measure=chosen_measure,
                 cpu_model=_this_cpu_model if cpu_model is None else cpu_model,
+                tree_harness=harness_sha256 if tree_harness is None else tree_harness,
                 rebase_harness=args.rebase_harness,
             )
         return 0
