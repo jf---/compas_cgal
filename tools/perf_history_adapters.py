@@ -582,6 +582,7 @@ NON_TIMING_RECORDS: Mapping[str, str] = {
     "performance_levers.json": "lever-to-function mapping; an input, no timing",
     "performance_time_buckets.json": "profiler time buckets (cProfile-inflated totals); not a clocked run",
     "perf_history.jsonl": "this history itself",
+    "perf_ratio_session.json": "same-moment HEAD/reference CPU ratios; owned by tools.perf_ratio_history, never the absolute history",
     CORPUS_STAMP: "provenance envelope of a corpus report; read by the benchmark_report adapter",
 }
 
