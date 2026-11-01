@@ -1,0 +1,694 @@
+{
+  "arms": {
+    "head": {
+      "compas_cgal_file": "/Users/jelle/Code/CADCAM/worktrees/compas_cgal_prs-ratio-head/src/compas_cgal/__init__.py",
+      "dirty": false,
+      "editable_build_dir": "/Users/jelle/Code/CADCAM/worktrees/compas_cgal_prs-ratio-head/build/cp312-abi3-macosx_11_0_arm64",
+      "environment": "default",
+      "interpreter_prefix": "/Users/jelle/Library/Caches/rattler/cache/envs/compas_cgal-10341637204532151523/envs/default",
+      "native_sha256": "213868a740351d920619132f3176cbb7e8f5848111f6a6f0fa7a849502b1a632",
+      "native_sources_sha256": "09aacb3635db331c898fc0d400665bb9c26c146918b4dbc0b37053cdbef10e16",
+      "patch_sha256": null,
+      "pixi_lock_sha256": "62df58e812a97d6bbc10accf1da4b7064ee86d9ed1826fa30e4612bf37232869",
+      "python_version": "3.12.13",
+      "rev": "15fbed70ebb016bdd8ef49453e04606d03e0b1fe",
+      "stock_2_origin": "/Users/jelle/Code/CADCAM/worktrees/compas_cgal_prs-ratio-head/build/cp312-abi3-macosx_11_0_arm64/install/platlib/compas_cgal/_stock_2.abi3.so",
+      "stock_2_sha256": "20678769715cb0fecb5c39f071fc9b49b6f43329daee4c8d58a468309d7b3e23"
+    },
+    "ref": {
+      "compas_cgal_file": "/Users/jelle/Code/CADCAM/worktrees/compas_cgal_prs-ratio-ref/src/compas_cgal/__init__.py",
+      "dirty": false,
+      "editable_build_dir": "/Users/jelle/Code/CADCAM/worktrees/compas_cgal_prs-ratio-ref/build/cp312-abi3-macosx_11_0_arm64",
+      "environment": "default",
+      "interpreter_prefix": "/Users/jelle/Library/Caches/rattler/cache/envs/compas_cgal-8591247342934971180/envs/default",
+      "native_sha256": "946ba402d634d9488860b1091ef910d32bf7c347ba748b4b41f84c29be4152d3",
+      "native_sources_sha256": "09aacb3635db331c898fc0d400665bb9c26c146918b4dbc0b37053cdbef10e16",
+      "patch_sha256": null,
+      "pixi_lock_sha256": "62df58e812a97d6bbc10accf1da4b7064ee86d9ed1826fa30e4612bf37232869",
+      "python_version": "3.12.13",
+      "rev": "15fbed70ebb016bdd8ef49453e04606d03e0b1fe",
+      "stock_2_origin": "/Users/jelle/Code/CADCAM/worktrees/compas_cgal_prs-ratio-ref/build/cp312-abi3-macosx_11_0_arm64/install/platlib/compas_cgal/_stock_2.abi3.so",
+      "stock_2_sha256": "5b8dec819dec78ab725a4c6f1e6ea74235b1da8ec3a40187e3ab78f4cefb7bc1"
+    }
+  },
+  "cpu_model": "Apple M1 Max",
+  "ended_utc": "2026-11-01T13:36:52+00:00",
+  "harness_sha256": "3a76eb83b69fa1cd4d69c4f22800cc4bdb3436506a82ff990e6b73a9ee1cd977",
+  "host": "jdf.local",
+  "injected": null,
+  "ref_commit": "15fbed70ebb016bdd8ef49453e04606d03e0b1fe",
+  "schema": "perf-ratio/1",
+  "started_utc": "2026-11-01T13:22:32+00:00",
+  "workloads": [
+    {
+      "family": "polygon",
+      "head_digest": "45a0ffa3ea5f8aa0b583cafcfb6307958922c790d4ae86c67863344ded4eed81",
+      "head_median": 1.629212,
+      "head_min": 1.59082,
+      "pair_ratio_median": 0.9997411788195533,
+      "pairs": [
+        {
+          "head_cpu": 1.59082,
+          "load_after": 143.4794921875,
+          "load_before": 131.11474609375,
+          "order": [
+            "ref",
+            "head"
+          ],
+          "ref_cpu": 1.6376049999999993
+        },
+        {
+          "head_cpu": 1.637906,
+          "load_after": 150.08740234375,
+          "load_before": 143.4794921875,
+          "order": [
+            "head",
+            "ref"
+          ],
+          "ref_cpu": 1.6324900000000002
+        },
+        {
+          "head_cpu": 1.6384319999999997,
+          "load_after": 149.6796875,
+          "load_before": 150.08740234375,
+          "order": [
+            "ref",
+            "head"
+          ],
+          "ref_cpu": 1.646214
+        },
+        {
+          "head_cpu": 1.629212,
+          "load_after": 146.421875,
+          "load_before": 149.6796875,
+          "order": [
+            "head",
+            "ref"
+          ],
+          "ref_cpu": 1.6261810000000003
+        },
+        {
+          "head_cpu": 1.6223219999999996,
+          "load_after": 149.1103515625,
+          "load_before": 146.421875,
+          "order": [
+            "ref",
+            "head"
+          ],
+          "ref_cpu": 1.6227420000000001
+        }
+      ],
+      "ratio": 0.9803283578042595,
+      "ref_digest": "45a0ffa3ea5f8aa0b583cafcfb6307958922c790d4ae86c67863344ded4eed81",
+      "ref_median": 1.6324900000000002,
+      "ref_min": 1.6227420000000001,
+      "same_output": true,
+      "workload": "polygon/figure5_refined"
+    },
+    {
+      "family": "polygon",
+      "head_digest": "fcba77e95fd7c403f9d47d0df2790d9853ca85b0756cb6a684ef572f8dd105a4",
+      "head_median": 1.597209000000001,
+      "head_min": 1.5912810000000006,
+      "pair_ratio_median": 0.9982493859413387,
+      "pairs": [
+        {
+          "head_cpu": 1.5948930000000001,
+          "load_after": 155.74755859375,
+          "load_before": 149.1103515625,
+          "order": [
+            "ref",
+            "head"
+          ],
+          "ref_cpu": 1.599636
+        },
+        {
+          "head_cpu": 1.597209000000001,
+          "load_after": 159.69140625,
+          "load_before": 155.74755859375,
+          "order": [
+            "head",
+            "ref"
+          ],
+          "ref_cpu": 1.6000099999999997
+        },
+        {
+          "head_cpu": 1.598868,
+          "load_after": 163.7197265625,
+          "load_before": 159.69140625,
+          "order": [
+            "ref",
+            "head"
+          ],
+          "ref_cpu": 1.5995590000000006
+        },
+        {
+          "head_cpu": 1.600713999999999,
+          "load_after": 169.7451171875,
+          "load_before": 163.7197265625,
+          "order": [
+            "head",
+            "ref"
+          ],
+          "ref_cpu": 1.5859560000000001
+        },
+        {
+          "head_cpu": 1.5912810000000006,
+          "load_after": 163.91943359375,
+          "load_before": 169.7451171875,
+          "order": [
+            "ref",
+            "head"
+          ],
+          "ref_cpu": 1.5962130000000005
+        }
+      ],
+      "ratio": 1.003357596301537,
+      "ref_digest": "fcba77e95fd7c403f9d47d0df2790d9853ca85b0756cb6a684ef572f8dd105a4",
+      "ref_median": 1.5995590000000006,
+      "ref_min": 1.5859560000000001,
+      "same_output": true,
+      "workload": "polygon/figure8_crossed_skis_boundary"
+    },
+    {
+      "family": "polygon",
+      "head_digest": "b4e0e37ecfe3f06ff1a16a6ad6a14665a58801c1ac0de4003f8df58eb6c2851e",
+      "head_median": 7.124345000000001,
+      "head_min": 7.056083,
+      "pair_ratio_median": 0.9916842017682579,
+      "pairs": [
+        {
+          "head_cpu": 7.172989000000001,
+          "load_after": 138.6884765625,
+          "load_before": 163.91943359375,
+          "order": [
+            "ref",
+            "head"
+          ],
+          "ref_cpu": 7.070533999999999
+        },
+        {
+          "head_cpu": 7.145823999999999,
+          "load_after": 103.40185546875,
+          "load_before": 138.6884765625,
+          "order": [
+            "head",
+            "ref"
+          ],
+          "ref_cpu": 7.236254000000001
+        },
+        {
+          "head_cpu": 7.124345000000001,
+          "load_after": 82.19482421875,
+          "load_before": 103.40185546875,
+          "order": [
+            "ref",
+            "head"
+          ],
+          "ref_cpu": 7.232766999999999
+        },
+        {
+          "head_cpu": 7.056083,
+          "load_after": 70.251953125,
+          "load_before": 82.19482421875,
+          "order": [
+            "head",
+            "ref"
+          ],
+          "ref_cpu": 7.115252
+        },
+        {
+          "head_cpu": 7.065972999999999,
+          "load_after": 64.25927734375,
+          "load_before": 70.251953125,
+          "order": [
+            "ref",
+            "head"
+          ],
+          "ref_cpu": 7.1067480000000005
+        }
+      ],
+      "ratio": 0.9979561656870614,
+      "ref_digest": "b4e0e37ecfe3f06ff1a16a6ad6a14665a58801c1ac0de4003f8df58eb6c2851e",
+      "ref_median": 7.115252,
+      "ref_min": 7.070533999999999,
+      "same_output": true,
+      "workload": "polygon/figure8_monstera_boundary_qualified_corners"
+    },
+    {
+      "family": "omega",
+      "head_digest": "bd59faad544911c53f4d91b740e651744527c4054cc25011f7758cbfaaeb00f1",
+      "head_median": 3.4089679999999998,
+      "head_min": 3.368983,
+      "pair_ratio_median": 0.9925188038924375,
+      "pairs": [
+        {
+          "head_cpu": 3.368983,
+          "load_after": 69.08056640625,
+          "load_before": 64.25927734375,
+          "order": [
+            "ref",
+            "head"
+          ],
+          "ref_cpu": 3.3943769999999995
+        },
+        {
+          "head_cpu": 3.378588,
+          "load_after": 60.8466796875,
+          "load_before": 69.08056640625,
+          "order": [
+            "head",
+            "ref"
+          ],
+          "ref_cpu": 3.4041639999999997
+        },
+        {
+          "head_cpu": 3.4089679999999998,
+          "load_after": 58.0830078125,
+          "load_before": 60.8466796875,
+          "order": [
+            "ref",
+            "head"
+          ],
+          "ref_cpu": 3.3725499999999995
+        },
+        {
+          "head_cpu": 3.435625000000001,
+          "load_after": 62.71826171875,
+          "load_before": 58.0830078125,
+          "order": [
+            "head",
+            "ref"
+          ],
+          "ref_cpu": 3.4758419999999997
+        },
+        {
+          "head_cpu": 3.4870560000000004,
+          "load_after": 63.92822265625,
+          "load_before": 62.71826171875,
+          "order": [
+            "ref",
+            "head"
+          ],
+          "ref_cpu": 3.4854179999999992
+        }
+      ],
+      "ratio": 0.9989423433307143,
+      "ref_digest": "bd59faad544911c53f4d91b740e651744527c4054cc25011f7758cbfaaeb00f1",
+      "ref_median": 3.4041639999999997,
+      "ref_min": 3.3725499999999995,
+      "same_output": true,
+      "workload": "omega/figure5_refined"
+    },
+    {
+      "family": "omega",
+      "head_digest": "38bc5e0e2faa1c2e66c8039b3761154d30cf98ab17201a2be13d91c02257e594",
+      "head_median": 4.7396069999999995,
+      "head_min": 4.717741999999999,
+      "pair_ratio_median": 1.0034486660506967,
+      "pairs": [
+        {
+          "head_cpu": 4.778503,
+          "load_after": 60.880859375,
+          "load_before": 63.92822265625,
+          "order": [
+            "ref",
+            "head"
+          ],
+          "ref_cpu": 4.823285
+        },
+        {
+          "head_cpu": 4.720628,
+          "load_after": 67.69140625,
+          "load_before": 60.880859375,
+          "order": [
+            "head",
+            "ref"
+          ],
+          "ref_cpu": 4.815155000000001
+        },
+        {
+          "head_cpu": 4.884997,
+          "load_after": 93.0322265625,
+          "load_before": 67.69140625,
+          "order": [
+            "ref",
+            "head"
+          ],
+          "ref_cpu": 4.807723
+        },
+        {
+          "head_cpu": 4.717741999999999,
+          "load_after": 87.46484375,
+          "load_before": 93.0322265625,
+          "order": [
+            "head",
+            "ref"
+          ],
+          "ref_cpu": 4.701528
+        },
+        {
+          "head_cpu": 4.7396069999999995,
+          "load_after": 92.263671875,
+          "load_before": 87.46484375,
+          "order": [
+            "ref",
+            "head"
+          ],
+          "ref_cpu": 4.71
+        }
+      ],
+      "ratio": 1.0034486660506967,
+      "ref_digest": "38bc5e0e2faa1c2e66c8039b3761154d30cf98ab17201a2be13d91c02257e594",
+      "ref_median": 4.807723,
+      "ref_min": 4.701528,
+      "same_output": true,
+      "workload": "omega/figure8_crossed_skis_boundary"
+    },
+    {
+      "family": "omega",
+      "head_digest": "694919597a089b56f0e15d2312915ecd1bc81168730fbcb1b90af54d866f30c3",
+      "head_median": 13.639837000000002,
+      "head_min": 13.385295999999999,
+      "pair_ratio_median": 1.002297558154624,
+      "pairs": [
+        {
+          "head_cpu": 13.441877000000002,
+          "load_after": 87.919921875,
+          "load_before": 92.263671875,
+          "order": [
+            "ref",
+            "head"
+          ],
+          "ref_cpu": 13.292922
+        },
+        {
+          "head_cpu": 13.385295999999999,
+          "load_after": 49.85693359375,
+          "load_before": 87.919921875,
+          "order": [
+            "head",
+            "ref"
+          ],
+          "ref_cpu": 13.354613
+        },
+        {
+          "head_cpu": 13.775076999999998,
+          "load_after": 37.49072265625,
+          "load_before": 49.85693359375,
+          "order": [
+            "ref",
+            "head"
+          ],
+          "ref_cpu": 13.671118000000002
+        },
+        {
+          "head_cpu": 13.639837000000002,
+          "load_after": 56.84619140625,
+          "load_before": 37.49072265625,
+          "order": [
+            "head",
+            "ref"
+          ],
+          "ref_cpu": 13.647568000000001
+        },
+        {
+          "head_cpu": 13.675357,
+          "load_after": 79.70166015625,
+          "load_before": 56.84619140625,
+          "order": [
+            "ref",
+            "head"
+          ],
+          "ref_cpu": 13.689549
+        }
+      ],
+      "ratio": 1.006949111715242,
+      "ref_digest": "694919597a089b56f0e15d2312915ecd1bc81168730fbcb1b90af54d866f30c3",
+      "ref_median": 13.647568000000001,
+      "ref_min": 13.292922,
+      "same_output": true,
+      "workload": "omega/figure8_monstera_boundary_qualified_corners"
+    },
+    {
+      "family": "certificate",
+      "head_digest": "5892f0a1ebd895ae5189fd6eb3c8e45c646f2819bb4cfa0cdf3862e712166910",
+      "head_median": 4.851514000000002,
+      "head_min": 4.814382,
+      "pair_ratio_median": 0.9846620478077462,
+      "pairs": [
+        {
+          "head_cpu": 4.854945000000001,
+          "load_after": 48.43017578125,
+          "load_before": 79.70166015625,
+          "order": [
+            "ref",
+            "head"
+          ],
+          "ref_cpu": 4.939668000000001
+        },
+        {
+          "head_cpu": 4.874145000000002,
+          "load_after": 62.046875,
+          "load_before": 48.43017578125,
+          "order": [
+            "head",
+            "ref"
+          ],
+          "ref_cpu": 4.870937
+        },
+        {
+          "head_cpu": 4.851514000000002,
+          "load_after": 68.71923828125,
+          "load_before": 62.046875,
+          "order": [
+            "ref",
+            "head"
+          ],
+          "ref_cpu": 4.852684
+        },
+        {
+          "head_cpu": 4.814382,
+          "load_after": 44.28173828125,
+          "load_before": 68.71923828125,
+          "order": [
+            "head",
+            "ref"
+          ],
+          "ref_cpu": 4.889375000000001
+        },
+        {
+          "head_cpu": 4.821520000000001,
+          "load_after": 95.046875,
+          "load_before": 44.28173828125,
+          "order": [
+            "ref",
+            "head"
+          ],
+          "ref_cpu": 4.958748999999999
+        }
+      ],
+      "ratio": 0.9921070483880673,
+      "ref_digest": "5892f0a1ebd895ae5189fd6eb3c8e45c646f2819bb4cfa0cdf3862e712166910",
+      "ref_median": 4.889375000000001,
+      "ref_min": 4.852684,
+      "same_output": true,
+      "workload": "certificate/figure8_monstera_boundary_qualified_corners"
+    },
+    {
+      "family": "gt",
+      "head_digest": "e041a91942b4a990:58",
+      "head_median": 0.711484,
+      "head_min": 0.676082,
+      "pair_ratio_median": 1.014266659184405,
+      "pairs": [
+        {
+          "head_cpu": 0.711484,
+          "load_after": 96.884765625,
+          "load_before": 95.046875,
+          "order": [
+            "ref",
+            "head"
+          ],
+          "ref_cpu": 0.703549
+        },
+        {
+          "head_cpu": 0.714194,
+          "load_after": 96.884765625,
+          "load_before": 96.884765625,
+          "order": [
+            "head",
+            "ref"
+          ],
+          "ref_cpu": 0.7004469999999999
+        },
+        {
+          "head_cpu": 0.721171,
+          "load_after": 104.0205078125,
+          "load_before": 96.884765625,
+          "order": [
+            "ref",
+            "head"
+          ],
+          "ref_cpu": 0.694071
+        },
+        {
+          "head_cpu": 0.676082,
+          "load_after": 102.6572265625,
+          "load_before": 104.0205078125,
+          "order": [
+            "head",
+            "ref"
+          ],
+          "ref_cpu": 0.68859
+        },
+        {
+          "head_cpu": 0.7048920000000001,
+          "load_after": 102.6572265625,
+          "load_before": 102.6572265625,
+          "order": [
+            "ref",
+            "head"
+          ],
+          "ref_cpu": 0.6949769999999998
+        }
+      ],
+      "ratio": 0.9818353446898734,
+      "ref_digest": "e041a91942b4a990:58",
+      "ref_median": 0.6949769999999998,
+      "ref_min": 0.68859,
+      "same_output": true,
+      "workload": "gt/cap-120-default/pipeline/rect_12x8"
+    },
+    {
+      "family": "gt",
+      "head_digest": "58ce345ba90e1fc8:98",
+      "head_median": 1.306266,
+      "head_min": 1.2925300000000002,
+      "pair_ratio_median": 1.0012487237764136,
+      "pairs": [
+        {
+          "head_cpu": 1.306266,
+          "load_after": 100.9228515625,
+          "load_before": 102.6572265625,
+          "order": [
+            "ref",
+            "head"
+          ],
+          "ref_cpu": 1.292312
+        },
+        {
+          "head_cpu": 1.3105499999999999,
+          "load_after": 94.7626953125,
+          "load_before": 100.9228515625,
+          "order": [
+            "head",
+            "ref"
+          ],
+          "ref_cpu": 1.329508
+        },
+        {
+          "head_cpu": 1.3035249999999998,
+          "load_after": 91.2578125,
+          "load_before": 94.7626953125,
+          "order": [
+            "ref",
+            "head"
+          ],
+          "ref_cpu": 1.330822
+        },
+        {
+          "head_cpu": 1.2925300000000002,
+          "load_after": 96.36181640625,
+          "load_before": 91.2578125,
+          "order": [
+            "head",
+            "ref"
+          ],
+          "ref_cpu": 1.290918
+        },
+        {
+          "head_cpu": 1.323283,
+          "load_after": 93.28955078125,
+          "load_before": 96.36181640625,
+          "order": [
+            "ref",
+            "head"
+          ],
+          "ref_cpu": 1.2900050000000003
+        }
+      ],
+      "ratio": 1.001957356754431,
+      "ref_digest": "58ce345ba90e1fc8:98",
+      "ref_median": 1.292312,
+      "ref_min": 1.2900050000000003,
+      "same_output": true,
+      "workload": "gt/cap-120-default/pipeline/rect_20x12"
+    },
+    {
+      "family": "gt",
+      "head_digest": "c43b842b252e0744:101",
+      "head_median": 1.2277330000000002,
+      "head_min": 1.2093530000000001,
+      "pair_ratio_median": 0.993759435935228,
+      "pairs": [
+        {
+          "head_cpu": 1.2093530000000001,
+          "load_after": 89.18212890625,
+          "load_before": 93.28955078125,
+          "order": [
+            "ref",
+            "head"
+          ],
+          "ref_cpu": 1.2219319999999998
+        },
+        {
+          "head_cpu": 1.218067,
+          "load_after": 89.18212890625,
+          "load_before": 89.18212890625,
+          "order": [
+            "head",
+            "ref"
+          ],
+          "ref_cpu": 1.238985
+        },
+        {
+          "head_cpu": 1.2277330000000002,
+          "load_after": 84.84326171875,
+          "load_before": 89.18212890625,
+          "order": [
+            "ref",
+            "head"
+          ],
+          "ref_cpu": 1.22865
+        },
+        {
+          "head_cpu": 1.2449919999999999,
+          "load_after": 83.974609375,
+          "load_before": 84.84326171875,
+          "order": [
+            "head",
+            "ref"
+          ],
+          "ref_cpu": 1.220419
+        },
+        {
+          "head_cpu": 1.2473419999999997,
+          "load_after": 78.611328125,
+          "load_before": 83.974609375,
+          "order": [
+            "ref",
+            "head"
+          ],
+          "ref_cpu": 1.255175
+        }
+      ],
+      "ratio": 0.9909326223206949,
+      "ref_digest": "c43b842b252e0744:101",
+      "ref_median": 1.22865,
+      "ref_min": 1.220419,
+      "same_output": true,
+      "workload": "gt/cap-120-default/pipeline/L_shape"
+    }
+  ]
+}

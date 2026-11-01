@@ -361,6 +361,40 @@ yet: the first quiet measurement of each key sets one.
 
 --8<-- "benchmarks/results/perf_history.md"
 
+## Ratio tracking against a pinned reference
+
+`pixi run perf-ratio` times HEAD (the `ratio-head` worktree at `--head-rev`)
+against the reference `15fbed70` (the `ratio-ref` worktree), each in its own
+clean tree, interpreter and native build. Every workload runs as 5 interleaved
+AB/BA pairs, each run is in-child process CPU, and the ratio is the HEAD
+minimum over the reference minimum, with the median of the per-pair ratios
+beside it. A ratio is a same-moment comparison at any load, never a budget
+verdict. It differs from the quiet-only CPU gates above ("Ruled: the
+generation budget gates CPU time") because load slows both arms at the same
+moment. That is why it keeps its own history
+(`benchmarks/results/perf_ratio_history.jsonl`, `pixi run perf-ratio-ingest`,
+`pixi run perf-ratio-render`) and never enters `perf-history-check`'s baseline.
+
+Five A/A sessions (both arms at `15fbed70`, Apple M1 Max, 1-minute load
+3.5–169.7) measured the noise floor: every ratio fell in 0.978–1.024, the
+largest per-pair spread around a session's pair-ratio median was 0.042
+(`gt/cap-120-default/pipeline/rect_20x12`), and the default set of 10
+workloads took 833–860 s of wall per session. Their records are committed
+under `benchmarks/results/perf_ratio_calibration/15fbed70/apple-m1-max/`. An
+injection audit spun 1.0 CPU s into one arm of `rect_20x12`: into HEAD the
+ratio rose to 1.723 against an expected 1.730, into the reference it fell to
+0.578 against an expected 0.578, both within that 0.042 spread. Injected
+records are refused at ingest.
+
+These sessions calibrate the ratio regression gate
+([design](superpowers/specs/2026-11-01-ratio-gate-design.md)): a HEAD passes
+when every workload's ratio is at most `1 + m_w`, where `m_w` is twice the
+largest A/A deviation `|ρ − 1|`. The margins run from 0.007
+(`omega/figure8_crossed_skis_boundary`) to 0.048
+(`gt/cap-120-default/pipeline/rect_20x12`).
+
+--8<-- "benchmarks/results/perf_ratio_history.md"
+
 ## Related pages
 
 - [Held Qualification](held_qualification.md): why no Held path is fit to
