@@ -157,6 +157,13 @@ function(native_add_locked_dependency)
         )
     endif()
 
+    # The populated/unpopulated decision below reads the top-level entries of NATIVE_SOURCE_DIR;
+    # declare that directory a configure input so the first build after the sources land re-runs
+    # CMake (directory mtime changes exactly when its entries do; relies on CMP0135 NEW, set by
+    # cmake_minimum_required(VERSION 3.15...3.26)).
+    file(MAKE_DIRECTORY "${NATIVE_SOURCE_DIR}")
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${NATIVE_SOURCE_DIR}")
+
     set(native_source_is_populated false)
     if(IS_DIRECTORY "${NATIVE_SOURCE_DIR}")
         file(
