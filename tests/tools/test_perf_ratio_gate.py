@@ -2,7 +2,8 @@
 
 Every session is synthetic (`synthetic_session`), every record lives under ``tmp_path``
 (``root=tmp_path``), the `Measure` is a fake and promotion's checkout is a fake: no
-timing, no arms, no harness subprocess.
+timing, no arms, no harness subprocess. The tests call `run`, which raises every refusal and
+regression; the exit codes `main` maps them to are `tests.tools.test_perf_ratio_gate_exit`.
 """
 
 from __future__ import annotations
@@ -32,7 +33,7 @@ from tools.perf_ratio_gate import PromotionRecordsExistError
 from tools.perf_ratio_gate import PromotionRefusedError
 from tools.perf_ratio_gate import RebaseWithoutHarnessChangeError
 from tools.perf_ratio_gate import harness_command
-from tools.perf_ratio_gate import main
+from tools.perf_ratio_gate import run
 from tools.perf_ratio_gate import promote as promote_records
 from tools.perf_ratio_gate import subprocess_measure
 from tools.perf_ratio_gate_chain import AnchorValueMismatchError
@@ -56,6 +57,7 @@ from tools.perf_ratio_gate_verdict import RatioRegressionError
 from tools.perf_ratio_record import ArmName
 from tools.perf_ratio_record import CpuSeconds
 from tools.perf_ratio_record import Injection
+from tools.perf_ratio_record import MalformedRatioRecordError
 from tools.perf_ratio_record import PerfRatioSession
 from tools.perf_ratio_record import load_session
 
@@ -166,18 +168,18 @@ def calibrated(tmp_path: Path) -> Path:
     """A registry at REF under HARNESS with CPU_MODEL calibrated from `AA_HEAD_CPU`; returns its path."""
     path = tmp_path / "perf_ratio_gate.json"
     paths = aa_records(tmp_path / "records")
-    assert main(["calibrate", "--records", *map(str, paths), "--registry", str(path)], root=tmp_path, measure=no_measure, checkout=no_checkout) == 0
+    assert run(["calibrate", "--records", *map(str, paths), "--registry", str(path)], root=tmp_path, measure=no_measure, checkout=no_checkout) == 0
     return path
 
 
 def check(tmp_path: Path, registry: Path, session: PerfRatioSession, *extra: str, measure: Measure = no_measure) -> int:
     record = write_record(session, tmp_path / "gate" / "perf_ratio_session.json")
-    return main(["check", str(record), "--registry", str(registry), *extra], root=tmp_path, measure=measure, checkout=no_checkout)
+    return run(["check", str(record), "--registry", str(registry), *extra], root=tmp_path, measure=measure, checkout=no_checkout)
 
 
 def promote(tmp_path: Path, registry: Path, session: PerfRatioSession, checkout: Callable[[Path, str], str], measure: Measure = no_measure) -> int:
     record = write_record(session, tmp_path / "gate" / "perf_ratio_session.json")
-    return main(["promote", str(record), "--registry", str(registry)], root=tmp_path, measure=measure, checkout=checkout)
+    return run(["promote", str(record), "--registry", str(registry)], root=tmp_path, measure=measure, checkout=checkout)
 
 
 # --- harness_command / subprocess_measure ------------------------------------------------------------
@@ -254,7 +256,7 @@ def test_check_improved_prints_the_promotion_hint(tmp_path: Path, capsys: pytest
     registry = calibrated(tmp_path)
     capsys.readouterr()
     record = write_record(gated({GT: IMPROVED, OMEGA: PASSING}), tmp_path / "gate" / "perf_ratio_session.json")
-    assert main(["check", str(record), "--registry", str(registry)], root=tmp_path, measure=no_measure, checkout=no_checkout) == 0
+    assert run(["check", str(record), "--registry", str(registry)], root=tmp_path, measure=no_measure, checkout=no_checkout) == 0
     lines = capsys.readouterr().out.splitlines()
     assert lines[0] == f"{GT}: IMPROVED rho 0.900 A_w 1.000 A_w*rho_w 0.900 margin 0.040 pairs {DEFAULT_PAIRS}"
     assert lines[-1] == f"promotion available: pixi run perf-ratio-promote {record}"
@@ -311,10 +313,10 @@ def test_calibrate_from_records_writes_a_loadable_registry(tmp_path: Path) -> No
 def test_calibrate_replaces_only_its_cpu(tmp_path: Path) -> None:
     path = calibrated(tmp_path)
     other = aa_records(tmp_path / "records", cpu_model=OTHER_CPU)
-    assert main(["calibrate", "--records", *map(str, other), "--registry", str(path)], root=tmp_path, measure=no_measure, checkout=no_checkout) == 0
+    assert run(["calibrate", "--records", *map(str, other), "--registry", str(path)], root=tmp_path, measure=no_measure, checkout=no_checkout) == 0
     before = load_registry(path, root=tmp_path)
     quiet = aa_records(tmp_path / "records", AA_HEAD_CPU_QUIET, series="quiet")
-    assert main(["calibrate", "--records", *map(str, quiet), "--registry", str(path)], root=tmp_path, measure=no_measure, checkout=no_checkout) == 0
+    assert run(["calibrate", "--records", *map(str, quiet), "--registry", str(path)], root=tmp_path, measure=no_measure, checkout=no_checkout) == 0
     after = load_registry(path, root=tmp_path)
     (other_before,) = [c for c in before.calibrations if c.cpu_model == OTHER_CPU]
     (other_after,) = [c for c in after.calibrations if c.cpu_model == OTHER_CPU]
@@ -329,7 +331,7 @@ def test_calibrate_without_a_registry_refuses_records_that_disagree(tmp_path: Pa
     paths = aa_records(tmp_path / "records")
     (odd,) = aa_records(tmp_path / "records", (1.0,), series="odd", **override)  # type: ignore[arg-type]
     with pytest.raises(InvalidCalibrationSessionError):
-        main(
+        run(
             ["calibrate", "--records", *map(str, [*paths[:-1], odd]), "--registry", str(tmp_path / "perf_ratio_gate.json")],
             root=tmp_path,
             measure=no_measure,
@@ -343,7 +345,7 @@ def test_calibrate_into_a_registry_refuses_records_at_another_reference(tmp_path
     before = path.read_bytes()
     elsewhere = aa_records(tmp_path / "records", cpu_model=OTHER_CPU, ref_commit=OTHER_REV, head_rev=OTHER_REV)
     with pytest.raises(InvalidCalibrationSessionError):
-        main(["calibrate", "--records", *map(str, elsewhere), "--registry", str(path)], root=tmp_path, measure=no_measure, checkout=no_checkout)
+        run(["calibrate", "--records", *map(str, elsewhere), "--registry", str(path)], root=tmp_path, measure=no_measure, checkout=no_checkout)
     assert path.read_bytes() == before
 
 
@@ -351,7 +353,7 @@ def test_calibrate_into_a_registry_refuses_records_at_another_reference(tmp_path
 
 
 def calibrate(tmp_path: Path, registry: Path, records: Sequence[Path], *extra: str) -> int:
-    return main(["calibrate", "--records", *map(str, records), "--registry", str(registry), *extra], root=tmp_path, measure=no_measure, checkout=no_checkout)
+    return run(["calibrate", "--records", *map(str, records), "--registry", str(registry), *extra], root=tmp_path, measure=no_measure, checkout=no_checkout)
 
 
 def two_machine_registry(tmp_path: Path) -> Path:
@@ -414,7 +416,7 @@ def test_calibrate_sessions_rebase_harness_measures_at_the_reference_and_rebases
     write_registry(build_registry(ref_commit=REF, harness_sha256=NEW_HARNESS, calibrations=(), workloads=WORKLOADS), path, root=tmp_path)
     measure = FakeMeasure(*AA_HEAD_CPU)
     argv = ["calibrate", "--sessions", str(CALIBRATION_SESSIONS), "--rebase-harness", "--registry", str(path)]
-    assert main(argv, root=tmp_path, measure=measure, checkout=no_checkout, cpu_model=lambda: CPU_MODEL, tree_harness=lambda: HARNESS) == 0
+    assert run(argv, root=tmp_path, measure=measure, checkout=no_checkout, cpu_model=lambda: CPU_MODEL, tree_harness=lambda: HARNESS) == 0
     assert {(request.ref_commit, request.head_rev) for request in measure.requests} == {(REF, REF)}
     registry = load_registry(path, root=tmp_path)
     assert registry.harness_sha256 == HARNESS and registry.ref_commit == REF
@@ -435,7 +437,7 @@ def test_calibrate_after_promotion_refuses_records_at_the_old_reference(tmp_path
     path = uncalibrated_registry(tmp_path, ref_commit=HEAD)
     before = path.read_bytes()
     with pytest.raises(InvalidCalibrationSessionError):
-        main(["calibrate", "--records", *map(str, aa_records(tmp_path / "records")), "--registry", str(path)], root=tmp_path, measure=no_measure, checkout=no_checkout)
+        run(["calibrate", "--records", *map(str, aa_records(tmp_path / "records")), "--registry", str(path)], root=tmp_path, measure=no_measure, checkout=no_checkout)
     assert path.read_bytes() == before
 
 
@@ -448,7 +450,7 @@ def test_calibrate_sessions_runs_k_aa_sessions_and_calibrates(tmp_path: Path) ->
     measure = FakeMeasure(*AA_HEAD_CPU, 1.015)
     sessions = CALIBRATION_SESSIONS + 1
     assert (
-        main(
+        run(
             ["calibrate", "--sessions", str(sessions), "--registry", str(path)],
             root=tmp_path,
             measure=measure,
@@ -473,7 +475,7 @@ def test_calibrate_sessions_refuses_an_existing_target_before_any_run(tmp_path: 
     sessions_target(tmp_path).mkdir(parents=True)
     before = path.read_bytes()
     with pytest.raises(CalibrationExistsError):
-        main(
+        run(
             ["calibrate", "--sessions", str(CALIBRATION_SESSIONS), "--registry", str(path)],
             root=tmp_path,
             measure=no_measure,
@@ -487,7 +489,7 @@ def test_calibrate_sessions_refuses_an_existing_target_before_any_run(tmp_path: 
 def test_calibrate_sessions_refuses_fewer_than_k_sessions(tmp_path: Path) -> None:
     path = uncalibrated_registry(tmp_path)
     with pytest.raises(TooFewCalibrationSessionsError):
-        main(
+        run(
             ["calibrate", "--sessions", str(CALIBRATION_SESSIONS - 1), "--registry", str(path)],
             root=tmp_path,
             measure=no_measure,
@@ -500,7 +502,7 @@ def test_calibrate_sessions_refuses_fewer_than_k_sessions(tmp_path: Path) -> Non
 
 def test_calibrate_sessions_needs_a_registry(tmp_path: Path) -> None:
     with pytest.raises(MissingRegistryError):
-        main(
+        run(
             ["calibrate", "--sessions", str(CALIBRATION_SESSIONS), "--registry", str(tmp_path / "absent.json")],
             root=tmp_path,
             measure=no_measure,
@@ -515,7 +517,7 @@ def test_calibrate_sessions_refuses_a_session_from_another_machine(tmp_path: Pat
     before = path.read_bytes()
     measure = FakeMeasure(1.0, cpu_model=OTHER_CPU)
     with pytest.raises(CalibrationMachineMismatchError):
-        main(
+        run(
             ["calibrate", "--sessions", str(CALIBRATION_SESSIONS), "--registry", str(path)],
             root=tmp_path,
             measure=measure,
@@ -534,7 +536,7 @@ def test_calibrate_sessions_refuses_an_edited_tree_harness_before_any_run(tmp_pa
     measure = FakeMeasure(*AA_HEAD_CPU)
     argv = ["calibrate", "--sessions", str(CALIBRATION_SESSIONS), "--registry", str(path)]
     with pytest.raises(CalibrationHarnessMismatchError, match="--rebase-harness"):
-        main(argv, root=tmp_path, measure=measure, checkout=no_checkout, cpu_model=lambda: CPU_MODEL, tree_harness=lambda: NEW_HARNESS)
+        run(argv, root=tmp_path, measure=measure, checkout=no_checkout, cpu_model=lambda: CPU_MODEL, tree_harness=lambda: NEW_HARNESS)
     assert measure.requests == []
     assert not sessions_target(tmp_path).exists()
     assert path.read_bytes() == before
@@ -546,7 +548,7 @@ def test_calibrate_sessions_refuses_rebase_under_an_unchanged_tree_harness_befor
     measure = FakeMeasure(*AA_HEAD_CPU)
     argv = ["calibrate", "--sessions", str(CALIBRATION_SESSIONS), "--rebase-harness", "--registry", str(path)]
     with pytest.raises(RebaseWithoutHarnessChangeError, match="without it"):
-        main(argv, root=tmp_path, measure=measure, checkout=no_checkout, cpu_model=lambda: CPU_MODEL, tree_harness=lambda: HARNESS)
+        run(argv, root=tmp_path, measure=measure, checkout=no_checkout, cpu_model=lambda: CPU_MODEL, tree_harness=lambda: HARNESS)
     assert measure.requests == []
     assert not sessions_target(tmp_path).exists()
     assert path.read_bytes() == before
@@ -572,13 +574,13 @@ def test_a_failed_sessions_run_leaves_no_calibration_directory_and_reruns(tmp_pa
     argv = ["calibrate", "--sessions", str(CALIBRATION_SESSIONS), "--registry", str(path)]
     failing = FailingMeasure(2, *AA_HEAD_CPU)
     with pytest.raises(subprocess.CalledProcessError):
-        main(argv, root=tmp_path, measure=failing, checkout=no_checkout, cpu_model=lambda: CPU_MODEL, tree_harness=lambda: HARNESS)
+        run(argv, root=tmp_path, measure=failing, checkout=no_checkout, cpu_model=lambda: CPU_MODEL, tree_harness=lambda: HARNESS)
     assert len(failing.requests) == 2
     assert not sessions_target(tmp_path).exists()
     assert not (tmp_path / calibration_dir(REF, CPU_MODEL).relative_to(REPOSITORY).parents[1]).exists()
     assert path.read_bytes() == before
     rerun = FakeMeasure(*AA_HEAD_CPU)
-    assert main(argv, root=tmp_path, measure=rerun, checkout=no_checkout, cpu_model=lambda: CPU_MODEL, tree_harness=lambda: HARNESS) == 0
+    assert run(argv, root=tmp_path, measure=rerun, checkout=no_checkout, cpu_model=lambda: CPU_MODEL, tree_harness=lambda: HARNESS) == 0
     assert len(rerun.requests) == CALIBRATION_SESSIONS
     assert sorted(child.name for child in sessions_target(tmp_path).iterdir()) == [f"aa-{k}" for k in range(1, CALIBRATION_SESSIONS + 1)]
     (calibration,) = load_registry(path, root=tmp_path).calibrations
@@ -838,6 +840,40 @@ def test_a_rerun_whose_gate_asks_for_more_extensions_than_were_persisted_is_refu
     with pytest.raises(PromotionRecordsExistError, match="no further extension record"):
         promote(tmp_path, path, session, no_checkout, measure=no_measure)
     assert path.read_bytes() == before
+
+
+def test_a_persisted_extension_that_no_longer_loads_is_refused_on_a_rerun(tmp_path: Path) -> None:
+    # The promotion directory's own evidence: a rerun that cannot load it refuses it as foreign records (cause chained).
+    path = calibrated(tmp_path)
+    before = path.read_bytes()
+    session = gated({GT: IMPROVED, OMEGA: RED_FIRST})
+    with pytest.raises(PromotedReferenceMismatchError):
+        promote(tmp_path, path, session, FakeCheckout(answer=OTHER_REV), measure=FakeMeasure(EXTENDED_TO))
+    (promotion_target(tmp_path, REF, HEAD) / "ext-1" / "perf_ratio_session.json").write_text("not json", encoding="utf-8")
+    with pytest.raises(PromotionRecordsExistError, match="ext-1/perf_ratio_session.json does not load") as raised:
+        promote(tmp_path, path, session, no_checkout, measure=no_measure)
+    assert isinstance(raised.value.__cause__, MalformedRatioRecordError)
+    assert path.read_bytes() == before
+
+
+def test_promote_of_a_record_that_is_not_utf_8_is_a_malformed_record(tmp_path: Path) -> None:
+    path = calibrated(tmp_path)
+    record = gate_record(tmp_path)
+    record.parent.mkdir(parents=True, exist_ok=True)
+    record.write_bytes(b"\xff\xfe{}")
+    with pytest.raises(MalformedRatioRecordError, match="is not UTF-8") as raised:
+        run(["promote", str(record), "--registry", str(path)], root=tmp_path, measure=no_measure, checkout=no_checkout)
+    assert isinstance(raised.value.__cause__, UnicodeDecodeError)
+
+
+def test_check_of_a_record_that_is_not_utf_8_is_a_malformed_record(tmp_path: Path) -> None:
+    path = calibrated(tmp_path)
+    record = gate_record(tmp_path)
+    record.parent.mkdir(parents=True, exist_ok=True)
+    record.write_bytes(b"\xff\xfe{}")
+    with pytest.raises(MalformedRatioRecordError, match="is not UTF-8") as raised:
+        run(["check", str(record), "--registry", str(path)], root=tmp_path, measure=no_measure, checkout=no_checkout)
+    assert isinstance(raised.value.__cause__, UnicodeDecodeError)
 
 
 def promoted_once(tmp_path: Path) -> Path:

@@ -6,7 +6,9 @@ registry root) and SHA-256, and carries the margins they give (spec §Margins:
 sessions). `calibration_of` builds a verified calibration from records on disk;
 `_verify_calibration` re-verifies a stored one, live or an anchor link's: K,
 distinct citations, each record's digest, each session an honest A/A session,
-and the margins re-derived and compared with ``==``. The registry
+and the margins re-derived and compared with ``==``. `_load_cited` is the one load of a
+cited record, for calibrations and anchor links alike: a record that has its cited digest
+but does not load is a refusal of the cited evidence, not an infra failure. The registry
 (`tools.perf_ratio_gate_registry`) and the anchor chain
 (`tools.perf_ratio_gate_chain`) build on this module.
 """
@@ -21,7 +23,11 @@ from typing import Literal
 
 from tools.perf_history_store import REPOSITORY
 from tools.perf_ratio_gate_decide import Margin
+from tools.perf_ratio_gate_errors import GateRefusal
 from tools.perf_ratio_record import ArmName
+from tools.perf_ratio_record import InconsistentRatioRecordError
+from tools.perf_ratio_record import MalformedRatioRecordError
+from tools.perf_ratio_record import NonPositiveCpuError
 from tools.perf_ratio_record import PerfRatioSession
 from tools.perf_ratio_record import load_session
 from tools.run_provenance import sha256_file
@@ -35,32 +41,51 @@ CALIBRATION_SESSIONS = 5
 # (live calibration) or an anchor link's gate session's (the calibration the link cites).
 HarnessOwner = Literal["registry's", "gate session's"]
 
+# What the harness loader `load_session` raises on a record that does not load. Its module is a HARNESS_SOURCE,
+# so these cannot derive from `GateRefusal`; at a citation they are wrapped in one (`_load_cited`).
+# UnicodeDecodeError: bytes that are not UTF-8, which `load_session` decodes before it parses JSON.
+RECORD_LOAD_ERRORS: tuple[type[Exception], ...] = (MalformedRatioRecordError, InconsistentRatioRecordError, NonPositiveCpuError, UnicodeDecodeError)
 
-class CalibrationRecordDigestError(Exception):
+# The ruling every unloadable-citation refusal states: committed evidence that stopped loading is the harness change's
+# defect, never the gate's to recover (CI-N3 follow-up).
+UNLOADABLE_RULING = (
+    "The defect is in the harness change that broke loading: that change must keep committed records loadable or ship a migration; the gate has no recovery path of its own."
+)
+
+
+class CalibrationRecordDigestError(GateRefusal):
     """A cited calibration record's bytes no longer have the cited ``record_sha256``."""
 
 
-class CalibrationRecordMissingError(Exception):
+class CalibrationRecordMissingError(GateRefusal):
     """A cited calibration record does not exist."""
 
 
-class CalibrationRecordOutsideRootError(Exception):
+class CalibrationRecordOutsideRootError(GateRefusal):
     """A calibration record lies outside the root its cited path is relative to."""
 
 
-class MarginMismatchError(Exception):
+class CalibrationRecordUnloadableError(GateRefusal):
+    """A cited calibration record has its cited digest but does not load as a ``perf-ratio/1`` session.
+
+    The message names the cited path, the loader's error and `UNLOADABLE_RULING`: the harness change that broke
+    loading owns the defect, and the gate has no recovery path of its own.
+    """
+
+
+class MarginMismatchError(GateRefusal):
     """A stored margin (or margin set) differs from the one its cited records re-derive."""
 
 
-class InvalidCalibrationSessionError(Exception):
+class InvalidCalibrationSessionError(GateRefusal):
     """A calibration session is not an honest A/A session of this registry and machine."""
 
 
-class TooFewCalibrationSessionsError(Exception):
+class TooFewCalibrationSessionsError(GateRefusal):
     """A calibration cites fewer than `CALIBRATION_SESSIONS` sessions."""
 
 
-class DuplicateCalibrationSessionError(Exception):
+class DuplicateCalibrationSessionError(GateRefusal):
     """A calibration cites one record (by path or by content) more than once."""
 
 
@@ -177,7 +202,7 @@ def _verify_calibration(calibration: Calibration, *, ref_commit: str, harness_sh
         actual = sha256_file(record_path)
         if actual != record.record_sha256:
             raise CalibrationRecordDigestError(f"{where}: {record.path} now has SHA-256 {actual}, not the cited {record.record_sha256}; the record was rewritten.")
-    sessions = [load_session(record_path) for record_path in record_paths]
+    sessions = [_load_cited(record, record_path, where) for record, record_path in zip(calibration.sessions, record_paths)]
     for record, session in zip(calibration.sessions, sessions):
         _require_aa_session(
             session,
@@ -191,6 +216,17 @@ def _verify_calibration(calibration: Calibration, *, ref_commit: str, harness_sh
     derived = derive_margins(sessions, SAFETY)
     if dict(calibration.margins) != derived:
         raise MarginMismatchError(f"{where}: stored margins {dict(calibration.margins)} are not the ones its cited records give, {derived}.")
+
+
+def _load_cited(record: CitedRecord, path: Path, where: str, *, unloadable: type[GateRefusal] = CalibrationRecordUnloadableError) -> PerfRatioSession:
+    # The one load of a record cited by *where*, its digest already verified. Bytes the citation pins that no longer
+    # load (a harness parser change, a hand edit) refuse the cited evidence: a rerun reads the same bytes, so this is
+    # never infra. *unloadable* names the citing kind's refusal; the loader's error is chained.
+    try:
+        return load_session(path)
+    except RECORD_LOAD_ERRORS as error:
+        cause = f"{type(error).__name__}: {str(error).rstrip('.')}"
+        raise unloadable(f"{where}: cited record {record.path} has its cited digest but does not load: {cause}. {UNLOADABLE_RULING}") from error
 
 
 def _require_session_count(count: int, where: str) -> None:

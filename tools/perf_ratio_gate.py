@@ -19,6 +19,22 @@
 
 Red workloads are extended through `Measure`; in production that runs the harness
 (`harness_command`) as a subprocess, its records under `GATE_SCRATCH`.
+
+Exit codes of `main` (`run` raises instead), by exception class:
+
+- 0 pass: PASS / IMPROVED, or a calibration or promotion written;
+- 1 regression: within the gate, only `RatioRegressionError`, with its
+  ``ratio gate: regression:`` stderr line;
+- 2 usage: argparse;
+- 3 refused: any `GateRefusal`, the gate declined to decide; fix the input or
+  state the message names, then rerun;
+- 4 infra: `INFRA_ERRORS` (a failed harness run, I/O, a session record that fails to load),
+  or an unclassified exception, whose traceback is printed.
+
+The codes are the gate's, not the process's: the pixi task's preamble, a failed
+import of this module, and pixi itself also exit 1, before `main` runs. Exit 1
+without the ``ratio gate: regression:`` line is an environment failure. A CI
+wrapper calls `main` in-process (analysis §7), so only the gate's codes reach it.
 """
 
 from __future__ import annotations
@@ -29,6 +45,7 @@ import json
 import subprocess
 import sys
 import tempfile
+import traceback
 from collections.abc import Callable
 from collections.abc import Iterator
 from collections.abc import Mapping
@@ -40,15 +57,20 @@ from typing import Optional
 
 from tools.perf_history_store import REPOSITORY
 from tools.perf_ratio import DEFAULT_PAIRS
+from tools.perf_ratio import HarnessSourceMissingError
 from tools.perf_ratio import harness_sha256
 from tools.perf_ratio_arms import DEFAULT_REF_WORKTREE
+from tools.perf_ratio_arms import HeadCheckoutFailedError
+from tools.perf_ratio_arms import HeadRevUnknownError
 from tools.perf_ratio_arms import checkout_head
 from tools.perf_ratio_gate_chain import AnchorLink
 from tools.perf_ratio_gate_chain import AnchorValueMismatchError
 from tools.perf_ratio_gate_chain import carry_anchor
+from tools.perf_ratio_gate_citations import RECORD_LOAD_ERRORS
 from tools.perf_ratio_gate_citations import CitedRecord
 from tools.perf_ratio_gate_decide import Anchor
 from tools.perf_ratio_gate_decide import ExactRatio
+from tools.perf_ratio_gate_errors import GateRefusal
 from tools.perf_ratio_gate_registry import CALIBRATE_TASK
 from tools.perf_ratio_gate_registry import CALIBRATION_SESSIONS
 from tools.perf_ratio_gate_registry import REGISTRY_PATH
@@ -68,9 +90,13 @@ from tools.perf_ratio_gate_verdict import Verdict
 from tools.perf_ratio_gate_verdict import anchors_for
 from tools.perf_ratio_gate_verdict import gate
 from tools.perf_ratio_record import ArmName
+from tools.perf_ratio_record import InconsistentRatioRecordError
 from tools.perf_ratio_record import MalformedRatioRecordError
+from tools.perf_ratio_record import NonPositiveCpuError
 from tools.perf_ratio_record import PerfRatioSession
 from tools.perf_ratio_record import load_session
+from tools.pipeline_timing_1_1_base import MeasuredTreeError
+from tools.run_provenance import MachineIdentityError
 from tools.run_provenance import machine_identity
 from tools.run_provenance import sha256_file
 
@@ -91,6 +117,39 @@ PROMOTION_STAGING_PREFIX = "promotion-staging-"
 # The promote pixi task the printed next step names (the calibrate task is the registry's `CALIBRATE_TASK`).
 PROMOTE_TASK = "pixi run perf-ratio-promote"
 
+# Exit codes of `main`, the contract a CI job branches on: 0 pass (PASS / IMPROVED), 2 usage (argparse's own).
+# 1 regression: the gate decided, and HEAD is slower; no other gate outcome exits 1. The process can still exit 1
+# before `main` runs (the pixi task preamble, an import failure, pixi itself): see the module docstring.
+EXIT_REGRESSION = 1
+# 3 refused: the gate declined to decide (every `GateRefusal`). Fix the input or state the message names, then
+# rerun; an unchanged rerun refuses again. CI never reruns a refusal by itself.
+EXIT_REFUSED = 3
+# 4 infra: the gate could not measure or read its inputs (`INFRA_ERRORS`, or an unclassified exception).
+EXIT_INFRA = 4
+# The stderr prefix of every classified failure line.
+EXIT_TAG = "ratio gate"
+
+# Infra errors raised by harness code. Its modules are HARNESS_SOURCES, hashed into ``harness_sha256``,
+# so their classes cannot derive from a gate base class and are listed instead: a harness subprocess
+# that exits non-zero, I/O, a session record that fails to load, a failed checkout of the reference
+# worktree, an unreadable machine identity, a reference worktree that is dirty or not at the commit
+# (`MeasuredTreeError`, promote's checkout), and a harness source missing from this tree
+# (`HarnessSourceMissingError`, ``calibrate --sessions`` reading the tree's harness digest). None of
+# them is a `GateRefusal`. A *cited* record that fails to load is not here: the citation boundary
+# (`tools.perf_ratio_gate_citations._load_cited`) refuses it.
+INFRA_ERRORS: tuple[type[Exception], ...] = (
+    subprocess.CalledProcessError,
+    OSError,
+    MalformedRatioRecordError,
+    InconsistentRatioRecordError,
+    NonPositiveCpuError,
+    HeadRevUnknownError,
+    HeadCheckoutFailedError,
+    MachineIdentityError,
+    MeasuredTreeError,
+    HarnessSourceMissingError,
+)
+
 # Reads this machine's CPU model, as the harness records it in ``cpu_model``.
 CpuModelReader = Callable[[], str]
 # Reads the SHA-256 of the harness this tree runs, as the harness records it in ``harness_sha256``.
@@ -99,36 +158,40 @@ HarnessReader = Callable[[], str]
 Checkout = Callable[[Path, str], str]
 
 
-class MissingRegistryError(Exception):
+class MissingRegistryError(GateRefusal):
     """The registry file does not exist where a subcommand needs one."""
 
 
-class CalibrationExistsError(Exception):
+class CalibrationExistsError(GateRefusal):
     """``calibrate --sessions`` would write into a calibration directory that already exists."""
 
 
-class CalibrationMachineMismatchError(Exception):
+class CalibrationMachineMismatchError(GateRefusal):
     """A measured A/A session ran on another CPU model than the one its directory is named after."""
 
 
-class CalibrationHarnessMismatchError(Exception):
+class CalibrationHarnessMismatchError(GateRefusal):
     """Calibration records ran another harness than the registry's, and ``--rebase-harness`` was not given."""
 
 
-class RebaseWithoutHarnessChangeError(Exception):
+class RebaseWithoutHarnessChangeError(GateRefusal):
     """``--rebase-harness`` was given, but the records ran the registry's own harness."""
 
 
-class PromotionRefusedError(Exception):
+class PromotionRefusedError(GateRefusal):
     """A session does not qualify for promotion: a regression, no improvement, a dirty HEAD, or HEAD is the reference."""
 
 
-class PromotionRecordsExistError(Exception):
+class PromotionRecordsExistError(GateRefusal):
     """The promotion's record directory exists with other records than the ones this promotion writes."""
 
 
-class PromotedReferenceMismatchError(Exception):
-    """The reference worktree's checkout landed on another commit than the promoted HEAD."""
+class PromotedReferenceMismatchError(GateRefusal):
+    """The reference worktree's checkout landed on another commit than the promoted HEAD.
+
+    A refusal: CI never promotes, and an operator fixes the reference worktree (the state the message names)
+    before the rerun of promote that finishes the promotion from its persisted records.
+    """
 
 
 def harness_command(request: ExtensionRequest, write: Path) -> tuple[str, ...]:
@@ -254,10 +317,11 @@ def check(record: Path, *, registry_path: Path, root: Path, measure: Measure, au
 
     Raises:
         MissingRegistryError: No registry at *registry_path*.
+        MalformedRatioRecordError: *record* is not UTF-8, not JSON, or not a ``perf-ratio/1`` record.
         RatioRegressionError: A workload stayed above ``1 + m_w`` after extension.
     """
     registry = _load(registry_path, root)
-    session = load_session(record)
+    _, session = _read_session(record)
     report = gate(session, registry, measure, audit=audit)
     for line in report_lines(report):
         print(line)
@@ -511,7 +575,7 @@ def promote(record: Path, *, registry_path: Path, root: Path, measure: Measure, 
 
     Raises:
         MissingRegistryError: No registry at *registry_path*.
-        MalformedRatioRecordError: *record* is not JSON, or not a ``perf-ratio/1`` record.
+        MalformedRatioRecordError: *record* is not UTF-8, not JSON, or not a ``perf-ratio/1`` record.
         InconsistentRatioRecordError: As `PerfRatioSession.build`.
         NonPositiveCpuError: As `PerfRatioSession.build`.
         InjectedSessionError: The session is an audit session (`require_gateable`).
@@ -578,7 +642,7 @@ def promote(record: Path, *, registry_path: Path, root: Path, measure: Measure, 
     if moved != head_rev:
         raise PromotedReferenceMismatchError(
             f"{DEFAULT_REF_WORKTREE} was checked out at {moved}, not the promoted {head_rev}; the registry is unchanged and the promotion records stay in {target}, "
-            f"so re-running promote on {record} finishes it."
+            f"so re-running promote on {record}, once the checkout lands, finishes it."
         )
     write_registry(promoted, registry_path, root=root)
     print(f"reference promoted: {registry.ref_commit} -> {head_rev}; the registry holds no calibrations.")
@@ -590,10 +654,13 @@ def promote(record: Path, *, registry_path: Path, root: Path, measure: Measure, 
 
 
 def _read_session(record: Path) -> tuple[bytes, PerfRatioSession]:
-    # The one read of a promoted record: its bytes, and the session parsed from those same bytes (as `load_session`).
+    # The one read of a session record the CLI is given (`check`, `promote`): its bytes, and the session parsed from
+    # those same bytes (as `load_session`). Bytes that are not UTF-8 are a malformed record (infra, 4), cause chained.
     data = record.read_bytes()
     try:
         raw = json.loads(data.decode("utf-8"))
+    except UnicodeDecodeError as error:
+        raise MalformedRatioRecordError(f"{record} is not UTF-8: {error}") from error
     except json.JSONDecodeError as error:
         raise MalformedRatioRecordError(f"{record} is not JSON: {error}") from error
     return data, PerfRatioSession.build(raw)
@@ -625,10 +692,19 @@ def _stage_promotion(files: Mapping[str, bytes], target: Path, root: Path) -> No
 
 
 def _persisted_extensions(target: Path) -> Iterator[PerfRatioSession]:
+    # The promotion directory's own evidence, in merge order. One that does not load (a harness parser change, a
+    # hand edit) cannot be replayed: refused like any other record this rerun would not write, its cause chained.
     index = 1
     path = target / f"{EXTENSION_DIR_PREFIX}{index}" / SESSION_RECORD_NAME
     while path.is_file():
-        yield load_session(path)
+        try:
+            session = load_session(path)
+        except RECORD_LOAD_ERRORS as error:
+            raise PromotionRecordsExistError(
+                f"{target}: the persisted {path.relative_to(target).as_posix()} does not load ({type(error).__name__}: {error}), "
+                "so a rerun cannot replay it. Move the directory aside to promote afresh."
+            ) from error
+        yield session
         index += 1
         path = target / f"{EXTENSION_DIR_PREFIX}{index}" / SESSION_RECORD_NAME
 
@@ -695,7 +771,59 @@ def main(
     cpu_model: Optional[CpuModelReader] = None,
     tree_harness: Optional[HarnessReader] = None,
 ) -> int:
-    """Command-line entry.
+    """Command-line entry: `run`, its outcome mapped to an exit code by exception class.
+
+    One line ``ratio gate: <class>: <ExceptionName>: <message>`` goes to stderr for every
+    non-zero code but usage. An exception no clause names is a defect or an unforeseen failure:
+    its full traceback is printed above the line and it exits `EXIT_INFRA`, so a return of 1
+    means a regression and nothing else. That holds for `main`, not the process: see the module
+    docstring for the exits of 1 before `main` runs. Usage errors are argparse's ``SystemExit(2)``,
+    which no clause catches.
+
+    Args:
+        argv: As `run`.
+        measure: As `run`.
+        checkout: As `run`.
+        root: As `run`.
+        cpu_model: As `run`.
+        tree_harness: As `run`.
+
+    Returns:
+        0 pass; `EXIT_REGRESSION` (1) on `RatioRegressionError`; `EXIT_REFUSED` (3) on any
+        `GateRefusal`; `EXIT_INFRA` (4) on `INFRA_ERRORS` or an unclassified exception.
+    """
+    # Most specific first: the regression, then the refusal family, then the listed harness errors, then the rest.
+    try:
+        return run(argv, measure=measure, checkout=checkout, root=root, cpu_model=cpu_model, tree_harness=tree_harness)
+    except RatioRegressionError as error:
+        _report("regression", error)
+        return EXIT_REGRESSION
+    except GateRefusal as error:
+        _report("refused", error)
+        return EXIT_REFUSED
+    except INFRA_ERRORS as error:
+        _report("infra", error)
+        return EXIT_INFRA
+    except Exception as error:
+        traceback.print_exc()
+        _report("infra (unclassified)", error)
+        return EXIT_INFRA
+
+
+def _report(kind: str, error: Exception) -> None:
+    print(f"{EXIT_TAG}: {kind}: {type(error).__name__}: {error}", file=sys.stderr)
+
+
+def run(
+    argv: Optional[Sequence[str]] = None,
+    *,
+    measure: Optional[Measure] = None,
+    checkout: Optional[Checkout] = None,
+    root: Path = REPOSITORY,
+    cpu_model: Optional[CpuModelReader] = None,
+    tree_harness: Optional[HarnessReader] = None,
+) -> int:
+    """Run one subcommand; every outcome but success is raised (`main` maps them to exit codes).
 
     Args:
         argv: Arguments, defaulting to ``sys.argv[1:]``.
@@ -709,7 +837,7 @@ def main(
             `harness_sha256` over this tree, the harness the subprocess `Measure` runs.
 
     Returns:
-        The process exit status: 0. Every refusal, and a regression, is raised.
+        0. Every refusal (a `GateRefusal`) and a regression (`RatioRegressionError`) is raised.
     """
     args = _parser().parse_args(argv)
     chosen_measure = subprocess_measure(GATE_SCRATCH) if measure is None else measure

@@ -21,6 +21,7 @@ from tools.perf_ratio_gate_chain import AnchorLinkSelfLoopError
 from tools.perf_ratio_gate_chain import AnchorRecordDigestError
 from tools.perf_ratio_gate_chain import AnchorRecordMissingError
 from tools.perf_ratio_gate_chain import AnchorRecordOutsideRootError
+from tools.perf_ratio_gate_chain import AnchorRecordUnloadableError
 from tools.perf_ratio_gate_chain import AnchorValueMismatchError
 from tools.perf_ratio_gate_chain import DuplicateAnchorRecordError
 from tools.perf_ratio_gate_chain import ExtensionPairCapError
@@ -52,7 +53,10 @@ from tools.perf_ratio_gate_registry import write_registry
 from tools.perf_ratio_record import ArmName
 from tools.perf_ratio_record import CpuSeconds
 from tools.perf_ratio_record import Injection
+from tools.perf_ratio_record import InconsistentRatioRecordError
+from tools.perf_ratio_record import MalformedRatioRecordError
 from tools.perf_ratio_record import PerfRatioSession
+from tools.run_provenance import sha256_file
 
 from tests.tools.perf_ratio_sessions import HARNESS
 from tests.tools.perf_ratio_sessions import REF
@@ -209,6 +213,7 @@ def test_every_chain_refusal_is_an_anchor_chain_mismatch() -> None:
         AnchorRecordMissingError,
         AnchorRecordDigestError,
         AnchorRecordOutsideRootError,
+        AnchorRecordUnloadableError,
         AnchorChainBrokenError,
         AnchorChainEndError,
         AnchorValueMismatchError,
@@ -259,6 +264,65 @@ def test_a_link_record_outside_the_root_is_refused(tmp_path: Path) -> None:
     _rewrite(path, escape, redigest=True)
     with pytest.raises(AnchorRecordOutsideRootError):
         load_registry(path, root=tmp_path)
+
+
+def _inconsistent(data: bytes) -> bytes:
+    # The record's first stored workload ratio doubled: valid JSON, but its derived value no longer recomputes.
+    raw = json.loads(data.decode("utf-8"))
+    raw["workloads"][0]["ratio"] *= 2
+    return json.dumps(raw).encode("utf-8")
+
+
+# Rewrites of a cited record that keep it citable but not loadable, each with the loader failure it causes.
+UNLOADABLE_RECORDS: dict[str, tuple[Callable[[bytes], bytes], type[Exception]]] = {
+    "not-json": (lambda data: b"not json", MalformedRatioRecordError),
+    "not-utf-8": (lambda data: b"\xff\xfe{}", UnicodeDecodeError),
+    "inconsistent": (_inconsistent, InconsistentRatioRecordError),
+}
+
+
+@pytest.mark.parametrize("content", sorted(UNLOADABLE_RECORDS))
+def test_a_digest_pinned_link_record_that_does_not_load_is_refused(tmp_path: Path, content: str) -> None:
+    # The record's digest is re-pinned (and the registry re-digested): only the load can fail. That is a refusal of
+    # the cited evidence, not an infra failure, so it is an AnchorChainMismatchError with the loader's error chained.
+    path = _chained_file(tmp_path)
+    record = tmp_path / promotion_dir(REF, REV_B).relative_to(REPOSITORY_ROOT) / "gate" / "perf_ratio_session.json"
+    rewrite, cause = UNLOADABLE_RECORDS[content]
+    record.write_bytes(rewrite(record.read_bytes()))
+
+    def repin(document: dict[str, Any]) -> None:
+        document["anchor_links"][0]["sessions"][0]["record_sha256"] = sha256_file(record)
+
+    _rewrite(path, repin, redigest=True)
+    with pytest.raises(AnchorRecordUnloadableError) as raised:
+        load_registry(path, root=tmp_path)
+    assert isinstance(raised.value, AnchorChainMismatchError)
+    assert isinstance(raised.value.__cause__, cause)
+    assert "has its cited digest but does not load" in str(raised.value)
+
+
+# The ruling an unloadable cited record's refusal states (CI-N3 follow-up), named independently of the gate modules.
+UNLOADABLE_RULING = (
+    "The defect is in the harness change that broke loading: that change must keep committed records loadable or ship a migration; the gate has no recovery path of its own."
+)
+
+
+def test_an_unloadable_link_record_names_its_path_its_cause_and_the_ruling(tmp_path: Path) -> None:
+    path = _chained_file(tmp_path)
+    cited = promotion_dir(REF, REV_B).relative_to(REPOSITORY_ROOT) / "gate" / "perf_ratio_session.json"
+    record = tmp_path / cited
+    record.write_bytes(_inconsistent(record.read_bytes()))
+
+    def repin(document: dict[str, Any]) -> None:
+        document["anchor_links"][0]["sessions"][0]["record_sha256"] = sha256_file(record)
+
+    _rewrite(path, repin, redigest=True)
+    with pytest.raises(AnchorRecordUnloadableError) as raised:
+        load_registry(path, root=tmp_path)
+    message = str(raised.value)
+    assert f"cited record {cited.as_posix()} " in message
+    assert "InconsistentRatioRecordError: " in message
+    assert UNLOADABLE_RULING in message
 
 
 def test_a_stored_anchor_that_disagrees_is_refused(tmp_path: Path) -> None:

@@ -56,6 +56,7 @@ from tools.perf_ratio_gate_chain import AnchorLinkSelfLoopError as AnchorLinkSel
 from tools.perf_ratio_gate_chain import AnchorRecordDigestError as AnchorRecordDigestError
 from tools.perf_ratio_gate_chain import AnchorRecordMissingError as AnchorRecordMissingError
 from tools.perf_ratio_gate_chain import AnchorRecordOutsideRootError as AnchorRecordOutsideRootError
+from tools.perf_ratio_gate_chain import AnchorRecordUnloadableError as AnchorRecordUnloadableError
 from tools.perf_ratio_gate_chain import AnchorValueMismatchError as AnchorValueMismatchError
 from tools.perf_ratio_gate_chain import DuplicateAnchorRecordError as DuplicateAnchorRecordError
 from tools.perf_ratio_gate_chain import ExtensionPairCapError as ExtensionPairCapError
@@ -72,6 +73,7 @@ from tools.perf_ratio_gate_citations import Calibration as Calibration
 from tools.perf_ratio_gate_citations import CalibrationRecordDigestError as CalibrationRecordDigestError
 from tools.perf_ratio_gate_citations import CalibrationRecordMissingError as CalibrationRecordMissingError
 from tools.perf_ratio_gate_citations import CalibrationRecordOutsideRootError as CalibrationRecordOutsideRootError
+from tools.perf_ratio_gate_citations import CalibrationRecordUnloadableError as CalibrationRecordUnloadableError
 from tools.perf_ratio_gate_citations import CitedRecord as CitedRecord
 from tools.perf_ratio_gate_citations import DuplicateCalibrationSessionError as DuplicateCalibrationSessionError
 from tools.perf_ratio_gate_citations import InvalidCalibrationSessionError as InvalidCalibrationSessionError
@@ -83,6 +85,7 @@ from tools.perf_ratio_gate_citations import derive_margins as derive_margins
 from tools.perf_ratio_gate_decide import UNIT_ANCHOR as UNIT_ANCHOR
 from tools.perf_ratio_gate_decide import Anchor as Anchor
 from tools.perf_ratio_gate_decide import Margin as Margin
+from tools.perf_ratio_gate_errors import GateRefusal
 from tools.perf_ratio_record import REF_SHORT_CHARS
 
 REGISTRY_SCHEMA = "perf-ratio-gate/2"
@@ -99,7 +102,7 @@ PROMOTION_ROOT = REPOSITORY / "benchmarks" / "results" / "perf_ratio_promotions"
 _SLUG_SEPARATORS = re.compile(r"[^a-z0-9]+")
 
 
-class MalformedRegistryError(Exception):
+class MalformedRegistryError(GateRefusal):
     """The registry file is not JSON, or has the wrong schema, keys or field types."""
 
 
@@ -107,39 +110,39 @@ class SupersededRegistrySchemaError(MalformedRegistryError):
     """The registry has a schema this gate no longer reads (`SUPERSEDED_SCHEMAS`); its message names the migration."""
 
 
-class RegistryDigestMismatchError(Exception):
+class RegistryDigestMismatchError(GateRefusal):
     """The stored ``registry_sha256`` is not the digest of the registry's content."""
 
 
-class SafetyMismatchError(Exception):
+class SafetyMismatchError(GateRefusal):
     """The registry's ``safety`` is not this module's `SAFETY`."""
 
 
-class DuplicateCalibrationError(Exception):
+class DuplicateCalibrationError(GateRefusal):
     """A registry holds two calibrations for one ``cpu_model``."""
 
 
-class CalibrationWorkloadMismatchError(Exception):
+class CalibrationWorkloadMismatchError(GateRefusal):
     """A calibration's workload set is not the registry's."""
 
 
-class MissingWorkloadsError(Exception):
+class MissingWorkloadsError(GateRefusal):
     """A registry's workload set is empty (a calibration-less registry is built without one)."""
 
 
-class DuplicateRegistryWorkloadError(Exception):
+class DuplicateRegistryWorkloadError(GateRefusal):
     """A registry's workload set names one workload more than once."""
 
 
-class UnsortedRegistryWorkloadsError(Exception):
+class UnsortedRegistryWorkloadsError(GateRefusal):
     """A registry's workload set is not in sorted order."""
 
 
-class UncalibratedMachineError(Exception):
+class UncalibratedMachineError(GateRefusal):
     """The registry holds no calibration for a ``cpu_model``."""
 
 
-class UnsluggableCpuModelError(Exception):
+class UnsluggableCpuModelError(GateRefusal):
     """A CPU model has no letter or digit, so it has no calibration directory name."""
 
 
@@ -325,7 +328,7 @@ def load_registry(path: Path = REGISTRY_PATH, *, root: Path = REPOSITORY) -> Gat
         The verified registry.
 
     Raises:
-        MalformedRegistryError: Not JSON, or the wrong schema, keys or field types.
+        MalformedRegistryError: Not UTF-8, not JSON, or the wrong schema, keys or field types.
         SupersededRegistrySchemaError: A ``perf-ratio-gate/1`` registry; the message names the migration.
         RegistryDigestMismatchError: The stored ``registry_sha256`` is not the content's.
         SafetyMismatchError: The stored safety is not `SAFETY`.
@@ -338,6 +341,8 @@ def load_registry(path: Path = REGISTRY_PATH, *, root: Path = REPOSITORY) -> Gat
         CalibrationRecordOutsideRootError: A cited path leaves *root*.
         CalibrationRecordMissingError: A cited record does not exist.
         CalibrationRecordDigestError: A cited record's bytes changed.
+        CalibrationRecordUnloadableError: A cited record has its digest but does not load (a harness
+            parser change, or a hand edit).
         InvalidCalibrationSessionError: A cited session is not an honest A/A session of this registry.
         MarginMismatchError: A stored margin set differs from the re-derived one.
         AnchorChainBrokenError: A link does not start where the chain stands.
@@ -346,11 +351,14 @@ def load_registry(path: Path = REGISTRY_PATH, *, root: Path = REPOSITORY) -> Gat
         AnchorRecordOutsideRootError: As `derive_anchors`.
         AnchorRecordMissingError: As `derive_anchors`.
         AnchorRecordDigestError: As `derive_anchors`.
+        AnchorRecordUnloadableError: As `derive_anchors`.
         ExtensionMismatchError: As `derive_anchors`.
         AnchorValueMismatchError: The stored anchors are not the re-derived ones.
     """
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
+    except UnicodeDecodeError as error:
+        raise MalformedRegistryError(f"{path} is not UTF-8: {error}") from error
     except json.JSONDecodeError as error:
         raise MalformedRegistryError(f"{path} is not JSON: {error}") from error
     try:

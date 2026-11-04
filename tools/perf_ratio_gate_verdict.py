@@ -33,6 +33,7 @@ from tools.perf_ratio_gate_decide import Margin
 from tools.perf_ratio_gate_decide import Verdict as Verdict
 from tools.perf_ratio_gate_decide import anchored
 from tools.perf_ratio_gate_decide import decide as decide
+from tools.perf_ratio_gate_errors import GateRefusal
 from tools.perf_ratio_gate_merge import ExtensionMismatchError
 from tools.perf_ratio_gate_merge import merge_extension
 from tools.perf_ratio_gate_registry import GateRegistry
@@ -45,27 +46,27 @@ from tools.perf_ratio_record import Ratio
 EXTENSION_PAIRS = 5
 
 
-class InjectedSessionError(Exception):
+class InjectedSessionError(GateRefusal):
     """An audit session (one with an injected spin) is gated outside audit mode."""
 
 
-class ReferenceMismatchError(Exception):
+class ReferenceMismatchError(GateRefusal):
     """The session's reference commit is not the registry's."""
 
 
-class HarnessMismatchError(Exception):
+class HarnessMismatchError(GateRefusal):
     """The session ran another harness than the one the registry was calibrated with."""
 
 
-class UnregisteredWorkloadError(Exception):
+class UnregisteredWorkloadError(GateRefusal):
     """A session workload has no margin in the registry."""
 
 
-class IncompleteSessionError(Exception):
+class IncompleteSessionError(GateRefusal):
     """Outside audit mode, the session's workload set is not the registry's."""
 
 
-class UnanchoredWorkloadError(Exception):
+class UnanchoredWorkloadError(GateRefusal):
     """A gated workload has no anchor ``A_w`` in a registry whose anchor chain is not empty."""
 
 

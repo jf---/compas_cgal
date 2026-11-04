@@ -15,6 +15,7 @@ from tools.perf_ratio_gate_citations import Calibration
 from tools.perf_ratio_gate_citations import CalibrationRecordDigestError
 from tools.perf_ratio_gate_citations import CalibrationRecordMissingError
 from tools.perf_ratio_gate_citations import CalibrationRecordOutsideRootError
+from tools.perf_ratio_gate_citations import CalibrationRecordUnloadableError
 from tools.perf_ratio_gate_citations import CitedRecord
 from tools.perf_ratio_gate_citations import DuplicateCalibrationSessionError
 from tools.perf_ratio_gate_citations import InvalidCalibrationSessionError
@@ -22,6 +23,7 @@ from tools.perf_ratio_gate_citations import MarginMismatchError
 from tools.perf_ratio_gate_citations import TooFewCalibrationSessionsError
 from tools.perf_ratio_gate_citations import calibration_of
 from tools.perf_ratio_gate_citations import derive_margins
+from tools.perf_ratio_gate_errors import GateRefusal
 from tools.perf_ratio_gate_registry import GateRegistry
 from tools.perf_ratio_gate_registry import Margin
 from tools.perf_ratio_gate_registry import build_registry
@@ -30,6 +32,7 @@ from tools.perf_ratio_gate_registry import load_registry
 from tools.perf_ratio_record import ArmName
 from tools.perf_ratio_record import CpuSeconds
 from tools.perf_ratio_record import Injection
+from tools.perf_ratio_record import MalformedRatioRecordError
 from tools.perf_ratio_record import PerfRatioSession
 from tools.perf_ratio_record import load_session
 from tools.run_provenance import sha256_file
@@ -86,6 +89,49 @@ def test_a_regenerated_calibration_record_is_refused(tmp_path: Path) -> None:
     write_record(regenerated, tmp_path / "apple-m1-max" / "aa-1" / "perf_ratio_session.json")
     with pytest.raises(CalibrationRecordDigestError):
         load_registry(path, root=tmp_path)
+
+
+@pytest.mark.parametrize(("content", "cause"), [(b"not json", MalformedRatioRecordError), (b"\xff\xfe{}", UnicodeDecodeError)], ids=["not-json", "not-utf-8"])
+def test_a_digest_pinned_calibration_record_that_does_not_load_is_refused(tmp_path: Path, content: bytes, cause: type[Exception]) -> None:
+    # Digest re-pinned and registry re-digested: only the load fails, a refusal of the cited evidence with the cause chained.
+    path = _written(tmp_path)
+    record = tmp_path / "apple-m1-max" / "aa-1" / "perf_ratio_session.json"
+    record.write_bytes(content)
+
+    def repin(document: dict[str, Any]) -> None:
+        (cited,) = [entry for entry in document["calibrations"][0]["sessions"] if entry["path"] == "apple-m1-max/aa-1/perf_ratio_session.json"]
+        cited["record_sha256"] = sha256_file(record)
+
+    _rewrite(path, repin, redigest=True)
+    with pytest.raises(CalibrationRecordUnloadableError) as raised:
+        load_registry(path, root=tmp_path)
+    assert isinstance(raised.value, GateRefusal)
+    assert isinstance(raised.value.__cause__, cause)
+    assert "apple-m1-max/aa-1/perf_ratio_session.json has its cited digest but does not load" in str(raised.value)
+
+
+# The ruling an unloadable cited record's refusal states (CI-N3 follow-up), named independently of the gate modules.
+UNLOADABLE_RULING = (
+    "The defect is in the harness change that broke loading: that change must keep committed records loadable or ship a migration; the gate has no recovery path of its own."
+)
+
+
+def test_an_unloadable_calibration_record_names_its_path_its_cause_and_the_ruling(tmp_path: Path) -> None:
+    path = _written(tmp_path)
+    record = tmp_path / "apple-m1-max" / "aa-1" / "perf_ratio_session.json"
+    record.write_bytes(b"not json")
+
+    def repin(document: dict[str, Any]) -> None:
+        (cited,) = [entry for entry in document["calibrations"][0]["sessions"] if entry["path"] == "apple-m1-max/aa-1/perf_ratio_session.json"]
+        cited["record_sha256"] = sha256_file(record)
+
+    _rewrite(path, repin, redigest=True)
+    with pytest.raises(CalibrationRecordUnloadableError) as raised:
+        load_registry(path, root=tmp_path)
+    message = str(raised.value)
+    assert "cited record apple-m1-max/aa-1/perf_ratio_session.json " in message
+    assert "MalformedRatioRecordError: " in message
+    assert UNLOADABLE_RULING in message
 
 
 def test_a_deleted_calibration_record_is_refused(tmp_path: Path) -> None:

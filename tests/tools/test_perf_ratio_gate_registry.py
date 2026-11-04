@@ -205,6 +205,15 @@ def test_a_registry_that_is_not_json_is_refused(tmp_path: Path) -> None:
         load_registry(path, root=tmp_path)
 
 
+def test_a_registry_that_is_not_utf_8_is_refused(tmp_path: Path) -> None:
+    # A binary-merge or encoding accident: a malformed registry (a refusal), not an unclassified decode error.
+    path = tmp_path / "perf_ratio_gate.json"
+    path.write_bytes(b"\xff\xfe{}")
+    with pytest.raises(MalformedRegistryError, match="is not UTF-8") as raised:
+        load_registry(path, root=tmp_path)
+    assert isinstance(raised.value.__cause__, UnicodeDecodeError)
+
+
 def test_calibration_dir_names_ref_and_cpu() -> None:
     assert calibration_dir(REF, "Apple M1 Max") == CALIBRATION_ROOT / "15fbed70" / "apple-m1-max"
 

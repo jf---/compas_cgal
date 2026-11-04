@@ -406,7 +406,7 @@ its margins exactly is refused.
 
 | Command | What it does |
 |---|---|
-| `pixi run perf-ratio-check RECORD [--audit]` | One verdict per workload; exits non-zero on any regression |
+| `pixi run perf-ratio-check RECORD [--audit]` | One verdict per workload; exits 1 on any regression (exit codes below) |
 | `pixi run perf-ratio-calibrate --records PATH...` or `--sessions K` | Builds the margins for one CPU model from K ≥ 5 A/A sessions at the reference |
 | `pixi run perf-ratio-calibrate ... --rebase-harness` | After a harness edit: takes the records' harness and workload set, drops every other calibration |
 | `pixi run perf-ratio-promote RECORD` | Moves the reference to a faster HEAD |
@@ -421,6 +421,41 @@ pixi run perf-ratio-check <record>
 Always pass `--ref-rev`. After a promotion the reference is the registry's
 `ref_commit`, not the harness default `PINNED_REF_COMMIT`; a session against
 the stale default is refused as another reference.
+
+All three subcommands exit by outcome class, so CI can branch on the code. A
+non-zero code also prints one `ratio gate: <class>: <Exception>: <message>`
+line to stderr. The codes are the gate's (`main` in
+`tools/perf_ratio_gate.py`), not the process's: see below the table.
+
+| Exit | Class | Raised as | What to do |
+|---|---|---|---|
+| 0 | pass | — | PASS or IMPROVED; a calibration or promotion was written |
+| 1 | regression | `RatioRegressionError` | HEAD is slower beyond its margin after extension. No other gate outcome exits 1 |
+| 2 | usage | argparse | Fix the command line |
+| 3 | refused | any `GateRefusal` | The gate declined to decide: an uncalibrated machine, another reference or harness, a registry that does not re-derive or cites a record that no longer loads, a promotion that does not qualify. Fix the input or state the message names, then rerun; an unchanged rerun refuses again. A cited record that no longer loads: the defect is in the harness change that broke loading: that change must keep committed records loadable or ship a migration; the gate has no recovery path of its own. |
+| 4 | infra | `INFRA_ERRORS`, or unclassified | Could not measure: a harness run that failed, I/O, a session record that does not load. Rerun once. An unclassified exception also prints its traceback and is a defect to root-cause |
+
+Every refusal the gate modules define derives from `GateRefusal`
+(`tools/perf_ratio_gate_errors.py`), and a test fails if a new exception in a
+gate module is neither a refusal nor allow-listed. Harness exceptions cannot
+derive from it, because their modules are hashed into `harness_sha256`, so
+`INFRA_ERRORS` in `tools/perf_ratio_gate.py` lists them. An unknown exception
+exits 4 rather than Python's default 1, which would read as a regression.
+
+A cited record (a calibration's A/A session, an anchor link's promotion
+record) whose bytes still have their cited digest but no longer load, say
+after a harness parser change, is a refusal (3), not infra: a rerun reads the
+same bytes. `calibrate --rebase-harness` loads the registry first, so it
+refuses such a registry too. The refusal
+(`CalibrationRecordUnloadableError`, `AnchorRecordUnloadableError`) names the
+cited path and the loader's error, and states the ruling: The defect is in the harness change that broke loading: that change must keep committed records loadable or ship a migration; the gate has no recovery path of its own.
+
+Exit 1 means a regression only when it comes from the gate. The process can
+exit 1 before the gate runs: the `perf-ratio-*` pixi task preamble (when the
+editable build cannot be found), a failed import of `tools.perf_ratio_gate`,
+or pixi itself. An exit of 1 without the `ratio gate: regression:` stderr line
+is an environment failure. The CI wrapper (the next unit, `perf_ratio_ci.py`)
+calls the gate's `main` in-process, so only these codes reach it.
 
 Verdicts, per workload, on the anchored ratio `A_w·ρ_w` (below):
 `REGRESSION` when `A_w·ρ_w > 1 + m_w`, `IMPROVED` when `A_w·ρ_w < 1 − m_w`,

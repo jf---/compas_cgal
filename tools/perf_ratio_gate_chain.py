@@ -24,11 +24,14 @@ Not every refusal is an `AnchorChainMismatchError`. `link_ratios` and
   calibration: `TooFewCalibrationSessionsError`,
   `DuplicateCalibrationSessionError`, `CalibrationRecordOutsideRootError`,
   `CalibrationRecordMissingError`, `CalibrationRecordDigestError`,
-  `InvalidCalibrationSessionError` and `MarginMismatchError`;
-- the record-load errors of `tools.perf_ratio_record.load_session` for a cited
-  record that is not a valid ``perf-ratio/1`` record.
+  `CalibrationRecordUnloadableError`, `InvalidCalibrationSessionError` and
+  `MarginMismatchError`.
 
-A caller that has to catch every chain refusal catches all four groups.
+A cited record that has its digest but does not load is refused, never left to
+the harness loader's own errors: `AnchorRecordUnloadableError` for a link's
+record, `CalibrationRecordUnloadableError` for its calibration's. Every refusal
+here is a `GateRefusal`; a caller that has to catch every chain refusal catches
+all three groups.
 """
 
 from __future__ import annotations
@@ -44,6 +47,7 @@ from tools.perf_history_store import REPOSITORY
 from tools.perf_ratio_gate_citations import Calibration
 from tools.perf_ratio_gate_citations import CitedRecord
 from tools.perf_ratio_gate_citations import _cited_path
+from tools.perf_ratio_gate_citations import _load_cited
 from tools.perf_ratio_gate_citations import _require_distinct
 from tools.perf_ratio_gate_citations import _verify_calibration
 from tools.perf_ratio_gate_citations import _workload_set
@@ -55,16 +59,16 @@ from tools.perf_ratio_gate_decide import Margin
 from tools.perf_ratio_gate_decide import Verdict
 from tools.perf_ratio_gate_decide import decide
 from tools.perf_ratio_gate_decide import exact_ratio
+from tools.perf_ratio_gate_errors import GateRefusal
 from tools.perf_ratio_gate_merge import Merge
 from tools.perf_ratio_gate_merge import merge_extension
 from tools.perf_ratio_record import ArmName
 from tools.perf_ratio_record import PerfRatioSession
 from tools.perf_ratio_record import WorkloadRatio
-from tools.perf_ratio_record import load_session
 from tools.run_provenance import sha256_file
 
 
-class AnchorChainMismatchError(Exception):
+class AnchorChainMismatchError(GateRefusal):
     """The anchor chain does not re-derive the registry's anchors; each failure mode is a subclass."""
 
 
@@ -78,6 +82,14 @@ class AnchorRecordDigestError(AnchorChainMismatchError):
 
 class AnchorRecordOutsideRootError(AnchorChainMismatchError):
     """A record cited by an anchor link lies outside the registry root."""
+
+
+class AnchorRecordUnloadableError(AnchorChainMismatchError):
+    """A cited anchor-link record has its cited digest but does not load as a ``perf-ratio/1`` session.
+
+    The message names the cited path, the loader's error and the citations module's ruling: the harness change that
+    broke loading owns the defect, and the gate has no recovery path of its own.
+    """
 
 
 class AnchorChainBrokenError(AnchorChainMismatchError):
@@ -196,12 +208,14 @@ def link_ratios(link: AnchorLink, anchors: Mapping[str, Anchor], *, root: Path =
         AnchorRecordOutsideRootError: A cited path leaves *root*.
         AnchorRecordMissingError: A cited record does not exist.
         AnchorRecordDigestError: A cited record's bytes changed.
+        AnchorRecordUnloadableError: A cited record has its digest but does not load (`_load_cited`).
         ExtensionMismatchError: *merge* refuses an extension (`merge_extension`).
         TooFewCalibrationSessionsError: As `load_registry`, for the link's calibration.
         DuplicateCalibrationSessionError: As `load_registry`, for the link's calibration.
         CalibrationRecordOutsideRootError: As `load_registry`, for the link's calibration.
         CalibrationRecordMissingError: As `load_registry`, for the link's calibration.
         CalibrationRecordDigestError: As `load_registry`, for the link's calibration.
+        CalibrationRecordUnloadableError: As `load_registry`, for the link's calibration.
         InvalidCalibrationSessionError: The link's calibration is not honest A/A at ``from_ref`` under
             the session's harness, on its machine, over its workloads.
         MarginMismatchError: The link's calibration margins do not re-derive.
@@ -215,7 +229,7 @@ def link_ratios(link: AnchorLink, anchors: Mapping[str, Anchor], *, root: Path =
         actual = sha256_file(path)
         if actual != record.record_sha256:
             raise AnchorRecordDigestError(f"{where}: {record.path} now has SHA-256 {actual}, not the cited {record.record_sha256}; the record was rewritten.")
-    gate_session, *extensions = [load_session(path) for path in paths]
+    gate_session, *extensions = [_load_cited(record, path, where, unloadable=AnchorRecordUnloadableError) for record, path in zip(link.sessions, paths)]
     _require_promoted_session(gate_session, link, where)
     _verify_calibration(
         link.calibration,
@@ -285,17 +299,16 @@ def derive_anchors(links: Sequence[AnchorLink], workloads: Sequence[str], *, roo
         AnchorRecordOutsideRootError: As `link_ratios`.
         AnchorRecordMissingError: As `link_ratios`.
         AnchorRecordDigestError: As `link_ratios`.
+        AnchorRecordUnloadableError: As `link_ratios`.
         ExtensionMismatchError: As `link_ratios`.
         TooFewCalibrationSessionsError: As `link_ratios`.
         DuplicateCalibrationSessionError: As `link_ratios`.
         CalibrationRecordOutsideRootError: As `link_ratios`.
         CalibrationRecordMissingError: As `link_ratios`.
         CalibrationRecordDigestError: As `link_ratios`.
+        CalibrationRecordUnloadableError: As `link_ratios`.
         InvalidCalibrationSessionError: As `link_ratios`.
         MarginMismatchError: As `link_ratios`.
-        MalformedRatioRecordError: A cited record is not JSON or not a ``perf-ratio/1`` record (`load_session`).
-        InconsistentRatioRecordError: A cited record's stored derived value differs from its recomputation (`load_session`).
-        NonPositiveCpuError: A cited record holds a run whose CPU is not positive (`load_session`).
     """
     anchors: dict[str, Anchor] = {}
     for link in links:

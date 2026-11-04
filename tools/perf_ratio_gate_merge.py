@@ -12,12 +12,13 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+from tools.perf_ratio_gate_errors import GateRefusal
 from tools.perf_ratio_record import ArmName
 from tools.perf_ratio_record import PerfRatioSession
 from tools.perf_ratio_record import WorkloadRatio
 
 
-class ExtensionMismatchError(Exception):
+class ExtensionMismatchError(GateRefusal):
     """An extension session did not measure what its base session and request measured."""
 
 

@@ -150,6 +150,7 @@ Prerequisites, in order:
 
 Files:
 - `tools/ci/perf_ratio_gate_job.sh`, or better a pixi task `perf-ratio-ci` invoking a small Python module `tools/perf_ratio_ci.py`. That module owns worktree provisioning, harness run, check and exit classification; the project rule is "CLI entry points are pixi tasks". It needs a test against the exit classes.
+  - It calls `tools.perf_ratio_gate.main` in-process and branches on its return (ruling, CI-N3 fix wave M2). A subprocess exit of 1 is not a regression by itself: the pixi task preamble, an import failure and pixi also exit 1 before `main` runs.
 - `.github/workflows/perf-ratio-gate.yml`, a new file. `benchmarks.yml` is untouched, so its cost profile does not change.
 - `docs/performance.md` "### The ratio regression gate": a CI paragraph (trigger, runner class, how to act on refused/regression, the calibration/promotion artifact flow).
 - Optional `.github/workflows/cpu-model-probe.yml` (`workflow_dispatch`, matrix ×N, prints `/proc/cpuinfo` model name), only if hosted runners are chosen.
