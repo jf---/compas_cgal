@@ -20,6 +20,7 @@ from hypothesis import strategies as st
 
 import benchmarks.held_omega_path as omega_path
 from benchmarks.held_centre_domain_supports import PieceKind
+from benchmarks.held_common_scale import common_scale_squared_distances_from
 from benchmarks.held_figure5_path import _common_scale_squared_distances
 from benchmarks.held_figure5_path import _cyclic_boundary_neighborhoods
 from benchmarks.held_figure5_path import _dyadic_compare
@@ -90,6 +91,13 @@ def test_common_scale_numerators_are_the_exact_squared_distances(pairs: list[tup
     assert len(numerators) == len(pairs)
     for numerator, (first, second) in zip(numerators, pairs, strict=True):
         assert Fraction(numerator, 1 << (2 * exponent)) == _exact(first, second)
+
+
+@settings(max_examples=1500, deadline=None)
+@given(origin=_POINT, points=st.lists(_POINT, max_size=6))
+def test_constant_origin_common_scale_is_the_pairwise_common_scale(origin: Point2[WorldXY], points: list[Point2[WorldXY]]) -> None:
+    """Same integers and the same exponent as the pairwise form over ``(origin, p)``, empty input included."""
+    assert common_scale_squared_distances_from(origin, points) == _common_scale_squared_distances((origin, point) for point in points)
 
 
 @st.composite

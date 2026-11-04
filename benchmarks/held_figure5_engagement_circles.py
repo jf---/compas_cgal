@@ -153,7 +153,7 @@ def _circle_with_side_normal(
     if length == 0:
         raise Figure5EngagementResolutionError("Interpolation encountered a zero-length boundary side.")
     limited_radius = float(_corner_radius_limit(boundary, side, contact, proposed_radius).value)
-    center = Point2[WorldXY].build(float(contact.x) - limited_radius * float(edge_y) / length, float(contact.y) + limited_radius * float(edge_x) / length)
+    center: Point2[WorldXY] = Point2.build(float(contact.x) - limited_radius * float(edge_y) / length, float(contact.y) + limited_radius * float(edge_x) / length)
     radius = _constructed_radius(center, contact, "corner-limited radius below binary64 resolution")
     # These identifiers retain the left source attribution; original_indices
     # is authoritative for distinguishing actual stations from interpolation.
@@ -203,7 +203,7 @@ def midpoint(
             site = ProjectionBoundarySite.build(ProjectionBoundarySegmentId(corner), Fraction(0), len(boundary))
             dx = ((float(previous.center.x) - float(previous.contact_point.x)) + (float(successor.center.x) - float(successor.contact_point.x))) / 2
             dy = ((float(previous.center.y) - float(previous.contact_point.y)) + (float(successor.center.y) - float(successor.contact_point.y))) / 2
-            center = Point2[WorldXY].build(float(vertex.x) + dx, float(vertex.y) + dy)
+            center: Point2[WorldXY] = Point2.build(float(vertex.x) + dx, float(vertex.y) + dy)
             radius = _constructed_radius(center, vertex, "concave corner normals cancel")
             return Figure5CounterclockwiseCircle(previous.run_id, previous.station_ordinal, previous.source_boundary_site, site, center, vertex, radius)
     # Subdivide physical boundary progress: equal side-index progress is not

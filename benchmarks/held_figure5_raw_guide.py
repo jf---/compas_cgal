@@ -485,7 +485,10 @@ def _boundary_arclength(
     site: ProjectionBoundarySite,
 ) -> Millimetre:
     ordinal = int(site.segment_id)
-    arclength = guide.boundary_side_offsets[ordinal] + float(site.parameter) * guide.boundary_side_lengths[ordinal]
+    # ``n / d`` in ints is ``float(Fraction)`` (one correctly rounded division),
+    # without the ``numbers.Rational.__float__`` dispatch.
+    parameter = site.parameter
+    arclength = guide.boundary_side_offsets[ordinal] + parameter.numerator / parameter.denominator * guide.boundary_side_lengths[ordinal]
     return Millimetre(arclength % float(guide.boundary_length))
 
 
@@ -553,16 +556,17 @@ def _hypothesis_geometry(
     # the annotation and the built value is the same.
     footpoint: Point2[WorldXY] = Point2.build(footpoint_x, footpoint_y)
     clearance = math.sqrt(squared_clearance)
-    direction_x = (float(middle.x) - float(footpoint.x)) / clearance
-    direction_y = (float(middle.y) - float(footpoint.y)) / clearance
+    # The local doubles are the values the points hold (``Point2.build`` keeps a
+    # finite float as is), so the arithmetic reads them, not the attributes.
+    direction_x = (float(middle.x) - footpoint_x) / clearance
+    direction_y = (float(middle.y) - footpoint_y) / clearance
     radius = (clearance - tool_radius) / 2.0
-    contact: Point2[WorldXY] = Point2.build(
-        float(footpoint.x) + tool_radius * direction_x,
-        float(footpoint.y) + tool_radius * direction_y,
-    )
+    contact_x = footpoint_x + tool_radius * direction_x
+    contact_y = footpoint_y + tool_radius * direction_y
+    contact: Point2[WorldXY] = Point2.build(contact_x, contact_y)
     center: Point2[WorldXY] = Point2.build(
-        float(contact.x) + radius * direction_x,
-        float(contact.y) + radius * direction_y,
+        contact_x + radius * direction_x,
+        contact_y + radius * direction_y,
     )
     return ProjectionAdmissibleBoundaryHypothesis(
         station.run_id,

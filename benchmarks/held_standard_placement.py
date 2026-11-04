@@ -320,9 +320,9 @@ class PredecessorEngagementCosine:
 
 def _dyadic_injection(values: tuple[float, ...]) -> tuple[tuple[int, ...], int]:
     """Exactly inject doubles as integers over their common power-of-two denominator ``scale``."""
-    ratios = tuple(value.as_integer_ratio() for value in values)
-    scale = max(denominator for _, denominator in ratios)
-    return tuple(numerator * (scale // denominator) for numerator, denominator in ratios), scale
+    ratios = [value.as_integer_ratio() for value in values]
+    scale = max([denominator for _, denominator in ratios])
+    return tuple([numerator * (scale // denominator) for numerator, denominator in ratios]), scale
 
 
 def _common_integers(values: tuple[float, ...]) -> tuple[int, ...]:

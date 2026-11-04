@@ -62,3 +62,29 @@ def common_scale_squared_distances(
         delta_y = second_y * (scale // second_y_scale) - first_y * (scale // first_y_scale)
         numerators.append(delta_x * delta_x + delta_y * delta_y)
     return CommonScaleSquaredDistances(tuple(numerators), scale.bit_length() - 1)
+
+
+def common_scale_squared_distances_from(
+    origin: Point2[WorldXY],
+    points: Iterable[Point2[WorldXY]],
+) -> CommonScaleSquaredDistances:
+    """``common_scale_squared_distances((origin, p) for p in points)``, the origin injected once.
+
+    The same scale (the largest power-of-two denominator over every coordinate,
+    origin included) and so the same integers; no points gives no numerators on
+    exponent 0, as the pairwise form does.
+    """
+    ratios = [(float(point.x).as_integer_ratio(), float(point.y).as_integer_ratio()) for point in points]
+    if not ratios:
+        return CommonScaleSquaredDistances((), 0)
+    origin_x, origin_x_scale = float(origin.x).as_integer_ratio()
+    origin_y, origin_y_scale = float(origin.y).as_integer_ratio()
+    scale = max([origin_x_scale, origin_y_scale, *[denominator for row in ratios for _, denominator in row]])
+    scaled_x = origin_x * (scale // origin_x_scale)
+    scaled_y = origin_y * (scale // origin_y_scale)
+    numerators = []
+    for (point_x, point_x_scale), (point_y, point_y_scale) in ratios:
+        delta_x = point_x * (scale // point_x_scale) - scaled_x
+        delta_y = point_y * (scale // point_y_scale) - scaled_y
+        numerators.append(delta_x * delta_x + delta_y * delta_y)
+    return CommonScaleSquaredDistances(tuple(numerators), scale.bit_length() - 1)

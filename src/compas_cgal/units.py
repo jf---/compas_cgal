@@ -121,8 +121,16 @@ class Point2(Generic[FrameT]):
     def build(cls, *args: object) -> Self:  # pyright: ignore[reportInconsistentOverload]
         if len(args) == 2:
             x, y = args
-            # Two finite doubles: ``__post_init__`` is the one validation.
             if type(x) is float and type(y) is float and math.isfinite(x) and math.isfinite(y):
+                if cls is Point2:
+                    # Two exact finite doubles are validated here, and are exactly
+                    # what ``__post_init__`` would keep: fill the frozen slots
+                    # directly (the hot path, ~10^5 points per Figure 5 run).
+                    point = object.__new__(cls)
+                    object.__setattr__(point, "x", x)
+                    object.__setattr__(point, "y", y)
+                    return point
+                # A subclass may extend ``__post_init__``: it is the one validation.
                 return cls(Millimetre(x), Millimetre(y))
         x, y = _components(args, cls.__name__)
         return cls(Millimetre(x), Millimetre(y))
@@ -277,7 +285,8 @@ class GuideRadius:
 
     @classmethod
     def build(cls, value: float) -> Self:
-        return cls(Millimetre(_positive(value, "guide radius")))
+        # ``__post_init__`` is the one validation (same check, same message).
+        return cls(Millimetre(value))
 
 
 @dataclass(frozen=True)

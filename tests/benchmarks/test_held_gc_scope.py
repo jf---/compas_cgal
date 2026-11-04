@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import gc
+import weakref
 from collections.abc import Iterator
 
 import pytest
@@ -84,6 +85,38 @@ def test_outermost_exit_collects_once_after_reenabling(monkeypatch: pytest.Monke
     with paused_cyclic_gc(), paused_cyclic_gc():
         pass
     assert states == [True]
+
+
+@pytest.mark.usefixtures("gc_enabled")
+def test_outermost_exit_collects_the_young_generation_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    generations: list[tuple[int, ...]] = []
+
+    def _collect(*args: int) -> int:
+        generations.append(args)
+        return 0
+
+    monkeypatch.setattr(gc, "collect", _collect)
+    with paused_cyclic_gc():
+        pass
+    assert generations == [(0,)]
+
+
+class _Node:
+    """A cyclic-garbage cell: ``node.other`` closes the cycle."""
+
+    other: _Node | None = None
+
+
+@pytest.mark.usefixtures("gc_enabled")
+def test_a_cycle_created_inside_the_scope_is_reclaimed_on_exit() -> None:
+    gc.collect()
+    with paused_cyclic_gc():
+        first, second = _Node(), _Node()
+        first.other, second.other = second, first
+        alive = weakref.ref(first)
+        del first, second
+        assert alive() is not None
+    assert alive() is None
 
 
 @pytest.mark.usefixtures("gc_enabled")

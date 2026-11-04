@@ -2,6 +2,7 @@ from fractions import Fraction
 
 import pytest
 from hypothesis import given
+from hypothesis import settings
 from hypothesis import strategies as st
 
 from benchmarks.held_figure5_boundary_path import AmbiguousFigure5BoundaryPathError
@@ -10,6 +11,7 @@ from benchmarks.held_figure5_boundary_path import Figure5BoundaryConnectors
 from benchmarks.held_figure5_boundary_path import Figure5BoundaryPath
 from benchmarks.held_figure5_boundary_path import Figure5SeamClosure
 from benchmarks.held_figure5_boundary_path import MissingFigure5GuideRunError
+from benchmarks.held_figure5_boundary_path import _project_to_offset_side
 from benchmarks.held_figure5_boundary_path import build_figure5_boundary_path
 from benchmarks.held_figure5_raw_guide import GuideRunId
 from benchmarks.held_figure5_raw_guide import GuideRunStationOrdinal
@@ -353,3 +355,54 @@ def test_closed_connectors_chain_contacts_and_sum_to_one_loop(sites: set[tuple[i
         assert float(transition.boundary_progress) > 0.0
     # Dyadic sites on an integer square: every progress is exact in binary64.
     assert sum(float(transition.boundary_progress) for transition in connectors.transitions) == SQUARE_PERIMETER_MM
+
+
+def _oracle_project_to_offset_side(
+    point: tuple[Fraction, Fraction],
+    component: tuple[Point2[WorldXY], ...],
+    side_index: int,
+) -> tuple[Fraction, Fraction]:
+    """Verbatim pre-L10 ``_project_to_offset_side``: the Fraction clamp-and-project."""
+    start = (Fraction.from_float(float(component[side_index].x)), Fraction.from_float(float(component[side_index].y)))
+    end_point = component[(side_index + 1) % len(component)]
+    end = (Fraction.from_float(float(end_point.x)), Fraction.from_float(float(end_point.y)))
+    edge_x = end[0] - start[0]
+    edge_y = end[1] - start[1]
+    squared_length = edge_x * edge_x + edge_y * edge_y
+    parameter = min(Fraction(1), max(Fraction(0), ((point[0] - start[0]) * edge_x + (point[1] - start[1]) * edge_y) / squared_length))
+    delta_x = point[0] - (start[0] + parameter * edge_x)
+    delta_y = point[1] - (start[1] + parameter * edge_y)
+    return parameter, delta_x * delta_x + delta_y * delta_y
+
+
+_PROJECTION_LATTICE = st.integers(min_value=-16, max_value=16).map(lambda value: value / 8)
+_PROJECTION_COORDINATE = st.one_of(_PROJECTION_LATTICE, st.floats(min_value=-1e6, max_value=1e6, allow_nan=False, allow_infinity=False))
+
+
+@settings(max_examples=1500, deadline=None)
+@given(
+    point=st.tuples(_PROJECTION_COORDINATE, _PROJECTION_COORDINATE),
+    corners=st.lists(st.tuples(_PROJECTION_COORDINATE, _PROJECTION_COORDINATE), min_size=2, max_size=4, unique=True),
+    side=st.integers(min_value=0, max_value=3),
+)
+def test_offset_side_projection_is_the_exact_fraction_projection(
+    point: tuple[float, float],
+    corners: list[tuple[float, float]],
+    side: int,
+) -> None:
+    component = tuple(Point2[WorldXY].build(x, y) for x, y in corners)
+    side_index = side % len(component)
+    start, end = component[side_index], component[(side_index + 1) % len(component)]
+    if start == end:
+        return
+    exact_point = (Fraction.from_float(point[0]), Fraction.from_float(point[1]))
+    parameter, squared_distance = _project_to_offset_side(exact_point, component, side_index)
+    expected_parameter, expected_squared_distance = _oracle_project_to_offset_side(exact_point, component, side_index)
+    assert type(parameter) is Fraction and type(squared_distance) is Fraction
+    assert (parameter, squared_distance) == (expected_parameter, expected_squared_distance)
+
+
+def test_offset_side_projection_refuses_a_zero_length_side() -> None:
+    corner = Point2[WorldXY].build(1.0, 2.0)
+    with pytest.raises(DisconnectedFigure5BoundaryPathError):
+        _project_to_offset_side((Fraction(0), Fraction(0)), (corner, corner), 0)

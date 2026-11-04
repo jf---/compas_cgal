@@ -16,6 +16,7 @@ from typing import TypeVar
 
 from benchmarks.errors import BenchmarkError
 from benchmarks.held_common_scale import common_scale_squared_distances as _common_scale_squared_distances
+from benchmarks.held_common_scale import common_scale_squared_distances_from
 from benchmarks.held_figure5_boundary_path import Figure5BoundaryPath
 from benchmarks.held_figure5_boundary_path import Figure5CounterclockwiseCircle
 from benchmarks.held_figure5_boundary_path import MissingFigure5GuideRunError
@@ -279,7 +280,7 @@ def _with_start_owners(
     by hypothesis equality: an equal hypothesis already owned suppresses the
     start owner.
     """
-    start_distances = _common_scale_squared_distances((published_start_center, hypothesis.contact_point) for hypothesis in hypotheses).numerators
+    start_distances = common_scale_squared_distances_from(published_start_center, [hypothesis.contact_point for hypothesis in hypotheses]).numerators
     start_minimum = min(start_distances)
     for index, distance in enumerate(start_distances):
         if distance == start_minimum and hypotheses[index] not in (hypotheses[owner] for owner in owners):

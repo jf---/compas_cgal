@@ -197,3 +197,51 @@ def test_two_component_constructor_matches_oracle(cls: Any, x: object, y: object
 @given(cls=st.sampled_from(_THREE_CLASSES), x=_SCALARS, y=_SCALARS, z=_SCALARS)
 def test_three_component_constructor_matches_oracle(cls: Any, x: object, y: object, z: object) -> None:
     assert _outcome(lambda: cls(x, y, z)) == _outcome(lambda: _oracle_construct(cls, x, y, z))
+
+
+def test_point2_two_float_build_fills_the_validated_slots_without_post_init(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``Point2.build`` checks the two exact finite doubles itself and does not validate again."""
+    x, y = 1.5, -2.25
+    expected = Point2(x, y)
+
+    def _refuse(self: object) -> None:
+        raise AssertionError("Point2.build re-validated through __post_init__")
+
+    monkeypatch.setattr(Point2, "__post_init__", _refuse)
+    built = Point2.build(x, y)
+    assert type(built) is Point2
+    assert vars(built) == vars(expected)
+    assert built.x is x and built.y is y
+    monkeypatch.undo()
+    assert built == expected and hash(built) == hash(expected)
+    with pytest.raises(AttributeError):
+        built.x = 0.0  # type: ignore[misc]
+
+
+def test_point2_subclass_build_still_runs_its_post_init(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The fill fast path is for ``Point2`` itself; a subclass's own ``__post_init__`` keeps running."""
+    calls: list[object] = []
+    original = Point2.__post_init__
+
+    def _counting(self: Point2[WorldXY]) -> None:
+        calls.append(self)
+        original(self)
+
+    monkeypatch.setattr(SemanticPoint, "__post_init__", _counting)
+    built = SemanticPoint.build(1.5, -2.25)
+    assert type(built) is SemanticPoint and calls == [built]
+
+
+def test_guide_radius_build_validates_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[object] = []
+    original = units._positive
+
+    def _counting(value: object, name: str) -> float:
+        calls.append(value)
+        return original(value, name)
+
+    monkeypatch.setattr(units, "_positive", _counting)
+    assert units.GuideRadius.build(2.5) == units.GuideRadius(2.5)  # type: ignore[arg-type]
+    assert len(calls) == 2  # one for build, one for the explicit constructor above
+    with pytest.raises(InvalidUnitValueError, match=r"^guide radius must be positive\.$"):
+        units.GuideRadius.build(0.0)

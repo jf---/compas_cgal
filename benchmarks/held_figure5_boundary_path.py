@@ -11,7 +11,7 @@ from typing import Literal
 from typing import NamedTuple
 
 from benchmarks.errors import BenchmarkError
-from benchmarks.held_common_scale import common_scale_squared_distances
+from benchmarks.held_common_scale import common_scale_squared_distances_from
 from benchmarks.held_figure5_raw_guide import GuideRunId
 from benchmarks.held_figure5_raw_guide import GuideRunStationOrdinal
 from benchmarks.held_figure5_raw_guide import ProjectionAdmissibleBoundaryHypothesis
@@ -195,7 +195,7 @@ def _canonical_offset_point(
         raise AmbiguousFigure5BoundaryPathError("A Figure 5 hypothesis names no radius-one offset side.")
     start = component[side_index]
     end = component[(side_index + 1) % len(component)]
-    return Point2[WorldXY].build(
+    return Point2.build(
         _dyadic_lerp(float(start.x), float(end.x), site.parameter),
         _dyadic_lerp(float(start.y), float(end.y), site.parameter),
     )
@@ -206,25 +206,44 @@ def _project_to_offset_side(
     component: tuple[Point2[WorldXY], ...],
     side_index: int,
 ) -> tuple[Fraction, Fraction]:
-    start = _rational(component[side_index])
-    end = _rational(component[(side_index + 1) % len(component)])
-    edge_x = end[0] - start[0]
-    edge_y = end[1] - start[1]
+    """Exact clamped projection of ``point`` onto one offset side: (parameter, squared distance).
+
+    Every input is dyadic (the point is the exact injection of doubles), so one
+    power-of-two ``scale`` makes all six coordinates integers. The parameter is
+    scale-free and the squared distance carries ``scale**2``; both come back as
+    the reduced Fractions the Fraction clamp-and-project gives (0, 1 or
+    ``dot / squared_length``), with integer arithmetic in between.
+
+    Raises:
+        DisconnectedFigure5BoundaryPathError: the side has zero length.
+    """
+    start = component[side_index]
+    end = component[(side_index + 1) % len(component)]
+    ratios = (
+        point[0].as_integer_ratio(),
+        point[1].as_integer_ratio(),
+        float(start.x).as_integer_ratio(),
+        float(start.y).as_integer_ratio(),
+        float(end.x).as_integer_ratio(),
+        float(end.y).as_integer_ratio(),
+    )
+    scale = max([denominator for _, denominator in ratios])
+    point_x, point_y, start_x, start_y, end_x, end_y = [numerator * (scale // denominator) for numerator, denominator in ratios]
+    edge_x, edge_y = end_x - start_x, end_y - start_y
     squared_length = edge_x * edge_x + edge_y * edge_y
-    parameter = min(
-        Fraction(1),
-        max(
-            Fraction(0),
-            ((point[0] - start[0]) * edge_x + (point[1] - start[1]) * edge_y) / squared_length,
-        ),
-    )
-    projected = (
-        start[0] + parameter * edge_x,
-        start[1] + parameter * edge_y,
-    )
-    delta_x = point[0] - projected[0]
-    delta_y = point[1] - projected[1]
-    return parameter, delta_x * delta_x + delta_y * delta_y
+    if squared_length == 0:
+        raise DisconnectedFigure5BoundaryPathError("Figure 5 inward-offset cycle contains a zero-length side.")
+    offset_x, offset_y = point_x - start_x, point_y - start_y
+    dot = offset_x * edge_x + offset_y * edge_y
+    if dot <= 0:
+        return Fraction(0), Fraction(offset_x * offset_x + offset_y * offset_y, scale * scale)
+    if dot >= squared_length:
+        beyond_x, beyond_y = point_x - end_x, point_y - end_y
+        return Fraction(1), Fraction(beyond_x * beyond_x + beyond_y * beyond_y, scale * scale)
+    # ``offset - (dot / L) * edge`` over the common denominator ``L``.
+    delta_x = offset_x * squared_length - dot * edge_x
+    delta_y = offset_y * squared_length - dot * edge_y
+    return Fraction(dot, squared_length), Fraction(delta_x * delta_x + delta_y * delta_y, squared_length * squared_length * scale * scale)
 
 
 def _resolved_site(
@@ -267,7 +286,7 @@ def _circle(
     contact = _canonical_offset_point(component, site)
     shift_x = float(contact.x) - float(hypothesis.contact_point.x)
     shift_y = float(contact.y) - float(hypothesis.contact_point.y)
-    center = Point2[WorldXY].build(
+    center: Point2[WorldXY] = Point2.build(
         float(hypothesis.center.x) + shift_x,
         float(hypothesis.center.y) + shift_y,
     )
@@ -308,12 +327,14 @@ def _transition(
         )
     start_side, start_parameter = _site_key(start.boundary_site)
     end_side, end_parameter = _site_key(end.boundary_site)
-    wraps = start is end or _site_key(end.boundary_site) < _site_key(start.boundary_site)
+    wraps = start is end or (end_side, end_parameter) < (start_side, start_parameter)
     samples = [start.contact_point]
     progress = 0.0
     side = start_side
+    # ``n / d`` in ints is ``float(Fraction)`` (CPython computes it so): one
+    # correctly rounded division, the same double without the Fraction protocol.
     if wraps or side != end_side:
-        progress += (1.0 - float(start_parameter)) * lengths[side]
+        progress += (1.0 - start_parameter.numerator / start_parameter.denominator) * lengths[side]
         while True:
             vertex = component[(side + 1) % len(component)]
             if vertex != samples[-1]:
@@ -322,9 +343,15 @@ def _transition(
             if side == end_side:
                 break
             progress += lengths[side]
-        progress += float(end_parameter) * lengths[end_side]
+        progress += end_parameter.numerator / end_parameter.denominator * lengths[end_side]
     else:
-        progress = float(end_parameter - start_parameter) * lengths[start_side]
+        # The exact difference over the unreduced common denominator: true
+        # division rounds the exact quotient once, so reduction cannot change it.
+        progress = (
+            (end_parameter.numerator * start_parameter.denominator - start_parameter.numerator * end_parameter.denominator)
+            / (end_parameter.denominator * start_parameter.denominator)
+            * lengths[start_side]
+        )
     # Distinct source sites may round to one contact. Preserve both emitted
     # endpoints even for stationary motion, as required by coverage replay.
     if end.contact_point != samples[-1] or wraps or len(samples) == 1:
@@ -444,7 +471,7 @@ def build_indexed_figure5_boundary_path(
     ordered = tuple(circles[index] for index in order)
     # Exact start distances on one power-of-two scale: the argmin is an integer
     # ``min``, a tie is ``==``, the bound verdict an integer comparison.
-    distances = common_scale_squared_distances((published_start_center, circle.contact_point) for circle in ordered)
+    distances = common_scale_squared_distances_from(published_start_center, [circle.contact_point for circle in ordered])
     minimum_distance = min(distances.numerators)
     if distances.exceeds_squared(minimum_distance, float(start_evidence_bound)):
         raise AmbiguousFigure5BoundaryPathError("Nearest Figure 5 start q exceeds the published-start evidence bound.")
