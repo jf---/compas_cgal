@@ -8,7 +8,8 @@
       "connectors": "2fcedb0515a965307014fa534dbee88465596a297102e97b5284584440b39756",
       "circle_count": 2004,
       "connector_count": 2004,
-      "seam": "connector"
+      "seam": "connector",
+      "entry": "6cddb2b962f4b16a0e86874c7706666d1b46ec9e79848fd43caf7265f159971d"
     },
     "figure8_crossed_skis_boundary": {
       "initial": "7906fdbcb0e4b968c7f0e54e2760a77511fc8f98ea36c4583f78ca5a6087dee7",
@@ -16,7 +17,8 @@
       "connectors": "fc8bf3b7f1a6d370c8ad1ac3f7d912448dfd8ec6fba412856e59ac146e07a293",
       "circle_count": 1621,
       "connector_count": 1621,
-      "seam": "connector"
+      "seam": "connector",
+      "entry": "0479cdefe0d3de069c1cd8acad8ae1a253923f1bcb3bd3461f26caa3ca931647"
     },
     "figure8_monstera_boundary_qualified_corners": {
       "initial": "fe2b2d816ad4730f1ab50d0a62ba94eacddd084842aa87d34283126138d30719",
@@ -24,7 +26,8 @@
       "connectors": "561a862e267bab5b577b121c4f379081cee97dc434db1661172184db4388a50f",
       "circle_count": 4428,
       "connector_count": 4428,
-      "seam": "connector"
+      "seam": "connector",
+      "entry": "fc2f45a3f04132466c407b49de8128f8682e693622bab1ca088ffb2d36400144"
     },
     "figure8_upper_boundary": {
       "initial": "a6a7933391dbc945e62c7de0c4f67cd1145405e050f0d065df9a4bf34eef209d",
@@ -32,7 +35,8 @@
       "connectors": "63e0b23aa0f1a03299f99de1585210f2dbd7c72cf6726458a01d9af00e7ea152",
       "circle_count": 1690,
       "connector_count": 1690,
-      "seam": "connector"
+      "seam": "connector",
+      "entry": "0dfcbc3ab87a514e8850cd256c93c90ca893825e99ea597dee42ff716ef49cf6"
     }
   }
 }

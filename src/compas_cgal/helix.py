@@ -28,12 +28,13 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from fractions import Fraction
+from typing import Protocol
 
 from compas.geometry import Circle
 from compas.geometry import Frame
 
 from compas_cgal.helix_units import HelixPitchPerRadius
-from compas_cgal.incident_loop import IncidentLoop
+from compas_cgal.incident_loop import GuideLoop
 from compas_cgal.incident_loop import LoopEntryIncidenceError
 from compas_cgal.units import ClearanceZ
 from compas_cgal.units import CutPlane
@@ -48,6 +49,29 @@ from compas_cgal.units import WorldXY
 # HELIX operation (USER 2026-10-16 Q6, ruling "Q6 shape"): one, so the bottom of
 # the bore is swept at depth before the pencil leaves P.
 HELIX_CLOSING_TURNS = 1
+
+
+class HelixFootprint(GuideLoop, Protocol):
+    """The footprint a `Helix` descends on: a guide circle with a certified exact entry ``P``.
+
+    Two footprints exist. `compas_cgal.incident_loop.IncidentLoop` (the
+    pipeline's pencil footprint) carries ``P`` itself as ``entry``: a double
+    exactly on the circle. The Held footprint
+    (``benchmarks.held_helix_entry.HeldCircleFootprint``) is the exact
+    injection of a published circle whose ``P`` is one-root; its ``entry`` is
+    the certified nearest double of ``P``. `certifies_incidence` is each
+    footprint's exact certificate of that relation; ``centre`` and ``radius``
+    are exact doubles either way, so the bore ``disk(centre, radius + r)`` is
+    exact.
+    """
+
+    def certifies_incidence(self) -> bool:
+        """The footprint's exact certificate that ``entry`` is (the nearest double of) its exact entry on the circle."""
+        ...
+
+    def circle(self) -> Circle:
+        """The footprint as a compas `Circle` (REPORTING)."""
+        ...
 
 
 class HelixTurnsError(ValueError):
@@ -89,8 +113,8 @@ class Helix:
     count concern the ramp only.
 
     Attributes:
-        footprint: The footprint loop; its exact ``entry`` is where the helix
-            starts (at ``top_z``) and ends (at ``bottom_z``).
+        footprint: The footprint (`HelixFootprint`); its exact entry is
+            where the helix starts (at ``top_z``) and ends (at ``bottom_z``).
         top_z: Start height, the cut plane's clearance.
         bottom_z: End height, the cut plane.
         turns: Number of full ramp turns, a positive integer (the closing
@@ -98,7 +122,7 @@ class Helix:
         clockwise: Turn sense in world XY, the root loop's.
     """
 
-    footprint: IncidentLoop
+    footprint: HelixFootprint
     top_z: ClearanceZ
     bottom_z: CutZ
     turns: int
@@ -113,7 +137,7 @@ class Helix:
             raise LoopEntryIncidenceError(f"helix footprint entry {self.footprint.entry!r} is not exactly on its circle.")
 
     @classmethod
-    def build(cls, footprint: IncidentLoop, cut_plane: CutPlane, pitch_per_radius: HelixPitchPerRadius, clockwise: bool) -> Helix:
+    def build(cls, footprint: HelixFootprint, cut_plane: CutPlane, pitch_per_radius: HelixPitchPerRadius, clockwise: bool) -> Helix:
         """The helix over the whole cut-plane interval with the fewest turns the ramp cap admits.
 
         ``turns`` is `ramp_turns`: the least positive integer with
@@ -163,12 +187,12 @@ class Helix:
 
     @property
     def entry_xy(self) -> Point2[WorldXY]:
-        """Exact start point in XY, the footprint entry ``P``."""
+        """Start point in XY, the footprint's ``entry``: ``P`` itself, or its certified nearest double (`HelixFootprint`)."""
         return self.footprint.entry
 
     @property
     def exit_xy(self) -> Point2[WorldXY]:
-        """Exact end point in XY: ``P`` again, because the ramp and the closing turn are whole turns."""
+        """End point in XY: `entry_xy` again, because the ramp and the closing turn are whole turns."""
         return self.footprint.entry
 
     def ramp_length(self) -> Millimetre:

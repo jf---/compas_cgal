@@ -50,6 +50,7 @@ from benchmarks.held_figure5_path import build_held_reference_path
 from benchmarks.held_figure5_raw_guide import build_figure5_raw_guide
 from benchmarks.held_figure5_raw_guide import build_held_reference_raw_guide
 from benchmarks.held_gc_scope import paused_cyclic_gc
+from benchmarks.held_helix_entry import HeldHelixEntry
 from benchmarks.held_nothing_circles import NothingCirclePass
 from benchmarks.held_nothing_circles import remove_nothing_circles
 from benchmarks.held_omega_toolpath import OmegaGeneratedToolpath
@@ -191,10 +192,12 @@ class Finding:
 
 @dataclass(frozen=True)
 class GeneratedToolpath:
-    """One workload's generated path: the circles and their closed connectors.
+    """One workload's generated path: the helical entry, the circles and their closed connectors.
 
-    ``transitions[i]`` runs ``circles[i]`` to ``circles[i + 1]``; with a
-    ``CONNECTOR`` seam the last runs ``circles[-1]`` back to ``circles[0]``.
+    ``entry`` runs first, ending at ``circles[0]``'s contact
+    (:mod:`benchmarks.held_helix_entry`). ``transitions[i]`` runs
+    ``circles[i]`` to ``circles[i + 1]``; with a ``CONNECTOR`` seam the last
+    runs ``circles[-1]`` back to ``circles[0]``.
     """
 
     workload: str
@@ -203,6 +206,7 @@ class GeneratedToolpath:
     circles: tuple[Figure5CounterclockwiseCircle, ...]
     connectors: Figure5BoundaryConnectors
     stage_seconds: dict[str, float]
+    entry: HeldHelixEntry
 
     @property
     def transitions(self) -> tuple[Figure5BoundaryTransition, ...]:
@@ -316,11 +320,13 @@ def _emit_closed_polygon_path(
     cap: EngagementCap,
     stages: _Stages,
 ) -> GeneratedToolpath:
-    """The stages after refinement: NOTHING-circle removal, connectors, connector post-gate.
+    """The stages after refinement: NOTHING-circle removal, connectors, connector post-gate, helical entry.
 
     Raises:
         UncertifiedConnectorEngagementError: A connector of the pruned path,
             the seam included, is left without a certificate.
+        HeldHelixEntryError: The entry into circle 0 cannot be decided
+            (see `HeldHelixEntry.build`).
     """
     stages.start()
     circles = remove_polygon_nothing_circles(refined, case.tool_radius, cap).circles
@@ -331,7 +337,10 @@ def _emit_closed_polygon_path(
     stages.start()
     certify_connectors(circles, connectors, case.tool_radius, cap)
     stages.stop("connector_certificate")
-    return GeneratedToolpath(name, case, boundary, circles, connectors, dict(stages.seconds))
+    stages.start()
+    entry = HeldHelixEntry.build(case, circles)
+    stages.stop("entry")
+    return GeneratedToolpath(name, case, boundary, circles, connectors, dict(stages.seconds), entry)
 
 
 def certify_connectors(

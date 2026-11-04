@@ -39,6 +39,7 @@ from benchmarks.gate import GATE_GENERATORS
 from benchmarks.gate import GateCapDegrees
 from benchmarks.gate import gate_pocket
 from compas_cgal.helix import Helix
+from compas_cgal.incident_loop import IncidentLoop
 from compas_cgal.toolpath import ToolpathOperation
 from compas_cgal.toolpath import ToolpathResult
 from tools.gate_measure import case_key
@@ -88,6 +89,10 @@ class MissingCaseResultError(Exception):
     """A run's child process printed no result line."""
 
 
+class UnsupportedHelixFootprintError(Exception):
+    """A helix footprint is not an `IncidentLoop`, so its chart parameter cannot be recorded."""
+
+
 class NondeterministicCaseError(Exception):
     """The runs of one case produced different operations."""
 
@@ -128,8 +133,13 @@ def _helix_data(helix: Helix) -> dict[str, Any]:
     is its exact definition: the footprint loop (centre, radius, exact entry,
     realised phase and chart parameter), both heights, the turn count and the
     turn sense. Every float is a double whose ``repr`` round-trips exactly.
+
+    Raises:
+        UnsupportedHelixFootprintError: The footprint is not an `IncidentLoop`.
     """
     footprint = helix.footprint
+    if not isinstance(footprint, IncidentLoop):
+        raise UnsupportedHelixFootprintError(f"pipeline timing digests an IncidentLoop helix footprint's chart; got {type(footprint).__name__!r}.")
     return {
         "footprint": {
             "centre": (float(footprint.centre.x), float(footprint.centre.y)),

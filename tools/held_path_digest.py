@@ -8,7 +8,11 @@ digests are taken of the ``repr`` of what it produced:
   placements and ``guide_progress``), captured from inside ``generate`` so the
   digest is of the path the benchmark generated, not of a re-implementation;
 - ``circles``: the refined circles;
-- ``connectors``: the connector transitions.
+- ``connectors``: the connector transitions;
+- ``entry`` (additive, 2026-11-04): the helical entry record
+  (``benchmarks.held_helix_entry.entry_digest``). The six fields above are
+  unchanged by it: a record without ``entry`` still parses, and ``--check``
+  compares ``entry`` whenever either side carries one.
 
 This is the serialisation the bookkeeping and native-clearance A/B proofs used
 (``build/bookkeeping_ab/digest.py``): ``repr`` of frozen dataclasses prints
@@ -40,6 +44,7 @@ from typing import Any
 from typing import TypeVar
 
 from benchmarks import held_toolpath_benchmark as toolpath_benchmark
+from benchmarks.held_helix_entry import entry_digest
 from benchmarks.performance_record import REPOSITORY
 from tools.streaming_repr_digest import ReprCarriesMemoryAddressError
 from tools.streaming_repr_digest import repr_sha256
@@ -59,6 +64,8 @@ _SHA256_HEX = re.compile(r"[0-9a-f]{64}")
 # The generator entry points whose return value is the initial placement result.
 _INITIAL_PATH_BUILDERS = ("build_figure5_approximate_path", "build_held_reference_path")
 _DIGEST_FIELDS = ("initial", "circles", "connectors", "circle_count", "connector_count", "seam")
+# The additive field: the helical entry's digest (optional in a record).
+_ENTRY_FIELD = "entry"
 
 T = TypeVar("T")
 
@@ -114,6 +121,8 @@ class WorkloadDigest:
         circle_count: Number of refined circles.
         connector_count: Number of connector transitions.
         seam: The ``Figure5SeamClosure`` value of the loop.
+        entry: SHA-256 of the helical entry record, or None in a record
+            written before the entry existed.
     """
 
     initial: str
@@ -122,6 +131,7 @@ class WorkloadDigest:
     circle_count: int
     connector_count: int
     seam: str
+    entry: str | None = None
 
     @classmethod
     def from_raw(cls, workload: str, raw: object) -> WorkloadDigest:
@@ -130,9 +140,10 @@ class WorkloadDigest:
         Raises:
             MalformedDigestRecordError: a field is missing, extra, or of the wrong form.
         """
-        if not isinstance(raw, dict) or set(raw) != set(_DIGEST_FIELDS):
-            raise MalformedDigestRecordError(f"{workload}: fields must be exactly {_DIGEST_FIELDS}, got {raw!r}.")
-        for name in ("initial", "circles", "connectors"):
+        if not isinstance(raw, dict) or set(raw) not in (set(_DIGEST_FIELDS), {*_DIGEST_FIELDS, _ENTRY_FIELD}):
+            raise MalformedDigestRecordError(f"{workload}: fields must be exactly {_DIGEST_FIELDS}, optionally with {_ENTRY_FIELD!r}, got {raw!r}.")
+        hashed = ("initial", "circles", "connectors", _ENTRY_FIELD) if _ENTRY_FIELD in raw else ("initial", "circles", "connectors")
+        for name in hashed:
             if not isinstance(raw[name], str) or _SHA256_HEX.fullmatch(raw[name]) is None:
                 raise MalformedDigestRecordError(f"{workload}: {name} is not a SHA-256 hex digest: {raw[name]!r}.")
         for name in ("circle_count", "connector_count"):
@@ -141,6 +152,14 @@ class WorkloadDigest:
         if not isinstance(raw["seam"], str):
             raise MalformedDigestRecordError(f"{workload}: seam is not a string: {raw['seam']!r}.")
         return cls(**raw)
+
+
+def _digest_json(digest: WorkloadDigest) -> dict[str, Any]:
+    """One workload's JSON object: the six fields, plus ``entry`` when present."""
+    body = dataclasses.asdict(digest)
+    if body[_ENTRY_FIELD] is None:
+        del body[_ENTRY_FIELD]
+    return body
 
 
 @dataclass(frozen=True)
@@ -153,7 +172,7 @@ class HeldPathDigests:
         body = {
             "generated_by": GENERATED_BY,
             "schema": SCHEMA,
-            "workloads": {name: dataclasses.asdict(self.workloads[name]) for name in sorted(self.workloads)},
+            "workloads": {name: _digest_json(self.workloads[name]) for name in sorted(self.workloads)},
         }
         return json.dumps(body, indent=2) + "\n"
 
@@ -195,7 +214,7 @@ class WorkloadMeasurement:
         return json.dumps(
             {
                 "workload": self.workload,
-                "digest": dataclasses.asdict(self.digest),
+                "digest": _digest_json(self.digest),
                 "generation_seconds": self.generation_seconds,
                 "stage_seconds": dict(self.stage_seconds),
             }
@@ -254,6 +273,7 @@ def measure_workload(workload: str) -> WorkloadMeasurement:
         circle_count=len(path.circles),
         connector_count=len(path.transitions),
         seam=path.connectors.seam.value,
+        entry=entry_digest(path.entry),
     )
     return WorkloadMeasurement(workload, digest, path.generation_seconds, dict(path.stage_seconds))
 
@@ -298,7 +318,8 @@ def mismatches(recorded: HeldPathDigests, current: HeldPathDigests, workloads: t
         if was is None or now is None:
             found.append(f"{name}: {'not recorded' if was is None else 'not measured'}.")
             continue
-        for field in _DIGEST_FIELDS:
+        fields = _DIGEST_FIELDS if was.entry is None and now.entry is None else (*_DIGEST_FIELDS, _ENTRY_FIELD)
+        for field in fields:
             before, after = getattr(was, field), getattr(now, field)
             if before != after:
                 found.append(f"{name}: {field} {after!r} != recorded {before!r}.")

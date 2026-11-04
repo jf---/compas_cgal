@@ -40,6 +40,7 @@ from compas_cgal import _coverage_2
 from compas_cgal import _stock_2
 from compas_cgal.engagement import _operation_removal
 from compas_cgal.helix_units import EntryRampLength
+from compas_cgal.incident_loop import GuideLoop
 from compas_cgal.incident_loop import IncidentLoop
 from compas_cgal.pipeline.direction import Direction2
 from compas_cgal.pipeline.errors import InvalidCapChordRatioError
@@ -282,7 +283,7 @@ class Admissibility:
             raise InvalidEntryRiseChordRatioError(f"an entry-rise chord ratio lies in (0, {MAX_CAP_CHORD_RATIO}]; got {entry_rise_ratio!r}.")
         return cls(tool=tool, cap_ratio=cap_ratio, domain=domain, entry_rise_ratio=entry_rise_ratio)
 
-    def loop_within_cap(self, stock: Stock, loop: IncidentLoop, clockwise: bool) -> bool:
+    def loop_within_cap(self, stock: Stock, loop: GuideLoop, clockwise: bool) -> bool:
         """No station of the full loop exceeds the cap, in process, on the authored radius.
 
         Args:
@@ -315,7 +316,7 @@ class Admissibility:
         """
         return self._loop_stations_within_cap(stock, loop, clockwise, loop_parameters()[1:])
 
-    def loop_entry_within_rise(self, stock: Stock, loop: IncidentLoop, clockwise: bool) -> bool:
+    def loop_entry_within_rise(self, stock: Stock, loop: GuideLoop, clockwise: bool) -> bool:
         """The loop's gate junction station (`JUNCTION_STATION`) is under the declared entry-rise limit, in process.
 
         The same station the gate's step reads at a junction into this loop,
@@ -342,10 +343,10 @@ class Admissibility:
             raise MissingEntryRiseLimitError("a pencil junction needs a declared entry-rise limit; build the admissibility with entry_rise_ratio.")
         return not self._loop_stations_exceed(stock, loop, clockwise, [loop_parameters()[JUNCTION_STATION]], float(self.entry_rise_ratio))
 
-    def _loop_stations_within_cap(self, stock: Stock, loop: IncidentLoop, clockwise: bool, parameters: list[float]) -> bool:
+    def _loop_stations_within_cap(self, stock: Stock, loop: GuideLoop, clockwise: bool, parameters: list[float]) -> bool:
         return not self._loop_stations_exceed(stock, loop, clockwise, parameters, float(self.cap_ratio))
 
-    def _loop_stations_exceed(self, stock: Stock, loop: IncidentLoop, clockwise: bool, parameters: list[float], ratio: float) -> bool:
+    def _loop_stations_exceed(self, stock: Stock, loop: GuideLoop, clockwise: bool, parameters: list[float], ratio: float) -> bool:
         return _stock_2.engagement_circle_exceeded(
             stock.raw,
             float(loop.centre.x),

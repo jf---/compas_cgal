@@ -43,6 +43,7 @@ from benchmarks.held_reference_reconstruction_cache_errors import Reconstruction
 from benchmarks.held_reference_reconstruction_identity import ReconstructionBuildIdentity
 from benchmarks.spec import PocketSpec
 from compas_cgal.errors import InvalidUnitValueError
+from compas_cgal.units import CutDepth
 from compas_cgal.units import Millimetre
 from compas_cgal.units import Point2
 from compas_cgal.units import Radian
@@ -51,6 +52,16 @@ from compas_cgal.units import WorldXY
 
 Degree = NewType("Degree", float)
 JsonValue: TypeAlias = None | bool | int | float | str | list["JsonValue"] | dict[str, "JsonValue"]
+
+# Declared cut depth of every Held case (ruling 2026-11-04): one level as deep as
+# the canonical tool radius, 1 mm, the depth the tri-dexel replay simulates.
+# Declared intent, a case parameter; nothing derives it.
+DEFAULT_HELD_CUT_DEPTH = CutDepth(Millimetre(1.0))
+
+# Declared cutter of every Held case: a centre-cutting flat end mill (the one the
+# tri-dexel replay simulates). The helical entry ramps on the end face, so it
+# refuses a cutter that is not centre-cutting (ruling 2026-11-04).
+DEFAULT_HELD_CENTRE_CUTTING = True
 
 CANONICAL_CASE_NAMES = (
     "figure5",
@@ -342,6 +353,8 @@ class HeldReferenceCase:
     start_marker: Point2[WorldXY] | None
     start_marker_radius: Millimetre | None
     figure7_observation: Figure7Observation | None
+    cut_depth: CutDepth = DEFAULT_HELD_CUT_DEPTH
+    centre_cutting: bool = DEFAULT_HELD_CENTRE_CUTTING
 
     @classmethod
     def build(
@@ -366,7 +379,11 @@ class HeldReferenceCase:
         start_marker: Point2[WorldXY] | None,
         start_marker_radius: Millimetre | None,
         figure7_observation: Figure7Observation | None,
+        cut_depth: CutDepth = DEFAULT_HELD_CUT_DEPTH,
+        centre_cutting: bool = DEFAULT_HELD_CENTRE_CUTTING,
     ) -> Self:
+        if not isinstance(cut_depth, CutDepth) or type(centre_cutting) is not bool:
+            raise MalformedHeldReferenceCaseError("Reference case cut depth must be a CutDepth and centre_cutting a bool.")
         if name not in CANONICAL_CASE_NAMES or not authors or not title or not doi:
             raise MalformedHeldReferenceCaseError("Reference case publication identity is incomplete.")
         source_tool_radius = _positive_pdf_length(source_tool_radius, "source tool radius")
@@ -445,6 +462,8 @@ class HeldReferenceCase:
             start_marker,
             start_marker_radius,
             figure7_observation,
+            cut_depth,
+            centre_cutting,
         )
         if case.analytic_signed_area <= 0.0 or case.polygon_signed_area <= 0.0:
             raise MalformedHeldReferenceCaseError(f"{name}: analytic and polygon boundaries must both be CCW.")

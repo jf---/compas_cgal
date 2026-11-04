@@ -429,8 +429,14 @@ def _helix_bytes(helix: Helix) -> bytes:
 
     The pitch is not encoded: it is exactly ``(top - bottom) / turns`` of
     encoded fields. ``phase`` is the footprint's stored realised phase.
+
+    Raises:
+        AuditHelixGeometryError: The footprint is not an `IncidentLoop` (the
+            encoding carries its chart parameter).
     """
     footprint = helix.footprint
+    if not isinstance(footprint, IncidentLoop):
+        raise AuditHelixGeometryError(f"helix identity encodes an IncidentLoop footprint's chart; got {type(footprint).__name__!r}.")
     return encode_tagged_union(
         b"compas-cgal-helix-v1",
         encode_component_map(

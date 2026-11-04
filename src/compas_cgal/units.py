@@ -369,3 +369,34 @@ class CutPlane:
     @classmethod
     def build(cls, cut_z: CutZ, clearance_z: ClearanceZ) -> Self:
         return cls(cut_z, clearance_z)
+
+
+@dataclass(frozen=True)
+class CutDepth:
+    """Depth of one cut level below the stock top, along world -Z, mm (positive).
+
+    Frame: world Z with the stock top as datum (`CutDepth.cut_plane`).
+    """
+
+    value: Millimetre
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "value", Millimetre(_positive(self.value, "cut depth")))
+
+    @classmethod
+    def build(cls, value: float) -> Self:
+        return cls(Millimetre(_positive(value, "cut depth")))
+
+    def cut_plane(self, stock_top: ClearanceZ) -> CutPlane:
+        """The cut plane of this depth under *stock_top*: cut at ``stock_top - depth``, a ramp starting at *stock_top*.
+
+        The subtraction is one double operation; every downstream decision
+        reads the resulting doubles exactly.
+
+        Args:
+            stock_top: The stock top, where a ramp into the stock starts.
+
+        Returns:
+            The cut plane.
+        """
+        return CutPlane(CutZ(Millimetre(stock_top.value - self.value)), stock_top)

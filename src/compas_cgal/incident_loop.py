@@ -27,6 +27,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from fractions import Fraction
+from typing import Protocol
 
 from compas.geometry import Circle
 from compas.geometry import Frame
@@ -79,6 +80,24 @@ class IncidentLoopRangeError(ValueError):
 
 class IncidentLoopRadiusBelowQuantumError(ValueError):
     """The target radius rounds to zero on its chart's radius quantum."""
+
+
+class GuideLoop(Protocol):
+    """A full machining loop as the in-process engagement queries read it: guide circle and start point, doubles.
+
+    `IncidentLoop` is one (its ``entry`` exactly on the circle); a published
+    Held circle wrapped by ``benchmarks.held_helix_entry`` is another (its
+    ``entry`` the certified nearest double of the exact entry).
+    """
+
+    @property
+    def centre(self) -> Point2[WorldXY]: ...
+
+    @property
+    def radius(self) -> GuideRadius: ...
+
+    @property
+    def entry(self) -> Point2[WorldXY]: ...
 
 
 class LoopEntryIncidenceError(RuntimeError):
