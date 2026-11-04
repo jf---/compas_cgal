@@ -23,8 +23,17 @@ overlay (``subtract_circle_sweep``, ``subtract_line_sweep``: the connector's
 ``Stock_UNDER``), which AS2 measured bit-identical to and 7-9x cheaper than
 local surgery on window-sized stocks.
 
-Not in generation (ruling 2026-10-21: not until it is fast). Batch runner:
-``benchmarks.held_actual_stock_last16_batch``.
+Omega above is the part polygon P (``case.projection.points``, typed
+``PartPolygon``), never the tool-centre offset. Two views of the sweeps
+(``SweepView``): ACTUAL (circles and connectors, the certificate) and CIRCLES
+(the circle view C_t of the 2026-11-04 refinement design: P minus every prior
+circle's swept annulus, connectors left out; it contains the actual stock, so
+a pass on it is a pass on the actual stock).
+
+Not in generation (ruling 2026-10-21: not until it is fast; 2026-11-04: an
+oracle, off the production path). Batch runner:
+``benchmarks.held_actual_stock_last16_batch``; differential oracle (D2, D4):
+``benchmarks.held_actual_stock_oracle``.
 """
 
 from __future__ import annotations
@@ -43,6 +52,7 @@ from benchmarks.held_actual_stock_last16_window import ExactSegmentReach
 from benchmarks.held_actual_stock_last16_window import circle_misses_window
 from benchmarks.held_actual_stock_last16_window import prove_clip_contains_stations
 from benchmarks.held_actual_stock_last16_window import segment_misses_window
+from benchmarks.held_material_domain import PartPolygon
 from compas_cgal import _stock_2
 from tools.actual_stock_profile import ReplayWorkload
 
@@ -88,6 +98,13 @@ class Verdict(enum.Enum):
     REFUSED = "refused"
 
 
+class SweepView(enum.Enum):
+    """Which prior sweeps a view subtracts from P."""
+
+    ACTUAL = "actual"  # circles and their connectors: the actual stock (the certificate)
+    CIRCLES = "circles"  # circles only: the circle view C_t (connectors left out, ruled Q1)
+
+
 @dataclass(frozen=True)
 class WindowView:
     """One window stock of one circle and its decision."""
@@ -130,9 +147,11 @@ def _cpu_ms(start: float) -> CpuMs:
 class Last16Oracle:
     """The certificate over one workload: exact sweep reaches, window construction, and the per-circle decision."""
 
-    def __init__(self, workload: ReplayWorkload, last: int = LAST_M) -> None:
+    def __init__(self, workload: ReplayWorkload, last: int = LAST_M, sweeps: SweepView = SweepView.ACTUAL) -> None:
         self.workload = workload
         self.last = last
+        self.sweeps = sweeps
+        self.material = PartPolygon.from_stock_rows(workload.polygon)
         r = workload.tool_radius
         self.circle_reach = tuple(ExactCircleReach.build(c.cx, c.cy, c.guide_radius, r) for c in workload.circles)
         self.segment_reach = tuple(ExactSegmentReach.build(s.x0, s.y0, s.x1, s.y1, r) for s in workload.segments)
@@ -157,9 +176,11 @@ class Last16Oracle:
         return disk
 
     def candidates(self, index: int, last: Optional[int]) -> list[SweepEvent]:
-        """Every prior sweep of the view, emission-ordered: circles ``j < index`` and connectors owned by them (``j >= index - last``)."""
+        """Every prior sweep of the view, emission-ordered: circles ``j < index`` and, in the ACTUAL view, the connectors they own (``j >= index - last``)."""
         first = 0 if last is None else max(0, index - last)
         circles = [(j, CIRCLE, j) for j in range(first, index)]
+        if self.sweeps is SweepView.CIRCLES:
+            return circles
         segments = [(int(self.owner[k]), SEGMENT, int(k)) for k in np.nonzero((self.owner < index) & (self.owner >= first))[0]]
         return sorted(circles + segments)
 
@@ -192,9 +213,9 @@ class Last16Oracle:
         return kept, omitted
 
     def build_stock(self, index: int, window: ExactDisk, events: list[SweepEvent], local: bool = False) -> _stock_2.Stock2:
-        """Omega, clipped to ``window``, minus ``events`` (global overlay; ``local`` uses local surgery, for references)."""
+        """P (``self.material``), clipped to ``window``, minus ``events`` (global overlay; ``local`` uses local surgery, for references)."""
         w = self.workload
-        stock = w.fresh_stock()
+        stock = _stock_2.Stock2(self.material.stock_rows(), [])
         stock.subtract_annulus(w.circles[index].cx, w.circles[index].cy, float(window.radius), self.clip_outer)
         for _owner, kind, item in events:
             if kind == CIRCLE:
