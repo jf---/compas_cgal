@@ -2095,7 +2095,7 @@ measured 87 s for the kite after a 7x end-to-end speedup; that run certifies and
 depletes every operation and is not comparable to Held and Pfeiffer's planner
 clock. Its cost history and the eliminated incremental-Boolean pathology are
 recorded in the
-[engagement-audit performance analysis](superpowers/state/sp1-gate-c-analysis.md).
+[engagement-audit performance analysis](dev/arrangement-redesign/findings.md).
 
 The first defensible performance comparison therefore comes after Tasks 13–15
 on the provenance-locked Fig. 5 fixture. Task 14A's tri-dexel validation is
