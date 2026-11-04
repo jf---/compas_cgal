@@ -1,28 +1,38 @@
 """The ratio gate verdict: decide rho_w against m_w, extend a red workload, refuse what is not gateable.
 
-The registry in these tests is a raw `GateRegistry` with chosen margins (the bypass-safe
-constructor): verdict logic does not depend on how the margins were derived.
+The registry in these tests is a raw `GateRegistry` with chosen margins and anchors (the
+bypass-safe constructor): verdict logic does not depend on how either was derived.
 """
 
 from __future__ import annotations
 
+import ast
 import dataclasses
 import math
 from collections.abc import Callable
 from collections.abc import Mapping
 from collections.abc import Sequence
+from fractions import Fraction
+from pathlib import Path
 from typing import Optional
 
 import pytest
 from tools.perf_ratio import DEFAULT_PAIRS
+from tools import perf_ratio_gate_decide
+from tools import perf_ratio_gate_verdict
+from tools.perf_ratio_gate_decide import exact_ratio
+from tools.perf_ratio_gate_merge import ExtensionMismatchError
+from tools.perf_ratio_gate_merge import merge_extension
 from tools.perf_ratio_gate_registry import SAFETY
+from tools.perf_ratio_gate_registry import UNIT_ANCHOR
+from tools.perf_ratio_gate_registry import Anchor
+from tools.perf_ratio_gate_registry import AnchorLink
 from tools.perf_ratio_gate_registry import Calibration
 from tools.perf_ratio_gate_registry import GateRegistry
 from tools.perf_ratio_gate_registry import Margin
 from tools.perf_ratio_gate_registry import UncalibratedMachineError
 from tools.perf_ratio_gate_verdict import EXTENSION_PAIRS
 from tools.perf_ratio_gate_verdict import MAX_PAIRS
-from tools.perf_ratio_gate_verdict import ExtensionMismatchError
 from tools.perf_ratio_gate_verdict import ExtensionRequest
 from tools.perf_ratio_gate_verdict import GateReport
 from tools.perf_ratio_gate_verdict import HarnessMismatchError
@@ -30,12 +40,12 @@ from tools.perf_ratio_gate_verdict import IncompleteSessionError
 from tools.perf_ratio_gate_verdict import InjectedSessionError
 from tools.perf_ratio_gate_verdict import RatioRegressionError
 from tools.perf_ratio_gate_verdict import ReferenceMismatchError
+from tools.perf_ratio_gate_verdict import UnanchoredWorkloadError
 from tools.perf_ratio_gate_verdict import UnregisteredWorkloadError
 from tools.perf_ratio_gate_verdict import Verdict
 from tools.perf_ratio_gate_verdict import WorkloadVerdict
 from tools.perf_ratio_gate_verdict import decide
 from tools.perf_ratio_gate_verdict import gate
-from tools.perf_ratio_gate_verdict import merge_extension
 from tools.perf_ratio_gate_verdict import require_gateable
 from tools.perf_ratio_record import ArmName
 from tools.perf_ratio_record import CpuSeconds
@@ -60,8 +70,15 @@ HEAD = "fedcba9876543210fedcba9876543210fedcba98"
 INJECTION = Injection(arm=ArmName.HEAD, seconds=CpuSeconds(0.5))
 
 
-def registry(margins: Optional[Mapping[str, float]] = None) -> GateRegistry:
-    """A raw registry at REF under HARNESS, CPU_MODEL calibrated with *margins* (M on every workload by default)."""
+def registry(
+    margins: Optional[Mapping[str, float]] = None,
+    anchors: Optional[Mapping[str, Fraction]] = None,
+    links: tuple[AnchorLink, ...] = (),
+) -> GateRegistry:
+    """A raw registry at REF under HARNESS, CPU_MODEL calibrated with *margins* (M on every workload by default).
+
+    *anchors* are the exact ``A_w`` (none: an empty chain); *links* the chain they came from (raw, never replayed here).
+    """
     chosen = {name: M for name in WORKLOADS} if margins is None else margins
     return GateRegistry(
         ref_commit=REF,
@@ -69,6 +86,8 @@ def registry(margins: Optional[Mapping[str, float]] = None) -> GateRegistry:
         safety=SAFETY,
         workloads=tuple(sorted(chosen)),
         calibrations=(Calibration(cpu_model=CPU_MODEL, sessions=(), margins={name: Margin(value) for name, value in chosen.items()}),),
+        anchor_links=links,
+        exact_anchors={} if anchors is None else {name: Anchor(value) for name, value in anchors.items()},
     )
 
 
@@ -94,6 +113,7 @@ class FakeMeasure:
 
     def __init__(self, batches: Sequence[tuple[float, float]], **overrides: object) -> None:
         self.requests: list[ExtensionRequest] = []
+        self.returned: list[PerfRatioSession] = []
         self.batches = list(batches)
         self.overrides = overrides
 
@@ -102,7 +122,9 @@ class FakeMeasure:
         ref_cpu, head_cpu = self.batches[len(self.requests) - 1]
         options: dict[str, object] = {"ref_commit": request.ref_commit, "head_rev": request.head_rev, "injected": request.injected}
         options.update(self.overrides)
-        return synthetic_session({name: pairs(ref_cpu, head_cpu, request.pairs) for name in request.workloads}, **options)  # type: ignore[arg-type]
+        extension = synthetic_session({name: pairs(ref_cpu, head_cpu, request.pairs) for name in request.workloads}, **options)  # type: ignore[arg-type]
+        self.returned.append(extension)
+        return extension
 
 
 def no_measure(request: ExtensionRequest) -> PerfRatioSession:
@@ -122,20 +144,65 @@ def test_an_extension_batch_is_one_default_batch() -> None:
 # --- decide ---------------------------------------------------------------------------------------
 
 
-def test_decide_boundaries() -> None:
+def test_decide_boundaries_are_exact() -> None:
+    # The bounds are the exact rationals 1 +- m, m the double M is. 0.04 is not dyadic, so the doubles
+    # 1.0 + M and 1.0 - M round away from them: 1.0 + M lies 5 / 2**57 above the exact upper bound and
+    # 1.0 - M as far below the exact lower one. An exact gate decides them REGRESSION and IMPROVED; the
+    # ulp next to each, on the inside, is the last ratio that passes.
     margin = Margin(M)
     upper = 1.0 + M
     lower = 1.0 - M
+    assert Fraction(upper) - (1 + Fraction(M)) == Fraction(5, 2**57)
+    assert Fraction(lower) - (1 - Fraction(M)) == -Fraction(5, 2**57)
 
     def decided(head_cpu: float) -> Verdict:
         run = session({GT: [(1.0, head_cpu)]}).workloads[0]
-        return decide(run, margin)
+        assert run.ratio == head_cpu
+        return decide(run, margin, UNIT_ANCHOR)
 
-    assert decided(upper) is Verdict.PASS
-    assert decided(math.nextafter(upper, math.inf)) is Verdict.REGRESSION
-    assert decided(lower) is Verdict.PASS
-    assert decided(math.nextafter(lower, 0.0)) is Verdict.IMPROVED
+    assert decided(math.nextafter(upper, 0.0)) is Verdict.PASS
+    assert decided(upper) is Verdict.REGRESSION
+    assert decided(math.nextafter(lower, math.inf)) is Verdict.PASS
+    assert decided(lower) is Verdict.IMPROVED
     assert decided(1.0) is Verdict.PASS
+
+
+# A double anchor and two adjacent double ratios straddling the exact bound 1 + 0.02 (the double 0.02),
+# where IEEE products and the exact Fraction products disagree (both checked in the test):
+#   A * RHO_ABOVE:  exact 3.0e-17 above the bound (REGRESSION); the float product rounds onto 1.0 + 0.02 (PASS).
+#   A * RHO_BELOW:  exact 8.4e-17 below the bound (PASS); the float product, read exactly, lies above it.
+BOUNDARY_ANCHOR = 1.03
+BOUNDARY_MARGIN = 0.02
+RHO_ABOVE = 0.9902912621359223
+RHO_BELOW = 0.9902912621359222
+
+
+def test_decide_on_the_exact_anchored_product_not_a_float_one() -> None:
+    anchor = Anchor(Fraction(BOUNDARY_ANCHOR))
+    margin = Margin(BOUNDARY_MARGIN)
+    bound = 1 + Fraction(BOUNDARY_MARGIN)
+    assert RHO_BELOW == math.nextafter(RHO_ABOVE, 0.0)
+    # Above: exact says over the bound, the float product says not.
+    assert anchor * Fraction(RHO_ABOVE) > bound
+    assert not BOUNDARY_ANCHOR * RHO_ABOVE > 1.0 + BOUNDARY_MARGIN
+    # Below: exact says within, the float product (even compared exactly) says over.
+    assert anchor * Fraction(RHO_BELOW) < bound
+    assert Fraction(BOUNDARY_ANCHOR * RHO_BELOW) > bound
+
+    def decided(ratio: float) -> Verdict:
+        run = session({GT: [(1.0, ratio)]}).workloads[0]
+        assert run.ratio == ratio
+        return decide(run, margin, anchor)
+
+    assert decided(RHO_ABOVE) is Verdict.REGRESSION
+    assert decided(RHO_BELOW) is Verdict.PASS
+
+
+def test_an_anchor_turns_a_flat_ratio_into_a_regression() -> None:
+    run = session({GT: pairs(1.0, 1.0)}).workloads[0]
+    assert decide(run, Margin(0.02), UNIT_ANCHOR) is Verdict.PASS
+    assert decide(run, Margin(0.02), Anchor(Fraction(103, 100))) is Verdict.REGRESSION
+    assert decide(run, Margin(0.03), Anchor(Fraction(96, 100))) is Verdict.IMPROVED
 
 
 # --- gate: the sequential extension -----------------------------------------------------------------
@@ -218,6 +285,81 @@ def test_the_extension_replays_the_injection() -> None:
     assert measure.requests
     assert all(request.injected == INJECTION for request in measure.requests)
     assert verdict_of(report, GT).verdict is Verdict.REGRESSION
+
+
+# --- gate: the anchor chain -------------------------------------------------------------------------
+
+
+def test_an_anchored_regression_extends_and_an_extension_to_098_passes() -> None:
+    anchor = Fraction(103, 100)
+    chosen = registry({GT: 0.02, OMEGA: 0.02}, anchors={GT: anchor, OMEGA: Fraction(1)})
+    base = session({GT: pairs(1.0, 1.0), OMEGA: pairs(1.0, 1.0)})
+    # The extension's HEAD ran faster: merged rho = 0.98 / 1.0; 1.03 * 0.98 = 1.0094 <= 1.02.
+    measure = FakeMeasure([(1.0, 0.98)])
+    report = gate(base, chosen, measure)
+    verdict = verdict_of(report, GT)
+    assert [request.workloads for request in measure.requests] == [(GT,)]
+    assert verdict.verdict is Verdict.PASS
+    assert verdict.ratio == 0.98
+    assert verdict.pairs == 10
+    assert verdict.anchor == 1.03
+    assert verdict.cumulative_ratio == float(anchor * Fraction(0.98))
+    assert report.extensions == tuple(measure.returned)
+    assert verdict_of(report, OMEGA).verdict is Verdict.PASS
+    assert verdict_of(report, OMEGA).pairs == 5
+
+
+def test_an_anchored_regression_that_persists_stays_red() -> None:
+    chosen = registry({GT: 0.02, OMEGA: 0.02}, anchors={GT: Fraction(103, 100), OMEGA: Fraction(1)})
+    base = session({GT: pairs(1.0, 1.0), OMEGA: pairs(1.0, 1.0)})
+    measure = FakeMeasure([(1.0, 1.0)] * 3)
+    report = gate(base, chosen, measure)
+    verdict = verdict_of(report, GT)
+    assert verdict.verdict is Verdict.REGRESSION
+    assert verdict.pairs == MAX_PAIRS
+    assert verdict.ratio == 1.0
+    assert verdict.cumulative_ratio == 1.03
+    assert report.regressions == (verdict,)
+    message = str(RatioRegressionError(report))
+    assert "A_w 1.03" in message
+    assert "A_w*rho_w 1.03" in message
+
+
+def test_an_anchor_below_one_turns_a_flat_ratio_into_an_improvement() -> None:
+    chosen = registry({GT: 0.03, OMEGA: 0.03}, anchors={GT: Fraction(96, 100), OMEGA: Fraction(1)})
+    report = gate(passing(), chosen, no_measure)
+    assert verdict_of(report, GT).verdict is Verdict.IMPROVED
+    assert verdict_of(report, GT).cumulative_ratio == 0.96
+    assert verdict_of(report, OMEGA).verdict is Verdict.PASS
+    assert report.improvements == (verdict_of(report, GT),)
+    assert report.extensions == ()
+
+
+def test_an_empty_chain_keeps_the_unanchored_verdicts() -> None:
+    base = session({GT: pairs(1.0, 1.10), OMEGA: pairs(1.0, 0.90)})
+    measure = FakeMeasure([(1.0, 1.01)])
+    report = gate(base, registry(), measure)
+    assert [(verdict.verdict, verdict.anchor) for verdict in report.verdicts] == [(Verdict.PASS, 1.0), (Verdict.IMPROVED, 1.0)]
+    assert [verdict.cumulative_ratio for verdict in report.verdicts] == [verdict.ratio for verdict in report.verdicts]
+    assert report.extensions == tuple(measure.returned)
+
+
+def test_every_extension_is_kept_on_the_report_in_merge_order() -> None:
+    base = session({GT: pairs(1.0, 1.10), OMEGA: pairs(1.0, 1.10)})
+    # GT: two red batches then a passing one; OMEGA: one passing batch.
+    measure = FakeMeasure([(1.0, 1.10), (1.0, 1.10), (1.0, 1.01), (1.0, 1.01)])
+    report = gate(base, registry(), measure)
+    assert [request.workloads for request in measure.requests] == [(GT,), (GT,), (GT,), (OMEGA,)]
+    assert len(report.extensions) == 4
+    assert all(kept is returned for kept, returned in zip(report.extensions, measure.returned))
+    assert [verdict.verdict for verdict in report.verdicts] == [Verdict.PASS, Verdict.PASS]
+
+
+def test_a_workload_without_an_anchor_on_a_nonempty_chain_is_refused() -> None:
+    link = AnchorLink(from_ref=OTHER_REV, to_ref=REF, sessions=(), calibration=Calibration(cpu_model=CPU_MODEL, sessions=(), margins={}))
+    chained = registry(anchors={GT: Fraction(1)}, links=(link,))
+    with pytest.raises(UnanchoredWorkloadError, match=OMEGA):
+        gate(passing(), chained, no_measure)
 
 
 # --- merge_extension refusals -----------------------------------------------------------------------
@@ -377,3 +519,31 @@ def test_the_regression_error_names_workload_ratio_margin_and_pairs() -> None:
     assert "1.1" in message
     assert "0.04" in message
     assert str(MAX_PAIRS) in message
+
+
+def test_decide_lives_below_the_registry_and_the_verdict() -> None:
+    # The registry's chain replay and the verdict share one decide; the shared module imports neither.
+    tree = ast.parse(Path(perf_ratio_gate_decide.__file__).read_text(encoding="utf-8"))
+    imported = {node.module for node in ast.walk(tree) if isinstance(node, ast.ImportFrom)}
+    imported |= {alias.name for node in ast.walk(tree) if isinstance(node, ast.Import) for alias in node.names}
+    assert not {name for name in imported if name and name.startswith(("tools.perf_ratio_gate_registry", "tools.perf_ratio_gate_verdict"))}
+    assert perf_ratio_gate_verdict.decide is perf_ratio_gate_decide.decide
+    assert perf_ratio_gate_verdict.Verdict is perf_ratio_gate_decide.Verdict
+    # The verdict re-exports, never redefines, what moved down (an int's identity proves nothing, so read the source).
+    verdict_tree = ast.parse(Path(perf_ratio_gate_verdict.__file__).read_text(encoding="utf-8"))
+    defined = {
+        target.id
+        for node in verdict_tree.body
+        if isinstance(node, (ast.Assign, ast.AnnAssign))
+        for target in (node.targets if isinstance(node, ast.Assign) else [node.target])
+        if isinstance(target, ast.Name)
+    }
+    defined |= {node.name for node in verdict_tree.body if isinstance(node, (ast.FunctionDef, ast.ClassDef))}
+    assert not defined & {"MAX_PAIRS", "Margin", "Anchor", "UNIT_ANCHOR", "Verdict", "decide", "anchored", "exact_ratio"}
+
+
+def test_exact_ratio_is_the_record_ratio_double_read_exactly() -> None:
+    # 1 / 3 is not a double: the record's ratio is its rounding, and that rounded double is the decided rho_w.
+    run = session({GT: [(3.0, 1.0)]}).workloads[0]
+    assert exact_ratio(run) == Fraction(run.ratio) == Fraction(1.0 / 3.0)
+    assert exact_ratio(run) != Fraction(1, 3)

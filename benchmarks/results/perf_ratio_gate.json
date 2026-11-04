@@ -1,4 +1,18 @@
 {
+  "anchor_links": [],
+  "anchor_ref": "15fbed70ebb016bdd8ef49453e04606d03e0b1fe",
+  "anchors": {
+    "certificate/figure8_monstera_boundary_qualified_corners": 1.0,
+    "gt/cap-120-default/pipeline/L_shape": 1.0,
+    "gt/cap-120-default/pipeline/rect_12x8": 1.0,
+    "gt/cap-120-default/pipeline/rect_20x12": 1.0,
+    "omega/figure5_refined": 1.0,
+    "omega/figure8_crossed_skis_boundary": 1.0,
+    "omega/figure8_monstera_boundary_qualified_corners": 1.0,
+    "polygon/figure5_refined": 1.0,
+    "polygon/figure8_crossed_skis_boundary": 1.0,
+    "polygon/figure8_monstera_boundary_qualified_corners": 1.0
+  },
   "calibrations": [
     {
       "cpu_model": "Apple M1 Max",
@@ -40,9 +54,9 @@
   ],
   "harness_sha256": "3a76eb83b69fa1cd4d69c4f22800cc4bdb3436506a82ff990e6b73a9ee1cd977",
   "ref_commit": "15fbed70ebb016bdd8ef49453e04606d03e0b1fe",
-  "registry_sha256": "6b84fd463f1a387e888e744d39acc4bc1d2d59b25cb21a74552137a3d792e403",
+  "registry_sha256": "0c661b635ee7ac1ee81fa1551363b444b60a8db761bfd9e9bf5dd64b3e54d923",
   "safety": 2.0,
-  "schema": "perf-ratio-gate/1",
+  "schema": "perf-ratio-gate/2",
   "workloads": [
     "certificate/figure8_monstera_boundary_qualified_corners",
     "gt/cap-120-default/pipeline/L_shape",

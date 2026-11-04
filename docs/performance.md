@@ -422,8 +422,9 @@ Always pass `--ref-rev`. After a promotion the reference is the registry's
 `ref_commit`, not the harness default `PINNED_REF_COMMIT`; a session against
 the stale default is refused as another reference.
 
-Verdicts, per workload: `REGRESSION` when `ρ_w > 1 + m_w`, `IMPROVED` when
-`ρ_w < 1 − m_w`, `PASS` otherwise (both bounds pass). Absolute seconds are
+Verdicts, per workload, on the anchored ratio `A_w·ρ_w` (below):
+`REGRESSION` when `A_w·ρ_w > 1 + m_w`, `IMPROVED` when `A_w·ρ_w < 1 − m_w`,
+`PASS` otherwise (both bounds pass). Absolute seconds are
 never gated. A workload that changed its output is still decided and is
 reported as `changed output` beside its verdict.
 
@@ -439,17 +440,58 @@ base session (arms, harness, host, CPU or injection differ) is refused.
 | Faster runner | Unchanged | The speed factor cancels in the ratio |
 | Another CPU model | Unchanged in expectation | Refused until that model is calibrated |
 
-The reference is a ratchet. `perf-ratio-promote` accepts only a gate session
-on a clean HEAD with no regression and at least one improvement; it moves
-`ratio-ref` to that HEAD and writes a registry with the new reference and no
-calibrations, so every check is refused until `perf-ratio-calibrate --sessions
-5` has run at the new reference. A session whose HEAD is the reference itself
-is never promoted. Within one reference, regressions cannot accumulate: every
-HEAD is measured against the same fixed reference. Across promotions they
-can. A promotion needs one `IMPROVED` workload, while the others need only
-`PASS` (`ρ_w ≤ 1 + m_w`), so each promotion can let a non-improved workload's
-reference get up to `m_w` slower. Bounding that drift is an open design
-question.
+Each workload carries an anchor `A_w` in the registry: the reference's CPU
+time over that of the workload's anchor commit. A fresh registry has
+`A_w = 1` everywhere. The gate decides the anchored ratio, `A_w·ρ_w ≤ 1 + m_w`;
+`IMPROVED` is `A_w·ρ_w < 1 − m_w`. The products are exact: `A_w`, `ρ_w` and
+`m_w` enter as the `fractions.Fraction` values of their recorded doubles.
+
+`perf-ratio-promote` accepts only a gate session on a clean HEAD with no
+regression and at least one improvement, and never one whose HEAD is the
+reference itself. It moves `ratio-ref` to that HEAD and writes a registry with
+the new reference and no calibrations, so every check is refused until
+`perf-ratio-calibrate --sessions 5` has run at the new reference. With `ρ_w`
+from the promoted session after extension, each anchor moves by one of two
+branches:
+
+- carried, `A'_w = A_w·ρ_w`, when `A_w·ρ_w ≥ 1 − m_w`: the new reference did
+  not certifiably beat the anchor, so its drift is kept and later sessions are
+  held to `1 + m_w` against the anchor commit, not the new reference;
+- reset, `A'_w = 1`, when `A_w·ρ_w < 1 − m_w`: the new reference is a certified
+  improvement and becomes the anchor, so later commits cannot spend the gain
+  back.
+
+A non-improved workload therefore cannot creep across promotions. What remains
+is measurement noise: each carried link is one measured ratio, so it carries at
+most `m_w / SAFETY` of noise (`SAFETY = 2`) under the calibrated noise model. After `n` carried
+links the gate holds the true slowdown against the anchor to
+`m_w + n·m_w/SAFETY` in the worst case. More pairs in today's session cannot
+shrink that, because the error lives in past sessions; a reset clears it. A
+workload new to the registry starts at `A_w = 1` at the current reference, a
+removed one drops its anchor, and `--rebase-harness` keeps the chain.
+
+The chain is content-addressed like the margins. Each promotion from `<from>`
+to `<to>` commits its gate session and every extension the gate merged, in
+merge order, as
+
+```text
+benchmarks/results/perf_ratio_promotions/<from8>-<to8>/gate/perf_ratio_session.json
+benchmarks/results/perf_ratio_promotions/<from8>-<to8>/ext-<n>/perf_ratio_session.json
+```
+
+and appends a link `{from_ref, to_ref, sessions, calibration}` to the registry's
+`anchor_links`. `sessions` cites each record by path and `record_sha256`, and
+`calibration` is the promoting machine's calibration that supplied `m_w`. The
+registry (schema `perf-ratio-gate/2`) also holds `anchor_ref`, the chain's first
+reference, and `anchors`, which are reporting copies only. `load_registry`
+re-derives every anchor: it checks that the links run from `anchor_ref` to
+`ref_commit`, re-hashes every cited record, re-derives each link's margins,
+replays `merge_extension` over its sessions, re-decides the link as promote
+would have, and applies the carry/reset rule in order. It refuses a registry
+whose stored anchors disagree with that result, or whose records are missing
+or changed. A `perf-ratio-gate/1` registry is refused with its migration
+message: move it aside and run `perf-ratio-calibrate --records` over its A/A
+records, which rebuilds it at `/2` with an empty chain.
 
 Every margin is void under an edited harness: each session then carries a new
 `harness_sha256` and is refused, and so are A/A records under the new harness
@@ -467,14 +509,23 @@ Refused outright: an injected session outside `--audit`, a session against
 another reference or harness, an uncalibrated CPU model, an unregistered
 workload, and a partial session (a `--workload` subset) outside `--audit`.
 
-The gate's audit, on Apple M1 Max at load 33–105:
+The gate's audit on the anchored code, on Apple M1 Max at `15fbed70`:
 
-- an A/A session at `15fbed70` passed all 10 workloads at 5 pairs (largest
-  ratio 1.011 on `rect_20x12` against its 0.048 margin; 863 s wall);
+- an A/A session passed all 10 workloads at 5 pairs, with no extension
+  (load 2.6–10.6; 854 s wall);
 - 0.126 CPU s (`2·m_w` times the largest A/A reference minimum) injected into
-  HEAD on `rect_20x12` gave `REGRESSION` at ρ 1.098 after extension to 20
-  pairs, against an expected 1.096;
-- the same injection into the reference gave `IMPROVED` at ρ 0.896.
+  HEAD on `rect_20x12` gave `REGRESSION`: ρ 1.097 on the base 5 pairs and
+  1.108 after extension to 20 pairs, against `1 + m_w` = 1.048 (load 5.3–8.5);
+- the same injection into the reference gave `IMPROVED` at ρ 0.900 on 5 pairs
+  (load 4.5–5.6).
+
+The expected ratio of an injection, ρ ≈ 1 + S/ref_min, depends on load. On
+this machine in-child CPU seconds fall with load: `ref_min` on `rect_20x12`
+is 1.319 s at load ~50 and 1.273 s at load ~6, so the same S gives a larger ρ
+at low load. The landed-gate audit at load 33–105 gave 1.098 after
+extension; the extension pairs here, at load 5–8, pull the merged ρ up to
+1.108. Audit expectations are verdict classes plus `1 + S/ref_min` from the
+session's own reference minimum, not a fixed band.
 
 ## Related pages
 

@@ -8,11 +8,13 @@ timing, no arms, no harness subprocess.
 from __future__ import annotations
 
 import dataclasses
+import hashlib
 import subprocess
 import sys
 from collections.abc import Callable
 from collections.abc import Mapping
 from collections.abc import Sequence
+from fractions import Fraction
 from pathlib import Path
 from typing import Optional
 
@@ -26,11 +28,17 @@ from tools.perf_ratio_gate import CalibrationHarnessMismatchError
 from tools.perf_ratio_gate import CalibrationMachineMismatchError
 from tools.perf_ratio_gate import MissingRegistryError
 from tools.perf_ratio_gate import PromotedReferenceMismatchError
+from tools.perf_ratio_gate import PromotionRecordsExistError
 from tools.perf_ratio_gate import PromotionRefusedError
 from tools.perf_ratio_gate import RebaseWithoutHarnessChangeError
 from tools.perf_ratio_gate import harness_command
 from tools.perf_ratio_gate import main
+from tools.perf_ratio_gate import promote as promote_records
 from tools.perf_ratio_gate import subprocess_measure
+from tools.perf_ratio_gate_chain import AnchorValueMismatchError
+from tools.perf_ratio_gate_decide import UNIT_ANCHOR
+from tools.perf_ratio_gate_decide import Verdict
+from tools.perf_ratio_gate_decide import decide
 from tools.perf_ratio_gate_registry import CALIBRATION_SESSIONS
 from tools.perf_ratio_gate_registry import InvalidCalibrationSessionError
 from tools.perf_ratio_gate_registry import TooFewCalibrationSessionsError
@@ -39,6 +47,7 @@ from tools.perf_ratio_gate_registry import build_registry
 from tools.perf_ratio_gate_registry import calibration_dir
 from tools.perf_ratio_gate_registry import derive_margins
 from tools.perf_ratio_gate_registry import load_registry
+from tools.perf_ratio_gate_registry import promotion_dir
 from tools.perf_ratio_gate_registry import write_registry
 from tools.perf_ratio_gate_verdict import ExtensionRequest
 from tools.perf_ratio_gate_verdict import InjectedSessionError
@@ -220,8 +229,8 @@ def test_check_pass_exits_zero_and_prints_each_workload(tmp_path: Path, capsys: 
     margin = load_registry(registry, root=tmp_path).margins_for(CPU_MODEL)[GT]
     lines = capsys.readouterr().out.splitlines()
     assert lines == [
-        f"{GT}: PASS rho 1.000 margin {margin:.3f} pairs {DEFAULT_PAIRS} changed output",
-        f"{OMEGA}: PASS rho 1.010 margin {margin:.3f} pairs {DEFAULT_PAIRS} changed output",
+        f"{GT}: PASS rho 1.000 A_w 1.000 A_w*rho_w 1.000 margin {margin:.3f} pairs {DEFAULT_PAIRS} changed output",
+        f"{OMEGA}: PASS rho 1.010 A_w 1.000 A_w*rho_w 1.010 margin {margin:.3f} pairs {DEFAULT_PAIRS} changed output",
         "ratio gate: 2 workloads: 2 PASS, 0 IMPROVED, 0 REGRESSION",
     ]
 
@@ -230,12 +239,13 @@ def test_check_regression_raises_with_workload_rho_margin_pairs(tmp_path: Path, 
     registry = calibrated(tmp_path)
     capsys.readouterr()
     measure = FakeMeasure(REGRESSED)
-    with pytest.raises(RatioRegressionError, match=rf"{OMEGA}: rho_w 1\.2 > 1 \+ m_w 0\.04\d* over 20 pairs") as raised:
+    # One message form whatever the anchor: A_w*rho_w against 1 + m_w, with A_w, rho_w and the pairs.
+    with pytest.raises(RatioRegressionError, match=rf"{OMEGA}: A_w\*rho_w 1\.2 > 1 \+ m_w 0\.04\d* \(A_w 1\.0, rho_w 1\.2\) over 20 pairs") as raised:
         check(tmp_path, registry, gated({GT: IMPROVED, OMEGA: REGRESSED}), measure=measure)
     assert [verdict.workload for verdict in raised.value.report.regressions] == [OMEGA]
     assert len(measure.requests) == 3
     out = capsys.readouterr().out
-    assert f"{OMEGA}: REGRESSION rho 1.200 margin 0.040 pairs 20\n" in out
+    assert f"{OMEGA}: REGRESSION rho 1.200 A_w 1.000 A_w*rho_w 1.200 margin 0.040 pairs 20\n" in out
     assert "ratio gate: 2 workloads: 0 PASS, 1 IMPROVED, 1 REGRESSION" in out
     assert "promotion available" not in out
 
@@ -246,7 +256,7 @@ def test_check_improved_prints_the_promotion_hint(tmp_path: Path, capsys: pytest
     record = write_record(gated({GT: IMPROVED, OMEGA: PASSING}), tmp_path / "gate" / "perf_ratio_session.json")
     assert main(["check", str(record), "--registry", str(registry)], root=tmp_path, measure=no_measure, checkout=no_checkout) == 0
     lines = capsys.readouterr().out.splitlines()
-    assert lines[0] == f"{GT}: IMPROVED rho 0.900 margin 0.040 pairs {DEFAULT_PAIRS}"
+    assert lines[0] == f"{GT}: IMPROVED rho 0.900 A_w 1.000 A_w*rho_w 0.900 margin 0.040 pairs {DEFAULT_PAIRS}"
     assert lines[-1] == f"promotion available: pixi run perf-ratio-promote {record}"
 
 
@@ -630,3 +640,370 @@ def test_a_checkout_that_lands_elsewhere_leaves_the_registry_alone(tmp_path: Pat
     with pytest.raises(PromotedReferenceMismatchError):
         promote(tmp_path, path, gated({GT: IMPROVED, OMEGA: PASSING}), FakeCheckout(answer=OTHER_REV))
     assert path.read_bytes() == before
+
+
+# --- promote: the anchor chain -----------------------------------------------------------------------
+
+# The second and third promoted commits of a chain (REF -> HEAD -> HEAD2 -> HEAD3).
+HEAD2 = "2222222222222222222222222222222222222222"
+HEAD3 = "3333333333333333333333333333333333333333"
+# HEAD CPU seconds (reference 1.0 s) of a non-improved workload that drifts inside a ~0.04 margin.
+DRIFT = 1.03
+# Red against a ~0.04 margin at first; its extension's pairs merge down to a PASS ratio.
+RED_FIRST, EXTENDED_TO = 1.05, 1.01
+
+
+def calibrate_at(tmp_path: Path, registry: Path, ref: str) -> None:
+    """Calibrate CPU_MODEL at *ref* from `AA_HEAD_CPU` (margin ~ 0.04), its records in their own series."""
+    assert calibrate(tmp_path, registry, aa_records(tmp_path / "records", series=f"aa-{ref[:8]}", ref_commit=ref, head_rev=ref)) == 0
+
+
+def promotion_target(tmp_path: Path, from_ref: str, to_ref: str) -> Path:
+    return tmp_path / promotion_dir(from_ref, to_ref).relative_to(REPOSITORY)
+
+
+def gate_record(tmp_path: Path) -> Path:
+    """Where `promote` and `check` write the session they gate."""
+    return tmp_path / "gate" / "perf_ratio_session.json"
+
+
+def test_promote_carries_a_drifted_anchor_and_resets_an_improved_one(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    path = calibrated(tmp_path)
+    before = load_registry(path, root=tmp_path)
+    capsys.readouterr()
+    assert promote(tmp_path, path, gated({GT: IMPROVED, OMEGA: DRIFT}), FakeCheckout()) == 0
+    promoted = load_registry(path, root=tmp_path)
+    # Carried: A' = A * rho exactly (A = 1 at a fresh registry); reset: the improved workload's anchor is 1.
+    assert dict(promoted.anchors_exact()) == {GT: Fraction(1), OMEGA: Fraction(DRIFT)}
+    assert promoted.ref_commit == HEAD and promoted.anchor_ref == REF and promoted.calibrations == ()
+    (link,) = promoted.anchor_links
+    assert (link.from_ref, link.to_ref) == (REF, HEAD)
+    assert link.calibration == before.calibrations[0]
+    target = promotion_target(tmp_path, REF, HEAD)
+    assert [record.path for record in link.sessions] == [(target / "gate" / "perf_ratio_session.json").relative_to(tmp_path).as_posix()]
+    assert (target / "gate" / "perf_ratio_session.json").read_bytes() == gate_record(tmp_path).read_bytes()
+    out = capsys.readouterr().out.splitlines()
+    assert f"  {GT}: A_w 1.000 -> 1.000 (reset)" in out
+    assert f"  {OMEGA}: A_w 1.000 -> 1.030 (carried)" in out
+
+
+def test_promote_persists_the_extensions_and_anchors_on_the_extended_ratio(tmp_path: Path) -> None:
+    path = calibrated(tmp_path)
+    measure = FakeMeasure(EXTENDED_TO)
+    assert promote(tmp_path, path, gated({GT: IMPROVED, OMEGA: RED_FIRST}), FakeCheckout(), measure=measure) == 0
+    assert [request.workloads for request in measure.requests] == [(OMEGA,)]
+    promoted = load_registry(path, root=tmp_path)
+    (link,) = promoted.anchor_links
+    target = promotion_target(tmp_path, REF, HEAD)
+    assert [record.path for record in link.sessions] == [(target / name / "perf_ratio_session.json").relative_to(tmp_path).as_posix() for name in ("gate", "ext-1")]
+    assert sorted(child.name for child in target.iterdir()) == ["ext-1", "gate"]
+    (extension,) = load_session(target / "ext-1" / "perf_ratio_session.json").workloads
+    assert extension.workload == OMEGA and len(extension.pairs) == 5
+    # The extended run's ratio is min head / min ref over all ten pairs: EXTENDED_TO, not RED_FIRST.
+    assert promoted.anchors_exact()[OMEGA] == Fraction(EXTENDED_TO)
+
+
+def test_the_promoted_registry_reloads_to_the_registry_promote_returned(tmp_path: Path) -> None:
+    path = calibrated(tmp_path)
+    record = write_record(gated({GT: IMPROVED, OMEGA: DRIFT}), gate_record(tmp_path))
+    returned = promote_records(record, registry_path=path, root=tmp_path, measure=no_measure, checkout=FakeCheckout())
+    assert load_registry(path, root=tmp_path) == returned
+    assert path.read_text(encoding="utf-8") == returned.dumps()
+
+
+def test_a_second_promotion_composes_on_the_first(tmp_path: Path) -> None:
+    path = calibrated(tmp_path)
+    assert promote(tmp_path, path, gated({GT: IMPROVED, OMEGA: DRIFT}), FakeCheckout()) == 0
+    calibrate_at(tmp_path, path, HEAD)
+    # Against the anchors {GT: 1, OMEGA: 1.03}: GT drifts 1.02 (carried), OMEGA at 0.9 is 0.927 < 1 - m (reset).
+    assert promote(tmp_path, path, gated({GT: 1.02, OMEGA: IMPROVED}, ref_commit=HEAD, head_rev=HEAD2), FakeCheckout()) == 0
+    promoted = load_registry(path, root=tmp_path)
+    assert promoted.ref_commit == HEAD2 and promoted.anchor_ref == REF
+    assert [(link.from_ref, link.to_ref) for link in promoted.anchor_links] == [(REF, HEAD), (HEAD, HEAD2)]
+    assert dict(promoted.anchors_exact()) == {GT: Fraction(1.02), OMEGA: Fraction(1)}
+
+
+def test_a_drift_creeping_over_two_promotions_is_a_regression_against_its_anchor(tmp_path: Path) -> None:
+    """The creep the landed gate (9ae1cdd2) let through, caught.
+
+    OMEGA never improves: it drifts 1.03 at the first promotion and 1.009 at the second, and its
+    third session measures 1.03 again. Every one of those ratios is inside ``1 + m_w`` on its
+    own, so on the landed gate's semantics (``rho_w`` against ``1 + m_w``, no anchor) the third
+    session PASSES and the drift compounds without bound. Against its anchor
+    ``A_w = 1.03 * 1.009`` the third session is ``A_w * rho_w ~ 1.07 > 1 + m_w``: REGRESSION. A
+    second +1.03 drift is already refused at the second promotion.
+    """
+    path = calibrated(tmp_path)
+    assert promote(tmp_path, path, gated({GT: IMPROVED, OMEGA: DRIFT}), FakeCheckout()) == 0
+    calibrate_at(tmp_path, path, HEAD)
+    after_first = path.read_bytes()
+    with pytest.raises(PromotionRefusedError, match=f"REGRESSION on {OMEGA}"):
+        promote(tmp_path, path, gated({GT: IMPROVED, OMEGA: DRIFT}, ref_commit=HEAD, head_rev=HEAD2), no_checkout, measure=FakeMeasure(DRIFT))
+    assert path.read_bytes() == after_first
+    second = 1.009
+    assert promote(tmp_path, path, gated({GT: IMPROVED, OMEGA: second}, ref_commit=HEAD, head_rev=HEAD2), FakeCheckout()) == 0
+    calibrate_at(tmp_path, path, HEAD2)
+    registry = load_registry(path, root=tmp_path)
+    assert registry.anchors_exact()[OMEGA] == Fraction(DRIFT) * Fraction(second)
+    third = gated({GT: PASSING, OMEGA: DRIFT}, ref_commit=HEAD2, head_rev=HEAD3)
+    margin = registry.margins_for(CPU_MODEL)[OMEGA]
+    (omega_run,) = [run for run in third.workloads if run.workload == OMEGA]
+    # The landed gate's decision: rho_w alone, no anchor.
+    assert decide(omega_run, margin, UNIT_ANCHOR) is Verdict.PASS
+    with pytest.raises(RatioRegressionError, match=rf"{OMEGA}: A_w\*rho_w 1\.07\d* > 1 \+ m_w 0\.04\d* \(A_w 1\.039\d*, rho_w 1\.03\) over 20 pairs"):
+        check(tmp_path, path, third, measure=FakeMeasure(DRIFT))
+
+
+def test_promotion_refusals_name_the_anchor(tmp_path: Path) -> None:
+    path = calibrated(tmp_path)
+    with pytest.raises(PromotionRefusedError, match=r"REGRESSION on omega/monstera \(A_w\*rho_w > 1 \+ m_w\)") as raised:
+        promote(tmp_path, path, gated({GT: IMPROVED, OMEGA: REGRESSED}), no_checkout, measure=FakeMeasure(REGRESSED))
+    assert "never moves to a slower commit" not in str(raised.value)
+    with pytest.raises(PromotionRefusedError, match=r"no IMPROVED workload; promotion needs a certified improvement \(A_w\*rho_w < 1 - m_w\)"):
+        promote(tmp_path, path, gated({GT: PASSING, OMEGA: PASSING}), no_checkout)
+
+
+class RaisingCheckout(FakeCheckout):
+    """A checkout that fails as ``git checkout`` exiting non-zero."""
+
+    def __call__(self, root: Path, rev: str) -> str:
+        self.calls.append((root, rev))
+        raise subprocess.CalledProcessError(128, ("git", "checkout", rev))
+
+
+FAILED_CHECKOUTS: dict[str, tuple[Callable[[], FakeCheckout], type[Exception]]] = {
+    "lands-elsewhere": (lambda: FakeCheckout(answer=OTHER_REV), PromotedReferenceMismatchError),
+    "raises": (RaisingCheckout, subprocess.CalledProcessError),
+}
+
+
+@pytest.mark.parametrize("failure", sorted(FAILED_CHECKOUTS))
+def test_a_failed_checkout_leaves_the_registry_and_a_rerun_finishes_without_measuring(tmp_path: Path, failure: str) -> None:
+    path = calibrated(tmp_path)
+    before = path.read_bytes()
+    session = gated({GT: IMPROVED, OMEGA: RED_FIRST})
+    build_checkout, error = FAILED_CHECKOUTS[failure]
+    with pytest.raises(error):
+        promote(tmp_path, path, session, build_checkout(), measure=FakeMeasure(EXTENDED_TO))
+    assert path.read_bytes() == before
+    target = promotion_target(tmp_path, REF, HEAD)
+    assert sorted(child.name for child in target.iterdir()) == ["ext-1", "gate"]
+    # The rerun replays the persisted extension instead of measuring a new one, so it cites the same records.
+    checkout = FakeCheckout()
+    assert promote(tmp_path, path, session, checkout, measure=no_measure) == 0
+    assert checkout.calls == [(DEFAULT_REF_WORKTREE, HEAD)]
+    promoted = load_registry(path, root=tmp_path)
+    (link,) = promoted.anchor_links
+    assert [record.path for record in link.sessions] == [(target / name / "perf_ratio_session.json").relative_to(tmp_path).as_posix() for name in ("gate", "ext-1")]
+    assert promoted.anchors_exact()[OMEGA] == Fraction(EXTENDED_TO)
+
+
+def test_promotion_records_of_another_session_are_refused_before_measuring(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    path = calibrated(tmp_path)
+    before = path.read_bytes()
+    target = promotion_target(tmp_path, REF, HEAD)
+    other = write_record(gated({GT: IMPROVED, OMEGA: PASSING}), target / "gate" / "perf_ratio_session.json").read_bytes()
+    # An extension the promoted session's gate would accept: without the identity check the gate would run on it.
+    extension = write_record(gated({OMEGA: EXTENDED_TO}), target / "ext-1" / "perf_ratio_session.json").read_bytes()
+    capsys.readouterr()
+    with pytest.raises(PromotionRecordsExistError) as raised:
+        promote(tmp_path, path, gated({GT: IMPROVED, OMEGA: RED_FIRST}), no_checkout, measure=no_measure)
+    # Refused before the gate runs: no verdict is printed (checked before the message), and the foreign records are untouched.
+    assert capsys.readouterr().out == ""
+    assert "gate/perf_ratio_session.json is not the record" in str(raised.value)
+    assert path.read_bytes() == before
+    assert (target / "gate" / "perf_ratio_session.json").read_bytes() == other
+    assert (target / "ext-1" / "perf_ratio_session.json").read_bytes() == extension
+
+
+def test_promotion_records_beyond_the_ones_promote_would_write_are_refused(tmp_path: Path) -> None:
+    path = calibrated(tmp_path)
+    before = path.read_bytes()
+    session = gated({GT: IMPROVED, OMEGA: PASSING})
+    with pytest.raises(PromotedReferenceMismatchError):
+        promote(tmp_path, path, session, FakeCheckout(answer=OTHER_REV))
+    target = promotion_target(tmp_path, REF, HEAD)
+    write_record(gated({OMEGA: EXTENDED_TO}), target / "ext-1" / "perf_ratio_session.json")
+    with pytest.raises(PromotionRecordsExistError, match=r"other records than this promotion writes \(ext-1/perf_ratio_session.json differ\)"):
+        promote(tmp_path, path, session, no_checkout)
+    assert path.read_bytes() == before
+
+
+def test_a_rerun_whose_gate_asks_for_more_extensions_than_were_persisted_is_refused(tmp_path: Path) -> None:
+    path = calibrated(tmp_path)
+    before = path.read_bytes()
+    session = gated({GT: IMPROVED, OMEGA: RED_FIRST})
+    target = promotion_target(tmp_path, REF, HEAD)
+    write_record(session, target / "gate" / "perf_ratio_session.json")
+    with pytest.raises(PromotionRecordsExistError, match="no further extension record"):
+        promote(tmp_path, path, session, no_checkout, measure=no_measure)
+    assert path.read_bytes() == before
+
+
+def promoted_once(tmp_path: Path) -> Path:
+    """`calibrated`, promoted REF -> HEAD (GT reset, OMEGA carried at `DRIFT`): one link, no calibrations."""
+    path = calibrated(tmp_path)
+    assert promote(tmp_path, path, gated({GT: IMPROVED, OMEGA: DRIFT}), FakeCheckout()) == 0
+    return path
+
+
+def test_calibrate_records_keeps_the_anchor_chain(tmp_path: Path) -> None:
+    path = promoted_once(tmp_path)
+    before = load_registry(path, root=tmp_path)
+    calibrate_at(tmp_path, path, HEAD)
+    after = load_registry(path, root=tmp_path)
+    assert [c.cpu_model for c in after.calibrations] == [CPU_MODEL]
+    assert (after.anchor_ref, after.anchor_links) == (before.anchor_ref, before.anchor_links) == (REF, before.anchor_links)
+    assert len(after.anchor_links) == 1
+    assert dict(after.anchors_exact()) == dict(before.anchors_exact()) == {GT: Fraction(1), OMEGA: Fraction(DRIFT)}
+
+
+def test_rebase_harness_keeps_the_anchor_chain(tmp_path: Path) -> None:
+    path = promoted_once(tmp_path)
+    calibrate_at(tmp_path, path, HEAD)
+    before = load_registry(path, root=tmp_path)
+    rebased = aa_records(tmp_path / "records", series="rebased", harness=NEW_HARNESS, ref_commit=HEAD, head_rev=HEAD)
+    assert calibrate(tmp_path, path, rebased, "--rebase-harness") == 0
+    after = load_registry(path, root=tmp_path)
+    assert after.harness_sha256 == NEW_HARNESS and after.ref_commit == HEAD
+    assert (after.anchor_ref, after.anchor_links) == (before.anchor_ref, before.anchor_links)
+    assert len(after.anchor_links) == 1
+    assert dict(after.anchors_exact()) == {GT: Fraction(1), OMEGA: Fraction(DRIFT)}
+
+
+# --- promote: the carry and reset rules, persisted (anchor-t3 fix wave) ---------------------------
+
+
+def test_a_carried_anchor_is_persisted_as_its_anchor_times_rho(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """The carry rule ``A'_w = A_w * rho_w``, read back from the written registry.
+
+    OMEGA enters at ``A_w = 1.03`` and measures ``rho_w = 0.95``: improved on ``rho_w`` alone
+    (``< 1 - m_w``), but ``A_w * rho_w ~ 0.979`` is not, so the drift is carried, not reset.
+    """
+    path = promoted_once(tmp_path)
+    calibrate_at(tmp_path, path, HEAD)
+    rho = 0.95
+    capsys.readouterr()
+    assert promote(tmp_path, path, gated({GT: IMPROVED, OMEGA: rho}, ref_commit=HEAD, head_rev=HEAD2), FakeCheckout()) == 0
+    persisted = load_registry(path, root=tmp_path).anchors_exact()
+    assert persisted[OMEGA] == Fraction(DRIFT) * Fraction(rho)
+    assert f"  {OMEGA}: A_w 1.030 -> 0.978 (carried)" in capsys.readouterr().out.splitlines()
+
+
+def test_a_reset_anchor_is_persisted_as_one(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """The reset rule ``A'_w = 1`` on a certified improvement (``A_w * rho_w < 1 - m_w``), read back.
+
+    OMEGA enters at ``A_w = 1.03`` and measures 0.9: ``A_w * rho_w = 0.927``, so its anchor is 1,
+    neither ``rho_w`` nor ``A_w * rho_w``. GT (``A_w = 1``, flat) is carried at 1.
+    """
+    path = promoted_once(tmp_path)
+    calibrate_at(tmp_path, path, HEAD)
+    capsys.readouterr()
+    assert promote(tmp_path, path, gated({GT: PASSING, OMEGA: IMPROVED}, ref_commit=HEAD, head_rev=HEAD2), FakeCheckout()) == 0
+    persisted = load_registry(path, root=tmp_path).anchors_exact()
+    assert persisted[OMEGA] == Fraction(1)
+    assert persisted[GT] == Fraction(1)
+    out = capsys.readouterr().out.splitlines()
+    assert f"  {OMEGA}: A_w 1.030 -> 1.000 (reset)" in out
+    assert f"  {GT}: A_w 1.000 -> 1.000 (carried)" in out
+
+
+# --- promote: the record is read once (review M1) -------------------------------------------------
+
+
+def test_a_record_rewritten_during_the_gate_persists_the_bytes_that_were_decided(tmp_path: Path) -> None:
+    """Promote reads *record* once; the gate, the persisted copy and the rerun check all use those bytes.
+
+    A `Measure` rewrites the record mid-gate (GT no longer improved). The promotion still decides,
+    persists and cites the bytes read at the start, and leaves no orphan promotion directory or staging.
+    """
+    path = calibrated(tmp_path)
+    record = write_record(gated({GT: IMPROVED, OMEGA: RED_FIRST}), gate_record(tmp_path))
+    decided = record.read_bytes()
+    inner = FakeMeasure(EXTENDED_TO)
+
+    def rewriting_measure(request: ExtensionRequest) -> PerfRatioSession:
+        write_record(gated({GT: PASSING, OMEGA: RED_FIRST}), record)
+        return inner(request)
+
+    promoted = promote_records(record, registry_path=path, root=tmp_path, measure=rewriting_measure, checkout=FakeCheckout())
+    assert record.read_bytes() != decided
+    target = promotion_target(tmp_path, REF, HEAD)
+    assert (target / "gate" / "perf_ratio_session.json").read_bytes() == decided
+    (link,) = promoted.anchor_links
+    assert [cited.path for cited in link.sessions] == [(target / name / "perf_ratio_session.json").relative_to(tmp_path).as_posix() for name in ("gate", "ext-1")]
+    assert link.sessions[0].record_sha256 == hashlib.sha256(decided).hexdigest()
+    # Decided on the bytes read first: GT improved (reset), OMEGA extended to EXTENDED_TO (carried).
+    assert dict(promoted.anchors_exact()) == {GT: Fraction(1), OMEGA: Fraction(EXTENDED_TO)}
+    assert load_registry(path, root=tmp_path) == promoted
+    # No orphan: the only promotion directory is the cited one, and no staging directory is left.
+    assert [child.name for child in target.parent.iterdir()] == [target.name]
+    scratch = tmp_path / GATE_SCRATCH.relative_to(REPOSITORY)
+    assert list(scratch.glob("promotion-staging-*")) == []
+
+
+# --- promote: the anchor cross-check (review M2) --------------------------------------------------
+
+
+def test_the_anchor_cross_check_refuses_a_report_the_chain_does_not_replay(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A CLI carry that disagrees with the chain is `AnchorValueMismatchError` before checkout.
+
+    The records are already staged when the guard fires; they stay (a rerun reproduces the error).
+    """
+    path = calibrated(tmp_path)
+    before = path.read_bytes()
+    monkeypatch.setattr("tools.perf_ratio_gate.carry_anchor", lambda anchor, ratio, margin: UNIT_ANCHOR)
+    with pytest.raises(AnchorValueMismatchError, match="re-derives the anchors"):
+        promote(tmp_path, path, gated({GT: IMPROVED, OMEGA: DRIFT}), no_checkout)
+    assert path.read_bytes() == before
+    assert sorted(child.name for child in promotion_target(tmp_path, REF, HEAD).iterdir()) == ["gate"]
+
+
+# --- promote: coverage gaps (review M6) -----------------------------------------------------------
+
+
+def test_a_failed_registry_write_leaves_the_registry_and_a_rerun_finishes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    path = calibrated(tmp_path)
+    before = path.read_bytes()
+    session = gated({GT: IMPROVED, OMEGA: RED_FIRST})
+
+    def failing_write(*args: object, **kwargs: object) -> None:
+        raise OSError("disk full")
+
+    with monkeypatch.context() as patch:
+        patch.setattr("tools.perf_ratio_gate.write_registry", failing_write)
+        with pytest.raises(OSError, match="disk full"):
+            promote(tmp_path, path, session, FakeCheckout(), measure=FakeMeasure(EXTENDED_TO))
+    assert path.read_bytes() == before
+    target = promotion_target(tmp_path, REF, HEAD)
+    assert sorted(child.name for child in target.iterdir()) == ["ext-1", "gate"]
+    checkout = FakeCheckout()
+    assert promote(tmp_path, path, session, checkout, measure=no_measure) == 0
+    assert checkout.calls == [(DEFAULT_REF_WORKTREE, HEAD)]
+    promoted = load_registry(path, root=tmp_path)
+    (link,) = promoted.anchor_links
+    assert [cited.path for cited in link.sessions] == [(target / name / "perf_ratio_session.json").relative_to(tmp_path).as_posix() for name in ("gate", "ext-1")]
+    assert dict(promoted.anchors_exact()) == {GT: Fraction(1), OMEGA: Fraction(EXTENDED_TO)}
+
+
+@pytest.mark.parametrize("cpu", [CPU_MODEL, OTHER_CPU])
+def test_the_link_cites_the_promoting_machines_calibration(tmp_path: Path, cpu: str) -> None:
+    path = two_machine_registry(tmp_path)
+    calibrations = {calibration.cpu_model: calibration for calibration in load_registry(path, root=tmp_path).calibrations}
+    assert sorted(calibrations) == sorted([CPU_MODEL, OTHER_CPU])
+    assert promote(tmp_path, path, gated({GT: IMPROVED, OMEGA: DRIFT}, cpu_model=cpu), FakeCheckout()) == 0
+    (link,) = load_registry(path, root=tmp_path).anchor_links
+    assert link.calibration == calibrations[cpu]
+
+
+def test_rebase_harness_with_a_changed_workload_set_keeps_the_chain_and_reanchors(tmp_path: Path) -> None:
+    """Spec: a rebase keeps the chain; an added workload starts at 1, a removed one drops its anchor."""
+    path = promoted_once(tmp_path)
+    calibrate_at(tmp_path, path, HEAD)
+    before = load_registry(path, root=tmp_path)
+    rebased = aa_records(tmp_path / "records", series="rebased", workloads=(OMEGA, NEW_WORKLOAD), harness=NEW_HARNESS, ref_commit=HEAD, head_rev=HEAD)
+    assert calibrate(tmp_path, path, rebased, "--rebase-harness") == 0
+    after = load_registry(path, root=tmp_path)
+    assert after.harness_sha256 == NEW_HARNESS and sorted(after.workloads) == sorted([OMEGA, NEW_WORKLOAD])
+    assert (after.anchor_ref, after.anchor_links) == (before.anchor_ref, before.anchor_links)
+    assert dict(after.anchors_exact()) == {OMEGA: Fraction(DRIFT), NEW_WORKLOAD: Fraction(1)}

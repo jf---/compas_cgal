@@ -1,12 +1,19 @@
-"""The ratio gate verdict: each workload's ``rho_w`` against its calibrated margin ``m_w``.
+"""The ratio gate verdict: each workload's anchored ratio ``A_w * rho_w`` against its calibrated margin ``m_w``.
 
 `gate` first refuses a session it cannot decide (`require_gateable`), then decides
-every workload in session order (`decide`). A workload in the red zone
-``rho_w > 1 + m_w`` is not yet a regression: the gate asks `Measure` for more pairs
-of that workload alone, merges them into the run (`merge_extension`) and decides
-again, until the verdict is not red or the workload holds `MAX_PAIRS` pairs (spec
-§The hardware answer: a busy runner costs time, not false reds). The merged ratio
-is the record's own ``min head / min ref`` over every pair measured.
+every workload in session order (`decide`) against its anchor ``A_w`` (spec
+amendment 2026-11-01, the anchor chain; `registry.anchors_exact`). A workload in the
+red zone ``A_w * rho_w > 1 + m_w`` is not yet a regression: the gate asks `Measure`
+for more pairs of that workload alone, merges them into the run (`merge_extension`)
+and decides again, until the verdict is not red or the workload holds `MAX_PAIRS`
+pairs (spec §The hardware answer: a busy runner costs time, not false reds). The
+merged ratio is the record's own ``min head / min ref`` over every pair measured.
+Every accepted extension session is kept on the report, in merge order, so a
+promotion can persist the evidence its anchors are derived from.
+
+`decide`, `Verdict` and `MAX_PAIRS` live in `tools.perf_ratio_gate_decide`, below this
+module and the registry, so the registry's chain replay re-decides a promoted link
+with the gate's own function; they are re-exported here. Decisions are exact.
 
 Changed output is reported beside the verdict, never refused (spec amendment
 2026-11-01): the gate decides ``rho_w`` whether or not the arms' outputs agree.
@@ -17,22 +24,25 @@ from __future__ import annotations
 from collections.abc import Callable
 from collections.abc import Mapping
 from dataclasses import dataclass
-from enum import Enum
 from typing import Optional
 
+from tools.perf_ratio_gate_decide import MAX_PAIRS as MAX_PAIRS
+from tools.perf_ratio_gate_decide import UNIT_ANCHOR
+from tools.perf_ratio_gate_decide import Anchor
+from tools.perf_ratio_gate_decide import Margin
+from tools.perf_ratio_gate_decide import Verdict as Verdict
+from tools.perf_ratio_gate_decide import anchored
+from tools.perf_ratio_gate_decide import decide as decide
+from tools.perf_ratio_gate_merge import ExtensionMismatchError
+from tools.perf_ratio_gate_merge import merge_extension
 from tools.perf_ratio_gate_registry import GateRegistry
-from tools.perf_ratio_gate_registry import Margin
 from tools.perf_ratio_record import ArmName
 from tools.perf_ratio_record import Injection
 from tools.perf_ratio_record import PerfRatioSession
 from tools.perf_ratio_record import Ratio
-from tools.perf_ratio_record import WorkloadRatio
 
 # Pairs per extension batch: one default batch (perf_ratio.DEFAULT_PAIRS).
 EXTENSION_PAIRS = 5
-# Cap on a workload's pairs: 4x the calibrated N, three extensions; bounds a red workload's extra wall
-# at 15 pairs (omega monstera, the costliest, ~27 s/pair on M1 Max -> ~7 min).
-MAX_PAIRS = 20
 
 
 class InjectedSessionError(Exception):
@@ -55,16 +65,8 @@ class IncompleteSessionError(Exception):
     """Outside audit mode, the session's workload set is not the registry's."""
 
 
-class ExtensionMismatchError(Exception):
-    """An extension session did not measure what its base session and request measured."""
-
-
-class Verdict(str, Enum):
-    """One workload's gate verdict."""
-
-    PASS = "PASS"
-    IMPROVED = "IMPROVED"
-    REGRESSION = "REGRESSION"
+class UnanchoredWorkloadError(Exception):
+    """A gated workload has no anchor ``A_w`` in a registry whose anchor chain is not empty."""
 
 
 @dataclass(frozen=True)
@@ -101,6 +103,8 @@ class WorkloadVerdict:
         margin: The workload's calibrated ``m_w``.
         pairs: The pairs the final run holds.
         changed_output: Whether the arms' output digests differ (reported, not refused).
+        anchor: The workload's anchor ``A_w`` as the nearest double (reporting; decided exactly).
+        cumulative_ratio: ``A_w * rho_w`` as the nearest double to the exact product (reporting).
     """
 
     workload: str
@@ -109,6 +113,8 @@ class WorkloadVerdict:
     margin: Margin
     pairs: int
     changed_output: bool
+    anchor: float
+    cumulative_ratio: float
 
 
 @dataclass(frozen=True)
@@ -118,10 +124,13 @@ class GateReport:
     Attributes:
         verdicts: One verdict per session workload.
         audit: Whether the session was gated in audit mode.
+        extensions: Every extension session the gate merged, in merge order (workload by workload,
+            in session order); a promotion persists them beside the gate session.
     """
 
     verdicts: tuple[WorkloadVerdict, ...]
     audit: bool
+    extensions: tuple[PerfRatioSession, ...]
 
     @property
     def regressions(self) -> tuple[WorkloadVerdict, ...]:
@@ -142,27 +151,40 @@ class RatioRegressionError(Exception):
     """
 
     def __init__(self, report: GateReport) -> None:
-        """Name each regressed workload of *report* with its ``rho_w``, ``m_w`` and pair count."""
+        """Name each regressed workload of *report* with its ``rho_w`` (anchored, if ``A_w != 1``), ``m_w`` and pair count."""
         self.report = report
-        named = "; ".join(f"{verdict.workload}: rho_w {verdict.ratio!r} > 1 + m_w {verdict.margin!r} over {verdict.pairs} pairs" for verdict in report.regressions)
+        named = "; ".join(_regression_line(verdict) for verdict in report.regressions)
         super().__init__(f"ratio regression: {named}")
 
 
-def decide(run: WorkloadRatio, margin: Margin) -> Verdict:
-    """The verdict on *run*'s ``rho_w`` against *margin*; both bounds pass.
+def _regression_line(verdict: WorkloadVerdict) -> str:
+    """One regressed workload in one form, ``A_w = 1`` included: ``A_w*rho_w``, ``1 + m_w``, ``A_w``, ``rho_w``, pairs (reporting floats)."""
+    return f"{verdict.workload}: A_w*rho_w {verdict.cumulative_ratio!r} > 1 + m_w {verdict.margin!r} (A_w {verdict.anchor!r}, rho_w {verdict.ratio!r}) over {verdict.pairs} pairs"
+
+
+def anchors_for(registry: GateRegistry, workloads: tuple[str, ...]) -> dict[str, Anchor]:
+    """The exact anchor ``A_w`` of each of *workloads*.
+
+    A workload the registry holds no anchor for is at `UNIT_ANCHOR` only when the chain is empty
+    (a raw registry with no links: nothing was ever carried). On a non-empty chain every gated
+    workload must carry its derived anchor (`derive_anchors` covers the registry's workloads).
 
     Args:
-        run: The workload's pairs.
-        margin: The workload's calibrated ``m_w``.
+        registry: The gate registry.
+        workloads: The workloads to anchor.
 
     Returns:
-        REGRESSION when ``rho_w > 1 + m_w``, IMPROVED when ``rho_w < 1 - m_w``, else PASS.
+        Workload -> its exact anchor.
+
+    Raises:
+        UnanchoredWorkloadError: The chain is not empty and a workload has no anchor.
     """
-    if run.ratio > 1.0 + margin:
-        return Verdict.REGRESSION
-    if run.ratio < 1.0 - margin:
-        return Verdict.IMPROVED
-    return Verdict.PASS
+    exact = registry.anchors_exact()
+    if registry.anchor_links:
+        missing = [name for name in workloads if name not in exact]
+        if missing:
+            raise UnanchoredWorkloadError(f"no anchor for {', '.join(missing)} in a registry with {len(registry.anchor_links)} anchor link(s); anchored: {sorted(exact)}.")
+    return {name: exact.get(name, UNIT_ANCHOR) for name in workloads}
 
 
 def require_gateable(session: PerfRatioSession, registry: GateRegistry, *, audit: bool) -> Mapping[str, Margin]:
@@ -209,48 +231,6 @@ def require_gateable(session: PerfRatioSession, registry: GateRegistry, *, audit
     return {name: calibrated[name] for name in names}
 
 
-def merge_extension(base: WorkloadRatio, base_session: PerfRatioSession, extension: PerfRatioSession) -> WorkloadRatio:
-    """*base* with *extension*'s pairs of that workload appended, each pair as measured.
-
-    Args:
-        base: The workload's run so far.
-        base_session: The session *base* comes from.
-        extension: The extension session: *base*'s workload alone, measured as *base_session* was.
-
-    Returns:
-        The merged run: *base*'s pairs then the extension's, *base*'s name, family and digests.
-
-    Raises:
-        ExtensionMismatchError: The extension's arms, harness, CPU model, host, reference or
-            injection differ from *base_session*'s, it measures other workloads than *base*'s,
-            or its output digests (or family) differ from *base*'s.
-    """
-    for arm in ArmName:
-        if extension.arms[arm] != base_session.arms[arm]:
-            raise ExtensionMismatchError(f"extension's {arm.value} arm is {extension.arms[arm]}, not the base session's {base_session.arms[arm]}; it measured another build.")
-    for label, measured, expected in (
-        ("harness_sha256", extension.harness_sha256, base_session.harness_sha256),
-        ("cpu_model", extension.cpu_model, base_session.cpu_model),
-        ("host", extension.host, base_session.host),
-        ("ref_commit", extension.ref_commit, base_session.ref_commit),
-        ("injected", extension.injected, base_session.injected),
-    ):
-        if measured != expected:
-            raise ExtensionMismatchError(f"extension's {label} is {measured!r}, not the base session's {expected!r}.")
-    names = tuple(workload.workload for workload in extension.workloads)
-    if names != (base.workload,):
-        raise ExtensionMismatchError(f"extension measures {list(names)}, not exactly the requested {base.workload!r}.")
-    (run,) = extension.workloads
-    for label, measured, expected in (
-        ("family", run.family, base.family),
-        ("ref_digest", run.ref_digest, base.ref_digest),
-        ("head_digest", run.head_digest, base.head_digest),
-    ):
-        if measured != expected:
-            raise ExtensionMismatchError(f"extension's {base.workload} {label} is {measured!r}, not the base run's {expected!r}.")
-    return WorkloadRatio(workload=base.workload, family=base.family, pairs=base.pairs + run.pairs, ref_digest=base.ref_digest, head_digest=base.head_digest)
-
-
 def gate(session: PerfRatioSession, registry: GateRegistry, measure: Measure, *, audit: bool = False) -> GateReport:
     """Decide every workload of *session*, extending each red one up to `MAX_PAIRS` pairs.
 
@@ -270,15 +250,19 @@ def gate(session: PerfRatioSession, registry: GateRegistry, measure: Measure, *,
         UncalibratedMachineError: As `require_gateable`.
         UnregisteredWorkloadError: As `require_gateable`.
         IncompleteSessionError: As `require_gateable`.
+        UnanchoredWorkloadError: As `anchors_for`.
         ExtensionMismatchError: An extension is refused by `merge_extension`, or holds another
             pair count than requested.
     """
     margins = require_gateable(session, registry, audit=audit)
+    anchors = anchors_for(registry, tuple(margins))
     verdicts = []
+    extensions: list[PerfRatioSession] = []
     for base in session.workloads:
         margin = margins[base.workload]
+        anchor = anchors[base.workload]
         run = base
-        verdict = decide(run, margin)
+        verdict = decide(run, margin, anchor)
         while verdict is Verdict.REGRESSION and len(run.pairs) < MAX_PAIRS:
             request = ExtensionRequest(
                 ref_commit=session.ref_commit,
@@ -287,11 +271,24 @@ def gate(session: PerfRatioSession, registry: GateRegistry, measure: Measure, *,
                 pairs=min(EXTENSION_PAIRS, MAX_PAIRS - len(run.pairs)),
                 injected=session.injected,
             )
-            merged = merge_extension(run, session, measure(request))
+            extension = measure(request)
+            merged = merge_extension(run, session, extension)
             added = len(merged.pairs) - len(run.pairs)
             if added != request.pairs:
                 raise ExtensionMismatchError(f"extension of {base.workload} holds {added} pairs, not the requested {request.pairs}.")
+            extensions.append(extension)
             run = merged
-            verdict = decide(run, margin)
-        verdicts.append(WorkloadVerdict(workload=base.workload, verdict=verdict, ratio=run.ratio, margin=margin, pairs=len(run.pairs), changed_output=not run.same_output))
-    return GateReport(verdicts=tuple(verdicts), audit=audit)
+            verdict = decide(run, margin, anchor)
+        verdicts.append(
+            WorkloadVerdict(
+                workload=base.workload,
+                verdict=verdict,
+                ratio=run.ratio,
+                margin=margin,
+                pairs=len(run.pairs),
+                changed_output=not run.same_output,
+                anchor=float(anchor),
+                cumulative_ratio=float(anchored(run, anchor)),
+            )
+        )
+    return GateReport(verdicts=tuple(verdicts), audit=audit, extensions=tuple(extensions))
