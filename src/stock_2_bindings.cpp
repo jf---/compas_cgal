@@ -25,6 +25,7 @@ using namespace nb::literals;
 
 void register_held_disk_contour_2(nb::module_& module);
 void register_held_boundary_clearance_2(nb::module_& module);
+void register_annulus_view_2(nb::module_& module);
 
 namespace {
 
@@ -583,4 +584,5 @@ NB_MODULE(_stock_2, m)
     });
 
     register_engagement(m);
+    register_annulus_view_2(m);
 }

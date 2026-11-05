@@ -1,4 +1,5 @@
 #include "engagement_2.h"
+#include "engagement_stations_2.h"
 #include "audit_certification_2.h"
 #include "audit_policy_2.h"
 #include "stock_2.h"
@@ -582,14 +583,6 @@ struct ArcPrefixMotion2 {
     bool clockwise;
 };
 
-// One station of a swept-prefix motion: its exact centre and prefix extent,
-// placed BEFORE any classification so that a decision-only scan raises on
-// exactly the placement errors the full prefix call raises on.
-struct ArcPrefixStation2 {
-    EPoint centre;
-    ArcPrefixExtent2 extent;
-};
-
 ArcPrefixStation2 arc_prefix_station(
     const ArcPrefixMotion2& motion, double parameter)
 {
@@ -790,6 +783,43 @@ ArcPrefixMotion2 circle_prefix_motion(
 }
 
 } // namespace
+
+CirclePrefixStations2 circle_prefix_stations(
+    double guide_cx, double guide_cy, double guide_radius,
+    double entry_x, double entry_y, bool clockwise,
+    const std::vector<double>& parameters, double tool_radius,
+    double cap_chord_ratio, double gap_close_ratio)
+{
+    const ArcPrefixMotion2 motion = circle_prefix_motion(
+        guide_cx, guide_cy, guide_radius, entry_x, entry_y, clockwise,
+        parameters, tool_radius, cap_chord_ratio, gap_close_ratio);
+    CirclePrefixStations2 placed{motion.guide, motion.start, motion.clockwise, {}};
+    placed.stations.reserve(parameters.size());
+    for (const double parameter : parameters) {
+        placed.stations.push_back(arc_prefix_station(motion, parameter));
+    }
+    return placed;
+}
+
+std::vector<std::size_t> station_probe_order(std::size_t count)
+{
+    return decision_probe_order(count);
+}
+
+EngagementSample engagement_sample_at_station(
+    const AuditExactStationClassification2& classification,
+    const EPoint& centre)
+{
+    return engagement_sample_from_exact(
+        classification,
+        CGAL::to_double(centre.x()),
+        CGAL::to_double(centre.y()));
+}
+
+EVector exact_unit_along(double x, double y)
+{
+    return rational_unit_along(x, y);
+}
 
 double cap_chord_ratio(double cap_radians)
 {

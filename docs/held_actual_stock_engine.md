@@ -181,6 +181,25 @@ The certificate is exact about that workload. It is not a statement about the ge
   - Figure 5 and Monstera, every circle, at any load: verdicts must equal the full exact replay per circle, with an `exactly_equals` audit every 50th circle;
   - the C1 budgets (per-circle CPU on both workloads, wall time on Monstera), which refuse with `MachineNotQuietError` on a loaded machine (ruling D2: budget verdicts count only from quiet-machine runs). Each budget is asserted on one run: a single run's CPU and wall are each ≥ their minimum over N runs, so a pass settles the min-of-5 verdict; a fail is inconclusive (single run; a min-of-5 quiet re-run decides).
 
+## 8. The rim engine (decision (b), unit U1)
+
+`AnnulusView2` (`src/annulus_view_2.{h,cpp}`) decides a station without an arrangement: the rim arcs in the part polygon P minus an emission range of closed swept annuli. It is exact only; the interval filter and the store come in later units ([design](superpowers/specs/2026-11-04-actual-stock-refinement-design.md), sections 2.4 and 5). No generator calls it yet.
+
+- **Events:** the rim's intersections with candidate annulus circles and with P's edges, as one-root points, plus the rim's two x-extreme points.
+- **Order:** CCW along the rim, with each event carrying its half.
+- **Cells:** each open cell is decided at a rational point strictly inside it: in int P and outside every closed annulus.
+- **Downstream:** the material cells enter the same clip, run and cap code as the arrangement engine, at the same stations (`src/engagement_stations_2.h`).
+- **Candidates:** CGAL AABB trees over outward-rounded boxes. Outward-rounded intervals then certify a rim clear of an annulus or inside it, and only the uncertain ones reach exact arithmetic.
+
+The cost is in the number of events, not in arithmetic per event. On the full view of Figure 5 a rim crosses about 50 prior annuli (about 60 events per station), because the circles are closely spaced. That shape is what the filter of unit U3 has to remove. Three lazy-number costs were found while profiling; see [What forces a lazy number's exact value](exactness.md#what-forces-a-lazy-numbers-exact-value).
+
+D1 compares the engine with `Stock2` on the same circle view: exact verdicts and exact run endpoints, per station, plus the reported spans.
+
+```bash
+pixi run --no-install sh build/pyrun.sh -m benchmarks.held_annulus_view_d1 d1 figure5_refined --first 200
+pixi run --no-install sh build/pyrun.sh -m benchmarks.held_annulus_view_d1 time figure5_refined --every 20 --repeats 5
+```
+
 ## Related pages
 
 - [Held Connector Engagement](held_connector_engagement.md): the analytic tiers that certify connectors without a replay.

@@ -641,6 +641,65 @@ def engagement_arc_prefixes(
     gap_close_ratio: float = ...,
 ) -> list[tuple[float, float, bool]]:
     """Engagement at each prefix parameter against stock minus the arc's own swept prefix; start == end is a full turn."""
+class InvalidAnnulusViewPolygonError(ValueError): ...
+class NonFiniteAnnulusViewInputError(ValueError): ...
+class InvalidAnnulusViewRadiiError(ValueError): ...
+class InvalidAnnulusViewRangeError(ValueError): ...
+class AnnulusViewWitnessError(RuntimeError): ...
+
+class AnnulusView2:
+    """The arrangement-free rim engine: stations decided on the part polygon minus an emission range of closed swept annuli."""
+
+    @staticmethod
+    def build(polygon: Float64Array, annuli: Float64Array, tool_radius: float) -> AnnulusView2: ...
+    @property
+    def size(self) -> int: ...
+    def station(self, first: int, end: int, cx: float, cy: float, cap_chord_ratio: float, gap_close_ratio: float = ...) -> tuple[float, float, bool]: ...
+    def circle_prefixes(
+        self,
+        first: int,
+        end: int,
+        guide_cx: float,
+        guide_cy: float,
+        guide_radius: float,
+        entry_x: float,
+        entry_y: float,
+        clockwise: bool,
+        parameters: Sequence[float],
+        cap_chord_ratio: float,
+        gap_close_ratio: float = ...,
+    ) -> list[tuple[float, float, bool]]: ...
+    def circle_exceeded(
+        self,
+        first: int,
+        end: int,
+        guide_cx: float,
+        guide_cy: float,
+        guide_radius: float,
+        entry_x: float,
+        entry_y: float,
+        clockwise: bool,
+        parameters: Sequence[float],
+        cap_chord_ratio: float,
+        gap_close_ratio: float = ...,
+    ) -> bool: ...
+    def station_matches_stock(self, stock: Stock2, first: int, end: int, cx: float, cy: float, cap_chord_ratio: float, gap_close_ratio: float = ...) -> bool: ...
+    def circle_matches_stock(
+        self,
+        stock: Stock2,
+        first: int,
+        end: int,
+        guide_cx: float,
+        guide_cy: float,
+        guide_radius: float,
+        entry_x: float,
+        entry_y: float,
+        clockwise: bool,
+        parameters: Sequence[float],
+        cap_chord_ratio: float,
+        gap_close_ratio: float = ...,
+    ) -> list[tuple[bool, bool]]: ...
+
 def engagement_circle_prefixes(
     stock: Stock2,
     guide_cx: float,

@@ -189,6 +189,25 @@ A tolerance is a *domain decision* — machining tolerance, measurement
 uncertainty, feature resolution — modelled as an exact `FT` and compared
 exactly. It is never a patch for arithmetic you didn't trust.
 
+### What forces a lazy number's exact value
+
+On `Lazy_exact_nt`, the two spellings of "is it zero" are not the same cost.
+
+- `CGAL::is_zero(x)` evaluates `x.exact()` unconditionally (`Is_zero_selector`,
+  `CGAL/Lazy_exact_nt.h`). `CGAL::sign(x)` and `CGAL::compare` ask the interval
+  first. On a hot path, write `CGAL::sign(x) == CGAL::ZERO`.
+- `CGAL::to_double(x)` forces the exact value when the interval's relative width
+  exceeds `1e-5`, so it forces anything near zero, such as `y - station.y` at a rim
+  extreme. A construction hint reads `CGAL::to_interval(x)` instead.
+- Comparing a value with itself is an identically-zero decision: no interval resolves
+  it. Carry what construction already knows (the rim's x-extreme points are in a known
+  half) instead of asking again.
+
+On the rim engine ([Actual-stock engine](held_actual_stock_engine.md)), replacing one
+`is_zero` per circle test took a Figure 5 decision from 41.8 to 18.3 ms (one sampled run
+each, load about 300, indicative). None of these changes a verdict: they are equally
+exact, and only the amount of bignum work differs.
+
 ### One-root numbers (`Sqrt_extension` / CoordNT)
 
 The circle-segment traits represents point coordinates as

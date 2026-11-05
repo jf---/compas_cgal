@@ -75,6 +75,19 @@ AuditExactStationClassification2 classify_line_swept_prefix_station_exact(
     const Epeck::FT& cap_chord_ratio,
     const Epeck::FT& gap_close_ratio);
 
+// The clip alone, on a static classification from any harvest of the same rim:
+// classify_arc_swept_prefix_station_exact is this on the arrangement's harvest.
+AuditExactStationClassification2 clip_arc_swept_prefix_station_exact(
+    const AuditExactStationClassification2& base,
+    const EPoint& guide_center,
+    const EPoint& motion_start,
+    const EPoint& station_center,
+    bool clockwise,
+    ArcPrefixExtent2 extent,
+    const Epeck::FT& tool_radius,
+    const Epeck::FT& cap_chord_ratio,
+    const Epeck::FT& gap_close_ratio);
+
 AuditExactStationClassification2 classify_arc_swept_prefix_station_exact(
     const Stock2& stock,
     const EPoint& guide_center,

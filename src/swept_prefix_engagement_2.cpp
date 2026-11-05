@@ -1,6 +1,7 @@
 #include "swept_prefix_engagement_2.h"
 
 #include "engagement_2.h"
+#include "exact_rim_order_2.h"
 
 #include <algorithm>
 #include <functional>
@@ -16,40 +17,6 @@ namespace {
 using FT = Epeck::FT;
 using CoordNT = GpsPoint::CoordNT;
 using RimArc = std::pair<GpsPoint, GpsPoint>;
-
-bool rim_upper(const GpsPoint& point, const EPoint& center)
-{
-    const CoordNT center_x(center.x());
-    const CoordNT center_y(center.y());
-    const CGAL::Comparison_result y = CGAL::compare(point.y(), center_y);
-    if (y == CGAL::LARGER) return true;
-    if (y == CGAL::SMALLER) return false;
-    return CGAL::compare(point.x(), center_x) == CGAL::LARGER;
-}
-
-bool rim_ccw_less(const GpsPoint& lhs, const GpsPoint& rhs, const EPoint& center)
-{
-    const bool lhs_upper = rim_upper(lhs, center);
-    const bool rhs_upper = rim_upper(rhs, center);
-    if (lhs_upper != rhs_upper) return lhs_upper;
-    const CGAL::Comparison_result x = CGAL::compare(lhs.x(), rhs.x());
-    return lhs_upper ? x == CGAL::LARGER : x == CGAL::SMALLER;
-}
-
-bool strictly_inside_ccw_arc(
-    const GpsPoint& point,
-    const GpsPoint& start,
-    const GpsPoint& end,
-    const EPoint& center)
-{
-    if (point == start || point == end) return false;
-    if (!rim_ccw_less(end, start, center)) {
-        return rim_ccw_less(start, point, center)
-            && rim_ccw_less(point, end, center);
-    }
-    return rim_ccw_less(start, point, center)
-        || rim_ccw_less(point, end, center);
-}
 
 GpsPoint rational_witness_on_ccw_arc(
     const GpsPoint& start,
@@ -424,6 +391,24 @@ FT arc_station_guide_radius_squared(
 }
 
 } // namespace
+
+AuditExactStationClassification2 clip_arc_swept_prefix_station_exact(
+    const AuditExactStationClassification2& base,
+    const EPoint& guide_center,
+    const EPoint& motion_start,
+    const EPoint& station_center,
+    bool clockwise,
+    ArcPrefixExtent2 extent,
+    const FT& tool_radius,
+    const FT& cap_chord_ratio,
+    const FT& gap_close_ratio)
+{
+    arc_station_guide_radius_squared(guide_center, station_center);
+    if (extent == ArcPrefixExtent2::ZERO) return base;
+    return clip_arc_prefix(
+        base, guide_center, motion_start, station_center, clockwise, extent,
+        tool_radius, cap_chord_ratio, gap_close_ratio);
+}
 
 AuditExactStationClassification2 classify_arc_swept_prefix_station_exact(
     const Stock2& stock,
