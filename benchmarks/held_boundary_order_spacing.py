@@ -16,6 +16,7 @@ from benchmarks.held_figure5_engagement_refinement import refine_figure5_engagem
 from benchmarks.held_figure5_path import HypothesisFigure5Path
 from benchmarks.held_figure5_path import _paper_candidate
 from benchmarks.held_figure5_raw_guide import GuideRunId
+from benchmarks.held_material_domain import PartPolygon
 from benchmarks.held_standard_placement import StandardPlacementFragmentationError
 from benchmarks.held_standard_placement import exact_predecessor_engagement
 from compas_cgal.motion import EngagementCap
@@ -74,6 +75,7 @@ def refine_boundary_ordered_path(
     tool_radius: ToolRadius,
     cap: EngagementCap,
     *,
+    part: PartPolygon,
     corner_approaches: bool = False,
     close_seam: bool = False,
 ) -> tuple[tuple[int, ...], Figure5EngagementRefinement]:
@@ -81,7 +83,8 @@ def refine_boundary_ordered_path(
 
     Returns original source indices and refined motion. The refinement's
     original_indices refer to the selected subsequence, not the full input.
-    Every emitted connector is certified (tiers 1 + 1b) by
+    Every emitted connector is certified (tiers 1 + 1b) and every emitted
+    circle after the entry decided on its circle view of ``part`` by
     ``refine_figure5_engagement``; ``close_seam`` certifies the seam connector
     too, appending circles after the last selected source.
     """
@@ -90,5 +93,6 @@ def refine_boundary_ordered_path(
     represented = frozenset(run for index in selected for run in source.circle_sources[index])
     if represented != source.reached_run_ids:
         raise InvalidBoundarySpacingInputError("Boundary spacing source attribution differs from the reached-run ledger.")
-    refined = refine_figure5_engagement(tuple(circles[index] for index in selected), boundary, tool_radius, cap, corner_approaches=corner_approaches, close_seam=close_seam)
+    picked = tuple(circles[index] for index in selected)
+    refined = refine_figure5_engagement(picked, boundary, tool_radius, cap, part=part, corner_approaches=corner_approaches, close_seam=close_seam)
     return selected, refined

@@ -33,6 +33,7 @@ from compas_cgal.units import Point2
 from compas_cgal.units import ToolRadius
 from compas_cgal.units import WorldXY
 from tests.benchmarks.held_engagement_reference_oracle import reference_engagement
+from tests.benchmarks.held_part_fixture import part_around
 
 
 BOUNDARY = tuple(Point2[WorldXY].build(x, y) for x, y in ((0, 0), (10, 0), (10, 10), (0, 10)))
@@ -55,7 +56,7 @@ def _circle(x: int, run: int) -> Figure5CounterclockwiseCircle:
 
 def test_refinement_preserves_sources_and_caps_every_final_pair() -> None:
     original = (_circle(2, 0), _circle(8, 1))
-    result = refine_figure5_engagement(original, BOUNDARY, TOOL, CAP)
+    result = refine_figure5_engagement(original, BOUNDARY, TOOL, CAP, part=part_around(BOUNDARY, TOOL))
     assert len(result.circles) > len(original)
     assert tuple(result.circles[index] for index in result.original_indices) == original
     domain = _coverage_2.CutterCentreDomain2.build(np.array([(float(p.x), float(p.y), 0) for p in BOUNDARY]), [], 1)
@@ -67,7 +68,7 @@ def test_refinement_preserves_sources_and_caps_every_final_pair() -> None:
 
 def test_unresolved_gap_fails_instead_of_forcing_successor() -> None:
     with pytest.raises(Figure5EngagementResolutionError, match="source interval 0"):
-        refine_figure5_engagement((_circle(2, 0), _circle(8, 1)), BOUNDARY, TOOL, CAP, max_depth=0)
+        refine_figure5_engagement((_circle(2, 0), _circle(8, 1)), BOUNDARY, TOOL, CAP, part=part_around(BOUNDARY, TOOL), max_depth=0)
 
 
 def _rectangle(width: Fraction, height: Fraction) -> tuple[Point2[WorldXY], ...]:
@@ -125,7 +126,7 @@ def test_exact_vertex_half_refines_across_the_convex_corner() -> None:
     second = _station(boundary, 1, Fraction(1, 5), 1, Fraction(1))
     for corner_approaches in (False, True):
         with pytest.raises(ConvexCornerEngagementError) as caught:
-            refine_figure5_engagement((first, second), boundary, TOOL, CAP, corner_approaches=corner_approaches)
+            refine_figure5_engagement((first, second), boundary, TOOL, CAP, part=part_around(boundary, TOOL), corner_approaches=corner_approaches)
         assert (caught.value.vertex, caught.value.connector, caught.value.seam) == (1, 0, False)
 
 
@@ -140,7 +141,7 @@ def test_convex_corner_over_the_cap_is_refused_before_any_midpoint(monkeypatch: 
     first = _station(boundary, 0, Fraction(4, 5), 0, Fraction(1))
     second = _station(boundary, 1, Fraction(1, 5), 1, Fraction(1))
     with pytest.raises(ConvexCornerEngagementError) as caught:
-        refine_figure5_engagement((first, second), boundary, TOOL, CAP)
+        refine_figure5_engagement((first, second), boundary, TOOL, CAP, part=part_around(boundary, TOOL))
     assert caught.value.vertex == 1
 
 
@@ -150,7 +151,7 @@ def test_connector_over_two_sharp_corners_is_refused_by_name_at_the_first() -> N
     first = _station(boundary, 0, Fraction(4, 5), 0, Fraction(1))
     second = _station(boundary, 2, Fraction(1, 5), 1, Fraction(1))
     with pytest.raises(ConvexCornerEngagementError) as caught:
-        refine_figure5_engagement((first, second), boundary, TOOL, CAP)
+        refine_figure5_engagement((first, second), boundary, TOOL, CAP, part=part_around(boundary, TOOL))
     assert caught.value.vertex == 1 and not caught.value.seam
 
 
@@ -158,7 +159,7 @@ def test_seam_over_a_sharp_convex_corner_is_refused_by_name() -> None:
     boundary = _rectangle(Fraction(10), Fraction(10))
     first, second = _station(boundary, 0, Fraction(1, 5), 0, Fraction(1)), _station(boundary, 0, Fraction(4, 5), 1, Fraction(1))
     with pytest.raises(ConvexCornerEngagementError) as caught:
-        refine_figure5_engagement((first, second), boundary, TOOL, CAP, close_seam=True)
+        refine_figure5_engagement((first, second), boundary, TOOL, CAP, part=part_around(boundary, TOOL), close_seam=True)
     assert caught.value.seam and caught.value.vertex == 1
 
 
@@ -243,7 +244,7 @@ def test_concave_corner_approach_rotates_only_at_shared_contact() -> None:
     last = Figure5CounterclockwiseCircle(
         GuideRunId(1), GuideRunStationOrdinal(0), outgoing, outgoing, Point2[WorldXY].build(2, 3), Point2[WorldXY].build(2, 4), GuideRadius.build(1)
     )
-    result = refine_figure5_engagement((first, last), boundary, TOOL, CAP, corner_approaches=True)
+    result = refine_figure5_engagement((first, last), boundary, TOOL, CAP, part=part_around(boundary, TOOL), corner_approaches=True)
     assert result.circles[0] == first and result.circles[-1] == last
     corner_circles = tuple(circle for circle in result.circles if circle.contact_point == boundary[4])
     assert any(circle.center == Point2[WorldXY].build(5, 4) for circle in corner_circles)
@@ -254,7 +255,7 @@ def test_concave_corner_approach_rotates_only_at_shared_contact() -> None:
 
 def test_source_circle_is_limited_by_incident_corner_without_losing_contact() -> None:
     source = replace(_circle(9, 0), center=Point2[WorldXY].build(9, 2), radius=GuideRadius.build(2))
-    result = refine_figure5_engagement((source,), BOUNDARY, TOOL, CAP)
+    result = refine_figure5_engagement((source,), BOUNDARY, TOOL, CAP, part=part_around(BOUNDARY, TOOL))
     circle = result.circles[0]
     assert float(circle.radius.value) == 1
     assert circle.contact_point == source.contact_point
@@ -275,7 +276,7 @@ def test_concave_corner_uses_shared_contact_fan() -> None:
                 GuideRunId(run), GuideRunStationOrdinal(0), site, site, Point2[WorldXY].build(*center), Point2[WorldXY].build(*contact), GuideRadius.build(1)
             )
         )
-    result = refine_figure5_engagement(tuple(circles), boundary, TOOL, CAP)
+    result = refine_figure5_engagement(tuple(circles), boundary, TOOL, CAP, part=part_around(boundary, TOOL))
     assert any(circle.contact_point == boundary[3] for circle in result.circles)
     for previous, circle in zip(result.circles, result.circles[1:]):
         assert reference_engagement(_paper_candidate(previous), _paper_candidate(circle), TOOL).within(CAP)
@@ -286,7 +287,7 @@ def test_full_figure5_refinement_preserves_families_and_connects_capped_motion()
     guide = build_figure5_raw_guide(case)
     boundary = figure7_inward_offset(case).components[0]
     source = build_figure5_approximate_path(guide, (boundary,)).path.circles
-    result = refine_figure5_engagement(source, boundary, case.tool_radius, CAP)
+    result = refine_figure5_engagement(source, boundary, case.tool_radius, CAP, part=part_around(boundary, case.tool_radius))
     assert len(result.original_indices) == len(source)
     for original, index in zip(source, result.original_indices, strict=True):
         repaired = result.circles[index]

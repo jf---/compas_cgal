@@ -119,12 +119,15 @@ from compas_cgal.units import GuideRadius
 from compas_cgal.units import Point2
 from compas_cgal.units import ToolRadius
 from compas_cgal.units import WorldXY
+from tests.benchmarks.held_part_fixture import NO_MATERIAL
+from tests.benchmarks.held_part_fixture import part_around
 
 SQUARE = tuple(Point2[WorldXY].build(x, y) for x, y in ((0, 0), (6, 0), (6, 6), (0, 6)))
 TOOL = ToolRadius.build(1)
 FAN_CAP = EngagementCap.build(math.pi)  # the fan's engagements are exactly 180 degrees
-SETTINGS = EngagementRefinementSettings.build(TOOL, FAN_CAP)
-OPEN_SETTINGS = EngagementRefinementSettings.build(TOOL, FAN_CAP, close_seam=False)
+SQUARE_PART = part_around(SQUARE, TOOL)
+SETTINGS = EngagementRefinementSettings.build(TOOL, FAN_CAP, part=SQUARE_PART)
+OPEN_SETTINGS = EngagementRefinementSettings.build(TOOL, FAN_CAP, part=SQUARE_PART, close_seam=False)
 GAP_POINTS = ((Fraction(9, 2), Fraction(3)), (Fraction(3, 2), Fraction(3)))
 Point = tuple[Fraction, Fraction]
 # Connector-repair circles the refinement inserts on (3, 0) -> (3, 6) under the
@@ -237,7 +240,7 @@ def test_repair_raises_when_the_circle_budget_refuses_the_only_closing_circle() 
     also refuses the selected path (0, 2, 3) itself. The circle budget is the
     other ``Figure5EngagementResolutionError`` the repair records as a refusal.
     """
-    budget = EngagementRefinementSettings.build(TOOL, FAN_CAP, max_circles=3 + len(SELECTED_PATH_REPAIR_CONTACTS) + len(SEAM_REPAIR_CONTACTS))
+    budget = EngagementRefinementSettings.build(TOOL, FAN_CAP, part=SQUARE_PART, max_circles=3 + len(SELECTED_PATH_REPAIR_CONTACTS) + len(SEAM_REPAIR_CONTACTS))
     with pytest.raises(CoverageRepairRefusedError) as caught:
         certify_boundary_ordered_selection(FIXTURE, RUNS, SQUARE, budget, CoverageCertificate.build)
     assert [refusal.candidate for refusal in caught.value.refusals] == [1]
@@ -281,7 +284,7 @@ def test_repair_flow_closes_and_gates_the_seam_connector() -> None:
 def test_post_gate_refuses_an_emission_whose_seam_was_never_refined() -> None:
     """The coverage verdict passes, but the seam of an emission refined open is not certified: the flow raises by name."""
     sources = _sources(FIXTURE)
-    emission = BoundaryOrderedEmission.build((0, 1, 2, 3), refine_figure5_engagement(sources, SQUARE, TOOL, FAN_CAP))
+    emission = BoundaryOrderedEmission.build((0, 1, 2, 3), refine_figure5_engagement(sources, SQUARE, TOOL, FAN_CAP, part=SQUARE_PART))
     # The post-gate decides the emitted (pruned) path, so the refused connector is its seam, the last
     # transition. Re-pinned 2026-10-22 (user go): the open refinement emits 7 circles (seam index 6);
     # the NOTHING pass removes (4, 3) R = 2 and the source (3, 5) R = 1, leaving 5, seam index 4.
@@ -354,6 +357,7 @@ def test_unit_fake_oracle_set_cover_prefers_most_witnesses_over_lowest_index() -
 # across a convex corner fails on its own (a midpoint at the corner gets radius 0), which is not the splice.
 SPLICE_BOUNDARY = tuple(Point2[WorldXY].build(x, y) for x, y in ((0, 0), (10, 0), (10, 10), (0, 10)))
 SPLICE_CAP = EngagementCap.build(math.radians(80))
+SPLICE_PART = part_around(SPLICE_BOUNDARY, TOOL)
 
 
 def _side_circle(ordinal: int, index: int, radius: float) -> Figure5CounterclockwiseCircle:
@@ -380,11 +384,12 @@ def _splice_cases(draw: st.DrawFn) -> tuple[tuple[Figure5CounterclockwiseCircle,
 def test_splice_equals_full_rerefinement(case: tuple[tuple[Figure5CounterclockwiseCircle, ...], tuple[int, ...], int, bool, int]) -> None:
     circles, selected, candidate, corners, slack = case
     sources = tuple(emitted_form(circle, SPLICE_BOUNDARY) for circle in circles)
-    base = refine_figure5_engagement(tuple(sources[k] for k in selected), SPLICE_BOUNDARY, TOOL, SPLICE_CAP, corner_approaches=corners)
-    budget = EngagementRefinementSettings.build(TOOL, SPLICE_CAP, max_circles=len(base.circles) + slack, corner_approaches=corners, close_seam=False)
+    base = refine_figure5_engagement(tuple(sources[k] for k in selected), SPLICE_BOUNDARY, TOOL, SPLICE_CAP, part=SPLICE_PART, corner_approaches=corners)
+    budget = EngagementRefinementSettings.build(TOOL, SPLICE_CAP, part=SPLICE_PART, max_circles=len(base.circles) + slack, corner_approaches=corners, close_seam=False)
     augmented = tuple(sorted((*selected, candidate)))
     try:
-        full = refine_figure5_engagement(tuple(sources[k] for k in augmented), SPLICE_BOUNDARY, TOOL, SPLICE_CAP, max_circles=budget.max_circles, corner_approaches=corners)
+        options = {"max_circles": budget.max_circles, "corner_approaches": corners}
+        full = refine_figure5_engagement(tuple(sources[k] for k in augmented), SPLICE_BOUNDARY, TOOL, SPLICE_CAP, part=SPLICE_PART, **options)
     except Figure5EngagementResolutionError:
         with pytest.raises(Figure5EngagementResolutionError):
             splice_source(sources, SPLICE_BOUNDARY, budget, BoundaryOrderedEmission.build(selected, base), candidate)
@@ -401,8 +406,8 @@ def test_splice_sees_the_circles_emitted_before_its_interval() -> None:
     re-refinement never saw, so it inserted a midpoint the full re-refinement does not."""
     circles = tuple(_side_circle(k, index, radius) for k, (index, radius) in enumerate(((0, 1.0), (1, 2.0), (2, 1.5), (71, 1.0), (84, 1.0))))
     sources = tuple(emitted_form(circle, SPLICE_BOUNDARY) for circle in circles)
-    base = refine_figure5_engagement(tuple(sources[k] for k in (0, 1, 2, 4)), SPLICE_BOUNDARY, TOOL, SPLICE_CAP)
-    full = refine_figure5_engagement(sources, SPLICE_BOUNDARY, TOOL, SPLICE_CAP)
+    base = refine_figure5_engagement(tuple(sources[k] for k in (0, 1, 2, 4)), SPLICE_BOUNDARY, TOOL, SPLICE_CAP, part=SPLICE_PART)
+    full = refine_figure5_engagement(sources, SPLICE_BOUNDARY, TOOL, SPLICE_CAP, part=SPLICE_PART)
     spliced = splice_source(sources, SPLICE_BOUNDARY, SIDE_SETTINGS, BoundaryOrderedEmission.build((0, 1, 2, 4), base), 3)
     assert full.original_indices == (0, 4, 5, 6, 7)
     assert spliced.emission.refinement == full
@@ -426,10 +431,11 @@ def _early_stop_case(
 ) -> tuple[Figure5EngagementRefinement, Figure5EngagementRefinement, ContinuedSplice, tuple[Figure5CounterclockwiseCircle, ...]]:
     sources = tuple(emitted_form(_side_circle(k, index, radius), SPLICE_BOUNDARY) for k, (index, radius) in enumerate(spec))
     selected = tuple(k for k in range(len(spec)) if k != candidate)
-    reference = refine_figure5_engagement(tuple(sources[k] for k in selected), SPLICE_BOUNDARY, TOOL, SPLICE_CAP)
-    full = refine_figure5_engagement(sources, SPLICE_BOUNDARY, TOOL, SPLICE_CAP)
+    # These fixtures pin the connector decisions; NO_MATERIAL keeps the stock decision out of them.
+    reference = refine_figure5_engagement(tuple(sources[k] for k in selected), SPLICE_BOUNDARY, TOOL, SPLICE_CAP, part=NO_MATERIAL)
+    full = refine_figure5_engagement(sources, SPLICE_BOUNDARY, TOOL, SPLICE_CAP, part=NO_MATERIAL)
     later = tuple(sources[k] for k in selected[candidate:])
-    return reference, full, continue_with_early_stop(reference, candidate, sources[candidate], later, SPLICE_BOUNDARY, SIDE_SETTINGS), later
+    return reference, full, continue_with_early_stop(reference, candidate, sources[candidate], later, SPLICE_BOUNDARY, replace(SIDE_SETTINGS, part=NO_MATERIAL)), later
 
 
 def _footprints(refinement: Figure5EngagementRefinement) -> list[tuple[int, int | None, tuple[float, ...] | None]]:
@@ -540,14 +546,14 @@ def _polygon_splice(
     sources = _polygon_sources(boundary, spec)
     selected = tuple(k for k in range(len(sources)) if k != candidate)
     kw = {"corner_approaches": settings_.corner_approaches, "close_seam": settings_.close_seam}
-    reference = refine_figure5_engagement(tuple(sources[k] for k in selected), boundary, TOOL, SPLICE_CAP, **kw)
-    full = refine_figure5_engagement(sources, boundary, TOOL, SPLICE_CAP, **kw)
+    reference = refine_figure5_engagement(tuple(sources[k] for k in selected), boundary, TOOL, SPLICE_CAP, part=part_around(boundary, TOOL), **kw)
+    full = refine_figure5_engagement(sources, boundary, TOOL, SPLICE_CAP, part=part_around(boundary, TOOL), **kw)
     later = tuple(sources[k] for k in selected[candidate:])
     return reference, full, continue_with_early_stop(reference, candidate, sources[candidate], later, boundary, settings_), len(later)
 
 
 def test_splice_in_the_shipped_configuration_adopts_the_seam_circles() -> None:
-    shipped = EngagementRefinementSettings.build(TOOL, SPLICE_CAP, corner_approaches=True, close_seam=True)
+    shipped = EngagementRefinementSettings.build(TOOL, SPLICE_CAP, part=part_around(OCTAGON, TOOL), corner_approaches=True, close_seam=True)
     reference, full, spliced, later = _polygon_splice(OCTAGON, SHIPPED_SPEC, 4, shipped)
     assert len(reference.circles) - 1 - reference.original_indices[-1] == 28, "precondition: the reference ends in seam circles"
     assert spliced.rerefined == 2 < later, "the seam circles are adopted, not re-refined"
@@ -556,7 +562,7 @@ def test_splice_in_the_shipped_configuration_adopts_the_seam_circles() -> None:
 
 
 def test_splice_with_floor_footprints_after_the_slot_equals_the_full_refinement() -> None:
-    reference, full, spliced, later = _polygon_splice(TOOTH, FLOOR_SPEC, 1, SIDE_SETTINGS)
+    reference, full, spliced, later = _polygon_splice(TOOTH, FLOOR_SPEC, 1, replace(SIDE_SETTINGS, part=part_around(TOOTH, TOOL)))
     start = reference.original_indices[0]
     assert any(f.vertex == 2 and f.position > start for f in reference.trace.footprints), "precondition: a floor decision after the slot"
     assert spliced.refinement == full
@@ -569,9 +575,9 @@ def test_chained_splices_equal_the_full_refinement_and_its_trace(case: tuple[tup
     """Two greedy steps: the second splice adopts from the first splice's stitched trace."""
     circles, selected, candidate, corners, _ = case
     sources = tuple(emitted_form(circle, SPLICE_BOUNDARY) for circle in circles)
-    settings_ = EngagementRefinementSettings.build(TOOL, SPLICE_CAP, corner_approaches=corners, close_seam=False)
+    settings_ = EngagementRefinementSettings.build(TOOL, SPLICE_CAP, part=SPLICE_PART, corner_approaches=corners, close_seam=False)
     try:
-        base = refine_figure5_engagement(tuple(sources[k] for k in selected), SPLICE_BOUNDARY, TOOL, SPLICE_CAP, corner_approaches=corners)
+        base = refine_figure5_engagement(tuple(sources[k] for k in selected), SPLICE_BOUNDARY, TOOL, SPLICE_CAP, part=SPLICE_PART, corner_approaches=corners)
         first = splice_source(sources, SPLICE_BOUNDARY, settings_, BoundaryOrderedEmission.build(selected, base), candidate).emission
     except Figure5EngagementResolutionError:
         return
@@ -581,7 +587,7 @@ def test_chained_splices_equal_the_full_refinement_and_its_trace(case: tuple[tup
     second = dropped[pick % len(dropped)]
     augmented = tuple(sorted((*first.selected, second)))
     try:
-        full = refine_figure5_engagement(tuple(sources[k] for k in augmented), SPLICE_BOUNDARY, TOOL, SPLICE_CAP, corner_approaches=corners)
+        full = refine_figure5_engagement(tuple(sources[k] for k in augmented), SPLICE_BOUNDARY, TOOL, SPLICE_CAP, part=SPLICE_PART, corner_approaches=corners)
     except Figure5EngagementResolutionError:
         with pytest.raises(Figure5EngagementResolutionError):
             splice_source(sources, SPLICE_BOUNDARY, settings_, first, second)
@@ -601,7 +607,7 @@ def test_chained_splices_equal_the_full_refinement_and_its_trace(case: tuple[tup
 
 # Open paths: the 10 x 10 square's seam turns three right-angle convex corners, which no refinement
 # certifies under an 80-degree cap (docs/held_connector_engagement.md, convex-corner lemma).
-SIDE_SETTINGS = EngagementRefinementSettings.build(TOOL, SPLICE_CAP, close_seam=False)
+SIDE_SETTINGS = EngagementRefinementSettings.build(TOOL, SPLICE_CAP, part=SPLICE_PART, close_seam=False)
 
 
 def _scripted_oracle(script: list[UncoveredPocketError | CoverageCertificate], calls: list[int]) -> CoverageOracle:
@@ -627,7 +633,7 @@ def _side_case(
     spec: Sequence[tuple[int, float]], selected: tuple[int, ...], settings: EngagementRefinementSettings = SIDE_SETTINGS
 ) -> tuple[tuple[Figure5CounterclockwiseCircle, ...], BoundaryOrderedEmission]:
     sources = tuple(emitted_form(_side_circle(k, index, radius), SPLICE_BOUNDARY) for k, (index, radius) in enumerate(spec))
-    refinement = refine_figure5_engagement(tuple(sources[k] for k in selected), SPLICE_BOUNDARY, TOOL, SPLICE_CAP, max_circles=settings.max_circles)
+    refinement = refine_figure5_engagement(tuple(sources[k] for k in selected), SPLICE_BOUNDARY, TOOL, SPLICE_CAP, part=SPLICE_PART, max_circles=settings.max_circles)
     return sources, BoundaryOrderedEmission.build(selected, refinement)
 
 
@@ -697,7 +703,7 @@ def test_budget_refusal_of_the_first_candidate_inserts_the_second() -> None:
     """
     spec = ((0, 1.0), (100, 2.0), (300, 1.0), (600, 1.0))
     sources, emission = _side_case(spec, (0, 3))
-    budget = EngagementRefinementSettings.build(TOOL, SPLICE_CAP, max_circles=len(emission.refinement.circles), close_seam=False)
+    budget = EngagementRefinementSettings.build(TOOL, SPLICE_CAP, part=SPLICE_PART, max_circles=len(emission.refinement.circles), close_seam=False)
     point = (Fraction(4), Fraction(2))
     certified = _repair(sources, emission, (_witness(*point),), budget)
     assert certified.ledger.inserted_sources == (2,)
@@ -734,7 +740,7 @@ def test_refinement_wraps_placement_errors_as_named_resolution_errors(monkeypatc
     sources, _ = _tie_case()
     _refuse_target(monkeypatch, sources[1], raised)
     with pytest.raises(wrapped, match="source interval 0") as caught:
-        refine_figure5_engagement(sources[:2], SPLICE_BOUNDARY, TOOL, SPLICE_CAP)
+        refine_figure5_engagement(sources[:2], SPLICE_BOUNDARY, TOOL, SPLICE_CAP, part=SPLICE_PART)
     assert isinstance(caught.value, Figure5EngagementResolutionError)
     assert caught.value.__cause__ is raised
 
@@ -817,7 +823,7 @@ def test_run_ledger_is_checked_before_certification() -> None:
     path = Figure5BoundaryPath(FIXTURE, (), frozenset({GuideRunId(0)}))
     source = HypothesisFigure5Path(path, (), RUNS, frozenset({GuideRunId(0)}), 0, 0, 0)
     with pytest.raises(InvalidBoundarySpacingInputError):
-        refine_boundary_ordered_path_certified(source, SQUARE, TOOL, FAN_CAP, oracle=_scripted_oracle([_passing()], calls))
+        refine_boundary_ordered_path_certified(source, SQUARE, TOOL, FAN_CAP, part=SQUARE_PART, oracle=_scripted_oracle([_passing()], calls))
     assert calls == []
 
 
@@ -927,12 +933,12 @@ def test_build_round_trips_every_value_type_of_a_real_repair() -> None:
     certified = _certified()
     emission, ledger = certified.emission, certified.ledger
     (insertion,) = ledger.insertions
-    assert EngagementRefinementSettings.build(TOOL, FAN_CAP, max_depth=0, max_circles=1) == EngagementRefinementSettings(TOOL, FAN_CAP, 0, 1)
+    assert EngagementRefinementSettings.build(TOOL, FAN_CAP, part=SQUARE_PART, max_depth=0, max_circles=1) == EngagementRefinementSettings(TOOL, FAN_CAP, SQUARE_PART, 0, 1)
     assert BoundaryOrderedEmission.build(list(emission.selected), emission.refinement) == emission
     assert RepairInsertion.build(insertion.source, insertion.witness, insertion.round) == insertion
     assert _rebuild_ledger(ledger) == ledger
     assert _rebuild_path(certified) == certified
-    base = BoundaryOrderedEmission.build((0, 2, 3), refine_figure5_engagement(tuple(certified.sources[k] for k in (0, 2, 3)), SQUARE, TOOL, FAN_CAP))
+    base = BoundaryOrderedEmission.build((0, 2, 3), refine_figure5_engagement(tuple(certified.sources[k] for k in (0, 2, 3)), SQUARE, TOOL, FAN_CAP, part=SQUARE_PART))
     splice = splice_source(certified.sources, SQUARE, SETTINGS, base, 1)
     assert Splice.build(splice.emission, splice.candidate, splice.interval, splice.added) == splice
     assert RepairRefusal.build(1, (0, 2), 1, "budget") == RepairRefusal(1, (0, 2), 1, "budget")
@@ -943,7 +949,7 @@ def test_build_round_trips_every_value_type_of_a_real_repair() -> None:
     ((NegativeRefinementDepthError, -1, 1), (NonPositiveCircleBudgetError, 0, 0)),
 )
 def test_settings_build_rejects_an_invalid_depth_or_budget(error: type[CoverageRepairInvariantError], max_depth: int, max_circles: int) -> None:
-    _raises_invariant(error, lambda: EngagementRefinementSettings.build(TOOL, FAN_CAP, max_depth=max_depth, max_circles=max_circles))
+    _raises_invariant(error, lambda: EngagementRefinementSettings.build(TOOL, FAN_CAP, part=SQUARE_PART, max_depth=max_depth, max_circles=max_circles))
 
 
 def test_emission_build_rejects_each_broken_invariant() -> None:
@@ -1019,5 +1025,5 @@ def test_certified_path_build_rejects_each_broken_invariant() -> None:
 
 def test_raw_constructors_stay_unvalidated() -> None:
     """Bypass-safe: the dataclass constructors accept what ``build`` rejects."""
-    assert EngagementRefinementSettings(TOOL, FAN_CAP, -1, 0).max_circles == 0
+    assert EngagementRefinementSettings(TOOL, FAN_CAP, SQUARE_PART, -1, 0).max_circles == 0
     assert BoundaryOrderedEmission((2, 1), _certified().emission.refinement).selected == (2, 1)

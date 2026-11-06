@@ -37,13 +37,14 @@ from compas_cgal.units import GuideRadius
 from compas_cgal.units import Point2
 from compas_cgal.units import ToolRadius
 from compas_cgal.units import WorldXY
+from tests.benchmarks.held_part_fixture import part_around
 
 TOOL = ToolRadius.build(1.0)
 CAP = EngagementCap.build(math.radians(80))
 # The tooth of test_held_connector_repair.py: vertex 2 = (0.5, 0.0625) is convex with an
 # exterior angle of about 92.8 degrees, over the 80-degree cap, so it is a floor vertex.
 TOOTH = tuple(Point2[WorldXY].build(x, y) for x, y in ((-3.0, 0.0), (0.25, 0.0), (0.5, 0.0625), (-0.5, 3.375), (-3.0, 3.375)))
-KEY = EngagementRefinementKey(TOOTH, TOOL, CAP, 16, False, False)
+KEY = EngagementRefinementKey(TOOTH, TOOL, CAP, 16, False, False, part_around(TOOTH, TOOL))
 # Below the binary64 spacing of 3.5 (2**-51 * 2): the next double above the exact boundary centre.
 BEYOND = math.nextafter(3.5, math.inf)
 
@@ -96,8 +97,8 @@ def _on(side: int, parameter: Fraction, radius: float, ordinal: int) -> Figure5C
 def test_a_real_refinement_records_floor_footprints_and_its_trace_compares_by_value() -> None:
     """The tooth: the R = 1.8 circle tangent at (0, 0) leaves vertex 2's wedge, so the arrival side 1 -> side 2 is gated, not refused."""
     sources = (_on(0, Fraction(12, 13), 1.8, 0), _on(1, Fraction(1, 2), 0.25, 1), _on(2, Fraction(7, 8), 0.5, 2))
-    first = refine_figure5_engagement(sources, TOOTH, TOOL, CAP)
-    second = refine_figure5_engagement(sources, TOOTH, TOOL, CAP)
+    first = refine_figure5_engagement(sources, TOOTH, TOOL, CAP, part=part_around(TOOTH, TOOL))
+    second = refine_figure5_engagement(sources, TOOTH, TOOL, CAP, part=part_around(TOOTH, TOOL))
     floors = [footprint for footprint in first.trace.footprints if footprint.vertex is not None]
     assert floors and all(footprint.vertex == 2 for footprint in floors)
     assert first.trace.last_influenced((first.circles[0],), 0) >= floors[-1].position

@@ -43,6 +43,8 @@ from compas_cgal.units import WorldXY
 from tests.benchmarks.held_engagement_reference_oracle import ReferenceCosineRangeError
 from tests.benchmarks.held_engagement_reference_oracle import ReferenceFragmentationError
 from tests.benchmarks.held_engagement_reference_oracle import reference_engagement
+from tests.benchmarks.held_part_fixture import NO_MATERIAL
+from tests.benchmarks.held_part_fixture import part_around
 
 T = TypeVar("T")
 
@@ -92,7 +94,7 @@ def test_selection_drops_the_middle_circle_when_the_exact_engagement_is_within()
 
 def test_refinement_subdivides_when_the_exact_engagement_exceeds() -> None:
     (successor, cap) = FLOAT_WITHIN_EXACT_EXCEEDS
-    result = refine_figure5_engagement((_circle(0, *PREDECESSOR), _circle(1, *successor)), BOUNDARY, TOOL, cap)
+    result = refine_figure5_engagement((_circle(0, *PREDECESSOR), _circle(1, *successor)), BOUNDARY, TOOL, cap, part=part_around(BOUNDARY, TOOL))
     assert len(result.circles) > 2
     assert all(reference_engagement(_paper_candidate(a), _paper_candidate(b), TOOL).within(cap) for a, b in zip(result.circles, result.circles[1:]))
 
@@ -112,8 +114,8 @@ def test_refinement_accepts_the_transition_when_the_exact_engagement_is_within()
     (successor, cap) = FLOAT_EXCEEDS_EXACT_WITHIN
     pair = (_circle(0, *PREDECESSOR), _circle(1, *successor))
     with pytest.raises(ConnectorEngagementResolutionError):
-        refine_figure5_engagement(pair, BOUNDARY, TOOL, cap, max_depth=0)
-    result = refine_figure5_engagement(pair, BOUNDARY, TOOL, cap)
+        refine_figure5_engagement(pair, BOUNDARY, TOOL, cap, part=NO_MATERIAL, max_depth=0)
+    result = refine_figure5_engagement(pair, BOUNDARY, TOOL, cap, part=NO_MATERIAL)
     assert len(result.circles) == 3 and result.original_indices == (0, 2)
     assert result.circles[1] == midpoint(*pair, BOUNDARY)
 

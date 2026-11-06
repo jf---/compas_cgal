@@ -21,6 +21,7 @@ from benchmarks.held_figure5_boundary_path import Figure5BoundaryConnectors
 from benchmarks.held_figure5_engagement_refinement import refine_figure5_engagement
 from benchmarks.held_figure5_path import build_held_reference_path
 from benchmarks.held_figure5_raw_guide import build_held_reference_raw_guide
+from benchmarks.held_material_domain import PartPolygon
 from benchmarks.held_reference_cases import CANONICAL_CASE_NAMES
 from benchmarks.held_reference_cases import load_held_reference_case
 from benchmarks.held_reference_figures import figure7_inward_offset
@@ -80,8 +81,9 @@ def main() -> None:
     inserted_sources: tuple[int, ...] | None = None
     if args.stage == "refined":
         cap = EngagementCap.build(math.radians(float(case.tea_cap)))
+        part = PartPolygon.from_case(case)
         if args.certified_repair:
-            certified = refine_boundary_ordered_path_certified(result, components[0], case.tool_radius, cap, corner_approaches=args.corner_approaches)
+            certified = refine_boundary_ordered_path_certified(result, components[0], case.tool_radius, cap, part=part, corner_approaches=args.corner_approaches)
             circles = certified.circles
             inserted_sources = tuple(certified.ledger.inserted_sources)
             print(f"{case.name}: certified repair re-inserted sources {inserted_sources}, {len(circles)} emitted circles", flush=True)
@@ -92,14 +94,14 @@ def main() -> None:
         else:
             print(f"{case.name}: no generator workload for these options; refining here without the generator's later stages", flush=True)
             if args.spacing == "boundary":
-                _, refined = refine_boundary_ordered_path(result, components[0], case.tool_radius, cap, corner_approaches=args.corner_approaches, close_seam=True)
+                _, refined = refine_boundary_ordered_path(result, components[0], case.tool_radius, cap, part=part, corner_approaches=args.corner_approaches, close_seam=True)
             else:
-                refined = refine_figure5_engagement(circles, components[0], case.tool_radius, cap, corner_approaches=args.corner_approaches, close_seam=True)
+                refined = refine_figure5_engagement(circles, components[0], case.tool_radius, cap, part=part, corner_approaches=args.corner_approaches, close_seam=True)
             circles = refined.circles
             certify_connectors(circles, Figure5BoundaryConnectors.build(components[0], circles), case.tool_radius, cap)
         if args.spacing == "lane":
             # Diagnostic of the refinement stage itself (before the generator's NOTHING pass).
-            refined = refine_figure5_engagement(result.path.circles, components[0], case.tool_radius, cap, corner_approaches=args.corner_approaches, close_seam=True)
+            refined = refine_figure5_engagement(result.path.circles, components[0], case.tool_radius, cap, part=part, corner_approaches=args.corner_approaches, close_seam=True)
             render_distribution(
                 case, result, refined, Figure5BoundaryConnectors.build(components[0], refined.circles), args.output_dir / f"held_{case.name}_circle_distribution.png"
             )

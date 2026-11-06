@@ -37,6 +37,7 @@ from benchmarks.held_coverage_repair import refine_boundary_ordered_path_certifi
 from benchmarks.held_figure5_boundary_path import Figure5CounterclockwiseCircle
 from benchmarks.held_figure5_path import build_held_reference_path
 from benchmarks.held_figure5_raw_guide import build_held_reference_raw_guide
+from benchmarks.held_material_domain import PartPolygon
 from benchmarks.held_reference_cases import load_held_reference_case
 from benchmarks.held_reference_figures import figure7_inward_offset
 from benchmarks.held_toolpath_benchmark import generate
@@ -261,7 +262,7 @@ def certify_monstera_repaired() -> WorkloadCertificate:
         raise CoverageCertificateAcceptanceError(f"Monstera centre domain has {len(components)} loops, expected 1")
     source = build_held_reference_path(guide, components, qualify_contacts=True)
     cap = EngagementCap.build(math.radians(float(case.tea_cap)))
-    certified = refine_boundary_ordered_path_certified(source, components[0], case.tool_radius, cap, corner_approaches=True)
+    certified = refine_boundary_ordered_path_certified(source, components[0], case.tool_radius, cap, part=PartPolygon.from_case(case), corner_approaches=True)
     ledger = certified.ledger
     repair = RepairLedger(
         emitted_before=ledger.emitted_before,

@@ -24,6 +24,7 @@ from benchmarks.held_figure5_engagement_refinement import refine_figure5_engagem
 from benchmarks.held_figure5_path import build_figure5_approximate_path
 from benchmarks.held_figure5_path import build_held_reference_path
 from benchmarks.held_figure5_raw_guide import build_held_reference_raw_guide
+from benchmarks.held_material_domain import PartPolygon
 from benchmarks.held_reference_cases import CANONICAL_CASE_NAMES
 from benchmarks.held_reference_cases import HeldReferenceCase
 from benchmarks.held_reference_cases import load_held_reference_case
@@ -55,9 +56,9 @@ def prepared_paths(request: pytest.FixtureRequest) -> PreparedPaths:
     )
     cap = EngagementCap.build(math.radians(float(case.tea_cap)))
     if case.name == "figure5":
-        baseline = refine_figure5_engagement(source.path.circles, boundary, case.tool_radius, cap)
+        baseline = refine_figure5_engagement(source.path.circles, boundary, case.tool_radius, cap, part=PartPolygon.from_case(case))
     else:
-        _, baseline = refine_boundary_ordered_path(source, boundary, case.tool_radius, cap, corner_approaches=True)
+        _, baseline = refine_boundary_ordered_path(source, boundary, case.tool_radius, cap, part=PartPolygon.from_case(case), corner_approaches=True)
     _, draft, _ = select_contour_bound_path(source.path.circles, source.circle_sources, boundary, case.tool_radius, cap, corner_approaches=True)
     _, corrected, _, _ = build_coverage_preserving_path(
         source.path.circles, source.circle_sources, boundary, case.projection.points, case.tool_radius, cap, corner_approaches=True

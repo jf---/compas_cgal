@@ -55,6 +55,7 @@ from benchmarks.held_figure5_engagement_refinement import refine_figure5_engagem
 from benchmarks.held_figure5_path import HypothesisFigure5Path
 from benchmarks.held_figure5_path import _paper_candidate
 from benchmarks.held_figure5_raw_guide import GuideRunId
+from benchmarks.held_material_domain import PartPolygon
 from benchmarks.held_nothing_circles import NothingCirclePass
 from benchmarks.held_nothing_circles import remove_nothing_circles
 from compas_cgal.coverage_certificate.certificate import CoverageCertificate
@@ -224,6 +225,7 @@ def _refined_selection(
         boundary,
         settings.tool_radius,
         settings.cap,
+        part=settings.part,
         max_depth=settings.max_depth,
         max_circles=settings.max_circles,
         corner_approaches=settings.corner_approaches,
@@ -256,6 +258,7 @@ def refine_boundary_ordered_path_certified(
     tool_radius: ToolRadius,
     cap: EngagementCap,
     *,
+    part: PartPolygon,
     oracle: CoverageOracle = CoverageCertificate.build,
     corner_approaches: bool = False,
 ) -> CertifiedBoundaryOrderedPath:
@@ -271,7 +274,7 @@ def refine_boundary_ordered_path_certified(
         RepairOrderViolationError, UncoveredPocketWithoutWitnessesError: see
         ``repair_coverage``.
     """
-    settings = EngagementRefinementSettings.build(tool_radius, cap, corner_approaches=corner_approaches)
+    settings = EngagementRefinementSettings.build(tool_radius, cap, part=part, corner_approaches=corner_approaches)
     sources = tuple(emitted_form(circle, boundary) for circle in source.path.circles)
     selected = select_boundary_ordered_sources(sources, source.circle_sources, tool_radius, cap)
     represented = frozenset(run for index in selected for run in source.circle_sources[index])

@@ -24,6 +24,7 @@ from benchmarks.held_figure5_boundary_path import Figure5BoundaryConnectors
 from benchmarks.held_figure5_boundary_path import Figure5SeamClosure
 from benchmarks.held_figure5_path import build_held_reference_path
 from benchmarks.held_figure5_raw_guide import build_held_reference_raw_guide
+from benchmarks.held_material_domain import PartPolygon
 from benchmarks.held_reference_cases import load_held_reference_case
 from benchmarks.held_reference_figures import figure7_inward_offset
 from compas_cgal.coverage_certificate.certificate import CoverageCertificate
@@ -49,7 +50,7 @@ def test_published_monstera_path_is_rejected_with_witnesses_at_both_slivers() ->
     assert len(components) == 1, "the Monstera centre domain is one loop without holes"
     result = build_held_reference_path(guide, components, qualify_contacts=True)
     cap = EngagementCap.build(math.radians(float(case.tea_cap)))
-    _, refined = refine_boundary_ordered_path(result, components[0], case.tool_radius, cap, corner_approaches=True)
+    _, refined = refine_boundary_ordered_path(result, components[0], case.tool_radius, cap, part=PartPolygon.from_case(case), corner_approaches=True)
     circles = refined.circles
 
     domain = CentreDomain.build(list(components[0]))

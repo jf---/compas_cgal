@@ -55,6 +55,7 @@ from benchmarks.held_figure5_engagement_refinement import continue_figure5_engag
 from benchmarks.held_figure5_engagement_refinement import refine_figure5_engagement
 from benchmarks.held_figure5_path import build_held_reference_path
 from benchmarks.held_figure5_raw_guide import build_held_reference_raw_guide
+from benchmarks.held_material_domain import PartPolygon
 from benchmarks.held_reference_cases import load_held_reference_case
 from benchmarks.held_reference_figures import figure7_inward_offset
 from benchmarks.performance_record import REPOSITORY
@@ -104,7 +105,7 @@ def measure() -> dict[str, Any]:
     boundary = components[0]
     source = build_held_reference_path(build_held_reference_raw_guide(case), components, qualify_contacts=True)
     cap = EngagementCap.build(math.radians(float(case.tea_cap)))
-    settings = EngagementRefinementSettings.build(case.tool_radius, cap, corner_approaches=True)
+    settings = EngagementRefinementSettings.build(case.tool_radius, cap, part=PartPolygon.from_case(case), corner_approaches=True)
     sources = tuple(emitted_form(circle, boundary) for circle in source.path.circles)
     selected = select_boundary_ordered_sources(sources, source.circle_sources, case.tool_radius, cap)
     picked = tuple(sources[index] for index in selected)
@@ -117,7 +118,7 @@ def measure() -> dict[str, Any]:
     full_seconds = []
     for _ in range(TIMING_REPEATS):
         started = time.perf_counter()
-        reference = refine_figure5_engagement(picked, boundary, case.tool_radius, cap, **options)
+        reference = refine_figure5_engagement(picked, boundary, case.tool_radius, cap, part=PartPolygon.from_case(case), **options)
         full_seconds.append(time.perf_counter() - started)
     emission = BoundaryOrderedEmission.build(selected, reference)
     nothing = remove_emission_nothing_circles(emission, settings)
@@ -144,7 +145,7 @@ def measure() -> dict[str, Any]:
         seconds_a, seconds_b = [], []
         for _ in range(TIMING_REPEATS):
             started = time.perf_counter()
-            full = continue_figure5_engagement(prefix, (sources[candidate], *later), boundary, case.tool_radius, cap, **options)
+            full = continue_figure5_engagement(prefix, (sources[candidate], *later), boundary, case.tool_radius, cap, part=PartPolygon.from_case(case), **options)
             seconds_a.append(time.perf_counter() - started)
             started = time.perf_counter()
             stopped = continue_with_early_stop(reference, slot, sources[candidate], later, boundary, settings)

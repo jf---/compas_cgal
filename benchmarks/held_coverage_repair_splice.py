@@ -83,12 +83,16 @@ def continue_with_early_stop(
     source whose interval re-emits exactly ``reference``'s circles for it,
     with ``X`` the circles emitted since the slot and ``Y`` ``reference``'s
     circles they replace (the common re-emitted tail removed from both), it
-    adopts ``reference``'s remaining circles when (i) no decision of
+    adopts ``reference``'s remaining circles when (i) no connector decision of
     ``reference`` after this source could read a circle of ``X`` or ``Y``
     (``EngagementTrace.last_influenced``: neither the tier-1b superset
     filter keeps it for any piece of that decision's connector, nor is it
-    within ``rho + 2 r`` of a convex-corner floor vertex), and (ii) the
-    circle budget still holds with the count shifted.
+    within ``rho + 2 r`` of a convex-corner floor vertex), (ii) every stock
+    decision of ``reference`` after this source whose read set an annulus of
+    ``X`` or ``Y`` can reach keeps its verdict when re-decided on the view it
+    would have after adoption (``EngagementContinuation.last_stock_flip``), and
+    (iii) the circle budget still holds with the count shifted. A dropped ``Y``
+    matters for (ii): without its annulus a later circle's stock is larger.
 
     Why that is exact. The refinement's state at a source boundary is the
     emitted list, and here both lists end in the same circle and continue
@@ -96,9 +100,14 @@ def continue_with_early_stop(
     target (equal, inductively), and beyond them only the circles listed in
     its footprint: by (i) those sequences are equal in both runs, so the grid,
     the candidate index and every exact test see the same inputs and decide
-    the same; decisions without a footprint (tier 1, the cap, the midpoint)
-    read nothing else. By (ii) no budget check flips. So the continuation
-    would emit exactly ``reference``'s remaining circles.
+    the same. A stock decision's verdict is a function of its target, P and
+    the annuli meeting its read set: one no changed circle reaches has the same
+    inputs, and one that a changed circle reaches was re-decided by (ii) on
+    exactly the view the continuation would have, every earlier verdict being
+    equal. So each stock decision takes the same branch. Decisions without a
+    footprint (tier 1, the pair cap, the midpoint) read nothing else. By (iii)
+    no budget check flips. So the continuation would emit exactly
+    ``reference``'s remaining circles.
 
     Raises:
         InvalidCoverageRepairInputError: ``slot`` is not within ``1..len(sources)``, or
@@ -121,6 +130,7 @@ def continue_with_early_stop(
         boundary,
         settings.tool_radius,
         settings.cap,
+        part=settings.part,
         max_depth=settings.max_depth,
         max_circles=settings.max_circles,
         corner_approaches=settings.corner_approaches,
@@ -141,7 +151,7 @@ def continue_with_early_stop(
         common += len(fresh)
         if limit is None:
             changed = (*continuation.emitted[start + 1 : len(continuation.emitted) - common], *reference.circles[start + 1 : end - common])
-            limit = trace.last_influenced(changed, end)
+            limit = max(trace.last_influenced(changed, end), continuation.last_stock_flip(reference, end, trace.stock_decisions_read_by(changed, end)))
         if limit < end and len(reference.circles) + len(continuation.emitted) - end <= settings.max_circles:
             return ContinuedSplice(continuation.adopt(reference, end, slot + offset + 1), offset + 1)
     return ContinuedSplice(continuation.finish(), len(later))

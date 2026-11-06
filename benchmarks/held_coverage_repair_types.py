@@ -35,6 +35,7 @@ from benchmarks.held_coverage_repair_invariant_errors import UntracedRefinementE
 from benchmarks.held_figure5_boundary_path import Figure5CounterclockwiseCircle
 from benchmarks.held_figure5_engagement_refinement import MAX_REFINED_CIRCLES
 from benchmarks.held_figure5_engagement_refinement import TracedEngagementRefinement
+from benchmarks.held_material_domain import PartPolygon
 from benchmarks.held_nothing_circles import NothingCirclePass
 from compas_cgal.coverage_certificate.certificate import CoverageCertificate
 from compas_cgal.coverage_certificate.sweeps import BoundaryConnectorSweep
@@ -113,11 +114,13 @@ class EngagementRefinementSettings:
     ``close_seam`` declares the path closed: its seam connector (last contact
     back to the first) is cut, so it is refined, swept by the coverage
     certificate and post-gated like every other connector. False is the open
-    path (no seam connector anywhere).
+    path (no seam connector anywhere). ``part`` is the material domain P the
+    stock decision reads.
     """
 
     tool_radius: ToolRadius
     cap: EngagementCap
+    part: PartPolygon
     max_depth: int = DEFAULT_MAX_DEPTH
     max_circles: int = MAX_REFINED_CIRCLES
     corner_approaches: bool = False
@@ -129,6 +132,7 @@ class EngagementRefinementSettings:
         tool_radius: ToolRadius,
         cap: EngagementCap,
         *,
+        part: PartPolygon,
         max_depth: int = DEFAULT_MAX_DEPTH,
         max_circles: int = MAX_REFINED_CIRCLES,
         corner_approaches: bool = False,
@@ -144,7 +148,7 @@ class EngagementRefinementSettings:
             raise NegativeRefinementDepthError(f"max_depth {max_depth} is negative")
         if max_circles < 1:
             raise NonPositiveCircleBudgetError(f"max_circles {max_circles} is below one")
-        return cls(tool_radius, cap, max_depth, max_circles, corner_approaches, close_seam)
+        return cls(tool_radius, cap, part, max_depth, max_circles, corner_approaches, close_seam)
 
 
 @dataclass(frozen=True)

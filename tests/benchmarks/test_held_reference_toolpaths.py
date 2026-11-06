@@ -12,6 +12,7 @@ from benchmarks.held_reference_cases import load_held_reference_case
 from benchmarks.held_reference_figures import figure7_inward_offset
 from compas_cgal.motion import EngagementCap
 from tests.benchmarks.held_engagement_reference_oracle import reference_engagement
+from tests.benchmarks.held_part_fixture import part_around
 
 
 def test_figure8_upper_emits_connected_capped_standard_draft() -> None:
@@ -20,7 +21,7 @@ def test_figure8_upper_emits_connected_capped_standard_draft() -> None:
     components = figure7_inward_offset(case).components
     source = build_held_reference_path(guide, components).path.circles
     cap = EngagementCap.build(math.radians(80))
-    refined = refine_figure5_engagement(source, components[0], case.tool_radius, cap)
+    refined = refine_figure5_engagement(source, components[0], case.tool_radius, cap, part=part_around(components[0], case.tool_radius))
     assert len(refined.original_indices) == len(source) > 1
     lengths = _side_lengths(components[0])
     for previous, current in zip(refined.circles, refined.circles[1:]):

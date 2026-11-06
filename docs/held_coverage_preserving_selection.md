@@ -405,6 +405,8 @@ a hash of the measured modules):
 
 --8<-- "benchmarks/results/held_splice_ab.md"
 
+The record predates the stock decision's [re-decisions at the early stop](held_actual_stock_engine.md#the-decision-in-refinement-unit-u4).
+
 A is the splice without the early stop: summed over one greedy step it costs several
 full refinements, which is why the early stop exists. An earlier
 two-interval splice (re-refining only (s⁻, q) and (q, s⁺)) was faster still

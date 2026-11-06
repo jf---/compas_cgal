@@ -51,6 +51,7 @@ from benchmarks.held_figure5_raw_guide import build_figure5_raw_guide
 from benchmarks.held_figure5_raw_guide import build_held_reference_raw_guide
 from benchmarks.held_gc_scope import paused_cyclic_gc
 from benchmarks.held_helix_entry import HeldHelixEntry
+from benchmarks.held_material_domain import PartPolygon
 from benchmarks.held_nothing_circles import NothingCirclePass
 from benchmarks.held_nothing_circles import remove_nothing_circles
 from benchmarks.held_omega_toolpath import OmegaGeneratedToolpath
@@ -307,7 +308,7 @@ def generate_figure5_refined() -> GeneratedToolpath:
     stages.stop("initial")
     cap = EngagementCap.build(math.radians(float(case.tea_cap)))
     stages.start()
-    refined = refine_figure5_engagement(result.path.circles, components[0], case.tool_radius, cap, close_seam=True)
+    refined = refine_figure5_engagement(result.path.circles, components[0], case.tool_radius, cap, part=PartPolygon.from_case(case), close_seam=True)
     stages.stop("refine")
     return _emit_closed_polygon_path("figure5_refined", case, components[0], refined.circles, cap, stages)
 
@@ -392,11 +393,12 @@ def _generate_figure8(name: str, case_name: str, *, spacing: str, qualify_contac
     result = build_held_reference_path(guide, components, qualify_contacts=qualify_contacts)
     stages.stop("initial")
     cap = EngagementCap.build(math.radians(float(case.tea_cap)))
+    part = PartPolygon.from_case(case)
     stages.start()
     if spacing == "boundary":
-        _, refined = refine_boundary_ordered_path(result, components[0], case.tool_radius, cap, corner_approaches=corner_approaches, close_seam=True)
+        _, refined = refine_boundary_ordered_path(result, components[0], case.tool_radius, cap, part=part, corner_approaches=corner_approaches, close_seam=True)
     else:
-        refined = refine_figure5_engagement(result.path.circles, components[0], case.tool_radius, cap, corner_approaches=corner_approaches, close_seam=True)
+        refined = refine_figure5_engagement(result.path.circles, components[0], case.tool_radius, cap, part=part, corner_approaches=corner_approaches, close_seam=True)
     stages.stop("refine")
     return _emit_closed_polygon_path(name, case, components[0], refined.circles, cap, stages)
 

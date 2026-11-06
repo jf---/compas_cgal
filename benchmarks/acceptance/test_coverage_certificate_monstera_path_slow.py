@@ -23,6 +23,7 @@ from benchmarks.held_coverage_repair import path_sweeps
 from benchmarks.held_coverage_repair import refine_boundary_ordered_path_certified
 from benchmarks.held_figure5_path import build_held_reference_path
 from benchmarks.held_figure5_raw_guide import build_held_reference_raw_guide
+from benchmarks.held_material_domain import PartPolygon
 from benchmarks.held_reference_cases import load_held_reference_case
 from benchmarks.held_reference_figures import figure7_inward_offset
 from benchmarks.held_toolpath_benchmark import generate
@@ -63,7 +64,7 @@ def repaired() -> CertificateInput:
     assert len(components) == 1, "the Monstera centre domain is one loop without holes"
     source = build_held_reference_path(build_held_reference_raw_guide(case), components, qualify_contacts=True)
     cap = EngagementCap.build(math.radians(float(case.tea_cap)))
-    certified = refine_boundary_ordered_path_certified(source, components[0], case.tool_radius, cap, corner_approaches=True)
+    certified = refine_boundary_ordered_path_certified(source, components[0], case.tool_radius, cap, part=PartPolygon.from_case(case), corner_approaches=True)
     domain = CentreDomain.build(list(components[0]))
     cuts, connectors = path_sweeps(domain, components[0], certified.circles)
     return domain, case.tool_radius, cuts, connectors

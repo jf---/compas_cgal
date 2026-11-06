@@ -35,11 +35,12 @@ from compas_cgal.units import GuideRadius
 from compas_cgal.units import Point2
 from compas_cgal.units import ToolRadius
 from compas_cgal.units import WorldXY
+from tests.benchmarks.held_part_fixture import part_around
 
 SQUARE = tuple(Point2[WorldXY].build(x, y) for x, y in ((0, 0), (6, 0), (6, 6), (0, 6)))
 TOOL = ToolRadius.build(1)
 FAN_CAP = EngagementCap.build(math.pi)  # the fan's engagements are exactly 180 degrees
-SETTINGS = EngagementRefinementSettings.build(TOOL, FAN_CAP)
+SETTINGS = EngagementRefinementSettings.build(TOOL, FAN_CAP, part=part_around(SQUARE, TOOL))
 HALF = Fraction(1, 2)
 # Index of the emitted circle duplicated by the defect injection: an interior
 # circle, so the duplicate's successor pair is an emitted (certified) pair.

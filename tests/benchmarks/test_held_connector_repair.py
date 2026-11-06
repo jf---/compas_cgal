@@ -38,6 +38,8 @@ from compas_cgal.units import GuideRadius
 from compas_cgal.units import Point2
 from compas_cgal.units import ToolRadius
 from compas_cgal.units import WorldXY
+from tests.benchmarks.held_part_fixture import NO_MATERIAL
+from tests.benchmarks.held_part_fixture import part_around
 
 TOOL = ToolRadius.build(1.0)
 CAP = EngagementCap.build(math.radians(80))
@@ -89,7 +91,7 @@ def test_convex_corner_fixture_is_a_connector_only_refusal() -> None:
 
 def test_refused_connector_forces_a_midpoint_and_the_post_gate_passes() -> None:
     first, second = _convex_corner_pair()
-    result = refine_figure5_engagement((first, second), OCTAGON, TOOL, CAP)
+    result = refine_figure5_engagement((first, second), OCTAGON, TOOL, CAP, part=NO_MATERIAL)
     assert len(result.circles) == 3, "one midpoint circle repairs the connector"
     assert (result.circles[0].contact_point, result.circles[-1].contact_point) == (first.contact_point, second.contact_point)
     assert result.original_indices == (0, 2)
@@ -112,7 +114,7 @@ def test_dstar_fixture_is_refused_only_at_the_interior_hole_minimum(monkeypatch:
 
 def test_dstar_refusal_forces_a_midpoint() -> None:
     first, second = _dstar_pair()
-    result = refine_figure5_engagement((first, second), TOOTH, TOOL, CAP)
+    result = refine_figure5_engagement((first, second), TOOTH, TOOL, CAP, part=part_around(TOOTH, TOOL))
     assert len(result.circles) > 2
     assert (result.circles[0].contact_point, result.circles[-1].contact_point) == (first.contact_point, second.contact_point)
     assert not _open_assessment(TOOTH, result.circles).refused
@@ -121,7 +123,7 @@ def test_dstar_refusal_forces_a_midpoint() -> None:
 def test_exhausted_connector_repair_raises_the_named_error() -> None:
     first, second = _convex_corner_pair()
     with pytest.raises(ConnectorEngagementResolutionError) as caught:
-        refine_figure5_engagement((first, second), OCTAGON, TOOL, CAP, max_depth=0)
+        refine_figure5_engagement((first, second), OCTAGON, TOOL, CAP, part=NO_MATERIAL, max_depth=0)
     assert caught.value.connector == 0
     assert caught.value.seam is False
     assert isinstance(caught.value, Figure5EngagementResolutionError), "callers catching the refinement's refusals still see it"
@@ -132,7 +134,7 @@ def test_right_angle_corner_with_vanishing_circles_exhausts_by_name() -> None:
     first, second = _on(SQUARE, 0, Fraction(9, 10), 1.0, 0), _on(SQUARE, 1, Fraction(1, 20), 1.0, 1)
     assert _pair_within(first, second)
     with pytest.raises(ConnectorEngagementResolutionError):
-        refine_figure5_engagement((first, second), SQUARE, TOOL, CAP)
+        refine_figure5_engagement((first, second), SQUARE, TOOL, CAP, part=part_around(SQUARE, TOOL))
 
 
 # Chords per quarter arc of the oracle's rounded square. At (10, 0) the sagitta
@@ -188,7 +190,7 @@ def test_pair_exhaustion_keeps_its_own_error() -> None:
     """A pair over the cap at depth 0 is not a connector refusal."""
     far = _on(SQUARE, 0, Fraction(2, 10), 1.0, 0), _on(SQUARE, 0, Fraction(8, 10), 1.0, 1)
     with pytest.raises(Figure5EngagementResolutionError) as caught:
-        refine_figure5_engagement(far, SQUARE, TOOL, CAP, max_depth=0)
+        refine_figure5_engagement(far, SQUARE, TOOL, CAP, part=part_around(SQUARE, TOOL), max_depth=0)
     assert not isinstance(caught.value, ConnectorEngagementResolutionError)
 
 
@@ -199,12 +201,12 @@ def _seam_refused_path() -> tuple[Figure5CounterclockwiseCircle, ...]:
 
 def test_seam_is_repaired_with_new_last_circles() -> None:
     sources = _seam_refused_path()
-    unclosed = refine_figure5_engagement(sources, OCTAGON, TOOL, CAP)
+    unclosed = refine_figure5_engagement(sources, OCTAGON, TOOL, CAP, part=part_around(OCTAGON, TOOL))
     connectors = Figure5BoundaryConnectors.build(OCTAGON, unclosed.circles)
     assert connectors.seam is Figure5SeamClosure.CONNECTOR
     assert ConnectorEngagementAssessment.build(unclosed.circles, connectors, TOOL, CAP).refused == (len(unclosed.circles) - 1,)
 
-    closed = refine_figure5_engagement(sources, OCTAGON, TOOL, CAP, close_seam=True)
+    closed = refine_figure5_engagement(sources, OCTAGON, TOOL, CAP, part=part_around(OCTAGON, TOOL), close_seam=True)
     assert closed.circles[: len(unclosed.circles)] == unclosed.circles, "the seam repair only appends"
     assert closed.original_indices == unclosed.original_indices
     assert len(closed.circles) > len(unclosed.circles)
@@ -217,14 +219,14 @@ def test_seam_is_repaired_with_new_last_circles() -> None:
 
 def test_seam_exhaustion_names_the_seam() -> None:
     with pytest.raises(ConnectorEngagementResolutionError) as caught:
-        refine_figure5_engagement(_seam_refused_path(), OCTAGON, TOOL, CAP, max_depth=0, close_seam=True)
+        refine_figure5_engagement(_seam_refused_path(), OCTAGON, TOOL, CAP, part=part_around(OCTAGON, TOOL), max_depth=0, close_seam=True)
     assert caught.value.seam is True
 
 
 def test_coincident_seam_needs_no_repair() -> None:
     first = _on(SQUARE, 0, Fraction(1, 2), 1.0, 0)
     fan = Figure5CounterclockwiseCircle(GuideRunId(1), GuideRunStationOrdinal(0), first.boundary_site, first.boundary_site, first.center, first.contact_point, first.radius)
-    result = refine_figure5_engagement((first, fan), SQUARE, TOOL, CAP, close_seam=True)
+    result = refine_figure5_engagement((first, fan), SQUARE, TOOL, CAP, part=part_around(SQUARE, TOOL), close_seam=True)
     assert result.circles == (first, fan)
     assert Figure5BoundaryConnectors.build(SQUARE, result.circles).seam is Figure5SeamClosure.COINCIDENT
 

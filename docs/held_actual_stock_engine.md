@@ -183,7 +183,7 @@ The certificate is exact about that workload. It is not a statement about the ge
 
 ## 8. The rim engine (decision (b), unit U1)
 
-`AnnulusView2` (`src/annulus_view_2.{h,cpp}`) decides a station without an arrangement: the rim arcs in the part polygon P minus an emission range of closed swept annuli ([design](superpowers/specs/2026-11-04-actual-stock-refinement-design.md), sections 2.4 and 5). No generator calls it yet.
+`AnnulusView2` (`src/annulus_view_2.{h,cpp}`) decides a station without an arrangement: the rim arcs in the part polygon P minus an emission range of closed swept annuli ([design](superpowers/specs/2026-11-04-actual-stock-refinement-design.md), sections 2.4 and 5). The polygon lane's refinement decides with it (below).
 
 - **Events:** the rim's intersections with candidate annulus circles and with P's edges, as one-root points, plus the rim's two x-extreme points.
 - **Order:** CCW along the rim, with each event carrying its half.
@@ -212,6 +212,24 @@ Three properties make it cheap:
 Near-tangent walls at station 0 are real stock under ruling M3, so the filter does not guess: the merged run has to be within the cap. On all three workloads it is, so no station falls through.
 
 The gate is `benchmarks.held_annulus_filter_gate`, below. It compares each certified station with the exact engine and states the arrangement ratio and the load of its own run.
+
+### The decision in refinement (unit U4)
+
+`_Emission.advance` accepts a target only if the pair model is within the cap, `ActualStockDecision` (`benchmarks/held_actual_stock_decision.py`) finds all 45 stations within the cap on P minus every earlier circle's annulus, and the connector gate certifies. Any refusal inserts a midpoint. Depth exhaustion raises `ActualStockEngagementResolutionError`. The Ω\* lane is not wired (unit U6).
+
+- **The material domain is typed.** `part: PartPolygon` is a required argument of the refinement entry points and part of `EngagementRefinementKey`, so a splice cannot adopt across material domains. `boundary` stays the placement domain.
+- **Circle 0 is `EntryCircle`.** It is never decided, it is in every later view, and asking for its decision raises `EntryCircleDecisionError`.
+- **The view is the emission.** A view out of step with the emitted list raises `ActualStockViewMismatchError`.
+- **Every decision leaves a footprint, refusals included.** `EngagementFootprint.read` holds the target's doubles and `refused` its verdict. The rims lie in B(c, ρ + r) ∪ B(e, r), so an annulus whose outward-rounded outer box misses that set's box cannot change the decision.
+- **A splice re-decides what it may have changed.** `stock_decisions_read_by` names the later stock decisions the inserted or dropped circles can reach, and `last_stock_flip` re-decides each on the view it would have after adoption. The tail is adopted once none of them after the current source changes verdict. A verdict that does change is the case that needs this: the adopted circles would no longer be what a continuation emits. This replaces stopping at the last footprint met, which the design first ruled: read sets of large circles reach far along the path, and that rule re-refined up to thousands of sources per splice.
+
+The stock and connector conjuncts overlap at station 0. Where the third conjunct refuses on a generated path, the station over the cap is station 0, the arrival, and the connector gate refuses the same target. That is why it leaves those paths unchanged; the holes it guards against appear on fixtures (`tests/benchmarks/test_held_refinement_actual_stock.py`).
+
+The exit gate is `benchmarks.held_refinement_decision_gate` (D2 and the call count, per workload):
+
+```bash
+pixi run --no-install sh build/pyrun.sh -m benchmarks.held_refinement_decision_gate figure5_refined --every 1 --processes 4 --circle-view
+```
 
 D1 compares the engine with `Stock2` on the same circle view: exact verdicts and exact run endpoints, per station, plus the reported spans.
 

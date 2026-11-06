@@ -59,6 +59,22 @@ class ConnectorEngagementResolutionError(Figure5EngagementResolutionError):
         super().__init__(f"Repair exhausted with {kind} {connector} uncertified: {detail}.")
 
 
+class ActualStockEngagementResolutionError(Figure5EngagementResolutionError):
+    """A target is still over the cap on its circle view when its repair runs out.
+
+    The repair runs out when the depth budget is spent, or when the midpoint
+    circle it needs is refused. ``position`` is the emission index the target
+    would have taken; ``seam`` marks a seam repair circle. A subclass of the
+    refinement's refusal, so its callers' error model is unchanged.
+    """
+
+    def __init__(self, position: int, seam: bool, detail: str) -> None:
+        self.position = position
+        self.seam = seam
+        kind = "seam circle" if seam else "circle"
+        super().__init__(f"Repair exhausted with {kind} {position} over the cap on its circle view: {detail}.")
+
+
 class ConvexCornerEngagementError(ConnectorEngagementResolutionError):
     """A connector crosses a convex boundary vertex whose exterior angle pi - alpha exceeds the cap.
 
