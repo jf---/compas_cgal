@@ -46,3 +46,15 @@ EngagementSample engagement_sample_at_station(
 // An exact rational unit vector steered by the double direction (x, y) != 0. The
 // double is a construction parameter, never a decision.
 EVector exact_unit_along(double x, double y);
+
+// That unit's construction: ((1 - t^2), 2 t) / (1 + t^2), negated when reflected.
+// The double t IS the exact rational.
+struct RationalUnitSteering2 {
+    double t;
+    bool reflected;
+};
+RationalUnitSteering2 rational_unit_steering(double x, double y);
+
+// The exact rotation a circle's station at 0 < parameter < 1 applies to the motion's
+// phase: the unit vector that phase (1, 0) rotates to.
+EVector circle_station_rotation(double parameter, bool clockwise);

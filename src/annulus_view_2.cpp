@@ -9,6 +9,7 @@
 #include <CGAL/AABB_traits_2.h>
 #include <CGAL/AABB_tree.h>
 #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
+#include <CGAL/FPU.h>
 #include <CGAL/Interval_nt.h>
 #include <CGAL/Kernel/global_functions.h>
 #include <CGAL/Polygon_2.h>
@@ -19,6 +20,7 @@
 #include <cmath>
 #include <functional>
 #include <iterator>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -71,17 +73,13 @@ struct AnnulusBoxPrimitive {
 using AnnulusTree =
     CGAL::AABB_tree<CGAL::AABB_traits_2<SearchKernel, AnnulusBoxPrimitive>>;
 
-// The closed swept annulus of one emitted circle, on full_turn_annulus_bounds' exact radii.
+// The exact form of a stored annulus (full_turn_annulus_bounds' radii), built when
+// the exact path first reads it.
 struct ExactAnnulus2 {
     EPoint centre;
     FT inner_squared;
     FT outer_squared;
     bool has_inner;
-    // Outward-rounded enclosures of the values above, for the certified shortcut.
-    double centre_x;
-    double centre_y;
-    CGAL::Interval_nt<false> inner;
-    CGAL::Interval_nt<false> outer;
 };
 
 // How a rim lies relative to a candidate annulus, certified by outward-rounded
@@ -97,11 +95,11 @@ RimAnnulusRelation2 certified_rim_relation(
     const CGAL::Interval_nt<false>& station_x,
     const CGAL::Interval_nt<false>& station_y,
     const CGAL::Interval_nt<false>& radius,
-    const ExactAnnulus2& annulus)
+    const StoredAnnulus2& annulus)
 {
     using Interval = CGAL::Interval_nt<false>;
-    const Interval dx = station_x - Interval(annulus.centre_x);
-    const Interval dy = station_y - Interval(annulus.centre_y);
+    const Interval dx = station_x - Interval(annulus.cx);
+    const Interval dy = station_y - Interval(annulus.cy);
     const Interval squared = CGAL::square(dx) + CGAL::square(dy);
     const auto squared_below = [&squared](const Interval& bound) {
         return bound.inf() > 0.0 && squared.sup() < (bound * bound).inf();
@@ -317,11 +315,38 @@ struct AnnulusView2::Index {
     double part_max_x;
     std::vector<PartEdge2> edges;
     SearchSegments edge_segments;
-    std::vector<ExactAnnulus2> annuli;
+    AnnulusStore2 store;
+    mutable std::vector<std::optional<ExactAnnulus2>> exact_annuli;
+    std::optional<AnnulusFilter2> filter;
+    // One rotation per parameter, shared by every circle of a loop.
+    std::vector<double> rotation_parameters;
+    std::vector<AnnulusFilterRotation2> rotations;
+    bool rotations_filterable = false;
+    bool forced_fallthrough = false;
+    AnnulusFilterCounters2 counters;
+    std::vector<AnnulusFilterStation2> filter_results;
+    // A view from `build` selects through a static tree; an opened view through the store.
+    bool appendable = false;
     std::vector<AnnulusBox2> annulus_boxes;
     EdgeTree edge_tree;
     AnnulusTree annulus_tree;
 
+    Index(double radius, const AnnulusSearchBox2& domain)
+        : tool_radius(radius),
+          tool_radius_binary64(radius),
+          rim_squared(tool_radius * tool_radius),
+          part_max_x(domain.max_x),
+          store(radius, domain)
+    {
+    }
+
+    std::size_t append(double cx, double cy, double guide_radius);
+    const ExactAnnulus2& exact_annulus(std::size_t id) const;
+    void prepare_rotations(const std::vector<double>& parameters);
+    void certify(
+        AnnulusViewRange2 range, double guide_cx, double guide_cy, double guide_radius,
+        double entry_x, double entry_y, const std::vector<double>& parameters,
+        double cap_chord_ratio);
     bool strictly_inside_part(const EPoint& point) const;
     EPoint cell_witness(
         const RimEvent2& start, const RimEvent2& end, const EPoint& station) const;
@@ -330,6 +355,70 @@ struct AnnulusView2::Index {
         const EPoint& station, AnnulusViewRange2 range,
         const FT& cap_chord_ratio, const FT& gap_close_ratio) const;
 };
+
+std::size_t AnnulusView2::Index::append(double cx, double cy, double guide_radius)
+{
+    const std::size_t id = store.append(cx, cy, guide_radius);
+    exact_annuli.emplace_back();
+    return id;
+}
+
+const ExactAnnulus2& AnnulusView2::Index::exact_annulus(std::size_t id) const
+{
+    std::optional<ExactAnnulus2>& exact = exact_annuli[id];
+    if (!exact) {
+        const StoredAnnulus2& stored = store[id];
+        const FT guide(stored.guide_radius);
+        const FT outer = guide + tool_radius;
+        const FT inner = stored.has_inner ? FT(guide - tool_radius) : FT(0);
+        exact = ExactAnnulus2{
+            EPoint(stored.cx, stored.cy), inner * inner, outer * outer, stored.has_inner};
+    }
+    return *exact;
+}
+
+// The rotations are exact values read as enclosures once per parameter list. A parameter
+// of 1 (the closed end of a loop) has no rotation the filter takes.
+void AnnulusView2::Index::prepare_rotations(const std::vector<double>& parameters)
+{
+    if (parameters == rotation_parameters) return;
+    rotation_parameters = parameters;
+    rotations.clear();
+    rotations_filterable = true;
+    for (const double parameter : parameters) {
+        if (parameter == 0.0) {
+            rotations.push_back({CGAL::Interval_nt<false>(1.0), CGAL::Interval_nt<false>(0.0), true});
+            continue;
+        }
+        if (parameter == 1.0) {
+            rotations_filterable = false;
+            continue;
+        }
+        const EVector rotation = circle_station_rotation(parameter, false);
+        rotations.push_back({
+            CGAL::Interval_nt<false>(CGAL::to_interval(rotation.x())),
+            CGAL::Interval_nt<false>(CGAL::to_interval(rotation.y())),
+            false,
+        });
+    }
+}
+
+void AnnulusView2::Index::certify(
+    AnnulusViewRange2 range, double guide_cx, double guide_cy, double guide_radius,
+    double entry_x, double entry_y, const std::vector<double>& parameters,
+    double cap_chord_ratio)
+{
+    if (forced_fallthrough) {
+        filter_results.assign(
+            parameters.size(), {AnnulusFilterTier2::UNCERTIFIED, 0.0});
+        return;
+    }
+    const RationalUnitSteering2 steering =
+        rational_unit_steering(entry_x - guide_cx, entry_y - guide_cy);
+    filter->certify_circle(
+        store, range, {guide_cx, guide_cy, guide_radius, entry_x, entry_y},
+        steering.t, steering.reflected, rotations, cap_chord_ratio, filter_results);
+}
 
 // Crossing parity along the +x ray, half-open in y. The caller guarantees that the
 // point is on no edge (an edge through a witness would be an event inside its
@@ -434,27 +523,36 @@ std::vector<RimArc> AnnulusView2::Index::harvest(
     // Annuli: an annulus with no event has the whole rim inside it (no material at
     // all, including a rim overlapping a boundary) or none of it, decided at one
     // rim point. Only the annuli the rim crosses stay in the cell tests.
-    std::vector<AnnulusTree::Primitive_id> hits;
-    annulus_tree.all_intersected_primitives(rim_box, std::back_inserter(hits));
+    std::vector<std::uint32_t> hits;
+    if (appendable) {
+        store.query(
+            {rim_box.xmin(), rim_box.ymin(), rim_box.xmax(), rim_box.ymax()}, range, hits);
+    } else {
+        std::vector<AnnulusTree::Primitive_id> tree_hits;
+        annulus_tree.all_intersected_primitives(rim_box, std::back_inserter(tree_hits));
+        for (const AnnulusTree::Primitive_id hit : tree_hits) {
+            if (hit >= range.first && hit < range.end) {
+                hits.push_back(static_cast<std::uint32_t>(hit));
+            }
+        }
+    }
     std::sort(hits.begin(), hits.end(), std::greater<>());
-    std::vector<const ExactAnnulus2*> uncertain;
+    std::vector<std::uint32_t> uncertain;
     {
         CGAL::Protect_FPU_rounding<true> rounding;
         const CGAL::Interval_nt<false> station_x(CGAL::to_interval(station.x()));
         const CGAL::Interval_nt<false> station_y(CGAL::to_interval(station.y()));
         const CGAL::Interval_nt<false> radius(CGAL::to_interval(tool_radius));
-        for (const AnnulusTree::Primitive_id hit : hits) {
-            if (hit < range.first || hit >= range.end) continue;
-            const ExactAnnulus2& annulus = annuli[hit];
+        for (const std::uint32_t hit : hits) {
             const RimAnnulusRelation2 relation =
-                certified_rim_relation(station_x, station_y, radius, annulus);
+                certified_rim_relation(station_x, station_y, radius, store[hit]);
             if (relation == RimAnnulusRelation2::COVERED) return {};
-            if (relation == RimAnnulusRelation2::UNCERTAIN) uncertain.push_back(&annulus);
+            if (relation == RimAnnulusRelation2::UNCERTAIN) uncertain.push_back(hit);
         }
     }
     std::vector<const ExactAnnulus2*> crossing;
-    for (const ExactAnnulus2* candidate : uncertain) {
-        const ExactAnnulus2& annulus = *candidate;
+    for (const std::uint32_t candidate : uncertain) {
+        const ExactAnnulus2& annulus = exact_annulus(candidate);
         std::size_t count = 0;
         const EVector v = annulus.centre - station;
         const FT distance_squared = v.squared_length();
@@ -539,9 +637,8 @@ AuditExactStationClassification2 AnnulusView2::Index::classify_static(
         harvest(station, range));
 }
 
-AnnulusView2 AnnulusView2::build(
+std::unique_ptr<AnnulusView2::Index> AnnulusView2::make_index(
     Eigen::Ref<const compas::RowMatrixXd> polygon,
-    Eigen::Ref<const compas::RowMatrixXd> annuli,
     double tool_radius)
 {
     if (!std::isfinite(tool_radius)) {
@@ -554,13 +651,9 @@ AnnulusView2 AnnulusView2::build(
         throw InvalidAnnulusViewPolygonError(
             "annulus view polygon needs at least three vertices");
     }
-    if (annuli.rows() > 0 && annuli.cols() != 3) {
-        throw InvalidAnnulusViewRadiiError(
-            "annulus view annuli must be rows of (cx, cy, guide_radius)");
-    }
     CGAL::Polygon_2<Epeck> part;
     std::vector<SearchKernel::Point_2> search_vertices;
-    double part_max_x = polygon(0, 0);
+    AnnulusSearchBox2 domain{polygon(0, 0), polygon(0, 1), polygon(0, 0), polygon(0, 1)};
     for (Eigen::Index row = 0; row < polygon.rows(); ++row) {
         const double x = polygon(row, 0);
         const double y = polygon(row, 1);
@@ -570,18 +663,20 @@ AnnulusView2 AnnulusView2::build(
         }
         part.push_back(EPoint(x, y));
         search_vertices.emplace_back(x, y);
-        part_max_x = std::max(part_max_x, x);
+        domain.min_x = std::min(domain.min_x, x);
+        domain.min_y = std::min(domain.min_y, y);
+        domain.max_x = std::max(domain.max_x, x);
+        domain.max_y = std::max(domain.max_y, y);
     }
     if (!part.is_simple()) {
         throw InvalidAnnulusViewPolygonError("annulus view polygon must be simple");
     }
 
-    auto index = std::make_unique<Index>();
-    index->tool_radius = FT(tool_radius);
-    index->tool_radius_binary64 = tool_radius;
-    index->rim_squared = index->tool_radius * index->tool_radius;
-    index->part_max_x = part_max_x;
+    auto index = std::make_unique<Index>(tool_radius, domain);
     const std::size_t vertex_count = part.size();
+    const bool counterclockwise = part.orientation() == CGAL::COUNTERCLOCKWISE;
+    std::vector<AnnulusFilterEdge2> filter_edges;
+    filter_edges.reserve(vertex_count);
     index->edges.reserve(vertex_count);
     index->edge_segments.reserve(vertex_count);
     for (std::size_t i = 0; i < vertex_count; ++i) {
@@ -591,41 +686,48 @@ AnnulusView2 AnnulusView2::build(
         const EVector direction = end - start;
         index->edges.push_back({start, end, direction, direction.squared_length()});
         index->edge_segments.emplace_back(search_vertices[i], search_vertices[next]);
+        const std::size_t from = counterclockwise ? i : next;
+        const std::size_t to = counterclockwise ? next : i;
+        filter_edges.push_back(
+            {search_vertices[from].x(), search_vertices[from].y(),
+             search_vertices[to].x(), search_vertices[to].y()});
     }
     index->edge_tree.rebuild(index->edge_segments.cbegin(), index->edge_segments.cend());
-
-    index->annuli.reserve(static_cast<std::size_t>(annuli.rows()));
-    index->annulus_boxes.reserve(static_cast<std::size_t>(annuli.rows()));
-    for (Eigen::Index row = 0; row < annuli.rows(); ++row) {
-        const double cx = annuli(row, 0);
-        const double cy = annuli(row, 1);
-        const double rho = annuli(row, 2);
-        if (!std::isfinite(cx) || !std::isfinite(cy) || !std::isfinite(rho)) {
-            throw NonFiniteAnnulusViewInputError(
-                "annulus view centres and guide radii must be finite");
-        }
-        if (rho < 0.0) {
-            throw InvalidAnnulusViewRadiiError(
-                "annulus view guide radii must be nonnegative");
-        }
-        const FT guide(rho);
-        const FT outer = guide + index->tool_radius;
-        const bool has_inner =
-            CGAL::compare(guide, index->tool_radius) == CGAL::LARGER;
-        const FT inner = has_inner ? FT(guide - index->tool_radius) : FT(0);
-        const EPoint centre(cx, cy);
-        index->annuli.push_back(
-            {centre, inner * inner, outer * outer, has_inner, cx, cy,
-             CGAL::Interval_nt<false>(CGAL::to_interval(inner)),
-             CGAL::Interval_nt<false>(CGAL::to_interval(outer))});
-        const std::size_t id = static_cast<std::size_t>(row);
-        index->annulus_boxes.push_back({id, rim_search_box(centre, outer)});
-    }
-    index->annulus_tree.rebuild(index->annulus_boxes.cbegin(), index->annulus_boxes.cend());
-    return AnnulusView2(std::unique_ptr<const Index>(std::move(index)));
+    index->filter.emplace(tool_radius, filter_edges);
+    return index;
 }
 
-AnnulusView2::AnnulusView2(std::unique_ptr<const Index> index)
+AnnulusView2 AnnulusView2::build(
+    Eigen::Ref<const compas::RowMatrixXd> polygon,
+    Eigen::Ref<const compas::RowMatrixXd> annuli,
+    double tool_radius)
+{
+    if (annuli.rows() > 0 && annuli.cols() != 3) {
+        throw InvalidAnnulusViewRadiiError(
+            "annulus view annuli must be rows of (cx, cy, guide_radius)");
+    }
+    auto index = make_index(polygon, tool_radius);
+    for (Eigen::Index row = 0; row < annuli.rows(); ++row) {
+        index->append(annuli(row, 0), annuli(row, 1), annuli(row, 2));
+        const std::size_t id = static_cast<std::size_t>(row);
+        const AnnulusSearchBox2& box = index->store[id].box;
+        index->annulus_boxes.push_back(
+            {id, SearchBox(box.min_x, box.min_y, box.max_x, box.max_y)});
+    }
+    index->annulus_tree.rebuild(index->annulus_boxes.cbegin(), index->annulus_boxes.cend());
+    return AnnulusView2(std::move(index));
+}
+
+AnnulusView2 AnnulusView2::open(
+    Eigen::Ref<const compas::RowMatrixXd> polygon,
+    double tool_radius)
+{
+    auto index = make_index(polygon, tool_radius);
+    index->appendable = true;
+    return AnnulusView2(std::move(index));
+}
+
+AnnulusView2::AnnulusView2(std::unique_ptr<Index> index)
     : index_(std::move(index))
 {
 }
@@ -636,7 +738,58 @@ AnnulusView2::~AnnulusView2() = default;
 
 std::size_t AnnulusView2::size() const
 {
-    return index_->annuli.size();
+    return index_->store.size();
+}
+
+std::size_t AnnulusView2::append(double cx, double cy, double guide_radius)
+{
+    if (!index_->appendable) {
+        throw AnnulusViewNotAppendableError("a built annulus view is fixed at construction");
+    }
+    return index_->append(cx, cy, guide_radius);
+}
+
+void AnnulusView2::truncate(std::size_t size)
+{
+    if (!index_->appendable) {
+        throw AnnulusViewNotAppendableError("a built annulus view is fixed at construction");
+    }
+    index_->store.truncate(size);
+    index_->exact_annuli.resize(size);
+}
+
+std::vector<std::uint32_t> AnnulusView2::candidates(
+    AnnulusViewRange2 range, const AnnulusSearchBox2& box) const
+{
+    validate_range(range, size());
+    std::vector<std::uint32_t> found;
+    index_->store.query(box, range, found);
+    return found;
+}
+
+std::size_t AnnulusView2::count_candidates(
+    AnnulusViewRange2 range, Eigen::Ref<const compas::RowMatrixXd> boxes) const
+{
+    validate_range(range, size());
+    std::size_t total = 0;
+    std::vector<std::uint32_t> found;
+    for (Eigen::Index row = 0; row < boxes.rows(); ++row) {
+        found.clear();
+        index_->store.query(
+            {boxes(row, 0), boxes(row, 1), boxes(row, 2), boxes(row, 3)}, range, found);
+        total += found.size();
+    }
+    return total;
+}
+
+std::size_t AnnulusView2::stale_references() const
+{
+    return index_->store.stale_references();
+}
+
+std::size_t AnnulusView2::store_rebuilds() const
+{
+    return index_->store.rebuilds();
 }
 
 EngagementSample AnnulusView2::station(
@@ -705,6 +858,153 @@ bool AnnulusView2::circle_exceeded(
         }
     }
     return false;
+}
+
+bool AnnulusView2::circle_exceeded_tiered(
+    AnnulusViewRange2 range, double guide_cx, double guide_cy,
+    double guide_radius, double entry_x, double entry_y, bool clockwise,
+    const std::vector<double>& parameters, double cap_chord_ratio,
+    double gap_close_ratio) const
+{
+    validate_range(range, size());
+    for (const std::size_t last : {DECISION_TIER_LAST_ONE, DECISION_TIER_LAST_SIXTEEN}) {
+        const AnnulusViewRange2 tier = last_of_range(range, last);
+        if (!circle_exceeded(
+                tier, guide_cx, guide_cy, guide_radius, entry_x, entry_y, clockwise,
+                parameters, cap_chord_ratio, gap_close_ratio)) {
+            return false;
+        }
+    }
+    return circle_exceeded(
+        range, guide_cx, guide_cy, guide_radius, entry_x, entry_y, clockwise,
+        parameters, cap_chord_ratio, gap_close_ratio);
+}
+
+namespace {
+
+// What the filter takes: every value finite and valid, a counterclockwise motion, no gap
+// closure, an entry off the guide centre. Everything else is the exact path's to decide
+// or to raise on.
+bool filter_takes(
+    double guide_cx, double guide_cy, double guide_radius, double entry_x, double entry_y,
+    bool clockwise, double gap_close_ratio)
+{
+    return !clockwise && gap_close_ratio == 0.0
+        && std::isfinite(guide_cx) && std::isfinite(guide_cy)
+        && std::isfinite(guide_radius) && guide_radius > 0.0
+        && std::isfinite(entry_x) && std::isfinite(entry_y)
+        && (entry_x != guide_cx || entry_y != guide_cy);
+}
+
+} // namespace
+
+bool AnnulusView2::circle_exceeded_filtered(
+    AnnulusViewRange2 range, double guide_cx, double guide_cy,
+    double guide_radius, double entry_x, double entry_y, bool clockwise,
+    const std::vector<double>& parameters, double cap_chord_ratio,
+    double gap_close_ratio) const
+{
+    validate_range(range, size());
+    AnnulusFilterCounters2& counters = index_->counters;
+    ++counters.decisions;
+    const bool taken = filter_takes(
+        guide_cx, guide_cy, guide_radius, entry_x, entry_y, clockwise, gap_close_ratio);
+    if (taken) {
+        // A new parameter list passes the exact placement's validation before it is used.
+        if (parameters != index_->rotation_parameters) {
+            circle_prefix_stations(
+                guide_cx, guide_cy, guide_radius, entry_x, entry_y, clockwise, parameters,
+                index_->tool_radius_binary64, cap_chord_ratio, gap_close_ratio);
+            index_->prepare_rotations(parameters);
+        }
+        validate_engagement_input_binary64(
+            guide_cx, guide_cy, index_->tool_radius_binary64, cap_chord_ratio, gap_close_ratio);
+    }
+    if (!taken || !index_->rotations_filterable) {
+        ++counters.exact_decisions;
+        const bool exceeded = circle_exceeded(
+            range, guide_cx, guide_cy, guide_radius, entry_x, entry_y, clockwise,
+            parameters, cap_chord_ratio, gap_close_ratio);
+        if (exceeded) ++counters.refused;
+        return exceeded;
+    }
+    index_->certify(
+        range, guide_cx, guide_cy, guide_radius, entry_x, entry_y, parameters, cap_chord_ratio);
+    const std::vector<AnnulusFilterStation2>& results = index_->filter_results;
+    counters.stations += static_cast<std::int64_t>(results.size());
+    std::vector<std::size_t> uncertain;
+    for (std::size_t k = 0; k < results.size(); ++k) {
+        switch (results[k].tier) {
+            case AnnulusFilterTier2::LAST_ONE: ++counters.certified_last_one; break;
+            case AnnulusFilterTier2::LAST_SIXTEEN: ++counters.certified_last_sixteen; break;
+            case AnnulusFilterTier2::RANGE: ++counters.certified_range; break;
+            case AnnulusFilterTier2::UNCERTIFIED:
+                uncertain.push_back(k);
+                ++counters.exact_stations;
+                if (k == 0) ++counters.exact_station_zero;
+                break;
+        }
+    }
+    if (uncertain.empty()) return false;
+    const CirclePrefixStations2 placed = circle_prefix_stations(
+        guide_cx, guide_cy, guide_radius, entry_x, entry_y, clockwise, parameters,
+        index_->tool_radius_binary64, cap_chord_ratio, gap_close_ratio);
+    const FT ratio(cap_chord_ratio);
+    const FT gap(gap_close_ratio);
+    for (const std::size_t k : uncertain) {
+        const ArcPrefixStation2& at = placed.stations[k];
+        const AuditExactStationClassification2 base =
+            index_->classify_static(at.centre, range, ratio, gap);
+        if (base.disposition() != AuditExactStationDisposition2::CAP_EXCEEDED) continue;
+        if (clip_arc_swept_prefix_station_exact(
+                base, placed.guide, placed.start, at.centre, placed.clockwise,
+                at.extent, index_->tool_radius, ratio, gap)
+                .disposition()
+            == AuditExactStationDisposition2::CAP_EXCEEDED) {
+            ++counters.refused;
+            return true;
+        }
+    }
+    return false;
+}
+
+std::vector<AnnulusFilterReport2> AnnulusView2::circle_filter_report(
+    AnnulusViewRange2 range, double guide_cx, double guide_cy,
+    double guide_radius, double entry_x, double entry_y,
+    const std::vector<double>& parameters, double cap_chord_ratio) const
+{
+    validate_range(range, size());
+    circle_prefix_stations(
+        guide_cx, guide_cy, guide_radius, entry_x, entry_y, false, parameters,
+        index_->tool_radius_binary64, cap_chord_ratio, 0.0);
+    index_->prepare_rotations(parameters);
+    if (!index_->rotations_filterable) {
+        throw InvalidSweptPrefixInputError(
+            "the annulus filter takes no parameter of 1, which closes the loop");
+    }
+    index_->certify(
+        range, guide_cx, guide_cy, guide_radius, entry_x, entry_y, parameters, cap_chord_ratio);
+    std::vector<AnnulusFilterReport2> report;
+    report.reserve(index_->filter_results.size());
+    for (const AnnulusFilterStation2& station : index_->filter_results) {
+        report.push_back({static_cast<int>(station.tier), station.chord_squared_bound});
+    }
+    return report;
+}
+
+const AnnulusFilterCounters2& AnnulusView2::filter_counters() const
+{
+    return index_->counters;
+}
+
+void AnnulusView2::reset_filter_counters()
+{
+    index_->counters = {};
+}
+
+void AnnulusView2::force_filter_fallthrough(bool forced)
+{
+    index_->forced_fallthrough = forced;
 }
 
 StationAgreement2 AnnulusView2::station_agrees_with_stock(

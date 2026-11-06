@@ -183,7 +183,7 @@ The certificate is exact about that workload. It is not a statement about the ge
 
 ## 8. The rim engine (decision (b), unit U1)
 
-`AnnulusView2` (`src/annulus_view_2.{h,cpp}`) decides a station without an arrangement: the rim arcs in the part polygon P minus an emission range of closed swept annuli. It is exact only; the interval filter and the store come in later units ([design](superpowers/specs/2026-11-04-actual-stock-refinement-design.md), sections 2.4 and 5). No generator calls it yet.
+`AnnulusView2` (`src/annulus_view_2.{h,cpp}`) decides a station without an arrangement: the rim arcs in the part polygon P minus an emission range of closed swept annuli ([design](superpowers/specs/2026-11-04-actual-stock-refinement-design.md), sections 2.4 and 5). No generator calls it yet.
 
 - **Events:** the rim's intersections with candidate annulus circles and with P's edges, as one-root points, plus the rim's two x-extreme points.
 - **Order:** CCW along the rim, with each event carrying its half.
@@ -191,13 +191,35 @@ The certificate is exact about that workload. It is not a statement about the ge
 - **Downstream:** the material cells enter the same clip, run and cap code as the arrangement engine, at the same stations (`src/engagement_stations_2.h`).
 - **Candidates:** CGAL AABB trees over outward-rounded boxes. Outward-rounded intervals then certify a rim clear of an annulus or inside it, and only the uncertain ones reach exact arithmetic.
 
-The cost is in the number of events, not in arithmetic per event. On the full view of Figure 5 a rim crosses about 50 prior annuli (about 60 events per station), because the circles are closely spaced. That shape is what the filter of unit U3 has to remove. Three lazy-number costs were found while profiling; see [What forces a lazy number's exact value](exactness.md#what-forces-a-lazy-numbers-exact-value).
+The exact path's cost is in the number of events, not in arithmetic per event. On the full view of Figure 5 a rim crosses about 50 prior annuli (about 60 events per station), because the circles are closely spaced. Three lazy-number costs were found while profiling; see [What forces a lazy number's exact value](exactness.md#what-forces-a-lazy-numbers-exact-value).
+
+### The store (unit U2)
+
+`AnnulusStore2` (`src/annulus_store_2.{h,cpp}`) holds each emitted circle's injected (c, ρ), outward-rounded enclosures of its radii, and its outward-rounded box in a uniform grid. An opened view is fed by `append` and cut by `truncate`, which is O(1): a view is an emission range, every query filters by that range and by box, and a stale grid reference costs one test and selects nothing. The grid is rebuilt once stale references outnumber live ones. The exact form of an annulus is built when the exact path first reads it, so a filtered decision constructs no lazy number.
+
+Point_set_2, the first choice of the design, is out: the query radius has to reach the largest annulus, which is far over the query ceiling of the design, and it merges coincident centres, which would lose a concentric annulus.
+
+### The filter (unit U3)
+
+`AnnulusFilter2` (`src/annulus_filter_2.{h,cpp}`) makes the exact path rare instead of faster. It is one-sided: for each station it builds M+, a superset of the exact material on the rim, in `Interval_nt` under one rounding guard per decision, and certifies the station when every arc of M+ is certainly within the cap. Clip monotonicity makes that a proof about the exact verdict. It certifies nothing as exceeded: a station it cannot certify goes to the next view, last-1 then last-16 then the whole range, and only what no view certifies goes to the exact path, whose verdict stands. A refused decision therefore costs one exact station.
+
+Three properties make it cheap:
+
+- **Stations escalate one by one.** A last-1 refusal of one station does not re-read the other 44.
+- **The covers are arcs, not cells.** On a rim, each disk covers one arc about the direction of its centre, so M+ is the complement of a union of intervals of a rim key, sorted. No witness, no parity: a rim with no wall crossing stays material, which is only ever pessimistic.
+- **The own prefix needs no extent.** A rim point is covered iff it is on the rear half-rim or in the start disk, at every extent (`annulus_filter_2.h`).
+
+Near-tangent walls at station 0 are real stock under ruling M3, so the filter does not guess: the merged run has to be within the cap. On all three workloads it is, so no station falls through.
+
+The gate is `benchmarks.held_annulus_filter_gate`, below. It compares each certified station with the exact engine and states the arrangement ratio and the load of its own run.
 
 D1 compares the engine with `Stock2` on the same circle view: exact verdicts and exact run endpoints, per station, plus the reported spans.
 
 ```bash
 pixi run --no-install sh build/pyrun.sh -m benchmarks.held_annulus_view_d1 d1 figure5_refined --first 200
 pixi run --no-install sh build/pyrun.sh -m benchmarks.held_annulus_view_d1 time figure5_refined --every 20 --repeats 5
+pixi run --no-install sh build/pyrun.sh -m benchmarks.held_annulus_store_gate figure5_refined --every 1
+pixi run --no-install sh build/pyrun.sh -m benchmarks.held_annulus_filter_gate figure5_refined
 ```
 
 ## Related pages

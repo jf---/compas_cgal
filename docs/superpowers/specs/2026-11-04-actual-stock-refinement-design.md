@@ -555,3 +555,12 @@ These changes respond to `2026-11-04-actual-stock-refinement-review.md` and the 
   pyproject and pixi-task edits go to the single pyproject slot. **L6:** the Ω\* cost ceiling is stated
   (§2.7).
 - §6: Q1–Q3 are recorded as ruled. The one remaining user decision is conditional on U-1.
+
+## Revision 2026-11-05 (units U2 and U3, as built)
+
+- **The filter is one-sided (§2.5).** It builds only the pessimistic set M+ and certifies only "within". There is no optimistic set and no certified "exceeded": a station no view certifies goes to the exact path, whose verdict stands. **Why:** a refusal then costs one exact station, a refused decision is rare, and half the bracketing code is gone. The H2 and M2 rules stand for what remains: both legs of the cap test, and an under-clipping own prefix.
+- **Escalation is per station (§2.5).** A last-1 failure re-reads only that station, on the larger view. Only a station no view certifies reaches exact.
+- **Covers replace cells in the filter (§2.5).** Each disk covers one rim arc, so M+ is the complement of a sorted union of key intervals, with no witness. A rim with no certain wall crossing counts as inside P, which is only pessimistic, so the filter needs no point location. The exact path still works as §2.4 says.
+- **The own prefix is the rear half-rim plus the start disk at every extent.** Proof in `src/annulus_filter_2.h`; only the inclusion "these are covered" carries the filter's soundness.
+- **The store's index is the uniform grid (§2.5).** Point_set_2 fails the §5 query ceiling and merges coincident centres. A flat prefix scan is faster over a whole run, because the full view is queried on about 1 % of decisions, but it grows with the store.
+- **A view's static AABB tree stays** beside the store for `AnnulusView2::build`, until its removal is approved.

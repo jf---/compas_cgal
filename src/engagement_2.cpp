@@ -25,6 +25,14 @@
 
 #include <boost/variant.hpp>
 
+RationalUnitSteering2 rational_unit_steering(double x, double y)
+{
+    const bool reflected = x < 0.0;
+    const double px = reflected ? -x : x;
+    const double py = reflected ? -y : y;
+    return {py / (std::hypot(px, py) + px), reflected};
+}
+
 namespace {
 
 using FT = Epeck::FT;
@@ -556,14 +564,12 @@ void validate_prefix_parameters(const std::vector<double>& parameters)
 // x >= 0 keeps |t| <= 1, away from the parametrization's pole.
 EVector rational_unit_along(double x, double y)
 {
-    const bool reflected = x < 0.0;
-    const double px = reflected ? -x : x;
-    const double py = reflected ? -y : y;
-    const FT t(py / (std::hypot(px, py) + px));
+    const RationalUnitSteering2 steering = rational_unit_steering(x, y);
+    const FT t(steering.t);
     const FT t_squared = t * t;
     const FT denominator = FT(1) + t_squared;
     const EVector unit((FT(1) - t_squared) / denominator, FT(2) * t / denominator);
-    return reflected ? -unit : unit;
+    return steering.reflected ? -unit : unit;
 }
 
 // One circular motion from `start` about `guide`, its stations classified
@@ -819,6 +825,14 @@ EngagementSample engagement_sample_at_station(
 EVector exact_unit_along(double x, double y)
 {
     return rational_unit_along(x, y);
+}
+
+EVector circle_station_rotation(double parameter, bool clockwise)
+{
+    const double turned = FULL_TURN * parameter;
+    return exact_circle_chart_vector(
+        EVector(FT(1), FT(0)),
+        audit_arc_chart_parameter_for_angle(clockwise ? -turned : turned));
 }
 
 double cap_chord_ratio(double cap_radians)

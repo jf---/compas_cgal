@@ -647,13 +647,82 @@ class InvalidAnnulusViewRadiiError(ValueError): ...
 class InvalidAnnulusViewRangeError(ValueError): ...
 class AnnulusViewWitnessError(RuntimeError): ...
 
+class AnnulusViewNotAppendableError(RuntimeError): ...
+
+class AnnulusFilterCounters2:
+    """What the filtered decision did since the view opened or the counters were reset."""
+
+    decisions: int
+    exact_decisions: int
+    stations: int
+    certified_last_one: int
+    certified_last_sixteen: int
+    certified_range: int
+    exact_stations: int
+    exact_station_zero: int
+    refused: int
+
 class AnnulusView2:
     """The arrangement-free rim engine: stations decided on the part polygon minus an emission range of closed swept annuli."""
 
     @staticmethod
     def build(polygon: Float64Array, annuli: Float64Array, tool_radius: float) -> AnnulusView2: ...
+    @staticmethod
+    def open(polygon: Float64Array, tool_radius: float) -> AnnulusView2: ...
     @property
     def size(self) -> int: ...
+    def append(self, cx: float, cy: float, guide_radius: float) -> int: ...
+    def truncate(self, size: int) -> None: ...
+    @property
+    def stale_references(self) -> int: ...
+    @property
+    def store_rebuilds(self) -> int: ...
+    def candidates(self, first: int, end: int, min_x: float, min_y: float, max_x: float, max_y: float) -> list[int]: ...
+    def count_candidates(self, first: int, end: int, boxes: Float64Array) -> int: ...
+    def circle_exceeded_tiered(
+        self,
+        first: int,
+        end: int,
+        guide_cx: float,
+        guide_cy: float,
+        guide_radius: float,
+        entry_x: float,
+        entry_y: float,
+        clockwise: bool,
+        parameters: Sequence[float],
+        cap_chord_ratio: float,
+        gap_close_ratio: float = ...,
+    ) -> bool: ...
+    def circle_exceeded_filtered(
+        self,
+        first: int,
+        end: int,
+        guide_cx: float,
+        guide_cy: float,
+        guide_radius: float,
+        entry_x: float,
+        entry_y: float,
+        clockwise: bool,
+        parameters: Sequence[float],
+        cap_chord_ratio: float,
+        gap_close_ratio: float = ...,
+    ) -> bool: ...
+    def circle_filter_report(
+        self,
+        first: int,
+        end: int,
+        guide_cx: float,
+        guide_cy: float,
+        guide_radius: float,
+        entry_x: float,
+        entry_y: float,
+        parameters: Sequence[float],
+        cap_chord_ratio: float,
+    ) -> list[tuple[int, float]]: ...
+    @property
+    def filter_counters(self) -> AnnulusFilterCounters2: ...
+    def reset_filter_counters(self) -> None: ...
+    def force_filter_fallthrough(self, forced: bool) -> None: ...
     def station(self, first: int, end: int, cx: float, cy: float, cap_chord_ratio: float, gap_close_ratio: float = ...) -> tuple[float, float, bool]: ...
     def circle_prefixes(
         self,
